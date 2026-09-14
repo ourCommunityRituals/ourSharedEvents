@@ -22,7 +22,7 @@ import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
-import { validateLogoUrl } from '../lib/sponsor-logo';
+import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -426,8 +426,22 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       rid
     );
   }
+  // OSE what_url — the WHAT card's optional external link (fundraiser donation
+  // site, tickets, external RSVP, …). HTTPS-ONLY: it is a public outbound link the
+  // visitor's own browser follows, so plain http:// is a mixed-content/downgrade
+  // risk and is rejected (unlike the proxied media URLs). null clears it.
+  const whatLink = validateHttpsUrl(body.what_url);
+  if (!whatLink.valid) {
+    return errorResponse(
+      'INVALID_URL',
+      'what_url must be an https:// URL under 500 chars',
+      400,
+      rid
+    );
+  }
   const whoImageUrl = whoImage.url;
   const whatVideoUrl = whatVideo.url;
+  const whatUrl = whatLink.url;
 
   // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
@@ -476,10 +490,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
-                           who_story, who_image_url, what_video_url,
+                           who_story, who_image_url, what_video_url, what_url,
                            lat, lon, h3_res9, h3_res7, is_published,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -502,6 +516,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         whoStory,
         whoImageUrl,
         whatVideoUrl,
+        whatUrl,
         lat,
         lon,
         h3Tags?.h3_res9 ?? null,
@@ -705,7 +720,8 @@ export async function handleUpdateEvent(
 
   // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
   // rather than blind-sliced, so a javascript:/data: payload is rejected here
-  // and never reaches the column. null clears the field.
+  // and never reaches the column. null clears the field. These are proxied
+  // server-side, so http(s) is fine (see what_url below for the outbound case).
   for (const field of ['who_image_url', 'what_video_url'] as const) {
     if (field in body) {
       const check = validateLogoUrl(body[field]);
@@ -720,6 +736,22 @@ export async function handleUpdateEvent(
       sets.push(`${field} = ?`);
       values.push(check.url);
     }
+  }
+
+  // what_url — the public OUTBOUND link, HTTPS-ONLY (the visitor's browser
+  // follows it; plain http:// is a downgrade risk). Same null-clears semantics.
+  if ('what_url' in body) {
+    const check = validateHttpsUrl(body.what_url);
+    if (!check.valid) {
+      return errorResponse(
+        'INVALID_URL',
+        'what_url must be an https:// URL under 500 chars',
+        400,
+        rid
+      );
+    }
+    sets.push('what_url = ?');
+    values.push(check.url);
   }
 
   if (sets.length === 0) {

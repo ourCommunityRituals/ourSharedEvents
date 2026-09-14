@@ -1,11 +1,11 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 219,
-    "totalTests": 2661,
-    "workerd": 116,
-    "node": 103,
-    "needsReview": 55
+    "total": 253,
+    "totalTests": 3032,
+    "workerd": 126,
+    "node": 127,
+    "needsReview": 59
   },
   "files": [
     {
@@ -21,6 +21,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-action-labels.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
@@ -121,11 +128,18 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/admin-frontdoor-exclusive.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 11
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/admin-object-scope.invariant.spec.ts",
@@ -195,14 +209,21 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/as-keyboard-nav.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/attendee-name-encryption.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/audit-log.spec.ts",
@@ -286,7 +307,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 6
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/corridor-map.spec.ts",
@@ -294,6 +315,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/corridor-readiness.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/cost-metric.spec.ts",
@@ -307,6 +335,20 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/create-flow-publication.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 5
     },
     {
@@ -378,6 +420,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/display-sponsor-placement.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/error-page-mobile-workability.spec.ts",
@@ -457,6 +506,41 @@
       "testCount": 8
     },
     {
+      "file": "workers/oursharedevents/tests/events-map.contract.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-map.redteam.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-map.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 24
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-publication.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/export-manifest-actor.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/fat-finger.property.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -503,14 +587,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 17
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/form-error-friendly-copy.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 8
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/form-page-canonical-title.spec.ts",
@@ -581,6 +665,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-phase-required-gate.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
     },
     {
       "file": "workers/oursharedevents/tests/forms-schema.spec.ts",
@@ -657,14 +748,21 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 21
+      "testCount": 22
     },
     {
-      "file": "workers/oursharedevents/tests/landing-colorblind-safe.spec.ts",
+      "file": "workers/oursharedevents/tests/landing-area.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/legal-footer.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 5
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/lifecycle.spec.ts",
@@ -672,6 +770,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/maps.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/migration-smoke.spec.ts",
@@ -713,7 +818,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 13
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/og-meta.spec.ts",
@@ -765,6 +870,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/pii-crypto.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 26
+    },
+    {
       "file": "workers/oursharedevents/tests/pii-invariant.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -790,7 +902,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 4
+      "testCount": 5
     },
     {
       "file": "workers/oursharedevents/tests/poster-attribution-h3.spec.ts",
@@ -856,6 +968,13 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/poster-print-gate.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-qr-uec-color.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -902,7 +1021,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 1
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
@@ -933,11 +1052,32 @@
       "testCount": 20
     },
     {
+      "file": "workers/oursharedevents/tests/public-event-projection.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-stakeholder-surfaces.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 21
+      "testCount": 25
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-list-api-parity.contract.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-read-limit.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-readonly.spec.ts",
@@ -945,6 +1085,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 30
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-server-rendered.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/public-surface-swappable.spec.ts",
@@ -1038,11 +1185,46 @@
       "testCount": 32
     },
     {
+      "file": "workers/oursharedevents/tests/red-team/auth-env-gating.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): fetchMock",
+      "testCount": 55
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): fetchMock",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/auth-jwt-fuzz.property.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
+    },
+    {
       "file": "workers/oursharedevents/tests/red-team/form-security-deep.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 32
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/forms-phase-bypass.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/red-team/impression-privacy.spec.ts",
@@ -1133,7 +1315,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/riph-brain-conformance.spec.ts",
@@ -1185,6 +1367,13 @@
       "testCount": 17
     },
     {
+      "file": "workers/oursharedevents/tests/security-headers-hardening.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
       "file": "workers/oursharedevents/tests/security-privacy.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1203,10 +1392,24 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 19
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-depth-section-matrix.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-disabled-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-event-state-maturity.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
@@ -1231,7 +1434,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-mobile-workability.spec.ts",
@@ -1248,6 +1451,13 @@
       "testCount": 41
     },
     {
+      "file": "workers/oursharedevents/tests/shared-report-read-depth-wiring.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/shared-report-read.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1255,11 +1465,18 @@
       "testCount": 52
     },
     {
+      "file": "workers/oursharedevents/tests/shared-report-sponsor-isolation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
       "file": "workers/oursharedevents/tests/sharedReport-signed-link-ui.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 14
+      "testCount": 17
     },
     {
       "file": "workers/oursharedevents/tests/shortlinks.spec.ts",
@@ -1364,7 +1581,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 18
+      "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-preview.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-render-hardening.spec.ts",
@@ -1409,6 +1633,13 @@
       "testCount": 1
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-write-validation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsors-h3-tagging.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1434,7 +1665,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 10
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/surface-deep-link.spec.ts",
@@ -1455,7 +1686,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
-      "testCount": 8
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/template-clearance-schema.spec.ts",
@@ -1540,6 +1771,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/what-external-link.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
     }
   ]
 }

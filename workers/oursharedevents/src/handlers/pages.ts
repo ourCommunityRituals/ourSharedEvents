@@ -51,6 +51,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
+import { applyCountFloor } from '../lib/count-floor.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -339,6 +340,10 @@ export interface PublicEventRow {
   who_story: string | null;
   who_image_url: string | null;
   what_video_url: string | null;
+  // WHAT card's optional external link — the event's "go here" destination
+  // (fundraiser donation site, tickets, tournament/season signup, a client's own
+  // Google Doc). Clients run their own admin off-platform; OSE just displays it.
+  what_url: string | null;
   lat: number | null;
   lon: number | null;
   price_cents: number | null;
@@ -354,6 +359,46 @@ function esc(s: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * D1 (CCR 2026-09-14) — the public post-event recap is the LEAST-trusted surface
+ * (unauthenticated) and must not become a side-channel that leaks an exact small
+ * count the admin tile + SharedReport hide. Every attendee-derived stat here
+ * routes through the SAME uniform floor the admin tile and corridor map use
+ * (applyCountFloor, K=5): a sub-K cohort renders "Fewer than 5", never the exact
+ * number. A 3-of-5 or "50% of 2" line back-derives an individual — the exact
+ * never-who break OSE-665 exists to close. Server-side, so the raw value never
+ * reaches the client.
+ */
+function statLine(raw: number, label: string, testid: string): string {
+  const f = applyCountFloor(raw);
+  const inner = f.suppressed
+    ? `Fewer than ${f.floor} ${label}`
+    : `<strong>${f.count}</strong> ${label}`;
+  return `<p data-testid="${testid}">${inner}</p>`;
+}
+
+/** True when a count clears the uniform floor (safe to publish exactly / use in a ratio). */
+function clearsFloor(raw: number): boolean {
+  return !applyCountFloor(raw).suppressed;
+}
+
+/**
+ * The WHAT card's optional external link, rendered on every phase (pre / live /
+ * post) so a patron who cannot attend can still act on the event before, during
+ * AND after. It is GENERIC by design — a fundraiser's donation site, a ticketing
+ * page, a tournament/season signup, a client's own Google Doc — because the
+ * client runs their own admin off-platform and OSE just displays the outbound
+ * link. Returns '' when no URL is set (the field is optional; only renders when
+ * active). http(s)-only via validateLogoUrl (defense-in-depth XSS wall), and the
+ * URL is attribute-escaped on output. Not donation-named anywhere: neutral label.
+ */
+function renderWhatLink(rawUrl: string | null, lang: string, testid: string): string {
+  const url = validateLogoUrl(rawUrl).url;
+  if (!url) return '';
+  const label = lang === 'es' ? 'Visitar el sitio →' : 'Visit the site →';
+  return `<p><a class="ose-what-link" data-testid="${testid}" href="${esc(url)}" target="_blank" rel="noopener noreferrer nofollow">${label}</a></p>`;
 }
 
 /** Escape a string for embedding inside a JS single-quoted string literal in a <script> block. */
@@ -560,6 +605,7 @@ export function renderPreEventHtml(
   // src/href here. URL is attribute-escaped on output.
   const whoImage = validateLogoUrl(row.who_image_url).url;
   const whatVideo = validateLogoUrl(row.what_video_url).url;
+  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link');
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
@@ -635,11 +681,12 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     </header>
 
     ${
-      whatShort || whatVideo
+      whatShort || whatVideo || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
            <h2 id="what-heading">What</h2>
            ${whatShort ? `<p>${whatShort}</p>` : ''}
            ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${lang === 'es' ? '▶ Ver el video' : '▶ Watch the video'}</a></p>` : ''}
+           ${whatLink}
          </section>`
         : ''
     }
@@ -741,6 +788,7 @@ export function renderEventLiveHtml(
   const title = esc(row.title);
   // Same What fallback as the pre-event render: host blurb, else description.
   const whatShort = esc(row.what_short) || esc(row.description);
+  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link-live');
   const whoHost = esc(row.who_host);
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
@@ -817,10 +865,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     </header>
 
     ${
-      whatShort
+      whatShort || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
            <h2 id="what-heading-live">What</h2>
-           <p>${whatShort}</p>
+           ${whatShort ? `<p>${whatShort}</p>` : ''}
+           ${whatLink}
          </section>`
         : ''
     }
@@ -951,7 +1000,7 @@ const MAX_POST_EVENT_SUGGESTIONS = 3;
  *   • Anonymity affordance retained (Invariant #1 surface language).
  *   • No sponsor logos v1 — display priority is tier-governed (Invariant #5).
  */
-function renderPostEventHtml(
+export function renderPostEventHtml(
   row: PublicEventRow,
   shareUrl: string,
   nextEvents: NextEventRow[],
@@ -965,6 +1014,10 @@ function renderPostEventHtml(
   // same fields + fallbacks as the pre-event render. WHAT falls back to description
   // so the lead card is never empty when a real description exists.
   const whatShort = esc(row.what_short) || esc(row.description);
+  // The WHAT external link persists into the recap: a fundraiser's donation
+  // window (and a client's own signup/doc) outlasts the gathering, so a patron
+  // who missed it can still act after.
+  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link-post');
   // OG/Twitter card computed up front (needs only title + whatShort + shareUrl):
   // keeps buildOgMeta near the top now that the recap has a fuller 5W setup below.
   const ogMeta = buildOgMeta({
@@ -1082,6 +1135,7 @@ ${ogMeta}
         <h2 id="recap-heading">What this was</h2>
         ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
         ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
+        ${whatLink}
       </section>
 
       ${
@@ -1127,11 +1181,17 @@ ${ogMeta}
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
-              ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
-              ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
-              ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>` : ''}
-              ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
-              ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
+              ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
+              ${regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''}
+              ${
+                // Ratio only when BOTH operands clear the floor — a "% showed up"
+                // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
+                clearsFloor(checkinCount) && clearsFloor(regCount)
+                  ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
+                  : ''
+              }
+              ${surveyCount > 0 ? statLine(surveyCount, 'Surveys submitted', 'stat-surveys') : ''}
+              ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
             </section>`
           : '';
         // Sponsor rotation stays ambient + spend-blind here (names/links only,
@@ -1291,7 +1351,7 @@ export async function handlePublicEventPage(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone,
               what_short, who_host, why_purpose, how_details, where_address,
-              who_story, who_image_url, what_video_url,
+              who_story, who_image_url, what_video_url, what_url,
               lat, lon, price_cents, price_model, price_note
        FROM events WHERE id = ?`
     )
