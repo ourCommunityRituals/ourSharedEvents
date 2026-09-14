@@ -438,24 +438,56 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     expect(html).toContain('Checked in');
   });
 
-  test('event-stats-card renders full funnel when all counts > 0', async () => {
-    const id = 'evt_ssp1_post_stats_full';
+  // D1 (CCR 2026-09-14): the public recap is unauthenticated and must not leak an
+  // exact SUB-K count the admin tile + SharedReport hide (OSE-665 uniform floor).
+  // This case previously seeded 2 reg / 1 checkin and asserted the exact numbers
+  // + the "% showed up" ratio RENDER — it locked the leak in. It now asserts the
+  // floor: sub-K cohorts read "Fewer than 5", the exact number never appears, and
+  // the ratio (which over a sub-K denominator back-derives a person) is suppressed.
+  test('event-stats-card floors SUB-K counts and suppresses the sub-K ratio', async () => {
+    const id = 'evt_ssp1_post_stats_subk';
     await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
-    await seedRegistration(id, { id: 'reg_full_a', expiresAt: null });
-    await seedRegistration(id, { id: 'reg_full_b', expiresAt: null });
+    await seedRegistration(id, { id: 'reg_subk_a', expiresAt: null });
+    await seedRegistration(id, { id: 'reg_subk_b', expiresAt: null });
     await seedCheckinCount(id, 1);
-    await seedSurvey(id, 'surv_full_a');
-    await seedEmailSignup(id, 'email_full_a');
+    await seedSurvey(id, 'surv_subk_a');
+    await seedEmailSignup(id, 'email_subk_a');
 
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
+    // The card + its lines still render (there WAS activity) — but floored.
+    expect(html).toContain('data-testid="event-stats-card"');
     expect(html).toContain('data-testid="stat-checkins"');
     expect(html).toContain('data-testid="stat-registrations"');
+    expect(html).toContain('Fewer than 5 Registered');
+    expect(html).toContain('Fewer than 5 Checked in');
+    // The exact sub-K values must NOT appear as the rendered stat.
+    expect(html).not.toContain('<strong>2</strong> Registered');
+    expect(html).not.toContain('<strong>1</strong> Checked in');
+    // Ratio over a sub-K denominator (50% of 2) is the de-anon vector — suppressed.
+    expect(html).not.toContain('data-testid="stat-showed-up-share"');
+    expect(html).not.toMatch(/% of those registered showed up/);
+  });
+
+  test('event-stats-card renders EXACT counts + ratio once every operand clears the floor', async () => {
+    const id = 'evt_ssp1_post_stats_abovefloor';
+    await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
+    for (let i = 0; i < 10; i++) await seedRegistration(id, { id: `reg_af_${i}`, expiresAt: null });
+    await seedCheckinCount(id, 7);
+    for (let i = 0; i < 6; i++) await seedSurvey(id, `surv_af_${i}`);
+    for (let i = 0; i < 5; i++) await seedEmailSignup(id, `email_af_${i}`);
+
+    const res = await SELF.fetch(`https://t.test/events/${id}`);
+    const html = await res.text();
+    expect(html).toContain('<strong>7</strong> Checked in');
+    expect(html).toContain('<strong>10</strong> Registered');
     expect(html).toContain('data-testid="stat-showed-up-share"');
+    expect(html).toContain('70% of those registered showed up'); // 7/10
+    expect(html).toContain('<strong>6</strong> Surveys submitted');
+    expect(html).toContain('<strong>5</strong> Email signups');
     // OSE-1201: the ratio never wears the banned word.
     expect(html).not.toMatch(/attendance/i);
-    expect(html).toContain('data-testid="stat-surveys"');
-    expect(html).toContain('data-testid="stat-email-signups"');
+    expect(html).not.toContain('Fewer than 5');
   });
 
   test('showed-up share shown only when both registrations and checkins > 0', async () => {
