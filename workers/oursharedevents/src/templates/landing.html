@@ -285,6 +285,16 @@
       .privacy a {
         color: var(--accent);
       }
+      /* Page-level heading — the one <h1>. Visible text = accessible name (WCAG
+         2.4.6 / 1.3.1 heading hierarchy: h1 → the section h2s below). */
+      .lead {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        margin: 0.25rem 0 1.25rem;
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
@@ -299,6 +309,9 @@
     </header>
 
     <main id="main-content" data-testid="landing-main">
+      <!-- The page's single <h1>. Frames the supply-side ask (the two doors
+           below) and gives screen readers + search engines a page-level heading. -->
+      <h1 class="lead" data-testid="landing-h1">Host or sponsor a gathering in your neighborhood</h1>
       <!-- Two doors: always present. This is the supply-side ask. -->
       <section class="doors" data-testid="landing-doors" aria-label="Get started">
         <a class="door" href="/admin" data-testid="door-create-event">

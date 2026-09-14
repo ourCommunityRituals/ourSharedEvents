@@ -33,6 +33,14 @@ function formReq(type: string): Request {
 
 async function scanPage(name: string, html: string): Promise<void> {
   const violations = await axeScan(html);
+  // Exactly-one-<h1> gate. axe's wcag2a/wcag2aa tags do NOT include the
+  // page-has-heading-one rule (it lives in best-practice), so a page with NO
+  // page-level heading passes axe while failing real screen-reader/SEO needs —
+  // that is exactly how the OSE-1312 landing shipped with zero <h1>. Every
+  // served surface must have precisely one page-level heading; assert it here so
+  // the axe scan can't be green on a headingless page.
+  const h1Count = document.querySelectorAll('h1').length;
+  expect(h1Count, `${name} must have exactly one <h1> (found ${h1Count})`).toBe(1);
   if (violations.length > 0) {
     const summary = violations.map((v) => `  [${v.impact}] ${v.id}: ${v.description}`).join('\n');
     expect.fail(`${name} has ${violations.length} critical/serious violation(s):\n${summary}`);
@@ -64,7 +72,9 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
   });
 
   test('landing page', async () => {
-    await scanPage('Landing page', await handleLandingPage({} as never).text());
+    // handleLandingPage is async as of OSE-1312 slice-2 (data-driven area view) —
+    // await the Response, then read it, like the other async handlers above.
+    await scanPage('Landing page', await handleLandingPage({} as never).then((r) => r.text()));
   });
 
   test('register form', async () => {
