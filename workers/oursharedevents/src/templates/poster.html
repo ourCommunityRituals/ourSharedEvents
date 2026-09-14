@@ -119,6 +119,33 @@
         font-size: 1rem;
         color: #334155;
       }
+      /* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
+         --border, --text-muted), not hardcoded hex — so the poster art viewport
+         can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+      .poster-art {
+        margin: 1rem 0 1.25rem;
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--surface-hover);
+      }
+      .poster-art-img {
+        display: block;
+        width: 100%;
+        max-height: 320px;
+        object-fit: cover;
+      }
+      .poster-art--empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+        border: 2px dashed var(--border);
+      }
+      .poster-art-placeholder {
+        font-size: 2rem;
+        color: var(--text-muted);
+        opacity: 0.5;
+      }
       .qr-section {
         display: flex;
         justify-content: center;
@@ -404,6 +431,9 @@
           width: 100px;
           height: 100px;
         }
+        .poster-art-img {
+          max-height: 200px;
+        }
         .qr-link-url {
           max-width: 100px;
           word-break: break-all;
@@ -475,6 +505,14 @@
         }
         .qr-loading {
           display: none !important;
+        }
+        /* R4: art prints when present; an empty placeholder must never print a
+           dashed box where artwork would go. */
+        .poster-art--empty {
+          display: none !important;
+        }
+        .poster-art {
+          page-break-inside: avoid;
         }
         /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
            if ANY QR is still a loading placeholder, hide the whole section so
@@ -650,6 +688,10 @@
         const address = '';
         const startISO = event.startDateISO || '';
         const name = event.name || '';
+        // R4 — poster art viewport. Source is the event's cover image (public
+        // projection allowlist includes cover_image_url). Snake/camel tolerant
+        // so it works whether or not enrichWithPhase renames the field.
+        const art = event.cover_image_url || event.coverImageUrl || '';
 
         return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
@@ -660,6 +702,11 @@
             '<div class="poster-meta" data-testid="poster-meta">' +
             (startISO ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
             (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+            '</div>' +
+            '<div class="poster-art' + (art ? '' : ' poster-art--empty') + '" data-testid="poster-art-viewport">' +
+              (art
+                ? '<img class="poster-art-img" src="' + esc(art) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">'
+                : '<span class="poster-art-placeholder" data-testid="poster-art-empty" aria-hidden="true">&#x1F3A8;</span>') +
             '</div>' +
             '<div class="qr-section" data-testid="poster-qr-section">' +
               '<div class="qr-card qr-item" data-testid="poster-qr-register"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-register-label">Registration</span></div><div class="qr-card-body"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +

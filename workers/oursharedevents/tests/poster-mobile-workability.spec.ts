@@ -93,6 +93,38 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
     expect(mediaBlock).toMatch(/\.qr-link-url\s*\{[^}]*max-width:\s*100px/);
     expect(mediaBlock).toMatch(/\.qr-link-url\s*\{[^}]*word-break:\s*break-all/);
   });
+
+  // ── R4 — poster art viewport (quality bar: mobile + structure + error path) ──
+  test('R4 | API | GET /poster (any) | art viewport img is fluid-width so it cannot overflow at 375px', async () => {
+    const html = await fetchPosterHtml();
+    // width:100% + object-fit:cover means the art scales to the poster
+    // column and can never push the layout wider than the viewport.
+    expect(html).toMatch(/\.poster-art-img\s*\{[^}]*width:\s*100%/);
+    expect(html).toMatch(/\.poster-art-img\s*\{[^}]*object-fit:\s*cover/);
+  });
+
+  test('R4 | API | GET /poster (mobile media query) | art viewport height clamps on narrow viewports', async () => {
+    const html = await fetchPosterHtml();
+    const mediaBlock = extractMediaBlock(html, 768);
+    expect(mediaBlock).toMatch(/\.poster-art-img\s*\{[^}]*max-height:\s*200px/);
+  });
+
+  test('R4 | API | GET /poster (any) | art viewport + empty-state render (no broken-image slot; failed art is hidden)', async () => {
+    const html = await fetchPosterHtml();
+    expect(html).toContain('data-testid="poster-art-viewport"');
+    // error path: when no art (or art fails to load) the poster shows an
+    // empty-state placeholder, never a raw broken-image box.
+    expect(html).toContain('data-testid="poster-art-empty"');
+    expect(html).toMatch(/event\.cover_image_url\s*\|\|\s*event\.coverImageUrl/);
+    expect(html).toMatch(/class="poster-art-img"[^>]*data-hide-on-error="1"/);
+  });
+
+  test('R4 | API | GET /poster (print) | empty art placeholder never prints a dashed box', async () => {
+    const html = await fetchPosterHtml();
+    // screen .poster-art--empty is display:flex; the print rule flips it
+    // to display:none so an artless poster prints clean.
+    expect(html).toMatch(/\.poster-art--empty\s*\{[^}]*display:\s*none\s*!important/);
+  });
 });
 
 /**
