@@ -1169,17 +1169,24 @@ export async function route(
   }
 
   // POST /api/v2/events/:id/sponsors/:sid/impression
+  // D3 (CCR 2026-09-14): per-IP rate-limited so a flood can't inflate a sponsor's
+  // proof-layer numbers. The handler separately rejects any (event,sponsor) pair
+  // that is not a resolved, brand-matched placement.
   const impressionMatch = pathname.match(
     /^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/impression$/
   );
   if (impressionMatch && method === 'POST') {
-    return handleLogImpression(request, env, impressionMatch[1], impressionMatch[2]);
+    return publicReadLimited('sponsor-impression', (req, e: typeof env) =>
+      handleLogImpression(req, e, impressionMatch[1], impressionMatch[2])
+    )(request, env);
   }
 
   // POST /api/v2/events/:id/sponsors/:sid/click
   const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
   if (clickMatch && method === 'POST') {
-    return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
+    return publicReadLimited('sponsor-click', (req, e: typeof env) =>
+      handleLogClick(req, e, clickMatch[1], clickMatch[2])
+    )(request, env);
   }
 
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).
