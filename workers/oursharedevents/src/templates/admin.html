@@ -2877,15 +2877,18 @@
             <!-- WHAT external link. A general outbound destination the client runs
                  off-platform: a fundraiser's donation site, tickets, a tournament/
                  season signup, a Google Doc. Optional; shows on the event page
-                 (before/during/after) only when set. Link-out only, http(s) only. -->
+                 (before/during/after) only when set. Link-out only, HTTPS ONLY
+                 (the visitor's browser follows it — no http:// downgrade). -->
             <div class="full-width">
-              <label for="create-what-url">What (external link — optional)</label>
+              <label for="create-what-url">What (external link — optional, https only)</label>
               <input
                 type="url"
                 id="create-what-url"
                 name="what_url"
                 data-testid="create-what-url"
                 placeholder="https://… donation page, tickets, signup, a doc — anything"
+                pattern="https://.*"
+                title="Must start with https://"
                 maxlength="500"
                 inputmode="url"
               />

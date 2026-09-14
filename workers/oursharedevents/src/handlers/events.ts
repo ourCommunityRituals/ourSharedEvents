@@ -22,7 +22,7 @@ import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
-import { validateLogoUrl } from '../lib/sponsor-logo';
+import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -427,11 +427,17 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     );
   }
   // OSE what_url — the WHAT card's optional external link (fundraiser donation
-  // site, tickets, external RSVP, …). http(s)-only, same scheme wall as the
-  // other media URLs; null clears it.
-  const whatLink = validateLogoUrl(body.what_url);
+  // site, tickets, external RSVP, …). HTTPS-ONLY: it is a public outbound link the
+  // visitor's own browser follows, so plain http:// is a mixed-content/downgrade
+  // risk and is rejected (unlike the proxied media URLs). null clears it.
+  const whatLink = validateHttpsUrl(body.what_url);
   if (!whatLink.valid) {
-    return errorResponse('INVALID_URL', 'what_url must be a http(s) URL under 500 chars', 400, rid);
+    return errorResponse(
+      'INVALID_URL',
+      'what_url must be an https:// URL under 500 chars',
+      400,
+      rid
+    );
   }
   const whoImageUrl = whoImage.url;
   const whatVideoUrl = whatVideo.url;
@@ -714,8 +720,9 @@ export async function handleUpdateEvent(
 
   // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
   // rather than blind-sliced, so a javascript:/data: payload is rejected here
-  // and never reaches the column. null clears the field.
-  for (const field of ['who_image_url', 'what_video_url', 'what_url'] as const) {
+  // and never reaches the column. null clears the field. These are proxied
+  // server-side, so http(s) is fine (see what_url below for the outbound case).
+  for (const field of ['who_image_url', 'what_video_url'] as const) {
     if (field in body) {
       const check = validateLogoUrl(body[field]);
       if (!check.valid) {
@@ -729,6 +736,22 @@ export async function handleUpdateEvent(
       sets.push(`${field} = ?`);
       values.push(check.url);
     }
+  }
+
+  // what_url — the public OUTBOUND link, HTTPS-ONLY (the visitor's browser
+  // follows it; plain http:// is a downgrade risk). Same null-clears semantics.
+  if ('what_url' in body) {
+    const check = validateHttpsUrl(body.what_url);
+    if (!check.valid) {
+      return errorResponse(
+        'INVALID_URL',
+        'what_url must be an https:// URL under 500 chars',
+        400,
+        rid
+      );
+    }
+    sets.push('what_url = ?');
+    values.push(check.url);
   }
 
   if (sets.length === 0) {
