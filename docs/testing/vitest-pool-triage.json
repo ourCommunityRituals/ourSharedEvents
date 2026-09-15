@@ -2,7 +2,7 @@
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
     "total": 253,
-    "totalTests": 3040,
+    "totalTests": 3051,
     "workerd": 126,
     "node": 127,
     "needsReview": 59
@@ -986,7 +986,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 21
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/poster-spon4-as2-spon10.spec.ts",
@@ -1427,7 +1427,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 15
+      "testCount": 17
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-materialize.spec.ts",
@@ -1483,7 +1483,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 22
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/signed-link-token-forgery.spec.ts",
@@ -1777,7 +1777,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 5
+      "testCount": 9
     }
   ]
 }
