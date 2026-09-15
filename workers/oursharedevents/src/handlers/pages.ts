@@ -398,7 +398,9 @@ function clearsFloor(raw: number): boolean {
  */
 // R3 — type-driven CTA labels for the WHAT external link. Neutral, action-first.
 // Same destination vocabulary the poster's typed QR slots use.
-const WHAT_LINK_LABELS: Record<string, { en: string; es: string }> = {
+// Exported so the what-url-types drift guard can assert this map stays a
+// superset of the canonical WHAT_URL_TYPES allowlist (strict-in / lenient-out).
+export const WHAT_LINK_LABELS: Record<string, { en: string; es: string }> = {
   donation: { en: 'Donate →', es: 'Donar →' },
   league: { en: 'View the league →', es: 'Ver la liga →' },
   workshop: { en: 'Register →', es: 'Inscribirse →' },
