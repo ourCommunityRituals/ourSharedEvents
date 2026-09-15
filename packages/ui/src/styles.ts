@@ -35,6 +35,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
 .card:hover{background:var(--surface-hover)}
 
+/* Sectioned card — the uniform management-card anatomy (OSE-1326). Opt-in via
+   .card--sectioned so existing .card (padding:14px) consumers are untouched.
+   Header row (>=56px: title + optional .meta-badge + exactly one action) over a
+   bottom border; body pads the content. No shadow, no left-accent border. */
+.card--sectioned{padding:0}
+.card--sectioned:hover{background:var(--surface)}
+.card-header{display:flex;align-items:center;gap:8px;min-height:56px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:1rem;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:8px}
+.card-action{margin-left:auto}
+.card-body{padding:16px}
+.card--collapsed .card-body{display:none}
+.card--locked{opacity:.6}
+
 /* Inputs (generalised from .venue-input / .track-search) */
 /* Every form partial (formInput, textarea, formSelect) renders .input, so this
    one rule is the library's whole form-control contract.
