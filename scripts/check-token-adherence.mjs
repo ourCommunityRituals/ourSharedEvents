@@ -47,7 +47,8 @@ const BASELINE = {
   // surface, validation-red → --error): 219 → 98; then OSE-1328 retired the five
   // per-surface surface-card left-border hexes (#6c757d/#d97706/#4361ee/#16a34a/
   // #7c3aed) as those cards adopted the uniform token-driven .card: 98 → 93; then
-  // card 2 (forms-card) took the anatomy and its `.form-link:hover` #e9ecef → var(--surface-hover): 93 → 92. The remaining 92 are the
+  // card 2 (forms-card) took the anatomy and its `.form-link:hover` #e9ecef → var(--surface-hover): 93 → 92; then
+  // card 3 (poster-deployments) took the anatomy + `.add-spon-btn:hover` #3a56d4 → var(--accent-hover): 92 → 91. The remaining 91 are the
   // status/SEMANTIC palette (tier + phase badges, green-success #16a34a family,
   // red/amber/info alert-banner TINTS), white-on-accent button text (color:#fff —
   // no --on-accent token), a few mixed-context grays, and one JS-string print-
@@ -55,7 +56,7 @@ const BASELINE = {
   // these needs the STATUS/TIER TOKEN decision (add --success/--on-accent/tier +
   // warn/info tint tokens to @ocr/ui vs. treat as theme-invariant status hues) —
   // admin's rich palette is the strongest driver of that decision. Chrome done.
-  'admin.html': 92,
+  'admin.html': 91,
 };
 
 function rawHexCount(html) {

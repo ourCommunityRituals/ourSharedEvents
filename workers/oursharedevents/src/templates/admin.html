@@ -939,6 +939,13 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-top: 2rem;
       }
+      /* OSE-1328 card 3: poster-deployments adopts the uniform token-driven
+         .card + .mcard-* anatomy (padding:0 so the header row + body own their
+         spacing). It no longer borrows the .sponsors-card-header piggyback. */
+      .poster-deployments-card {
+        margin-top: 2rem;
+        padding: 0;
+      }
       .sponsors-card-header {
         display: flex;
         align-items: center;
@@ -961,7 +968,7 @@
         transition: background 0.2s;
       }
       .add-spon-btn:hover {
-        background: #3a56d4;
+        background: var(--accent-hover);
       }
       .add-spon-btn:focus-visible {
         outline: 2px solid var(--accent);
@@ -3805,9 +3812,9 @@
     <!-- Posters — step 4. Each deployment is one physical placement and mints its
            own unique qr_token (migrations/0003), so "how many posters" is "how
            many deployments", and the QR is complete once a deployment exists. -->
-    <div class="poster-deployments-card" data-testid="poster-deployments-card">
-      <div class="sponsors-card-header">
-        <h2>Posters</h2>
+    <div class="card poster-deployments-card" data-testid="poster-deployments-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">Posters</h2>
         <button
           class="add-spon-btn"
           id="add-pd-toggle"
@@ -3818,6 +3825,7 @@
         >+ Add Deployment</button>
       </div>
 
+      <div class="mcard-body">
       <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
         <form id="pd-create-form" data-testid="poster-deployment-create-form" novalidate>
           <div class="create-form">
@@ -3881,6 +3889,7 @@
 
       <div id="pd-panel" data-testid="poster-deployments-panel">
         <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
+      </div>
       </div>
     </div>
 

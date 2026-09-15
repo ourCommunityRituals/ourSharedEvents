@@ -211,6 +211,34 @@ describe('OSE-1328: forms-card uniform anatomy', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OSE-1328: poster-deployments-card uniform anatomy (card 3, cluster — decouple)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
+  test('poster-deployments-card adopts .card + .mcard-* (no longer borrows .sponsors-card-header)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('class="card poster-deployments-card"');
+    // Its header uses the shared .mcard-head/.mcard-title, not the sponsors-card piggyback.
+    expect(html).toMatch(
+      /class="card poster-deployments-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Posters/
+    );
+    expect(html).toContain('.poster-deployments-card {');
+    expect(html).not.toMatch(/\.poster-deployments-card\s*\{[^}]*box-shadow/);
+    // The add-spon-btn hover raw hex was routed to the token in the same change.
+    expect(html).not.toContain('#3a56d4');
+  });
+
+  test('poster-deployments wiring preserved (panel + form ids + ecb jump target)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('id="pd-panel"');
+    expect(html).toContain('id="pd-form-wrap"');
+    expect(html).toContain('data-testid="poster-deployments-panel"');
+    expect(html).toContain('data-action="pd-toggle"');
+    expect(html).toContain('data-target="poster-deployments-card"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-14: Surface link cards (poster, display, public, report)
 // ═══════════════════════════════════════════════════════════════════════════════
 
