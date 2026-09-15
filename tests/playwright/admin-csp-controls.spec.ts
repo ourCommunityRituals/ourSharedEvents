@@ -41,8 +41,10 @@ async function openAdvanced(page: Page): Promise<void> {
   await page.waitForTimeout(800);
 }
 
-/** Seed one event so the events table and the per-event cards have something real. */
-async function seedEvent(page: Page): Promise<void> {
+/** Seed one event so the events table and the per-event cards have something real.
+ *  Returns the created event id so the caller can wait on the DATA being visible
+ *  to the list-read path (below) before it ever waits on the DOM. */
+async function seedEvent(page: Page): Promise<string> {
   const res = await page.request.post('/api/v2/admin/events', {
     headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
     data: {
@@ -54,6 +56,46 @@ async function seedEvent(page: Page): Promise<void> {
   // A silent non-2xx here would surface downstream as an empty table ("0 rows"),
   // which reads as a flake — fail loudly at the real cause instead.
   expect(res.ok(), `seed POST failed: ${res.status()} ${await res.text()}`).toBe(true);
+  const body = (await res.json()) as { id?: string };
+  expect(body.id, `seed response carried no event id: ${JSON.stringify(body)}`).toBeTruthy();
+  return body.id as string;
+}
+
+/**
+ * Wait until the seeded event is visible to the ADMIN LIST READ PATH — polling
+ * the API, not the DOM.
+ *
+ * WHY THIS EXISTS (#545 flaked twice more after its "wait for the row" fix).
+ *   The surface renders its events table from an async `GET /api/v2/admin/events`
+ *   after DOMContentLoaded. On a cold CI worker the seed WRITE and that first
+ *   LIST READ race, so the row can be genuinely absent when the DOM wait starts —
+ *   and a DOM-visibility timeout reports that as the ambiguous "no selectable
+ *   event rows rendered", conflating "the data isn't there yet" with "the data is
+ *   there but didn't render". This splits the two: we assert the DATA condition
+ *   here (deterministically, at the API, with a clear message), so the later DOM
+ *   wait is only ever waiting on client fetch+render — never on a cold DB write.
+ *   The admin list has no is_published filter and orders created_at DESC, so a
+ *   just-seeded event is always on page one — its absence here is pure lag, and
+ *   polling is the right tool for lag.
+ */
+async function waitForEventInAdminList(page: Page, id: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get('/api/v2/admin/events?limit=100', {
+          headers: { Authorization: `Bearer ${ADMIN_BEARER}` },
+        });
+        if (!res.ok()) return false;
+        const body = (await res.json()) as { items?: Array<{ id?: string }> };
+        return (body.items ?? []).some((e) => e.id === id);
+      },
+      {
+        message: `seeded event ${id} never appeared in the admin list API`,
+        timeout: 15000,
+        intervals: [250, 500, 1000],
+      }
+    )
+    .toBe(true);
 }
 
 test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
@@ -85,15 +127,18 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
   test('selecting an event scopes the surface links to it', async ({ page }) => {
     const csp = watchCsp(page);
     await openAdvanced(page);
-    await seedEvent(page);
+    const id = await seedEvent(page);
+    // Gate on the DATA being readable before we reload into the render path.
+    await waitForEventInAdminList(page, id);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     await page.click('[data-testid="admin-path-advanced"]');
     await page.waitForTimeout(1000);
 
-    // The events list loads via an async fetch after DOMContentLoaded, so a
-    // fixed wait + non-waiting count() races that fetch on a slow CI cold-start.
-    // Wait for the seeded row to attach, THEN snapshot the count deterministically.
+    // The events list loads via an async fetch after DOMContentLoaded. The data
+    // is already confirmed present (waitForEventInAdminList above), so this wait
+    // is only for client fetch+render — never a cold DB write. Wait for the row
+    // to attach, THEN snapshot the count deterministically.
     const rows = page.locator('[data-testid="events-tbody"] tr[data-action="event-select"]');
     await expect(rows.first(), 'no selectable event rows rendered').toBeVisible({ timeout: 15000 });
     expect(await rows.count()).toBeGreaterThan(0);
@@ -115,15 +160,17 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
   test('the per-event cards load once an event is selected', async ({ page }) => {
     const csp = watchCsp(page);
     await openAdvanced(page);
-    await seedEvent(page);
+    const id = await seedEvent(page);
+    await waitForEventInAdminList(page, id);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     await page.click('[data-testid="admin-path-advanced"]');
     await page.waitForTimeout(1000);
-    await page
-      .locator('[data-testid="events-tbody"] tr[data-action="event-select"]')
-      .first()
-      .click();
+    const seededRow = page.locator('[data-testid="events-tbody"] tr[data-action="event-select"]');
+    await expect(seededRow.first(), 'no selectable event rows rendered').toBeVisible({
+      timeout: 15000,
+    });
+    await seededRow.first().click();
     await page.waitForTimeout(3000);
 
     // "Could not load forms" here would mean the panel threw while rendering —
