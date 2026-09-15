@@ -27,8 +27,8 @@ const TEMPLATES = join(ROOT, 'workers', 'oursharedevents', 'src', 'templates');
 const BASELINE = {
   'landing.html': 0,
   'public.html': 0,
-  'admin-signin.html': 1,
-  'display.html': 17,
+  'admin-signin.html': 0,
+  'display.html': 0,
   // poster.html: screen chrome fully tokenised; the remaining 6 are @media-print
   // PAPER colors (white paper / dark ink, theme-invariant) that have no semantic
   // token today. Closing them to 0 is the print-token follow-up: teach @ocr/ui

@@ -88,11 +88,14 @@
         font-size: 0.95rem;
         margin-bottom: 1.75rem;
       }
+      /* Foreground comes from the canonical .btn-primary in /ui.css (the CTA
+         adopts `btn btn-primary` below), so no on-accent hex lives here. The
+         .cta keeps only its layout deltas (font-size, padding, margin); its
+         higher specificity preserves those over .btn's defaults. */
       .signin-card .cta {
         display: inline-flex;
         align-items: center;
         background: var(--accent);
-        color: #000;
         padding: 0.75rem 1.5rem;
         border-radius: var(--radius-sm);
         text-decoration: none;
@@ -183,7 +186,9 @@
           This page is for event organizers. Sign in with your authorized work email to manage your
           events and access reports.
         </p>
-        <a href="/admin" class="cta" data-testid="signin-cta" rel="noopener">Sign in to admin</a>
+        <a href="/admin" class="cta btn btn-primary" data-testid="signin-cta" rel="noopener"
+          >Sign in to admin</a
+        >
         <p class="helper" data-testid="signin-helper">
           New to OurSharedEvents?
           <a href="/" data-testid="signin-request-access">Request access from the home page</a>
