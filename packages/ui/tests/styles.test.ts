@@ -33,3 +33,16 @@ describe('componentStyles — uniform Card anatomy (OSE-1326)', () => {
     expect(componentStyles).toMatch(/\.card\{[^}]*padding:14px\}/);
   });
 });
+
+// OSE-1327 — combined-footer statement classes.
+describe('componentStyles — combined-footer statement (OSE-1327)', () => {
+  for (const sel of ['.ocr-footer-statement', '.ocr-footer-flag', '.ocr-footer-say']) {
+    it(`defines ${sel}`, () => {
+      expect(componentStyles).toContain(sel);
+    });
+  }
+
+  it('hides the statement in print so the print footer stays compact', () => {
+    expect(componentStyles).toContain('.ocr-footer-statement{display:none}');
+  });
+});

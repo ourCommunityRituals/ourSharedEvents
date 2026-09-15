@@ -147,8 +147,12 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .ocr-footer a:hover,.ocr-footer a:focus-visible{text-decoration:underline}
 .ocr-footer-sep{opacity:.5;padding:0 2px}
 .ocr-footer-sub{margin:4px 0 0;font-size:.75rem;opacity:.75}
+/* OSE-1327 — combined-footer privacy statement, above the legal line. */
+.ocr-footer-statement{margin:0 auto 12px;max-width:60ch}
+.ocr-footer-flag{margin:0;font-size:1.1rem;font-weight:700;line-height:1.2;color:var(--text)}
+.ocr-footer-say{margin:4px 0 0;font-size:.9rem;line-height:1.5;color:var(--text-muted)}
 @media (pointer:coarse){.ocr-footer a{padding:14px 8px}}
-@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}}
+@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}.ocr-footer-statement{display:none}}
 
 /* Track card family */
 .track-card{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-sm);transition:background .15s;cursor:pointer}

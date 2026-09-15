@@ -115,6 +115,14 @@ export interface FooterOpts {
    * belongs where a reader meets the product, not on every page twice.
    */
   subtitle?: boolean;
+  /**
+   * Render the privacy STATEMENT block above the legal line (OSE-1327): the
+   * "Anonymous or plant your flag." headline + the never-who statement. The
+   * legal line — © + links, including the "How this works →" deeper-dive link —
+   * stays: one combined footer. Off by default and dropped in `@media print`, so
+   * the poster / print footer stays compact.
+   */
+  statement?: boolean;
 }
 
 /**
@@ -150,8 +158,19 @@ export function footer(o: FooterOpts): string {
     ? `<p class="ocr-footer-sub" data-testid="${esc(surface)}-footer-subtitle">Never who, only how many.</p>`
     : '';
 
+  // OSE-1327 — combined footer: the privacy statement sits ABOVE the retained
+  // legal line (© + links, incl. the "How this works →" deeper-dive link). Off by
+  // default; dropped in @media print so the poster/print footer stays compact.
+  const statement = o.statement
+    ? `<div class="ocr-footer-statement" data-testid="${esc(surface)}-footer-statement">` +
+      `<p class="ocr-footer-flag">Anonymous or plant your flag.</p>` +
+      `<p class="ocr-footer-say">We measure that people came, when, and roughly where. We never collect who. If you want your name on something, that's your choice to make, each time.</p>` +
+      `</div>`
+    : '';
+
   return (
     `<footer class="ocr-footer" data-testid="${esc(surface)}-footer">` +
+    statement +
     `<p class="ocr-footer-legal" data-testid="${esc(surface)}-footer-copyright">` +
     `© ${esc(String(year))} ${esc(product)}` +
     (links ? `<span class="ocr-footer-sep" aria-hidden="true"> · </span>${links}` : '') +
