@@ -66,3 +66,11 @@ export {
   type PageOpts,
 } from './partials';
 export { checkTemplate, checkAll, type DriftFinding } from './contract';
+export {
+  BRAND_CUSTOMIZABLE,
+  BRAND_LOCKED,
+  DESIGNATION,
+  validateBrandOverride,
+  type CustomizableToken,
+  type BrandOverrideViolation,
+} from './brand';
