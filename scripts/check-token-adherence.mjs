@@ -36,7 +36,13 @@ const BASELINE = {
   // construction, then this block tokenises. Tracked; do not "fix" by tokenising
   // print to theme-flipping vars (that risks dark-on-dark printed posters).
   'poster.html': 6,
-  'shared-report.html': 65,
+  // shared-report.html: chrome fully tokenised; the remaining 11 are the
+  // status/tier BADGE hues (active green, tier mid blue, tier enterprise purple,
+  // checkin-bar green + the overlay's active green) — meaning-carrying like UEC,
+  // no @ocr/ui token today — plus 3 @media-print paper colors. Closing them is a
+  // pending design decision (add status/tier tokens vs. treat as theme-invariant
+  // status hues), informed by the QR/customization research.
+  'shared-report.html': 11,
   'admin.html': 219,
 };
 
