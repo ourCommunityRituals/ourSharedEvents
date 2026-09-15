@@ -14,7 +14,7 @@
  * avoids it:
  *   --live   = teal  (#00C4B4) — distinguishable across protanopia,
  *              deuteranopia, and tritanopia; distinct in lightness from blue
- *   --danger = red   (#E05252) — used only for DESTRUCTIVE ACTIONS, never
+ *   --danger = red   (#EA6D6D) — used only for DESTRUCTIVE ACTIONS, never
  *              as a semantic opposite to --live
  *
  * All foreground/background pairs target WCAG AA (4.5:1 normal text, 3:1 large).
@@ -30,6 +30,16 @@
  *   }
  *
  * Override only the semantic tokens that differ. Everything else inherits OCR base.
+ *
+ * LOCKED BASE — CUSTOMIZE VIA THE WHITE-LABEL PIPELINE, NOT HERE
+ * ────────────────────────────────────────────────────────────────────────────
+ * Tier 1 + Tier 2 are canonical and locked: no surface hardcodes a hex or
+ * declares its own :root (both gated fleet-wide by scripts/check-token-adherence.mjs).
+ * Per-brand customization is a Tier 3 [data-brand] block INJECTED by the
+ * white-label pipeline — OSM (OurSharedMagnets) contracts/onboards the brand's
+ * assets + config, OA (OurAirwaves) deploys the instance / client fork — never
+ * a hand-edited token in a template. A brand override set must itself pass
+ * contrast verification (an inaccessible white-label palette does not ship).
  */
 
 // ── Tier 1: Primitive colour scale ───────────────────────────────────────────

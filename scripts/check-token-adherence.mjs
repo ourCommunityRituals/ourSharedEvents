@@ -42,6 +42,14 @@ function rawHexCount(html) {
   return (css.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length;
 }
 
+// Tokens are LOCKED in @ocr/ui — no surface redefines them via a local :root
+// block. Per-brand customization comes from the [data-brand] override layer, fed
+// by OSM (contracts/onboards the brand assets+config) + OA (deploys the
+// white-label instance / client fork), never a hand-edited token in a template.
+function redefinesTokens(html) {
+  return /:root\s*\{/.test(html);
+}
+
 // Every template must appear in BASELINE — a new surface can't skip the gate.
 const onDisk = readdirSync(TEMPLATES).filter((f) => f.endsWith('.html'));
 let fail = false;
@@ -53,7 +61,8 @@ for (const file of onDisk) {
 }
 
 for (const [file, ceiling] of Object.entries(BASELINE)) {
-  const count = rawHexCount(readFileSync(join(TEMPLATES, file), 'utf8'));
+  const html = readFileSync(join(TEMPLATES, file), 'utf8');
+  const count = rawHexCount(html);
   let note = count === 0 ? 'clean ✓' : 'at ceiling';
   if (count > ceiling) {
     note = `REGRESSION — route new colors through var(--token)`;
@@ -63,6 +72,10 @@ for (const [file, ceiling] of Object.entries(BASELINE)) {
     fail = true;
   }
   console.log(`${String(count).padStart(4)} / ${String(ceiling).padEnd(4)}  ${file.padEnd(20)} ${note}`);
+  if (redefinesTokens(html)) {
+    console.log(`  ✗ ${file}: redefines :root tokens locally — tokens are LOCKED in @ocr/ui; customize via the [data-brand] layer (OSM/OA), not here.`);
+    fail = true;
+  }
 }
 
 console.log('');
