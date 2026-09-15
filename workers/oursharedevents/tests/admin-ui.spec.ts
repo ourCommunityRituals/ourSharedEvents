@@ -222,8 +222,9 @@ describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
     expect(html).toMatch(
       /class="card poster-deployments-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Posters/
     );
-    expect(html).toContain('.poster-deployments-card {');
-    expect(html).not.toMatch(/\.poster-deployments-card\s*\{[^}]*box-shadow/);
+    // The three cluster cards now share ONE grouped padding:0 base rule (DRY —
+    // slice 3 retired the per-card chrome); assert poster-deployments is in it.
+    expect(html).toMatch(/\.poster-deployments-card[,{][\s\S]*?padding: 0/);
     // The add-spon-btn hover raw hex was routed to the token in the same change.
     expect(html).not.toContain('#3a56d4');
   });
