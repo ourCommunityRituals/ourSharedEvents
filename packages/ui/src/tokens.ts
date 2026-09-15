@@ -41,7 +41,8 @@ export const primitives = {
   '--ocr-blue-200': '#A8CEFD', // subtle highlight (light mode)
 
   // Navy/dark scale
-  '--ocr-navy-950': '#0F1824', // darkest bg
+  '--ocr-navy-950': '#0F1824', // darkest (reserved — deepest step)
+  '--ocr-navy-925': '#141F30', // dark-mode PAGE bg — one step up from navy-950 (OSE-1325)
   '--ocr-navy-900': '#1A2740', // surface / card
   '--ocr-navy-700': '#2A3D5A', // border
   '--ocr-navy-500': '#7A94B0', // muted text
@@ -78,7 +79,7 @@ export type PrimitiveName = keyof typeof primitives;
 // ── Tier 2: Semantic tokens (dark default) ────────────────────────────────────
 
 export const semanticDark = {
-  '--bg': 'var(--ocr-navy-950)',
+  '--bg': 'var(--ocr-navy-925)', // OSE-1325: lifted one step from navy-950 (#0F1824 → #141F30)
   '--surface': 'var(--ocr-navy-900)',
   '--border': 'var(--ocr-navy-700)',
   '--text': 'var(--ocr-navy-100)',

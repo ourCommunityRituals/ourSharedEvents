@@ -278,6 +278,23 @@ describe('footer()', () => {
     expect(html).toContain('data-testid="landing-footer-privacy"');
   });
 
+  // OSE-1327 — combined footer: the privacy statement above the retained legal line.
+  it('renders the privacy statement only when statement:true, above the legal line', () => {
+    const on = footer({ surface: 'landing', links, year: 2026, statement: true });
+    expect(on).toContain('data-testid="landing-footer-statement"');
+    expect(on).toContain('Anonymous or plant your flag.');
+    expect(on).toContain('We never collect who.');
+    expect(on.indexOf('footer-statement')).toBeLessThan(on.indexOf('footer-copyright'));
+    const off = footer({ surface: 'landing', links, year: 2026 });
+    expect(off).not.toContain('footer-statement');
+  });
+
+  it('keeps the legal line + links when the statement is on (combination, not replacement)', () => {
+    const html = footer({ surface: 'landing', links, year: 2026, statement: true });
+    expect(html).toContain('data-testid="landing-footer-privacy"');
+    expect(html).toContain('© 2026 OurSharedEvents');
+  });
+
   it('omits the test-id attribute for a link that has none', () => {
     const html = footer({ surface: 'x', links: [{ href: '/a', label: 'A' }] });
     expect(html).toContain('<a href="/a">A</a>');

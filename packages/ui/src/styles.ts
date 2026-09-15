@@ -35,6 +35,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
 .card:hover{background:var(--surface-hover)}
 
+/* Sectioned card — the uniform management-card anatomy (OSE-1326). Opt-in via
+   .card--sectioned so existing .card (padding:14px) consumers are untouched.
+   Header row (>=56px: title + optional .meta-badge + exactly one action) over a
+   bottom border; body pads the content. No shadow, no left-accent border. */
+.card--sectioned{padding:0}
+.card--sectioned:hover{background:var(--surface)}
+.card-header{display:flex;align-items:center;gap:8px;min-height:56px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:1rem;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:8px}
+.card-action{margin-left:auto}
+.card-body{padding:16px}
+.card--collapsed .card-body{display:none}
+.card--locked{opacity:.6}
+
 /* Inputs (generalised from .venue-input / .track-search) */
 /* Every form partial (formInput, textarea, formSelect) renders .input, so this
    one rule is the library's whole form-control contract.
@@ -134,8 +147,12 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .ocr-footer a:hover,.ocr-footer a:focus-visible{text-decoration:underline}
 .ocr-footer-sep{opacity:.5;padding:0 2px}
 .ocr-footer-sub{margin:4px 0 0;font-size:.75rem;opacity:.75}
+/* OSE-1327 — combined-footer privacy statement, above the legal line. */
+.ocr-footer-statement{margin:0 auto 12px;max-width:60ch}
+.ocr-footer-flag{margin:0;font-size:1.1rem;font-weight:700;line-height:1.2;color:var(--text)}
+.ocr-footer-say{margin:4px 0 0;font-size:.9rem;line-height:1.5;color:var(--text-muted)}
 @media (pointer:coarse){.ocr-footer a{padding:14px 8px}}
-@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}}
+@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}.ocr-footer-statement{display:none}}
 
 /* Track card family */
 .track-card{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-sm);transition:background .15s;cursor:pointer}
