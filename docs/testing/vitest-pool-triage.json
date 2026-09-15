@@ -1,9 +1,9 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 256,
-    "totalTests": 3070,
-    "workerd": 128,
+    "total": 257,
+    "totalTests": 3076,
+    "workerd": 129,
     "node": 128,
     "needsReview": 59
   },
@@ -147,6 +147,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
       "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-poster-art-card.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/admin-selection-spine.spec.ts",
