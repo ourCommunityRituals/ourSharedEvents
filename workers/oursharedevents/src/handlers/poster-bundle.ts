@@ -128,8 +128,10 @@ function scanUrl(origin: string, qrToken: string, type: FormType): string {
 }
 
 // Poster destination-slot labels (routing layer). Keys match the R3 what_url_type
-// vocabulary; 'public' is the always-present share/event-page slot.
-const POSTER_SLOT_LABELS: Record<string, string> = {
+// vocabulary; 'public' is the always-present share/event-page slot. Exported so
+// the what-url-types drift guard can assert this map stays a superset of the
+// canonical WHAT_URL_TYPES allowlist.
+export const POSTER_SLOT_LABELS: Record<string, string> = {
   public: 'Event page',
   donation: 'Donate',
   signup: 'Sign up',

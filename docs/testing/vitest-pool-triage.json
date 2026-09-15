@@ -1,10 +1,10 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 253,
-    "totalTests": 3051,
-    "workerd": 126,
-    "node": 127,
+    "total": 256,
+    "totalTests": 3070,
+    "workerd": 128,
+    "node": 128,
     "needsReview": 59
   },
   "files": [
@@ -175,6 +175,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 78
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-what-url-controls.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/advanced-metrics.spec.ts",
@@ -532,6 +539,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-what-url-r3.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/export-manifest-actor.spec.ts",
@@ -1778,6 +1792,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/what-url-types.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
     }
   ]
 }
