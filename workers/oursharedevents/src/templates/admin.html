@@ -351,13 +351,13 @@
         gap: 1rem;
         margin-top: 2rem;
       }
-      .surface-card {
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        border-left: 3px solid #6c757d;
-      }
+      /* OSE-1328 uniform anatomy (Decision 3): surface-link cards adopt the
+         shipped .card base from /ui.css (var(--surface) bg, 1px var(--border),
+         var(--radius-sm), hover) — NO box-shadow, NO left-border accent. The
+         accent now lives on the link (var(--accent)) instead of a decorative
+         raw-hex border, so all five per-surface hexes leave the bundle. The
+         .surface-card class is kept for content layout + as the data-surface
+         hook window.scopeSurfaceCards drives. */
       .surface-card h3 {
         font-size: 0.9rem;
         font-weight: 600;
@@ -383,18 +383,6 @@
       }
       .surface-card a:hover {
         text-decoration: underline;
-      }
-      .surface-card.poster {
-        border-left-color: #d97706;
-      }
-      .surface-card.display {
-        border-left-color: #4361ee;
-      } /* OSE-221: platform-standard accent (was Tailwind blue #2563eb) */
-      .surface-card.public {
-        border-left-color: #16a34a;
-      }
-      .surface-card.report {
-        border-left-color: #7c3aed;
       }
       .qr-hint {
         font-size: 0.7rem;
@@ -4316,7 +4304,7 @@
          surface (data-surface drives window.scopeSurfaceCards). Unscoped they
          open the event-agnostic shell, so the cards are always functional. -->
     <div class="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
-      <div class="surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
+      <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
         <p>Print-ready event poster with QR codes</p>
         <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
@@ -4325,7 +4313,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
       </div>
-      <div class="surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
+      <div class="card surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
         <h3>TV Display</h3>
         <p>Bar TV / kiosk live event display</p>
         <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
@@ -4334,7 +4322,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
       </div>
-      <div class="surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
+      <div class="card surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
         <h3>Public Page</h3>
         <p>Customer-facing events listing</p>
         <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
@@ -4343,7 +4331,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
       </div>
-      <div class="surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
+      <div class="card surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
         <h3>Shared Report</h3>
         <p>Post-event analytics dashboard</p>
         <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>

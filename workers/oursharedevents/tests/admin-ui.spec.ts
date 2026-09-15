@@ -228,14 +228,20 @@ describe('ADMIN-14 Structure: Surface cards in admin HTML', () => {
 
 // ── Layer 2: CSS — visual classes defined for card styling ───────────────────
 
-describe('ADMIN-14 CSS: Surface card styles', () => {
-  test('surface card base + per-surface border colors defined', async () => {
+describe('ADMIN-14 CSS: Surface card styles (OSE-1328 uniform anatomy)', () => {
+  test('surface cards adopt the shipped .card base (no bespoke card chrome)', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('.surface-card {');
-    expect(html).toContain('.surface-card.poster');
-    expect(html).toContain('.surface-card.display');
-    expect(html).toContain('.surface-card.public');
-    expect(html).toContain('.surface-card.report');
+    // OSE-1328 Decision 3: every surface-link card carries the uniform .card
+    // class — var(--surface) bg + 1px var(--border) + var(--radius-sm) from
+    // /ui.css — NOT a bespoke background/box-shadow/left-border block.
+    expect(html).toContain('class="card surface-card poster"');
+    expect(html).toContain('class="card surface-card display"');
+    expect(html).toContain('class="card surface-card public"');
+    expect(html).toContain('class="card surface-card report"');
+    // The retired bespoke chrome is gone: no box-shadow / left-border on the
+    // base surface-card rule (those now come from the token-driven .card).
+    expect(html).not.toMatch(/\.surface-card\s*\{[^}]*box-shadow/);
+    expect(html).not.toMatch(/\.surface-card\s*\{[^}]*border-left/);
   });
 
   test('surface cards grid layout defined', async () => {
@@ -249,16 +255,18 @@ describe('ADMIN-14 CSS: Surface card styles', () => {
     expect(html).toContain('.qr-hint');
   });
 
-  // OSE-221: Display surface card MUST use the platform-standard accent
-  // (#4361ee, indigo) — not the Tailwind blue (#2563eb) that drifted in
-  // earlier. The 7-surface color tokens need to stay consistent across
-  // admin surfaces. If a future contributor reverts this to Tailwind blue,
-  // this test fails the PR.
-  test('OSE-221: surface-card.display uses platform-standard #4361ee accent (no Tailwind drift)', async () => {
+  // OSE-221, carried forward into OSE-1328: the per-surface left-border accents
+  // are RETIRED by Decision 3 (uniform card, no left-border), so the accent no
+  // longer rides a raw hex that could drift. The anti-drift guarantee now holds
+  // by construction — the surface link routes its accent through var(--accent),
+  // and the Tailwind blue that once drifted in never reappears on a border.
+  test('OSE-221/1328: per-surface raw-hex left-border accents retired (uniform card)', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toMatch(/\.surface-card\.display\s*\{[^}]*border-left-color:\s*#4361ee\b/);
-    // Negative: the Tailwind drift value MUST NOT appear in the display rule
-    expect(html).not.toMatch(/\.surface-card\.display\s*\{[^}]*border-left-color:\s*#2563eb\b/);
+    expect(html).not.toMatch(
+      /\.surface-card\.(poster|display|public|report)\s*\{[^}]*border-left-color/
+    );
+    // The historical Tailwind drift value must never return on a border.
+    expect(html).not.toMatch(/border-left-color:\s*#2563eb/);
   });
 });
 
