@@ -185,6 +185,32 @@ describe('ADMIN-13: Skeleton loaders and error states', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OSE-1328: forms-card uniform .card anatomy (card 2/6)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-1328: forms-card uniform anatomy', () => {
+  test('forms-card adopts the uniform .card base + header/body anatomy', async () => {
+    const html = await fetchAdminHtml();
+    // .card = token-driven base from /ui.css; the forms-card class is kept so
+    // the context-bar ecbJump target (querySelector('.forms-card')) still resolves.
+    expect(html).toContain('class="card forms-card"');
+    expect(html).toMatch(/class="mcard-head"[\s\S]*?class="mcard-title"/);
+    expect(html).toContain('class="mcard-body"');
+    expect(html).toContain('.mcard-head {');
+    // No bespoke card chrome (shadow) left on the forms-card rule.
+    expect(html).not.toMatch(/\.forms-card\s*\{[^}]*box-shadow/);
+  });
+
+  test('forms-card wiring preserved (panel id + loadForms + ecb jump target)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('id="forms-panel"');
+    expect(html).toContain('data-testid="forms-panel"');
+    expect(html).toContain('window.loadForms');
+    expect(html).toContain('data-target="forms-card"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-14: Surface link cards (poster, display, public, report)
 // ═══════════════════════════════════════════════════════════════════════════════
 

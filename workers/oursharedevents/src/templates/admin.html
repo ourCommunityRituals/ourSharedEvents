@@ -284,18 +284,31 @@
         padding: 2rem;
         color: var(--error);
       }
+      /* OSE-1328 uniform management-card anatomy (Decision 3): the card is the
+         token-driven .card from /ui.css (surface bg, 1px var(--border),
+         var(--radius-sm); no shadow, no left-border). padding:0 so the header
+         row + body own their spacing. .mcard-* are shared by every selected-
+         event management card (forms / sponsors / poster-deployments / dashboard). */
       .forms-card {
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-top: 2rem;
+        padding: 0;
       }
-      .forms-card h2 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 0.75rem;
+      .mcard-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        min-height: 56px;
+        border-bottom: 1px solid var(--border);
+      }
+      .mcard-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+      }
+      .mcard-body {
+        padding: 16px;
       }
       .forms-grid {
         display: grid;
@@ -312,7 +325,7 @@
         border-left: 3px solid var(--accent);
       }
       .form-link:hover {
-        background: #e9ecef;
+        background: var(--surface-hover);
       }
       .form-link .form-type {
         font-weight: 600;
@@ -3533,10 +3546,14 @@
            tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
            and Forms 3. Two numbering schemes disagreeing is worse than none, so
            the numbers are gone and the order carries the meaning (OSE-1238). -->
-    <div class="forms-card" data-testid="forms-card">
-      <h2>Registration &amp; Forms</h2>
-      <div id="forms-panel" data-testid="forms-panel">
-        <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
+    <div class="card forms-card" data-testid="forms-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">Registration &amp; Forms</h2>
+      </div>
+      <div class="mcard-body">
+        <div id="forms-panel" data-testid="forms-panel">
+          <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
+        </div>
       </div>
     </div>
     <script>
