@@ -21,13 +21,13 @@
           system-ui,
           -apple-system,
           sans-serif;
-        background: #0f172a;
-        color: #f8fafc;
+        background: var(--bg);
+        color: var(--text);
         display: flex;
         flex-direction: column;
       }
       header {
-        background: #1a1a2e;
+        background: var(--surface);
         padding: 1rem 2rem;
         display: flex;
         align-items: center;
@@ -64,19 +64,19 @@
         font-size: 0.75rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #64748b;
+        color: var(--text-muted);
         margin-bottom: 0.5rem;
       }
       .event-card h2 {
         font-size: clamp(1.5rem, 4vw, 2.5rem);
         font-weight: 800;
         line-height: 1.15;
-        color: #f8fafc;
+        color: var(--text);
         margin-bottom: 0.75rem;
       }
       .event-card .meta {
         font-size: 1.1rem;
-        color: #64748b;
+        color: var(--text-muted);
         display: flex;
         gap: 1.5rem;
         flex-wrap: wrap;
@@ -92,7 +92,7 @@
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: #64748b;
+        color: var(--text-muted);
         margin-bottom: 0.25rem;
       }
       .next-card {
@@ -110,18 +110,18 @@
       }
       .next-card .date {
         font-size: 0.85rem;
-        color: #64748b;
+        color: var(--text-muted);
       }
       .empty {
         text-align: center;
         padding: 4rem;
-        color: #475569;
+        color: var(--text-muted);
         font-size: 1.1rem;
       }
       .display-consent {
         margin: 0;
         padding: 0.75rem 2rem;
-        background: #1a1a2e;
+        background: var(--surface);
         color: rgba(255, 255, 255, 0.85);
         font-size: 1.25rem;
         text-align: center;
@@ -134,10 +134,10 @@
         }
       }
       .ticker {
-        background: #1e3a5f;
+        background: var(--surface);
         padding: 0.6rem 2rem;
         font-size: 0.85rem;
-        color: #93c5fd;
+        color: var(--accent);
         border-top: 1px solid rgba(255, 255, 255, 0.06);
         overflow: hidden;
         white-space: nowrap;
@@ -207,7 +207,7 @@
       }
       .display-sponsor-item .name {
         font-size: 0.8rem;
-        color: #64748b;
+        color: var(--text-muted);
       }
       /* OSE-878/#25: the per-tier treatment blocks (title/platinum gold accent
          border + background + padding + 48px/64px logos + brighter/bolder name;
@@ -216,7 +216,7 @@
          keys off it. Rotation FREQUENCY (buildShareRotation) is the only diff. */
       .sponsor-counter {
         font-size: 0.65rem;
-        color: #64748b;
+        color: var(--text-muted);
         text-align: center;
         margin-top: 0.25rem;
         font-variant-numeric: tabular-nums;
@@ -279,12 +279,12 @@
         width: auto;
         height: auto;
         padding: 0.5rem 1rem;
-        background: #1a1a2e;
-        color: #fff;
+        background: var(--surface);
+        color: var(--text);
         font-size: 1rem;
         z-index: 9999;
         text-decoration: none;
-        border-bottom: 2px solid #4361ee;
+        border-bottom: 2px solid var(--accent);
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
