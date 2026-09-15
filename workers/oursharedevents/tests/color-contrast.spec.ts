@@ -86,8 +86,13 @@ describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
     expect(await adminHtml()).toContain('#6c757d');
   });
 
-  test('shared report page has #6c757d for muted text', async () => {
-    expect(await reportHtml()).toContain('#6c757d');
+  // shared-report migrated muted text to var(--text-muted) (token-adherence
+  // conversion). The contrast guarantee moved to the token layer, it did not
+  // weaken — verify-contrast.mjs checks --text-muted across themes.
+  test('shared report page routes muted text through var(--text-muted), not raw hex', async () => {
+    const body = await reportHtml();
+    expect(body).toContain('var(--text-muted)');
+    expect(body).not.toContain('#6c757d');
   });
 
   test('register form has #6c757d for privacy notice', async () => {
@@ -120,10 +125,15 @@ describe('A11Y-5: #495057 (7.33:1 on #f1f3f5) for archived badge text', () => {
     expect(body).toContain('#495057');
   });
 
-  test('shared report archived badge uses #495057', async () => {
+  // shared-report's .badge.archived migrated to var(--surface-hover)/var(--text-muted)
+  // via the token overlay; the active/tier badge hues remain raw (no token yet).
+  // Archived is tokenised, so assert the token, not the old hex. (Admin's archived
+  // badge above is unchanged — that surface is not yet converted.)
+  test('shared report archived badge is tokenised (var(--text-muted))', async () => {
     const body = await reportHtml();
     expect(body).toContain('.badge.archived');
-    expect(body).toContain('#495057');
+    expect(body).toContain('var(--text-muted)');
+    expect(body).not.toContain('#495057');
   });
 });
 
