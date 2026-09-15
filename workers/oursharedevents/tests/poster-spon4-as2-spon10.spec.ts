@@ -34,14 +34,12 @@ describe('AS-2: Poster page has 30+ data-testid values (OSE-47)', () => {
     'poster-meta-date',
     'poster-meta-venue',
     'poster-qr-section',
-    'poster-qr-register',
-    'poster-qr-register-label',
-    'poster-qr-checkin',
-    'poster-qr-checkin-label',
-    'poster-qr-survey',
-    'poster-qr-survey-label',
-    'poster-qr-email-signup',
-    'poster-qr-email-signup-label',
+    // Typed /q+/s destination slots (Public / Donate / Sign Up) are rendered
+    // client-side by loadPosterQR from bundle.slots; the static server HTML
+    // carries only the container. Per-slot testids (poster-qr-slot-*,
+    // qr-img-slot-*, qr-slot-code-*) are asserted at source in poster-qr.spec.ts.
+    // The forms (register/checkin/survey/email) left the poster in P2 (OSE-1319).
+    'poster-qr-slots',
     'poster-sponsor-strip',
     'poster-footer',
     // init() error/empty states (in script strings)

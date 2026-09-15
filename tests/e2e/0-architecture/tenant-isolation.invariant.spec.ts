@@ -70,9 +70,10 @@ const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
  * the linter.
  */
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'events.ts:255':
+  'events.ts:256':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
-    'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears.',
+    'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
+    '(Line shifted 255→256 by the OSE-1319 what-url-types import.)',
   'portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
     'WHERE clause is interpolated, so the bind is invisible to a static scan.',

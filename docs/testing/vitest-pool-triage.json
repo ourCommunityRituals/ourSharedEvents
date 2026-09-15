@@ -1,10 +1,10 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 253,
-    "totalTests": 3032,
-    "workerd": 126,
-    "node": 127,
+    "total": 257,
+    "totalTests": 3076,
+    "workerd": 129,
+    "node": 128,
     "needsReview": 59
   },
   "files": [
@@ -149,6 +149,13 @@
       "testCount": 20
     },
     {
+      "file": "workers/oursharedevents/tests/admin-poster-art-card.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-selection-spine.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -175,6 +182,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 78
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-what-url-controls.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/advanced-metrics.spec.ts",
@@ -532,6 +546,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-what-url-r3.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/export-manifest-actor.spec.ts",
@@ -951,7 +972,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 6
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/poster-page-csp.spec.ts",
@@ -986,7 +1007,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 21
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/poster-spon4-as2-spon10.spec.ts",
@@ -1427,7 +1448,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 15
+      "testCount": 17
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-materialize.spec.ts",
@@ -1483,7 +1504,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 18
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/signed-link-token-forgery.spec.ts",
@@ -1774,6 +1795,13 @@
     },
     {
       "file": "workers/oursharedevents/tests/what-external-link.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/what-url-types.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",

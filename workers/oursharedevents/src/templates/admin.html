@@ -1618,6 +1618,76 @@
         line-height: 1.5;
         color: var(--text-muted, #64748b);
       }
+      /* R3/R5 (OSE-1319) — typed external-link controls + poster-slot preview. */
+      .create-linkctl {
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 8px;
+        background: var(--surface-hover, #f8fafc);
+      }
+      .create-linkctl-fields {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+      }
+      @media (min-width: 640px) {
+        .create-linkctl-fields {
+          grid-template-columns: minmax(10rem, 14rem) 1fr;
+        }
+      }
+      .create-linkctl-fields label {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.9375rem;
+      }
+      /* Explicit sizing so the new select + url input clear the mobile-workability
+         gate (>=44px target, >=16px font) regardless of the create-form base rule. */
+      .create-linkctl select,
+      .create-linkctl input[type='url'] {
+        width: 100%;
+        min-height: 44px;
+        font-size: 16px;
+        padding: 0.5rem 0.625rem;
+        border: 1px solid var(--border, #dee2e6);
+        border-radius: 6px;
+        background: var(--surface, #fff);
+        color: var(--text, #1e293b);
+      }
+      .create-field-error {
+        margin: 0.5rem 0 0;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        color: #dc2626;
+        font-weight: 600;
+      }
+      .create-slot-preview {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
+        color: var(--text-muted, #64748b);
+      }
+      .create-slot-preview-label {
+        font-weight: 600;
+      }
+      .create-slot-chip {
+        display: inline-block;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #cbd5e1);
+        color: var(--text, #1e293b);
+        font-size: 0.8125rem;
+        line-height: 1.4;
+      }
+      .create-slot-chip--typed {
+        border-color: #16a34a;
+        color: #166534;
+        font-weight: 600;
+      }
       .wizard-publish {
         margin-top: 1.25rem;
         padding-top: 1.25rem;
@@ -2874,24 +2944,74 @@
                 inputmode="url"
               />
             </div>
-            <!-- WHAT external link. A general outbound destination the client runs
-                 off-platform: a fundraiser's donation site, tickets, a tournament/
-                 season signup, a Google Doc. Optional; shows on the event page
-                 (before/during/after) only when set. Link-out only, HTTPS ONLY
-                 (the visitor's browser follows it — no http:// downgrade). -->
-            <div class="full-width">
-              <label for="create-what-url">What (external link — optional, https only)</label>
-              <input
-                type="url"
-                id="create-what-url"
-                name="what_url"
-                data-testid="create-what-url"
-                placeholder="https://… donation page, tickets, signup, a doc — anything"
-                pattern="https://.*"
-                title="Must start with https://"
-                maxlength="500"
-                inputmode="url"
-              />
+            <!-- WHAT external link (R3, OSE-1319). A general outbound destination
+                 the client runs off-platform: a fundraiser's donation site,
+                 tickets, a season signup, a Substack. THREE controls:
+                   • ENABLE — a staged-but-off link stays dark on every surface,
+                     so an organizer can prep a fundraiser URL before going live.
+                   • TYPE — picks the CTA label (public page) + slot label (poster).
+                   • URL — https ONLY (the visitor's browser follows it; plain
+                     http:// is a downgrade risk and is rejected server-side too). -->
+            <div class="full-width create-linkctl" data-testid="create-what-url-group">
+              <label class="create-publish-label" for="create-what-url-enabled">
+                <input
+                  type="checkbox"
+                  id="create-what-url-enabled"
+                  name="what_url_enabled"
+                  data-testid="create-what-url-enabled"
+                />
+                <span>Add an external link (donation, tickets, league, &hellip;)</span>
+              </label>
+              <div class="create-linkctl-fields">
+                <div>
+                  <label for="create-what-url-type">Link type</label>
+                  <select id="create-what-url-type" name="what_url_type" data-testid="create-what-url-type">
+                    <option value="donation">Donation</option>
+                    <option value="tickets">Tickets</option>
+                    <option value="workshop">Workshop / registration</option>
+                    <option value="league">League / season</option>
+                    <option value="substack">Substack / newsletter</option>
+                    <option value="menu">Menu &amp; reservations</option>
+                    <option value="website">Website</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="create-what-url">External URL (https only)</label>
+                  <input
+                    type="url"
+                    id="create-what-url"
+                    name="what_url"
+                    data-testid="create-what-url"
+                    placeholder="https://… donation page, tickets, a doc"
+                    pattern="https://.*"
+                    title="Must start with https://"
+                    maxlength="500"
+                    inputmode="url"
+                    aria-describedby="create-what-url-error"
+                  />
+                </div>
+              </div>
+              <p
+                id="create-what-url-error"
+                class="create-field-error"
+                data-testid="create-what-url-error"
+                role="alert"
+                aria-live="polite"
+                hidden
+              ></p>
+              <!-- R5 — live poster-slot preview. The poster always carries the
+                   Event page slot; the typed slot appears only when the link is
+                   ENABLED with a valid https URL. Read-only; mirrors
+                   ensureSlotShortlinks so what the organizer sees is what prints. -->
+              <div class="create-slot-preview" data-testid="create-slot-preview" aria-live="polite">
+                <span class="create-slot-preview-label">Poster will show:</span>
+                <span class="create-slot-chip" data-testid="create-slot-chip-public">Event page</span>
+                <span
+                  class="create-slot-chip create-slot-chip--typed"
+                  data-testid="create-slot-chip-typed"
+                  hidden
+                ></span>
+              </div>
             </div>
             <div>
               <label for="create-who-host">Who (host / organizer)</label>
@@ -3758,6 +3878,192 @@
         <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
       </div>
     </div>
+
+    <!-- R4 (OSE-1319) — Poster art. A selected-event management card. The poster
+         art VIEWPORT (poster.html, #551) renders events.cover_image_url; this card
+         is how an organizer PUTS an image there. Same-origin ONLY: the poster CSP
+         is img-src 'self' data:, so art must be R2-served via the existing
+         event-scoped upload endpoint — never a pasted external URL. -->
+    <div class="sponsors-card poster-art-card" data-testid="poster-art-card">
+      <div class="sponsors-card-header">
+        <h2>Poster art</h2>
+      </div>
+      <div id="pa-panel" data-testid="poster-art-panel">
+        <p class="loading" data-testid="poster-art-loading-initial">Select an event to manage its poster art&hellip;</p>
+      </div>
+      <div id="pa-manage" data-testid="poster-art-manage" hidden>
+        <div class="pa-preview-wrap">
+          <img id="pa-preview" data-testid="poster-art-preview" alt="Current poster art" hidden />
+          <p id="pa-preview-none" class="pa-preview-none" data-testid="poster-art-none">
+            No poster art yet.
+          </p>
+        </div>
+        <label class="pa-upload-label" for="pa-file">
+          <span>Choose an image</span>
+          <input
+            type="file"
+            id="pa-file"
+            data-testid="poster-art-file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+          />
+        </label>
+        <p class="pa-hint" data-testid="poster-art-hint">
+          JPG, PNG, WebP or GIF, up to 25&nbsp;MB. It appears in the poster art viewport.
+        </p>
+        <p class="create-msg" id="pa-msg" data-testid="poster-art-msg" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+    <style>
+      .poster-art-card .pa-preview-wrap {
+        margin-bottom: 0.75rem;
+      }
+      #pa-preview {
+        display: block;
+        max-width: 100%;
+        max-height: 220px;
+        border-radius: 8px;
+        border: 1px solid var(--border, #e2e8f0);
+      }
+      .pa-preview-none {
+        margin: 0;
+        font-size: 0.9375rem;
+        color: var(--text-muted, #64748b);
+      }
+      .pa-upload-label > span {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+      }
+      /* Explicit sizing so the file control clears the mobile-workability gate
+         (>=44px target, >=16px font) — native file inputs are not sized by the
+         create-form base rule. */
+      #pa-file {
+        display: block;
+        width: 100%;
+        min-height: 44px;
+        font-size: 16px;
+        padding: 0.5rem;
+        border: 1px solid var(--border, #dee2e6);
+        border-radius: 6px;
+        background: var(--surface, #fff);
+      }
+      .pa-hint {
+        margin: 0.5rem 0 0;
+        font-size: 0.875rem;
+        color: var(--text-muted, #64748b);
+      }
+    </style>
+    <script>
+      // R4 (OSE-1319) — poster-art card wiring. Hydrates on ose:event-selected;
+      // uploads via the existing event-scoped endpoint (server re-validates MIME
+      // + 25MB), then points events.cover_image_url at the returned same-origin
+      // URL via the events PUT. No create-flow surgery — this is additive.
+      (function () {
+        var MAX_BYTES = 25 * 1024 * 1024;
+        var OK_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+        function paMsg(text, kind) {
+          var el = document.getElementById('pa-msg');
+          if (!el) return;
+          el.textContent = text || '';
+          el.className = 'create-msg' + (kind ? ' ' + kind : '');
+        }
+        function paShowPreview(url) {
+          var img = document.getElementById('pa-preview');
+          var none = document.getElementById('pa-preview-none');
+          if (url) {
+            if (img) {
+              img.src = url;
+              img.hidden = false;
+            }
+            if (none) none.hidden = true;
+          } else {
+            if (img) {
+              img.hidden = true;
+              img.removeAttribute('src');
+            }
+            if (none) none.hidden = false;
+          }
+        }
+        window._paEventId = null;
+        window.loadPosterArt = async function (eventId) {
+          var panel = document.getElementById('pa-panel');
+          var manage = document.getElementById('pa-manage');
+          if (!eventId) {
+            if (panel) panel.hidden = false;
+            if (manage) manage.hidden = true;
+            return;
+          }
+          window._paEventId = eventId;
+          if (panel) panel.hidden = true;
+          if (manage) manage.hidden = false;
+          paMsg('');
+          // Read the current cover image (public read — cover_image_url is in the
+          // public projection; fetch-by-id is not is_published-filtered).
+          try {
+            var res = await fetch('/api/v2/events/' + encodeURIComponent(eventId));
+            var data = await res.json();
+            var url = data && data.ok && data.item ? data.item.cover_image_url : null;
+            paShowPreview(url || null);
+          } catch (e) {
+            paShowPreview(null);
+          }
+        };
+        var fileEl = document.getElementById('pa-file');
+        if (fileEl)
+          fileEl.addEventListener('change', async function () {
+            var eventId = window._paEventId;
+            var file = fileEl.files && fileEl.files[0];
+            if (!eventId || !file) return;
+            // Fat-finger guards (client). The server re-validates both.
+            if (OK_TYPES.indexOf(file.type) === -1) {
+              paMsg('Choose a JPG, PNG, WebP or GIF image.', 'error');
+              fileEl.value = '';
+              return;
+            }
+            if (file.size > MAX_BYTES) {
+              paMsg('That image is over 25 MB. Choose a smaller file.', 'error');
+              fileEl.value = '';
+              return;
+            }
+            paMsg('Uploading…');
+            try {
+              var fd = new FormData();
+              fd.append('file', file);
+              var up = await fetch(
+                '/api/v2/admin/events/' + encodeURIComponent(eventId) + '/uploads',
+                { method: 'POST', body: fd }
+              );
+              var upData = await up.json();
+              if (!up.ok || !upData.ok || !upData.file || !upData.file.url) {
+                paMsg((upData && upData.error) || 'Upload failed. Please try again.', 'error');
+                return;
+              }
+              // Point the event's cover image at the uploaded same-origin URL.
+              var patch = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cover_image_url: upData.file.url }),
+              });
+              var patchData = await patch.json();
+              if (!patch.ok || !patchData.ok) {
+                paMsg(
+                  (patchData && patchData.error) ||
+                    'Saved the file but could not set it as poster art.',
+                  'error'
+                );
+                return;
+              }
+              paShowPreview(upData.file.url);
+              paMsg('Poster art updated.', 'success');
+            } catch (e) {
+              paMsg('Network error during upload. Please try again.', 'error');
+            } finally {
+              fileEl.value = '';
+            }
+          });
+      })();
+    </script>
     <style>
       /* OSE-895: GAS QRRegenerator .qr-card frame
          (archive/v2-code/components/QRRegenerator.html) ported onto the admin
@@ -4401,6 +4707,7 @@
         if (typeof window.loadPosterDeployments === 'function') window.loadPosterDeployments(d.id);
         if (typeof window._loadSponsorsForEvent === 'function') window._loadSponsorsForEvent(d.id);
         if (typeof window.scopeSurfaceCards === 'function') window.scopeSurfaceCards(d.id, d.name);
+        if (typeof window.loadPosterArt === 'function') window.loadPosterArt(d.id);
       });
 
       // ── OSE-675: memoized admin-events fetch ──
@@ -4568,6 +4875,66 @@
       })();
 
       // ── Create Event form handler ──
+      // R3/R5 (OSE-1319) — external-link control wiring: fat-finger error
+      // display + the live poster-slot preview. POSTER_SLOT_PREVIEW_LABELS
+      // mirrors POSTER_SLOT_LABELS (poster-bundle.ts); it is a client-side copy
+      // (this inline script can't import), authoritative labels stay server-side.
+      var POSTER_SLOT_PREVIEW_LABELS = {
+        donation: 'Donate',
+        tickets: 'Get tickets',
+        workshop: 'Register',
+        league: 'View the league',
+        substack: 'Subscribe',
+        menu: 'Menu & reservations',
+        website: 'Visit the site',
+      };
+      function showLinkError(text) {
+        var el = document.getElementById('create-what-url-error');
+        if (!el) return;
+        el.textContent = text;
+        el.hidden = false;
+      }
+      function clearLinkError() {
+        var el = document.getElementById('create-what-url-error');
+        if (el) {
+          el.textContent = '';
+          el.hidden = true;
+        }
+      }
+      // R5 — the typed slot chip appears only when the link is ENABLED with a
+      // valid https URL, exactly as ensureSlotShortlinks decides on the server.
+      function updateSlotPreview() {
+        var enabledEl = document.getElementById('create-what-url-enabled');
+        var urlEl = document.getElementById('create-what-url');
+        var typeEl = document.getElementById('create-what-url-type');
+        var chip = document.querySelector('[data-testid="create-slot-chip-typed"]');
+        if (!chip) return;
+        var enabled = enabledEl && enabledEl.checked;
+        var url = urlEl && urlEl.value ? urlEl.value.trim() : '';
+        if (enabled && /^https:\/\/\S+/i.test(url)) {
+          var type = typeEl ? typeEl.value : 'website';
+          chip.textContent = POSTER_SLOT_PREVIEW_LABELS[type] || 'More';
+          chip.hidden = false;
+        } else {
+          chip.hidden = true;
+        }
+      }
+      function wireLinkControls() {
+        var enabledEl = document.getElementById('create-what-url-enabled');
+        var urlEl = document.getElementById('create-what-url');
+        var typeEl = document.getElementById('create-what-url-type');
+        if (!enabledEl) return;
+        function onChange() {
+          clearLinkError();
+          updateSlotPreview();
+        }
+        enabledEl.addEventListener('change', onChange);
+        if (urlEl) urlEl.addEventListener('input', onChange);
+        if (typeEl) typeEl.addEventListener('change', updateSlotPreview);
+        updateSlotPreview();
+      }
+      wireLinkControls();
+
       document.getElementById('create-event-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('create-submit-btn');
@@ -4577,6 +4944,20 @@
           msg.textContent = 'Event name is required.';
           msg.className = 'create-msg error';
           return;
+        }
+
+        // R3 fat-finger guard — enabling an external link with no/invalid https
+        // URL is a hard stop. Checked BEFORE the button disables, so we just
+        // return (no re-enable dance). The server re-validates (defence in depth).
+        const linkEnabledEl = document.getElementById('create-what-url-enabled');
+        const linkUrlEl = document.getElementById('create-what-url');
+        if (linkEnabledEl && linkEnabledEl.checked) {
+          const linkUrl = linkUrlEl && linkUrlEl.value ? linkUrlEl.value.trim() : '';
+          if (!/^https:\/\/\S+/i.test(linkUrl)) {
+            showLinkError('Enter an https:// link, or uncheck “Add an external link”.');
+            if (linkUrlEl) linkUrlEl.focus();
+            return;
+          }
         }
 
         btn.disabled = true;
@@ -4616,6 +4997,17 @@
           // is unchecked would publish an event the operator declined to list.
           const publishedEl = document.getElementById('create-published');
           body.is_published = publishedEl ? publishedEl.checked : true;
+
+          // R3 — typed external link. Enable flag sent always (like is_published);
+          // the type is sent only when enabling, so an unchecked link never writes
+          // a type. what_url itself rides the fivew loop above (a staged-but-off
+          // url still saves, so an organizer can prep it before going live).
+          const linkEnabled = linkEnabledEl ? linkEnabledEl.checked : false;
+          body.what_url_enabled = linkEnabled;
+          if (linkEnabled) {
+            const linkTypeEl = document.getElementById('create-what-url-type');
+            body.what_url_type = linkTypeEl ? linkTypeEl.value : 'website';
+          }
 
           const res = await fetch('/api/v2/admin/events', {
             method: 'POST',

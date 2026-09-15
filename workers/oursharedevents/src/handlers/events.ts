@@ -23,6 +23,7 @@ import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
+import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -443,6 +444,26 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const whatVideoUrl = whatVideo.url;
   const whatUrl = whatLink.url;
 
+  // R3 (OSE-1319) — typed external-link controls. `what_url_enabled` gates
+  // whether the link renders at all (a staged-but-OFF url stays dark, so an
+  // organizer can prep a fundraiser link before flipping it live); `what_url_type`
+  // picks the CTA label on the public page + the destination-slot label on the
+  // poster. Strict-in: an out-of-vocabulary type is a 400 — the admin dropdown
+  // only ever emits valid values, so this only fires on a direct-API fat-finger.
+  const whatUrlEnabled = body.what_url_enabled === true || body.what_url_enabled === 1 ? 1 : 0;
+  let whatUrlType: string | null = null;
+  if (body.what_url_type != null && body.what_url_type !== '') {
+    if (!isValidWhatUrlType(body.what_url_type)) {
+      return errorResponse(
+        'INVALID_WHAT_URL_TYPE',
+        `what_url_type must be one of: ${WHAT_URL_TYPES.join(', ')}`,
+        400,
+        rid
+      );
+    }
+    whatUrlType = body.what_url_type;
+  }
+
   // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
   if (startDate !== null && !isValidIsoDate(startDate)) {
@@ -491,9 +512,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
                            who_story, who_image_url, what_video_url, what_url,
+                           what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -517,6 +539,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         whoImageUrl,
         whatVideoUrl,
         whatUrl,
+        whatUrlEnabled,
+        whatUrlType,
         lat,
         lon,
         h3Tags?.h3_res9 ?? null,
@@ -752,6 +776,28 @@ export async function handleUpdateEvent(
     }
     sets.push('what_url = ?');
     values.push(check.url);
+  }
+
+  // R3 (OSE-1319) — typed external-link controls. Mirrors handleCreateEvent:
+  // what_url_enabled is a boolean→0/1 gate; what_url_type is an allowlisted
+  // enum (strict-in, 400 on an unknown value). Both use the "only when present
+  // in the body" semantics so a partial update never clobbers them.
+  if ('what_url_enabled' in body) {
+    sets.push('what_url_enabled = ?');
+    values.push(body.what_url_enabled === true || body.what_url_enabled === 1 ? 1 : 0);
+  }
+  if ('what_url_type' in body) {
+    const raw = body.what_url_type;
+    if (raw != null && raw !== '' && !isValidWhatUrlType(raw)) {
+      return errorResponse(
+        'INVALID_WHAT_URL_TYPE',
+        `what_url_type must be one of: ${WHAT_URL_TYPES.join(', ')}`,
+        400,
+        rid
+      );
+    }
+    sets.push('what_url_type = ?');
+    values.push(raw != null && raw !== '' ? String(raw).slice(0, 32) : null);
   }
 
   if (sets.length === 0) {

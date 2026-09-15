@@ -103,12 +103,18 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(pages).toContain('poster-bundle');
   });
 
-  test('poster page renderPoster() has all 4 QR loading item IDs', () => {
+  test('poster renderPoster() emits the slot container; loadPosterQR fills it from bundle.slots', () => {
     const pages = sourceFile('templates/poster.html');
-    expect(pages).toContain('qr-img-register');
-    expect(pages).toContain('qr-img-checkin');
-    expect(pages).toContain('qr-img-survey');
-    expect(pages).toContain('qr-img-email-signup');
+    // renderPoster emits one empty, print-gated slot container...
+    expect(pages).toContain('id="poster-qr-slots"');
+    expect(pages).toContain('data-testid="poster-qr-slots"');
+    // ...and loadPosterQR fills it from the bundle's typed /q+/s destination
+    // slots (Public / Donate / Sign Up), each with a scannable QR and a printed
+    // shortlink. The forms (register/checkin/survey/email) are NOT on the poster.
+    expect(pages).toContain('data.slots');
+    expect(pages).toContain('data-testid="qr-img-slot-');
+    expect(pages).toContain('data-testid="qr-slot-code-');
+    expect(pages).not.toContain('qr-img-register');
   });
 
   test('poster page calls loadPosterQR in both init() and picker change handler', () => {
@@ -234,6 +240,24 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     expect(bundle.qr).toBeDefined();
     expect(bundle.links).toBeDefined();
     expect(bundle.labels).toBeDefined();
+  });
+
+  test('poster-bundle emits a Public destination slot routed via /s/ (not /forms/) with a PNG QR', async () => {
+    const eventId = await createEvent('Slots Public Bundle');
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    const bundle = await json(res);
+
+    const slots = bundle.slots as Array<Record<string, unknown>>;
+    expect(Array.isArray(slots), 'bundle must expose a slots array').toBe(true);
+    expect(slots.length).toBeGreaterThanOrEqual(1);
+
+    const pub = slots[0]!;
+    expect(pub.kind).toBe('public');
+    expect(String(pub.code).length, 'slot code is a 6-char /s/ code').toBe(6);
+    expect(String(pub.url), 'Public slot routes through /s/').toContain('/s/');
+    // The poster slot is the anonymous ROUTING destination — never the PII forms path.
+    expect(String(pub.url)).not.toContain('/forms/');
+    expect(String(pub.qr), 'slot QR is a PNG data URI').toMatch(/^data:image\/png;base64,/);
   });
 
   test('all 4 form types present in qr, links, and labels', async () => {

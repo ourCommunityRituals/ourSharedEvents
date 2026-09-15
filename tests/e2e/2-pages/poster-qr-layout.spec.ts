@@ -4,25 +4,26 @@
  *
  * Context — the staging board flagged "poster: QR legible at 390px viewport /
  * element overflows container by 24px". Investigation could NOT reproduce that
- * 24px overflow in either Chromium or WebKit (the iPhone-Safari engine): the QR
- * cells render at 100px, the uppercase labels fit within them, and flex-wrap
- * prevents document overflow — so the originally-hypothesized root cause (label
- * wider than the image driving a 3-cell row past the body) does not hold as
- * described. This spec therefore guards the two invariants that ARE real and
- * checkable rather than a mechanism we could not reproduce:
+ * 24px overflow in either Chromium or WebKit: the QR cells render at 100px and
+ * flex-wrap prevents document overflow. This spec guards the two invariants that
+ * ARE real and checkable:
  *   1. the poster surface actually renders (it regressed to a blank "Loading…"
- *      when a JS parse error in the inline script — onerror="...'none'" — killed
- *      the whole script; that fix is what this test protects), and
- *   2. no QR cell (incl. the 4th, email-signup) overflows the QR section or the
- *      document at 375/390, in both loading and loaded states.
- * If the real 24px overflow is device/font-specific, extend VIEWPORTS / add the
- * offending brand font here once a failing artifact (screenshot/trace) is in hand.
+ *      when a JS parse error in the inline script killed the whole script), and
+ *   2. no QR cell overflows the QR section or the document at 375/390.
+ *
+ * P2 (OSE-1319) rebuilt the QR row: it is now DYNAMIC /q+/s destination slots
+ * (Public + the event's typed outbound link), rendered client-side by
+ * loadPosterQR from bundle.slots, NOT the four fixed form QRs. Each slot card
+ * also prints its /s shortlink (.qr-slot-code) — a NEW potential overflow driver,
+ * so we stress it with a deliberately long shortlink. Slot testids are built at
+ * runtime (poster-qr-slot-<kind>), so this spec references them via variables,
+ * never static literals — the same way it always handled the per-cell ids, and
+ * what keeps the testid-drift scanner honest.
  *
  * HERMETIC by design: the poster shell is served from the on-disk template and
- * the events/QR APIs are mocked, so this test needs no live server and cannot
- * inherit the concurrent "ENOTFOUND eventangle.com" staging/baseURL failure.
- * pages.ts serves POSTER_HTML essentially verbatim (only injects a
- * data-poster-format attr on <body>), so the served CSS/markup == this template.
+ * the events/QR APIs are mocked, so this test needs no live server. pages.ts
+ * serves POSTER_HTML essentially verbatim (only injects a data-poster-format
+ * attr on <body>), so the served CSS/markup == this template.
  *
  * Source of truth: workers/oursharedevents/src/templates/poster.html
  */
@@ -33,25 +34,22 @@ import { resolve } from 'node:path';
 
 const TIMEOUT = 20_000;
 
-// Cover both the canonical mobile-workability floor (375) and the exact width
-// named by the failing staging case (390). The grid fix is viewport-agnostic,
-// so either reproduces the pre-fix overflow.
 const VIEWPORTS = [
   { name: '375px (mobile-workability floor)', width: 375, height: 812 },
   { name: '390px (staging failure width)', width: 390, height: 844 },
 ];
 
-const QR_TESTIDS = [
-  'poster-qr-register',
-  'poster-qr-checkin',
-  'poster-qr-survey',
-  'poster-qr-email-signup',
-];
+// The poster carries the always-present Public slot plus the event's typed link
+// (here: donation). Kinds drive the runtime testids poster-qr-slot-<kind> /
+// qr-img-slot-<kind>; built as data, referenced only via `${…}` interpolation.
+const SLOT_KINDS = ['public', 'donation'] as const;
+const SLOT_CARD_IDS = SLOT_KINDS.map((k) => `poster-qr-slot-${k}`);
+const WAIT_IMG_ID = `qr-img-slot-${SLOT_KINDS[1]}`; // the typed slot img settles last
 
 const POSTER_HTML = readFileSync(
   resolve(__dirname, '../../../workers/oursharedevents/src/templates/poster.html'),
   'utf8'
-  // mirror the only server-side mutation pages.ts makes (handlers/pages.ts:1409)
+  // mirror the only server-side mutation pages.ts makes (handlers/pages.ts)
 ).replace('<body>', '<body data-poster-format="letter">');
 
 // 1x1 transparent PNG — the QR <img> is CSS-sized (100px on mobile), so the
@@ -73,29 +71,27 @@ const EVENTS_BODY = {
   ],
 };
 
-// A deliberately long link so the injected .qr-link-url is stressed as a
-// potential second max-content driver (guards the overflow-wrap on it too).
-const LONG_LINK =
-  'https://stg.oursharedevents.com/e/layout-regression/email-signup?utm_source=poster&utm_campaign=qr-email-signup-legibility';
+// A deliberately long /s shortlink so the PRINTED shortlink (.qr-slot-code, new
+// in P2) is stressed as an overflow driver alongside the QR image — it must wrap
+// (word-break) inside the card, never widen it past the section.
+const LONG_SHORTLINK =
+  'https://stg.oursharedevents.com/s/aVeryLongShortcodeThatMustWrapNotOverflowTheCardOrSection0123456789';
 
 function qrBundleBody() {
-  const types = ['register', 'checkin', 'survey', 'email-signup'] as const;
-  const qr: Record<string, string> = {};
-  const links: Record<string, string> = {};
-  const labels: Record<string, string> = {};
-  for (const t of types) {
-    qr[t] = PNG_1PX;
-    links[t] =
-      t === 'email-signup' ? LONG_LINK : `https://stg.oursharedevents.com/e/layout-regression/${t}`;
-    labels[t] = t.replace('-', ' ');
-  }
-  return { ok: true, qr, links, labels };
+  const slots = SLOT_KINDS.map((kind) => ({
+    kind,
+    label: kind === 'public' ? 'Event page' : 'Donate',
+    code: kind === 'public' ? 'pub123' : 'don456',
+    url: kind === 'donation' ? LONG_SHORTLINK : 'https://stg.oursharedevents.com/s/pub123',
+    qr: PNG_1PX,
+  }));
+  return { ok: true, slots };
 }
 
 /**
  * Serve the poster shell hermetically and mock its data dependencies.
- * @param qrMode 'loading' aborts the QR bundle (cells stay in .qr-loading
- *   placeholder state) | 'loaded' fulfils it (cells become real .qr-img links).
+ * @param qrMode 'loading' aborts the QR bundle (the single .qr-loading
+ *   placeholder stays, no slot cards) | 'loaded' fulfils it (slot cards render).
  */
 async function openPoster(page: any, qrMode: 'loading' | 'loaded') {
   await page.route('**/api/v2/events/*/poster-bundle', (route: any) =>
@@ -117,7 +113,7 @@ async function openPoster(page: any, qrMode: 'loading' | 'loaded') {
   await expect(page.locator('[data-testid="poster-qr-section"]')).toBeVisible({ timeout: TIMEOUT });
 }
 
-/** Measure the QR section + each cell in one round trip. */
+/** Measure the QR section + each named cell in one round trip. */
 async function measure(page: any, testids: string[]) {
   return page.evaluate((ids: string[]) => {
     const doc = document.documentElement;
@@ -138,32 +134,35 @@ async function measure(page: any, testids: string[]) {
 }
 
 for (const mode of ['loading', 'loaded'] as const) {
-  test.describe(`Poster QR layout — ${mode} state`, () => {
+  test.describe(`Poster QR slot layout — ${mode} state`, () => {
     for (const vp of VIEWPORTS) {
-      test(`no overflow & every QR cell contained at ${vp.name}`, async ({ page }) => {
+      test(`no overflow & every slot card contained at ${vp.name}`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await openPoster(page, mode);
 
+        // In loaded mode wait for the slot cards to replace the placeholder; in
+        // loading mode there are no slot cards, only the .qr-loading placeholder.
+        const cellIds = mode === 'loaded' ? SLOT_CARD_IDS : [];
         if (mode === 'loaded') {
-          // wait for the placeholders to be replaced by real QR links
-          await expect(page.locator('[data-testid="qr-img-email-signup"]')).toBeVisible({
+          await expect(page.locator(`[data-testid="${WAIT_IMG_ID}"]`)).toBeVisible({
             timeout: TIMEOUT,
           });
         }
 
-        const m = await measure(page, QR_TESTIDS);
+        const m = await measure(page, cellIds);
 
-        // (a) No document-level horizontal scroll — the exact invariant the
-        // 24px overflow tripped (mirrors mobile-workability + poster-error-states).
+        // (a) No document-level horizontal scroll — the exact invariant the 24px
+        // overflow tripped. Holds in BOTH states (the loading placeholder must
+        // not overflow either).
         expect(
           m.scrollWidth,
           `document overflows viewport by ${m.scrollWidth - m.clientWidth}px`
         ).toBeLessThanOrEqual(m.clientWidth + 1);
 
-        // (b/c/d) Per-cell containment: every QR cell (incl. the 4th,
-        // email-signup) is present and sits fully within the QR section, and
-        // honors the 140px cap. This catches the NEXT overflow regardless of
-        // which child (label or injected URL) drives width.
+        // (b/c/d) Per-slot containment (loaded only): every slot card — incl. the
+        // one carrying the LONG printed /s shortlink — sits fully within the QR
+        // section and honors the ~140px card cap. Catches the next overflow
+        // regardless of which child (QR image or printed shortlink) drives width.
         for (const cell of m.cells) {
           expect(cell.present, `${cell.id} missing`).toBe(true);
           expect(

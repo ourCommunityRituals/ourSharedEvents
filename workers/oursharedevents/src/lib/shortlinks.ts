@@ -57,6 +57,36 @@ export function isValidCodeShape(code: string): boolean {
   return true;
 }
 
+/** Upper bound on an admin-set target URL (defense-in-depth against abuse). */
+const MAX_TARGET_URL_LEN = 2048;
+
+/**
+ * https-only guard for an admin-set shortlink target (Rb). Rejects non-URLs,
+ * over-long input, and any non-https scheme (`javascript:`, `data:`, `http:`,
+ * …). This is the open-redirect + scheme-injection gate, enforced at CREATION
+ * — the resolver never takes a destination from a request param.
+ */
+export function isValidHttpsTarget(url: unknown): url is string {
+  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_TARGET_URL_LEN) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === 'https:';
+}
+
+export interface CreateShortlinkOptions {
+  /**
+   * Admin-set external destination. Must pass isValidHttpsTarget. Omit / null
+   * to route to the event public page (/events/:id) — the default behaviour.
+   */
+  targetUrl?: string | null;
+  /** Destination category for per-destination click-out attribution. */
+  kind?: 'public' | 'donate' | 'signup' | string | null;
+}
+
 export interface CreateShortlinkResult {
   code: string;
 }
@@ -72,19 +102,33 @@ export interface CreateShortlinkResult {
  */
 export async function createShortlink(
   env: ShortlinksEnv,
-  eventId: string
+  eventId: string,
+  opts: CreateShortlinkOptions = {}
 ): Promise<CreateShortlinkResult> {
   if (!env.DB) {
     throw new Error('[shortlinks] DB binding missing');
   }
+  // Rb: an external target must be a valid https URL, validated HERE at
+  // creation (never at resolve time). Reject fat-fingered / unsafe input loudly.
+  const targetUrl =
+    opts.targetUrl === undefined || opts.targetUrl === null || opts.targetUrl === ''
+      ? null
+      : opts.targetUrl;
+  if (targetUrl !== null && !isValidHttpsTarget(targetUrl)) {
+    throw new Error('[shortlinks] target_url must be a valid https:// URL');
+  }
+  const kind =
+    typeof opts.kind === 'string' && opts.kind.trim().length > 0
+      ? opts.kind.trim().slice(0, 32)
+      : null;
   for (let attempt = 0; attempt < MAX_GENERATE_RETRIES; attempt++) {
     const code = generateCode();
     try {
       await env.DB.prepare(
-        `INSERT INTO shortlinks (code, event_id, created_at)
-         VALUES (?, ?, datetime('now'))`
+        `INSERT INTO shortlinks (code, event_id, target_url, kind, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`
       )
-        .bind(code, eventId)
+        .bind(code, eventId, targetUrl, kind)
         .run();
       return { code };
     } catch (err) {
@@ -101,9 +145,85 @@ export async function createShortlink(
   );
 }
 
+export interface SlotShortlink {
+  /** Destination category: 'public' (share/event page) or the typed link kind. */
+  kind: string;
+  /** The 6-char /s/ code. */
+  code: string;
+  /** Admin-set external https target, or null → the event public page. */
+  target_url: string | null;
+}
+
+/**
+ * Reuse an existing shortlink for (event, kind), else mint one. The Public slot
+ * also matches the kind-less shortlink minted at event creation, so we never
+ * mint a duplicate public code.
+ */
+async function ensureKindShortlink(
+  env: ShortlinksEnv,
+  eventId: string,
+  kind: string,
+  target: string | null
+): Promise<string> {
+  if (!env.DB) throw new Error('[shortlinks] DB binding missing');
+  const existing = await env.DB.prepare(
+    `SELECT code FROM shortlinks
+       WHERE event_id = ? AND (kind = ? OR (? = 'public' AND kind IS NULL))
+       ORDER BY created_at ASC LIMIT 1`
+  )
+    .bind(eventId, kind, kind)
+    .first<{ code: string }>();
+  if (existing) return existing.code;
+  const { code } = await createShortlink(env, eventId, { targetUrl: target, kind });
+  return code;
+}
+
+/**
+ * Ensure the poster/share shortlinks for an event's destination slots exist,
+ * minting any that are missing — idempotent per (event, kind). Returns the slots
+ * in poster order: PUBLIC first (the share vector → the event page), then the
+ * event's typed outbound link (donate/signup/league/…) ONLY when it is enabled
+ * and a valid https target. Routing-layer only (`/s/`); tracking (`/q/`) is
+ * composed separately.
+ */
+export async function ensureSlotShortlinks(
+  env: ShortlinksEnv,
+  eventId: string,
+  opts: {
+    whatUrl?: string | null;
+    whatUrlType?: string | null;
+    whatUrlEnabled?: boolean | number | null;
+  } = {}
+): Promise<SlotShortlink[]> {
+  if (!env.DB) return [];
+  const slots: SlotShortlink[] = [];
+
+  // Public slot — always present; reuses the event's creation shortlink.
+  const publicCode = await ensureKindShortlink(env, eventId, 'public', null);
+  slots.push({ kind: 'public', code: publicCode, target_url: null });
+
+  // Typed slot — only when the organizer turned the link ON and it is https.
+  const target =
+    opts.whatUrlEnabled && typeof opts.whatUrl === 'string' && isValidHttpsTarget(opts.whatUrl)
+      ? opts.whatUrl
+      : null;
+  if (target) {
+    const kind =
+      typeof opts.whatUrlType === 'string' && opts.whatUrlType.trim().length > 0
+        ? opts.whatUrlType.trim().slice(0, 32)
+        : 'link';
+    const code = await ensureKindShortlink(env, eventId, kind, target);
+    slots.push({ kind, code, target_url: target });
+  }
+
+  return slots;
+}
+
 export interface ResolvedShortlink {
   code: string;
   event_id: string;
+  /** Admin-set external destination (https) or null → route to the event page. */
+  target_url: string | null;
 }
 
 /**
@@ -119,7 +239,9 @@ export async function resolveCode(
 ): Promise<ResolvedShortlink | null> {
   if (!env.DB) return null;
   if (!isValidCodeShape(code)) return null;
-  const row = await env.DB.prepare(`SELECT code, event_id FROM shortlinks WHERE code = ?`)
+  const row = await env.DB.prepare(
+    `SELECT code, event_id, target_url FROM shortlinks WHERE code = ?`
+  )
     .bind(code)
     .first<ResolvedShortlink>();
   return row ?? null;

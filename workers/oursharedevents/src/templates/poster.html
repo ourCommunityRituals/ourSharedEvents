@@ -119,6 +119,55 @@
         font-size: 1rem;
         color: #334155;
       }
+      /* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
+         --border, --text-muted), not hardcoded hex — so the poster art viewport
+         can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+      .poster-art {
+        margin: 1rem 0 1.25rem;
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--surface-hover);
+      }
+      .poster-art-img {
+        display: block;
+        width: 100%;
+        max-height: 320px;
+        object-fit: cover;
+      }
+      .poster-art--empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+        border: 2px dashed var(--border);
+      }
+      .poster-art-placeholder {
+        font-size: 2rem;
+        color: var(--text-muted);
+        opacity: 0.5;
+      }
+      /* Typed-slot layout. #poster-qr-slots is the single flex child of
+         .qr-section; the slot cards lay out inside it. */
+      .qr-slots {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+      /* Printed /s shortlink under each slot's QR — a NEW class (not
+         .qr-link-url), so it deliberately escapes the print display:none below:
+         the poster is meant to carry the human-typeable shortlink on paper. */
+      .qr-slot-code {
+        display: block;
+        margin: 0.35rem auto 0;
+        max-width: 120px;
+        font-size: 0.62rem;
+        line-height: 1.3;
+        color: var(--text-muted);
+        word-break: break-all;
+        text-align: center;
+      }
       .qr-section {
         display: flex;
         justify-content: center;
@@ -404,6 +453,9 @@
           width: 100px;
           height: 100px;
         }
+        .poster-art-img {
+          max-height: 200px;
+        }
         .qr-link-url {
           max-width: 100px;
           word-break: break-all;
@@ -475,6 +527,14 @@
         }
         .qr-loading {
           display: none !important;
+        }
+        /* R4: art prints when present; an empty placeholder must never print a
+           dashed box where artwork would go. */
+        .poster-art--empty {
+          display: none !important;
+        }
+        .poster-art {
+          page-break-inside: avoid;
         }
         /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
            if ANY QR is still a loading placeholder, hide the whole section so
@@ -650,6 +710,10 @@
         const address = '';
         const startISO = event.startDateISO || '';
         const name = event.name || '';
+        // R4 — poster art viewport. Source is the event's cover image (public
+        // projection allowlist includes cover_image_url). Snake/camel tolerant
+        // so it works whether or not enrichWithPhase renames the field.
+        const art = event.cover_image_url || event.coverImageUrl || '';
 
         return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
@@ -661,11 +725,18 @@
             (startISO ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
             (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
             '</div>' +
+            '<div class="poster-art' + (art ? '' : ' poster-art--empty') + '" data-testid="poster-art-viewport">' +
+              (art
+                ? '<img class="poster-art-img" src="' + esc(art) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">'
+                : '<span class="poster-art-placeholder" data-testid="poster-art-empty" aria-hidden="true">&#x1F3A8;</span>') +
+            '</div>' +
             '<div class="qr-section" data-testid="poster-qr-section">' +
-              '<div class="qr-card qr-item" data-testid="poster-qr-register"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-register-label">Registration</span></div><div class="qr-card-body"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
-              '<div class="qr-card qr-item" data-testid="poster-qr-checkin"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-checkin-label">Check-in</span></div><div class="qr-card-body"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
-              '<div class="qr-card qr-item" data-testid="poster-qr-survey"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-survey-label">Survey</span></div><div class="qr-card-body"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
-              '<div class="qr-card qr-item" data-testid="poster-qr-email-signup"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-email-signup-label">Email Signup</span></div><div class="qr-card-body"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
+              // Typed destination slots (/q tracking + /s routing → Public /
+              // Donate / Sign Up). loadPosterQR fills this from bundle.slots. The
+              // .qr-loading placeholder keeps the print gate closed until codes
+              // settle. NOT the forms (register/checkin/survey/feedback are a
+              // separate, destroyed-by-cron implementation — off the poster).
+              '<div id="poster-qr-slots" class="qr-slots" data-testid="poster-qr-slots"><div class="qr-loading" aria-busy="true">&#x23F3;</div></div>' +
             '</div>' +
           '</div>' +
           '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
@@ -760,46 +831,36 @@
         if (!eventId) return;
         // Gate Print for this render cycle until the codes below settle.
         setPrintReady(false);
-        const types = [
-          { type: 'register', id: 'qr-img-register' },
-          { type: 'checkin', id: 'qr-img-checkin' },
-          { type: 'survey', id: 'qr-img-survey' },
-          { type: 'email-signup', id: 'qr-img-email-signup' },
-        ];
+        const container = document.getElementById('poster-qr-slots');
         try {
           const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle');
           const data = await res.json();
-          if (!data.ok) return;
-          for (const { type, id } of types) {
-            const el = document.getElementById(id);
-            if (!el) continue;
-            const src = data.qr && data.qr[type];
-            const href = data.links && data.links[type];
-            const label = (data.labels && data.labels[type]) || type;
-            const uec = data.uec && data.uec[type];
-            if (!src) continue;
-            // OSE-1200: the card wears its UEC — color on the frame, and the
-            // word + path + consent tier in text so color is never the only carrier.
-            const card = el.closest('.qr-card');
-            if (card && uec && /^#[0-9a-fA-F]{6}$/.test(uec.scan_hex)) {
-              card.setAttribute('data-uec', String(uec.id).toLowerCase());
-              card.style.borderTopColor = uec.scan_hex;
-              card.style.borderTopWidth = '6px';
-              const title = card.querySelector('.qr-card-title');
-              if (title) title.style.color = uec.scan_hex;
-            }
-            const uecText = uec
-              ? '<div class="qr-uec" data-testid="qr-uec-' + type + '">' +
-                  '<span class="qr-uec-word" data-testid="qr-uec-word-' + type + '">' + esc(uec.word) + '</span>' +
-                  '<span class="qr-uec-path" data-testid="qr-uec-path-' + type + '">' + esc(uec.url_path) + '</span>' +
-                  '<span class="qr-uec-tier qr-uec-tier-' + esc(uec.tier) + '" data-testid="qr-uec-tier-' + type + '">' + esc(uec.tier_label) + '</span>' +
+          if (!data.ok || !container) return;
+          // Typed destination slots (Public / Donate / Sign Up) from the bundle:
+          // each is a /s routing shortlink (printed AND scannable) — the anonymous
+          // routing layer, never a form. If the bundle has no slots, the
+          // .qr-loading placeholder stays and the print gate keeps Print disabled.
+          const slots = Array.isArray(data.slots) ? data.slots : [];
+          if (!slots.length) return;
+          container.innerHTML = slots
+            .map(function (s) {
+              const kind = esc(s.kind || 'slot');
+              const label = esc(s.label || s.kind || '');
+              const url = esc(s.url || '#');
+              const shortText = esc(s.url || '');
+              return (
+                '<div class="qr-card qr-item" data-testid="poster-qr-slot-' + kind + '">' +
+                '<div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-slot-label-' + kind + '">' + label + '</span></div>' +
+                '<div class="qr-card-body">' +
+                '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
+                '<img src="' + esc(s.qr || '') + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
+                '</a>' +
+                '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>' +
+                '</div>' +
                 '</div>'
-              : '';
-            el.outerHTML = '<a class="qr-link" href="' + esc(href || '#') + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + ' QR code — tap to open" data-testid="qr-link-' + type + '">' +
-              '<img src="' + esc(src) + '" alt="' + esc(label) + ' QR code" class="qr-img" data-testid="qr-img-' + type + '" width="120" height="120" />' +
-              '<span class="qr-link-url" data-testid="qr-link-url-' + type + '">' + esc(href || '') + '</span>' +
-              '</a>' + uecText;
-          }
+              );
+            })
+            .join('');
         } catch { /* QR loading is non-critical */ }
         finally {
           // AC (OSE-286): re-enable Print only after all QR images finish

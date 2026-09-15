@@ -120,10 +120,15 @@ describe('QA-1: Migration idempotency', () => {
     //   (+1), idx_sponsor_placement_event/_business/_locality (+3) = +6 → 66.
     // + 1 (migration 0068, OSE-0068): ADD idx_sponsor_business_active
     //   (brand_id, is_active) for the business-level soft-delete flag → 67.
+    // + 2 (migrations 0069–0072): later index additions → 69.
+    // + 1 (migration 0073, OSE-1319): ADD idx_shortlinks_event_kind
+    //   (event_id, kind) for the per-slot /s shortlink lookup → 70.
+    // NOTE: schema.spec.ts's EXPECTED_INDEXES enumerates all 70 by name — that
+    // list is the authoritative roster; this test only asserts the count.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(69);
+    expect(indexes.results).toHaveLength(70);
   });
 });
 

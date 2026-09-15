@@ -24,7 +24,9 @@ import { env, SELF } from 'cloudflare:test';
 import {
   generateCode,
   isValidCodeShape,
+  isValidHttpsTarget,
   createShortlink,
+  ensureSlotShortlinks,
   resolveCode,
   incrementClick,
 } from '../src/lib/shortlinks';
@@ -139,6 +141,141 @@ describe('OSE-240: createShortlink + resolveCode lib round-trip', () => {
     expect(resolved).not.toBeNull();
     expect(resolved!.event_id).toBe(eventId);
     expect(resolved!.code).toBe(code);
+  });
+
+  // ── Rb — external-target routing (open-redirect-safe; https validated at creation) ──
+  test('isValidHttpsTarget accepts https and rejects every unsafe/non-https form', () => {
+    expect(isValidHttpsTarget('https://give.example.org/donate')).toBe(true);
+    expect(isValidHttpsTarget('http://give.example.org')).toBe(false); // not https
+    expect(isValidHttpsTarget('javascript:alert(1)')).toBe(false); // scheme injection
+    expect(isValidHttpsTarget('data:text/html,<script>x</script>')).toBe(false);
+    expect(isValidHttpsTarget('/events/evt_x')).toBe(false); // not an absolute URL
+    expect(isValidHttpsTarget('')).toBe(false);
+    expect(isValidHttpsTarget('https://x/' + 'a'.repeat(3000))).toBe(false); // over length cap
+    // @ts-expect-error runtime safety
+    expect(isValidHttpsTarget(null)).toBe(false);
+  });
+
+  test('createShortlink REJECTS a non-https target at creation (fat-finger + open-redirect gate)', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_badtarget_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Bad target', 'bad-target', 'active')
+      .run();
+    await expect(
+      createShortlink(tenv, eventId, { targetUrl: 'javascript:alert(1)' })
+    ).rejects.toThrow();
+    await expect(
+      createShortlink(tenv, eventId, { targetUrl: 'http://insecure.example' })
+    ).rejects.toThrow();
+  });
+
+  test('a shortlink with an https target_url 302-redirects to that external destination', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_donate_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Donate slot', 'donate-slot', 'active')
+      .run();
+    const target = 'https://give.example.org/campaign/bocce';
+    const { code } = await createShortlink(tenv, eventId, { targetUrl: target, kind: 'donate' });
+
+    const resolved = await resolveCode(tenv, code);
+    expect(resolved!.target_url).toBe(target);
+
+    const res = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(target);
+  });
+
+  test('a shortlink with NO target_url still routes to the event public page (backward-compatible)', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_public_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Public slot', 'public-slot', 'active')
+      .run();
+    const { code } = await createShortlink(tenv, eventId, { kind: 'public' });
+    const res = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toContain(`/events/${eventId}`);
+  });
+
+  // ── Per-slot shortlink minting (poster destination slots) ──
+  async function seedSlotEvent(tenv: TestEnv, id: string, title: string): Promise<void> {
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(id, BRAND, title, id, 'active')
+      .run();
+  }
+
+  test('ensureSlotShortlinks returns only the Public slot when there is no typed link', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_slots_pub_${Date.now()}`;
+    await seedSlotEvent(tenv, eventId, 'Slots public');
+    const slots = await ensureSlotShortlinks(tenv, eventId, {});
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.kind).toBe('public');
+    expect(slots[0]!.target_url).toBeNull();
+  });
+
+  test('ensureSlotShortlinks adds a typed slot when what_url is enabled + https', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_slots_typed_${Date.now()}`;
+    await seedSlotEvent(tenv, eventId, 'Slots typed');
+    const slots = await ensureSlotShortlinks(tenv, eventId, {
+      whatUrl: 'https://give.example.org/donate',
+      whatUrlType: 'donate',
+      whatUrlEnabled: 1,
+    });
+    expect(slots.map((s) => s.kind)).toEqual(['public', 'donate']);
+    expect(slots[1]!.target_url).toBe('https://give.example.org/donate');
+  });
+
+  test('ensureSlotShortlinks omits the typed slot when disabled or non-https', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_slots_off_${Date.now()}`;
+    await seedSlotEvent(tenv, eventId, 'Slots off');
+    const disabled = await ensureSlotShortlinks(tenv, eventId, {
+      whatUrl: 'https://give.example.org',
+      whatUrlType: 'donate',
+      whatUrlEnabled: 0,
+    });
+    expect(disabled).toHaveLength(1);
+    const insecure = await ensureSlotShortlinks(tenv, eventId, {
+      whatUrl: 'http://insecure.example',
+      whatUrlType: 'donate',
+      whatUrlEnabled: 1,
+    });
+    expect(insecure).toHaveLength(1);
+  });
+
+  test('ensureSlotShortlinks is idempotent and reuses the creation shortlink for Public', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_slots_idem_${Date.now()}`;
+    await seedSlotEvent(tenv, eventId, 'Slots idem');
+    const creation = await createShortlink(tenv, eventId); // event's kind-less shortlink
+    const first = await ensureSlotShortlinks(tenv, eventId, {
+      whatUrl: 'https://x.example/signup',
+      whatUrlType: 'signup',
+      whatUrlEnabled: 1,
+    });
+    const second = await ensureSlotShortlinks(tenv, eventId, {
+      whatUrl: 'https://x.example/signup',
+      whatUrlType: 'signup',
+      whatUrlEnabled: 1,
+    });
+    expect(first.map((s) => s.code)).toEqual(second.map((s) => s.code));
+    expect(first[0]!.code).toBe(creation.code);
   });
 
   test('resolveCode returns null for unknown but valid-shape codes', async () => {
@@ -256,7 +393,19 @@ describe('OSE-240: anonymity-principle compliance', () => {
     const tenv = env as unknown as TestEnv;
     const info = await tenv.DB.prepare(`PRAGMA table_info('shortlinks')`).all<{ name: string }>();
     const cols = (info.results ?? []).map((r) => r.name);
-    expect(cols).toEqual(['code', 'event_id', 'created_at', 'clicks', 'last_clicked_at']);
+    expect(cols).toEqual([
+      'code',
+      'event_id',
+      'created_at',
+      'clicks',
+      'last_clicked_at',
+      // Rb (migration 0073): admin-set ROUTING config — NOT per-attendee data.
+      // target_url = the fixed external destination (https, validated at
+      // creation); kind = destination category (public/donate/signup). Neither
+      // can carry identity — the forbidden-PII check below still guards that.
+      'target_url',
+      'kind',
+    ]);
 
     // Sanity: every forbidden PII-bearing column name from the
     // pii-invariant gate MUST be absent from the new table.

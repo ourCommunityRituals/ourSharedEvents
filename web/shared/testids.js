@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-14 — 379 ids.
+ * Generated 2026-09-15 — 391 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 221 ids
+    // admin.html — 237 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -95,12 +95,19 @@
       'create-msg',
       'create-published',
       'create-published-hint',
+      'create-slot-chip-public',
+      'create-slot-chip-typed',
+      'create-slot-preview',
       'create-submit',
       'create-title',
       'create-venue',
       'create-warnings',
       'create-what-short',
       'create-what-url',
+      'create-what-url-enabled',
+      'create-what-url-error',
+      'create-what-url-group',
+      'create-what-url-type',
       'create-what-video-url',
       'create-where-address',
       'create-who-host',
@@ -171,6 +178,15 @@
       'pd-qr-token',
       'phase-badge',
       'portfolio-rollup',
+      'poster-art-card',
+      'poster-art-file',
+      'poster-art-hint',
+      'poster-art-loading-initial',
+      'poster-art-manage',
+      'poster-art-msg',
+      'poster-art-none',
+      'poster-art-panel',
+      'poster-art-preview',
       'poster-deployment-create-form',
       'poster-deployment-form-wrap',
       'poster-deployment-row',
@@ -321,9 +337,12 @@
       'display-upcoming-heading',
       'display-upcoming-name',
     ]),
-    // poster.html — 35 ids
+    // poster.html — 31 ids
     POSTER: Object.freeze([
       'poster-area',
+      'poster-art-empty',
+      'poster-art-img',
+      'poster-art-viewport',
       'poster-body',
       'poster-card',
       'poster-card-header',
@@ -341,15 +360,8 @@
       'poster-org',
       'poster-print',
       'poster-print-status',
-      'poster-qr-checkin',
-      'poster-qr-checkin-label',
-      'poster-qr-email-signup',
-      'poster-qr-email-signup-label',
-      'poster-qr-register',
-      'poster-qr-register-label',
       'poster-qr-section',
-      'poster-qr-survey',
-      'poster-qr-survey-label',
+      'poster-qr-slots',
       'poster-skip-link',
       'poster-sponsor-item',
       'poster-sponsor-label',

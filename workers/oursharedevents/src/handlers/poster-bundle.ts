@@ -20,6 +20,7 @@
  */
 
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
+import { ensureSlotShortlinks } from '../lib/shortlinks';
 import { assertRenderable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
 
@@ -126,14 +127,42 @@ function scanUrl(origin: string, qrToken: string, type: FormType): string {
   return `${origin}/q/${encodeURIComponent(qrToken)}?type=${type}`;
 }
 
+// Poster destination-slot labels (routing layer). Keys match the R3 what_url_type
+// vocabulary; 'public' is the always-present share/event-page slot. Exported so
+// the what-url-types drift guard can assert this map stays a superset of the
+// canonical WHAT_URL_TYPES allowlist.
+export const POSTER_SLOT_LABELS: Record<string, string> = {
+  public: 'Event page',
+  donation: 'Donate',
+  signup: 'Sign up',
+  league: 'View the league',
+  workshop: 'Register',
+  substack: 'Subscribe',
+  tickets: 'Get tickets',
+  menu: 'Menu & reservations',
+  website: 'Visit the site',
+};
+function posterSlotLabel(kind: string): string {
+  return POSTER_SLOT_LABELS[kind] ?? 'More';
+}
+
 export async function handleGetPosterBundle(
   request: Request,
   env: PosterBundleEnv,
   eventId: string
 ): Promise<Response> {
-  const row = await env.DB.prepare('SELECT id, title, status FROM events WHERE id = ?')
+  const row = await env.DB.prepare(
+    'SELECT id, title, status, what_url, what_url_type, what_url_enabled FROM events WHERE id = ?'
+  )
     .bind(eventId)
-    .first<{ id: string; title: string; status: string }>();
+    .first<{
+      id: string;
+      title: string;
+      status: string;
+      what_url: string | null;
+      what_url_type: string | null;
+      what_url_enabled: number | null;
+    }>();
 
   if (!row) {
     return Response.json({ ok: false, status: 404, error: 'Event not found' }, { status: 404 });
@@ -198,6 +227,26 @@ export async function handleGetPosterBundle(
   const publicUrl = `${origin}/events/${publicEventId}`;
   const uecQr = generateSvgQrCode(publicUrl, { fgColor: UEC_ENTER_HEX, errorCorrection: 'M' });
 
+  // Poster destination slots (routing layer) — Public first (share vector →
+  // event page), then the typed outbound link (donate/signup/…) when enabled.
+  // Each slot carries its /s/ shortlink (printed + anonymously click-counted)
+  // and a QR encoding it. Tracking (/q/) is composed separately.
+  const slotDefs = await ensureSlotShortlinks(env, row.id, {
+    whatUrl: row.what_url,
+    whatUrlType: row.what_url_type,
+    whatUrlEnabled: row.what_url_enabled,
+  });
+  const slots = slotDefs.map((s) => {
+    const shortUrl = `${origin}/s/${s.code}`;
+    return {
+      kind: s.kind,
+      label: posterSlotLabel(s.kind),
+      code: s.code,
+      url: shortUrl,
+      qr: generateQrCode(shortUrl, { errorCorrection: 'M' }),
+    };
+  });
+
   return Response.json({
     ok: true,
     // OSE-842: `status` is reserved for the numeric HTTP status on every path
@@ -215,5 +264,6 @@ export async function handleGetPosterBundle(
     uec,
     uecQr,
     uecEnterHex: UEC_ENTER_HEX,
+    slots,
   });
 }

@@ -44,6 +44,8 @@ function row(overrides: Partial<PublicEventRow> = {}): PublicEventRow {
     who_image_url: null,
     what_video_url: null,
     what_url: null,
+    what_url_enabled: 0,
+    what_url_type: null,
     lat: null,
     lon: null,
     price_cents: null,
@@ -65,7 +67,7 @@ const renders: [string, (r: PublicEventRow) => string][] = [
 describe('WHAT external link | renders on every phase (before/during/after)', () => {
   for (const [phase, render] of renders) {
     it(`${phase}: renders the external link when what_url is set`, () => {
-      const html = render(row({ what_url: DONATE }));
+      const html = render(row({ what_url: DONATE, what_url_enabled: 1 }));
       expect(html).toContain(`href="${DONATE}"`);
       expect(html).toContain('ose-what-link');
       // link-out hygiene
@@ -74,12 +76,12 @@ describe('WHAT external link | renders on every phase (before/during/after)', ()
     });
 
     it(`${phase}: OPTIONAL — no link markup when what_url is null`, () => {
-      const html = render(row({ what_url: null }));
+      const html = render(row({ what_url: null, what_url_enabled: 1 }));
       expect(html).not.toContain('ose-what-link');
     });
 
     it(`${phase}: rejects a non-http(s) scheme (javascript:) — never reaches href`, () => {
-      const html = render(row({ what_url: 'javascript:alert(1)' }));
+      const html = render(row({ what_url: 'javascript:alert(1)', what_url_enabled: 1 }));
       expect(html).not.toContain('ose-what-link');
       expect(html).not.toContain('javascript:alert');
     });
@@ -88,17 +90,55 @@ describe('WHAT external link | renders on every phase (before/during/after)', ()
 
 describe('WHAT external link | generic, not donation-named', () => {
   it('uses a neutral label so it serves any event type', () => {
-    const html = renderPreEventHtml(row({ what_url: DONATE }), SHARE);
+    const html = renderPreEventHtml(row({ what_url: DONATE, what_url_enabled: 1 }), SHARE);
     expect(html).toContain('Visit the site');
     expect(html.toLowerCase()).not.toContain('>donate');
   });
 
   it('shows even when the host wrote no WHAT blurb (link-only WHAT card)', () => {
     const html = renderPreEventHtml(
-      row({ what_short: null, description: null, what_url: DONATE }),
+      row({ what_short: null, description: null, what_url: DONATE, what_url_enabled: 1 }),
       SHARE
     );
     expect(html).toContain('data-testid="event-what"');
     expect(html).toContain('ose-what-link');
+  });
+});
+
+describe('WHAT external link | R3 — explicit enable gate + typed CTA label', () => {
+  it('does NOT render when the url is set but the link is disabled (enabled=0)', () => {
+    const html = renderPreEventHtml(row({ what_url: DONATE, what_url_enabled: 0 }), SHARE);
+    expect(html).not.toContain('ose-what-link');
+    expect(html).not.toContain(DONATE);
+  });
+
+  it('renders a donation CTA when what_url_type=donation', () => {
+    const html = renderPreEventHtml(
+      row({ what_url: DONATE, what_url_enabled: 1, what_url_type: 'donation' }),
+      SHARE
+    );
+    expect(html).toContain('ose-what-link');
+    expect(html).toContain('Donate');
+  });
+
+  it('renders a league CTA when what_url_type=league (live phase)', () => {
+    const html = renderEventLiveHtml(
+      row({
+        what_url: 'https://league.example/standings',
+        what_url_enabled: 1,
+        what_url_type: 'league',
+      }),
+      SHARE
+    );
+    expect(html).toContain('View the league');
+  });
+
+  it('falls back to the neutral label for an unknown/absent type', () => {
+    const html = renderPostEventHtml(
+      row({ what_url: DONATE, what_url_enabled: 1, what_url_type: 'not-a-real-type' }),
+      SHARE,
+      []
+    );
+    expect(html).toContain('Visit the site');
   });
 });

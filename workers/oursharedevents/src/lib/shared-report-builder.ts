@@ -84,6 +84,19 @@ export interface SharedReport {
 
   unique_gatherings: number | null;
 
+  /**
+   * Rc — anonymous digital click-out counts from the /s/ routing layer, per
+   * destination kind (public/donate/signup/…). Group-level counter only (no IP,
+   * no per-visitor id, no cookie, no referrer); each kind AND the total pass the
+   * same K=5 floor as unique_gatherings, so a sub-K count never ships. This is the
+   * digital half of the flywheel — surfaced on the SharedReport / post-event
+   * recap only (never pre/event/poster, OSE-509).
+   */
+  click_outs: {
+    by_kind: Record<string, number | null>;
+    total: number | null;
+  } | null;
+
   return_rate: {
     venue_pct: number | null;
     corridor_pct: number | null;
@@ -724,6 +737,33 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
+  // 8. click_outs (Rc) — anonymous /s/ routing-layer clicks per destination kind.
+  //    Read shortlinks.clicks grouped by kind (NULL/'' → 'public'); floor each
+  //    kind independently at K=5 (never merged into the scan total — different
+  //    metric, and a merge would double-count / enable differencing), and floor
+  //    the total as its own aggregate. Closes the gap where the digital half of
+  //    the flywheel was absent from the proof layer.
+  const clickRows = await db
+    .prepare(
+      `SELECT COALESCE(NULLIF(TRIM(kind), ''), 'public') AS kind, SUM(clicks) AS clicks
+         FROM shortlinks WHERE event_id = ?
+         GROUP BY COALESCE(NULLIF(TRIM(kind), ''), 'public')`
+    )
+    .bind(eventId)
+    .all<{ kind: string; clicks: number | null }>();
+  let clickOuts: { by_kind: Record<string, number | null>; total: number | null } | null = null;
+  const clickData = clickRows.results ?? [];
+  if (clickData.length > 0) {
+    const byKind: Record<string, number | null> = {};
+    let rawTotal = 0;
+    for (const r of clickData) {
+      const raw = Number.isFinite(Number(r.clicks)) ? Number(r.clicks) : 0;
+      byKind[r.kind] = applyCountFloor(raw).count;
+      rawTotal += raw;
+    }
+    clickOuts = { by_kind: byKind, total: applyCountFloor(rawTotal).count };
+  }
+
   return {
     ok: true,
     report: {
@@ -732,6 +772,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       event_start_date: event.start_date,
       event_end_date: event.end_date,
       unique_gatherings: uniqueGatherings,
+      click_outs: clickOuts,
       return_rate: {
         venue_pct: venuePct,
         corridor_pct: corridorPct,

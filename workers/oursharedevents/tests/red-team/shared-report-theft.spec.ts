@@ -22,6 +22,7 @@ import {
   type SharedReportAuthEnv,
   type SignedLinkRole,
 } from '../../src/lib/shared-report-auth';
+import { requireAdmin, type AdminEnv } from '../../src/auth/admin';
 
 // ─── Test env bindings ────────────────────────────────────────────────────────
 
@@ -406,12 +407,31 @@ describe('Service token scope — WKRP token misuse', () => {
     expect(res.status).toBe(401);
   });
 
-  test('WKRP service token rejected on admin endpoints', async () => {
-    const res = await SELF.fetch('http://localhost/api/v2/admin/events', {
+  test('WKRP service token rejected on admin endpoints (deployed env — dev-open bypass refused)', async () => {
+    // In the workers-pool TEST env, DEV_OPEN_ADMIN='true' + WORKER_ENV='test'
+    // makes requireAdmin's local-dev bypass (admin.ts:228) OPEN admin to any
+    // request — a deliberate local convenience, guarded by
+    // dev-open-admin-guard.spec.ts. So a SELF.fetch here would (correctly for
+    // that env) return 200. The real security property — a non-admin
+    // cross-product token is REJECTED — is a DEPLOYED-env property, so assert it
+    // directly against requireAdmin with WORKER_ENV='staging', where the bypass
+    // is refused. Even with the ADMIN_KEY fallback enabled, a bearer that is not
+    // the ADMIN_KEY must 401 (falls through Methods 1-3).
+    const deployedEnv = {
+      WORKER_ENV: 'staging',
+      DEV_OPEN_ADMIN: 'true', // present but REFUSED because WORKER_ENV is staging
+      ALLOW_ADMIN_KEY_FALLBACK: 'true',
+      ADMIN_KEY,
+    } as unknown as AdminEnv;
+    const req = new Request('https://stg.oursharedevents.com/api/v2/admin/events', {
       headers: { Authorization: `Bearer ${WKRP_TOKEN}` },
     });
-    console.log(`[SCOPE] WKRP token on admin events: ${res.status}`);
-    expect(res.status).toBe(401);
+    const deny = await requireAdmin(req, deployedEnv, 'req-wkrp-admin-scope');
+    expect(
+      deny,
+      'a non-admin WKRP token must be rejected on admin in a deployed env'
+    ).not.toBeNull();
+    expect(deny!.status).toBe(401);
   });
 
   test('WKRP service token rejected on form endpoints', async () => {
