@@ -29,7 +29,13 @@ const BASELINE = {
   'public.html': 0,
   'admin-signin.html': 0,
   'display.html': 0,
-  'poster.html': 45,
+  // poster.html: screen chrome fully tokenised; the remaining 6 are @media-print
+  // PAPER colors (white paper / dark ink, theme-invariant) that have no semantic
+  // token today. Closing them to 0 is the print-token follow-up: teach @ocr/ui
+  // /ui.css an `@media print { :root { <light tokens> } }` so print is paper by
+  // construction, then this block tokenises. Tracked; do not "fix" by tokenising
+  // print to theme-flipping vars (that risks dark-on-dark printed posters).
+  'poster.html': 6,
   'shared-report.html': 65,
   'admin.html': 219,
 };
