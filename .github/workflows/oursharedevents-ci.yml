@@ -593,6 +593,13 @@ jobs:
         if: matrix.shard == 'lint'
         run: node scripts/gen-testids.mjs --check
 
+      # OSE-1328: one color pattern fleet-wide — colors go through var(--token),
+      # never raw hex. Ratchet per surface (count can only drop; clean pages
+      # locked at 0). This is what makes "theme-correct" a gate, not a pixel-check.
+      - name: 'Lint: token adherence (no raw hex; one var(--token) pattern)'
+        if: matrix.shard == 'lint'
+        run: node scripts/check-token-adherence.mjs
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
