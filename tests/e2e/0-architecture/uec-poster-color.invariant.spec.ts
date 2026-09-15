@@ -1,11 +1,20 @@
 /**
- * INVARIANT #3 (poster leg): the poster prints UEC hues, and never color alone.
+ * INVARIANT #3 (poster leg): the poster never relies on color alone, and the
+ * UEC-hue capability stays wired.
  *
  * uec-codes.invariant.spec.ts locks the canonical hex values in the registry.
  * OSE-1200 found the poster ignoring them: every printed QR was #000000 on a
- * grey card. This structural spec locks the WIRING, so a refactor that drops
- * `fgColor` from the poster bundle, or removes the word / path / tier text
- * from the card, turns CI red before it reaches a wall.
+ * grey card. This structural spec locks the WIRING so it cannot silently rot.
+ *
+ * OSE-1319 (P2): the Reg / Walk-in / Survey / Feedback QRs — and their
+ * consent-tier UEC coloring — LEFT the poster for the FORMS_DB system (see
+ * brain memory `qs-flywheel-vs-forms`). The poster now carries only anonymous
+ * /q+/s destination slots, which have no consent tier to color-code. So the
+ * "non-color channel on the poster" requirement is now met by the slots' TEXT
+ * channel — a visible label + the printed /s shortlink under every QR — and the
+ * UEC-hue capability itself is guarded where it still lives: the encoder
+ * (lib/qr.ts) and the bundle (poster-bundle.ts), ready for wherever the form QRs
+ * are next rendered.
  *
  * Structural: reads source from disk, no worker (T0 Gate invariants shard).
  * Behaviour (decoded PNG pixels equal scan_hex) is proven in
@@ -39,16 +48,19 @@ test.describe('INVARIANT #3 | UEC hues on the poster (OSE-1200)', () => {
     expect(src).toMatch(/\buec,\s*\n/); // in the response
   });
 
-  test('the poster card carries the non-color channel: word, path, consent tier, data-uec', () => {
+  test('the poster carries a non-color (text) channel on every slot — form-UEC left the poster in P2', () => {
     const html = read('templates/poster.html');
+    // OSE-1319/P2: the poster's anonymous /q+/s slots are identified by TEXT,
+    // never color — a visible label + the printed /s shortlink under each QR.
     for (const needle of [
-      'data-testid="qr-uec-word-',
-      'data-testid="qr-uec-path-',
-      'data-testid="qr-uec-tier-',
-      "card.setAttribute('data-uec'",
-      'borderTopColor = uec.scan_hex',
+      'data-testid="poster-qr-slot-label-',
+      'data-testid="qr-slot-code-',
+      'class="qr-slot-code"',
     ]) {
-      expect(html, `poster.html must contain ${needle}`).toContain(needle);
+      expect(html, `poster.html must carry the slot text channel: ${needle}`).toContain(needle);
     }
+    // the form-QR consent-tier color framing is gone from the poster — it moved
+    // with the forms to the FORMS_DB system.
+    expect(html).not.toContain("card.setAttribute('data-uec'");
   });
 });
