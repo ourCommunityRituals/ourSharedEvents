@@ -27,8 +27,8 @@ const TEMPLATES = join(ROOT, 'workers', 'oursharedevents', 'src', 'templates');
 const BASELINE = {
   'landing.html': 0,
   'public.html': 0,
-  'admin-signin.html': 1,
-  'display.html': 17,
+  'admin-signin.html': 0,
+  'display.html': 0,
   'poster.html': 45,
   'shared-report.html': 65,
   'admin.html': 219,
