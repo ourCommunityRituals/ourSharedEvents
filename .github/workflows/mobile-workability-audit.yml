@@ -57,7 +57,15 @@ on:
     # first PR-code run were in src/templates/admin.html and
     # packages/ui/src/styles.ts, neither of which was listed here.
     paths:
+      # ALL three specs this job runs (playwright.mobile.config.ts testMatch:
+      # mobile-workability | admin-wizard-isolation | admin-csp-controls). The
+      # list previously named only mobile-workability.spec.ts, so a change to
+      # either admin spec — two of the three specs the config actually executes
+      # — did not trigger the job that runs it, and the change merged green
+      # without ever being exercised (found on #555, the admin-csp de-flake).
       - 'tests/playwright/mobile-workability.spec.ts'
+      - 'tests/playwright/admin-wizard-isolation.spec.ts'
+      - 'tests/playwright/admin-csp-controls.spec.ts'
       - 'playwright.mobile.config.ts'
       - 'playwright.config.ts'
       - '.github/workflows/mobile-workability-audit.yml'
