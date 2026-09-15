@@ -60,10 +60,14 @@ export const primitives = {
   '--ocr-teal-300': '#33D4C6', // live hover dark
   '--ocr-teal-700': '#00796B', // live light mode (4.9:1 on light-050)
   '--ocr-teal-600': '#009688', // live hover light
-  '--ocr-red-500': '#E05252', // danger dark mode (4.7:1 on navy-950)
+  '--ocr-red-500': '#EA6D6D', // danger dark mode — AA on --bg #141F30 (5.45:1) + --surface #1A2740 (4.90:1). Brightened from #E05252 (3.90:1 on surface) after OSE-1325 lifted --bg.
   '--ocr-red-400': '#E87272', // danger hover dark
   '--ocr-red-700': '#B03030', // danger light mode (5.2:1 on light-050)
   '--ocr-red-600': '#C03838', // danger hover light
+
+  // Warn — amber (colorblind-safe; distinct from the red/green axis). OSE-1328.
+  '--ocr-amber-400': '#F5B32E', // warn dark mode
+  '--ocr-amber-700': '#8A5A00', // warn light mode
 
   // Surface hover steps
   '--ocr-navy-800': '#223350', // surface-hover dark (between navy-900 and navy-700)
@@ -92,6 +96,8 @@ export const semanticDark = {
   '--danger': 'var(--ocr-red-500)', // destructive actions only
   '--danger-hover': 'var(--ocr-red-400)',
   '--error': 'var(--ocr-red-500)', // alias — form validation / error banners
+  '--warn': 'var(--ocr-amber-400)', // caution / pending — amber (OSE-1328)
+  '--info': 'var(--ocr-blue-500)', // informational — blue, lighter than --accent (OSE-1328)
 } as const;
 
 // ── Tier 2: Light mode override ───────────────────────────────────────────────
@@ -110,6 +116,8 @@ export const semanticLight = {
   '--danger': 'var(--ocr-red-700)', // 5.2:1 — full AA
   '--danger-hover': 'var(--ocr-red-600)',
   '--error': 'var(--ocr-red-700)', // alias — form validation / error banners
+  '--warn': 'var(--ocr-amber-700)', // caution / pending — amber (OSE-1328)
+  '--info': 'var(--ocr-blue-700)', // informational — blue (OSE-1328)
 } as const;
 
 // ── Shared structural tokens (not colour, not theme-sensitive) ────────────────

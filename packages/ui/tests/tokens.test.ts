@@ -73,9 +73,16 @@ describe('palette identity (CARTO, Ember-free)', () => {
     const liveDark = P['--ocr-teal-400'];
     const dangerDark = P['--ocr-red-500'];
     expect(liveDark).not.toBe(dangerDark);
-    // Teal and red are not the same hue family
-    expect(liveDark.startsWith('#00')).toBe(true); // teal
-    expect(dangerDark.startsWith('#E0')).toBe(true); // red
+    // Red vs teal are different hue families (colorblind-safe: no red+green pair).
+    // Checked by channel dominance, NOT an exact hex — so an in-family tweak
+    // (e.g. brightening danger for AA contrast, OSE-1328) doesn't falsely fail.
+    const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [lr, lg, lb] = rgb(liveDark);
+    const [dr, dg, db] = rgb(dangerDark);
+    expect(dr).toBeGreaterThan(dg); // danger: red channel dominant
+    expect(dr).toBeGreaterThan(db);
+    expect(lr).toBeLessThan(lg); // live: teal — low red, high green/blue
+    expect(lr).toBeLessThan(lb);
   });
 });
 
