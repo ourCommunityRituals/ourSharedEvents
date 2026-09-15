@@ -23,6 +23,7 @@
     "check:surfaces": "node scripts/check-surfaces.js",
     "check:dead-code": "node scripts/check-dead-code.js --fail-on-dead",
     "check:banned-origins": "node scripts/check-banned-origins.mjs",
+    "check:token-adherence": "node scripts/check-token-adherence.mjs",
     "check:v2-files": "node scripts/check-v2-files.js",
     "guard:no-gas": "node scripts/guard-no-gas.js",
     "test:guard-no-gas": "node scripts/guard-no-gas.test.js",

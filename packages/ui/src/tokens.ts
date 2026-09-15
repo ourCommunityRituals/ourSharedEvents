@@ -14,7 +14,7 @@
  * avoids it:
  *   --live   = teal  (#00C4B4) — distinguishable across protanopia,
  *              deuteranopia, and tritanopia; distinct in lightness from blue
- *   --danger = red   (#E05252) — used only for DESTRUCTIVE ACTIONS, never
+ *   --danger = red   (#EA6D6D) — used only for DESTRUCTIVE ACTIONS, never
  *              as a semantic opposite to --live
  *
  * All foreground/background pairs target WCAG AA (4.5:1 normal text, 3:1 large).
@@ -30,6 +30,16 @@
  *   }
  *
  * Override only the semantic tokens that differ. Everything else inherits OCR base.
+ *
+ * LOCKED BASE — CUSTOMIZE VIA THE WHITE-LABEL PIPELINE, NOT HERE
+ * ────────────────────────────────────────────────────────────────────────────
+ * Tier 1 + Tier 2 are canonical and locked: no surface hardcodes a hex or
+ * declares its own :root (both gated fleet-wide by scripts/check-token-adherence.mjs).
+ * Per-brand customization is a Tier 3 [data-brand] block INJECTED by the
+ * white-label pipeline — OSM (OurSharedMagnets) contracts/onboards the brand's
+ * assets + config, OA (OurAirwaves) deploys the instance / client fork — never
+ * a hand-edited token in a template. A brand override set must itself pass
+ * contrast verification (an inaccessible white-label palette does not ship).
  */
 
 // ── Tier 1: Primitive colour scale ───────────────────────────────────────────
@@ -60,10 +70,14 @@ export const primitives = {
   '--ocr-teal-300': '#33D4C6', // live hover dark
   '--ocr-teal-700': '#00796B', // live light mode (4.9:1 on light-050)
   '--ocr-teal-600': '#009688', // live hover light
-  '--ocr-red-500': '#E05252', // danger dark mode (4.7:1 on navy-950)
+  '--ocr-red-500': '#EA6D6D', // danger dark mode — AA on --bg #141F30 (5.45:1) + --surface #1A2740 (4.90:1). Brightened from #E05252 (3.90:1 on surface) after OSE-1325 lifted --bg.
   '--ocr-red-400': '#E87272', // danger hover dark
   '--ocr-red-700': '#B03030', // danger light mode (5.2:1 on light-050)
   '--ocr-red-600': '#C03838', // danger hover light
+
+  // Warn — amber (colorblind-safe; distinct from the red/green axis). OSE-1328.
+  '--ocr-amber-400': '#F5B32E', // warn dark mode
+  '--ocr-amber-700': '#8A5A00', // warn light mode
 
   // Surface hover steps
   '--ocr-navy-800': '#223350', // surface-hover dark (between navy-900 and navy-700)
@@ -92,6 +106,8 @@ export const semanticDark = {
   '--danger': 'var(--ocr-red-500)', // destructive actions only
   '--danger-hover': 'var(--ocr-red-400)',
   '--error': 'var(--ocr-red-500)', // alias — form validation / error banners
+  '--warn': 'var(--ocr-amber-400)', // caution / pending — amber (OSE-1328)
+  '--info': 'var(--ocr-blue-500)', // informational — blue, lighter than --accent (OSE-1328)
 } as const;
 
 // ── Tier 2: Light mode override ───────────────────────────────────────────────
@@ -110,6 +126,8 @@ export const semanticLight = {
   '--danger': 'var(--ocr-red-700)', // 5.2:1 — full AA
   '--danger-hover': 'var(--ocr-red-600)',
   '--error': 'var(--ocr-red-700)', // alias — form validation / error banners
+  '--warn': 'var(--ocr-amber-700)', // caution / pending — amber (OSE-1328)
+  '--info': 'var(--ocr-blue-700)', // informational — blue (OSE-1328)
 } as const;
 
 // ── Shared structural tokens (not colour, not theme-sensitive) ────────────────

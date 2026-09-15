@@ -9,7 +9,7 @@
 
 export interface DriftFinding {
   file: string;
-  issue: 'local-root-tokens' | 'large-inline-style' | 'missing-shared-stylesheet';
+  issue: 'local-root-tokens' | 'large-inline-style' | 'missing-shared-stylesheet' | 'raw-hex-color';
   detail: string;
 }
 
@@ -43,6 +43,26 @@ export function checkTemplate(file: string, html: string): DriftFinding[] {
       file,
       issue: 'missing-shared-stylesheet',
       detail: 'No stylesheet linked. Add <link rel="stylesheet" href="/ui.css">.',
+    });
+  }
+
+  // Raw hex colors bypass the token system, so a surface that uses them cannot
+  // follow dark/light — it is not theme-correct. Hex INSIDE a var() fallback
+  // (`var(--token, #fallback)`) is fine: that IS routed through a token. This is
+  // the token-adherence keystone (OSE-1328) — a surface with zero raw hex is
+  // correct in BOTH themes by construction, because the tokens are
+  // contrast-verified for dark + light (verify-contrast.mjs). CSS comments and
+  // var() fallbacks are stripped before the scan so neither is a false positive.
+  const scannableCss = inlineCss.replace(/\/\*[\s\S]*?\*\//g, '').replace(/var\([^)]*\)/g, '');
+  const rawHex = [...scannableCss.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => m[0]);
+  if (rawHex.length > 0) {
+    const sample = [...new Set(rawHex)].slice(0, 8).join(', ');
+    findings.push({
+      file,
+      issue: 'raw-hex-color',
+      detail:
+        `${rawHex.length} raw hex color(s) not routed through a token (${sample}). ` +
+        'Use var(--token[, #fallback]) so both themes stay correct.',
     });
   }
 
