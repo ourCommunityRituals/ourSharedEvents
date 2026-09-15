@@ -239,6 +239,46 @@ describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OSE-1328: sponsors + poster-art cluster — the .sponsors-card god-class retired
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
+  test('sponsors-card adopts .card + .mcard-* (keeps .sponsors-card hook + testid)', async () => {
+    const html = await fetchAdminHtml();
+    // .card base + the sponsors-card class kept for ecbJump + the [data-testid] lookup (admin.html ~2717)
+    expect(html).toContain('class="card sponsors-card"');
+    expect(html).toMatch(
+      /class="card sponsors-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Sponsors/
+    );
+    expect(html).toContain('class="mcard-body"');
+    // wiring preserved
+    expect(html).toContain('id="spon-form-wrap"');
+    expect(html).toContain('data-testid="sponsors-list"');
+    expect(html).toContain('data-testid="add-sponsor-toggle"');
+    expect(html).toContain('data-target="sponsors-card"');
+  });
+
+  test('poster-art-card adopts .card + .mcard-* and DROPS the sponsors-card piggyback', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('class="card poster-art-card"');
+    expect(html).not.toContain('class="sponsors-card poster-art-card"'); // decoupled
+    expect(html).toMatch(
+      /class="card poster-art-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Poster art/
+    );
+    // R4 (OSE-1319) hydration wiring preserved
+    expect(html).toContain('id="pa-panel"');
+    expect(html).toContain('id="pa-manage"');
+    expect(html).toContain('data-testid="poster-art-file"');
+  });
+
+  test('the shared .sponsors-card-header rule + class are retired (god-class killed)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).not.toMatch(/\.sponsors-card-header\s*\{/); // CSS rule gone
+    expect(html).not.toContain('class="sponsors-card-header"'); // no card borrows it
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-14: Surface link cards (poster, display, public, report)
 // ═══════════════════════════════════════════════════════════════════════════════
 
