@@ -17,11 +17,11 @@
           system-ui,
           -apple-system,
           sans-serif;
-        background: #f8f9fa;
-        color: #212529;
+        background: var(--bg);
+        color: var(--text);
       }
       header {
-        background: #1a1a2e;
+        background: var(--surface);
         color: #fff;
         padding: 1.25rem 2rem;
         display: flex;
@@ -72,7 +72,7 @@
       }
       .phase-badge.phase-1 {
         background: #f1f3f5;
-        color: #495057;
+        color: var(--text-muted);
       }
       .phase-badge.phase-2 {
         background: #d0ebff;
@@ -98,7 +98,7 @@
         gap: 0.5rem;
         margin: 0.5rem 0 0.75rem;
         font-size: 0.85rem;
-        color: #6c757d;
+        color: var(--text-muted);
       }
       /* WCAG 2.5.5 sizes the TARGET, not the painted control: the 13x13
          checkbox is fine so long as the label around it is tappable, which is
@@ -151,7 +151,7 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.5rem 0;
-        border-bottom: 1px solid #f1f3f5;
+        border-bottom: 1px solid var(--border);
       }
       .form-config:last-child {
         border-bottom: none;
@@ -162,7 +162,7 @@
       }
       .form-config-desc {
         font-size: 0.75rem;
-        color: #6c757d;
+        color: var(--text-muted);
       }
       .toggle {
         position: relative;
@@ -178,7 +178,7 @@
       .toggle .slider {
         position: absolute;
         inset: 0;
-        background: #dee2e6;
+        background: var(--surface-hover);
         border-radius: 22px;
         cursor: pointer;
         transition: background 0.2s;
@@ -190,12 +190,12 @@
         top: 2px;
         width: 18px;
         height: 18px;
-        background: #fff;
+        background: var(--surface);
         border-radius: 50%;
         transition: transform 0.2s;
       }
       .toggle input:checked + .slider {
-        background: #4361ee;
+        background: var(--accent);
       }
       .toggle input:checked + .slider::before {
         transform: translateX(18px);
@@ -207,12 +207,12 @@
       .config-section {
         margin-top: 1rem;
         padding-top: 1rem;
-        border-top: 1px solid #e9ecef;
+        border-top: 1px solid var(--border);
       }
       .config-section h3 {
         font-size: 0.85rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 0.5rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -225,19 +225,19 @@
       h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       table {
         width: 100%;
         border-collapse: collapse;
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       }
       th {
-        background: #1a1a2e;
+        background: var(--surface);
         color: #fff;
         padding: 0.75rem 1rem;
         text-align: left;
@@ -247,7 +247,7 @@
       }
       td {
         padding: 0.75rem 1rem;
-        border-bottom: 1px solid #f1f3f5;
+        border-bottom: 1px solid var(--border);
         font-size: 0.9rem;
       }
       tr:last-child td {
@@ -272,20 +272,20 @@
       }
       .badge.archived {
         background: #f1f3f5;
-        color: #495057;
+        color: var(--text-muted);
       }
       .loading {
         text-align: center;
         padding: 3rem;
-        color: #6c757d;
+        color: var(--text-muted);
       }
       .error {
         text-align: center;
         padding: 2rem;
-        color: #e03131;
+        color: var(--error);
       }
       .forms-card {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -294,7 +294,7 @@
       .forms-card h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 0.75rem;
       }
       .forms-grid {
@@ -305,11 +305,11 @@
       .form-link {
         display: block;
         padding: 0.75rem 1rem;
-        background: #f8f9fa;
+        background: var(--surface-hover);
         border-radius: 6px;
         text-decoration: none;
-        color: #212529;
-        border-left: 3px solid #4361ee;
+        color: var(--text);
+        border-left: 3px solid var(--accent);
       }
       .form-link:hover {
         background: #e9ecef;
@@ -320,7 +320,7 @@
       }
       .form-link .form-desc {
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--text-muted);
         margin-top: 0.15rem;
       }
       .form-counts {
@@ -332,17 +332,17 @@
       .form-counts .count-box {
         text-align: center;
         padding: 0.5rem;
-        background: #f8f9fa;
+        background: var(--surface-hover);
         border-radius: 6px;
       }
       .form-counts .count-num {
         font-size: 1.5rem;
         font-weight: 700;
-        color: #1a1a2e;
+        color: var(--text);
       }
       .form-counts .count-label {
         font-size: 0.7rem;
-        color: #6c757d;
+        color: var(--text-muted);
         text-transform: uppercase;
       }
       .surface-cards {
@@ -352,7 +352,7 @@
         margin-top: 2rem;
       }
       .surface-card {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1rem 1.25rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -365,7 +365,7 @@
       }
       .surface-card p {
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--text-muted);
         margin-bottom: 0.5rem;
       }
       /* These are the card's ACTION, not a link in a sentence, so the
@@ -377,7 +377,7 @@
         align-items: center;
         min-height: 44px;
         font-size: 0.8rem;
-        color: #4361ee;
+        color: var(--accent);
         text-decoration: none;
         font-weight: 500;
       }
@@ -398,7 +398,7 @@
       }
       .qr-hint {
         font-size: 0.7rem;
-        color: #64748b;
+        color: var(--text-muted);
         margin-top: 0.25rem;
       }
       .copy-btn {
@@ -407,11 +407,11 @@
         min-height: 44px; /* WCAG 2.5.5 — rendered 73x22 (OSE-1236) */
         padding: 0.2rem 0.5rem;
         background: #f1f3f5;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--border);
         border-radius: 4px;
         font-size: 0.75rem;
         cursor: pointer;
-        color: #495057;
+        color: var(--text-muted);
         margin-left: 0.5rem;
         transition:
           background 0.2s,
@@ -429,7 +429,7 @@
         cursor: pointer;
       }
       .muted-sm {
-        color: #6c757d;
+        color: var(--text-muted);
         font-size: 0.8rem;
       }
       .sr-only {
@@ -450,7 +450,7 @@
         gap: 0.75rem;
       }
       .required-star {
-        color: #dc2626;
+        color: var(--error);
       }
       @keyframes shimmer {
         0% {
@@ -475,7 +475,7 @@
         flex-direction: column;
         gap: 0.5rem;
         padding: 1.5rem;
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       }
@@ -506,18 +506,18 @@
         display: inline-block;
         margin-top: 0.75rem;
         padding: 0.4rem 1rem;
-        background: #fff;
-        border: 1px solid #dee2e6;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 0.8rem;
         cursor: pointer;
-        color: #495057;
+        color: var(--text-muted);
       }
       .card-error .retry-btn:hover {
-        background: #f8f9fa;
+        background: var(--surface-hover);
       }
       .create-card {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -527,7 +527,7 @@
       .create-card h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       .create-form {
@@ -542,7 +542,7 @@
         display: block;
         font-size: 0.8rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 0.25rem;
       }
       /* Mobile floor (OSE-1236). font-size is 16px, not 0.9rem: below 16px iOS
@@ -561,11 +561,11 @@
         width: 100%;
         min-height: 44px;
         padding: 0.5rem 0.75rem;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 16px;
-        background: #fff;
-        color: #1e293b;
+        background: var(--surface);
+        color: var(--text);
       }
       /* input[type=date] on iOS Safari (OSE-1237, reported from a phone).
          Safari gives a date input an INTRINSIC width from its rendered value
@@ -593,7 +593,7 @@
       .create-form input:focus,
       .create-form select:focus,
       .create-form textarea:focus {
-        border-color: #4361ee;
+        border-color: var(--accent);
         outline: none;
         box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
       }
@@ -625,7 +625,7 @@
         color: #16a34a;
       }
       .create-msg.error {
-        color: #dc2626;
+        color: var(--error);
       }
       /* Shared assertive status toast (replaces blocking dialogs). Sticky at the
          top of the admin main column on mobile; top-right on wide screens. */
@@ -685,7 +685,7 @@
         align-items: center;
         border-radius: 8px;
         font-size: 0.9rem;
-        background: #fff;
+        background: var(--surface);
         border: 1px solid currentColor;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
       }
@@ -696,7 +696,7 @@
         color: #16a34a;
       }
       .admin-status.is-error {
-        color: #dc2626;
+        color: var(--error);
       }
       @media (min-width: 900px) {
         .admin-status {
@@ -771,23 +771,23 @@
         width: auto;
         height: auto;
         padding: 0.5rem 1rem;
-        background: #1a1a2e;
+        background: var(--surface);
         color: #fff;
         font-size: 1rem;
         z-index: 9999;
         text-decoration: none;
-        border-bottom: 2px solid #4361ee;
+        border-bottom: 2px solid var(--accent);
       }
       button:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .form-link:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .clickable-row:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: -2px;
         background: #eef2ff;
       }
@@ -867,11 +867,11 @@
         }
         table.events-table tr {
           display: block;
-          border: 1px solid #dee2e6;
+          border: 1px solid var(--border);
           border-radius: 8px;
           padding: 0.75rem 1rem;
           margin-bottom: 0.75rem;
-          background: #fff;
+          background: var(--surface);
         }
         table.events-table td {
           display: block;
@@ -883,7 +883,7 @@
         table.events-table td::before {
           content: attr(data-label) ': ';
           font-weight: 600;
-          color: #495057;
+          color: var(--text-muted);
           margin-right: 0.5rem;
         }
         table.events-table td.col-internal-id {
@@ -905,11 +905,11 @@
         }
         #sponsors-list table tr {
           display: block;
-          border: 1px solid #dee2e6;
+          border: 1px solid var(--border);
           border-radius: 8px;
           padding: 0.75rem 1rem;
           margin-bottom: 0.75rem;
-          background: #fff;
+          background: var(--surface);
         }
         #sponsors-list table td {
           display: block;
@@ -920,7 +920,7 @@
         #sponsors-list table td::before {
           content: attr(data-label) ': ';
           font-weight: 600;
-          color: #495057;
+          color: var(--text-muted);
           margin-right: 0.5rem;
         }
         /* Action cell shouldn't get the label prefix — it contains buttons. */
@@ -932,7 +932,7 @@
         }
       }
       .sponsors-card {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -950,7 +950,7 @@
       .add-spon-btn {
         min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
         padding: 0.4rem 1rem;
-        background: #4361ee;
+        background: var(--accent);
         color: #fff;
         border: none;
         border-radius: 6px;
@@ -963,27 +963,27 @@
         background: #3a56d4;
       }
       .add-spon-btn:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .cancel-btn {
         padding: 0.6rem 1rem;
-        background: #fff;
-        color: #495057;
-        border: 1px solid #dee2e6;
+        background: var(--surface);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 0.9rem;
         cursor: pointer;
       }
       .cancel-btn:hover {
-        background: #f8f9fa;
+        background: var(--surface-hover);
       }
       .spon-form-wrap {
-        background: #f8f9fa;
+        background: var(--surface-hover);
         border-radius: 6px;
         padding: 1rem;
         margin-bottom: 1rem;
-        border-left: 3px solid #4361ee;
+        border-left: 3px solid var(--accent);
       }
       .spon-tier-pill {
         display: inline-block;
@@ -1008,7 +1008,7 @@
       }
       .spon-tier-pill.silver {
         background: #e9ecef;
-        color: #495057;
+        color: var(--text-muted);
       }
       .spon-tier-pill.bronze {
         background: #fde8d8;
@@ -1033,24 +1033,24 @@
         color: #adb5bd;
       }
       .pip.active {
-        background: #4361ee;
+        background: var(--accent);
         color: #fff;
       }
       .spon-action-btn {
         padding: 0.25rem 0.6rem;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--border);
         border-radius: 4px;
         font-size: 0.75rem;
         cursor: pointer;
-        background: #fff;
-        color: #495057;
+        background: var(--surface);
+        color: var(--text-muted);
         transition: all 0.15s;
       }
       .spon-action-btn:hover {
-        background: #f8f9fa;
+        background: var(--surface-hover);
       }
       .spon-action-btn:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .spon-action-btn.deactivate {
@@ -1092,7 +1092,7 @@
         font-size: 0.85rem;
         cursor: pointer;
         font-weight: normal;
-        color: #212529;
+        color: var(--text);
       }
       .placement-check input {
         cursor: pointer;
@@ -1438,22 +1438,22 @@
       }
 
       .path-chooser {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-bottom: 2rem;
-        border-left: 3px solid #4361ee;
+        border-left: 3px solid var(--accent);
       }
       .path-chooser h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 0.25rem;
       }
       .path-chooser-sub {
         font-size: 0.85rem;
-        color: #64748b;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       .path-chooser-options {
@@ -1480,7 +1480,7 @@
       }
       .path-option-quiet:hover,
       .path-option-quiet:focus-visible {
-        color: #4361ee;
+        color: var(--accent);
       }
       .path-option {
         display: flex;
@@ -1488,29 +1488,29 @@
         gap: 0.25rem;
         text-align: left;
         padding: 1rem;
-        background: #f8f9fa;
-        border: 2px solid #dee2e6;
+        background: var(--surface-hover);
+        border: 2px solid var(--border);
         border-radius: 8px;
         cursor: pointer;
         transition: border-color 0.15s, background 0.15s;
       }
       .path-option:hover,
       .path-option:focus-visible {
-        border-color: #4361ee;
-        background: #fff;
+        border-color: var(--accent);
+        background: var(--surface);
         outline: none;
       }
       .path-option-title {
         font-size: 0.95rem;
         font-weight: 600;
-        color: #1e293b;
+        color: var(--text);
       }
       .path-option-desc {
         font-size: 0.8rem;
-        color: #64748b;
+        color: var(--text-muted);
       }
       .launch-wizard {
-        background: #fff;
+        background: var(--surface);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -1520,7 +1520,7 @@
       .launch-wizard h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       .wizard-progress {
@@ -1536,7 +1536,7 @@
         left: 10%;
         right: 10%;
         height: 2px;
-        background: #dee2e6;
+        background: var(--surface-hover);
       }
       .wizard-progress-step {
         position: relative;
@@ -1555,9 +1555,9 @@
         width: 28px;
         height: 28px;
         border-radius: 50%;
-        background: #f8f9fa;
-        border: 2px solid #dee2e6;
-        color: #64748b;
+        background: var(--surface-hover);
+        border: 2px solid var(--border);
+        color: var(--text-muted);
         font-size: 0.8rem;
         font-weight: 600;
         display: flex;
@@ -1566,15 +1566,15 @@
       }
       .wizard-progress-step .step-label {
         font-size: 0.7rem;
-        color: #64748b;
+        color: var(--text-muted);
       }
       .wizard-progress-step.active .step-number {
-        background: #4361ee;
-        border-color: #4361ee;
+        background: var(--accent);
+        border-color: var(--accent);
         color: #fff;
       }
       .wizard-progress-step.active .step-label {
-        color: #1e293b;
+        color: var(--text);
         font-weight: 600;
       }
       .wizard-progress-step.completed {
@@ -1593,7 +1593,7 @@
       }
       .wizard-step-help {
         font-size: 0.85rem;
-        color: #64748b;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       .wizard-template-grid,
@@ -1658,7 +1658,7 @@
         margin: 0.5rem 0 0;
         font-size: 0.875rem;
         line-height: 1.4;
-        color: #dc2626;
+        color: var(--error);
         font-weight: 600;
       }
       .create-slot-preview {
@@ -1713,8 +1713,8 @@
         gap: 0.25rem;
         text-align: left;
         padding: 0.9rem;
-        background: #f8f9fa;
-        border: 2px solid #dee2e6;
+        background: var(--surface-hover);
+        border: 2px solid var(--border);
         border-radius: 8px;
         cursor: pointer;
         transition: border-color 0.15s;
@@ -1725,7 +1725,7 @@
       .wizard-publish-option:focus-visible,
       .wizard-template-card:focus-visible,
       .wizard-signup-option:focus-visible {
-        border-color: #4361ee;
+        border-color: var(--accent);
         outline: none;
       }
       .wizard-template-card.selected,
@@ -1737,11 +1737,11 @@
       .wizard-card-title {
         font-size: 0.9rem;
         font-weight: 600;
-        color: #1e293b;
+        color: var(--text);
       }
       .wizard-card-desc {
         font-size: 0.78rem;
-        color: #64748b;
+        color: var(--text-muted);
       }
       .wizard-nav {
         display: flex;
@@ -1753,16 +1753,16 @@
       .wizard-back-btn,
       .wizard-skip-btn {
         padding: 0.6rem 1.25rem;
-        background: #fff;
-        border: 1px solid #dee2e6;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 0.9rem;
-        color: #495057;
+        color: var(--text-muted);
         cursor: pointer;
       }
       .wizard-back-btn:hover,
       .wizard-skip-btn:hover {
-        background: #f8f9fa;
+        background: var(--surface-hover);
       }
       .wizard-links-grid {
         display: grid;
@@ -1771,8 +1771,8 @@
         margin-bottom: 1rem;
       }
       .wizard-link-card {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 0.9rem;
         display: flex;
@@ -1786,24 +1786,24 @@
       }
       .wizard-link-card .wizard-card-url {
         font-size: 0.75rem;
-        color: #4361ee;
+        color: var(--accent);
         word-break: break-all;
       }
       .wizard-link-card img {
         width: 110px;
         height: 110px;
-        background: #fff;
+        background: var(--surface);
         border-radius: 6px;
         align-self: flex-start;
       }
       .wizard-copy-btn {
         align-self: flex-start;
         padding: 0.35rem 0.9rem;
-        background: #fff;
-        border: 1px solid #dee2e6;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 0.78rem;
-        color: #495057;
+        color: var(--text-muted);
         cursor: pointer;
       }
       .wizard-copy-btn:hover {
@@ -1820,7 +1820,7 @@
       }
       .wizard-checklist li {
         font-size: 0.9rem;
-        color: #1e293b;
+        color: var(--text);
       }
       .wizard-summary {
         background: #f0fdf4;
@@ -1828,7 +1828,7 @@
         border-radius: 8px;
         padding: 0.9rem;
         font-size: 0.95rem;
-        color: #1e293b;
+        color: var(--text);
         margin-bottom: 1rem;
       }
       @media (max-width: 480px) {
@@ -4106,7 +4106,7 @@
         image-rendering: pixelated;
         border: 1px solid var(--border);
         border-radius: 6px;
-        background: #fff;
+        background: var(--surface);
       }
       .pd-meta { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
       .pd-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }

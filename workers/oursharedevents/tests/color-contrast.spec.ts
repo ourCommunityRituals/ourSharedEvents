@@ -119,10 +119,16 @@ describe('A11Y-5: #155724 (8.69:1 on white, 7.59:1 on green bg) for success/badg
 });
 
 describe('A11Y-5: #495057 (7.33:1 on #f1f3f5) for archived badge text', () => {
-  test('admin page archived badge uses #495057', async () => {
+  // admin's archived-badge TEXT migrated to var(--text-muted) in the
+  // token-adherence priority conversion (#495057 → --text-muted). The badge bg +
+  // the status hues remain raw pending the status/tier-token decision. The
+  // contrast guarantee moved to the token layer (verify-contrast.mjs), it did not
+  // weaken. Assert the token, not the old hex.
+  test('admin archived badge text is tokenised (var(--text-muted))', async () => {
     const body = await adminHtml();
     expect(body).toContain('.badge.archived');
-    expect(body).toContain('#495057');
+    expect(body).toContain('var(--text-muted)');
+    expect(body).not.toContain('#495057');
   });
 
   // shared-report's .badge.archived migrated to var(--surface-hover)/var(--text-muted)

@@ -43,7 +43,16 @@ const BASELINE = {
   // pending design decision (add status/tier tokens vs. treat as theme-invariant
   // status hues), informed by the QR/customization research.
   'shared-report.html': 11,
-  'admin.html': 219,
+  // admin.html: chrome converted in priority order (accent, neutral text/border/
+  // surface, validation-red → --error): 219 → 98. The remaining 98 are the
+  // status/SEMANTIC palette (tier + phase badges, green-success #16a34a family,
+  // red/amber/info alert-banner TINTS), white-on-accent button text (color:#fff —
+  // no --on-accent token), a few mixed-context grays, and one JS-string print-
+  // window color (#555 @ ~4254, which has no /ui.css and MUST stay hex). Closing
+  // these needs the STATUS/TIER TOKEN decision (add --success/--on-accent/tier +
+  // warn/info tint tokens to @ocr/ui vs. treat as theme-invariant status hues) —
+  // admin's rich palette is the strongest driver of that decision. Chrome done.
+  'admin.html': 98,
 };
 
 function rawHexCount(html) {
