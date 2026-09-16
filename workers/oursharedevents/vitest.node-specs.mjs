@@ -122,6 +122,7 @@ export const NODE_SPECS = [
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
   'tests/what-external-link.spec.ts',
+<<<<<<< HEAD
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',
@@ -132,4 +133,9 @@ export const NODE_SPECS = [
   // (archived->active is direct; only draft hops via ready). Pure over the
   // admin.html template string + the event-state domain module.
   'tests/admin-golive-transitions.spec.ts',
+
+  // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
+  // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
+  // No cloudflare:test / SELF.fetch / D1 runtime — node-clean by construction.
+  'tests/scan-buffer.spec.ts',
 ];

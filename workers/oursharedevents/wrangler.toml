@@ -146,6 +146,29 @@ bucket_name = "ose-uploads-staging"
 binding = "RATE_LIMIT_KV"
 id = "4418eb1709e24987bf86b1aa280725c2"
 
+# ── Scan write-buffer (staging) — engine-hardening #1, DARK-LAUNCHED ───────────
+# Producer + consumer for the /q/ QR-scan write buffer (src/lib/scan-buffer.ts).
+# Left COMMENTED until the queues exist: an uncommented reference to a queue that
+# has not been created fails `wrangler deploy`. Until it is activated the code
+# runs exactly as today — SCAN_QUEUE is unbound, so the /q/ hot path takes the
+# direct D1 batch write (the fallback floor). Nothing to flip in the code.
+#
+# To activate (owner, separate terminal, once per account):
+#   npx wrangler queues create ose-scans      --env staging
+#   npx wrangler queues create ose-scans-dlq  --env staging
+# then uncomment the two blocks below and redeploy. Reversible by re-commenting.
+#
+# [[env.staging.queues.producers]]
+# binding = "SCAN_QUEUE"
+# queue   = "ose-scans"
+#
+# [[env.staging.queues.consumers]]
+# queue             = "ose-scans"
+# max_batch_size    = 100
+# max_batch_timeout = 5
+# max_retries       = 3
+# dead_letter_queue = "ose-scans-dlq"
+
 # ── Cron trigger: data lifecycle (staging) ────────────────────────────────────
 # OSE-813 — Wrangler does NOT inherit [triggers] into named environments, the same
 # rule that applies to vars / d1_databases / kv_namespaces / r2_buckets. The
@@ -244,6 +267,26 @@ bucket_name = "ose-uploads-production"
 [[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "e44974e89361435e97b3cb79bd10abbb"
+
+# ── Scan write-buffer (production) — engine-hardening #1, DARK-LAUNCHED ────────
+# See the staging block above for rationale. Commented until the queues exist;
+# until then SCAN_QUEUE is unbound and the /q/ hot path takes the direct D1 batch.
+#
+# To activate (owner, separate terminal, once per account):
+#   npx wrangler queues create ose-scans      --env production
+#   npx wrangler queues create ose-scans-dlq  --env production
+# then uncomment the two blocks below and redeploy. Reversible by re-commenting.
+#
+# [[env.production.queues.producers]]
+# binding = "SCAN_QUEUE"
+# queue   = "ose-scans"
+#
+# [[env.production.queues.consumers]]
+# queue             = "ose-scans"
+# max_batch_size    = 100
+# max_batch_timeout = 5
+# max_retries       = 3
+# dead_letter_queue = "ose-scans-dlq"
 
 # ── Cron trigger: data lifecycle (production) ─────────────────────────────────
 # OSE-813 — see the staging block. Must be declared per-environment; not inherited.
