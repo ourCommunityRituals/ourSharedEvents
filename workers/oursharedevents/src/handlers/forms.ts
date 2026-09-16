@@ -232,6 +232,13 @@ export async function handleFormRegistration(
   if (name && !env.FORMS_ENCRYPTION_KEY) {
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
   }
+  // DE-06 / OSE-1343: the write path hashes the email with a REQUIRED pepper
+  // (hashEmail(..., { requirePepper: true }) below). Guard it explicitly, like
+  // the key above, so a missing FORMS_HASH_PEPPER surfaces as a clear
+  // CONFIG_ERROR instead of a masked DB_ERROR from the caught throw.
+  if (email && !env.FORMS_HASH_PEPPER) {
+    return errorResponse('CONFIG_ERROR', 'FORMS_HASH_PEPPER not configured', 503, request);
+  }
 
   let emailHash: string | undefined;
   let nameEncrypted: string | undefined;
@@ -434,6 +441,11 @@ export async function handleFormEmailSignup(
   const encryptionKey = env.FORMS_ENCRYPTION_KEY;
   if (!encryptionKey)
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
+  // DE-06 / OSE-1343: the pepper is required by hashEmail below; guard it
+  // explicitly so a missing FORMS_HASH_PEPPER is a clear CONFIG_ERROR, not a
+  // masked DB_ERROR from the caught throw.
+  if (!env.FORMS_HASH_PEPPER)
+    return errorResponse('CONFIG_ERROR', 'FORMS_HASH_PEPPER not configured', 503, request);
 
   try {
     // DE-06: WRITE path — never silently degrade to bare SHA-256. A missing

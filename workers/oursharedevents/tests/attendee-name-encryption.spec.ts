@@ -115,6 +115,8 @@ describe('DE-06: WRITE paths fail closed when FORMS_HASH_PEPPER is unset', () =>
       EVENT
     );
     expect(res.status).toBe(503);
+    // OSE-1343: a missing pepper now surfaces a clear CONFIG_ERROR, not a masked DB_ERROR.
+    expect((await json(res)).code).toBe('CONFIG_ERROR');
 
     const cnt = await formsDb()
       .prepare('SELECT COUNT(*) AS n FROM form_registrations WHERE event_id = ?')
@@ -134,6 +136,7 @@ describe('DE-06: WRITE paths fail closed when FORMS_HASH_PEPPER is unset', () =>
       EVENT
     );
     expect(res.status).toBe(503);
+    expect((await json(res)).code).toBe('CONFIG_ERROR');
 
     const cnt = await formsDb()
       .prepare('SELECT COUNT(*) AS n FROM email_signups WHERE event_id = ?')
