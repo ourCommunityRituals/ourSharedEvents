@@ -932,28 +932,16 @@
           padding-top: 0.75rem;
         }
       }
-      .sponsors-card {
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        margin-top: 2rem;
-      }
-      /* OSE-1328 card 3: poster-deployments adopts the uniform token-driven
-         .card + .mcard-* anatomy (padding:0 so the header row + body own their
-         spacing). It no longer borrows the .sponsors-card-header piggyback. */
-      .poster-deployments-card {
+      /* OSE-1328 card 3 (cluster): sponsors-card, poster-art-card and
+         poster-deployments-card all adopt the uniform token-driven .card +
+         .mcard-* anatomy (padding:0 so the header row + body own their spacing).
+         The .sponsors-card god-class no longer supplies chrome, and the old
+         shared card-header rule is RETIRED — every management card uses .mcard-head. */
+      .sponsors-card,
+      .poster-deployments-card,
+      .poster-art-card {
         margin-top: 2rem;
         padding: 0;
-      }
-      .sponsors-card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1rem;
-      }
-      .sponsors-card-header h2 {
-        margin-bottom: 0;
       }
       .add-spon-btn {
         min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
@@ -3139,9 +3127,9 @@
            wizard-isolation rule no longer needs a second selector for content
            that escaped the landmark. -->
     <!-- Sponsors — step 2, optional. (SPON-6) -->
-    <div class="sponsors-card" data-testid="sponsors-card">
-      <div class="sponsors-card-header">
-        <h2>Sponsors</h2>
+    <div class="card sponsors-card" data-testid="sponsors-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">Sponsors</h2>
         <button
           class="add-spon-btn"
           id="add-spon-toggle"
@@ -3153,6 +3141,7 @@
         </button>
       </div>
 
+      <div class="mcard-body">
       <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
           <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
@@ -3284,6 +3273,7 @@
           <div class="skeleton skeleton-row"></div>
           <div class="skeleton skeleton-row"></div>
         </div>
+      </div>
       </div>
     </div>
     <script>
@@ -3898,10 +3888,11 @@
          is how an organizer PUTS an image there. Same-origin ONLY: the poster CSP
          is img-src 'self' data:, so art must be R2-served via the existing
          event-scoped upload endpoint — never a pasted external URL. -->
-    <div class="sponsors-card poster-art-card" data-testid="poster-art-card">
-      <div class="sponsors-card-header">
-        <h2>Poster art</h2>
+    <div class="card poster-art-card" data-testid="poster-art-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">Poster art</h2>
       </div>
+      <div class="mcard-body">
       <div id="pa-panel" data-testid="poster-art-panel">
         <p class="loading" data-testid="poster-art-loading-initial">Select an event to manage its poster art&hellip;</p>
       </div>
@@ -3925,6 +3916,7 @@
           JPG, PNG, WebP or GIF, up to 25&nbsp;MB. It appears in the poster art viewport.
         </p>
         <p class="create-msg" id="pa-msg" data-testid="poster-art-msg" role="status" aria-live="polite"></p>
+      </div>
       </div>
     </div>
     <style>

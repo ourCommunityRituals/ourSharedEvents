@@ -222,8 +222,9 @@ describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
     expect(html).toMatch(
       /class="card poster-deployments-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Posters/
     );
-    expect(html).toContain('.poster-deployments-card {');
-    expect(html).not.toMatch(/\.poster-deployments-card\s*\{[^}]*box-shadow/);
+    // The three cluster cards now share ONE grouped padding:0 base rule (DRY —
+    // slice 3 retired the per-card chrome); assert poster-deployments is in it.
+    expect(html).toMatch(/\.poster-deployments-card[,{][\s\S]*?padding: 0/);
     // The add-spon-btn hover raw hex was routed to the token in the same change.
     expect(html).not.toContain('#3a56d4');
   });
@@ -235,6 +236,46 @@ describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
     expect(html).toContain('data-testid="poster-deployments-panel"');
     expect(html).toContain('data-action="pd-toggle"');
     expect(html).toContain('data-target="poster-deployments-card"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OSE-1328: sponsors + poster-art cluster — the .sponsors-card god-class retired
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
+  test('sponsors-card adopts .card + .mcard-* (keeps .sponsors-card hook + testid)', async () => {
+    const html = await fetchAdminHtml();
+    // .card base + the sponsors-card class kept for ecbJump + the [data-testid] lookup (admin.html ~2717)
+    expect(html).toContain('class="card sponsors-card"');
+    expect(html).toMatch(
+      /class="card sponsors-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Sponsors/
+    );
+    expect(html).toContain('class="mcard-body"');
+    // wiring preserved
+    expect(html).toContain('id="spon-form-wrap"');
+    expect(html).toContain('data-testid="sponsors-list"');
+    expect(html).toContain('data-testid="add-sponsor-toggle"');
+    expect(html).toContain('data-target="sponsors-card"');
+  });
+
+  test('poster-art-card adopts .card + .mcard-* and DROPS the sponsors-card piggyback', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('class="card poster-art-card"');
+    expect(html).not.toContain('class="sponsors-card poster-art-card"'); // decoupled
+    expect(html).toMatch(
+      /class="card poster-art-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Poster art/
+    );
+    // R4 (OSE-1319) hydration wiring preserved
+    expect(html).toContain('id="pa-panel"');
+    expect(html).toContain('id="pa-manage"');
+    expect(html).toContain('data-testid="poster-art-file"');
+  });
+
+  test('the shared .sponsors-card-header rule + class are retired (god-class killed)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).not.toMatch(/\.sponsors-card-header\s*\{/); // CSS rule gone
+    expect(html).not.toContain('class="sponsors-card-header"'); // no card borrows it
   });
 });
 
