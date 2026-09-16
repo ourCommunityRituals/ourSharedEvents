@@ -212,10 +212,17 @@ describe('OSE-736 — is_active writer enumeration (truthful, not "sole writer")
       .filter(
         ([, c]) =>
           // OSE-799 A2: is_active moved to sponsor_placement. A writer is an INSERT
-          // of a placement (create/promotion, is_active=1) or an UPDATE of
-          // sponsor_placement.is_active (admin soft-delete).
+          // of a placement (create/promotion, is_active=1) or an UPDATE that
+          // ASSIGNS sponsor_placement.is_active (admin soft-delete).
+          //
+          // The UPDATE match is scoped to the SET clause (before the first WHERE):
+          // a statement that merely FILTERS on `WHERE ... is_active = 1` is a READ,
+          // not a write. The earlier `SET[\s\S]*is_active` matched that too, which
+          // false-flagged sponsor-home.ts's respond UPDATE — it SETs
+          // sponsor_accepted and only references is_active in its WHERE / subquery
+          // (PR #567). A real `SET is_active = …` still matches and still fails.
           /INSERT\s+INTO\s+sponsor_placement\b/i.test(c) ||
-          /UPDATE\s+sponsor_placement\s+SET[\s\S]*is_active/i.test(c)
+          /UPDATE\s+sponsor_placement\s+SET\s+(?:(?!\bWHERE\b)[\s\S])*?\bis_active\s*=/i.test(c)
       )
       .map(([p]) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/'))
       .sort();
