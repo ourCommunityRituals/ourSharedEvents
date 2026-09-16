@@ -205,6 +205,13 @@
               card.classList.remove('needs-answer');
               card.classList.toggle('declined', !accepted);
               card.setAttribute('data-sponsor-accepted', accepted ? '1' : '0');
+              // Keep the buttons in step with the new state (mirror the server render in
+              // sponsor-home.ts): hide the choice you just made, leave the other visible
+              // so "you can change your mind below" is actually true.
+              var acceptBtn = card.querySelector('[data-testid="placement-accept"]');
+              var declineBtn = card.querySelector('[data-testid="placement-decline"]');
+              if (acceptBtn) acceptBtn.hidden = accepted;
+              if (declineBtn) declineBtn.hidden = !accepted;
               setMsg(card, accepted ? 'Thanks. Your placement is on.' : 'Declined. You can change your mind below.', 'ok');
               var pending = document.querySelector('[data-testid="sponsor-home-count-pending"]');
               if (pending && card.getAttribute('data-was-pending') === '1') {

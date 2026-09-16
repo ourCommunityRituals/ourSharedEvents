@@ -738,6 +738,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
@@ -926,6 +927,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
