@@ -265,6 +265,7 @@ export async function handleSponsorHomePage(
         <p class="sh-when" data-testid="placement-when">${esc(humanDate(p.start_date))}</p>
         <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
         <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
+        ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting shows your name on this event's page, poster, and live screen.</p>` : ''}
         <div class="sh-actions">${links.join('')}${respond}</div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
       </article>`
