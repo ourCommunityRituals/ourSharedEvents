@@ -1126,20 +1126,15 @@
          GAS frame (archive/v2-code/components/DashboardCard.html) dressed in
          baseline /ui.css tokens (var(--token, #fallback), same convention the
          rest of this file uses). Hidden until ose:event-selected (OSE-667/673). */
+      /* OSE-1328 card 4: dashboard-card adopts the uniform token-driven .card +
+         .mcard-* anatomy (padding:0; the header row + body own their spacing).
+         The bespoke .dashboard-card__title styling is retired onto .mcard-title. */
       .dashboard-card {
         margin: 0 0 1rem;
-        padding: 1.25rem;
-        background: var(--surface, #fff);
-        border: 1px solid var(--border, #e5e7eb);
-        border-radius: 8px;
+        padding: 0;
       }
       .dashboard-card[hidden] {
         display: none;
-      }
-      .dashboard-card__title {
-        margin: 0 0 1rem;
-        font-size: 1.15rem;
-        color: var(--text, #1f2937);
       }
       .dashboard-stats {
         display: grid;
@@ -4431,13 +4426,16 @@
            (OSE-896). No fabricated metrics. -->
       <section
         id="dashboard-card"
-        class="dashboard-card"
+        class="card dashboard-card"
         data-testid="admin-dashboard-card"
         aria-label="Event dashboard for the selected event"
         hidden
       >
-        <h2 class="dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
+        <div class="mcard-head">
+          <h2 class="mcard-title dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
+        </div>
 
+        <div class="mcard-body">
         <div class="dashboard-stats" role="group" aria-label="Event statistics">
           <div class="dash-stat scans" data-testid="admin-stat-scans">
             <span class="dash-stat__num" data-testid="admin-stat-scans-num">—</span>
@@ -4490,6 +4488,7 @@
           <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Post-event progress">
             <div class="dash-progress__fill" data-testid="admin-phase-post-fill"></div>
           </div>
+        </div>
         </div>
       </section>
       <script>
