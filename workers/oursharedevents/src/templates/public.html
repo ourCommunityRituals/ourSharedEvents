@@ -60,6 +60,80 @@
         margin-bottom: 0.35rem;
         color: var(--text);
       }
+      /* Attendee discovery bar — phone-first, 44px+ targets, token colours. */
+      .disc-search {
+        display: flex;
+        gap: 0.5rem;
+        margin: 0 0 0.75rem;
+      }
+      .disc-q {
+        flex: 1;
+        min-height: 48px;
+        font-size: 1rem;
+        padding: 0.5rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .disc-go {
+        min-height: 48px;
+        padding: 0 1.1rem;
+        border: none;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #000;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .disc-chips {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        margin-bottom: 0.5rem;
+        -webkit-overflow-scrolling: touch;
+      }
+      .disc-chip,
+      .disc-clear {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 0.95rem;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .disc-chip.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #000;
+      }
+      .disc-clear {
+        color: var(--text);
+        text-decoration: underline;
+      }
+      .disc-summary {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+        margin: 0 0 0.75rem;
+      }
+      .empty {
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-sm);
+        padding: 1.5rem 1rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 1rem;
+      }
       .event-card .meta {
         font-size: 0.85rem;
         color: var(--text-muted);
@@ -235,6 +309,9 @@
       <section data-testid="public-events-section" aria-labelledby="events-heading">
         <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite"><!--OCR_EVENT_COUNT--></p>
         <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
+        <!-- Discovery filters (lib/event-discovery): server-rendered GET form +
+             "when" chips. Works with no JS; the URL is the state. -->
+        <!--OCR_EVENT_FILTERS-->
         <!-- OSE-1243: server-rendered. The Worker replaces this marker with the
              event cards before the page is sent, so the served HTML is the
              truth and there is no second round trip to see an event. The

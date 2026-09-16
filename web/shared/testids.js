@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-15 — 391 ids.
+ * Generated 2026-09-16 — 418 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 237 ids
+    // admin.html — 264 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -53,6 +53,7 @@
       'admin-main',
       'admin-path-advanced',
       'admin-path-chooser',
+      'admin-path-events',
       'admin-path-sponsor',
       'admin-path-wizard',
       'admin-phase-day',
@@ -126,6 +127,15 @@
       'event-name',
       'event-phase',
       'event-status',
+      'event-status-actions',
+      'event-status-badge',
+      'event-status-card',
+      'event-status-explain',
+      'event-status-msg',
+      'event-status-name',
+      'event-timeline',
+      'event-timeline-card',
+      'event-timeline-next',
       'event-venue',
       'events-col-date',
       'events-col-id',
@@ -134,8 +144,19 @@
       'events-col-type',
       'events-col-venue',
       'events-container',
+      'events-count',
+      'events-empty',
       'events-error',
+      'events-filter-active',
+      'events-filter-all',
+      'events-filter-archived',
+      'events-filter-draft',
+      'events-filter-mine',
+      'events-filter-ready',
+      'events-filters',
+      'events-load-more',
       'events-retry',
+      'events-section',
       'events-table',
       'events-tbody',
       'form-counts',
@@ -227,6 +248,9 @@
       'sponsor-edit-ctx',
       'sponsor-form-msg',
       'sponsor-form-wrap',
+      'sponsor-home-link-box',
+      'sponsor-home-link-copy',
+      'sponsor-home-link-url',
       'sponsor-submit',
       'sponsors-card',
       'sponsors-col-actions',
@@ -254,6 +278,9 @@
       'wizard-event-name',
       'wizard-event-venue',
       'wizard-finish-btn',
+      'wizard-go-live',
+      'wizard-go-live-btn',
+      'wizard-go-live-msg',
       'wizard-link-display',
       'wizard-link-poster',
       'wizard-link-public',

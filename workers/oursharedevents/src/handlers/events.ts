@@ -13,7 +13,14 @@
  */
 
 import { corsHeaders } from '../lib/cors';
-import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
+import {
+  assertRenderable,
+  VALID_EVENT_STATES,
+  parseEventState,
+  isValidTransition,
+  getAllowedTransitions,
+  type EventState,
+} from '../domain/event-state';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
@@ -205,6 +212,30 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 100);
   const cursor = url.searchParams.get('cursor') ?? null;
 
+  // Lifecycle filters (migration 0075 / "come back to my events"):
+  //   ?status=draft|ready|active|archived — allowlisted against the state
+  //     machine; anything else is 400 (strict-in, never silently ignored).
+  //   ?mine=1 — only rows whose created_by equals the caller's server-verified
+  //     actor id. A FILTER on top of brand scope, never a widening of it: a key
+  //     actor (no personal identity) gets the same brand-scoped set either way.
+  const rawStatus = url.searchParams.get('status');
+  const statusFilter =
+    rawStatus == null || rawStatus === '' || rawStatus === 'all'
+      ? null
+      : (VALID_EVENT_STATES as readonly string[]).includes(rawStatus)
+        ? rawStatus
+        : undefined;
+  if (statusFilter === undefined) {
+    return errorResponse(
+      'INVALID_STATUS',
+      `status must be one of: ${VALID_EVENT_STATES.join(', ')}`,
+      400,
+      rid
+    );
+  }
+  const mineRaw = url.searchParams.get('mine');
+  const mine = mineRaw === '1' || mineRaw === 'true';
+
   if (!env.DB) {
     return Response.json(
       {
@@ -219,7 +250,8 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   // OSE-666 / B1 (#9 tenant_isolation) — derive the caller's brand scope from
   // the SERVER-VERIFIED actor identity, never from a client `?brand_id=`. An
   // unscopable operator is denied (zero rows), never handed the whole table.
-  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  const actor = extractAdminActor(request, env);
+  const scope = await resolveAdminBrandScopeAsync(actor, env);
   if (scope.mode === 'deny') {
     return Response.json(
       { ok: true, items: [], pagination: { limit, hasMore: false, nextCursor: null } },
@@ -234,9 +266,11 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' legal_clearance_tier,' +
       ' what_short, who_host, why_purpose, how_details, where_address,' +
       ' who_story, who_image_url, what_video_url,' +
-      ' lat, lon, corridor_id, h3_res9, h3_res7';
+      ' lat, lon, corridor_id, h3_res9, h3_res7,' +
+      ' is_published, created_by';
 
-    // WHERE is composed from server-derived scope + the opaque cursor only.
+    // WHERE is composed from server-derived scope, the allowlisted lifecycle
+    // filters, and the opaque cursor only — never a caller-chosen brand.
     const whereParts: string[] = [];
     const bindings: (string | number)[] = [];
     if (cursor) {
@@ -247,6 +281,17 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       const placeholders = scope.brandIds.map(() => '?').join(', ');
       whereParts.push(`brand_id IN (${placeholders})`);
       bindings.push(...scope.brandIds);
+    }
+    if (statusFilter) {
+      whereParts.push('status = ?');
+      bindings.push(statusFilter);
+    }
+    // "Only mine" is meaningful only for a personal (email) actor; a key actor
+    // has no creator identity to match, so the flag is a no-op for it rather
+    // than an empty list.
+    if (mine && actor && !actor.startsWith('key:')) {
+      whereParts.push('created_by = ?');
+      bindings.push(actor);
     }
     bindings.push(limit + 1);
     const whereClause = whereParts.length ? ' WHERE ' + whereParts.join(' AND ') : '';
@@ -276,6 +321,12 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
         ok: true,
         items,
         pagination: { limit, hasMore, nextCursor },
+        // Echo the applied filters so the client renders what the server did,
+        // not what it asked for (a key actor asking ?mine=1 sees mine:false).
+        filters: {
+          status: statusFilter,
+          mine: Boolean(mine && actor && !actor.startsWith('key:')),
+        },
       },
       {
         headers: {
@@ -505,6 +556,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // hiding an organiser's event from the world.
   const isPublished = body.is_published === false || body.is_published === 0 ? 0 : 1;
 
+  // Migration 0075 — record WHO made this row (the server-verified admin actor:
+  // CF Access email, or key:admin / key:ocr-internal for automation). This is
+  // what lets the admin list answer "only mine" later. Never client-supplied.
+  const createdBy = extractAdminActor(request, env);
+
   const now = new Date().toISOString();
 
   try {
@@ -513,9 +569,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                            what_short, who_host, why_purpose, how_details, where_address,
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
-                           lat, lon, h3_res9, h3_res7, is_published,
+                           lat, lon, h3_res9, h3_res7, is_published, created_by,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -546,6 +602,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         h3Tags?.h3_res9 ?? null,
         h3Tags?.h3_res7 ?? null,
         isPublished,
+        createdBy,
         now,
         now
       )
@@ -809,11 +866,46 @@ export async function handleUpdateEvent(
   values.push(eventId);
 
   try {
+    // Status changes go through the state machine — the same VALID_TRANSITIONS
+    // verify-qr / unverify-qr already enforce. Before this, `PUT status` was a
+    // second door that let any state jump to any other (draft → active with no
+    // ready step, archived → active with no re-check), so the machine held only
+    // on the paths that happened to use the dedicated endpoints. A same-state
+    // write (draft → draft) is a no-op, not a violation. Returning 409 with
+    // from/to matches qr-verify's envelope so the admin UI has one shape to read.
+    if (typeof body.status === 'string') {
+      const current = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ status: string }>();
+      if (!current) {
+        return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
+      }
+      const from = parseEventState(current.status);
+      const to = body.status as EventState;
+      if (from !== to && !isValidTransition(from, to)) {
+        return Response.json(
+          {
+            ok: false,
+            status: 409,
+            code: 'INVALID_TRANSITION',
+            from,
+            to,
+            allowed: getAllowedTransitions(from),
+            error: `Cannot move an event from ${from} to ${to}`,
+            requestId: rid,
+          },
+          { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+        );
+      }
+    }
+
     const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + ' WHERE id = ?')
       .bind(...values)
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
+      // The transition guard above reads the row first, so a no-op UPDATE here
+      // is a genuine miss, not a refused transition.
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
     }
 

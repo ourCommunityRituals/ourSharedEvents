@@ -12,6 +12,7 @@ import { runBigQueryBackup } from './handlers/bigquery';
 import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
+import { runDraftExpiry } from './lib/draft-expiry';
 import {
   createCostAccumulator,
   instrumentEnvForCost,
@@ -87,6 +88,9 @@ export default {
     // runSecurityMetricsCron (OSE-SEC-1): reads DB.admin_audit_log + RATE_LIMIT_KV;
     //   writes to DB.security_metrics + DB.security_alerts. Opens Linear issues
     //   for anomalies. Off-by-default guard: skips gracefully if tables don't exist.
+    // runDraftExpiry (lib/draft-expiry.ts) touches DB.events ONLY: archives
+    //   (never deletes) drafts untouched for DRAFT_EXPIRY_DAYS (default 30;
+    //   0 = off). Future-dated drafts are left alone. Audits to admin_audit_log.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
@@ -95,6 +99,7 @@ export default {
         runSharedReportMaterialization(env),
         runSharedReportBigQueryExport(env),
         runSecurityMetricsCron(env),
+        runDraftExpiry(env),
       ])
     );
   },

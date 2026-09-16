@@ -120,6 +120,155 @@
       }
       table.events-table .col-internal-id { display: none; }
       table.events-table.show-internal-ids .col-internal-id { display: table-cell; }
+      /* Lifecycle filters on the events list. Chips are real buttons with a
+         44px target (WCAG 2.5.5); aria-pressed carries the active state so a
+         screen reader hears "Drafts, pressed", not just a colour change. */
+      .events-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.5rem 0;
+      }
+      .events-filter-chip {
+        min-height: 44px;
+        padding: 0.4rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .events-filter-chip[aria-pressed='true'] {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      .events-filter-mine {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 44px;
+        padding: 0 0.5rem;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+      .events-filter-chip:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .events-load-more {
+        display: block;
+        margin: 0.75rem auto 0;
+      }
+      .events-count {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin: 0.25rem 0 0.5rem;
+      }
+      .badge.draft {
+        background: #fff3bf;
+        color: #7a5b00;
+      }
+      .badge.ready {
+        background: #d0ebff;
+        color: #1c4f82;
+      }
+      /* Status panel: the one place an event's lifecycle is driven from. */
+      .event-status-panel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+      }
+      .event-status-current {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+      }
+      .event-status-explain {
+        flex-basis: 100%;
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+      .event-status-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .event-status-btn {
+        min-height: 44px;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .event-status-btn.primary {
+        background: #16a34a;
+        border-color: #16a34a;
+        color: #fff;
+      }
+      .event-status-btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      /* Event timeline — six steps, phone-first (vertical), big glanceable state. */
+      .timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.5rem;
+      }
+      .tl-step {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 0.6rem;
+        align-items: start;
+        min-height: 44px;
+      }
+      .tl-dot {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-top: 2px;
+      }
+      .tl-step.done .tl-dot { background: #16a34a; border-color: #16a34a; color: #fff; }
+      .tl-step.now .tl-dot { border-color: var(--accent); color: var(--accent); }
+      .tl-step.todo .tl-dot { color: var(--text-muted); }
+      .tl-label { font-weight: 700; font-size: 1rem; }
+      .tl-step.todo .tl-label { color: var(--text-muted); font-weight: 600; }
+      .tl-detail { font-size: 0.9rem; color: var(--text-muted); margin: 0.1rem 0 0; }
+      .tl-detail a { color: var(--text); }
+      @media (min-width: 900px) {
+        .timeline { grid-template-columns: repeat(6, 1fr); gap: 0.75rem; }
+        .tl-step { grid-template-columns: 1fr; }
+      }
+      .wizard-go-live {
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 1rem;
+      }
+      .wizard-go-live .create-btn.is-live {
+        background: #1c4f82;
+      }
       .feature-locked {
         position: relative;
         opacity: 0.5;
@@ -1042,6 +1191,23 @@
         color: var(--text-muted);
         transition: all 0.15s;
       }
+      .spon-home-link-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 0.4rem;
+        flex-basis: 100%;
+      }
+      .spon-home-link-url {
+        font-size: 0.75rem;
+        word-break: break-all;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0.2rem 0.4rem;
+        flex: 1 1 200px;
+      }
       .spon-action-btn:hover {
         background: var(--surface-hover);
       }
@@ -1908,6 +2074,9 @@
           'sponsor-deactivate': function (el) {
             if (window._deactivateSponsor) window._deactivateSponsor(argOf(el, 'id'));
           },
+          'sponsor-home-link': function (el) {
+            if (window._mintSponsorHomeLink) window._mintSponsorHomeLink(argOf(el, 'id'), el);
+          },
           'sponsor-confirm-deactivate': function (el) {
             if (window._confirmDeactivate) window._confirmDeactivate(argOf(el, 'id'));
           },
@@ -1966,6 +2135,15 @@
           },
           'brand-toggle': function (el) {
             if (window.toggleBrandGroup) window.toggleBrandGroup(argOf(el, 'brand-group'), el);
+          },
+          'events-filter': function (el) {
+            if (window.setEventsFilter) window.setEventsFilter(argOf(el, 'status'));
+          },
+          'events-load-more': function () {
+            if (window.loadMoreEvents) window.loadMoreEvents();
+          },
+          'event-status': function (el) {
+            if (window.changeEventStatus) window.changeEventStatus(argOf(el, 'event-id'), argOf(el, 'to'), el);
           },
           'reload-page': function () {
             location.reload();
@@ -2144,6 +2322,15 @@
           >
             <span class="path-option-title">Create an event</span>
             <span class="path-option-desc">A few short steps: name it, pick a night, get your links.</span>
+          </button>
+          <button
+            type="button"
+            class="path-option"
+            id="admin-path-events"
+            data-testid="admin-path-events"
+          >
+            <span class="path-option-title">Your events</span>
+            <span class="path-option-desc">Come back to what you've made — finish a draft, go live, or archive.</span>
           </button>
         </div>
         <button
@@ -2357,13 +2544,37 @@
         <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
         <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
           <div class="wizard-summary" id="wizardEventSummary"></div>
-          <p class="wizard-step-help">Quick check before the big night:</p>
+          <!-- Every event is created as a DRAFT (handleCreateEvent). The public
+               page, poster and display refuse drafts, so the links on step 4
+               do nothing until the event is live. This step is where that
+               happens — it is the only reason the step exists. Before this
+               button, the wizard said "ready to go" and handed out links that
+               404'd; the state machine had no driver from the UI. -->
+          <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
+            <p class="wizard-step-help" id="wizard-go-live-help">
+              Right now this is a <strong>draft</strong>: your links won't work until you go live.
+              Go live when the details are right — you can take it back offline any time.
+            </p>
+            <button
+              type="button"
+              class="create-btn"
+              id="wizard-go-live-btn"
+              data-testid="wizard-go-live-btn"
+            >
+              Go live now
+            </button>
+            <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
+          </div>
+          <p class="wizard-step-help">Once it's live:</p>
           <ul class="wizard-checklist">
             <li id="wizardCheckPublic">📱 Share the event page link with your regulars</li>
             <li id="wizardCheckPoster">📄 Print the poster and hang it where people will see it</li>
             <li id="wizardCheckDisplay">📺 Open the big-screen display at the venue</li>
             <li id="wizardCheckReport">📊 After the event, share the results report</li>
           </ul>
+          <p class="wizard-step-help muted-sm">
+            Not ready yet? Press Done — it stays in <em>Your events</em> as a draft. Drafts nobody touches for 30 days are archived automatically so the list stays clean.
+          </p>
         </div>
 
         <div class="create-msg" id="wizard-msg" data-testid="wizard-msg" role="status"></div>
@@ -2620,9 +2831,11 @@
                 try { sessionStorage.setItem(window.SELECTED_EVENT_KEY, wiz.createdId); } catch (e) {}
                 var summary = document.getElementById('wizardEventSummary');
                 if (summary) {
+                  // Honest state: it is SAVED, not live. "Ready to go" was a
+                  // lie the public page contradicted with a 404.
                   summary.textContent =
-                    '🎉 "' + body.title + '" is ready to go' +
-                    (venueVal ? ' at ' + venueVal : '') + '!';
+                    '✅ "' + body.title + '" is saved' +
+                    (venueVal ? ' at ' + venueVal : '') + ' as a draft.';
                 }
                 wiz.step = 4;
                 updateUI();
@@ -2717,6 +2930,23 @@
             if (name) name.focus();
           }
 
+          /**
+           * Your-events path. The list already existed but only behind "Show
+           * me everything"; an organizer coming back to finish a draft had no
+           * door to it. This clears the doorway and lands on the list with the
+           * Drafts filter pre-selected when any drafts exist (the most common
+           * reason to come back), otherwise All.
+           */
+          function startMyEvents() {
+            document.body.classList.remove('wizard-active');
+            document.body.classList.remove('chooser-active');
+            document.getElementById('admin-path-chooser').hidden = true;
+            document.getElementById('launch-wizard').hidden = true;
+            var list = document.getElementById('events-section');
+            if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (typeof window.focusEventsList === 'function') window.focusEventsList();
+          }
+
           function chooseAdvanced() {
             // Reveal the full dashboard and clear the doorway.
             document.body.classList.remove('wizard-active');
@@ -2784,6 +3014,7 @@
           document.getElementById('admin-path-wizard').addEventListener('click', startWizard);
           document.getElementById('admin-path-sponsor').addEventListener('click', startSponsor);
           document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
+          document.getElementById('admin-path-events').addEventListener('click', startMyEvents);
           document.getElementById('wizard-next-btn').addEventListener('click', goNext);
           document.getElementById('wizardBackBtn').addEventListener('click', goBack);
           document.getElementById('wizardSkipBtn').addEventListener('click', skipSignup);
@@ -2791,6 +3022,28 @@
             // Reload = the same convention as the dashboard's create flow;
             // SELECTED_EVENT_KEY re-selects the new event on the dashboard.
             location.reload();
+          });
+          // Step 5 — Go live: draft → ready → active through the SAME two calls
+          // the status panel uses (window.changeEventStatus, defined in the
+          // dashboard script; looked up lazily at click time).
+          document.getElementById('wizard-go-live-btn').addEventListener('click', async function () {
+            var btn = this;
+            var msgEl = document.getElementById('wizard-go-live-msg');
+            if (!wiz.createdId || typeof window.goLiveFromDraft !== 'function') return;
+            btn.disabled = true;
+            btn.textContent = 'Going live\u2026';
+            var r = await window.goLiveFromDraft(wiz.createdId);
+            if (r.ok) {
+              btn.textContent = 'Live \u2713';
+              btn.classList.add('is-live');
+              if (msgEl) { msgEl.textContent = 'Your event is live. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
+              var help = document.getElementById('wizard-go-live-help');
+              if (help) help.hidden = true;
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Go live now';
+              if (msgEl) { msgEl.textContent = r.error || 'Could not go live. Try again from Your events.'; msgEl.className = 'create-msg error'; }
+            }
           });
           // Progress-rail click: revisit a completed step (pre-create only).
           document.querySelectorAll('.wizard-progress-step').forEach(function (el) {
@@ -3122,7 +3375,7 @@
            wizard-isolation rule no longer needs a second selector for content
            that escaped the landmark. -->
     <!-- Sponsors — step 2, optional. (SPON-6) -->
-    <div class="card sponsors-card" data-testid="sponsors-card">
+    <div class="card sponsors-card" id="sponsors-card" data-testid="sponsors-card">
       <div class="mcard-head">
         <h2 class="mcard-title">Sponsors</h2>
         <button
@@ -3344,6 +3597,10 @@
                 : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
               const actions = s.is_active
                 ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + esc(s.name || s.id) + '">Edit</button> ' +
+                  // Sponsor corner of the triangle: mint the sponsor's own page
+                  // link (their placements, accept/decline, their report). The
+                  // organizer hands it over; it expires in 30 days.
+                  '<button class="spon-action-btn" data-testid="sponsor-home-link-' + esc(s.id) + '" data-action="sponsor-home-link" data-id="' + esc(s.id) + '" aria-label="Get sponsor page link for ' + esc(s.name || s.id) + '">Sponsor link</button> ' +
                   '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + esc(s.name || s.id) + '">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
@@ -3463,6 +3720,38 @@
           }
         };
 
+        // Mint + surface the sponsor's page link inline in the row (same
+        // copy-to-clipboard gesture as the report link; the URL itself is the
+        // credential, so it is shown once, here, and not stored client-side).
+        window._mintSponsorHomeLink = async function(id, btn) {
+          const row = document.querySelector('[data-testid="sponsor-row-' + id + '"]');
+          if (!row) return;
+          if (btn) { btn.disabled = true; btn.textContent = 'Minting…'; }
+          try {
+            const res = await fetch('/api/v2/admin/sponsors/' + encodeURIComponent(id) + '/home-link', { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || data.code || 'Could not create link (server said ' + res.status + ')');
+            const cell = row.querySelector('td[data-label="Actions"]');
+            let box = row.querySelector('[data-testid="sponsor-home-link-box"]');
+            if (!box) {
+              box = document.createElement('div');
+              box.setAttribute('data-testid', 'sponsor-home-link-box');
+              box.className = 'spon-home-link-box';
+              cell.appendChild(box);
+            }
+            const expires = new Date(data.expiresAt).toLocaleDateString();
+            box.innerHTML =
+              '<span class="muted-sm">Sponsor page link · expires ' + esc(expires) + '</span> ' +
+              '<code class="spon-home-link-url" data-testid="sponsor-home-link-url">' + esc(data.url) + '</code> ' +
+              '<button type="button" class="copy-btn" data-action="mint-copy" data-token="' + esc(data.url) + '" data-testid="sponsor-home-link-copy" aria-label="Copy sponsor page link">Copy</button>';
+            if (typeof window._adminAnnounce === 'function') window._adminAnnounce('Sponsor page link ready. Send it to ' + (row.querySelector('[data-testid="spon-name-' + id + '"]') || {}).textContent + '.', 'ok');
+          } catch (err) {
+            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not create sponsor link.', 'error');
+          } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'Sponsor link'; }
+          }
+        };
+
         window._deactivateSponsor = function(id) {
           const btn = document.querySelector('[data-testid="deactivate-' + id + '"]');
           if (!btn) return;
@@ -3538,7 +3827,7 @@
            tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
            and Forms 3. Two numbering schemes disagreeing is worse than none, so
            the numbers are gone and the order carries the meaning (OSE-1238). -->
-    <div class="card forms-card" data-testid="forms-card">
+    <div class="card forms-card" id="report-card" data-testid="forms-card">
       <div class="mcard-head">
         <h2 class="mcard-title">Registration &amp; Forms</h2>
       </div>
@@ -3797,7 +4086,7 @@
     <!-- Posters — step 4. Each deployment is one physical placement and mints its
            own unique qr_token (migrations/0003), so "how many posters" is "how
            many deployments", and the QR is complete once a deployment exists. -->
-    <div class="card poster-deployments-card" data-testid="poster-deployments-card">
+    <div class="card poster-deployments-card" id="poster-deployments-card" data-testid="poster-deployments-card">
       <div class="mcard-head">
         <h2 class="mcard-title">Posters</h2>
         <button
@@ -4642,7 +4931,48 @@
         </div>
       </section>
 
-      <h2>All Events</h2>
+      <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
+      <h2 id="events-heading">Your events</h2>
+      <!-- Status panel — hydrates from ose:event-selected like the four
+           management cards. This is the ONLY place in the admin an event moves
+           between draft / ready / live / archived: before it, the UI could
+           create drafts and nothing else, so every event stayed invisible. -->
+      <div class="card" id="event-status-card" data-testid="event-status-card" hidden>
+        <div class="event-status-panel">
+          <div class="event-status-current">
+            <strong id="event-status-name" data-testid="event-status-name"></strong>
+            <span class="badge" id="event-status-badge" data-testid="event-status-badge"></span>
+          </div>
+          <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
+          <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
+          <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <!-- Event timeline — the selected event's whole chain at a glance:
+           setup → live → poster out → people scanning → sponsors on → report.
+           Hydrates from the same ose:event-selected event as every other card.
+           It reads what the other cards already load (list row, stats, poster
+           deployments, sponsors) and adds nothing new to the wire. The one
+           thing it adds is the NEXT STEP: a single link into whichever card
+           is the thing to do now, so the organizer never has to work out where
+           in the flow they are. -->
+      <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Where this event is</h3>
+          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
+        </div>
+        <div class="mcard-body">
+          <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
+        </div>
+      </div>
+      <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Live</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
+        <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
+      </div>
       <div id="events" data-testid="events-container">
         <div class="skeleton-table" data-testid="skeleton-events">
           <div class="skeleton skeleton-row"></div>
@@ -4651,6 +4981,7 @@
           <div class="skeleton skeleton-row"></div>
         </div>
       </div>
+      </section>
     </main>
     <script>
       // ─── OSE-R-005 label maps ─────────────────────────────────────────────
@@ -4774,32 +5105,101 @@
         });
       };
 
-      (async () => {
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = s;
+      // ── Your events: filtered, paginated, status-driven list ──
+      // Filters (status / only-mine) are applied SERVER-SIDE via the allowlisted
+      // query params on GET /api/v2/admin/events; the client never filters a
+      // wider set down (the list is brand-scoped per request, #9). Cursor
+      // pagination replaces the old silent 50-row cap: the API always paged,
+      // the UI just never asked for page two.
+      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: {}, loading: false };
+
+      window.setEventsFilter = function (status) {
+        window._oseList.status = status || 'all';
+        document.querySelectorAll('[data-action="events-filter"]').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(b.getAttribute('data-status') === window._oseList.status));
+        });
+        try { sessionStorage.setItem('ose_events_filter', window._oseList.status); } catch (e) {}
+        window.renderEventsList({ reset: true });
+      };
+      window.loadMoreEvents = function () {
+        window.renderEventsList({ reset: false });
+      };
+      window.focusEventsList = function () {
+        // Coming back via the front door: if there are drafts, that is almost
+        // always why — land on them.
+        var hasDrafts = window._oseList.items.some(function (e) { return e.status === 'draft'; });
+        if (window._oseList.status === 'all' && hasDrafts) window.setEventsFilter('draft');
+        var first = document.querySelector('[data-action="events-filter"][aria-pressed="true"]');
+        if (first) first.focus();
+      };
+      (function () {
+        var mineEl = document.getElementById('events-filter-mine');
+        if (mineEl) {
+          mineEl.addEventListener('change', function () {
+            window._oseList.mine = mineEl.checked;
+            try { sessionStorage.setItem('ose_events_mine', mineEl.checked ? '1' : '0'); } catch (e) {}
+            window.renderEventsList({ reset: true });
+          });
+        }
+      })();
+
+      window.renderEventsList = async function (opts) {
+        var L = window._oseList;
+        if (L.loading) return;
+        L.loading = true;
+        var esc = function (s) {
+          var d = document.createElement('div');
+          d.textContent = s == null ? '' : String(s);
           return d.innerHTML;
         };
-        const container = document.getElementById('events');
+        var container = document.getElementById('events');
+        if (opts && opts.reset) {
+          L.cursor = null;
+          L.items = [];
+          L.byId = {};
+        }
         try {
-          const data = await window.OSE_events();
-          if (!data.ok || !data.items.length) {
-            container.innerHTML = '<p class="loading">No events found.</p>';
+          var qs = [];
+          if (L.status && L.status !== 'all') qs.push('status=' + encodeURIComponent(L.status));
+          if (L.mine) qs.push('mine=1');
+          if (L.cursor) qs.push('cursor=' + encodeURIComponent(L.cursor));
+          var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
+          var data = await fetch(url).then(function (r) { return r.json(); });
+          if (!data.ok) throw new Error(data.error || data.code || 'list failed');
+          data.items.forEach(function (e) { L.items.push(e); L.byId[String(e.id)] = e; });
+          var hasMore = !!(data.pagination && data.pagination.hasMore);
+          L.cursor = hasMore ? data.pagination.nextCursor : null;
+
+          if (!L.items.length) {
+            var empty =
+              L.status === 'draft' ? 'No drafts — everything you started is live or archived.' :
+              L.status === 'active' ? 'Nothing is live right now. Pick a draft and press Go live.' :
+              L.status === 'archived' ? 'Nothing archived.' :
+              L.status === 'ready' ? 'Nothing waiting to go live.' :
+              L.mine ? 'You haven’t created any events yet.' : 'No events found.';
+            container.innerHTML = '<p class="loading" data-testid="events-empty">' + esc(empty) + '</p>';
             return;
           }
-          const rowFor = (e) => {
-            const safeName = esc(e.name || 'Untitled');
-            const safeId = esc(String(e.id));
-            const safeBrand = esc(String(e.brand_id || '—'));
-            const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
-            const phaseLabel = esc(window.friendlyPhase(safePhase));
+          var rowFor = function (e) {
+            var safeName = esc(e.name || 'Untitled');
+            var safeId = esc(String(e.id));
+            var safeBrand = esc(String(e.brand_id || '—'));
+            var safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
+            var phaseLabel = esc(window.friendlyPhase(safePhase));
+            var st = esc(e.status || 'draft');
+            var stLabel = esc(window.friendlyStatus ? window.friendlyStatus(e.status) : e.status);
+            // A bare YYYY-MM-DD parses as UTC midnight and shows the previous
+            // day in every US timezone; pin it to local noon.
+            var iso = e.startDateISO ? String(e.startDateISO) : '';
+            var when = iso ? esc(new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso).toLocaleDateString()) : '—';
+            var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Live, but kept off the public map and list">(unlisted)</span>' : '';
             return `
-          <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
+          <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}" data-status="${st}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
             <td data-label="Name" data-testid="event-name">${safeName}</td>
-            <td data-label="Date" data-testid="event-date">${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
+            <td data-label="Date" data-testid="event-date">${when}</td>
             <td data-label="Venue" data-testid="event-venue">${esc(e.venue || '—')}</td>
-            <td data-label="Status"><span class="badge ${esc(e.status)}" data-testid="event-status">${esc(e.status)}</span></td>
+            <td data-label="Status"><span class="badge ${st}" data-testid="event-status">${stLabel}</span>${unlisted}</td>
             <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
           </tr>
         `;
@@ -4811,7 +5211,7 @@
           // several brands gets the tree. Rows carry data-brand-row so the
           // group header can collapse them.
           const byBrand = {};
-          for (const e of data.items) {
+          for (const e of L.items) {
             const b = String(e.brand_id || '—');
             (byBrand[b] = byBrand[b] || []).push(e);
           }
@@ -4827,19 +5227,23 @@
               return header + evs.map(rowFor).join('');
             })
             .join('');
-          container.innerHTML = `
-          <div class="events-toolbar">
-            <label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>
-          </div>
-          <table class="events-table" data-testid="events-table">
-            <thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th></tr></thead>
-            <tbody data-testid="events-tbody">${rows}</tbody>
-          </table>
-        `;
-          const toggle = document.getElementById('show-internal-ids');
-          const tbl = container.querySelector('table.events-table');
+          var countLine = L.items.length + (hasMore ? '+' : '') + ' event' + (L.items.length === 1 && !hasMore ? '' : 's') +
+            (L.status !== 'all' ? ' · ' + esc(window.friendlyStatus ? window.friendlyStatus(L.status) : L.status) : '') +
+            (L.mine ? ' · only mine' : '');
+          container.innerHTML =
+          '<div class="events-toolbar">' +
+            '<label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>' +
+            '<span class="events-count" data-testid="events-count">' + countLine + '</span>' +
+          '</div>' +
+          '<table class="events-table" data-testid="events-table">' +
+            '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th></tr></thead>' +
+            '<tbody data-testid="events-tbody">' + rows + '</tbody>' +
+          '</table>' +
+          (hasMore ? '<button type="button" class="copy-btn events-load-more" data-action="events-load-more" data-testid="events-load-more">Show more</button>' : '');
+          var toggle = document.getElementById('show-internal-ids');
+          var tbl = container.querySelector('table.events-table');
           if (toggle && tbl) {
-            toggle.addEventListener('change', () => {
+            toggle.addEventListener('change', function () {
               if (toggle.checked) {
                 tbl.classList.add('show-internal-ids');
               } else {
@@ -4848,14 +5252,20 @@
             });
           }
 
+          // Keep the current selection highlighted across re-renders.
+          if (window.OSE_selection) {
+            var selRow = container.querySelector('[data-testid="event-row-' + window.OSE_selection.id + '"]');
+            if (selRow) selRow.classList.add('selected');
+          }
+
           // OSE-667: restore the previously-selected event across reloads (the
           // create flow forces a reload). Only the opaque id was persisted —
           // re-select it, re-hydrate the four cards, and scroll it into view.
           try {
-            const savedId = sessionStorage.getItem(window.SELECTED_EVENT_KEY);
-            if (savedId) {
-              const savedRow = container.querySelector('[data-testid="event-row-' + savedId + '"]');
-              const saved = data.items.find((e) => String(e.id) === savedId);
+            var savedId = sessionStorage.getItem(window.SELECTED_EVENT_KEY);
+            if (savedId && !window.OSE_selection) {
+              var savedRow = container.querySelector('[data-testid="event-row-' + savedId + '"]');
+              var saved = L.byId[savedId];
               if (savedRow && saved) {
                 // Returning to a selected event (e.g. just created via the
                 // wizard, which reloads) — show the dashboard, not the front
@@ -4865,10 +5275,11 @@
                 if (chooser) chooser.hidden = true;
                 savedRow.classList.add('selected');
                 savedRow.scrollIntoView({ block: 'center' });
-                const ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
+                var ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
                 window.selectEvent(savedId, saved.name || 'Untitled', ph);
-              } else {
-                // The saved event no longer exists (deleted / not on this page).
+              } else if (!L.cursor && L.status === 'all' && !L.mine) {
+                // The saved event no longer exists (deleted) — only conclude
+                // that on an unfiltered, fully-paged list.
                 sessionStorage.removeItem(window.SELECTED_EVENT_KEY);
               }
             }
@@ -4876,7 +5287,212 @@
         } catch (err) {
           container.innerHTML =
             '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
+        } finally {
+          L.loading = false;
         }
+      };
+
+      // ── Status panel: the lifecycle driver ──
+      // draft → ready → live is the state machine in domain/event-state.ts.
+      // ready → live and live → ready go through verify-qr / unverify-qr (they
+      // also flip qr_verified); everything else is PUT status, which now
+      // enforces the same transition table server-side.
+      window.friendlyStatus = function (s) {
+        return { draft: 'Draft', ready: 'Ready', active: 'Live', archived: 'Archived' }[s] || s || 'Draft';
+      };
+      var STATUS_EXPLAIN = {
+        draft: 'Only you can see this. Mark it ready when the details are right, then go live to turn on the public page, poster and display.',
+        ready: 'Details are locked in. Go live to turn on the public page, poster and display.',
+        active: 'Live. The public page, poster QR codes and the big-screen display all work.',
+        archived: 'Hidden everywhere except here. Reopen it as a draft to bring it back.',
+      };
+      var STATUS_ACTIONS = {
+        draft: [ { to: 'ready', label: 'Mark ready' }, { to: 'active', label: 'Go live', primary: true }, { to: 'archived', label: 'Archive' } ],
+        ready: [ { to: 'active', label: 'Go live', primary: true }, { to: 'draft', label: 'Back to draft' }, { to: 'archived', label: 'Archive' } ],
+        active: [ { to: 'ready', label: 'Take offline' }, { to: 'archived', label: 'Archive' } ],
+        archived: [ { to: 'draft', label: 'Reopen as draft', primary: true }, { to: 'active', label: 'Go live again' } ],
+      };
+      window.renderEventStatus = function (id) {
+        var card = document.getElementById('event-status-card');
+        var e = window._oseList.byId[String(id)];
+        if (!card || !e) { if (card) card.hidden = true; return; }
+        var st = e.status || 'draft';
+        var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+        document.getElementById('event-status-name').textContent = e.name || 'Untitled';
+        var badge = document.getElementById('event-status-badge');
+        badge.className = 'badge ' + esc(st);
+        badge.textContent = window.friendlyStatus(st);
+        document.getElementById('event-status-explain').textContent = STATUS_EXPLAIN[st] || '';
+        document.getElementById('event-status-actions').innerHTML = (STATUS_ACTIONS[st] || []).map(function (a) {
+          return '<button type="button" class="event-status-btn' + (a.primary ? ' primary' : '') + '" data-action="event-status" data-event-id="' + esc(e.id) + '" data-to="' + a.to + '" data-testid="event-status-' + a.to + '">' + esc(a.label) + '</button>';
+        }).join('');
+        var msg = document.getElementById('event-status-msg');
+        if (msg) { msg.textContent = ''; msg.className = 'create-msg'; }
+        card.hidden = false;
+      };
+      window.addEventListener('ose:event-selected', function (ev) {
+        var d = ev.detail || {};
+        window.renderEventStatus(d.id);
+        window.renderEventTimeline(d.id);
+      });
+
+      // ── Event timeline: the chain at a glance + the next step ──
+      // Steps: 1 Set up · 2 Live · 3 Poster out · 4 People scanning ·
+      //        5 Sponsors on · 6 Report. Facts come from the row (status,
+      //        is_published), /stats (k-floored counts — never a sub-5 number),
+      //        /poster-deployments (count) and the sponsors list (accepted count).
+      //        Each fetch is independent; a failure leaves that step "unknown"
+      //        rather than blanking the card.
+      window._oseTimelineSeq = 0;
+      window.renderEventTimeline = async function (id) {
+        var card = document.getElementById('event-timeline-card');
+        var ol = document.getElementById('event-timeline');
+        var next = document.getElementById('event-timeline-next');
+        var e = window._oseList.byId[String(id)];
+        if (!card || !ol || !e) { if (card) card.hidden = true; return; }
+        var seq = ++window._oseTimelineSeq;
+        var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+        var st = e.status || 'draft';
+        var live = st === 'active';
+        var over = st === 'archived';
+        var eid = encodeURIComponent(id);
+
+        var stats = null, posters = null, sponsors = null;
+        await Promise.all([
+          fetch('/api/v2/admin/events/' + eid + '/stats').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) stats = d.stats; }).catch(function () {}),
+          fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).length; }).catch(function () {}),
+          fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) sponsors = (d.items || []).filter(function (s) { return s.is_active && s.sponsor_accepted !== 0; }).length; }).catch(function () {}),
+        ]);
+        if (seq !== window._oseTimelineSeq) return; // a newer selection won
+
+        var fmt = function (f) {
+          if (!f) return null;
+          if (typeof f === 'number') return String(f);
+          if (f.suppressed) return 'fewer than ' + (f.floor || 5);
+          return String(f.count != null ? f.count : 0);
+        };
+        var scans = stats ? fmt(stats.scans) : null;
+        var regs = stats ? fmt(stats.registrations) : null;
+        var checkins = stats ? fmt(stats.checkins) : null;
+        var anyScans = !!(stats && ((typeof stats.scans === 'number' && stats.scans > 0) || (stats.scans && stats.scans.count > 0) || (stats.registrations && (stats.registrations.count > 0 || stats.registrations.suppressed))));
+
+        var steps = [
+          { key: 'setup', label: 'Set up', state: 'done',
+            detail: (e.name || 'Untitled') + (e.startDateISO ? ' · ' + esc(e.startDateISO) : ' · no date yet') },
+          { key: 'live', label: over ? 'Was live' : 'Live', state: live || over ? 'done' : st === 'ready' ? 'now' : 'todo',
+            detail: live ? (Number(e.is_published) === 0 ? 'Live, but kept off the public map' : 'Public page, poster and display are on') : over ? 'Archived' : st === 'ready' ? 'Marked ready. Press Go live above.' : 'Still a draft. Go live when the details are right.' },
+          { key: 'poster', label: 'Poster out', state: posters == null ? 'todo' : posters > 0 ? 'done' : (live ? 'now' : 'todo'),
+            detail: posters == null ? 'Could not load' : posters > 0 ? posters + ' placement' + (posters === 1 ? '' : 's') + ' logged' : 'No poster placements logged yet' },
+          { key: 'scans', label: 'People scanning', state: anyScans ? 'done' : (live && posters > 0 ? 'now' : 'todo'),
+            detail: stats ? 'Scans ' + scans + ' · registered ' + regs + ' · checked in ' + checkins : 'Could not load counts' },
+          { key: 'sponsors', label: 'Sponsors on', state: sponsors == null ? 'todo' : sponsors > 0 ? 'done' : 'todo',
+            detail: sponsors == null ? 'Could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'No sponsors on this event yet' },
+          { key: 'report', label: 'Report', state: (live && anyScans) || over ? 'now' : 'todo',
+            detail: over || (live && anyScans) ? 'Ready to share with the venue and sponsors' : 'Fills in once people start scanning' },
+        ];
+        ol.innerHTML = steps.map(function (s, i) {
+          return '<li class="tl-step ' + s.state + '" data-testid="tl-' + s.key + '" data-state="' + s.state + '">' +
+            '<span class="tl-dot" aria-hidden="true">' + (s.state === 'done' ? '✓' : (i + 1)) + '</span>' +
+            '<div><div class="tl-label">' + esc(s.label) + '</div><p class="tl-detail">' + esc(s.detail) + '</p></div></li>';
+        }).join('');
+
+        // The one next step. Order of the chain decides it.
+        var nextStep = null;
+        if (!live && !over) nextStep = { label: st === 'ready' ? 'Go live' : 'Mark ready or go live', href: '#event-status-card' };
+        else if (live && !(posters > 0)) nextStep = { label: 'Print a poster', href: '#poster-deployments-card' };
+        else if (live && sponsors === 0) nextStep = { label: 'Add a sponsor', href: '#sponsors-card' };
+        else if ((live && anyScans) || over) nextStep = { label: 'Share the report', href: '#report-card' };
+        if (next) {
+          if (nextStep) { next.hidden = false; next.textContent = 'Next: ' + nextStep.label; next.setAttribute('href', nextStep.href); }
+          else next.hidden = true;
+        }
+        card.hidden = false;
+      };
+
+      async function postJson(url, method, body) {
+        var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+        var data = null;
+        try { data = await res.json(); } catch (e) { data = { ok: false, error: 'Unexpected reply (status ' + res.status + '). Reload and sign in.' }; }
+        return { res: res, data: data };
+      }
+      async function transition(id, from, to) {
+        // Only the two QR-verified edges use the dedicated endpoints.
+        if (to === 'active' && from === 'ready') return postJson('/api/v2/admin/events/' + encodeURIComponent(id) + '/verify-qr', 'POST');
+        if (to === 'ready' && from === 'active') return postJson('/api/v2/admin/events/' + encodeURIComponent(id) + '/unverify-qr', 'POST');
+        return postJson('/api/v2/admin/events/' + encodeURIComponent(id), 'PUT', { status: to });
+      }
+      /** draft/archived → active is two hops (ready, then verify). One call for the wizard + panel. */
+      window.goLiveFromDraft = async function (id) {
+        var current = window._oseList.byId[String(id)];
+        var from = current ? current.status : 'draft';
+        if (from !== 'ready') {
+          var r1 = await transition(id, from, 'ready');
+          if (!r1.res.ok || !r1.data.ok) return { ok: false, error: (r1.data && (r1.data.error || r1.data.code)) || 'Could not mark ready (server said ' + r1.res.status + ')' };
+        }
+        var r2 = await transition(id, 'ready', 'active');
+        if (!r2.res.ok || !r2.data.ok) return { ok: false, error: (r2.data && (r2.data.error || r2.data.code)) || 'Could not go live (server said ' + r2.res.status + ')' };
+        if (current) current.status = 'active';
+        return { ok: true };
+      };
+      window.changeEventStatus = async function (id, to, btn) {
+        var e = window._oseList.byId[String(id)];
+        if (!e) return;
+        var from = e.status || 'draft';
+        var msg = document.getElementById('event-status-msg');
+        var buttons = document.querySelectorAll('#event-status-actions button');
+        buttons.forEach(function (b) { b.disabled = true; });
+        if (btn) btn.textContent = 'Saving…';
+        var result;
+        if (to === 'active' && from !== 'ready') {
+          result = await window.goLiveFromDraft(id);
+        } else {
+          var r = await transition(id, from, to);
+          result = r.res.ok && r.data.ok
+            ? { ok: true }
+            : { ok: false, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
+        }
+        if (result.ok) {
+          e.status = to;
+          // Re-render the row badge in place (no refetch: status is the only
+          // thing that changed and the server confirmed it).
+          var row = document.querySelector('[data-testid="event-row-' + id + '"]');
+          if (row) {
+            row.setAttribute('data-status', to);
+            var b = row.querySelector('[data-testid="event-status"]');
+            if (b) { b.className = 'badge ' + to; b.textContent = window.friendlyStatus(to); }
+          }
+          window.renderEventStatus(id);
+          var nice = { active: 'Live — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
+          if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
+          var m2 = document.getElementById('event-status-msg');
+          if (m2) { m2.textContent = nice; m2.className = 'create-msg success'; }
+          // If the list is filtered to the OLD status, the row no longer
+          // belongs — refresh so what you see matches the filter.
+          if (window._oseList.status !== 'all' && window._oseList.status !== to) window.renderEventsList({ reset: true });
+        } else {
+          buttons.forEach(function (b) { b.disabled = false; });
+          window.renderEventStatus(id);
+          if (msg) { msg.textContent = result.error; msg.className = 'create-msg error'; }
+          if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error');
+        }
+      };
+
+      // Initial load: restore the last filter this browser used (per-viewer
+      // convenience only, never authorization), then fetch page one.
+      (function () {
+        try {
+          var savedFilter = sessionStorage.getItem('ose_events_filter');
+          var savedMine = sessionStorage.getItem('ose_events_mine') === '1';
+          var mineEl = document.getElementById('events-filter-mine');
+          if (mineEl && savedMine) { mineEl.checked = true; window._oseList.mine = true; }
+          if (savedFilter && ['all', 'draft', 'ready', 'active', 'archived'].indexOf(savedFilter) >= 0) {
+            window._oseList.status = savedFilter;
+            document.querySelectorAll('[data-action="events-filter"]').forEach(function (b) {
+              b.setAttribute('aria-pressed', String(b.getAttribute('data-status') === savedFilter));
+            });
+          }
+        } catch (e) {}
+        window.renderEventsList({ reset: true });
       })();
 
       // ── Create Event form handler ──

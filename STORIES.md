@@ -1270,3 +1270,71 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 | F12/F15/F5 | OSE-1293 | 📋              | Brain silent-pass hardening + label 3rd testing layer + ADR-009↔010 axis               | OSE-1284   |
 
 ---
+
+## Epic TRIANGLE — Screens on every corner (2026-09-16, Cowork slice)
+
+> Standing directive (PO, 2026-09-16): the event / sponsor / attendee corners and the SharedReport at the centre must be connected by **screens**, not by links someone has to keep. Usability identification first (`workers/oursharedevents/docs/ops/TRIANGLE-SCREEN-MAP-2026-09-16.md`), then stitching, security posture unchanged. Slice PRs: no `OSE-###` in branch/title; body `Part of OSE-1245`.
+
+### TRI-1: Event lifecycle driver — Your events, status panel, honest wizard, draft expiry
+
+**Status:** 🔄 IN PROGRESS (code + worker specs green locally; needs PR + CI)
+**Prerequisite:** —
+**CI/CD Ticket:** — (to open)
+
+**PO Acceptance Criteria:**
+
+- [x] Every UI-created event can be moved draft → ready → live → archived from `/admin` (status panel; state machine edges only)
+- [x] Front door has **Your events**; list filters Drafts / Ready / Live / Archived, **Only mine** (`events.created_by`, migration 0075), **Show more** (cursor)
+- [x] Wizard step 5 says "saved as a draft" and offers **Go live now**
+- [x] `PUT /admin/events/:id` with `status` enforces `VALID_TRANSITIONS` (409 `INVALID_TRANSITION`)
+- [x] Nightly `runDraftExpiry` archives (never deletes) drafts untouched ≥ `DRAFT_EXPIRY_DAYS` (default 30, 0 = off); future-dated drafts skipped; audited
+- [ ] Merged + exercised by named CI jobs (T0 invariants, workers pool, mobile-workability)
+
+**QA:** `tests/admin-events-lifecycle-list.spec.ts`, `tests/draft-expiry.spec.ts`, `tests/admin-event-lifecycle-ui.spec.ts`; schema/constraints counts bumped (44 cols / 72 idx); INV9 exemption re-keyed `events.ts:256→301`.
+**Audit doc:** `workers/oursharedevents/docs/ops/EVENT-LIFECYCLE-AUDIT-2026-09-16.md`.
+
+### TRI-2: Sponsor home — the sponsor corner gets a screen
+
+**Status:** 🔄 IN PROGRESS
+**Prerequisite:** TRI-1
+
+**PO Acceptance Criteria:**
+
+- [x] `POST /api/v2/admin/sponsors/:id/home-link` mints a 30-day sponsor-scoped signed link (brand-scoped, rate-limited, audited `MINT_SPONSOR_HOME_LINK`); **Sponsor link** action on the admin sponsors row
+- [x] `GET /sponsor?t=` server-renders the sponsor's placements with event state, Event page link (live only), sponsor-scoped **Your report** link (active/archived only), **Accept / Decline**
+- [x] `POST /api/v2/sponsor/placements/:id/respond` sets `sponsor_placement.sponsor_accepted` for the token's own placement only (404 otherwise); audited as `sponsor:<id>`
+- [x] No attendee data on the page; `noindex`; `no-store`; nonce CSP; token `kind` distinct from the report token
+- [ ] Adopt `@ocr/ui` partials for the sponsor template (currently hand-rolled CSS on tokens — FE drift to close)
+- [ ] Register `/sponsor` as a UEC URL class in OCR-docs (`uec-codes.yaml`) — brain intake
+
+**QA:** `tests/sponsor-home.spec.ts` (19). **Lib:** `src/lib/sponsor-home-auth.ts`, `src/handlers/sponsor-home.ts`, `src/templates/sponsor-home.html`.
+
+### TRI-3: Attendee discovery — /events answers a question
+
+**Status:** 🔄 IN PROGRESS
+**Prerequisite:** —
+
+**PO Acceptance Criteria:**
+
+- [x] Server-rendered search (name / venue) + **Everything / Today / This weekend / Next 7 days / This month / Recently wrapped** chips; `when` allowlisted, `q` capped + escaped once; URL is the state; no client fetch
+- [x] Default view unchanged (every listed event incl. wrapped) — API-parity contract holds
+- [ ] Map view over `GET /api/v2/events/map` via `renderCorridorMap` SVG (next slice)
+
+**QA:** `tests/event-discovery.spec.ts` (16). **Lib:** `src/lib/event-discovery.ts`.
+
+### TRI-4: Admin event timeline — the chain at a glance
+
+**Status:** 🔄 IN PROGRESS
+**Prerequisite:** TRI-1
+
+- [x] Card hydrates from `ose:event-selected`; six steps (Set up → Live → Poster out → People scanning → Sponsors on → Report) from row + `/stats` (k-floored) + poster deployments + sponsors; **Next:** one link into the right card; stale-response guard
+- [ ] Surface pending sponsor drafts / declined placements here (organizer inbox)
+
+### TRI-5: Reconciliation to the shared brain
+
+**Status:** 📋 BACKLOG
+
+- [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` audit actions, `DRAFT_EXPIRY_DAYS` env knob
+- [ ] Bruno collection: admin list filters, home-link mint, respond endpoint
+- [ ] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id`
+- [ ] `admin.html` split (now ~250 KB; sponsor page is deliberately its own template)

@@ -134,6 +134,12 @@ import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
 import { guardAdminObjectScope, type AdminObjectScopeEnv } from './lib/admin-object-scope';
 import {
+  handleAdminMintSponsorHomeLink,
+  handleSponsorHomePage,
+  handleSponsorPlacementRespond,
+  type SponsorHomeEnv,
+} from './handlers/sponsor-home';
+import {
   logAdminAction,
   logReportAccess,
   logExportManifest,
@@ -254,6 +260,7 @@ export type RouterEnv = PagesEnv &
   SharedReportReadEnv &
   ShortlinkResolveEnv &
   AdminObjectScopeEnv &
+  SponsorHomeEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -769,6 +776,26 @@ export async function route(
       return handleGetSponsorEventTypes(request, env, adminSponsorEventTypesMatch[1]);
   }
 
+  // POST /api/v2/admin/sponsors/:id/home-link — mint the sponsor's own page link
+  // (sponsor corner of the triangle). Rate-limited like the report mint, admin
+  // + brand-scoped inside the handler, audited.
+  const sponsorHomeLinkMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/home-link$/);
+  if (sponsorHomeLinkMatch && method === 'POST') {
+    if (env.RATE_LIMIT_KV) {
+      const mintKey = `mint-sponsor-home:${clientIp(request)}:${sponsorHomeLinkMatch[1]}`;
+      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+        return rateLimitResponse();
+      }
+    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'MINT_SPONSOR_HOME_LINK', 'denied', 'sponsor', sponsorHomeLinkMatch[1]);
+      return deny;
+    }
+    return handleAdminMintSponsorHomeLink(request, env, sponsorHomeLinkMatch[1]);
+  }
+
   // PUT/GET /api/v2/admin/sponsors/:id/areas
   const adminSponsorAreasMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/areas$/);
   if (adminSponsorAreasMatch) {
@@ -1189,6 +1216,16 @@ export async function route(
     )(request, env);
   }
 
+  // POST /api/v2/sponsor/placements/:id/respond — sponsor accepts / declines a
+  // placement from their own page. Authorized by the sponsor-home token in the
+  // body (never admin); ownership proven in SQL inside the handler.
+  const placementRespondMatch = pathname.match(
+    /^\/api\/v2\/sponsor\/placements\/([^/]+)\/respond$/
+  );
+  if (placementRespondMatch && method === 'POST') {
+    return handleSponsorPlacementRespond(request, env, placementRespondMatch[1]);
+  }
+
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).
   // Public route: authorized by a signed sponsor invite token (NOT admin bearer);
   // brand scope comes from the token claim. Placed before the /:id/logo matcher so
@@ -1386,6 +1423,11 @@ export async function route(
     }
   }
 
+  // GET /sponsor?t=<token> — the sponsor's own page (token-gated, read-limited).
+  if (pathname === '/sponsor' && method === 'GET') {
+    return handleSponsorHomePage(request, env);
+  }
+
   // ── Public pages ───────────────────────────────────────────────────────────
   if (
     pathname === '/events' ||
@@ -1395,7 +1437,7 @@ export async function route(
     pathname === '/agenda' ||
     pathname === '/lineup'
   ) {
-    return handlePublicPage(env, ctx);
+    return handlePublicPage(env, ctx, request);
   }
 
   // ── Admin aliases ─────────────────────────────────────────────────────────
