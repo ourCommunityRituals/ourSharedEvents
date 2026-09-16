@@ -57,7 +57,15 @@ const HANDLERS_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'handl
  * Multi-tenant tables. A SELECT against one of these from a handler must bind
  * brand_id, whatever the handler is called.
  */
-const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
+const TENANT_TABLES = [
+  'events',
+  // 'sponsors' was DROPped in migration 0067 — replaced by the split
+  // sponsor_business (the brand) + sponsor_placement (brand↔event link).
+  'sponsor_business',
+  'sponsor_placement',
+  'corridors',
+  'node_hierarchy',
+];
 
 /**
  * Triaged exemptions. Every entry is a query that reads a multi-tenant table
@@ -89,6 +97,28 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
     'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
     'id-key exemption does not match it.',
+  // ── sponsor_placement reads (added to TENANT_TABLES 2026-09-16, PR #567). ──
+  // Each is a held-key or correlated read, not a cross-brand bulk enumeration.
+  'event-stats.ts:74':
+    'COUNT of active placements for ONE event, keyed by `event_id = ?` (a ' +
+    'caller-held event UUID). A per-event aggregate, not a cross-brand read — ' +
+    'same held-key rationale as the single-event GET design note above.',
+  'portfolio-rollup.ts:165':
+    'COUNT over `event_id IN (?, …)` where the id list is the brand-scoped ' +
+    'event set assembled above (the same dynamic brandFilter that exempts ' +
+    'portfolio-rollup.ts:148). Not a cross-brand read.',
+  'shared-report-read.ts:431':
+    'Single-row existence check keyed by `sponsor_business_id = ? AND ' +
+    'event_id = ?` (both caller-held ids) — verifies a sponsor belongs to an ' +
+    'event before minting a token; not enumeration.',
+  'sponsors.ts:508':
+    'Admin-flow cache invalidation: SELECT DISTINCT event_id for one sponsor, ' +
+    'keyed by `sponsor_business_id = ?` (the held business id from a ' +
+    'brand-scoped admin mutation). Not a public read, not cross-brand.',
+  'sponsors.ts:1253':
+    'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
+    'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
+    'sponsor id). Scoped to one business; not enumeration.',
 };
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {
@@ -191,7 +221,14 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
       const src = readFileSync(join(HANDLERS_DIR, file), 'utf8');
 
       for (const table of TENANT_TABLES) {
-        const re = new RegExp('FROM\\s+' + table + '\\b', 'gi');
+        // Match `FROM <table>` AND `JOIN <table>` (PR #567). A tenant table read
+        // through a JOIN is as much a read as through FROM — sponsor_placement /
+        // sponsor_business are routinely JOINed onto events across the sponsor
+        // handlers, and the FROM-only scan was blind to them. Every current JOIN
+        // read already carries brand_id or an id-key in its window, so this
+        // strengthens coverage without adding exemptions; a future JOIN read that
+        // drops its brand clause now goes red.
+        const re = new RegExp('(?:FROM|JOIN)\\s+' + table + '\\b', 'gi');
         for (const m of src.matchAll(re)) {
           // Read a bounded window after the FROM, the way a reviewer does.
           // Matching to a delimiter does not work here: these statements are

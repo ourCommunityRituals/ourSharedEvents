@@ -16,6 +16,7 @@ import {
   handleLandingPage,
 } from '../src/handlers/pages';
 import { handleFormPage } from '../src/handlers/form-pages';
+import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
 
 async function axeScan(html: string): Promise<axe.Result[]> {
   document.open();
@@ -103,5 +104,26 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
       'Email form',
       await (await handleFormPage(formReq('email'), {} as never, 'evt1')).text()
     );
+  });
+
+  // PR #567: /sponsor was invisible to this gate (a11y-axe never scanned it),
+  // which is how the double-<h1> shipped. handleSponsorHomePage is token- +
+  // D1-bound (can't run in the jsdom a11y env), so scan the SERVED SHELL — the
+  // real template filled with the empty-state (a sponsor with no placements).
+  // That is the a11y-load-bearing surface: it carries the page landmarks and the
+  // one-<h1> contract the regression violated. Placement-card a11y rides on the
+  // integration-tier sponsor-home.spec.ts.
+  test('sponsor home page (shell / empty state)', async () => {
+    const page = SPONSOR_HOME_HTML.replace('<!--OCR_SPONSOR_ID-->', 'sb_test')
+      .replace('<!--OCR_SPONSOR_NAME-->', 'Test Sponsor Co')
+      .replace('<!--OCR_COUNT_LIVE-->', '0')
+      .replace('<!--OCR_COUNT_UPCOMING-->', '0')
+      .replace('<!--OCR_COUNT_PENDING-->', '0')
+      .replace(
+        '<!--OCR_SPONSOR_PLACEMENTS-->',
+        '<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>'
+      )
+      .replace('<!--OCR_EXPIRES-->', 'Oct 1, 2026');
+    await scanPage('Sponsor home page', page);
   });
 });
