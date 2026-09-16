@@ -280,6 +280,34 @@ describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OSE-1328: dashboard-card uniform anatomy (card 4 — last management card)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-1328: dashboard-card uniform anatomy', () => {
+  test('dashboard-card adopts .card + .mcard-* (title in header, stats+lifecycle in body)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('class="card dashboard-card"');
+    expect(html).toMatch(
+      /class="card dashboard-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title[^"]*"[^>]*>Event Dashboard/
+    );
+    expect(html).toContain('class="mcard-body"');
+    // base rule adopts the anatomy (padding:0), no bespoke card chrome (shadow).
+    expect(html).toMatch(/\.dashboard-card\s*\{[\s\S]*?padding: 0/);
+    expect(html).not.toMatch(/\.dashboard-card\s*\{[^}]*box-shadow/);
+  });
+
+  test('dashboard-card wiring preserved (id + hidden + stat/phase testids + ecb target)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('id="dashboard-card"');
+    expect(html).toContain('data-testid="admin-dashboard-card"');
+    expect(html).toContain('data-testid="admin-dashboard-title"');
+    expect(html).toContain('data-testid="admin-stat-scans-num"');
+    expect(html).toContain('data-testid="admin-phase-pre-fill"');
+    expect(html).toContain('data-target="dashboard-card"'); // ecbJump target intact
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-14: Surface link cards (poster, display, public, report)
 // ═══════════════════════════════════════════════════════════════════════════════
 
