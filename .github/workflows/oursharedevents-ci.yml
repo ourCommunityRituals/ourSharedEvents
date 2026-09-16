@@ -903,9 +903,14 @@ jobs:
 
           fetch_names() {
             local DB=$1; local OBJ=$2
+            # Drift-proof extraction (OSE-303): `wrangler d1 execute --json` shape
+            # varies by transport — --local returns [{results:[...]}] (array), but
+            # --remote returns an object envelope — so a fixed `.[0]` index aborts the
+            # deploy with "jq: Cannot index object with number". Walk any depth for the
+            # results rows so array / object / CF-envelope shapes all work.
             npx wrangler d1 execute "$DB" --env staging --remote --json \
               --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.[0].results[].name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+              | jq -r '.. | objects | select(has("results")) | .results[] | .name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
           }
 
           ACTUAL_DB=$(fetch_names ocr-db-staging table)
@@ -1845,9 +1850,12 @@ jobs:
 
           fetch_names() {
             local DB=$1; local OBJ=$2
+            # Drift-proof extraction (OSE-303) — see the staging verify: walk any depth
+            # for the results rows so wrangler's array / object / envelope --json shapes
+            # all work (a fixed `.[0]` aborts prod deploys the same way it did staging).
             npx wrangler d1 execute "$DB" --env production --remote --json \
               --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.[0].results[].name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+              | jq -r '.. | objects | select(has("results")) | .results[] | .name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
           }
 
           ACTUAL_DB=$(fetch_names ocr-db-production table)
