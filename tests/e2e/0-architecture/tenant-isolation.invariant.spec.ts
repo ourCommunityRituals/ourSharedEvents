@@ -70,12 +70,13 @@ const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
  * the linter.
  */
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'events.ts:301':
+  'events.ts:335':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
     'the 2026-09-16 lifecycle filters — ?status= / ?mine= parsing and the ' +
-    'created_by predicate sit above the SELECT. Scope enforcement unchanged; ' +
+    'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
+    'resolveEventType helper + import land above it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +

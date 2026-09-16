@@ -31,6 +31,12 @@ import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
+import {
+  buildEventTypeCatalog,
+  isEventTypeIdShape,
+  type EventTypeCategoryRow,
+  type EventTypeRow,
+} from '../lib/event-type-catalog';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -43,6 +49,34 @@ import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
 export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+}
+
+/**
+ * OSE-1344 — resolve a client-supplied `event_type_id` against the registry.
+ * null id → { ok, id: null } (clearing is allowed); a malformed or
+ * unknown/inactive id → { ok: false } so the caller answers 400, never a
+ * silent NULL — a picker that posts an id that does not exist is a bug we
+ * want to see.
+ *
+ * DELIBERATELY does NOT touch `events.legal_clearance_tier`. Invariant #4
+ * (OSE-380, tests/regulatory-label-unavailable.spec.ts): the tier is never
+ * settable through the create/update API, directly OR by derivation — every
+ * app-created event stays Phase 1 / general until the regulatory.phaseN flags
+ * exist. The type is a classification for discovery; the tier is a legal
+ * ceiling. They are joined at report/export time, not written here.
+ */
+async function resolveEventType(
+  db: D1Database,
+  raw: unknown
+): Promise<{ ok: true; id: string | null } | { ok: false }> {
+  if (raw === null || raw === undefined) return { ok: true, id: null };
+  if (!isEventTypeIdShape(raw)) return { ok: false };
+  const row = await db
+    .prepare('SELECT id FROM event_type_registry WHERE id = ? AND is_active = 1')
+    .bind(raw)
+    .first<{ id: string }>();
+  if (!row) return { ok: false };
+  return { ok: true, id: row.id };
 }
 
 function requestId(): string {
@@ -530,6 +564,19 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     typeof body.cover_image_url === 'string' ? body.cover_image_url.slice(0, 500) : null;
   const templateId = typeof body.template_id === 'string' ? body.template_id.slice(0, 64) : null;
 
+  // OSE-1344 — the Category → Type picker posts `event_type_id`. Optional (an
+  // event with only a title still saves), validated against the registry when
+  // present. Both create paths in admin.html send it when the organizer picked.
+  const eventType = await resolveEventType(env.DB, body.event_type_id);
+  if (!eventType.ok) {
+    return errorResponse(
+      'INVALID_EVENT_TYPE',
+      'event_type_id is not an active event type',
+      400,
+      rid
+    );
+  }
+
   // OSE-489: capture-time H3 tagging — computation happens here (admin create),
   // never in the scan/read hot path.
   const lat = typeof body.lat === 'number' && Number.isFinite(body.lat) ? body.lat : null;
@@ -570,8 +617,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published, created_by,
+                           event_type_id,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -603,6 +651,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         h3Tags?.h3_res7 ?? null,
         isPublished,
         createdBy,
+        eventType.id,
         now,
         now
       )
@@ -772,6 +821,23 @@ export async function handleUpdateEvent(
   // making the reversal unavailable.
   //
   // Accepts boolean or 0/1 so a form post and a JSON client agree.
+  // OSE-1344 — event_type_id is an id-shaped FK, not a free string: validated
+  // against the registry (null clears; unknown → 400). Never touches
+  // legal_clearance_tier (Invariant #4 — see resolveEventType).
+  if ('event_type_id' in body) {
+    const et = await resolveEventType(env.DB, body.event_type_id);
+    if (!et.ok) {
+      return errorResponse(
+        'INVALID_EVENT_TYPE',
+        'event_type_id is not an active event type',
+        400,
+        rid
+      );
+    }
+    sets.push('event_type_id = ?');
+    values.push(et.id);
+  }
+
   if ('is_published' in body) {
     const v = body.is_published;
     if (typeof v === 'boolean' || v === 0 || v === 1) {
@@ -1130,6 +1196,58 @@ export async function handleAdminListEventTemplates(
       })
     );
     return errorResponse('DB_ERROR', 'Failed to list event templates', 503, rid);
+  }
+}
+
+/**
+ * GET /api/v2/admin/event-types — OSE-1344: the Category → Type catalog that
+ * feeds the Create Event picker ("Sports > Bocce"). Read-only, admin-gated,
+ * no audit (same posture as event-templates). Grouping lives in
+ * lib/event-type-catalog.ts; an unmapped type is grouped under "Other", never
+ * dropped, and the response says how many such orphans exist so a seed
+ * mistake is visible in the envelope.
+ */
+export async function handleAdminListEventTypes(
+  request: Request,
+  env: EventsEnv
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) {
+    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+  }
+  try {
+    const [cats, types] = await Promise.all([
+      env.DB.prepare(
+        `SELECT category_code, display_name, display_order, is_active
+           FROM event_type_category_registry
+          WHERE is_active = 1`
+      ).all<EventTypeCategoryRow>(),
+      env.DB.prepare(
+        `SELECT id, uec_code, name, description, category_code, legal_clearance_tier, is_active
+           FROM event_type_registry
+          WHERE is_active = 1`
+      ).all<EventTypeRow>(),
+    ]);
+    const catalog = buildEventTypeCatalog(cats.results ?? [], types.results ?? []);
+    return Response.json(
+      { ok: true, ...catalog },
+      {
+        headers: {
+          ...corsHeaders(request),
+          'X-Request-Id': rid,
+          'Cache-Control': 'private, max-age=300',
+        },
+      }
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminListEventTypes',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+    return errorResponse('DB_ERROR', 'Failed to list event types', 503, rid);
   }
 }
 

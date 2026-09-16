@@ -21,6 +21,9 @@ export const BRAND_CUSTOMIZABLE = [
   '--border',
   '--text',
   '--text-muted',
+  // Foreground on the (customizable) --accent surface — a brand whose accent is
+  // light must set its own readable on-accent, so it travels with the palette.
+  '--on-accent',
 ] as const;
 
 /** Never brand-overridden — colorblind-safe + status semantics stay fixed. */
@@ -32,6 +35,9 @@ export const BRAND_LOCKED = [
   '--live-hover',
   '--warn',
   '--info',
+  // Success is a status/colorblind-safe semantic like --live/--warn — a brand
+  // can't recolor "done/accepted" and break the accessibility/meaning guarantee.
+  '--success',
 ] as const;
 
 export type CustomizableToken = (typeof BRAND_CUSTOMIZABLE)[number];

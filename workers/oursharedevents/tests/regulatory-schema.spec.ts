@@ -118,9 +118,9 @@ describe('REG-6: event_type_registry table', () => {
     ).rejects.toThrow();
   });
 
-  test('all 10 columns present', async () => {
+  test('all 11 columns present (10 from 0023 + category_code from 0076)', async () => {
     const info = await tenv().DB.prepare('PRAGMA table_info(event_type_registry)').all();
-    expect(info.results.length).toBe(10);
+    expect(info.results.length).toBe(11);
     const colNames = info.results.map((r: Record<string, unknown>) => r.name);
     for (const col of [
       'id',
@@ -133,6 +133,7 @@ describe('REG-6: event_type_registry table', () => {
       'is_active',
       'created_at',
       'updated_at',
+      'category_code', // 0076 (OSE-1344)
     ]) {
       expect(colNames).toContain(col);
     }

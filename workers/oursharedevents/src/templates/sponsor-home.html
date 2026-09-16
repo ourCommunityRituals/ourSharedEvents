@@ -19,7 +19,7 @@
       .sh-head {
         margin: 0.5rem 0 1.25rem;
       }
-      .sh-head h1 {
+      .sh-head h2 {
         font-size: 1.6rem;
         font-weight: 700;
         line-height: 1.2;
@@ -73,7 +73,7 @@
         padding: 1rem;
       }
       .sh-card.needs-answer {
-        border-left-color: #f59e0b;
+        border-left-color: var(--warn);
       }
       .sh-card.declined {
         border-left-color: var(--border);
@@ -103,10 +103,10 @@
         font-weight: 700;
         margin-right: 0.35rem;
       }
-      .sh-state.live { background: #16a34a; color: #fff; }
-      .sh-state.soon { background: #2563eb; color: #fff; }
+      .sh-state.live { background: var(--success); color: var(--bg); }
+      .sh-state.soon { background: var(--accent); color: var(--bg); }
       .sh-state.done { background: var(--border); color: var(--text); }
-      .sh-state.pending { background: #f59e0b; color: #000; }
+      .sh-state.pending { background: var(--warn); color: var(--bg); }
       .sh-state.declined { background: var(--border); color: var(--text-muted); }
       .sh-actions {
         display: flex;
@@ -123,7 +123,7 @@
         font-size: 0.9rem;
         min-height: 1.2em;
       }
-      .sh-msg.ok { color: #16a34a; }
+      .sh-msg.ok { color: var(--success); }
       .sh-msg.error { color: var(--danger); }
       .sh-empty {
         background: var(--surface);
@@ -150,7 +150,7 @@
     </header>
     <main id="main-content" data-testid="sponsor-home" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
       <div class="sh-head">
-        <h1 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h1>
+        <h2 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h2>
         <p data-testid="sponsor-home-sub">Everything you're backing, in one place. Nothing here identifies an attendee.</p>
       </div>
 

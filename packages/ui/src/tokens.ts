@@ -79,6 +79,16 @@ export const primitives = {
   '--ocr-amber-400': '#F5B32E', // warn dark mode
   '--ocr-amber-700': '#8A5A00', // warn light mode
 
+  // Success — emerald (blue-green). Distinct in HUE and LIGHTNESS from --danger
+  // red (#EA6D6D) and from --live teal (#00C4B4); reserved for done/accepted/
+  // completed and NEVER used as a semantic OPPOSITE to --danger (always paired
+  // with a text label per WCAG 1.4.1). Two theme values, mirroring --live:
+  // dark is bright (readable on navy AND as a filled bg with dark var(--bg)
+  // text — contrast is symmetric); light is dark (readable on light-050 AND
+  // with white text). OSE-1328 / token-lock (PR #567). Verified in verify-contrast.mjs.
+  '--ocr-green-400': '#34D399', // success dark mode  (8.6:1 on --bg, 7.8:1 on --surface)
+  '--ocr-green-700': '#137A42', // success light mode (5.0:1 on light-050; 5.4:1 with white)
+
   // Surface hover steps
   '--ocr-navy-800': '#223350', // surface-hover dark (between navy-900 and navy-700)
 
@@ -108,6 +118,8 @@ export const semanticDark = {
   '--error': 'var(--ocr-red-500)', // alias — form validation / error banners
   '--warn': 'var(--ocr-amber-400)', // caution / pending — amber (OSE-1328)
   '--info': 'var(--ocr-blue-500)', // informational — blue, lighter than --accent (OSE-1328)
+  '--success': 'var(--ocr-green-400)', // done / accepted / completed — emerald (OSE-1328)
+  '--on-accent': 'var(--ocr-light-100)', // #FFFFFF — text on solid --accent (blue) surfaces
 } as const;
 
 // ── Tier 2: Light mode override ───────────────────────────────────────────────
@@ -128,6 +140,8 @@ export const semanticLight = {
   '--error': 'var(--ocr-red-700)', // alias — form validation / error banners
   '--warn': 'var(--ocr-amber-700)', // caution / pending — amber (OSE-1328)
   '--info': 'var(--ocr-blue-700)', // informational — blue (OSE-1328)
+  '--success': 'var(--ocr-green-700)', // done / accepted / completed — emerald (OSE-1328)
+  '--on-accent': 'var(--ocr-light-100)', // #FFFFFF — text on solid --accent (blue) surfaces
 } as const;
 
 // ── Shared structural tokens (not colour, not theme-sensitive) ────────────────

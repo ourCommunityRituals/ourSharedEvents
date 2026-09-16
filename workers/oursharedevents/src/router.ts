@@ -18,6 +18,7 @@
  *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *   GET /api/v2/admin/event-templates → seeded event templates (auth, OSE-868)
+ *   GET /api/v2/admin/event-types     → Category → Type catalog for the picker (auth, OSE-1344)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *
@@ -111,6 +112,7 @@ import {
   handleUpdateEvent,
   handleDeleteEvent,
   handleAdminListEventTemplates,
+  handleAdminListEventTypes,
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
@@ -551,6 +553,15 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListEventTemplates(request, env);
+  }
+
+  // GET /api/v2/admin/event-types — OSE-1344: the Category → Type catalog
+  // (event_type_category_registry ⟶ event_type_registry) behind the Create
+  // Event picker. Read-only, admin-gated, no audit — same posture as templates.
+  if (pathname === '/api/v2/admin/event-types' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListEventTypes(request, env);
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'POST') {

@@ -86,7 +86,8 @@ describe('QA-1: Migration idempotency', () => {
     //   + scan_node_returns → −1 +2) = 33.
     // + net 2 (migrations 0065–0067, OSE-799 A2: DROP sponsors, ADD
     //   sponsor_business + sponsor_asset + sponsor_placement → −1 +3) = 35.
-    expect(names).toHaveLength(35);
+    // + 1 (event_type_category_registry — migration 0076, OSE-1344) = 36.
+    expect(names).toHaveLength(36);
   });
 
   test('indexes remain at exactly 72 after idempotent re-run', async () => {
@@ -128,7 +129,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(72); // +2 (0075: idx_events_status_updated, idx_events_created_by)
+    expect(indexes.results).toHaveLength(73); // +2 (0075) +1 (0076: idx_event_type_registry_category)
   });
 });
 

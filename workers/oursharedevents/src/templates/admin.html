@@ -22,7 +22,7 @@
       }
       header {
         background: var(--surface);
-        color: #fff;
+        color: var(--text);
         padding: 1.25rem 2rem;
         display: flex;
         align-items: center;
@@ -170,12 +170,12 @@
         margin: 0.25rem 0 0.5rem;
       }
       .badge.draft {
-        background: #fff3bf;
-        color: #7a5b00;
+        background: var(--warn);
+        color: var(--bg);
       }
       .badge.ready {
-        background: #d0ebff;
-        color: #1c4f82;
+        background: var(--info);
+        color: var(--bg);
       }
       /* Status panel: the one place an event's lifecycle is driven from. */
       .event-status-panel {
@@ -214,9 +214,9 @@
         cursor: pointer;
       }
       .event-status-btn.primary {
-        background: #16a34a;
-        border-color: #16a34a;
-        color: #fff;
+        background: var(--success);
+        border-color: var(--success);
+        color: var(--bg);
       }
       .event-status-btn:disabled {
         opacity: 0.6;
@@ -249,7 +249,7 @@
         font-weight: 700;
         margin-top: 2px;
       }
-      .tl-step.done .tl-dot { background: #16a34a; border-color: #16a34a; color: #fff; }
+      .tl-step.done .tl-dot { background: var(--success); border-color: var(--success); color: var(--bg); }
       .tl-step.now .tl-dot { border-color: var(--accent); color: var(--accent); }
       .tl-step.todo .tl-dot { color: var(--text-muted); }
       .tl-label { font-weight: 700; font-size: 1rem; }
@@ -267,7 +267,8 @@
         margin-bottom: 1rem;
       }
       .wizard-go-live .create-btn.is-live {
-        background: #1c4f82;
+        background: var(--success);
+        color: var(--bg);
       }
       .feature-locked {
         position: relative;
@@ -733,6 +734,11 @@
          NOT VERIFIED IN WEBKIT: this container cannot install it (missing
          system libraries), so the fix is applied from the documented Safari
          behaviour and the screenshot, not from a local repro. */
+      .type-picker-msg {
+        margin: 0;
+        font-size: 0.9375rem;
+        color: var(--text-muted, #64748b);
+      }
       .create-form input[type='date'] {
         -webkit-appearance: none;
         appearance: none;
@@ -2461,7 +2467,32 @@
              pre-fills the same optional "what/why" fields the dashboard form
              sends; nothing tier-gated, nothing saved until step 3's create. -->
         <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
-          <p class="wizard-step-help">What kind of event is this? We'll start the description for you.</p>
+          <p class="wizard-step-help">What kind of event is this?</p>
+          <!-- OSE-1344 — Category → Type. The SAME two-level picker the advanced
+               form uses (one loader, one catalog, lib/event-type-catalog.ts on
+               the server). Optional: an event with only a name still saves. The
+               chosen type rides the create POST as event_type_id. -->
+          <div class="create-form type-picker" data-testid="wizard-type-picker">
+            <div>
+              <label for="wizard-category">Category</label>
+              <select
+                id="wizard-category"
+                data-testid="wizard-category"
+                data-type-picker="category"
+                data-type-select="wizard-event-type"
+              >
+                <option value="">Choose a category…</option>
+              </select>
+            </div>
+            <div>
+              <label for="wizard-event-type">Event type</label>
+              <select id="wizard-event-type" data-testid="wizard-event-type" disabled>
+                <option value="">Pick a category first</option>
+              </select>
+            </div>
+            <p class="type-picker-msg full-width" data-testid="wizard-type-picker-msg" hidden></p>
+          </div>
+          <p class="wizard-step-help">Want a head start on the description? Pick one, or start blank.</p>
           <div class="wizard-template-grid" id="wizardTemplatePicker">
             <button type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
               <span class="wizard-card-title">Trivia Night</span>
@@ -2604,6 +2635,92 @@
           </button>
         </div>
       </section>
+
+      <script>
+        // OSE-1344 — ONE event-type picker for both create paths.
+        //
+        // Loads GET /api/v2/admin/event-types once per page (cached promise),
+        // fills every `[data-type-picker="category"]` select, and on change
+        // fills its paired type select (`data-type-select`). The server does
+        // the grouping (lib/event-type-catalog.ts) so this never re-derives a
+        // category from a code. Failure is honest and non-fatal: the selects
+        // say the list could not load and the event still saves without a
+        // type — the picker is a convenience, the title is the contract.
+        // All DOM is built with createElement/textContent (never innerHTML, #1).
+        (function () {
+          var catalogPromise = null;
+          function loadCatalog() {
+            if (!catalogPromise) {
+              catalogPromise = fetch('/api/v2/admin/event-types')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                  if (!d || !d.ok || !Array.isArray(d.categories)) throw new Error('bad catalog');
+                  return d.categories;
+                });
+              // A failed load must not poison later attempts.
+              catalogPromise.catch(function () { catalogPromise = null; });
+            }
+            return catalogPromise;
+          }
+          function opt(value, label) {
+            var o = document.createElement('option');
+            o.value = value;
+            o.textContent = label;
+            return o;
+          }
+          function fillTypes(typeSel, cat) {
+            typeSel.replaceChildren(opt('', cat ? 'Choose a type…' : 'Pick a category first'));
+            if (!cat) { typeSel.disabled = true; return; }
+            cat.types.forEach(function (t) {
+              var o = opt(t.id, t.name);
+              o.setAttribute('data-uec', t.uec_code);
+              typeSel.appendChild(o);
+            });
+            typeSel.disabled = false;
+          }
+          function msgFor(catSel) {
+            var wrap = catSel.closest('.type-picker') || catSel.closest('.create-form');
+            return wrap ? wrap.querySelector('.type-picker-msg') : null;
+          }
+          function mount(catSel) {
+            var typeSel = document.getElementById(catSel.getAttribute('data-type-select') || '');
+            if (!typeSel) return;
+            var byCode = {};
+            catSel.addEventListener('change', function () {
+              fillTypes(typeSel, byCode[catSel.value] || null);
+            });
+            loadCatalog().then(function (categories) {
+              catSel.replaceChildren(opt('', 'Choose a category…'));
+              categories.forEach(function (c) {
+                byCode[c.code] = c;
+                catSel.appendChild(opt(c.code, c.name + ' (' + c.types.length + ')'));
+              });
+              var m = msgFor(catSel);
+              if (m) m.hidden = true;
+            }).catch(function () {
+              var m = msgFor(catSel);
+              if (m) {
+                m.textContent = 'Couldn’t load event types. You can still save and set the type later.';
+                m.hidden = false;
+              }
+            });
+          }
+          window.oseTypePicker = {
+            value: function (typeSelId) {
+              var el = document.getElementById(typeSelId);
+              return el && !el.disabled ? String(el.value || '') : '';
+            },
+            reset: function (catSelId) {
+              var catSel = document.getElementById(catSelId);
+              if (!catSel) return;
+              catSel.value = '';
+              var typeSel = document.getElementById(catSel.getAttribute('data-type-select') || '');
+              if (typeSel) fillTypes(typeSel, null);
+            },
+          };
+          document.querySelectorAll('[data-type-picker="category"]').forEach(mount);
+        })();
+      </script>
 
       <script>
         // ── Guided wizard logic (FE dev-prep Phase B) ─────────────────────────
@@ -2752,6 +2869,10 @@
             // "keep it off the map" would silently publish them. Sending it
             // explicitly every time is what makes the question mean anything.
             body.is_published = wiz.published;
+            // OSE-1344 — only when the organizer actually picked a type; the
+            // API treats an absent value as "no type", never as an error.
+            var wizTypeId = window.oseTypePicker ? window.oseTypePicker.value('wizard-event-type') : '';
+            if (wizTypeId) body.event_type_id = wizTypeId;
             var prefill = TEMPLATE_PREFILL[wiz.template] || {};
             for (var k in prefill) body[k] = prefill[k];
 
@@ -3137,6 +3258,34 @@
                 maxlength="500"
               />
             </div>
+
+            <!-- OSE-1344 — Category → Type ("Sports > Bocce"). Fed by
+                 GET /api/v2/admin/event-types; the type select stays disabled
+                 until a category is chosen so the list is never 47 long. -->
+            <div>
+              <label for="create-category">Category</label>
+              <select
+                id="create-category"
+                name="event_type_category"
+                data-testid="create-category"
+                data-type-picker="category"
+                data-type-select="create-event-type"
+              >
+                <option value="">Choose a category…</option>
+              </select>
+            </div>
+            <div>
+              <label for="create-event-type">Event type</label>
+              <select
+                id="create-event-type"
+                name="event_type_id"
+                data-testid="create-event-type"
+                disabled
+              >
+                <option value="">Pick a category first</option>
+              </select>
+            </div>
+            <p class="type-picker-msg full-width" data-testid="create-type-picker-msg" hidden></p>
 
             <!-- OSE-1245 — the same question the wizard asks, in the form this
                  surface uses. A checkbox rather than two cards is deliberate:
@@ -5619,6 +5768,10 @@
           const publishedEl = document.getElementById('create-published');
           body.is_published = publishedEl ? publishedEl.checked : true;
 
+          // OSE-1344 — the picked type, when there is one.
+          const typeId = window.oseTypePicker ? window.oseTypePicker.value('create-event-type') : '';
+          if (typeId) body.event_type_id = typeId;
+
           // R3 — typed external link. Enable flag sent always (like is_published);
           // the type is sent only when enabling, so an unchecked link never writes
           // a type. what_url itself rides the fivew loop above (a staged-but-off
@@ -5652,6 +5805,7 @@
             document.getElementById('create-title').value = '';
             document.getElementById('create-date').value = '';
             document.getElementById('create-venue').value = '';
+            if (window.oseTypePicker) window.oseTypePicker.reset('create-category');
             for (const [domId] of fivew) {
               const el = document.getElementById(domId);
               if (el) el.value = '';

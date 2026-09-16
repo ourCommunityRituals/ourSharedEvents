@@ -1338,3 +1338,23 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 - [ ] Bruno collection: admin list filters, home-link mint, respond endpoint
 - [ ] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id`
 - [ ] `admin.html` split (now ~250 KB; sponsor page is deliberately its own template)
+
+### TRI-6 / OSE-1344: Category → Type picker on Create Event ("Sports > Bocce")
+
+**Status:** 🔄 IN PROGRESS (code + tests on disk 2026-09-16; needs PR + CI)
+**Linear:** OSE-1344 (High) under OSE-1322; linked OSE-1314, registry tickets, advanced-form redesign
+**Prerequisite:** TRI-1
+
+**Finding (measured 2026-09-16):** BOTH create paths lacked a type control — the advanced form had no field; the wizard's step 2 rendered fine but was four hardcoded copy-prefill cards (`TEMPLATE_PREFILL`), not a type picker (so no separate "blank step 2" bug). `events.event_type_id` (0023) had never been written by any handler. `category_registry` (OSE-729) is the layout-template axis (bar_events / leagues / general), NOT the type taxonomy; the 47 types (0024) carried their category only as the UEC prefix (15 clusters).
+
+- [x] Migration **0076**: `event_type_category_registry` (15 clusters, display names + order) + `event_type_registry.category_code` backfilled from the UEC prefix + index; `REQUIRED_DB_MIGRATION` = 76
+- [x] `lib/event-type-catalog.ts` — one grouping for every reader; an unmapped type goes to **Other**, never dropped; `orphans` counted
+- [x] `GET /api/v2/admin/event-types` (admin, read-only, `{ ok, categories:[{code,name,types:[{id,uec_code,name,description}]}], orphans }`)
+- [x] `POST/PUT /api/v2/admin/events` accept `event_type_id` — id-shape + registry-validated (400 `INVALID_EVENT_TYPE`), null clears; **does not touch `legal_clearance_tier`** (Invariant #4 / OSE-380 — the born-red gate caught a first draft that derived it)
+- [x] `admin.html`: Category → Type selects on the advanced form AND wizard step 2 (ahead of the prefill cards); ONE loader (`window.oseTypePicker`), createElement/textContent only, honest failure copy; both POSTs send `event_type_id`
+- [x] **Acceptance criterion gated:** `tests/event-type-catalog.spec.ts` asserts 0 orphans, 47/47 prefix-matched, 15 categories each non-empty
+- [ ] Show the type on the admin list row + public event page (discovery filter by category is the attendee-side follow-on)
+- [ ] Edit path in admin (change type after create — API supports it, no UI yet)
+- [ ] PR (slice: no OSE-### in branch/title; body `Part of OSE-1344`) + CI pyramid; Bruno; OCR-docs brain intake (new table, column, endpoint)
+
+**QA:** `tests/event-type-catalog.spec.ts` (17). Counts bumped: tables 36, indexes 73, `event_type_registry` 11 cols. INV9 exemption re-keyed `events.ts:301→335`.

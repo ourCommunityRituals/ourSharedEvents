@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-16 — 418 ids.
+ * Generated 2026-09-16 — 425 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 264 ids
+    // admin.html — 271 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -89,9 +89,11 @@
       'count-num',
       'count-retry',
       'count-suppressed',
+      'create-category',
       'create-date',
       'create-event-card',
       'create-event-form',
+      'create-event-type',
       'create-how-details',
       'create-msg',
       'create-published',
@@ -101,6 +103,7 @@
       'create-slot-preview',
       'create-submit',
       'create-title',
+      'create-type-picker-msg',
       'create-venue',
       'create-warnings',
       'create-what-short',
@@ -269,6 +272,7 @@
       'surface-cards',
       'tier-badge',
       'wizard-back-btn',
+      'wizard-category',
       'wizard-copy-display',
       'wizard-copy-poster',
       'wizard-copy-public',
@@ -276,6 +280,7 @@
       'wizard-copy-signup',
       'wizard-event-date',
       'wizard-event-name',
+      'wizard-event-type',
       'wizard-event-venue',
       'wizard-finish-btn',
       'wizard-go-live',
@@ -309,6 +314,8 @@
       'wizard-template-music',
       'wizard-template-other',
       'wizard-template-trivia',
+      'wizard-type-picker',
+      'wizard-type-picker-msg',
     ]),
     // public.html — 18 ids
     PUBLIC: Object.freeze([

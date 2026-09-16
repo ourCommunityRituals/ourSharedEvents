@@ -25,7 +25,7 @@
  */
 
 /** Highest migration in migrations/ — currently 0075_events_add_created_by_and_status_index.sql */
-export const REQUIRED_DB_MIGRATION = 75;
+export const REQUIRED_DB_MIGRATION = 76;
 
 /** Highest migration in migrations-forms/ — currently 0014_encrypt_attendee_name.sql */
 export const REQUIRED_FORMS_MIGRATION = 14;

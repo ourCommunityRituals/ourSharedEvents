@@ -15,6 +15,8 @@ const pairs = [
   ['danger on surface (dark)', '#EA6D6D', darkSurf],
   ['warn on bg (dark)',        '#F5B32E', darkBg],
   ['info on bg (dark)',        '#3D9BFF', darkBg],
+  ['success on bg (dark)',     '#34D399', darkBg],
+  ['success on surface (dark)','#34D399', darkSurf],
   // Light mode — darker variants
   ['text on bg (light)',       '#162945', lightBg],
   ['muted on bg (light)',      '#4A6882', lightBg],
@@ -23,6 +25,7 @@ const pairs = [
   ['danger on bg (light)',     '#B03030', lightBg],
   ['warn on bg (light)',       '#8A5A00', lightBg],
   ['info on bg (light)',       '#0057D6', lightBg],
+  ['success on bg (light)',    '#137A42', lightBg],
 ];
 
 let allPass = true;

@@ -61,6 +61,16 @@ const ADMIN_SKIP_REASON = ADMIN_BEARER_IS_DEFAULT
   ? "OSE-302 / ADR-006: requires OSE_ADMIN_BEARER repo secret to be set with a valid staging admin bearer. Until set, the /admin audit measures the Cloudflare bot challenge page, not OSE's admin dashboard. Founder action: `gh secret set OSE_ADMIN_BEARER --repo OurCommunityRituals/ourSharedEvents`"
   : undefined;
 
+// PR #567: /sponsor is token-gated — a bare load renders the invalid-link page,
+// not the surface. Provide a minted sponsor-home bearer (POST
+// /api/v2/admin/sponsors/:id/home-link against a seeded sponsor, then the ?t=
+// value) via OSE_SPONSOR_HOME_TOKEN to audit the real surface; skip (documented)
+// otherwise so the gate reports the honest signal instead of measuring the 401.
+const SPONSOR_HOME_TOKEN = process.env.OSE_SPONSOR_HOME_TOKEN || '';
+const SPONSOR_HOME_SKIP_REASON = SPONSOR_HOME_TOKEN
+  ? undefined
+  : 'Set OSE_SPONSOR_HOME_TOKEN to a minted sponsor-home bearer (POST /api/v2/admin/sponsors/:id/home-link on a seeded sponsor) — without it /sponsor?t= renders the invalid-link page, not the phone-first sponsor surface.';
+
 // Mobile floor: iPhone 13 Mini / iPhone X. Smallest modern phone in
 // significant active use. Designing to this floor passes for every
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
@@ -180,6 +190,16 @@ const SURFACES: Surface[] = [
     primaryCtaSelector:
       '[data-testid="export-json-btn"], [data-testid="export-pdf-btn"], main button, main a',
     skipReason: ADMIN_SKIP_REASON,
+  },
+  {
+    // PR #567: sponsor home — phone-first (48px targets) token-gated surface.
+    // Documented-skip unless OSE_SPONSOR_HOME_TOKEN is provided (see above), so
+    // the new surface is VISIBLE to the gate rather than silently absent.
+    path: `/sponsor?t=${SPONSOR_HOME_TOKEN}`,
+    name: 'sponsor home',
+    primaryCtaSelector:
+      '[data-testid="placement-accept"], [data-testid="sponsor-home-nav-events"], main a, main button',
+    skipReason: SPONSOR_HOME_SKIP_REASON,
   },
   {
     path: '/poster',
