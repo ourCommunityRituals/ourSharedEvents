@@ -5349,7 +5349,7 @@
             <td data-label="Date" data-testid="event-date">${when}</td>
             <td data-label="Venue" data-testid="event-venue">${esc(e.venue || '—')}</td>
             <td data-label="Status"><span class="badge ${st}" data-testid="event-status">${stLabel}</span>${unlisted}</td>
-            <td data-label="Clearance"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal review level (phase ${safePhase})">${phaseLabel}</span></td>
+            <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
           </tr>
         `;
           };
@@ -5385,7 +5385,7 @@
             '<span class="events-count" data-testid="events-count">' + countLine + '</span>' +
           '</div>' +
           '<table class="events-table" data-testid="events-table">' +
-            '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Clearance</th></tr></thead>' +
+            '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th></tr></thead>' +
             '<tbody data-testid="events-tbody">' + rows + '</tbody>' +
           '</table>' +
           (hasMore ? '<button type="button" class="copy-btn events-load-more" data-action="events-load-more" data-testid="events-load-more">Show more</button>' : '');
