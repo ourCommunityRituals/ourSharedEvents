@@ -66,9 +66,9 @@ runtime:
 
         } else if (res.getStatus() === 503) {\r
 
-        \    test('503 is DB error', function() {\r
+        \    test('503 is a DB or config error', function() {\r
 
-        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);\r
+        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR', 'CONFIG_ERROR']);\r
 
         \    });\r
 
