@@ -218,6 +218,10 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     // OSE-944: the public sponsors read is cache-fronted (SWR); the sponsor created
     // in Step 1 may not appear on the immediate read. Poll until it propagates
     // instead of asserting once (the flywheel's screen N+1 sees screen N contract).
+    // The poll MUST exceed the 30s cache TTL: invalidation is best-effort
+    // (sponsors.ts), so a missed purge means the write is only visible at TTL
+    // expiry — a 20s poll under-budgeted that worst case and flaked on the first
+    // cold-cache staging deploy (P1-7). 40s covers the full TTL + margin.
     await expect(async () => {
       const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
       expect(res.status).toBe(200);
@@ -225,7 +229,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       const found = res.body.items.find((s: any) => s.id === sponsorId);
       expect(found, 'sponsor present in public list after write→read propagation').toBeTruthy();
       expect(found.name).toBe(SPONSOR_NAME);
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -261,7 +265,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       // Rotation config should be valid
       expect(bundle.rotation_config.rotationMs).toBeGreaterThanOrEqual(3000);
       expect(bundle.rotation_config.rotationMs).toBeLessThanOrEqual(15000);
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -445,7 +449,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       expect(res.body.ok).toBe(true);
       const found = res.body.items.find((s: any) => s.id === sponsorId);
       expect(found, 'deleted sponsor absent from public list after propagation').toBeUndefined();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -602,7 +606,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const tvTop = res.body.bundle?.surface_sponsors?.tvTop || [];
       expect(tvTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Poster surface: sponsor in bundle', async ({ page, request }) => {
@@ -617,7 +621,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const posterTop = res.body.bundle?.surface_sponsors?.posterTop || [];
       expect(posterTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Public surface: sponsor in bundle', async ({ page, request }) => {
@@ -632,7 +636,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const mobileBanner = res.body.bundle?.surface_sponsors?.mobileBanner || [];
       expect(mobileBanner.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('SharedReport surface: sponsor in unfiltered list', async ({ page, request }) => {
@@ -643,7 +647,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     await expect(async () => {
       const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
       expect(res.body.items.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {
