@@ -104,6 +104,38 @@ function dayOfWeek(ymd: string): number {
 }
 
 /**
+ * Searchable, human-readable date tokens for an event — so a local who SEES
+ * "Saturday, Oct 4" on the card and types "saturday" (or "october", "oct")
+ * actually finds it, instead of the anti-anticipatory "nothing matches" on text
+ * that is on the screen. The card date is the calendar date pinned to local
+ * noon, so weekday/month derive from that same YYYY-MM-DD; full AND abbreviated
+ * forms are both included.
+ */
+function dateSearchTokens(item: EventListItem): string {
+  const ymd = eventDate(item);
+  if (!ymd) return '';
+  const d = new Date(`${ymd}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    const long = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d);
+    const short = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      weekday: 'short',
+      month: 'short',
+    }).format(d);
+    return `${long} ${short}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Apply the filters. Pure over the enriched list; `now` is injectable so the
  * "today / weekend" boundaries are testable.
  */
@@ -144,8 +176,13 @@ export function applyDiscoveryFilters(
     }
 
     if (needle) {
-      const hay =
-        `${typeof e.name === 'string' ? e.name : ''} ${typeof e.venue === 'string' ? e.venue : ''}`.toLowerCase();
+      const hay = [
+        typeof e.name === 'string' ? e.name : '',
+        typeof e.venue === 'string' ? e.venue : '',
+        dateSearchTokens(e),
+      ]
+        .join(' ')
+        .toLowerCase();
       if (!hay.includes(needle)) return false;
     }
     return true;

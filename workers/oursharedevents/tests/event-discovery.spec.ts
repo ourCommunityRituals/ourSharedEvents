@@ -79,6 +79,14 @@ describe('applyDiscoveryFilters', () => {
     expect(ids('month', 'bocce')).toEqual(['fri']);
     expect(ids('all', 'zzz')).toEqual([]);
   });
+  test('q also matches the visible DATE (weekday / month), not just name+venue', () => {
+    // The purest anticipatory fix: a local who SEES "Saturday" / "October" on a
+    // card and types it should find that event, even when the word is nowhere in
+    // its name or venue. Oct 3 2026 is a Saturday; its name is "Oktober Bocce".
+    expect(ids('all', 'saturday')).toEqual(['oct']); // weekday, not in name/venue
+    expect(ids('all', 'wednesday')).toEqual(['today']); // Sep 16 is a Wed; name "Trivia Night"
+    expect(ids('all', 'october')).toEqual(['oct']); // month name — NOT the misspelled "Oktober"
+  });
   test('"today" is the event\'s local day, not the Worker\'s UTC day', () => {
     // 11pm Chicago on the 16th is 04:00Z on the 17th — still "today" for a Sep 16 event.
     const late = new Date('2026-09-17T04:00:00Z');
