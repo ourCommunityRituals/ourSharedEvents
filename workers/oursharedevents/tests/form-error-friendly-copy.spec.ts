@@ -86,6 +86,7 @@ const FORBIDDEN_RAW_PHRASES = [
   'Body must be under 16KB',
   'Missing required field:',
   'FORMS_ENCRYPTION_KEY not configured',
+  'FORMS_HASH_PEPPER not configured',
   'Service temporarily unavailable',
   'Invalid event ID format',
 ];
