@@ -92,6 +92,10 @@ crons = ["0 3 * * *"]
 [vars]
 WORKER_ENV = "development"
 WORKER_BUILD_VERSION = "dev-local"
+# Draft auto-expiry (lifecycle cron): archive — never delete — drafts untouched
+# for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
+# is visible config, not an invisible code default of 30 (CCR-PR567 L2).
+DRAFT_EXPIRY_DAYS = "30"
 # Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities
 ALLOWED_ADMIN_EMAILS = ""
 ALLOWED_ADMIN_DOMAINS = ""
