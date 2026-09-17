@@ -2161,7 +2161,10 @@ jobs:
       needs.deploy-staging.result == 'success' &&
       needs.functional-staging.result == 'success'
     uses: ./.github/workflows/security-finale.yml
-    secrets: inherit
+    # `inherit` passes the repo's CF_ACCESS_* / ADMIN_KEY secrets to the reusable
+    # workflow; detect-secrets' Secret-Keyword plugin reads the literal word
+    # "inherit" as a value — a false positive (no secret is here).
+    secrets: inherit # pragma: allowlist secret
 
   gate-execution-reconciler:
     name: 'Gate-execution reconciler'
