@@ -44,7 +44,7 @@ npx wrangler secret list --env production
 
 ## Step 2 — Deploy to staging + run the FULL pyramid
 
-The Bruno/Newman contract + Playwright E2E + staging-mobile tiers **skip on `feat/*`**; this is what makes them run. **Migrations apply automatically** inside the deploy job (`oursharedevents-ci.yml:834/841` run `wrangler d1 migrations apply {DB,FORMS_DB} --env staging --remote`) — you do **not** run them by hand.
+The Bruno/Newman contract + Playwright E2E + staging-mobile tiers **skip on `feat/*`**; this is what makes them run. **Migrations apply automatically** inside the deploy job (the `Apply D1 migrations (main DB)` / `(forms DB)` steps run `wrangler d1 migrations apply {DB,FORMS_DB} --env staging --remote`) — you do **not** run them by hand. A pre-migrate **signing-secret gate** (`Gate: signing secret present (pre-migrate…)`, CCR item 5) aborts the deploy _before_ migrate if `SHARED_REPORT_SIGNING_SECRET` is unset, so a missing secret fails fast with a clear error rather than migrating and shipping the /sponsor corner inert.
 
 ```sh
 gh workflow run "OurSharedEvents CI/CD" \
@@ -55,7 +55,7 @@ gh run watch $(gh run list --workflow "OurSharedEvents CI/CD" --branch feat/epic
 ```
 
 This fires: `deploy-staging` (applies 0075/0076 to both staging D1s, then `wrangler deploy --env staging`) → `smoke-staging` → `contract-staging` (Bruno) → `functional-staging` (T4). Green here = the full pyramid the PR couldn't run.
-_(Alternative: rename the branch to `full-pipeline/*` and push — same trigger, per `ci.yml:796`.)_
+_(Alternative: rename the branch to `full-pipeline/*` and push — same trigger, via the `full-pipeline/*` branch-name match in the workflow's push filter.)_
 
 ---
 
@@ -81,7 +81,7 @@ gh pr ready 567                       # un-draft (signals ready)
 # merge PR #567 to main via the UI or:  gh pr merge 567 --squash
 ```
 
-Push-to-main re-runs `deploy-staging` automatically. Then, with the **production** secret set (Step 1) and staging validated, fire production (migrations apply to prod D1 automatically at `ci.yml:1803/1810`):
+Push-to-main re-runs `deploy-staging` automatically. Then, with the **production** secret set (Step 1) and staging validated, fire production (migrations apply to prod D1 automatically in the production deploy job's `Apply D1 migrations` steps, behind the same pre-migrate signing-secret gate):
 
 ```sh
 gh workflow run "OurSharedEvents CI/CD" --ref main -f deploy_production=PRODUCTION
