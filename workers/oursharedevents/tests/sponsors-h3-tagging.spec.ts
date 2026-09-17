@@ -142,9 +142,13 @@ describe('OSE H3 sponsor geo-tagging — migration 0045', () => {
       lon: EAGLES.lon,
     });
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { ok: boolean; id: string };
+    const body = (await res.json()) as { ok: boolean; id: string; placement_id: string };
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^sp_/);
+    // The create response exposes the placement id (distinct from the business
+    // id) so a caller can drive the sponsor-side accept under strict consent
+    // (POST /sponsor/placements/:placement_id/respond). CCR-PR567 re-run Stage-2.
+    expect(body.placement_id).toMatch(/^spl_/);
 
     const row = await getSponsorRow(body.id);
     expect(row).not.toBeNull();

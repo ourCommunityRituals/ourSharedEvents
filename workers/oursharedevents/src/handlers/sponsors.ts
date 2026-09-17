@@ -480,6 +480,12 @@ export async function handleAdminCreateSponsor(
     ok: true,
     status: 201,
     id,
+    // The placement id (distinct from the business `id`). Callers need it to drive
+    // the sponsor-side accept: POST /api/v2/sponsor/placements/:placement_id/respond.
+    // Under strict consent an organizer-created placement is PENDING until the
+    // sponsor accepts, so a test/flow that expects the sponsor to RENDER must
+    // accept it first — and needs this id to do so (CCR-PR567 re-run, Stage-2).
+    placement_id: placementId,
     // Echo what was stored on the placement so callers (and the OSE-INV5 seed) can
     // confirm the create landed with the intended tier + geo-derived locality.
     tier,
