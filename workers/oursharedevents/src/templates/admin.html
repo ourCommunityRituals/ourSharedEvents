@@ -3676,6 +3676,9 @@
     <script>
       (function() {
         const esc = s => { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
+        // Quote-safe for ATTRIBUTE contexts (esc() above is textContent-based and
+        // does not escape " or ', so it is unsafe inside aria-label="..."). M1.
+        const escAttr = s => String(s == null ? '' : s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 
         function parsePlc(raw) {
           try { const p = JSON.parse(raw || '{}'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
@@ -3745,12 +3748,12 @@
                 ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
                 : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
               const actions = s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + esc(s.name || s.id) + '">Edit</button> ' +
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
                   // Sponsor corner of the triangle: mint the sponsor's own page
                   // link (their placements, accept/decline, their report). The
                   // organizer hands it over; it expires in 30 days.
-                  '<button class="spon-action-btn" data-testid="sponsor-home-link-' + esc(s.id) + '" data-action="sponsor-home-link" data-id="' + esc(s.id) + '" aria-label="Get sponsor page link for ' + esc(s.name || s.id) + '">Sponsor link</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + esc(s.name || s.id) + '">Deactivate</button>'
+                  '<button class="spon-action-btn" data-testid="sponsor-home-link-' + esc(s.id) + '" data-action="sponsor-home-link" data-id="' + esc(s.id) + '" aria-label="Get sponsor page link for ' + escAttr(s.name || s.id) + '">Sponsor link</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + escAttr(s.name || s.id) + '">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +

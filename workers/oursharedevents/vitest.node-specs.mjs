@@ -122,4 +122,7 @@ export const NODE_SPECS = [
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',
+  // M1 (CCR-PR567) — admin sponsor aria-label attribute escaping. Imports the
+  // admin.html template as Text and asserts the client-JS escaper shape.
+  'tests/admin-sponsor-attr-escape.spec.ts',
 ];
