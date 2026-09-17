@@ -624,7 +624,15 @@ export async function route(
       return response;
     }
     const response = await handleUpdateEvent(request, env, adminEventMatch[1]);
-    _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);
+    // Status-derived outcome: a refused update — a 409 INVALID_TRANSITION from the
+    // state machine, or a 400/404/503 — must not be audited as a successful update
+    // (CCR-PR567 re-run item 7). event-manager-audit.spec.ts asserts BOTH the
+    // success and denied UPDATE_EVENT audit calls exist.
+    if (response.status < 400) {
+      _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);
+    } else {
+      _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
+    }
     return response;
   }
 
