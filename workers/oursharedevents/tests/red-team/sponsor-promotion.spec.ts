@@ -89,15 +89,25 @@ describe('OSE-736 — happy path crosses the #25 wall exactly once', () => {
     // OSE-799 A2: promotion writes the split model — name on sponsor_business,
     // tier/is_active/event_id on the sponsor_placement it created.
     const sp = await env.DB.prepare(
-      `SELECT sp.tier AS tier, sp.is_active AS is_active, sp.event_id AS event_id, sb.name AS name
+      `SELECT sp.tier AS tier, sp.is_active AS is_active, sp.event_id AS event_id,
+              sp.sponsor_accepted AS sponsor_accepted, sb.name AS name
          FROM sponsor_business sb
          JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
         WHERE sb.id = ?`
     )
       .bind(res.sponsor_id)
-      .first<{ tier: string; is_active: number; event_id: string; name: string }>();
+      .first<{
+        tier: string;
+        is_active: number;
+        event_id: string;
+        sponsor_accepted: number;
+        name: string;
+      }>();
     expect(sp?.is_active).toBe(1);
     expect(sp?.event_id).toBe('evt-P');
+    // Promotion IS the sponsor's consent (ADR-019 / CCR-PR567 re-run): a promoted
+    // self-signup lands sponsor_accepted=1, so the strict resolver renders it.
+    expect(sp?.sponsor_accepted).toBe(1);
     // FIX 1 — tier server-forced to the covenant base (never escalated).
     expect(sp?.tier).toBe(COVENANT_BASE_TIER);
     expect(sovTierOf(sp!.tier)).toBe('base');
