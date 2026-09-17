@@ -39,6 +39,7 @@ import SPONSOR_HOME_HTML from '../templates/sponsor-home.html';
 import { html, renderErrorPage } from './pages';
 import { injectLegalFooter } from '../lib/legal-footer';
 import { injectMarker } from '../lib/inject-marker';
+import { invalidateSponsorsCache } from '../lib/data-provider';
 import { escapeHtml as esc } from '../lib/html-escape';
 import { computeEventPhase } from '../domain/event-phase';
 import { parseEventState, canRender } from '../domain/event-state';
@@ -345,6 +346,17 @@ export async function handleSponsorPlacementRespond(
   if ((result.meta?.changes ?? 0) === 0) {
     return jsonError('NOT_FOUND', `Placement not found: ${placementId}`, 404, id);
   }
+
+  // Bust the cache-fronted public sponsor list for this event so an accept/decline
+  // reflects immediately on the cache-fronted poster / display / JSON surfaces,
+  // matching the direct-DB public event page. Without this, a declined sponsor
+  // keeps rendering for up to the 30s TTL — a cross-surface consent split
+  // (ADR-019 / CCR re-run #3). The UPDATE keys on placement/sponsor/brand, so the
+  // event_id is fetched here for the cache key.
+  const evt = await env.DB.prepare('SELECT event_id FROM sponsor_placement WHERE id = ?')
+    .bind(placementId)
+    .first<{ event_id: string }>();
+  if (evt?.event_id) await invalidateSponsorsCache(evt.event_id);
 
   await logAdminAction(env as { DB: D1Database }, {
     action: 'SPONSOR_PLACEMENT_RESPOND',

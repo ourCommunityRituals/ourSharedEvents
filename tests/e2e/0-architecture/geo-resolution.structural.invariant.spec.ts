@@ -193,6 +193,24 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     }
   });
 
+  test('OSE-INV2 | consent | the public /sponsor respond WRITE busts the cache-fronted sponsor list', () => {
+    // A write to sponsor_placement.sponsor_accepted must invalidate the
+    // cache-fronted public sponsor list, or a declined/accepted sponsor stays
+    // stale on the poster / display / JSON surfaces for up to the TTL while the
+    // direct-DB public event page updates immediately — a cross-surface consent
+    // split (ADR-019 / CCR re-run #3). The admin path (sponsors.ts) already does;
+    // the public /sponsor respond handler must too.
+    const respond = readFileSync(join(WORKER_ROOT, 'src', 'handlers', 'sponsor-home.ts'), 'utf8');
+    expect(
+      /UPDATE\s+sponsor_placement[\s\S]{0,120}sponsor_accepted\s*=/i.test(respond),
+      'sponsor-home.ts must write sponsor_accepted (the /sponsor respond path)'
+    ).toBe(true);
+    expect(
+      /invalidateSponsorsCache\s*\(/.test(respond),
+      'the /sponsor respond handler must call invalidateSponsorsCache after the write'
+    ).toBe(true);
+  });
+
   test('OSE-INV2 | resolver | geo match evaluates zip equality OR haversine radius', () => {
     const src = readFileSync(RESOLVER, 'utf8');
     // The area filter is "zip match OR within radius". Both dimensions must be
