@@ -1,0 +1,30 @@
+info:
+  name: TRIANGLE | sponsor home-link | mint 404 on unknown sponsor
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors/sb_does_not_exist/home-link"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: minting a sponsor-home link for an unknown/out-of-brand
+        // sponsor is NOT_FOUND (no enumeration oracle). Brand-scoped + audited.
+        test('404 NOT_FOUND on unknown sponsor', function () { expect(res.getStatus()).to.eql(404); });
+        test('ok is false', function () { expect(res.getBody().ok).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

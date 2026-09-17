@@ -1,0 +1,34 @@
+info:
+  name: OSE-199 | admin events | PUT status rejects a non-string status (400)
+  type: http
+  seq: 6
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"status":null}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (CCR-PR567 re-run item 9): a PUT that sends a NON-string status
+        // (e.g. null) must not slip past the state machine — it is INVALID_STATUS
+        // (400), not a silent no-op.
+        test('400 INVALID_STATUS on null status', function () { expect(res.getStatus()).to.eql(400); });
+        test('code is INVALID_STATUS', function () { expect(res.getBody().code).to.eql('INVALID_STATUS'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
