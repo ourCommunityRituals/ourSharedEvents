@@ -5528,7 +5528,7 @@
         await Promise.all([
           fetch('/api/v2/admin/events/' + eid + '/stats').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) stats = d.stats; }).catch(function () {}),
           fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).length; }).catch(function () {}),
-          fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) sponsors = (d.items || []).filter(function (s) { return s.is_active && s.sponsor_accepted !== 0; }).length; }).catch(function () {}),
+          fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) sponsors = (d.items || []).filter(function (s) { return s.is_active && Number(s.sponsor_accepted) === 1; }).length; }).catch(function () {}),
         ]);
         if (seq !== window._oseTimelineSeq) return; // a newer selection won
 

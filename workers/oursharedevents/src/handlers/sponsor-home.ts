@@ -214,10 +214,10 @@ export async function handleSponsorPlacementRespond(
   env: SponsorHomeEnv,
   placementId: string
 ): Promise<Response> {
+  // Rate limiting for this route lives at the router (publicReadLimited(
+  // 'sponsor-respond', …, 60)) — CCR-PR567 re-run item 9 — so it is visible in
+  // the route table alongside the other public writes, not buried here.
   const id = rid();
-  if (await isPublicReadLimited(request, env, 'sponsor-respond', 60)) {
-    return jsonError('RATE_LIMITED', 'Too many requests', 429, id);
-  }
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
   if (!(request.headers.get('content-type') || '').includes('application/json')) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);

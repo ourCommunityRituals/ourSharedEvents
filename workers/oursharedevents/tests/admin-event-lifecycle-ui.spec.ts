@@ -183,6 +183,20 @@ describe('event timeline — the chain at a glance', () => {
     expect(html).toContain("if (f.suppressed) return 'fewer than ' + (f.floor || 5)");
   });
 
+  test('the "Sponsors on" step counts ACCEPTED sponsors only, not pending (item 9)', async () => {
+    const html = await adminHtml();
+    // sponsor_accepted: 1 accepted, 0 declined, null pending. Only accepted
+    // (=== 1) renders on the public surfaces (ADR-019 strict consent), so the
+    // timeline must not count a pending (null) sponsor as "on". `!== 0` wrongly
+    // treated pending as on; accepted-only is the honest count.
+    expect(html, 'timeline sponsor count must not treat pending (null) as on').not.toMatch(
+      /s\.sponsor_accepted\s*!==\s*0/
+    );
+    expect(html, 'timeline "Sponsors on" must count accepted-only').toMatch(
+      /Number\(s\.sponsor_accepted\)\s*===\s*1/
+    );
+  });
+
   test('the next step is one link into the right card, in chain order', async () => {
     const html = await adminHtml();
     expect(html).toContain('data-testid="event-timeline-next"');

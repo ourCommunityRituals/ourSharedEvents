@@ -1237,12 +1237,19 @@ export async function route(
 
   // POST /api/v2/sponsor/placements/:id/respond — sponsor accepts / declines a
   // placement from their own page. Authorized by the sponsor-home token in the
-  // body (never admin); ownership proven in SQL inside the handler.
+  // body (never admin); ownership proven in SQL inside the handler. Rate limit
+  // lives HERE at the route (CCR-PR567 re-run item 9), like sponsor-impression/
+  // -click above, so the limit is visible in the router rather than buried in
+  // the handler — a respond route that is NOT limited is visibly not limited.
   const placementRespondMatch = pathname.match(
     /^\/api\/v2\/sponsor\/placements\/([^/]+)\/respond$/
   );
   if (placementRespondMatch && method === 'POST') {
-    return handleSponsorPlacementRespond(request, env, placementRespondMatch[1]);
+    return publicReadLimited(
+      'sponsor-respond',
+      (req, e: typeof env) => handleSponsorPlacementRespond(req, e, placementRespondMatch[1]),
+      60
+    )(request, env);
   }
 
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).
