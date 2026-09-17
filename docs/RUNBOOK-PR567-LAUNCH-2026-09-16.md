@@ -38,7 +38,7 @@ npx wrangler secret list --env staging       # expect: SHARED_REPORT_SIGNING_SEC
 npx wrangler secret list --env production
 ```
 
-> **Note (the CCR "no CI gate verifies it" risk):** `verify-secrets.js` only checks GitHub-Actions env secrets, **not** wrangler secrets — nothing in CI can confirm this is set. The manifest entry is documentation; the real check is the `wrangler secret list` above. Do not skip it.
+> **Note:** `verify-secrets.js` only checks GitHub-Actions env secrets, **not** wrangler secrets — but as of CCR-PR567 H2 the `deploy-staging` and `deploy-production` jobs **hard-gate** on `wrangler secret list` before the Deploy step, so an unset secret now **fails the deploy** instead of shipping a silent-inert corner. Still run the `wrangler secret list` above at sign-off.
 
 ---
 
@@ -106,4 +106,4 @@ gh workflow run "OurSharedEvents CI/CD" --ref main -f deploy_production=PRODUCTI
 
 ## Not-yet-a-gate (follow-up, not launch-blocking)
 
-`SHARED_REPORT_SIGNING_SECRET` has **no CI gate** (Step-1 note). If you want one: add a `wrangler secret list`-based check to the `deploy-staging`/`deploy-production` jobs that fails the deploy when it's absent — the fail-closed code makes an unset secret a silent-inert corner otherwise.
+~~`SHARED_REPORT_SIGNING_SECRET` has no CI gate~~ — **DONE (CCR-PR567 H2).** The `deploy-staging` and `deploy-production` jobs now run a `wrangler secret list` presence check before the Deploy step and fail the deploy when the secret is absent, so an unset fail-closed secret can no longer ship a silent-inert `/sponsor` + `/sharedReport` corner.

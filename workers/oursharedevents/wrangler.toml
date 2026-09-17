@@ -96,6 +96,8 @@ WORKER_BUILD_VERSION = "dev-local"
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
 DRAFT_EXPIRY_DAYS = "30"
+# Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
+SPONSOR_GEO_MATCH_ENABLED = "0"
 # Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities
 ALLOWED_ADMIN_EMAILS = ""
 ALLOWED_ADMIN_DOMAINS = ""
@@ -157,6 +159,10 @@ crons = ["0 3 * * *"]
 [env.staging.vars]
 WORKER_ENV = "staging"
 WORKER_BUILD_VERSION = "stg-2026.03.22"
+# Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
+# (CCR-PR567 re-run item 9 / L2). Otherwise staging runs the invisible code defaults.
+DRAFT_EXPIRY_DAYS = "30"
+SPONSOR_GEO_MATCH_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
 ALLOW_ADMIN_KEY_FALLBACK = "true"
 # Allow X-OCR-Internal header for CI/CD automation
@@ -247,6 +253,10 @@ crons = ["0 3 * * *"]
 [env.production.vars]
 WORKER_ENV = "production"
 WORKER_BUILD_VERSION = "prod-2026.03.22"
+# Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
+# (CCR-PR567 re-run item 9 / L2). Otherwise production runs the invisible code defaults.
+DRAFT_EXPIRY_DAYS = "30"
+SPONSOR_GEO_MATCH_ENABLED = "0"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
 # Admin email allowlist — set explicitly here (not inherited from [vars])

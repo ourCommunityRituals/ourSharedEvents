@@ -939,6 +939,14 @@ export async function handleUpdateEvent(
     // on the paths that happened to use the dedicated endpoints. A same-state
     // write (draft → draft) is a no-op, not a violation. Returning 409 with
     // from/to matches qr-verify's envelope so the admin UI has one shape to read.
+    //
+    // A PUT that explicitly sends a NON-string status (e.g. { status: null }) must
+    // not slip past the state machine — reject it, don't silently ignore it
+    // (CCR-PR567 re-run item 9). An ABSENT status key is fine: a field-only update
+    // never touches the lifecycle.
+    if ('status' in body && typeof body.status !== 'string') {
+      return errorResponse('INVALID_STATUS', 'status must be an event-state string', 400, rid);
+    }
     if (typeof body.status === 'string') {
       const current = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
         .bind(eventId)
