@@ -17,6 +17,7 @@ import {
 } from '../src/handlers/pages';
 import { handleFormPage } from '../src/handlers/form-pages';
 import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
+import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
 
 async function axeScan(html: string): Promise<axe.Result[]> {
   document.open();
@@ -107,12 +108,8 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
   });
 
   // PR #567: /sponsor was invisible to this gate (a11y-axe never scanned it),
-  // which is how the double-<h1> shipped. handleSponsorHomePage is token- +
-  // D1-bound (can't run in the jsdom a11y env), so scan the SERVED SHELL — the
-  // real template filled with the empty-state (a sponsor with no placements).
-  // That is the a11y-load-bearing surface: it carries the page landmarks and the
-  // one-<h1> contract the regression violated. Placement-card a11y rides on the
-  // integration-tier sponsor-home.spec.ts.
+  // which is how the double-<h1> shipped. The empty shell carries the page
+  // landmarks and the one-<h1> contract the regression violated.
   test('sponsor home page (shell / empty state)', async () => {
     const page = SPONSOR_HOME_HTML.replace('<!--OCR_SPONSOR_ID-->', 'sb_test')
       .replace('<!--OCR_SPONSOR_NAME-->', 'Test Sponsor Co')
@@ -125,5 +122,46 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
       )
       .replace('<!--OCR_EXPIRES-->', 'Oct 1, 2026');
     await scanPage('Sponsor home page', page);
+  });
+
+  // CCR-PR567 re-run item 6 — scan the POPULATED page too, not just the shell.
+  // The prior "placement-card a11y rides on the integration-tier spec" claim was
+  // false: sponsor-home.spec.ts runs in the workers pool with NO axe/DOM, so the
+  // cards were axe-scanned nowhere. renderSponsorHomePage is now pure, so the
+  // real placement markup (multiple <h2> titles, state chips, action buttons in
+  // pending/accepted/declined states) is scanned here — including that the cards
+  // introduce NO second <h1> and every control has an accessible name.
+  test('sponsor home page (populated — pending/accepted/declined cards)', async () => {
+    const base: PlacementRow = {
+      placement_id: 'p',
+      event_id: 'e',
+      tier: 'gold',
+      locality_band: 1,
+      organizer_accepted: 1,
+      sponsor_accepted: 1,
+      placement_active: 1,
+      title: 'Community Bocce Night',
+      status: 'active',
+      start_date: '2026-10-01',
+      end_date: null,
+      location: 'Sawyer Town Hall',
+      is_published: 1,
+    };
+    const page = renderSponsorHomePage({
+      sponsor: { id: 'sb_test', name: 'Test Sponsor Co' },
+      placements: [
+        { ...base, placement_id: 'p1', event_id: 'e1', sponsor_accepted: null }, // pending
+        { ...base, placement_id: 'p2', event_id: 'e2', sponsor_accepted: 1 }, // accepted, live
+        {
+          ...base,
+          placement_id: 'p3',
+          event_id: 'e3',
+          sponsor_accepted: 0,
+          status: 'draft',
+        }, // declined + not-yet-listed
+      ],
+      expiresIso: '2026-10-01T12:00:00Z',
+    });
+    await scanPage('Sponsor home page (populated)', page);
   });
 });

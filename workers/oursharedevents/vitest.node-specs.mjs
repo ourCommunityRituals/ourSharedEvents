@@ -21,6 +21,9 @@ export const NODE_SPECS = [
   // CCR-PR567 re-run item 5 — pure truth table for the /health signing-secret
   // usability boolean (present + >=32 chars). No runtime, no fs.
   'tests/health-signing-secret.spec.ts',
+  // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
+  // name + placement fields). Imports the render module, no runtime.
+  'tests/sponsor-home-xss.spec.ts',
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',

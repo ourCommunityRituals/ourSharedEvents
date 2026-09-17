@@ -35,14 +35,10 @@
  *   - `noindex` + `Cache-Control: no-store` + the same nonce CSP as every page.
  */
 
-import SPONSOR_HOME_HTML from '../templates/sponsor-home.html';
 import { html, renderErrorPage } from './pages';
-import { injectLegalFooter } from '../lib/legal-footer';
-import { injectMarker } from '../lib/inject-marker';
 import { invalidateSponsorsCache } from '../lib/data-provider';
-import { escapeHtml as esc } from '../lib/html-escape';
-import { computeEventPhase } from '../domain/event-phase';
-import { parseEventState, canRender } from '../domain/event-state';
+import { parseEventState } from '../domain/event-state';
+import { renderSponsorHomePage, type PlacementRow } from '../lib/sponsor-home-render';
 import { corsHeaders } from '../lib/cors';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
@@ -134,33 +130,8 @@ export async function handleAdminMintSponsorHomeLink(
 
 // ─── Public: the sponsor's page ──────────────────────────────────────────────
 
-interface PlacementRow {
-  placement_id: string;
-  event_id: string;
-  tier: string;
-  locality_band: number;
-  organizer_accepted: number | null;
-  sponsor_accepted: number | null;
-  placement_active: number;
-  title: string;
-  status: string;
-  start_date: string | null;
-  end_date: string | null;
-  location: string | null;
-  is_published: number;
-}
-
-function humanDate(iso: string | null): string {
-  if (!iso) return 'Date to be announced';
-  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
+// PlacementRow + humanDate + the page markup now live in lib/sponsor-home-render
+// (CCR-PR567 re-run items 6/8 — a pure, a11y- + XSS-testable render).
 
 function invalidLinkPage(): Response {
   return renderErrorPage(
@@ -204,97 +175,34 @@ export async function handleSponsorHomePage(
     .all<PlacementRow>();
   const placements = rows.results ?? [];
 
-  let live = 0;
-  let upcoming = 0;
-  let pending = 0;
-  const cards: string[] = [];
+  // Pre-mint the sponsor-scoped SharedReport links (async, env-bound) into a
+  // lookup so the page render stays PURE — a11y- + XSS-testable with no env/DB
+  // (CCR-PR567 re-run items 6/8). Only active/archived placements have a report;
+  // a failed mint simply yields no link, exactly as the inline render did.
+  const reportLinks = new Map<string, string>();
   for (const p of placements) {
     const state = parseEventState(p.status);
-    const phase = computeEventPhase({
-      status: p.status,
-      start_date: p.start_date,
-      end_date: p.end_date,
-    });
-    const publicOk = canRender(state, 'public');
-    const isPending = p.sponsor_accepted == null;
-    const declined = p.sponsor_accepted === 0;
-    if (isPending) pending++;
-    if (publicOk && phase === 'event') live++;
-    if (publicOk && phase === 'pre_event') upcoming++;
-
-    let stateLabel = 'Not yet listed';
-    let stateCls = 'done';
-    if (state === 'archived' || phase === 'post_event') {
-      stateLabel = 'Over';
-      stateCls = 'done';
-    } else if (publicOk && phase === 'event') {
-      stateLabel = 'Live now';
-      stateCls = 'live';
-    } else if (publicOk) {
-      stateLabel = 'Coming up';
-      stateCls = 'soon';
-    } else {
-      stateLabel = 'Organizer still setting up';
-      stateCls = 'done';
-    }
-    const answerLabel = isPending ? 'Please confirm' : declined ? 'Declined' : 'Accepted';
-    const answerCls = isPending ? 'pending' : declined ? 'declined' : 'live';
-
-    const links: string[] = [];
-    if (publicOk && state === 'active') {
-      links.push(
-        `<a class="btn btn-secondary" href="/events/${esc(p.event_id)}" data-testid="placement-public-link">Event page</a>`
-      );
-    }
-    // Report: only once there is something to report (active or over). The
-    // token is sponsor-scoped so the report shows this sponsor only.
     if (state === 'active' || state === 'archived') {
       const rt = await mintSignedLinkToken(env, p.event_id, 'sponsor', 7 * 24 * 60 * 60, {
         sponsor_id: sponsor.id,
       });
       if (rt) {
-        links.push(
-          `<a class="btn btn-secondary" href="/sharedReport?eventId=${encodeURIComponent(p.event_id)}&token=${encodeURIComponent(rt)}" data-testid="placement-report-link">Your report</a>`
+        reportLinks.set(
+          p.event_id,
+          `/sharedReport?eventId=${encodeURIComponent(p.event_id)}&token=${encodeURIComponent(rt)}`
         );
       }
     }
-    const respond =
-      `<button type="button" class="btn ${declined ? 'btn-secondary' : 'btn-primary'}" data-action="placement-respond" data-placement-id="${esc(p.placement_id)}" data-accepted="1" data-testid="placement-accept"${!isPending && !declined ? ' hidden' : ''}>Accept</button>` +
-      `<button type="button" class="btn btn-secondary" data-action="placement-respond" data-placement-id="${esc(p.placement_id)}" data-accepted="0" data-testid="placement-decline"${declined ? ' hidden' : ''}>Decline</button>`;
-
-    cards.push(
-      `<article class="sh-card${isPending ? ' needs-answer' : ''}${declined ? ' declined' : ''}" data-testid="placement-card" data-placement-id="${esc(p.placement_id)}" data-event-id="${esc(p.event_id)}" data-sponsor-accepted="${isPending ? '' : p.sponsor_accepted}" data-was-pending="${isPending ? '1' : '0'}">
-        <h2 data-testid="placement-title">${esc(p.title)}</h2>
-        <p class="sh-when" data-testid="placement-when">${esc(humanDate(p.start_date))}</p>
-        <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
-        <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
-        ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting shows your name on this event's page, poster, and live screen.</p>` : ''}
-        <div class="sh-actions">${links.join('')}${respond}</div>
-        <p class="sh-msg" role="status" aria-live="polite"></p>
-      </article>`
-    );
   }
 
-  const list =
-    cards.length === 0
-      ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>`
-      : `<p class="sh-section-title">Your placements</p><div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`;
+  const page = renderSponsorHomePage({
+    sponsor: { id: sponsor.id, name: sponsor.name },
+    placements,
+    expiresIso: new Date(claim.exp * 1000).toISOString(),
+    reportLinkFor: (eventId) => reportLinks.get(eventId) ?? null,
+  });
 
-  // injectMarker (not String.replace) so a sponsor name or placement markup
-  // carrying a `$` cannot splice the trusted page shell (CCR-PR567 H1).
-  let page = injectMarker(SPONSOR_HOME_HTML, '<!--OCR_SPONSOR_ID-->', esc(sponsor.id));
-  page = injectMarker(page, '<!--OCR_SPONSOR_NAME-->', esc(sponsor.name));
-  page = injectMarker(page, '<!--OCR_COUNT_LIVE-->', String(live));
-  page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
-  page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
-  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list);
-  page = injectMarker(
-    page,
-    '<!--OCR_EXPIRES-->',
-    esc(humanDate(new Date(claim.exp * 1000).toISOString()))
-  );
-
-  const res = html(injectLegalFooter(page, 'public'));
+  const res = html(page);
   res.headers.set('Cache-Control', 'no-store');
   return res;
 }
