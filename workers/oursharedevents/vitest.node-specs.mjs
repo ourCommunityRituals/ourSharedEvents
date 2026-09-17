@@ -18,9 +18,6 @@ export const NODE_SPECS = [
 // no axe, no cloudflare:test, no fs). Proven green in the node project.
   'tests/count-floor.spec.ts',
   'tests/event-price.spec.ts',
-  // CCR-PR567 re-run item 5 — pure truth table for the /health signing-secret
-  // usability boolean (present + >=32 chars). No runtime, no fs.
-  'tests/health-signing-secret.spec.ts',
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
   // name + placement fields). Imports the render module, no runtime.
   'tests/sponsor-home-xss.spec.ts',

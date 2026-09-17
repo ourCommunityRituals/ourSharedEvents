@@ -845,8 +845,9 @@ jobs:
       # BEFORE the remote D1 migrate steps. A missing signing secret would ship
       # the /sponsor + /sharedReport corner SILENTLY INERT, and we must not mutate
       # the shared remote D1 for a deploy we already know is doomed. `wrangler
-      # secret list` sees only the NAME (never the value), so value-length is
-      # asserted post-deploy via /health's signingSecretConfigured boolean.
+      # secret list` sees only the NAME (never the value); value-length is enforced
+      # at provisioning (set-secrets.sh) and functionally by the T4 /sponsor
+      # journey (a public /health field would trip the NS-3 boring-OK gate).
       # ────────────────────────────────────────────────────────────────────
       - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
         env:
@@ -1047,24 +1048,17 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           sleep 10
-          BODY="$(curl -s --max-time 30 \
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -w '\n%{http_code}' "$STG_BASE_URL/health")"
-          HTTP="$(printf '%s' "$BODY" | tail -n1)"
-          JSON="$(printf '%s' "$BODY" | sed '$d')"
-          if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; echo "$JSON"; exit 1; fi
+            "$STG_BASE_URL/health")
+          if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; exit 1; fi
           echo "✓ Health check passed"
-          # CCR-PR567 re-run item 5 — value-validity, not just presence. /health
-          # reports signingSecretConfigured (present + >=32 chars, never the value);
-          # false ⇒ the /sponsor + /sharedReport corner shipped inert with a
-          # missing/short secret the presence gate could not see.
-          if ! printf '%s' "$JSON" | grep -q '"signingSecretConfigured":true'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is missing or under 32 chars on staging — the /sponsor + /sharedReport corner is inert. Provision it: bash scripts/set-secrets.sh staging"
-            echo "$JSON"
-            exit 1
-          fi
-          echo "✓ Signing secret configured (present + >=32 chars)"
+          # Signing-secret value-validity is NOT asserted here: /health stays
+          # "boring OK" for the NS-3 security gate (no secret-adjacent fields on a
+          # public endpoint). It is covered at provisioning (set-secrets.sh length
+          # check) and functionally by the T4 /sponsor journey, which fails if the
+          # signing secret is unset/short (CCR-PR567 re-run item 5, revised).
 
   # ============================================================================
   # TIER 2: SMOKE — Post-deploy + nightly + dispatch
@@ -1847,8 +1841,8 @@ jobs:
       # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
       # BEFORE the remote D1 migrate steps (production). Same rationale as
       # staging: never mutate the shared remote D1 for a deploy that would ship
-      # the /sponsor + /sharedReport corner inert. Value-length is asserted
-      # post-deploy via /health's signingSecretConfigured boolean.
+      # the /sponsor + /sharedReport corner inert. Value-length is enforced at
+      # provisioning (set-secrets.sh) + functionally by the T4 /sponsor journey.
       # ────────────────────────────────────────────────────────────────────
       - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
         env:
@@ -2005,21 +1999,15 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           sleep 10
-          BODY="$(curl -s --max-time 30 \
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -w '\n%{http_code}' "$PROD_BASE_URL/health")"
-          HTTP="$(printf '%s' "$BODY" | tail -n1)"
-          JSON="$(printf '%s' "$BODY" | sed '$d')"
-          if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; echo "$JSON"; exit 1; fi
+            "$PROD_BASE_URL/health")
+          if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; exit 1; fi
           echo "✓ Production health check passed"
-          # CCR-PR567 re-run item 5 — value-validity, not just presence (prod).
-          if ! printf '%s' "$JSON" | grep -q '"signingSecretConfigured":true'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is missing or under 32 chars on production — the /sponsor + /sharedReport corner is inert. Provision it: bash scripts/set-secrets.sh production"
-            echo "$JSON"
-            exit 1
-          fi
-          echo "✓ Signing secret configured (present + >=32 chars)"
+          # Signing-secret value-validity is NOT asserted here — /health stays
+          # "boring OK" for NS-3. Covered at provisioning (set-secrets.sh) + the
+          # T4 /sponsor journey (CCR-PR567 re-run item 5, revised).
 
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)
