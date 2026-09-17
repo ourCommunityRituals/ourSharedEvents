@@ -30,9 +30,39 @@ import {
   incrementClick,
   isValidCodeShape,
   type ShortlinksEnv,
+  type ResolvedShortlink,
 } from '../lib/shortlinks';
+import {
+  readThroughResolution,
+  logCacheEvent,
+  shortlinkCacheKey,
+  type CacheResult,
+} from '../lib/resolution-cache';
 
-export type ShortlinkResolveEnv = ShortlinksEnv;
+export type ShortlinkResolveEnv = ShortlinksEnv & {
+  /** Optional read-cache for the code→destination resolution (OSE-963).
+   * Shortlink rows are write-once (only clicks mutate), so this is TTL-safe
+   * with no purge. Unbound → resolves straight from D1 (dark-launched). */
+  RESOLVE_CACHE_KV?: KVNamespace;
+};
+
+/**
+ * Resolve a shortlink code → destination, fronted by the KV read-cache. The
+ * click counter is deliberately NOT cached — only the immutable resolution
+ * (event_id / target_url) is. Emits the never-who CACHE_EVENT.
+ */
+export async function resolveShortlinkCached(
+  env: ShortlinkResolveEnv,
+  code: string
+): Promise<CacheResult<ResolvedShortlink>> {
+  const result = await readThroughResolution(
+    env.RESOLVE_CACHE_KV,
+    shortlinkCacheKey(code),
+    () => resolveCode(env, code)
+  );
+  logCacheEvent('shortlink', result.outcome);
+  return result;
+}
 
 export async function handleShortlinkResolve(
   request: Request,
@@ -53,7 +83,7 @@ export async function handleShortlinkResolve(
     });
   }
 
-  const row = await resolveCode(env, code);
+  const { value: row } = await resolveShortlinkCached(env, code);
   if (!row) {
     // Same 404 shape for unknown vs malformed so probing reveals nothing.
     return new Response(JSON.stringify({ ok: false, code: 'NOT_FOUND', error: 'Link not found' }), {

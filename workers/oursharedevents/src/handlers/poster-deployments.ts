@@ -22,6 +22,7 @@
 import { corsHeaders } from '../lib/cors';
 import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
+import { purgeResolution, deploymentCacheKey } from '../lib/resolution-cache';
 
 /**
  * Physical scan URL a poster QR encodes: `{origin}/q/{qr_token}`.
@@ -36,6 +37,10 @@ function scanUrlFor(origin: string, qrToken: string): string {
 
 export interface PosterDeploymentsEnv {
   DB?: D1Database;
+  /** Optional read-cache (OSE-963). Present → deactivation selectively purges
+   * the deployment's cached resolution so `/q/` stops resolving it immediately
+   * rather than waiting out the bounded TTL. */
+  RESOLVE_CACHE_KV?: KVNamespace;
 }
 
 function generateId(prefix: string): string {
@@ -348,15 +353,20 @@ export async function handleAdminDeletePosterDeployment(
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
   const now = new Date().toISOString();
-  const result = await env.DB.prepare(
-    'UPDATE poster_deployments SET is_active = 0, updated_at = ? WHERE id = ?'
+  // RETURNING qr_token so we can selectively purge the read-cache below — a
+  // deactivated poster must stop resolving on `/q/` at once, not after the TTL.
+  const deactivated = await env.DB.prepare(
+    'UPDATE poster_deployments SET is_active = 0, updated_at = ? WHERE id = ? RETURNING qr_token'
   )
     .bind(now, deploymentId)
-    .run();
+    .first<{ qr_token: string }>();
 
-  if ((result.meta?.changes ?? 0) === 0) {
+  if (!deactivated) {
     return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
   }
+
+  // Selective purge (never a blanket bust). No-op when the cache is unbound.
+  await purgeResolution(env.RESOLVE_CACHE_KV, deploymentCacheKey(deactivated.qr_token));
 
   return Response.json(
     { ok: true, id: deploymentId, is_active: false },

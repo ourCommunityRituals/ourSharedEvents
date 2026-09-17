@@ -73,6 +73,15 @@ bucket_name = "ose-uploads-dev"
 binding = "RATE_LIMIT_KV"
 id = "rate-limit-kv-dev-local"
 
+# ── Resolution read-cache KV (local dev) — OSE-963, DARK-LAUNCHED ──────────────
+# Fronts the /q/ and /s/ resolver D1 reads. UNBOUND until provisioned → the
+# resolvers fall through to D1 exactly as today (fail-open). To activate:
+#   wrangler kv namespace create resolve-cache-dev
+# then uncomment and fill id from: wrangler kv namespace list
+# [[kv_namespaces]]
+# binding = "RESOLVE_CACHE_KV"
+# id = "resolve-cache-kv-dev-local"
+
 # ── Observability: structured logs and traces ────────────────────
 # Enables Workers Logs in CF Dashboard (real-time + historical)
 # See: https://developers.cloudflare.com/workers/observability/
@@ -139,6 +148,13 @@ bucket_name = "ose-uploads-staging"
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "4418eb1709e24987bf86b1aa280725c2"
+
+# ── Resolution read-cache KV (staging) — OSE-963, DARK-LAUNCHED ────────────────
+# Provision: wrangler kv namespace create resolve-cache-staging --env staging
+# then uncomment + fill id. Unbound → resolvers fail-open to D1.
+# [[env.staging.kv_namespaces]]
+# binding = "RESOLVE_CACHE_KV"
+# id = "TODO-provision-resolve-cache-staging"
 
 # ── Cron trigger: data lifecycle (staging) ────────────────────────────────────
 # OSE-813 — Wrangler does NOT inherit [triggers] into named environments, the same
@@ -234,6 +250,13 @@ bucket_name = "ose-uploads-production"
 [[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "e44974e89361435e97b3cb79bd10abbb"
+
+# ── Resolution read-cache KV (production) — OSE-963, DARK-LAUNCHED ─────────────
+# Provision: wrangler kv namespace create resolve-cache-production --env production
+# then uncomment + fill id. Unbound → resolvers fail-open to D1.
+# [[env.production.kv_namespaces]]
+# binding = "RESOLVE_CACHE_KV"
+# id = "TODO-provision-resolve-cache-production"
 
 # ── Cron trigger: data lifecycle (production) ─────────────────────────────────
 # OSE-813 — see the staging block. Must be declared per-environment; not inherited.

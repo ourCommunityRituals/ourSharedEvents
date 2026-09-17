@@ -26,10 +26,45 @@
  */
 
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import {
+  readThroughResolution,
+  logCacheEvent,
+  deploymentCacheKey,
+  type CacheResult,
+} from '../lib/resolution-cache';
 
 export interface QrScanEnv {
   DB: D1Database;
   RATE_LIMIT_KV?: KVNamespace;
+  /** Optional read-cache for the deployment resolution (OSE-963). Unbound →
+   * every resolve falls through to D1, exactly as before (dark-launched). */
+  RESOLVE_CACHE_KV?: KVNamespace;
+}
+
+/**
+ * Resolve a qr_token → active poster deployment, fronted by the KV read-cache.
+ * The D1 read (the same active-only lookup this endpoint has always done) is the
+ * loader, so an unbound cache behaves identically to today. Emits the never-who
+ * CACHE_EVENT for hit-rate observability.
+ */
+export async function resolveDeploymentCached(
+  env: QrScanEnv,
+  qrToken: string
+): Promise<CacheResult<{ id: string; event_id: string }>> {
+  const db = env.DB;
+  const result = await readThroughResolution(
+    env.RESOLVE_CACHE_KV,
+    deploymentCacheKey(qrToken),
+    () =>
+      db
+        .prepare(
+          `SELECT id, event_id FROM poster_deployments WHERE qr_token = ? AND is_active = 1 LIMIT 1`
+        )
+        .bind(qrToken)
+        .first<{ id: string; event_id: string }>()
+  );
+  logCacheEvent('qr', result.outcome);
+  return result;
 }
 
 /** Hour-bucketed UTC timestamp string — privacy invariant for scans.anonymous_id. */
@@ -82,12 +117,9 @@ export async function handleQrScan(
     });
   }
 
-  // Resolve poster deployment by qr_token unique index.
-  const deployment = await env.DB.prepare(
-    `SELECT id, event_id FROM poster_deployments WHERE qr_token = ? AND is_active = 1 LIMIT 1`
-  )
-    .bind(qrToken)
-    .first<{ id: string; event_id: string }>();
+  // Resolve poster deployment by qr_token, fronted by the KV read-cache
+  // (OSE-963). Cache miss/unbound → the same active-only D1 lookup as before.
+  const { value: deployment } = await resolveDeploymentCached(env, qrToken);
 
   if (!deployment) {
     // Unknown or inactive token — safe to redirect home rather than 404.

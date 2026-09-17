@@ -119,4 +119,13 @@ export const NODE_SPECS = [
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
   'tests/what-external-link.spec.ts',
+
+  // OSE-963 / OSE-1090 (engine-hardening #2) — KV read-through cache for the
+  // scan/shortlink resolvers. Pure logic over a Map-backed KV stub (no
+  // cloudflare:test / D1 / SELF): fail-open, bounded TTL, negative cache,
+  // selective purge. Node-clean.
+  'tests/resolution-cache.spec.ts',
+  // Wiring: the two resolvers are fronted by the read-through (fake D1 + KV
+  // stub; no cloudflare:test / SELF). Node-clean.
+  'tests/resolution-cache-wiring.spec.ts',
 ];
