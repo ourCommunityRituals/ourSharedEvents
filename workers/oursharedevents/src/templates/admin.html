@@ -177,6 +177,10 @@
         background: var(--info);
         color: var(--bg);
       }
+      .badge.pending {
+        background: var(--warn);
+        color: var(--bg);
+      }
       /* Status panel: the one place an event's lifecycle is driven from. */
       .event-status-panel {
         display: flex;
@@ -3744,9 +3748,17 @@
             }
             const rows = items.map(function(s) {
               const dimStyle = s.is_active ? '' : ' class="spon-row-inactive"';
-              const statusBadge = s.is_active
-                ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
-                : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
+              // Surface sponsor_accepted so an organizer can see who has not yet
+              // accepted (ADR-019: pending sponsors do NOT render publicly until
+              // they accept via the home-link). CCR-PR567 re-run item 6.
+              const acc = s.sponsor_accepted;
+              const statusBadge = !s.is_active
+                ? '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>'
+                : acc === 0
+                ? '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Declined</span>'
+                : acc === null || acc === undefined
+                ? '<span class="badge pending" data-testid="spon-status-' + esc(s.id) + '">Pending accept</span>'
+                : '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>';
               const actions = s.is_active
                 ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
                   // Sponsor corner of the triangle: mint the sponsor's own page

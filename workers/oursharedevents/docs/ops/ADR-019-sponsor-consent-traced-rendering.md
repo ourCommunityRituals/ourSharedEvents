@@ -47,6 +47,16 @@ has not yet answered.
 - Pending and declined sponsors are invisible to attendees until the sponsor
   accepts. This is the intended consent-traced behavior; the `/sponsor` copy is
   now truthful.
+- **Organizer flow — the sponsor self-accepts, always** (PO decision, CCR-PR567
+  re-run item 6). When an organizer directly adds a sponsor (Path-1) or a covenant
+  promotes one, the placement is born PENDING — `sponsor_accepted` is NULL (0068
+  has no DEFAULT and the create INSERTs omit the column) — and does NOT render
+  until the sponsor accepts via their sponsor-home link. The organizer's action is
+  deliberately NOT a stand-in for the sponsor's consent (no auto-accept was added).
+  **Launch implication:** organizers must mint + send the home-link and get
+  sponsors to accept BEFORE posters print — a sponsor added last-minute will not
+  appear until they accept. The admin sponsors card shows the pending state so the
+  organizer can see who has not yet answered.
 - **Backfill:** none required. Phase-1 infrastructure is not yet deployed and
   there is no production sponsor data; the change is data-migration-free. Any
   future pre-existing NULL placements simply become hidden-until-accept, which
@@ -55,5 +65,8 @@ has not yet answered.
   the strict-sponsor / permissive-organizer split; the shared `seedSplitSponsor`
   helper defaults `sponsor_accepted = 1` (a seeded sponsor that should _render_
   is an _accepted_ sponsor), with an override for pending/declined fixtures.
-- Path 2 (template + geo auto-match) is unaffected here and remains
-  dark-at-launch per OSE-1301; when it lands it inherits the same strict gate.
+- Path 2 (template + geo auto-match) is DARK-AT-LAUNCH — now **enforced in code,
+  not just prose** (CCR-PR567 re-run): it is gated behind the off-by-default
+  `SPONSOR_GEO_MATCH_ENABLED` flag and carries a `brand_id` tenant fence, so a
+  non-consented / cross-brand template subscriber cannot render at launch. When it
+  is turned on later it inherits the same strict gate.
