@@ -26,7 +26,8 @@ export interface HealthEnv extends DataProviderEnv {
  * value, so the post-deploy health step can assert real validity, not presence.
  */
 export function isSigningSecretConfigured(secret: string | undefined | null): boolean {
-  return typeof secret === 'string' && secret.trim().length >= 32;
+  // detect-secrets false positive — a typeof guard, no value stored in this file.
+  return typeof secret === 'string' && secret.trim().length >= 32; // pragma: allowlist secret
 }
 
 export async function handleHealth(env: HealthEnv): Promise<Response> {
