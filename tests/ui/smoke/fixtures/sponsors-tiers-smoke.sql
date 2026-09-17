@@ -56,13 +56,22 @@ VALUES
 --   mid:     locality_band=0, tier='silver' -> 'mid'
 --   premium: locality_band=0, tier='gold'   -> 'premium'
 -- click_token / display_token are UNIQUE — distinct per placement.
+-- sponsor_accepted = 1 on every row: strict consent (ADR-019 / M4) renders a
+-- sponsor ONLY when accepted. These tier fixtures must be VISIBLE for the
+-- SharedReport class/depth tiers to have data; a pending (NULL) seed is hidden by
+-- the resolver, which is what failed T2/T4 on staging.
 INSERT OR IGNORE INTO sponsor_placement
   (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
-   click_token, display_token, is_active)
+   click_token, display_token, is_active, sponsor_accepted)
 VALUES
   ('spl_tiers_local',   'sp_tiers_local',   'evt_smoke_tiers', 'gold',   'organizer', 1, 1,
-   'ctok_tiers_local',   'dtok_tiers_local',   1),
+   'ctok_tiers_local',   'dtok_tiers_local',   1, 1),
   ('spl_tiers_mid',     'sp_tiers_mid',     'evt_smoke_tiers', 'silver', 'organizer', 1, 0,
-   'ctok_tiers_mid',     'dtok_tiers_mid',     1),
+   'ctok_tiers_mid',     'dtok_tiers_mid',     1, 1),
   ('spl_tiers_premium', 'sp_tiers_premium', 'evt_smoke_tiers', 'gold',   'organizer', 1, 0,
-   'ctok_tiers_premium', 'dtok_tiers_premium', 1);
+   'ctok_tiers_premium', 'dtok_tiers_premium', 1, 1);
+
+-- INSERT OR IGNORE skips rows a prior CI seed already wrote (pending), so force
+-- the accepted state on all three explicitly — idempotent, effective on re-seed.
+UPDATE sponsor_placement SET sponsor_accepted = 1
+ WHERE id IN ('spl_tiers_local', 'spl_tiers_mid', 'spl_tiers_premium');
