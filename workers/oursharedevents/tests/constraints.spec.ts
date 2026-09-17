@@ -90,7 +90,7 @@ describe('QA-1: Migration idempotency', () => {
     expect(names).toHaveLength(36);
   });
 
-  test('indexes remain at exactly 72 after idempotent re-run', async () => {
+  test('indexes remain at exactly 73 after idempotent re-run', async () => {
     // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
     // idx_anon_id_returns_venue_visit, idx_event_series_venue_state,
     // idx_event_series_venue_dow_hour, idx_events_series_start) + 1
