@@ -52,6 +52,9 @@ const EVENTS_HANDLER = join(
 );
 const ROUTER = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'router.ts');
 const HANDLERS_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'handlers');
+// CCR-PR567 re-run item 4 — lib/ reads tenant tables too (reporting corridor,
+// DataProvider seam, sponsor resolver, draft-expiry cron); scan it as well.
+const LIB_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'lib');
 
 /**
  * Multi-tenant tables. A SELECT against one of these from a handler must bind
@@ -77,8 +80,12 @@ const TENANT_TABLES = [
  * Adding an entry is a decision. Write the reason for the next reader, not for
  * the linter.
  */
+// Keys are dir-qualified (`handlers/<file>:line` / `lib/<file>:line`) because two
+// basenames collide across the scanned dirs (feature-flags.ts,
+// shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
+// re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'events.ts:335':
+  'handlers/events.ts:335':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -86,45 +93,108 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
     'resolveEventType helper + import land above it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
-  'portfolio-rollup.ts:148':
+  'handlers/portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
     'WHERE clause is interpolated, so the bind is invisible to a static scan.',
-  'bigquery.ts:83':
+  'handlers/bigquery.ts:83':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
     'from any request path.',
-  'bigquery.ts:268':
+  'handlers/bigquery.ts:268':
     'OER emission cron, second read: the 24h recent-events backup joined to the ' +
     'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
     'as bigquery.ts:83; not reachable from any request path. Previously passed the ' +
     'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
     'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
-  'sponsors.ts:671':
+  'handlers/sponsors.ts:671':
     'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
     'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
     'id-key exemption does not match it.',
   // ── sponsor_placement reads (added to TENANT_TABLES 2026-09-16, PR #567). ──
   // Each is a held-key or correlated read, not a cross-brand bulk enumeration.
-  'event-stats.ts:74':
+  'handlers/event-stats.ts:74':
     'COUNT of active placements for ONE event, keyed by `event_id = ?` (a ' +
     'caller-held event UUID). A per-event aggregate, not a cross-brand read — ' +
     'same held-key rationale as the single-event GET design note above.',
-  'portfolio-rollup.ts:165':
+  'handlers/portfolio-rollup.ts:165':
     'COUNT over `event_id IN (?, …)` where the id list is the brand-scoped ' +
     'event set assembled above (the same dynamic brandFilter that exempts ' +
     'portfolio-rollup.ts:148). Not a cross-brand read.',
-  'shared-report-read.ts:431':
+  'handlers/shared-report-read.ts:431':
     'Single-row existence check keyed by `sponsor_business_id = ? AND ' +
     'event_id = ?` (both caller-held ids) — verifies a sponsor belongs to an ' +
     'event before minting a token; not enumeration.',
-  'sponsors.ts:508':
+  'handlers/sponsors.ts:508':
     'Admin-flow cache invalidation: SELECT DISTINCT event_id for one sponsor, ' +
     'keyed by `sponsor_business_id = ?` (the held business id from a ' +
     'brand-scoped admin mutation). Not a public read, not cross-brand.',
-  'sponsors.ts:1253':
+  'handlers/sponsors.ts:1253':
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
+  // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
+  // The reporting corridor, the sponsor resolver and the draft-expiry cron read
+  // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand
+  // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
+  // a never-who geographic aggregate, or a correlated/transitively-scoped
+  // subselect — never a request-reachable per-brand row enumeration.
+  'lib/draft-expiry.ts:95':
+    'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
+    'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
+    'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
+  'lib/draft-expiry.ts:107':
+    'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
+    'brand by design, not request-reachable.',
+  'lib/shared-report.ts:157':
+    'materializeAnonIdReturns cron — `SELECT id FROM events WHERE status=active ' +
+    'AND end_date BETWEEN ? AND ?`. Cross-brand geographic baseline input; the ' +
+    'output is never-who anon-return aggregates. Not request-reachable.',
+  'lib/shared-report.ts:268':
+    'refreshCorridorBaselines cron — aggregates by `COALESCE(h3_res7, ' +
+    'corridor_id)` across brands. A corridor is a shared geography by design; ' +
+    'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
+  'lib/shared-report.ts:436':
+    'detectEventSeriesClusters cron — venue/day/hour event-count baseline across ' +
+    'brands, count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
+  'lib/shared-report.ts:471':
+    'Same cron — subselect `venue_id IN (SELECT id FROM events WHERE location=?)` ' +
+    '(a venue-geography key) for the confirmed/rejected series check. Cross-brand ' +
+    'geographic by design; never-who.',
+  'lib/shared-report.ts:495':
+    'Same cron, the `state=pending` twin of :471. Same venue-geography rationale.',
+  'lib/shared-report.ts:622':
+    'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
+    '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
+    'Never-who scan aggregate; not request-reachable.',
+  'lib/shared-report.ts:643': 'Same cron, the country-code bucket twin of :622. Same rationale.',
+  'lib/shared-report.ts:744':
+    'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
+    'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
+    'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
+  'lib/shared-report.ts:745':
+    'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
+  'lib/shared-report.ts:748':
+    'Same backfill statement, the EXISTS guard correlated by ' +
+    '`id = scan_aggregates.event_id`. Same rationale.',
+  'lib/shared-report-builder.ts:292':
+    'Corridor-neighbour COUNT keyed by `COALESCE(h3_res7, corridor_id) = ?` ' +
+    '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
+    'by design; never-who (COUNT DISTINCT anon_id_hash).',
+  'lib/shared-report-builder.ts:692':
+    'Series instances keyed by `series_id = ?` — the held series id of the ' +
+    'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
+  'lib/shared-report-export.ts:263':
+    'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
+    'anon_id_returns joined to event geo metadata, keyed by `computed_at > ?` ' +
+    'watermark across ALL brands. OER ingests every brand by design; never-who ' +
+    'anon hashes; not request-reachable.',
+  'lib/shared-report-export.ts:513':
+    'Same OER export, the event_series emission twin. Cross-brand by design.',
+  'lib/sponsor-resolver.ts:223':
+    'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
+    '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
+    'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +
+    '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration.',
 };
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {
@@ -218,11 +288,35 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
   // handler added next month is covered the day it is written rather than the
   // day someone remembers to add it here.
   // The one exemption the FROM/JOIN scan below honours: a tenant-table read is
-  // exempt from the brand_id requirement only when it binds a specific id
-  // (`id = ?`) — a single-row fetch by an id the caller already holds. A JOIN
-  // ON-clause correlated id-equality (`t.id = other.col`) is NOT a scope and
-  // must not exempt (CCR-PR567 M3). Self-tested below so the rule can't rot.
-  const KEYED_BY_ID_RE = /\b(\w+_id|id)\s*=\s*\?\d*/i;
+  // exempt from the brand_id requirement only when it is keyed by a HELD ENTITY
+  // id — the PK `id`, or a foreign key to another tenant entity's unguessable
+  // UUID PK (`event_id`, `sponsor_business_id`, …). Binding one reads a single
+  // held entity's rows — a fetch by an id the caller already holds — not a
+  // brand's rows in bulk.
+  //
+  // What is NOT a scope, and must NOT exempt:
+  //   - a JOIN ON-clause correlated id (`t.id = other.col`) — a row relation,
+  //     not a bind (CCR-PR567 M3);
+  //   - a SHARED-DIMENSION FK (`event_type_id`, `template_id`, `category_id`) —
+  //     binding it enumerates that dimension across EVERY brand (CCR-PR567 re-run
+  //     item 3). The earlier `\w+_id` wildcard exempted these, silently green-
+  //     lighting a cross-brand read.
+  // So the allowlist is explicit entity keys, not a `\w+_id` wildcard. A `\b`
+  // anchors the start so `some_event_id` / a trailing `_id` cannot partial-match;
+  // the safe default for an unknown key is "falls through to brand_id". Self-
+  // tested below so the rule can't rot.
+  const HELD_ID_KEY_COLUMNS = [
+    'id', // PK of any tenant table — one row
+    'event_id', // held event UUID — one event's rows
+    'sponsor_business_id', // held sponsor-business UUID — one sponsor's rows
+    'sponsor_placement_id', // held placement UUID
+    'placement_id', // alt placement key
+    'sponsor_id', // legacy/alt sponsor key
+  ];
+  const KEYED_BY_ID_RE = new RegExp(
+    '\\b(?:' + HELD_ID_KEY_COLUMNS.join('|') + ')\\s*=\\s*\\?\\d*',
+    'i'
+  );
 
   test('OSE-INV9 | meta | keyedById accepts a bound id-key but rejects a JOIN ON-clause correlated id', () => {
     // A read bound to a held id (`id = ?`) or FK (`event_id = ?`) reads ONE row
@@ -245,59 +339,93 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
       KEYED_BY_ID_RE.test('WHERE is_active = ?'),
       'a non-id predicate is not a scope key'
     ).toBe(false);
+    // CCR-PR567 re-run item 3 — the old `\w+_id` wildcard exempted ANY column
+    // ending in _id, including a SHARED-DIMENSION foreign key. But binding a
+    // shared dimension enumerates across brands: `WHERE event_type_id = ?`
+    // returns every brand's events of that type. Only a held ENTITY id (the PK
+    // `id`, or a FK to another tenant entity's unguessable UUID PK) reads one
+    // held entity's rows. Narrow to an explicit held-key allowlist so a
+    // dimension FK falls through to the brand_id requirement.
+    expect(
+      KEYED_BY_ID_RE.test('WHERE event_type_id = ?'),
+      'a shared-dimension FK (event_type_id) enumerates across brands — NOT a held-id scope'
+    ).toBe(false);
+    expect(
+      KEYED_BY_ID_RE.test('WHERE template_id = ?'),
+      'a shared-dimension FK (template_id) enumerates across brands — NOT a held-id scope'
+    ).toBe(false);
+    expect(
+      KEYED_BY_ID_RE.test('WHERE category_id = ?'),
+      'a shared-dimension FK (category_id) enumerates across brands — NOT a held-id scope'
+    ).toBe(false);
+    expect(
+      KEYED_BY_ID_RE.test('WHERE sponsor_business_id = ?'),
+      'a held sponsor-business UUID reads ONE sponsor, not a brand in bulk — exempt'
+    ).toBe(true);
   });
 
-  test('OSE-INV9 | security | query | EVERY handler SELECT on a tenant table binds brand_id', () => {
-    const handlers = readdirSync(HANDLERS_DIR).filter((f) => f.endsWith('.ts'));
-    expect(handlers.length, 'handlers directory must not be empty').toBeGreaterThan(0);
+  test('OSE-INV9 | security | query | EVERY handler + lib SELECT on a tenant table binds brand_id', () => {
+    // CCR-PR567 re-run item 4 — scan src/lib too, not just src/handlers. The
+    // reporting corridor (shared-report*.ts), the DataProvider seam, the sponsor
+    // resolver and the draft-expiry cron all read tenant tables from lib/, and a
+    // handlers-only scan was structurally blind to them. Keys are dir-qualified.
+    const SCAN_DIRS: Array<{ label: string; dir: string }> = [
+      { label: 'handlers', dir: HANDLERS_DIR },
+      { label: 'lib', dir: LIB_DIR },
+    ];
 
     const violations: string[] = [];
 
-    for (const file of handlers) {
-      const src = readFileSync(join(HANDLERS_DIR, file), 'utf8');
+    for (const { label, dir } of SCAN_DIRS) {
+      const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
+      expect(files.length, `${label} directory must not be empty`).toBeGreaterThan(0);
 
-      for (const table of TENANT_TABLES) {
-        // Match `FROM <table>` AND `JOIN <table>` (PR #567). A tenant table read
-        // through a JOIN is as much a read as through FROM — sponsor_placement /
-        // sponsor_business are routinely JOINed onto events across the sponsor
-        // handlers, and the FROM-only scan was blind to them. keyedById (below)
-        // accepts a bound id-key (`id = ?` / `event_id = ?`) but NOT a
-        // column-to-column ON-clause, so a JOIN read that scopes ONLY through
-        // its ON-clause and drops its brand/held-id clause genuinely goes red.
-        // (CCR-PR567 M3: the earlier "now goes red" claim was FALSE — the
-        // ON-clause `t.id = other.col` satisfied the old regex; the OER backup at
-        // bigquery.ts:268 that leaned on it is now an explicit exemption.)
-        const re = new RegExp('(?:FROM|JOIN)\\s+' + table + '\\b', 'gi');
-        for (const m of src.matchAll(re)) {
-          // Read a bounded window after the FROM, the way a reviewer does.
-          // Matching to a delimiter does not work here: these statements are
-          // built from backtick literals, single-quoted strings AND string
-          // concatenation, so a non-greedy scan to the next backtick runs past
-          // the statement and swallows unrelated code. A window is approximate
-          // but it is approximate in a way that is easy to reason about.
-          const window = src.slice(m.index!, m.index! + 400);
+      for (const file of files) {
+        const src = readFileSync(join(dir, file), 'utf8');
 
-          // Skip comments. `DELETE FROM events` inside a prose block explaining
-          // a cascade is not a query, and a doc comment listing pipeline
-          // phases is not a query either — both were false positives on the
-          // first run of this gate.
-          const lineStart = src.lastIndexOf('\n', m.index!) + 1;
-          const linePrefix = src.slice(lineStart, m.index!);
-          if (/^\s*(\*|\/\/|\/\*)/.test(linePrefix)) continue;
+        for (const table of TENANT_TABLES) {
+          // Match `FROM <table>` AND `JOIN <table>` (PR #567). A tenant table read
+          // through a JOIN is as much a read as through FROM — sponsor_placement /
+          // sponsor_business are routinely JOINed onto events across the sponsor
+          // handlers, and the FROM-only scan was blind to them. keyedById (below)
+          // accepts a bound id-key (`id = ?` / `event_id = ?`) but NOT a
+          // column-to-column ON-clause, so a JOIN read that scopes ONLY through
+          // its ON-clause and drops its brand/held-id clause genuinely goes red.
+          // (CCR-PR567 M3: the earlier "now goes red" claim was FALSE — the
+          // ON-clause `t.id = other.col` satisfied the old regex; the OER backup at
+          // bigquery.ts:268 that leaned on it is now an explicit exemption.)
+          const re = new RegExp('(?:FROM|JOIN)\\s+' + table + '\\b', 'gi');
+          for (const m of src.matchAll(re)) {
+            // Read a bounded window after the FROM, the way a reviewer does.
+            // Matching to a delimiter does not work here: these statements are
+            // built from backtick literals, single-quoted strings AND string
+            // concatenation, so a non-greedy scan to the next backtick runs past
+            // the statement and swallows unrelated code. A window is approximate
+            // but it is approximate in a way that is easy to reason about.
+            const window = src.slice(m.index!, m.index! + 400);
 
-          // Keyed by a unique id is not enumeration — the risk this invariant
-          // addresses is reading a tenant's rows in bulk, not reading one row
-          // whose id the caller already holds. Accept ONLY a bound `id = ?`; a
-          // correlated-column id-equality is a JOIN ON-clause relating rows,
-          // not a tenant scope (CCR-PR567 M3). See KEYED_BY_ID_RE + its self-test.
-          const keyedById = KEYED_BY_ID_RE.test(window);
-          const bindsBrand = /\bbrand_id\s*=\s*\?\d*/i.test(window);
+            // Skip comments. `DELETE FROM events` inside a prose block explaining
+            // a cascade is not a query, and a doc comment listing pipeline
+            // phases is not a query either — both were false positives on the
+            // first run of this gate.
+            const lineStart = src.lastIndexOf('\n', m.index!) + 1;
+            const linePrefix = src.slice(lineStart, m.index!);
+            if (/^\s*(\*|\/\/|\/\*)/.test(linePrefix)) continue;
 
-          if (!bindsBrand && !keyedById) {
-            const line = src.slice(0, m.index).split('\n').length;
-            const key = `${file}:${line}`;
-            if (BRAND_SCOPE_EXEMPT[key]) continue;
-            violations.push(`${key} — FROM ${table} with no brand_id and no id key`);
+            // Keyed by a unique id is not enumeration — the risk this invariant
+            // addresses is reading a tenant's rows in bulk, not reading one row
+            // whose id the caller already holds. Accept ONLY a bound `id = ?`; a
+            // correlated-column id-equality is a JOIN ON-clause relating rows,
+            // not a tenant scope (CCR-PR567 M3). See KEYED_BY_ID_RE + its self-test.
+            const keyedById = KEYED_BY_ID_RE.test(window);
+            const bindsBrand = /\bbrand_id\s*=\s*\?\d*/i.test(window);
+
+            if (!bindsBrand && !keyedById) {
+              const line = src.slice(0, m.index).split('\n').length;
+              const key = `${label}/${file}:${line}`;
+              if (BRAND_SCOPE_EXEMPT[key]) continue;
+              violations.push(`${key} — ${table} read with no brand_id and no held-id key`);
+            }
           }
         }
       }
