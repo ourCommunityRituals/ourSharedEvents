@@ -2140,6 +2140,29 @@ jobs:
   # to ephemeral GitHub-hosted runners unchanged. The retired-job invariant is
   # regression-locked by tests/unit/security/post-execution-integrity.test.js.
   # ============================================================================
+  # ── Stage 2 finale — adversarial → closing security ────────────────────────
+  # The sequenced tail of the two-stage model: after the real-env functional tier
+  # (T4), run the red-team suite against the DEPLOYED surface (T5 adversarial),
+  # then a post-test integrity scan (T6 closing — nothing injected during
+  # testing). Defined in a REUSABLE workflow (workflow_call) so every OCR product
+  # and OA/OSM white-label fork runs the identical finale from one source —
+  # "infra-wide by default", promotable to an org-level `.github` ref by tag.
+  # Sequencing is preserved: this caller `needs: functional-staging`, and T6
+  # `needs: red-team-staging` inside the reusable file. Runs only when the staging
+  # chain ran and T4 is green (the surface must exist and be sound before we poke
+  # it). CodeQL + ZAP stay in their own workflow files by design.
+  security-finale:
+    name: 'Stage 2 — Security Finale'
+    needs: [security, gate, deploy-staging, functional-staging]
+    if: |
+      always() &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      needs.deploy-staging.result == 'success' &&
+      needs.functional-staging.result == 'success'
+    uses: ./.github/workflows/security-finale.yml
+    secrets: inherit
+
   gate-execution-reconciler:
     name: 'Gate-execution reconciler'
     # OSE-1255 (Detect model): assert every gate EXPECTED for THIS trigger actually
@@ -2157,6 +2180,7 @@ jobs:
       - contract-staging
       - smoke-staging
       - functional-staging
+      - security-finale
       - deploy-production
       - smoke-production
     if: always()
@@ -2200,7 +2224,7 @@ jobs:
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, security-finale, deploy-production, smoke-production]
     if: always()
     steps:
       - name: Summary
@@ -2215,6 +2239,7 @@ jobs:
           echo "| T2 Contract STG (Bruno) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T5+T6 Security Finale (adversarial → closing) | security-finale | \`${{ needs.security-finale.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
