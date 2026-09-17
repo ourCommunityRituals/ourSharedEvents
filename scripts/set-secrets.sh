@@ -14,8 +14,11 @@
 #   - Cloudflare Worker already created for the target environment
 #
 # Required secrets:
-#   ADMIN_KEY                 — Bearer token for /admin routes (openssl rand -hex 32)
-#   FORMS_ENCRYPTION_KEY      — AES-GCM key for email signup encryption (min 32 chars)
+#   ADMIN_KEY                    — Bearer token for /admin routes (openssl rand -hex 32)
+#   FORMS_ENCRYPTION_KEY         — AES-GCM key for email signup encryption (min 32 chars)
+#   SHARED_REPORT_SIGNING_SECRET — HMAC key for SharedReport + sponsor-home signed
+#                                  links (>=32 chars). FAIL-CLOSED: unset -> the whole
+#                                  /sponsor corner and every /sharedReport link is inert.
 #
 # Ref: E2E-LAUNCH.md Part 5
 
@@ -50,6 +53,7 @@ fi
 SECRETS=(
   "ADMIN_KEY"
   "FORMS_ENCRYPTION_KEY"
+  "SHARED_REPORT_SIGNING_SECRET"
 )
 
 echo "════════════════════════════════════════════════════════════"

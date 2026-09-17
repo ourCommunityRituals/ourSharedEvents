@@ -998,6 +998,25 @@ jobs:
           VERSION="stg-${SHORT_SHA}-$(date -u +%Y%m%d)"
           sed -i "s/WORKER_BUILD_VERSION = \"stg-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
+      - name: Gate — signing secret provisioned (fail-closed corner)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # SHARED_REPORT_SIGNING_SECRET is fail-closed: without it the entire
+          # /sponsor corner and all /sharedReport signed links deploy SILENTLY
+          # INERT. verify-secrets.js only checks GitHub-Actions secrets, not
+          # wrangler secrets — this is the only gate that catches an unset
+          # signing secret before it ships (CCR-PR567 H2).
+          OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the staging worker — the /sponsor + /sharedReport corners would deploy inert. Provision it: bash scripts/set-secrets.sh staging"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on the staging worker."
+
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1922,6 +1941,23 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME:-prod-$(git rev-parse --short HEAD)}"
           sed -i "s/WORKER_BUILD_VERSION = \"prod-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
+
+      - name: Gate — signing secret provisioned (fail-closed corner)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # SHARED_REPORT_SIGNING_SECRET is fail-closed on production too — an
+          # unset secret ships a green deploy whose /sponsor + /sharedReport
+          # corners are silently inert (CCR-PR567 H2).
+          OUT="$(npx wrangler secret list --env production 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the production worker — the /sponsor + /sharedReport corners would deploy inert. Provision it: bash scripts/set-secrets.sh production"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on the production worker."
 
       - name: Deploy
         env:
