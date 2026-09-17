@@ -17,6 +17,12 @@ const pairs = [
   ['info on bg (dark)',        '#3D9BFF', darkBg],
   ['success on bg (dark)',     '#34D399', darkBg],
   ['success on surface (dark)','#34D399', darkSurf],
+  // Status-pill text on the neutral --border fill (sponsor-home .done/.declined,
+  // CCR-PR567 L3c). The colored pills (soon/pending/live = --bg on accent/warn/
+  // success) are already covered: contrast is symmetric, so those equal the
+  // gated "<color> on bg" pairs above.
+  ['pill text on border (dark)',  '#F0F4F8', '#2A3D5A'], // --text on --border(navy-700)
+  ['pill text on border (light)', '#162945', '#D4E0ED'], // --text on --border(light-200)
   // Light mode — darker variants
   ['text on bg (light)',       '#162945', lightBg],
   ['muted on bg (light)',      '#4A6882', lightBg],
