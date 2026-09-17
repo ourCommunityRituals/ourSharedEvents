@@ -128,7 +128,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Admin-flow cache invalidation: SELECT DISTINCT event_id for one sponsor, ' +
     'keyed by `sponsor_business_id = ?` (the held business id from a ' +
     'brand-scoped admin mutation). Not a public read, not cross-brand.',
-  'handlers/sponsors.ts:1253':
+  // Line-sensitive: shifted 1253→1259 when create began returning placement_id
+  // (the response block grew). Bump on any edit above this read in sponsors.ts.
+  'handlers/sponsors.ts:1259':
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
