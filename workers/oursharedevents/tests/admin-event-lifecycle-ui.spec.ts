@@ -119,8 +119,11 @@ describe('status panel — the only lifecycle driver', () => {
   test('Go live from a draft is two honest hops (ready, then verify), shared by panel and wizard', async () => {
     const html = await adminHtml();
     expect(html).toContain('window.goLiveFromDraft = async function (id)');
+    // A DRAFT is two honest hops: draft -> ready, then (from = ready) -> active.
+    // ARCHIVED reaches active directly via the same `transition(id, from, 'active')`
+    // (archived -> ready is INVALID; CCR-PR567 L1 revived the "Go live again" button).
     expect(html).toMatch(
-      /goLiveFromDraft[\s\S]{0,600}transition\(id, from, 'ready'\)[\s\S]{0,400}transition\(id, 'ready', 'active'\)/
+      /goLiveFromDraft[\s\S]{0,600}transition\(id, 'draft', 'ready'\)[\s\S]{0,400}transition\(id, from, 'active'\)/
     );
   });
 
