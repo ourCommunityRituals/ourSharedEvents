@@ -1338,7 +1338,7 @@ async function fetchEventPageSocialData(
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, 1) = 1
-                AND COALESCE(sp.sponsor_accepted, 1) = 1
+                AND sp.sponsor_accepted = 1
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

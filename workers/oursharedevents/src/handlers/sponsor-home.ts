@@ -16,9 +16,10 @@
  * (admin sponsors card) and the report already gives each side its own view.
  * What was missing was the sponsor's SIDE OF THE TABLE: a screen to come back
  * to. `sponsor_placement.sponsor_accepted` (migration 0068) was designed for
- * exactly this and nothing could set it. Now the resolver's
- * `COALESCE(sp.sponsor_accepted, 1) = 1` gate (which already drops declined
- * placements from every public surface) has a hand on the switch.
+ * exactly this and nothing could set it. Now the resolver's strict
+ * `sponsor_accepted = 1` gate (ADR-019, "silence != consent": pending NULL and
+ * declined 0 both stay off every public surface until the sponsor accepts here)
+ * has a hand on the switch.
  *
  * SECURITY POSTURE.
  *   - No login. A signed, expiring, sponsor-scoped bearer (lib/sponsor-home-auth)

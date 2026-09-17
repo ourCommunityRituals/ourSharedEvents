@@ -29,6 +29,18 @@ export interface SeedSponsorOpts {
   logoUrl?: string | null;
   /** → sponsor_placement.is_active (default 1). */
   isActive?: number;
+  /**
+   * → sponsor_placement.organizer_accepted (default 1). The resolver keeps the
+   * organizer side permissive (COALESCE …,1), so this rarely matters.
+   */
+  organizerAccepted?: number | null;
+  /**
+   * → sponsor_placement.sponsor_accepted (default 1). Strict per ADR-019
+   * ("silence != consent"): a sponsor renders publicly ONLY when this is 1, so
+   * a seeded sponsor that should RENDER must be accepted. Pass null/0 to seed a
+   * pending/declined placement.
+   */
+  sponsorAccepted?: number | null;
   /** → sponsor_placement.locality_band (default 0). */
   isLocal?: number;
   clickToken?: string | null;
@@ -98,8 +110,9 @@ export async function seedSplitSponsor(db: D1Database, opts: SeedSponsorOpts): P
       .prepare(
         `INSERT INTO sponsor_placement
            (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
-            locality_band, click_token, display_token, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+            locality_band, click_token, display_token, is_active,
+            organizer_accepted, sponsor_accepted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         opts.placementId ?? `spl_${id}`,
@@ -112,6 +125,8 @@ export async function seedSplitSponsor(db: D1Database, opts: SeedSponsorOpts): P
         opts.clickToken ?? null,
         opts.displayToken ?? null,
         opts.isActive ?? 1,
+        opts.organizerAccepted ?? 1,
+        opts.sponsorAccepted ?? 1,
         createdAt,
         now
       ),

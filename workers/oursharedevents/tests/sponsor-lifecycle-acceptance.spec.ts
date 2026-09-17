@@ -11,11 +11,16 @@
  *      it on Path 1. Now deletion is sponsor_business.is_active = 0, and
  *      BOTH resolver paths must honour it.
  *
- *   2. ACCEPTANCE IS TWO-SIDED AND NULL-PERMISSIVE. A placement is hidden
- *      only when a side has actively REJECTED it (accepted = 0). NULL means
- *      "not answered yet" and must NOT hide — that is what makes the
- *      migration backfill-free. Either side's rejection hides; a rejection
- *      is durable against Path 2 re-proposal.
+ *   2. ACCEPTANCE IS TWO-SIDED AND ASYMMETRIC (ADR-019, "silence != consent").
+ *      SPONSOR side is STRICT: a placement renders publicly only when
+ *      sponsor_accepted = 1 — NULL ("not answered yet") and 0 (rejected) both
+ *      hide, because a sponsor's silence is not consent to appear on a public
+ *      surface. ORGANIZER side stays PERMISSIVE: COALESCE(organizer_accepted,
+ *      1) = 1, so only an explicit organizer rejection (0) hides — the
+ *      organizer created the placement, so their silence IS consent. Either
+ *      side still hides on rejection; a rejection is durable against Path 2
+ *      re-proposal. (Was NULL-permissive on both sides; flipped per CCR-PR567
+ *      M4 + ADR-019.)
  *
  * Harness mirrors poster-attribution-kanon-floor.spec.ts: apply migrations
  * exactly once per isolate, seed directly, run the real resolver.
@@ -105,11 +110,11 @@ beforeEach(async () => {
 });
 
 describe('0068 — business lifecycle governs both resolver paths', () => {
-  test('an active business with an unanswered placement resolves (NULL does not hide)', async () => {
+  test('an unanswered SPONSOR (NULL) does NOT render — silence != consent (ADR-019)', async () => {
     await seedBusiness('sb-live');
-    await seedPlacement('sp-live', 'sb-live');
+    await seedPlacement('sp-live', 'sb-live'); // organizer NULL, sponsor NULL
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
-    expect(resolved.map((s) => s.id)).toEqual(['sb-live']);
+    expect(resolved).toEqual([]);
   });
 
   test('a soft-deleted business is gone from Path 1 even with an active placement', async () => {
@@ -140,5 +145,19 @@ describe('0068 — two-sided acceptance', () => {
     await seedPlacement('sp-both', 'sb-both', { organizer: 1, sponsor: 1 });
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
     expect(resolved.map((s) => s.id)).toEqual(['sb-both']);
+  });
+
+  test('sponsor silence hides even when the organizer accepted (strict sponsor consent)', async () => {
+    await seedBusiness('sb-spnull');
+    await seedPlacement('sp-spnull', 'sb-spnull', { organizer: 1, sponsor: null });
+    const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
+    expect(resolved).toEqual([]);
+  });
+
+  test('organizer silence stays permissive: sponsor accepted + organizer NULL renders', async () => {
+    await seedBusiness('sb-orgnull');
+    await seedPlacement('sp-orgnull', 'sb-orgnull', { organizer: null, sponsor: 1 });
+    const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
+    expect(resolved.map((s) => s.id)).toEqual(['sb-orgnull']);
   });
 });
