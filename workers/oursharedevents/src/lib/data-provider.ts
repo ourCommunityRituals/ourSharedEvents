@@ -275,8 +275,14 @@ export class DataProvider {
               lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active'
-       ORDER BY start_date ASC`
+       ORDER BY start_date ASC
+       LIMIT 1000`
     )
+      // LIMIT 1000 (CCR-PR567 L3d): a worst-case guard so the uncached,
+      // server-rendered /events discovery (applyDiscoveryFilters runs O(N)
+      // in-Worker over this set) can't read an unbounded result. Far above any
+      // realistic single-brand active+published count; the real scale fix is
+      // pushing the when/q filters into SQL, deferred until a brand approaches it.
       .bind(brand)
       .all<MockEvent>();
     return results ?? [];
