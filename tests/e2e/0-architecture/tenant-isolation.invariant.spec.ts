@@ -93,6 +93,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
     'from any request path.',
+  'bigquery.ts:268':
+    'OER emission cron, second read: the 24h recent-events backup joined to the ' +
+    'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
+    'as bigquery.ts:83; not reachable from any request path. Previously passed the ' +
+    'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
+    'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
   'sponsors.ts:671':
     'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
     'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
@@ -211,6 +217,36 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
   // This scans every handler instead. It is the property, not the subject, so a
   // handler added next month is covered the day it is written rather than the
   // day someone remembers to add it here.
+  // The one exemption the FROM/JOIN scan below honours: a tenant-table read is
+  // exempt from the brand_id requirement only when it binds a specific id
+  // (`id = ?`) — a single-row fetch by an id the caller already holds. A JOIN
+  // ON-clause correlated id-equality (`t.id = other.col`) is NOT a scope and
+  // must not exempt (CCR-PR567 M3). Self-tested below so the rule can't rot.
+  const KEYED_BY_ID_RE = /\b(\w+_id|id)\s*=\s*\?\d*/i;
+
+  test('OSE-INV9 | meta | keyedById accepts a bound id-key but rejects a JOIN ON-clause correlated id', () => {
+    // A read bound to a held id (`id = ?`) or FK (`event_id = ?`) reads ONE row
+    // / one event, not a brand's rows in bulk — non-enumeration, accepted (the
+    // object-scoping gap is OSE-1080). A JOIN ON-clause (`t.id = other.col`) is
+    // column-to-column row relation, not a tenant scope, and must NOT exempt.
+    expect(KEYED_BY_ID_RE.test('WHERE e.id = ?'), 'single-row fetch by bound id is exempt').toBe(
+      true
+    );
+    expect(KEYED_BY_ID_RE.test('WHERE e.id = ?1'), 'numbered bind is exempt').toBe(true);
+    expect(
+      KEYED_BY_ID_RE.test('WHERE sp.event_id = ?'),
+      'a bound FK scope (event_id = ?) reads one event, not a brand in bulk'
+    ).toBe(true);
+    expect(
+      KEYED_BY_ID_RE.test('JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id'),
+      'a JOIN ON-clause is a row relation, not a tenant scope — must NOT exempt'
+    ).toBe(false);
+    expect(
+      KEYED_BY_ID_RE.test('WHERE is_active = ?'),
+      'a non-id predicate is not a scope key'
+    ).toBe(false);
+  });
+
   test('OSE-INV9 | security | query | EVERY handler SELECT on a tenant table binds brand_id', () => {
     const handlers = readdirSync(HANDLERS_DIR).filter((f) => f.endsWith('.ts'));
     expect(handlers.length, 'handlers directory must not be empty').toBeGreaterThan(0);
@@ -224,10 +260,13 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
         // Match `FROM <table>` AND `JOIN <table>` (PR #567). A tenant table read
         // through a JOIN is as much a read as through FROM — sponsor_placement /
         // sponsor_business are routinely JOINed onto events across the sponsor
-        // handlers, and the FROM-only scan was blind to them. Every current JOIN
-        // read already carries brand_id or an id-key in its window, so this
-        // strengthens coverage without adding exemptions; a future JOIN read that
-        // drops its brand clause now goes red.
+        // handlers, and the FROM-only scan was blind to them. keyedById (below)
+        // accepts a bound id-key (`id = ?` / `event_id = ?`) but NOT a
+        // column-to-column ON-clause, so a JOIN read that scopes ONLY through
+        // its ON-clause and drops its brand/held-id clause genuinely goes red.
+        // (CCR-PR567 M3: the earlier "now goes red" claim was FALSE — the
+        // ON-clause `t.id = other.col` satisfied the old regex; the OER backup at
+        // bigquery.ts:268 that leaned on it is now an explicit exemption.)
         const re = new RegExp('(?:FROM|JOIN)\\s+' + table + '\\b', 'gi');
         for (const m of src.matchAll(re)) {
           // Read a bounded window after the FROM, the way a reviewer does.
@@ -248,9 +287,10 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
 
           // Keyed by a unique id is not enumeration — the risk this invariant
           // addresses is reading a tenant's rows in bulk, not reading one row
-          // whose id the caller already holds. Accept a bind (`id = ?`) or a
-          // correlated column (`id = other.event_id`).
-          const keyedById = /\bid\s*=\s*(\?\d*|[A-Za-z_][\w.]*)/i.test(window);
+          // whose id the caller already holds. Accept ONLY a bound `id = ?`; a
+          // correlated-column id-equality is a JOIN ON-clause relating rows,
+          // not a tenant scope (CCR-PR567 M3). See KEYED_BY_ID_RE + its self-test.
+          const keyedById = KEYED_BY_ID_RE.test(window);
           const bindsBrand = /\bbrand_id\s*=\s*\?\d*/i.test(window);
 
           if (!bindsBrand && !keyedById) {
