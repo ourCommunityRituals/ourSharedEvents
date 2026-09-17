@@ -5458,9 +5458,12 @@
 
       // ── Status panel: the lifecycle driver ──
       // draft → ready → live is the state machine in domain/event-state.ts.
-      // ready → live and live → ready go through verify-qr / unverify-qr (they
-      // also flip qr_verified); everything else is PUT status, which now
-      // enforces the same transition table server-side.
+      // ready → live and live → ready go through verify-qr / unverify-qr;
+      // everything else — INCLUDING the archived → live "Go live again" edge — is
+      // PUT status. verify-qr is NOT the single door into `active`: PUT status
+      // enforces the same transition table AND couples qr_verified to the target
+      // state server-side (events.ts), so `active ⟺ qr_verified=1` holds no matter
+      // which door is used.
       window.friendlyStatus = function (s) {
         return { draft: 'Draft', ready: 'Ready', active: 'Live', archived: 'Archived' }[s] || s || 'Draft';
       };

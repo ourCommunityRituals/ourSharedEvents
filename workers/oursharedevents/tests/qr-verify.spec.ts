@@ -181,3 +181,60 @@ describe('QR Unverify — POST /api/v2/admin/events/:id/unverify-qr', () => {
     expect(body.event.qrVerified).toBe(false);
   });
 });
+
+// ── PUT status keeps qr_verified in lockstep (CCR-PR567 re-run item 2) ────────
+// verify-qr / unverify-qr are the admin's QR-verified edges, but they are NOT the
+// only door to `active`: PUT /admin/events/:id moves archived -> active directly
+// (the L1 "Go live again" edge) and active -> ready/archived. Before this fix that
+// PUT was a bare UPDATE that never touched qr_verified, so an event archived while
+// qr_verified=0 could reach `active` with qr_verified=0 — violating the invariant
+// `active <=> qr_verified=1`. The PUT write now couples qr_verified to the target
+// state in BOTH directions, so the invariant holds no matter which door is used.
+
+describe('PUT status couples qr_verified to the target state (item 2)', () => {
+  const PUT_HEADERS = { ...ADMIN_HEADERS, 'Content-Type': 'application/json' };
+  async function setQr(id: string, v: number): Promise<void> {
+    await db().prepare('UPDATE events SET qr_verified = ? WHERE id = ?').bind(v, id).run();
+  }
+  async function readQr(id: string): Promise<number | null> {
+    const row = await db()
+      .prepare('SELECT qr_verified FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ qr_verified: number }>();
+    return row ? row.qr_verified : null;
+  }
+  async function putStatus(id: string, body: Record<string, unknown>): Promise<Response> {
+    return SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: PUT_HEADERS,
+      body: JSON.stringify(body),
+    });
+  }
+
+  test('archived -> active via PUT sets qr_verified = 1 (the "Go live again" edge)', async () => {
+    const id = `qr-put-archived-active-${Date.now()}`;
+    await insertEvent(id, 'archived');
+    await setQr(id, 0); // archived while never QR-verified
+    const res = await putStatus(id, { status: 'active' });
+    expect(res.status).toBe(200);
+    expect(await readQr(id)).toBe(1);
+  });
+
+  test('active -> ready via PUT resets qr_verified = 0', async () => {
+    const id = `qr-put-active-ready-${Date.now()}`;
+    await insertEvent(id, 'active');
+    await setQr(id, 1);
+    const res = await putStatus(id, { status: 'ready' });
+    expect(res.status).toBe(200);
+    expect(await readQr(id)).toBe(0);
+  });
+
+  test('a field-only PUT (no status) leaves qr_verified untouched', async () => {
+    const id = `qr-put-fieldonly-${Date.now()}`;
+    await insertEvent(id, 'active');
+    await setQr(id, 1);
+    const res = await putStatus(id, { title: 'Renamed but still live' });
+    expect(res.status).toBe(200);
+    expect(await readQr(id)).toBe(1); // no lifecycle move → not touched
+  });
+});

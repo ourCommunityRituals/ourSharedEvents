@@ -927,6 +927,20 @@ export async function handleUpdateEvent(
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
 
+  // CCR-PR567 re-run item 2 — keep qr_verified in lockstep with the lifecycle.
+  // verify-qr / unverify-qr couple qr_verified to status, but PUT status is a
+  // second door into `active` (archived → active, the L1 "Go live again" edge)
+  // and out of it (active → ready/archived). A bare status UPDATE left qr_verified
+  // stale, so an event could be `active` with qr_verified=0, or `ready` with
+  // qr_verified=1. Couple it here too — ONLY on an explicit lifecycle move (a
+  // field-only PUT never touches it) — so the invariant `active ⟺ qr_verified=1`
+  // holds no matter which door is used. (Invalid transitions still 409 below,
+  // before the UPDATE runs, so this push is discarded on a rejected move.)
+  if (typeof body.status === 'string') {
+    sets.push('qr_verified = ?');
+    values.push(body.status === 'active' ? 1 : 0);
+  }
+
   sets.push('updated_at = ?');
   values.push(new Date().toISOString());
   values.push(eventId);
