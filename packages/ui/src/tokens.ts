@@ -119,7 +119,9 @@ export const semanticDark = {
   '--warn': 'var(--ocr-amber-400)', // caution / pending — amber (OSE-1328)
   '--info': 'var(--ocr-blue-500)', // informational — blue, lighter than --accent (OSE-1328)
   '--success': 'var(--ocr-green-400)', // done / accepted / completed — emerald (OSE-1328)
-  '--on-accent': 'var(--ocr-light-100)', // #FFFFFF — text on solid --accent (blue) surfaces
+  // Dark --accent (#1785FB) is light-ish, so text on it must be DARK: white was
+  // 3.63:1 (sub-AA); navy-950 is 4.92:1 — full AA (CCR-PR567 re-run item 5).
+  '--on-accent': 'var(--ocr-navy-950)', // #0F1824 — text on solid --accent (blue) surfaces
 } as const;
 
 // ── Tier 2: Light mode override ───────────────────────────────────────────────

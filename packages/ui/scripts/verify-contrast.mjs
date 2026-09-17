@@ -23,6 +23,11 @@ const pairs = [
   // gated "<color> on bg" pairs above.
   ['pill text on border (dark)',  '#F0F4F8', '#2A3D5A'], // --text on --border(navy-700)
   ['pill text on border (light)', '#162945', '#D4E0ED'], // --text on --border(light-200)
+  // --on-accent: text on solid --accent buttons/CTAs (CCR-PR567 re-run item 5).
+  // Asymmetric: dark --accent (#1785FB, light-ish) needs DARK text; light
+  // --accent (#0057D6, dark) needs WHITE text.
+  ['on-accent (dark):  navy-950 on --accent',  '#0F1824', '#1785FB'],
+  ['on-accent (light): white on --accent',     '#FFFFFF', '#0057D6'],
   // Light mode — darker variants
   ['text on bg (light)',       '#162945', lightBg],
   ['muted on bg (light)',      '#4A6882', lightBg],

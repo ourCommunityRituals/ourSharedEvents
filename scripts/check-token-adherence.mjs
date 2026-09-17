@@ -56,7 +56,7 @@ const BASELINE = {
   // these needs the STATUS/TIER TOKEN decision (add --success/--on-accent/tier +
   // warn/info tint tokens to @ocr/ui vs. treat as theme-invariant status hues) —
   // admin's rich palette is the strongest driver of that decision. Chrome done.
-  'admin.html': 91,
+  'admin.html': 90,
   // sponsor-home.html (Epic TRIANGLE, PR #567): born fully tokenised — status
   // pills route to --success / --warn / --info / --accent with var(--bg) inverse
   // text (all AA-verified in packages/ui verify-contrast.mjs), messages to
