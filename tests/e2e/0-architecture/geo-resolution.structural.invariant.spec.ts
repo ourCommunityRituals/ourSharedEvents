@@ -42,6 +42,12 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
 const WORKER_ROOT = join(REPO_ROOT, 'workers', 'oursharedevents');
 const MIGRATIONS_DIR = join(WORKER_ROOT, 'migrations');
 const RESOLVER = join(WORKER_ROOT, 'src', 'lib', 'sponsor-resolver.ts');
+// Every public sponsor render path that carries the strict-consent gate (ADR-019).
+const PUBLIC_CONSENT_PATHS = [
+  RESOLVER,
+  join(WORKER_ROOT, 'src', 'handlers', 'pages.ts'),
+  join(WORKER_ROOT, 'src', 'handlers', 'sponsors.ts'),
+];
 
 test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape lock', () => {
   // ── Schema atoms the resolution engine reads ────────────────────────────────
@@ -126,34 +132,65 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     );
   });
 
-  test('OSE-INV2 | resolver | two-sided acceptance hides only REJECTED placements (0068)', () => {
+  test('OSE-INV2 | resolver | acceptance is ASYMMETRIC: organizer permissive, sponsor strict (ADR-019)', () => {
     const src = readFileSync(RESOLVER, 'utf8');
-    // A placement is hidden only when a side has REJECTED it (accepted = 0);
-    // NULL (unanswered) does NOT hide — so the guard COALESCEs to 1. If this
-    // flips to `= 1` without the COALESCE, every legacy/unanswered placement
-    // silently disappears.
+    // ADR-019 "silence != consent" (CCR-PR567 M4). The ORGANIZER side stays
+    // PERMISSIVE — they created the placement, so unanswered (NULL) must not
+    // hide → COALESCE(...organizer_accepted,1)=1. The SPONSOR side is STRICT —
+    // a placement renders publicly only when the sponsor explicitly accepted
+    // (= 1); NULL (pending) and 0 (declined) both hide. A permissive COALESCE on
+    // the sponsor side would re-open the pre-ADR-019 non-consented-render leak.
     expect(
       src,
-      'organizer acceptance must be COALESCE(sp.organizer_accepted, 1) = 1 — unanswered must not hide'
+      'organizer acceptance must be COALESCE(sp.organizer_accepted, 1) = 1 — organizer silence is consent'
     ).toMatch(/COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*1\s*\)\s*=\s*1/i);
     expect(
       src,
-      'sponsor acceptance must be COALESCE(sp.sponsor_accepted, 1) = 1 — unanswered must not hide'
-    ).toMatch(/COALESCE\s*\(\s*sp\.sponsor_accepted\s*,\s*1\s*\)\s*=\s*1/i);
+      'sponsor acceptance must be STRICT sp.sponsor_accepted = 1 (ADR-019: sponsor silence is NOT consent)'
+    ).toMatch(/\bsp\.sponsor_accepted\s*=\s*1/i);
+    expect(
+      src,
+      'sponsor side must NOT be COALESCE-permissive — that was the pre-ADR-019 leak'
+    ).not.toMatch(/COALESCE\s*\(\s*sp\.sponsor_accepted\s*,\s*1\s*\)/i);
   });
 
-  test('OSE-INV2 | resolver | Path 2 Template+Geo is gated on template_id and joins sponsor_event_types', () => {
+  test('OSE-INV2 | resolver | Path 2 is dark-at-launch (flag-gated) + template-gated + brand-fenced', () => {
     const src = readFileSync(RESOLVER, 'utf8');
-    // Path 2 only runs when the event has a template — a template-less event
-    // resolves direct placements only.
-    expect(src, 'Path 2 must be gated on event.template_id').toMatch(
-      /if\s*\(\s*event\.template_id\s*\)/
+    // Path 2 (template+geo auto-match) is OFF by default (ADR-019 dark-at-launch,
+    // CCR-PR567 M4): it must be gated on BOTH the geoMatchEnabled flag AND the
+    // event's template, so a non-consented template subscriber never renders
+    // publicly at launch.
+    expect(src, 'Path 2 must be gated on the geoMatchEnabled flag AND event.template_id').toMatch(
+      /if\s*\(\s*opts\.geoMatchEnabled\s*&&\s*event\.template_id\s*\)/
     );
     // The subscription join + the template filter are Path 2's core.
     expect(src, 'Path 2 must join sponsor_event_types').toMatch(/JOIN\s+sponsor_event_types/i);
     expect(src, 'Path 2 must filter on the event template via st.template_id = ?').toMatch(
       /st\.template_id\s*=\s*\?/i
     );
+    // Tenant fence (INV #9): a template subscriber from another brand must not
+    // render on this brand's event — the Path 2 query binds sb.brand_id.
+    expect(src, 'Path 2 must fence on sb.brand_id = ? (tenant isolation)').toMatch(
+      /sb\.brand_id\s*=\s*\?/i
+    );
+  });
+
+  test('OSE-INV2 | consent | strict sponsor_accepted = 1 on EVERY public render path; no COALESCE regression (ADR-019)', () => {
+    // Strict consent (ADR-019, CCR-PR567 M4) lives in three ungated SQL literals:
+    // the resolver Path-1, the public event-page sponsor strip (pages.ts), and the
+    // geo/h3 sponsor lookup (sponsors.ts). A COALESCE(...sponsor_accepted,1)
+    // reintroduction on ANY of them re-opens the non-consented-render leak — the
+    // exact regression the CCR re-run caught. Lock all three by source shape.
+    for (const path of PUBLIC_CONSENT_PATHS) {
+      const src = readFileSync(path, 'utf8');
+      expect(src, `${path} must gate public render on strict sp.sponsor_accepted = 1`).toMatch(
+        /\bsp\.sponsor_accepted\s*=\s*1/i
+      );
+      expect(
+        src,
+        `${path} must NOT COALESCE the sponsor side permissive — that is the pre-ADR-019 leak`
+      ).not.toMatch(/COALESCE\s*\(\s*sp\.sponsor_accepted\s*,\s*1\s*\)/i);
+    }
   });
 
   test('OSE-INV2 | resolver | geo match evaluates zip equality OR haversine radius', () => {

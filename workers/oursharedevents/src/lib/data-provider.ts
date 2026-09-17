@@ -69,6 +69,8 @@ export interface DataProviderEnv {
   WORKER_ENV?: string;
   /** Set to "1" or "true" to force mock mode in non-production environments. */
   MOCK_MODE?: string;
+  /** "1" enables Path-2 template+geo sponsor auto-match (dark-at-launch; ADR-019). */
+  SPONSOR_GEO_MATCH_ENABLED?: string;
 }
 
 // ── Per-route TTL config ───────────────────────────────────────────────────────
@@ -111,10 +113,13 @@ export class DataProvider {
   private readonly db: D1Database | null;
   private readonly mockMode: boolean;
   private readonly ctx: DataProviderCtx | null;
+  private readonly geoMatchEnabled: boolean;
 
   constructor(env: DataProviderEnv, ctx?: DataProviderCtx | null, mockModeOverride?: boolean) {
     this.db = env.DB ?? null;
     this.ctx = ctx ?? null;
+    // Path-2 template+geo sponsor auto-match: OFF unless explicitly enabled (ADR-019 dark-at-launch).
+    this.geoMatchEnabled = env.SPONSOR_GEO_MATCH_ENABLED === '1';
 
     if (typeof mockModeOverride === 'boolean') {
       this.mockMode = mockModeOverride;
@@ -315,7 +320,7 @@ export class DataProvider {
   }
 
   private async fetchSponsors(eventId: string): Promise<SponsorRow[] | null> {
-    return resolveSponsorsForEvent(this.db!, eventId);
+    return resolveSponsorsForEvent(this.db!, eventId, { geoMatchEnabled: this.geoMatchEnabled });
   }
 
   // ── Poster deployments ───────────────────────────────────────────────────────

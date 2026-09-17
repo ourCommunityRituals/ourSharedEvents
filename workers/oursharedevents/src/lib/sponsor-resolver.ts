@@ -138,14 +138,16 @@ function haversineDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: 
  */
 export async function resolveSponsorsForEvent(
   db: D1Database,
-  eventId: string
+  eventId: string,
+  opts: { geoMatchEnabled?: boolean } = {}
 ): Promise<SponsorRow[]> {
-  // Fetch event context: template_id, geo, and corridor cell (h3_res7) for the
-  // OSE-799 locality_band derivation on template-matched businesses.
+  // Fetch event context: brand_id (Path-2 tenant fence, INV #9), template_id,
+  // geo, and corridor cell (h3_res7) for the OSE-799 locality_band derivation.
   const event = await db
-    .prepare('SELECT template_id, zip_code, lat, lon, h3_res7 FROM events WHERE id = ?')
+    .prepare('SELECT brand_id, template_id, zip_code, lat, lon, h3_res7 FROM events WHERE id = ?')
     .bind(eventId)
     .first<{
+      brand_id: string;
       template_id: string | null;
       zip_code: string | null;
       lat: number | null;
@@ -207,7 +209,11 @@ export async function resolveSponsorsForEvent(
   // these as real placement rows is tracked separately — see OSE-799 follow-up.
   let templateGeoSponsors: SponsorRow[] = [];
 
-  if (event.template_id) {
+  // Path 2 is DARK-AT-LAUNCH (ADR-019 / CCR-PR567 M4): it renders a business that
+  // only SUBSCRIBED to the event's template, with NO per-event accepted placement
+  // — consideration, not per-event consent. Gated OFF by default; enable
+  // post-launch via env SPONSOR_GEO_MATCH_ENABLED (threaded through opts).
+  if (opts.geoMatchEnabled && event.template_id) {
     // Find businesses subscribed to this template (identity + logo + corridor cell
     // + the representative tier from their latest placement).
     const templateResult = await db
@@ -222,6 +228,7 @@ export async function resolveSponsorsForEvent(
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          WHERE st.template_id = ? AND st.is_active = 1
            AND sb.is_active = 1
+           AND sb.brand_id = ?
            AND NOT EXISTS (
              SELECT 1 FROM sponsor_placement spx
               WHERE spx.sponsor_business_id = sb.id
@@ -230,7 +237,7 @@ export async function resolveSponsorsForEvent(
            )
          ORDER BY sb.id`
       )
-      .bind(event.template_id, eventId)
+      .bind(event.template_id, event.brand_id, eventId)
       .all<{
         id: string;
         name: string;

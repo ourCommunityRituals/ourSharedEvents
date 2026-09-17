@@ -146,11 +146,18 @@ describe('Q1: Sponsor signs up for 5 event types', () => {
     await expect(seedSponsorEventType('sp-q1-multi', 'bar_night')).rejects.toThrow(/UNIQUE/);
   });
 
-  test('sponsor resolves for event with matching template', async () => {
+  test('template match alone does NOT resolve by default — Path-2 dark-at-launch (ADR-019 / CCR-PR567)', async () => {
+    // Path 2 (template+geo auto-match) is OFF by default. A business subscribed
+    // to the event's template but with NO accepted placement on THIS event has
+    // not consented to appear here, so it must not render publicly at launch.
     await seedEvent('evt-q1-bar', { templateId: 'bar_night' });
     const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q1-bar');
-    const ids = sponsors.map((s) => s.id);
-    expect(ids).toContain('sp-q1-multi');
+    expect(sponsors.map((s) => s.id)).not.toContain('sp-q1-multi');
+  });
+
+  test('template match resolves ONLY when geo-match is explicitly enabled (post-launch flag)', async () => {
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q1-bar', { geoMatchEnabled: true });
+    expect(sponsors.map((s) => s.id)).toContain('sp-q1-multi');
   });
 });
 
@@ -172,21 +179,27 @@ describe('Q2: Hyperlocal sponsor filtering', () => {
 
   test('matching template + matching zip -> sponsor appears', async () => {
     await seedEvent('evt-q2-match-zip', { templateId: 'bar_night', zipCode: '60614' });
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-match-zip');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-match-zip', {
+      geoMatchEnabled: true,
+    });
     const ids = sponsors.map((s) => s.id);
     expect(ids).toContain('sp-q2-local');
   });
 
   test('matching template + wrong zip -> sponsor absent', async () => {
     await seedEvent('evt-q2-wrong-zip', { templateId: 'bar_night', zipCode: '90210' });
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-wrong-zip');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-wrong-zip', {
+      geoMatchEnabled: true,
+    });
     const ids = sponsors.map((s) => s.id);
     expect(ids).not.toContain('sp-q2-local');
   });
 
   test('wrong template + matching zip -> sponsor absent', async () => {
     await seedEvent('evt-q2-wrong-tmpl', { templateId: 'rec_league', zipCode: '60614' });
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-wrong-tmpl');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-wrong-tmpl', {
+      geoMatchEnabled: true,
+    });
     const ids = sponsors.map((s) => s.id);
     expect(ids).not.toContain('sp-q2-local');
   });
@@ -194,7 +207,9 @@ describe('Q2: Hyperlocal sponsor filtering', () => {
   test('matching template + within radius -> sponsor appears', async () => {
     // Lincoln Park is ~3 miles from downtown Chicago
     await seedEvent('evt-q2-near', { templateId: 'bar_night', lat: 41.9214, lon: -87.6513 });
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-near');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-near', {
+      geoMatchEnabled: true,
+    });
     const ids = sponsors.map((s) => s.id);
     expect(ids).toContain('sp-q2-radius');
   });
@@ -202,7 +217,7 @@ describe('Q2: Hyperlocal sponsor filtering', () => {
   test('matching template + outside radius -> sponsor absent', async () => {
     // Milwaukee ~90 miles from Chicago
     await seedEvent('evt-q2-far', { templateId: 'bar_night', lat: 43.0389, lon: -87.9065 });
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-far');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-far', { geoMatchEnabled: true });
     const ids = sponsors.map((s) => s.id);
     expect(ids).not.toContain('sp-q2-radius');
   });
@@ -212,7 +227,9 @@ describe('Q2: Hyperlocal sponsor filtering', () => {
     await seedEvent('evt-q2-direct', { templateId: 'trivia', zipCode: '90210' });
     await seedSponsor('sp-q2-direct', 'evt-q2-direct', { tier: 'platinum' });
 
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-direct');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q2-direct', {
+      geoMatchEnabled: true,
+    });
     const ids = sponsors.map((s) => s.id);
     expect(ids).toContain('sp-q2-direct');
   });
@@ -238,20 +255,26 @@ describe('Q3: Sponsors accumulate (rotation, not replacement)', () => {
   });
 
   test('all 5 sponsors returned for matching event', async () => {
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate', {
+      geoMatchEnabled: true,
+    });
     const q3Sponsors = sponsors.filter((s) => s.id.startsWith('sp-q3-'));
     expect(q3Sponsors.length).toBe(5);
   });
 
   test('sponsors sorted by tier priority (title first, bronze last)', async () => {
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate', {
+      geoMatchEnabled: true,
+    });
     const q3Sponsors = sponsors.filter((s) => s.id.startsWith('sp-q3-'));
     const tiers = q3Sponsors.map((s) => s.tier);
     expect(tiers).toEqual(['title', 'platinum', 'gold', 'silver', 'bronze']);
   });
 
   test('bundle rotation_config adapts to sponsor count', async () => {
-    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate');
+    const sponsors = await resolveSponsorsForEvent(env.DB, 'evt-q3-accumulate', {
+      geoMatchEnabled: true,
+    });
     const q3Sponsors = sponsors.filter((s) => s.id.startsWith('sp-q3-'));
     const bundle = buildSponsorBundle(q3Sponsors);
     expect(bundle.rotation_config.sponsorSlots).toBeGreaterThanOrEqual(5);
