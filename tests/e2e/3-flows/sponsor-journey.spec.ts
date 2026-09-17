@@ -129,6 +129,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // State shared across serial tests
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -184,8 +185,44 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
     expect(res.body.id).toBeTruthy();
+    expect(res.body.placement_id, 'create exposes placement_id for the accept step').toBeTruthy();
 
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 1b: Sponsor accepts the placement (strict consent — ADR-019)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // An organizer-created placement is PENDING; strict consent hides a pending
+  // sponsor from EVERY public surface until the sponsor accepts on its own
+  // /sponsor page. This is the real triangle flow: admin mints the sponsor-home
+  // link (brand-scoped) → the sponsor's token responds "accept". Without it,
+  // Steps 3–7 (public visibility) correctly see nothing. adminFetch carries the
+  // CF-Access headers so both calls reach the worker through Access (the Bearer
+  // it also adds is ignored by the token-authed respond endpoint).
+
+  test('Step 1b: Sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
