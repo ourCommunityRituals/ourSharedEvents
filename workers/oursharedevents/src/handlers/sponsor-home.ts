@@ -37,6 +37,7 @@
 import SPONSOR_HOME_HTML from '../templates/sponsor-home.html';
 import { html, renderErrorPage } from './pages';
 import { injectLegalFooter } from '../lib/legal-footer';
+import { injectMarker } from '../lib/inject-marker';
 import { escapeHtml as esc } from '../lib/html-escape';
 import { computeEventPhase } from '../domain/event-phase';
 import { parseEventState, canRender } from '../domain/event-state';
@@ -277,13 +278,19 @@ export async function handleSponsorHomePage(
       ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>`
       : `<p class="sh-section-title">Your placements</p><div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`;
 
-  const page = SPONSOR_HOME_HTML.replace('<!--OCR_SPONSOR_ID-->', esc(sponsor.id))
-    .replace('<!--OCR_SPONSOR_NAME-->', esc(sponsor.name))
-    .replace('<!--OCR_COUNT_LIVE-->', String(live))
-    .replace('<!--OCR_COUNT_UPCOMING-->', String(upcoming))
-    .replace('<!--OCR_COUNT_PENDING-->', String(pending))
-    .replace('<!--OCR_SPONSOR_PLACEMENTS-->', list)
-    .replace('<!--OCR_EXPIRES-->', esc(humanDate(new Date(claim.exp * 1000).toISOString())));
+  // injectMarker (not String.replace) so a sponsor name or placement markup
+  // carrying a `$` cannot splice the trusted page shell (CCR-PR567 H1).
+  let page = injectMarker(SPONSOR_HOME_HTML, '<!--OCR_SPONSOR_ID-->', esc(sponsor.id));
+  page = injectMarker(page, '<!--OCR_SPONSOR_NAME-->', esc(sponsor.name));
+  page = injectMarker(page, '<!--OCR_COUNT_LIVE-->', String(live));
+  page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
+  page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
+  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list);
+  page = injectMarker(
+    page,
+    '<!--OCR_EXPIRES-->',
+    esc(humanDate(new Date(claim.exp * 1000).toISOString()))
+  );
 
   const res = html(injectLegalFooter(page, 'public'));
   res.headers.set('Cache-Control', 'no-store');

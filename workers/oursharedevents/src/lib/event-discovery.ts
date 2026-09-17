@@ -27,6 +27,7 @@
  */
 
 import { escapeHtml } from './html-escape';
+import { injectMarker } from './inject-marker';
 import type { EventListItem } from './event-list';
 
 export const WHEN_OPTIONS = ['all', 'today', 'weekend', 'week', 'month', 'past'] as const;
@@ -243,5 +244,5 @@ export function discoveryEmptyCopy(f: DiscoveryFilters): string {
 }
 
 export function injectDiscoveryFilters(html: string, bar: string): string {
-  return html.includes(EVENT_FILTERS_MARKER) ? html.replace(EVENT_FILTERS_MARKER, bar) : html;
+  return html.includes(EVENT_FILTERS_MARKER) ? injectMarker(html, EVENT_FILTERS_MARKER, bar) : html;
 }
