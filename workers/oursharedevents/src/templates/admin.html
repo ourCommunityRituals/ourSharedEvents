@@ -5577,11 +5577,16 @@
       window.goLiveFromDraft = async function (id) {
         var current = window._oseList.byId[String(id)];
         var from = current ? current.status : 'draft';
-        if (from !== 'ready') {
-          var r1 = await transition(id, from, 'ready');
+        // Only draft lacks a direct edge to active (draft -> ready -> active).
+        // Every other origin that offers "go live" reaches active directly —
+        // archived -> active is a valid edge, and archived -> ready is INVALID
+        // (409), so the old two-hop-through-ready made "Go live again" dead.
+        if (from === 'draft') {
+          var r1 = await transition(id, 'draft', 'ready');
           if (!r1.res.ok || !r1.data.ok) return { ok: false, error: (r1.data && (r1.data.error || r1.data.code)) || 'Could not mark ready (server said ' + r1.res.status + ')' };
+          from = 'ready';
         }
-        var r2 = await transition(id, 'ready', 'active');
+        var r2 = await transition(id, from, 'active');
         if (!r2.res.ok || !r2.data.ok) return { ok: false, error: (r2.data && (r2.data.error || r2.data.code)) || 'Could not go live (server said ' + r2.res.status + ')' };
         if (current) current.status = 'active';
         return { ok: true };
