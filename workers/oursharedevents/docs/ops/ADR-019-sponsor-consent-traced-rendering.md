@@ -65,8 +65,25 @@ has not yet answered.
   the strict-sponsor / permissive-organizer split; the shared `seedSplitSponsor`
   helper defaults `sponsor_accepted = 1` (a seeded sponsor that should _render_
   is an _accepted_ sponsor), with an override for pending/declined fixtures.
-- Path 2 (template + geo auto-match) is DARK-AT-LAUNCH — now **enforced in code,
-  not just prose** (CCR-PR567 re-run): it is gated behind the off-by-default
-  `SPONSOR_GEO_MATCH_ENABLED` flag and carries a `brand_id` tenant fence, so a
-  non-consented / cross-brand template subscriber cannot render at launch. When it
-  is turned on later it inherits the same strict gate.
+- **Path 2 (template + geo auto-match) is DEFERRED, not merely off.** It is
+  dark-at-launch — gated behind the off-by-default `SPONSOR_GEO_MATCH_ENABLED`
+  flag with a `brand_id` tenant fence — but that flag is a **marker on unfinished
+  design, not a toggle to flip.** Path 2 is the sponsor face of the hyperlocal
+  **matching network** — the same layer as the QR corridor funnel / Choice
+  Network (see `ADR-INCENTIVE-SPINE` §5 and the brain note
+  `project_choice_network`) — and it inherits that layer's unsolved core:
+  **multi-sided explicit opt-in.**
+  - Today Path 2 has only the _sponsor's_ opt-in (their `sponsor_event_types`
+    subscription). There is **no event-side opt-in**: an organizer inherits
+    template-matched sponsors as a side effect of choosing a `template_id` (a
+    categorization, not a consent), and can only opt _out_ via the rejection
+    clause. That is opt-out for the organizer — the asymmetry ADR-019 exists to
+    close, applied to the Events corner.
+  - **Precondition to ever enabling it:** a real event-side consent signal (e.g.
+    an `events.accepts_geo_sponsors` opt-in the organizer sets) — NOT `template_id`
+    as a consent proxy — so BOTH corners of the triangle actively say yes,
+    mirroring the sponsor-accept requirement. The QR funnel is stricter still
+    (three-sided: business, event, and the attendee who scans).
+  - Until that consent model is designed (alongside the broader matching-network /
+    QR-funnel work), Path 2 stays off. The `brand_id` fence and strict gate it
+    carries are defense-in-depth for that future, not a sign it is ready.
