@@ -826,6 +826,28 @@ jobs:
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ────────────────────────────────────────────────────────────────────
+      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
+      # BEFORE the remote D1 migrate steps. A missing signing secret would ship
+      # the /sponsor + /sharedReport corner SILENTLY INERT, and we must not mutate
+      # the shared remote D1 for a deploy we already know is doomed. `wrangler
+      # secret list` sees only the NAME (never the value), so value-length is
+      # asserted post-deploy via /health's signingSecretConfigured boolean.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh staging"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on staging (value-length verified post-deploy via /health)."
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -998,25 +1020,6 @@ jobs:
           VERSION="stg-${SHORT_SHA}-$(date -u +%Y%m%d)"
           sed -i "s/WORKER_BUILD_VERSION = \"stg-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
-      - name: Gate — signing secret provisioned (fail-closed corner)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          # SHARED_REPORT_SIGNING_SECRET is fail-closed: without it the entire
-          # /sponsor corner and all /sharedReport signed links deploy SILENTLY
-          # INERT. verify-secrets.js only checks GitHub-Actions secrets, not
-          # wrangler secrets — this is the only gate that catches an unset
-          # signing secret before it ships (CCR-PR567 H2).
-          OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
-          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the staging worker — the /sponsor + /sharedReport corners would deploy inert. Provision it: bash scripts/set-secrets.sh staging"
-            echo "$OUT"
-            exit 1
-          fi
-          echo "SHARED_REPORT_SIGNING_SECRET present on the staging worker."
-
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1030,12 +1033,24 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           sleep 10
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+          BODY="$(curl -s --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            "$STG_BASE_URL/health")
-          if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; exit 1; fi
+            -w '\n%{http_code}' "$STG_BASE_URL/health")"
+          HTTP="$(printf '%s' "$BODY" | tail -n1)"
+          JSON="$(printf '%s' "$BODY" | sed '$d')"
+          if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; echo "$JSON"; exit 1; fi
           echo "✓ Health check passed"
+          # CCR-PR567 re-run item 5 — value-validity, not just presence. /health
+          # reports signingSecretConfigured (present + >=32 chars, never the value);
+          # false ⇒ the /sponsor + /sharedReport corner shipped inert with a
+          # missing/short secret the presence gate could not see.
+          if ! printf '%s' "$JSON" | grep -q '"signingSecretConfigured":true'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is missing or under 32 chars on staging — the /sponsor + /sharedReport corner is inert. Provision it: bash scripts/set-secrets.sh staging"
+            echo "$JSON"
+            exit 1
+          fi
+          echo "✓ Signing secret configured (present + >=32 chars)"
 
   # ============================================================================
   # TIER 2: SMOKE — Post-deploy + nightly + dispatch
@@ -1814,6 +1829,27 @@ jobs:
           fi
           echo "✓ Production DB isolation verified"
 
+      # ────────────────────────────────────────────────────────────────────
+      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
+      # BEFORE the remote D1 migrate steps (production). Same rationale as
+      # staging: never mutate the shared remote D1 for a deploy that would ship
+      # the /sponsor + /sharedReport corner inert. Value-length is asserted
+      # post-deploy via /health's signingSecretConfigured boolean.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          OUT="$(npx wrangler secret list --env production 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh production"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on production (value-length verified post-deploy via /health)."
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1942,23 +1978,6 @@ jobs:
           VERSION="${GITHUB_REF_NAME:-prod-$(git rev-parse --short HEAD)}"
           sed -i "s/WORKER_BUILD_VERSION = \"prod-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
-      - name: Gate — signing secret provisioned (fail-closed corner)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          # SHARED_REPORT_SIGNING_SECRET is fail-closed on production too — an
-          # unset secret ships a green deploy whose /sponsor + /sharedReport
-          # corners are silently inert (CCR-PR567 H2).
-          OUT="$(npx wrangler secret list --env production 2>&1 || true)"
-          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the production worker — the /sponsor + /sharedReport corners would deploy inert. Provision it: bash scripts/set-secrets.sh production"
-            echo "$OUT"
-            exit 1
-          fi
-          echo "SHARED_REPORT_SIGNING_SECRET present on the production worker."
-
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1972,12 +1991,21 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           sleep 10
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+          BODY="$(curl -s --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            "$PROD_BASE_URL/health")
-          if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; exit 1; fi
+            -w '\n%{http_code}' "$PROD_BASE_URL/health")"
+          HTTP="$(printf '%s' "$BODY" | tail -n1)"
+          JSON="$(printf '%s' "$BODY" | sed '$d')"
+          if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; echo "$JSON"; exit 1; fi
           echo "✓ Production health check passed"
+          # CCR-PR567 re-run item 5 — value-validity, not just presence (prod).
+          if ! printf '%s' "$JSON" | grep -q '"signingSecretConfigured":true'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is missing or under 32 chars on production — the /sponsor + /sharedReport corner is inert. Provision it: bash scripts/set-secrets.sh production"
+            echo "$JSON"
+            exit 1
+          fi
+          echo "✓ Signing secret configured (present + >=32 chars)"
 
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)

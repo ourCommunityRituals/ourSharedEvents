@@ -12,6 +12,21 @@ import { HARDENING_HEADERS } from '../lib/security-headers.js';
 
 export interface HealthEnv extends DataProviderEnv {
   WORKER_BUILD_VERSION?: string;
+  SHARED_REPORT_SIGNING_SECRET?: string;
+}
+
+/**
+ * CCR-PR567 re-run item 5 — is the HMAC signing secret genuinely usable?
+ *
+ * The deploy-time gate can only check that SHARED_REPORT_SIGNING_SECRET is
+ * PRESENT (`wrangler secret list` never exposes the value), so an empty /
+ * whitespace / too-short value lists as present yet leaves the /sponsor +
+ * /sharedReport signing corner fail-closed (silently inert). This reports
+ * usability — present AND >= 32 chars after trimming — as a boolean, NEVER the
+ * value, so the post-deploy health step can assert real validity, not presence.
+ */
+export function isSigningSecretConfigured(secret: string | undefined | null): boolean {
+  return typeof secret === 'string' && secret.trim().length >= 32;
 }
 
 export async function handleHealth(env: HealthEnv): Promise<Response> {
@@ -52,7 +67,15 @@ export async function handleHealth(env: HealthEnv): Promise<Response> {
       db,
       dataSource: effective_source,
       cacheAge,
-      _debug: { db_bound, mock_mode_forced },
+      // signingSecretConfigured is a usability boolean (present + >=32 chars),
+      // NEVER the value — the post-deploy CI health step asserts it so a
+      // fail-closed-inert /sponsor + /sharedReport corner can't ship green
+      // (CCR-PR567 re-run item 5).
+      _debug: {
+        db_bound,
+        mock_mode_forced,
+        signingSecretConfigured: isSigningSecretConfigured(env.SHARED_REPORT_SIGNING_SECRET),
+      },
       timestamp,
     },
     {
