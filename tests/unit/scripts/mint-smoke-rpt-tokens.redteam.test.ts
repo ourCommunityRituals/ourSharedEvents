@@ -38,8 +38,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 const SCRIPT = resolve(ROOT, 'scripts/mint-smoke-rpt-tokens.mjs');
 
-const SECRET_A = 'ccr-redteam-signing-secret-AAA';
-const SECRET_B = 'ccr-redteam-signing-secret-BBB-different';
+// Fake, in-repo test fixtures — never real credentials. The `pragma` markers
+// tell the detect-secrets committed-secret gate (S0) these are intentional.
+const SECRET_A = 'ccr-redteam-signing-secret-AAA'; // pragma: allowlist secret
+const SECRET_B = 'ccr-redteam-signing-secret-BBB-different'; // pragma: allowlist secret
 
 interface RunResult {
   code: number | null;
