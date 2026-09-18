@@ -1279,6 +1279,25 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-sponsors-reset.sql
 
+      # CCR-PR567 Stage-2: seed the 4 canonical covenant sponsors ALREADY ACCEPTED
+      # (sponsor_accepted=1) so the covenant Bruno block is a pure ASSERT. Under ADR-019
+      # strict consent an organizer-created placement is PENDING until the sponsor
+      # accepts; the old API-seed-then-mint-then-respond flow could not run reliably on
+      # Bruno CLI (multi-request after-response scripts silently skipped), so consent is
+      # now established in the fixture. Runs AFTER the reset (which clears stale rows by
+      # name) so exactly these 4 exist at read time. Idempotent.
+      - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
+        id: seed-covenant-sponsors
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../postman/fixtures/covenant-sponsors-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
