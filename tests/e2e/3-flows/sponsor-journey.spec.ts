@@ -512,6 +512,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
 test.describe('Sponsor Journey — Tier Upgrade', () => {
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -540,6 +541,31 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 
     expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // Step 1b: strict consent (ADR-019). An organizer-created placement is PENDING and
+  // hidden from every public surface (incl. Display) until the sponsor accepts. Mint
+  // the sponsor-home link (brand-scoped) → the sponsor's token responds "accept".
+  test('Step 1b: Sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   test('Step 2: Verify bronze tier on Display', async ({ page, request }) => {
@@ -601,6 +627,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -629,6 +656,29 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     });
     expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // Strict consent (ADR-019): accept the placement so it renders on every surface.
+  test('Accept: sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   test('Display surface: sponsor in bundle', async ({ page, request }) => {
