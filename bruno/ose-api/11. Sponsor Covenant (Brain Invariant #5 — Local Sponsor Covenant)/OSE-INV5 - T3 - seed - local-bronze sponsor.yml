@@ -22,37 +22,37 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // Wrapped in an IIFE: Bruno runs request- and collection-level after-response
-        // scripts in ONE shared scope, so a bare `const ct` here redefines the
-        // collection hook's `const ct` (opencollection.yml) -> SyntaxError. Own scope = no collision.
-        (function () {
-          // Covenant cannot be proven if seed cannot land — fail loud, not silent. See OSE-349.
-          const ct = res.getHeader('Content-Type') || '';
-          if (!ct.includes('application/json')) {
-            const code = res.getStatus();
-            const diag = ct.includes('text/html')
-              ? 'CF Access challenge HTML returned (most common cause is a STALE service token — rotated in Cloudflare without updating CF_ACCESS_CLIENT_ID/SECRET repo secrets). See OSE-349.'
-              : `Unexpected non-JSON response (Content-Type=${ct}, HTTP ${code}). Investigate the body manually.`;
-            test(`COVENANT TEST BLOCKED: seed POST did not reach the worker as JSON — ${diag}`, function () {
-              expect.fail(`Seed POST: HTTP ${code} / Content-Type=${ct}`);
-            });
-            return;
-          }
-          test('Seed POST status is 200 or 201', function () { expect([200, 201]).to.include(res.getStatus()); });
-          const json = res.getBody();
-          const sponsor = json.item || json.sponsor || json;
-          // OSE-891: the create endpoint GENERATES the id (sp_<uuid>) and GEO-DERIVES is_local.
-          test('Create returned a server-generated sp_ id', function () { expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });
-          bru.setCollectionVar('covId_localBronze', sponsor.id);
-          // CCR-PR567 Stage-2: capture placement id for the paired accept step. Under ADR-019
-          // strict consent an organizer-seeded placement is PENDING until the sponsor accepts,
-          // so the covenant assert observes it only AFTER mint -> respond flips sponsor_accepted=1.
-          test('Create returned a placement_id', function () { expect(sponsor.placement_id).to.be.a('string').and.to.have.length.above(0); });
-          bru.setCollectionVar('covPlacement_localBronze', sponsor.placement_id);
-          // Same res7 cell as test-event-001 -> is_local derives TRUE (locality is geo-derived, not purchasable).
-          test('is_local is geo-derived TRUE (sponsor cell matches event corridor cell)', function () { expect(sponsor.is_local).to.eql(true); });
-          test('Seeded tier is bronze', function () { expect(sponsor.tier).to.eql('bronze'); });
-        })();
+        // NOTE: local var is `covCt`, NOT `ct`. Bruno runs request- and collection-level
+        // after-response scripts in ONE shared scope; the collection hook declares `const ct`,
+        // so a `const ct` here throws "invalid redefinition of lexical identifier" — and one
+        // such SyntaxError poisons the shared VM for the REST of the folder (every later
+        // seed/mint/respond silently stops running). Unique names avoid it (see folder 12).
+        // Covenant cannot be proven if seed cannot land — fail loud, not silent. See OSE-349.
+        const covCt = res.getHeader('Content-Type') || '';
+        if (!covCt.includes('application/json')) {
+          const code = res.getStatus();
+          const diag = covCt.includes('text/html')
+            ? 'CF Access challenge HTML returned (most common cause is a STALE service token — rotated in Cloudflare without updating CF_ACCESS_CLIENT_ID/SECRET repo secrets). See OSE-349.'
+            : `Unexpected non-JSON response (Content-Type=${covCt}, HTTP ${code}). Investigate the body manually.`;
+          test(`COVENANT TEST BLOCKED: seed POST did not reach the worker as JSON — ${diag}`, function () {
+            expect.fail(`Seed POST: HTTP ${code} / Content-Type=${covCt}`);
+          });
+          return;
+        }
+        test('Seed POST status is 200 or 201', function () { expect([200, 201]).to.include(res.getStatus()); });
+        const json = res.getBody();
+        const sponsor = json.item || json.sponsor || json;
+        // OSE-891: create endpoint GENERATES sp_<uuid> and GEO-DERIVES is_local.
+        test('Create returned a server-generated sp_ id', function () { expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });
+        bru.setCollectionVar('covId_localBronze', sponsor.id);
+        // CCR-PR567 Stage-2: capture placement id for the paired accept step. Under ADR-019
+        // strict consent an organizer-seeded placement is PENDING until the sponsor accepts,
+        // so the covenant assert observes it only AFTER mint -> respond flips sponsor_accepted=1.
+        test('Create returned a placement_id', function () { expect(sponsor.placement_id).to.be.a('string').and.to.have.length.above(0); });
+        bru.setCollectionVar('covPlacement_localBronze', sponsor.placement_id);
+        // Same res7 cell as test-event-001 -> is_local derives TRUE (geo-derived, not purchasable).
+        test('is_local is geo-derived TRUE (sponsor cell matches event corridor cell)', function () { expect(sponsor.is_local).to.eql(true); });
+        test('Seeded tier is bronze', function () { expect(sponsor.tier).to.eql('bronze'); });
 
 settings:
   encodeUrl: true

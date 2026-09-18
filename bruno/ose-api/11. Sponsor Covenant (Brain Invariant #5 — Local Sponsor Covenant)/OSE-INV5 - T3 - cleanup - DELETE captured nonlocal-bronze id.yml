@@ -17,12 +17,10 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // IIFE: own scope so `const ct` does not redefine the collection hook's `const ct`.
-        (function () {
-          const ct = res.getHeader('Content-Type') || '';
-          if (!ct.includes('application/json')) { return; }
-          test('Cleanup DELETE returned 200/204/404', function () { expect([200, 204, 404]).to.include(res.getStatus()); });
-        })();
+        // local var `covCt` (NOT `ct`) — avoids the collection-hook redefinition.
+        const covCt = res.getHeader('Content-Type') || '';
+        if (!covCt.includes('application/json')) { return; }
+        test('Cleanup DELETE returned 200/204/404', function () { expect([200, 204, 404]).to.include(res.getStatus()); });
 
 settings:
   encodeUrl: true

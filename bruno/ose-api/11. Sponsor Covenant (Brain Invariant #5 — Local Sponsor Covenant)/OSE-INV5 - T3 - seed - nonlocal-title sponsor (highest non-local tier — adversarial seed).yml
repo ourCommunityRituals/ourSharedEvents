@@ -22,22 +22,19 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // IIFE: own scope so `const ct` does not redefine the collection hook's `const ct`.
-        (function () {
-          const ct = res.getHeader('Content-Type') || '';
-          if (!ct.includes('application/json')) { test(`CF Access shadow on seed POST (HTTP ${res.getStatus()}, Content-Type=${ct}) — see OSE-349`, function () { expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }
-          test('Seed POST status is 200 or 201', function () { expect([200, 201]).to.include(res.getStatus()); });
-          const json = res.getBody();
-          const sponsor = json.item || json.sponsor || json;
-          test('Create returned a server-generated sp_ id', function () { expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });
-          bru.setCollectionVar('covId_nonlocalTitle', sponsor.id);
-          // CCR-PR567 Stage-2: capture placement id for the paired accept step (ADR-019 consent).
-          test('Create returned a placement_id', function () { expect(sponsor.placement_id).to.be.a('string').and.to.have.length.above(0); });
-          bru.setCollectionVar('covPlacement_nonlocalTitle', sponsor.placement_id);
-          // LA coords — a DIFFERENT res7 cell -> is_local FALSE even at the highest tier. Adversarial:
-          // a title (highest) non-local must NOT be able to buy locality.
-          test('Seeded nonlocal-title sponsor: geo-derived non-local at highest tier', function () { expect(sponsor.is_local).to.eql(false); expect(sponsor.tier).to.eql('title'); });
-        })();
+        // local var `covCt` (NOT `ct`) — avoids the collection-hook redefinition (see local-bronze seed).
+        const covCt = res.getHeader('Content-Type') || '';
+        if (!covCt.includes('application/json')) { test(`CF Access shadow on seed POST (HTTP ${res.getStatus()}, Content-Type=${covCt}) — see OSE-349`, function () { expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }
+        test('Seed POST status is 200 or 201', function () { expect([200, 201]).to.include(res.getStatus()); });
+        const json = res.getBody();
+        const sponsor = json.item || json.sponsor || json;
+        test('Create returned a server-generated sp_ id', function () { expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });
+        bru.setCollectionVar('covId_nonlocalTitle', sponsor.id);
+        test('Create returned a placement_id', function () { expect(sponsor.placement_id).to.be.a('string').and.to.have.length.above(0); });
+        bru.setCollectionVar('covPlacement_nonlocalTitle', sponsor.placement_id);
+        // LA coords — a DIFFERENT res7 cell -> is_local FALSE even at the highest tier. Adversarial:
+        // a title (highest) non-local must NOT be able to buy locality.
+        test('Seeded nonlocal-title sponsor: geo-derived non-local at highest tier', function () { expect(sponsor.is_local).to.eql(false); expect(sponsor.tier).to.eql('title'); });
 
 settings:
   encodeUrl: true
