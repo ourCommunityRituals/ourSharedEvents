@@ -1,0 +1,38 @@
+info:
+  name: OSE-INV5 | T3 | accept | mint nonlocal-title home-link
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors/{{covId_nonlocalTitle}}/home-link"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Mint the nonlocal-title sponsor's home-link token (the adversarial highest-tier
+        // non-local — it consents through the same door; tier buys no locality or slot).
+        test('Mint returns 200', function() { expect(res.getStatus()).to.eql(200); });
+        const body = res.getBody();
+        test('Mint returns a /sponsor?t= link', function() {
+            expect(body.ok).to.eql(true);
+            expect(body.url).to.be.a('string').and.to.match(/[?&]t=/);
+        });
+        const m = (body.url || '').match(/[?&]t=([^&]+)/);
+        const tok = m ? decodeURIComponent(m[1]) : '';
+        test('Extracted a non-empty sponsor-home token', function() { expect(tok).to.have.length.above(0); });
+        bru.setCollectionVar('covToken_nonlocalTitle', tok);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

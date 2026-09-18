@@ -1,7 +1,7 @@
 info:
   name: OSE-INV5 | T3 | assert | GET /api/v2/events/test-event-001/sponsors returns covenant-correct order
   type: http
-  seq: 5
+  seq: 13
 
 http:
   method: GET

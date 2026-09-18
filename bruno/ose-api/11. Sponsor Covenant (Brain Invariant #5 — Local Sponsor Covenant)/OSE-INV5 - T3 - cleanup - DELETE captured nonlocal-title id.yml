@@ -1,7 +1,7 @@
 info:
   name: OSE-INV5 | T3 | cleanup | DELETE captured nonlocal-title id
   type: http
-  seq: 9
+  seq: 17
 
 http:
   method: DELETE

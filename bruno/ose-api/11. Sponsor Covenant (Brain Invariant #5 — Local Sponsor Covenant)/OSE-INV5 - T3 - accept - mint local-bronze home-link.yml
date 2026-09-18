@@ -1,0 +1,40 @@
+info:
+  name: OSE-INV5 | T3 | accept | mint local-bronze home-link
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors/{{covId_localBronze}}/home-link"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // ADR-019 strict consent: an organizer-seeded placement is PENDING and does NOT
+        // render until the SPONSOR accepts. There is deliberately no admin auto-accept —
+        // the only door is a signed sponsor-home token. Mint one here (admin, brand-scoped,
+        // audited); the paired respond step uses it to consent the placement.
+        test('Mint returns 200', function() { expect(res.getStatus()).to.eql(200); });
+        const body = res.getBody();
+        test('Mint returns a /sponsor?t= link', function() {
+            expect(body.ok).to.eql(true);
+            expect(body.url).to.be.a('string').and.to.match(/[?&]t=/);
+        });
+        const m = (body.url || '').match(/[?&]t=([^&]+)/);
+        const tok = m ? decodeURIComponent(m[1]) : '';
+        test('Extracted a non-empty sponsor-home token', function() { expect(tok).to.have.length.above(0); });
+        bru.setCollectionVar('covToken_localBronze', tok);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

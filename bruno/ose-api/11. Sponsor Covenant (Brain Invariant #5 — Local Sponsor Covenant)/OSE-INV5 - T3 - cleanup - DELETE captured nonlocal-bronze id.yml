@@ -1,7 +1,7 @@
 info:
   name: OSE-INV5 | T3 | cleanup | DELETE captured nonlocal-bronze id
   type: http
-  seq: 8
+  seq: 16
 
 http:
   method: DELETE

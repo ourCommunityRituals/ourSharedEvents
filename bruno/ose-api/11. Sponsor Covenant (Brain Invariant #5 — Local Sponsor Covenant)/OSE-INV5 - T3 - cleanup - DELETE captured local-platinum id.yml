@@ -1,7 +1,7 @@
 info:
   name: OSE-INV5 | T3 | cleanup | DELETE captured local-platinum id
   type: http
-  seq: 7
+  seq: 15
 
 http:
   method: DELETE
