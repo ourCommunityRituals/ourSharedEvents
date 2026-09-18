@@ -17,20 +17,22 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // ADR-019 strict consent: an organizer-seeded placement is PENDING and does NOT
-        // render until the SPONSOR accepts. There is deliberately no admin auto-accept —
-        // the only door is a signed sponsor-home token. Mint one here (admin, brand-scoped,
-        // audited); the paired respond step uses it to consent the placement.
-        test('Mint returns 200', function() { expect(res.getStatus()).to.eql(200); });
-        const body = res.getBody();
-        test('Mint returns a /sponsor?t= link', function() {
+        // IIFE: own scope (Bruno shares the after-response scope with the collection hook).
+        (function () {
+          // ADR-019 strict consent: an organizer-seeded placement is PENDING and does NOT
+          // render until the SPONSOR accepts. No admin auto-accept — the only door is a signed
+          // sponsor-home token. Mint one (admin, brand-scoped, audited); the respond step consents.
+          test('Mint returns 200', function () { expect(res.getStatus()).to.eql(200); });
+          const body = res.getBody();
+          test('Mint returns a /sponsor?t= link', function () {
             expect(body.ok).to.eql(true);
             expect(body.url).to.be.a('string').and.to.match(/[?&]t=/);
-        });
-        const m = (body.url || '').match(/[?&]t=([^&]+)/);
-        const tok = m ? decodeURIComponent(m[1]) : '';
-        test('Extracted a non-empty sponsor-home token', function() { expect(tok).to.have.length.above(0); });
-        bru.setCollectionVar('covToken_localBronze', tok);
+          });
+          const m = (body.url || '').match(/[?&]t=([^&]+)/);
+          const tok = m ? decodeURIComponent(m[1]) : '';
+          test('Extracted a non-empty sponsor-home token', function () { expect(tok).to.have.length.above(0); });
+          bru.setCollectionVar('covToken_localBronze', tok);
+        })();
 
 settings:
   encodeUrl: true

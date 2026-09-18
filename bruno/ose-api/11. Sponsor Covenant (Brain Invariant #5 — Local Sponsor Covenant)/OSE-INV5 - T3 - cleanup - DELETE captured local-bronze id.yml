@@ -16,13 +16,14 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// Cleanup is best-effort — staging soft-deletes (is_active=0) so re-runs upsert cleanly.\r
-
-        const ct = res.getHeader('Content-Type') || '';\r
-
-        if (!ct.includes('application/json')) { console.warn('cleanup DELETE blocked by CF Access — sponsor row remains on staging until next manual cleanup'); return; }\r
-
-        test('Cleanup DELETE returned 200, 204, or 404 (already gone)', function() { expect([200, 204, 404]).to.include(res.getStatus()); });"
+      code: |
+        // IIFE: own scope so `const ct` does not redefine the collection hook's `const ct`.
+        (function () {
+          // Cleanup is best-effort — staging soft-deletes (is_active=0) so re-runs upsert cleanly.
+          const ct = res.getHeader('Content-Type') || '';
+          if (!ct.includes('application/json')) { console.warn('cleanup DELETE blocked by CF Access — sponsor row remains on staging until next manual cleanup'); return; }
+          test('Cleanup DELETE returned 200, 204, or 404 (already gone)', function () { expect([200, 204, 404]).to.include(res.getStatus()); });
+        })();
 
 settings:
   encodeUrl: true

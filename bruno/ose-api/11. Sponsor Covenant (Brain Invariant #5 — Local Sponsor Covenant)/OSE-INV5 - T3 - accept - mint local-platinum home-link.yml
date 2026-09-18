@@ -17,18 +17,19 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // Mint the local-platinum sponsor's home-link token (see the local-bronze mint for
-        // the ADR-019 rationale — organizer-seeded placements are PENDING until accepted).
-        test('Mint returns 200', function() { expect(res.getStatus()).to.eql(200); });
-        const body = res.getBody();
-        test('Mint returns a /sponsor?t= link', function() {
+        // IIFE: own scope (Bruno shares the after-response scope with the collection hook).
+        (function () {
+          test('Mint returns 200', function () { expect(res.getStatus()).to.eql(200); });
+          const body = res.getBody();
+          test('Mint returns a /sponsor?t= link', function () {
             expect(body.ok).to.eql(true);
             expect(body.url).to.be.a('string').and.to.match(/[?&]t=/);
-        });
-        const m = (body.url || '').match(/[?&]t=([^&]+)/);
-        const tok = m ? decodeURIComponent(m[1]) : '';
-        test('Extracted a non-empty sponsor-home token', function() { expect(tok).to.have.length.above(0); });
-        bru.setCollectionVar('covToken_localPlatinum', tok);
+          });
+          const m = (body.url || '').match(/[?&]t=([^&]+)/);
+          const tok = m ? decodeURIComponent(m[1]) : '';
+          test('Extracted a non-empty sponsor-home token', function () { expect(tok).to.have.length.above(0); });
+          bru.setCollectionVar('covToken_localPlatinum', tok);
+        })();
 
 settings:
   encodeUrl: true

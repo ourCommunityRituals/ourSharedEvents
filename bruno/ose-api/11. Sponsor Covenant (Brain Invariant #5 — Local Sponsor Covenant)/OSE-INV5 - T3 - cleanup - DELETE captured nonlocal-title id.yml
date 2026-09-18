@@ -16,11 +16,13 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = res.getHeader('Content-Type') || '';\r
-
-        if (!ct.includes('application/json')) { return; }\r
-
-        test('Cleanup DELETE returned 200/204/404', function() { expect([200, 204, 404]).to.include(res.getStatus()); });"
+      code: |
+        // IIFE: own scope so `const ct` does not redefine the collection hook's `const ct`.
+        (function () {
+          const ct = res.getHeader('Content-Type') || '';
+          if (!ct.includes('application/json')) { return; }
+          test('Cleanup DELETE returned 200/204/404', function () { expect([200, 204, 404]).to.include(res.getStatus()); });
+        })();
 
 settings:
   encodeUrl: true

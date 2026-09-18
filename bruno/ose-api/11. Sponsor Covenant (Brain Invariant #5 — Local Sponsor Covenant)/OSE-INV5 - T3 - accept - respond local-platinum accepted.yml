@@ -18,13 +18,15 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // Sponsor consents to the local-platinum placement (signed token, never admin).
-        test('Respond returns 200', function() { expect(res.getStatus()).to.eql(200); });
-        const body = res.getBody();
-        test('sponsor_accepted is now 1', function() {
+        // IIFE: own scope. Sponsor consents to the local-platinum placement (signed token).
+        (function () {
+          test('Respond returns 200', function () { expect(res.getStatus()).to.eql(200); });
+          const body = res.getBody();
+          test('sponsor_accepted is now 1', function () {
             expect(body.ok).to.eql(true);
             expect(body.sponsor_accepted).to.eql(1);
-        });
+          });
+        })();
 
 settings:
   encodeUrl: true

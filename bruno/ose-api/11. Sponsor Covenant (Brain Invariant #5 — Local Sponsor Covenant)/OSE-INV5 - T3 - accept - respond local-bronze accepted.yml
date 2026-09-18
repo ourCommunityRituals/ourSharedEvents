@@ -18,15 +18,17 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // The sponsor consents to this placement via the signed token (never admin).
-        // Flips sponsor_placement.sponsor_accepted=1 and busts the sponsors cache, so the
-        // covenant assert observes this sponsor in the public rotation (ADR-019 render gate).
-        test('Respond returns 200', function() { expect(res.getStatus()).to.eql(200); });
-        const body = res.getBody();
-        test('sponsor_accepted is now 1', function() {
+        // IIFE: own scope. The sponsor consents via the signed token (never admin); this flips
+        // sponsor_placement.sponsor_accepted=1 and busts the sponsors cache so the covenant
+        // assert observes this sponsor in the public rotation (ADR-019 render gate).
+        (function () {
+          test('Respond returns 200', function () { expect(res.getStatus()).to.eql(200); });
+          const body = res.getBody();
+          test('sponsor_accepted is now 1', function () {
             expect(body.ok).to.eql(true);
             expect(body.sponsor_accepted).to.eql(1);
-        });
+          });
+        })();
 
 settings:
   encodeUrl: true
