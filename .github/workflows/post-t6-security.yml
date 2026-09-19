@@ -1,0 +1,51 @@
+# Post-T6 Security Bookend
+#
+# This is intentionally a separate run from T5 and T6. It is the final
+# security confirmation after the adversarial run and the Stage 2 finale have
+# both completed successfully.
+name: Post-T6 Security Bookend
+
+on:
+  workflow_run:
+    workflows: ['Stage 2 — Security Finale']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-t6-security-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  post-t6-security:
+    name: 'Post-T6 Security (final bookend)'
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'push') &&
+      (startsWith(github.event.workflow_run.head_branch, 'full-pipeline/') ||
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: 'Integrity: committed tree is clean'
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          git diff-tree --check HEAD
+
+      - name: 'Closing: committed-secret gate'
+        run: |
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
+
+      - name: 'Closing: dependency audit'
+        run: npm audit --omit=dev --audit-level=moderate --package-lock-only
