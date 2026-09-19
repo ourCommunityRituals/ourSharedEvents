@@ -264,7 +264,11 @@ jobs:
           python scripts/check-secrets-baseline.py
 
       - name: npm audit
-        run: npm audit --omit=dev --audit-level=moderate
+        # Audit the committed dependency graph instead of submitting the
+        # installed tree. The first-party @ocr/flags file: dependency is
+        # staged beside this checkout for CI, but npm's audit endpoint rejects
+        # that local linked tree as an invalid package tree.
+        run: npm audit --omit=dev --audit-level=moderate --package-lock-only
 
       # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
