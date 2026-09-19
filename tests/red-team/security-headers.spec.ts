@@ -23,7 +23,8 @@
 
 import { test, expect, type APIResponse, type Page } from '@playwright/test';
 
-const BASE_URL = process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
+const BASE_URL =
+  process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
 
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
@@ -81,10 +82,13 @@ class HeaderAudit {
     const csp = this.get('content-security-policy');
     expect(
       csp,
-      `[${this.url}] Missing Content-Security-Policy header (status=${this.status})`
+      `[${this.url}] Missing Content-Security-Policy header (status=${this.status})`,
     ).toBeDefined();
 
-    expect(csp!.length, `[${this.url}] CSP header is empty`).toBeGreaterThan(0);
+    expect(
+      csp!.length,
+      `[${this.url}] CSP header is empty`,
+    ).toBeGreaterThan(0);
 
     // Must contain at minimum a default-src or script-src directive
     const hasDefaultSrc = /default-src/i.test(csp!);
@@ -92,18 +96,22 @@ class HeaderAudit {
 
     expect(
       hasDefaultSrc || hasScriptSrc,
-      `[${this.url}] CSP lacks default-src or script-src directive: "${csp}"`
+      `[${this.url}] CSP lacks default-src or script-src directive: "${csp}"`,
     ).toBe(true);
   }
 
   /** Assert X-Frame-Options header value */
   assertXFrameOptions(expected: 'DENY' | 'SAMEORIGIN'): void {
     const xfo = this.get('x-frame-options')?.toUpperCase();
-    expect(xfo, `[${this.url}] Missing X-Frame-Options header`).toBeDefined();
+    expect(
+      xfo,
+      `[${this.url}] Missing X-Frame-Options header`,
+    ).toBeDefined();
 
-    expect(xfo, `[${this.url}] X-Frame-Options is "${xfo}" — expected "${expected}"`).toBe(
-      expected
-    );
+    expect(
+      xfo,
+      `[${this.url}] X-Frame-Options is "${xfo}" — expected "${expected}"`,
+    ).toBe(expected);
   }
 
   /** Assert none of the server version headers are present */
@@ -122,7 +130,7 @@ class HeaderAudit {
       const value = this.get(header);
       expect(
         value,
-        `[${this.url}] "${header}" header present (value: "${value}") — leaks server info`
+        `[${this.url}] "${header}" header present (value: "${value}") — leaks server info`,
       ).toBeUndefined();
     }
 
@@ -135,7 +143,7 @@ class HeaderAudit {
       const DANGEROUS_PATTERNS = /nginx|apache|express|node\.js|IIS|lighttpd|gunicorn/i;
       expect(
         DANGEROUS_PATTERNS.test(serverHeader),
-        `[${this.url}] Server header reveals implementation: "${serverHeader}"`
+        `[${this.url}] Server header reveals implementation: "${serverHeader}"`,
       ).toBe(false);
     }
   }
@@ -143,7 +151,10 @@ class HeaderAudit {
   /** Assert Referrer-Policy header is present with a privacy-safe value */
   assertReferrerPolicy(): void {
     const rp = this.get('referrer-policy');
-    expect(rp, `[${this.url}] Missing Referrer-Policy header`).toBeDefined();
+    expect(
+      rp,
+      `[${this.url}] Missing Referrer-Policy header`,
+    ).toBeDefined();
 
     // Acceptable values — all limit cross-origin referrer exposure
     const ACCEPTABLE = [
@@ -159,24 +170,28 @@ class HeaderAudit {
     const normalised = rp!.toLowerCase().trim();
     expect(
       ACCEPTABLE.some((v) => normalised === v),
-      `[${this.url}] Referrer-Policy "${rp}" is not a recognised safe value`
+      `[${this.url}] Referrer-Policy "${rp}" is not a recognised safe value`,
     ).toBe(true);
 
     // Explicitly ban 'unsafe-url' which sends full URL including path and query
     expect(
       normalised,
-      `[${this.url}] Referrer-Policy is "unsafe-url" — sends full URL cross-origin`
+      `[${this.url}] Referrer-Policy is "unsafe-url" — sends full URL cross-origin`,
     ).not.toBe('unsafe-url');
   }
 
   /** Assert X-Content-Type-Options: nosniff */
   assertNoSniff(): void {
     const xcto = this.get('x-content-type-options')?.toLowerCase();
-    expect(xcto, `[${this.url}] Missing X-Content-Type-Options header`).toBeDefined();
+    expect(
+      xcto,
+      `[${this.url}] Missing X-Content-Type-Options header`,
+    ).toBeDefined();
 
-    expect(xcto, `[${this.url}] X-Content-Type-Options is "${xcto}" — expected "nosniff"`).toBe(
-      'nosniff'
-    );
+    expect(
+      xcto,
+      `[${this.url}] X-Content-Type-Options is "${xcto}" — expected "nosniff"`,
+    ).toBe('nosniff');
   }
 
   /** Assert HSTS header for HTTPS responses */
@@ -185,19 +200,22 @@ class HeaderAudit {
     if (!this.url.startsWith('https://')) return;
 
     const hsts = this.get('strict-transport-security');
-    expect(hsts, `[${this.url}] Missing Strict-Transport-Security (HSTS) header`).toBeDefined();
+    expect(
+      hsts,
+      `[${this.url}] Missing Strict-Transport-Security (HSTS) header`,
+    ).toBeDefined();
 
     // Must include max-age with a meaningful value (at least 1 week = 604800 seconds)
     const maxAgeMatch = /max-age=(\d+)/i.exec(hsts!);
     expect(
       maxAgeMatch,
-      `[${this.url}] HSTS header lacks max-age directive: "${hsts}"`
+      `[${this.url}] HSTS header lacks max-age directive: "${hsts}"`,
     ).not.toBeNull();
 
     const maxAgeSeconds = parseInt(maxAgeMatch![1], 10);
     expect(
       maxAgeSeconds,
-      `[${this.url}] HSTS max-age ${maxAgeSeconds}s is too short (minimum 604800)`
+      `[${this.url}] HSTS max-age ${maxAgeSeconds}s is too short (minimum 604800)`,
     ).toBeGreaterThanOrEqual(604_800);
   }
 }
@@ -206,7 +224,7 @@ class HeaderAudit {
 
 async function fetchSurface(
   surface: Surface,
-  request: { get: (url: string, opts?: Record<string, unknown>) => Promise<APIResponse> }
+  request: { get: (url: string, opts?: Record<string, unknown>) => Promise<APIResponse> },
 ): Promise<APIResponse> {
   const headers: Record<string, string> = {};
 
@@ -241,7 +259,7 @@ test.describe('HDR-001 — Content-Security-Policy on every surface', () => {
         if (csp === undefined) {
           console.warn(
             `[HDR-001] ${surface.name} returned ${response.status()} without CSP — ` +
-              `set auth env vars to test the full page.`
+              `set auth env vars to test the full page.`,
           );
           return;
         }
@@ -258,7 +276,7 @@ test.describe('HDR-002 — X-Frame-Options: DENY on /admin', () => {
   test('/admin with auth → X-Frame-Options: DENY', async ({ request }) => {
     const response = await fetchSurface(
       { name: 'Admin', path: '/admin', requiresAuth: true },
-      request
+      request,
     );
 
     const audit = new HeaderAudit(response);
@@ -269,14 +287,14 @@ test.describe('HDR-002 — X-Frame-Options: DENY on /admin', () => {
       if (xfo !== undefined) {
         expect(
           ['DENY', 'SAMEORIGIN'],
-          `[/admin 401 shell] X-Frame-Options is "${xfo}" — expected DENY or SAMEORIGIN`
+          `[/admin 401 shell] X-Frame-Options is "${xfo}" — expected DENY or SAMEORIGIN`,
         ).toContain(xfo);
       }
       // If not set on the 401 shell, that is a finding — log and continue
       if (xfo === undefined) {
         console.warn(
           '[HDR-002] /admin 401 response lacks X-Frame-Options — ' +
-            'set ADMIN_KEY to test the full page'
+            'set ADMIN_KEY to test the full page',
         );
       }
       return;
@@ -291,9 +309,10 @@ test.describe('HDR-002 — X-Frame-Options: DENY on /admin', () => {
     const xfo = audit.get('x-frame-options')?.toUpperCase();
 
     if (xfo !== undefined) {
-      expect(['DENY', 'SAMEORIGIN'], `/admin without auth: X-Frame-Options is "${xfo}"`).toContain(
-        xfo
-      );
+      expect(
+        ['DENY', 'SAMEORIGIN'],
+        `/admin without auth: X-Frame-Options is "${xfo}"`,
+      ).toContain(xfo);
     }
     // Absence on the unauthenticated shell is noted but not a hard failure
     // if the full page (with auth) has it. The full-page check above is the gate.
@@ -325,7 +344,7 @@ test.describe('HDR-004 — Referrer-Policy on all page surfaces', () => {
         const rp = audit.get('referrer-policy');
         if (rp === undefined) {
           console.warn(
-            `[HDR-004] ${surface.name} returned ${response.status()} without Referrer-Policy`
+            `[HDR-004] ${surface.name} returned ${response.status()} without Referrer-Policy`,
           );
           return;
         }
@@ -351,13 +370,13 @@ test.describe('HDR-005 — HTTPS enforced on all surfaces', () => {
     // Must redirect (301/302/307/308) to HTTPS
     expect(
       [301, 302, 307, 308],
-      `HTTP root returned ${response.status()} — expected redirect to HTTPS`
+      `HTTP root returned ${response.status()} — expected redirect to HTTPS`,
     ).toContain(response.status());
 
     const location = response.headers()['location'] ?? '';
     expect(
       location.startsWith('https://'),
-      `HTTP redirect does not go to HTTPS: "${location}"`
+      `HTTP redirect does not go to HTTPS: "${location}"`,
     ).toBe(true);
   });
 
@@ -370,7 +389,7 @@ test.describe('HDR-005 — HTTPS enforced on all surfaces', () => {
       const response = await request.get(httpUrl, { maxRedirects: 0 });
       expect(
         response.status(),
-        `${surface.name} served 200 over HTTP — HTTPS not enforced`
+        `${surface.name} served 200 over HTTP — HTTPS not enforced`,
       ).not.toBe(200);
     }
   });
@@ -378,7 +397,7 @@ test.describe('HDR-005 — HTTPS enforced on all surfaces', () => {
   test('Staging BASE_URL uses HTTPS', async () => {
     expect(
       BASE_URL.startsWith('https://'),
-      `BASE_URL "${BASE_URL}" does not use HTTPS — test is misconfigured or site is HTTP-only`
+      `BASE_URL "${BASE_URL}" does not use HTTPS — test is misconfigured or site is HTTP-only`,
     ).toBe(true);
   });
 });
@@ -422,7 +441,7 @@ test.describe('HDR-007 — Strict-Transport-Security (HSTS) present on HTTPS res
         const hsts = audit.get('strict-transport-security');
         if (hsts === undefined) {
           console.warn(
-            `[HDR-007] ${surface.name} auth gate lacks HSTS — set auth env vars for full test`
+            `[HDR-007] ${surface.name} auth gate lacks HSTS — set auth env vars for full test`,
           );
           return;
         }
@@ -439,7 +458,7 @@ test.describe('HDR-COMBO — Complete header audit on /admin (highest risk surfa
   test('admin surface passes all header checks simultaneously', async ({ request }) => {
     const response = await fetchSurface(
       { name: 'Admin', path: '/admin', requiresAuth: true },
-      request
+      request,
     );
 
     const audit = new HeaderAudit(response);
@@ -449,7 +468,7 @@ test.describe('HDR-COMBO — Complete header audit on /admin (highest risk surfa
     if (status === 401 || status === 403) {
       console.warn(
         `[HDR-COMBO] /admin returned ${status} — running partial audit on auth gate. ` +
-          `Set ADMIN_KEY or X_OCR_INTERNAL for full coverage.`
+          `Set ADMIN_KEY or X_OCR_INTERNAL for full coverage.`,
       );
     }
 
