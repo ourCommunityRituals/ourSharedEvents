@@ -1,7 +1,12 @@
 ﻿# Production Rollback Procedures
 
 > **Architecture:** Cloudflare Worker + D1 (Phase 2 complete)
-> **Last Updated:** 2026-04-09
+> **Last Updated:** 2026-09-17
+> **Schema high-water mark:** main DB through migration **0076** (`REQUIRED_DB_MIGRATION = 76`).
+> Rollback-relevant recent migrations: the sponsor model is the **0067/0068** split
+> (`sponsor_business` + `sponsor_placement`, replacing the dropped `sponsors` table),
+> `events.created_by` landed **0075**, and the event-type category registry **0076**.
+> A D1 rollback that predates 0067 must account for the sponsor-table split.
 > **Supersedes:** Previous version referencing oursharedevents.com, GAS, and Google Sheets
 
 ---

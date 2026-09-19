@@ -1,0 +1,34 @@
+info:
+  name: TRIANGLE | placement respond | rejects an invalid token
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/placements/spl_does_not_exist/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"token":"not.a.valid.token","accepted":true}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: the respond endpoint is authorized ONLY by a valid sponsor-home
+        // token in the body (never admin). A forged/expired token is rejected before
+        // any write — fail-closed, no placement mutation.
+        test('rejects with a 4xx', function () { expect(res.getStatus()).to.be.within(400, 404); });
+        test('ok is false', function () { expect(res.getBody().ok).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

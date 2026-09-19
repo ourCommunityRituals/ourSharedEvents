@@ -104,6 +104,15 @@ worker_surface:
     red_birth: null
     notes: "verifySignedLinkToken() uses HMAC-SHA256 + constant-time compare. Tests cover: event_id swap, role escalation, sig bit-flip, wrong secret, expired, missing claims, depth escalation, sponsor_id swap. 2026-08-06."
 
+  - id: TL-045
+    threat: "Sponsor-home token forgery / timing oracle / cross-kind replay: attacker crafts a valid-looking HMAC for another sponsor_id or brand, replays a SharedReport token as a sponsor-home token, or times the signature compare to recover the HMAC"
+    severity: HIGH
+    target_invariant: null
+    test_ref: "tests/e2e/0-architecture/edge-token-verification.invariant.spec.ts — TL-045 sponsor-home describe block (4 structural tests)"
+    status: tested
+    red_birth: { date: "2026-09-17", method: design-time-negative-assertion }
+    notes: "verifySponsorHomeToken() (lib/sponsor-home-auth.ts): HMAC-SHA256 + constantTimeEqual (XOR-accumulate, no early return) + fail-closed on missing SHARED_REPORT_SIGNING_SECRET + distinct kind='sponsor_home' (no cross-kind confusion with the report token) + exp enforced + brand_id in the signed claim. Structural lock added CCR-PR567 M5; born-red verified by swapping constantTimeEqual→=== (the constant-time gate goes red)."
+
   - id: TL-009
     threat: "Briefing page unauthenticated access: attacker GETs /briefing, /overview, or /summary without admin credentials"
     severity: CRITICAL

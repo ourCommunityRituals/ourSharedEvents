@@ -22,6 +22,7 @@
 // they meant.
 
 import { escapeHtml } from './html-escape.js';
+import { injectMarker } from './inject-marker.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -178,8 +179,8 @@ export const EVENT_COUNT_MARKER = '<!--OCR_EVENT_COUNT-->';
  */
 export function injectEventList(html: string, list: RenderedEventList): string {
   let out = html;
-  if (out.includes(EVENT_LIST_MARKER)) out = out.replace(EVENT_LIST_MARKER, list.html);
+  if (out.includes(EVENT_LIST_MARKER)) out = injectMarker(out, EVENT_LIST_MARKER, list.html);
   if (out.includes(EVENT_COUNT_MARKER))
-    out = out.replace(EVENT_COUNT_MARKER, escapeHtml(list.countText));
+    out = injectMarker(out, EVENT_COUNT_MARKER, escapeHtml(list.countText));
   return out;
 }

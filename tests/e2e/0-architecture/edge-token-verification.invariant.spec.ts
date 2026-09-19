@@ -117,3 +117,78 @@ test.describe('Invariant: edge identity token cryptographic verification (OSE-57
     ).toBe(false);
   });
 });
+
+// ── Sponsor-home signed token (CCR-PR567 M5) ─────────────────────────────────
+// The second edge identity token: an HMAC-signed, sponsor-scoped bearer that
+// opens /sponsor. It shares the report signing secret but a distinct `kind`.
+// Its constant-time / fail-closed / kind-pinned / expiry properties were locked
+// by nothing (green-but-blind); this pins them into the code shape so a refactor
+// to a `===` signature compare, a dropped secret check, or a missing kind/exp
+// guard fails in the T0 invariants shard.
+const SPONSOR_HOME_AUTH_TS = join(
+  REPO_ROOT,
+  'workers',
+  'oursharedevents',
+  'src',
+  'lib',
+  'sponsor-home-auth.ts'
+);
+function sponsorAuthSrc(): string {
+  return readFileSync(SPONSOR_HOME_AUTH_TS, 'utf8');
+}
+function verifySponsorFnBody(src: string): string {
+  const start = src.indexOf('export async function verifySponsorHomeToken');
+  expect(
+    start,
+    'verifySponsorHomeToken must be exported from lib/sponsor-home-auth.ts'
+  ).toBeGreaterThan(-1);
+  const rest = src.slice(start + 1);
+  const nextExport = rest.indexOf('\nexport ');
+  return rest.slice(0, nextExport === -1 ? 3000 : nextExport);
+}
+
+test.describe('Invariant: sponsor-home signed token verification (TL-045, CCR-PR567 M5)', () => {
+  test('verifySponsorHomeToken compares the signature in CONSTANT TIME, never with === / ==', () => {
+    const body = verifySponsorFnBody(sponsorAuthSrc());
+    expect(
+      /constantTimeEqual\s*\(/.test(body),
+      'verifySponsorHomeToken must compare the HMAC via constantTimeEqual — a byte-early-exit === leaks the signature through timing'
+    ).toBe(true);
+    // The signature must not be compared with a raw ===/== (a timing oracle).
+    expect(
+      /(?:===?\s*sig\b)|(?:\bsig\s*===?)/.test(body),
+      'the signature must not be compared with === / == — use constantTimeEqual'
+    ).toBe(false);
+  });
+
+  test('constantTimeEqual is a real constant-time comparator (length check + XOR accumulate)', () => {
+    const src = sponsorAuthSrc();
+    expect(/function constantTimeEqual/.test(src), 'constantTimeEqual must be defined').toBe(true);
+    // XOR-accumulate into a single diff, checked once after the loop — not an
+    // early-return-on-mismatch (which would reintroduce the timing leak).
+    expect(
+      /diff\s*\|=\s*[^\n]*\^/.test(src),
+      'constantTimeEqual must XOR-accumulate every byte (no early return inside the loop)'
+    ).toBe(true);
+  });
+
+  test('verifySponsorHomeToken is fail-closed on a missing signing secret', () => {
+    const body = verifySponsorFnBody(sponsorAuthSrc());
+    expect(
+      /if\s*\(\s*!secret\s*\)\s*return null/.test(body),
+      'must return null when SHARED_REPORT_SIGNING_SECRET is unset (fail-closed)'
+    ).toBe(true);
+  });
+
+  test('verifySponsorHomeToken pins the token kind and enforces expiry', () => {
+    const body = verifySponsorFnBody(sponsorAuthSrc());
+    expect(
+      /c\.kind\s*!==\s*KIND/.test(body),
+      'must reject a payload whose kind is not sponsor_home (no cross-kind confusion with the report token)'
+    ).toBe(true);
+    expect(
+      /c\.exp\s*<=\s*Math\.floor\(Date\.now\(\)\s*\/\s*1000\)/.test(body),
+      'must reject an expired token (exp <= now)'
+    ).toBe(true);
+  });
+});

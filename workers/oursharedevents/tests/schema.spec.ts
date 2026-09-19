@@ -32,6 +32,7 @@ const EXPECTED_TABLES = [
   'corridors',
   'event_templates',
   'event_type_registry',
+  'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker)
   'events',
   'node_hierarchy',
   'poster_deployments',
@@ -94,6 +95,7 @@ const EXPECTED_INDEXES = [
   // Regulatory schema (migration 0023)
   'idx_event_type_registry_phase',
   'idx_event_type_registry_uec',
+  'idx_event_type_registry_category', // 0076 (OSE-1344)
   'idx_corridor_regulatory_status_corridor',
   // Admin audit log (migration 0026 — OSE-212)
   'idx_admin_audit_log_created_at',
@@ -105,6 +107,8 @@ const EXPECTED_INDEXES = [
   'idx_shortlinks_event_id',
   'idx_shortlinks_created_at',
   'idx_shortlinks_event_kind', // 0073 (Rb) — per-destination click-out reads
+  'idx_events_status_updated', // 0075 — admin ?status= filter + stale-draft sweep
+  'idx_events_created_by', // 0075 — admin ?mine=1 filter
   // Campaigns (migrations 0039/0040) — idx_sponsors_is_local + idx_sponsors_campaign_id
   // retired by OSE-799 A2 (0067): locality/campaign moved to sponsor_placement.
   'idx_campaigns_brand_id',
@@ -127,7 +131,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 43, // 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3)
+  events: 44, // 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
@@ -160,7 +164,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   sponsor_areas: 7,
   // sponsor_impressions: 7 (pre-OSE-635) + 1 (h3_res7, migration 0048) = 8.
   sponsor_impressions: 8,
-  event_type_registry: 10,
+  // + category_code (migration 0076, OSE-1344) = 11.
+  event_type_registry: 11,
   corridor_regulatory_status: 5,
   // OSE-240 (migration 0030): code TEXT PK, event_id TEXT FK, created_at TEXT,
   // clicks INTEGER, last_clicked_at TEXT = 5; +target_url +kind (migration 0073, Rb) = 7.
@@ -194,7 +199,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 15 tables exist post-migration', async () => {
+  test('all expected tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
@@ -297,7 +302,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 59 custom indexes exist', async () => {
+  test('all 73 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -329,7 +334,8 @@ describe('Gate 5: Index verification', () => {
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(70); // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb)
+    // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
+    expect(names.length).toBe(73); // +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

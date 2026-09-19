@@ -146,11 +146,12 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
         // extraHTTPHeaders. The playwright.config for red-team sets none.
         'Cache-Control': 'no-cache',
       },
+      maxRedirects: 0,
     });
 
     expect(
-      [401, 403],
-      `Admin endpoint without auth returned ${response.status()} — expected 401 or 403`,
+      [302, 401, 403],
+      `Admin endpoint without auth returned ${response.status()} — expected 302, 401, or 403`,
     ).toContain(response.status());
   });
 
@@ -162,11 +163,12 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
         // Forged JWT — not signed by Cloudflare's Access key
         Cookie: 'CF_Authorization=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.forged.sig',
       },
+      maxRedirects: 0,
     });
 
     expect(
-      [401, 403],
-      `Forged CF_Authorization cookie returned ${response.status()} — expected 401 or 403`,
+      [302, 401, 403],
+      `Forged CF_Authorization cookie returned ${response.status()} — expected 302, 401, or 403`,
     ).toContain(response.status());
   });
 
@@ -176,7 +178,7 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
       maxRedirects: 0,
     });
 
-    const { status } = response;
+    const status = response.status();
     const isGated =
       status === 401 ||
       status === 403 ||

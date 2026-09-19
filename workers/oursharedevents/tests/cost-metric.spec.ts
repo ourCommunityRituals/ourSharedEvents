@@ -51,6 +51,19 @@ describe('normalizeOperation — identifier-free, low-cardinality labels', () =>
     expect(normalizeOperation('GET', '/')).toBe('GET /');
     expect(normalizeOperation('weird méthod', '/health')).toBe('OTHER /health');
   });
+
+  it('keeps the Epic TRIANGLE sponsor-home corner routes readable (CCR-PR567 L2c)', () => {
+    // sponsor (page + /api/v2/sponsor prefix), placements, respond, home-link
+    // must be recognised segments so the new corner (incl. the HMAC-mint
+    // amplification on /sponsor) is observable, not masked to :x/:x/:x.
+    expect(normalizeOperation('POST', '/api/v2/sponsor/placements/abc/respond')).toBe(
+      'POST /api/v2/sponsor/placements/:x/respond'
+    );
+    expect(normalizeOperation('POST', '/api/v2/admin/sponsors/xyz/home-link')).toBe(
+      'POST /api/v2/admin/sponsors/:x/home-link'
+    );
+    expect(normalizeOperation('GET', '/sponsor')).toBe('GET /sponsor');
+  });
 });
 
 describe('emitOperationCost — sealed aggregate payload boundary', () => {

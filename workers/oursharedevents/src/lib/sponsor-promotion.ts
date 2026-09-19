@@ -262,10 +262,17 @@ export async function promoteSponsorDraft(
   );
   statements.push(
     env.DB.prepare(
+      // sponsor_accepted = 1: promotion IS the sponsor's consent (ADR-019 /
+      // CCR-PR567 re-run). The draft is a sponsor-completed onboarding — they
+      // filled it out and acknowledged the covenant (covenant_acknowledged_at,
+      // gated above) — so a promoted self-signup is explicitly opted in and
+      // renders immediately, unlike an organizer-added placement which stays
+      // pending until the sponsor accepts on /sponsor. organizer_accepted stays
+      // NULL (the resolver reads it permissively, COALESCE(...,1)=1).
       `INSERT INTO sponsor_placement
          (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
-          locality_band, click_token, display_token, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, ?, ?)`
+          locality_band, click_token, display_token, is_active, sponsor_accepted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, 1, ?, ?)`
     ).bind(
       placementId,
       sponsorId,

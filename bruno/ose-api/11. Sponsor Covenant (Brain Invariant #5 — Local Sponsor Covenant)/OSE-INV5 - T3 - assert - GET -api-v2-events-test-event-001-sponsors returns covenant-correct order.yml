@@ -1,7 +1,7 @@
 info:
   name: OSE-INV5 | T3 | assert | GET /api/v2/events/test-event-001/sponsors returns covenant-correct order
   type: http
-  seq: 5
+  seq: 1
 
 http:
   method: GET
@@ -11,209 +11,86 @@ http:
 runtime:
   scripts:
     - type: before-request
-      code: "// OSE-944: the public sponsors read is cache-fronted (SWR). Between retry\r
-
-        // attempts, back off so the admin write-through cache invalidation can propagate\r
-
-        // before we re-read. Newman waits for pending setTimeout callbacks before sending\r
-
-        // the request, so this delays the RETRY send only (attempt 0 = no wait). If a given\r
-
-        // Newman build does not honour the timer, each retry is still a real network\r
-
-        // round-trip to staging, which provides natural spacing on its own.\r
-
-        const covAttempt = Number(bru.getCollectionVar('covAttempt') || 0);\r
-
-        if (covAttempt > 0) {\r
-
-        \    const backoffMs = Math.min(3000, 750 * covAttempt);\r
-
-        \    setTimeout(function () {}, backoffMs);\r
-
-        }"
+      code: |
+        // OSE-944: the public sponsors read is cache-fronted (TTL 30s + SWR 300s). The 4
+        // covenant sponsors are seeded directly into D1 by covenant-sponsors-seed.sql (no
+        // API write -> no cache bust), so a stale entry from a prior run could linger a moment.
+        // Back off between retries to let a stale entry age out / SWR revalidate. attempt 0 = no wait.
+        const covAttempt = Number(bru.getCollectionVar('covAttempt') || 0);
+        if (covAttempt > 0) {
+          const backoffMs = Math.min(5000, 1000 * covAttempt);
+          setTimeout(function () {}, backoffMs);
+        }
     - type: after-response
-      code: "// This is the assertion that proves the Local Sponsor Covenant on the deployed worker.\r
-
-        // Public endpoint — no admin auth required, not edge-shadowed.\r
-
-        //\r
-
-        // OSE-944: the sp_ ids just created via POST /api/v2/admin/sponsors may not appear on\r
-
-        // the very next GET because this public read is cache-fronted (SWR) and the admin\r
-
-        // write-through invalidation is asynchronous. Poll/retry this GET (bounded) until all\r
-
-        // 4 captured ids are present, then assert — instead of false-failing on a single\r
-
-        // eventually-consistent read. Intermediate attempts run NO pm.test (so --bail is not\r
-
-        // tripped) and re-queue this same request via pm.setNextRequest.\r
-
-        const COV_MAX_ATTEMPTS = 6;\r
-
-        const covAttempt = Number(bru.getCollectionVar('covAttempt') || 0);\r
-
-        const covJson = res.getBody();\r
-
-        const covItems = Array.isArray(covJson.items) ? covJson.items : [];\r
-
-        const covIds = covItems.map(function (s) { return s.id; });\r
-
-        const covCaptured = [\r
-
-        \    bru.getCollectionVar('covId_localBronze'),\r
-
-        \    bru.getCollectionVar('covId_localPlatinum'),\r
-
-        \    bru.getCollectionVar('covId_nonlocalBronze'),\r
-
-        \    bru.getCollectionVar('covId_nonlocalTitle')\r
-
-        ];\r
-
-        const covPresentCount = covCaptured.filter(function (id) { return covIds.indexOf(id) > -1; }).length;\r
-
-        if (covPresentCount < 4 && covAttempt < COV_MAX_ATTEMPTS) {\r
-
-        \    bru.setCollectionVar('covAttempt', covAttempt + 1);\r
-
-        \    console.log('OSE-944 covenant read-after-write: attempt ' + (covAttempt + 1) + '/' + COV_MAX_ATTEMPTS +\r
-
-        \                ' — ' + covIds.length + ' sponsors visible, ' + covPresentCount + '/4 fixtures present; retrying after backoff.');\r
-
-        \    bru.runner.setNextRequest(req.getName());\r
-
-        \    return;\r
-
-        }\r
-
-        // Consistent read reached (or attempts exhausted → assert definitively so a real\r
-
-        // regression still fails). Reset the counter for cleanup and any subsequent run.\r
-
-        bru.setCollectionVar('covAttempt', 0);\r
-
-        test('Response is 200 JSON', function() {\r
-
-        \    expect(res.getStatus()).to.eql(200);\r
-
-        \    expect(res.getHeader('Content-Type')).to.include('application/json');\r
-
-        });\r
-
-        const json = res.getBody();\r
-
-        test('Response has items array', function() { expect(json.items).to.be.an('array'); });\r
-
-        \r
-
-        // Locate our 4 fixtures by the SERVER-GENERATED ids captured at seed time\r
-
-        // (the create endpoint mints sp_<uuid>; there are no client-chosen ids).\r
-
-        const idLocalBronze   = bru.getCollectionVar('covId_localBronze');\r
-
-        const idLocalPlatinum = bru.getCollectionVar('covId_localPlatinum');\r
-
-        const idNonlocBronze  = bru.getCollectionVar('covId_nonlocalBronze');\r
-
-        const idNonlocTitle   = bru.getCollectionVar('covId_nonlocalTitle');\r
-
-        const ids = json.items.map(s => s.id);\r
-
-        const idxLocalBronze   = ids.indexOf(idLocalBronze);\r
-
-        const idxLocalPlatinum = ids.indexOf(idLocalPlatinum);\r
-
-        const idxNonlocBronze  = ids.indexOf(idNonlocBronze);\r
-
-        const idxNonlocTitle   = ids.indexOf(idNonlocTitle);\r
-
-        \r
-
-        test('All 4 covenant fixture sponsors are present in the public response', function() {\r
-
-        \    expect(idxLocalBronze,   'local-bronze ('   + idLocalBronze   + ')').to.be.above(-1);\r
-
-        \    expect(idxLocalPlatinum, 'local-platinum (' + idLocalPlatinum + ')').to.be.above(-1);\r
-
-        \    expect(idxNonlocBronze,  'nonlocal-bronze (' + idNonlocBronze + ')').to.be.above(-1);\r
-
-        \    expect(idxNonlocTitle,   'nonlocal-title ('  + idNonlocTitle  + ')').to.be.above(-1);\r
-
-        });\r
-
-        \r
-
-        // Corroborate the geo-derivation on the PUBLIC list too, if the resolver surfaces\r
-
-        // is_local per item: the two Chicago sponsors must read local, the NYC/LA ones non-local.\r
-
-        // Guarded so the covenant floor above stays the load-bearing assertion regardless of shape.\r
-
-        const byId = Object.fromEntries(json.items.map(s => [s.id, s]));\r
-
-        const localBronze = byId[idLocalBronze];\r
-
-        if (localBronze && Object.prototype.hasOwnProperty.call(localBronze, 'is_local')) {\r
-
-        \    test('Public list agrees: locals are is_local, non-locals are not (geo-derived)', function() {\r
-
-        \        expect(!!byId[idLocalBronze].is_local,   'local-bronze is_local').to.eql(true);\r
-
-        \        expect(!!byId[idLocalPlatinum].is_local, 'local-platinum is_local').to.eql(true);\r
-
-        \        expect(!!byId[idNonlocBronze].is_local,  'nonlocal-bronze is_local').to.eql(false);\r
-
-        \        expect(!!byId[idNonlocTitle].is_local,   'nonlocal-title is_local').to.eql(false);\r
-
-        \    });\r
-
-        }\r
-
-        \r
-
-        // THE COVENANT (OSE-891 reconcile) — Invariant #25 is a rotation-frequency\r
-
-        // FLOOR, NOT a locals-first display rank. The OSE-330 tierSort is RETIRED\r
-
-        // (see src/lib/sponsor-resolver.ts buildShareRotation + tier-equity.invariant).\r
-
-        // The resolved list is ordered by covenant SHARE (allocateShares, share desc with\r
-
-        // a stable id tie-break) — order carries no size/slot/position meaning. So we assert\r
-
-        // the OBSERVABLE covenant on the public list: locals are never zeroed/dropped (the\r
-
-        // floor) and non-locals are present too (uniform eligibility). We deliberately do NOT\r
-
-        // assert 'local before non-local' — that would re-encode the retired model. Runnable\r
-
-        // L1 twin (verifiable without staging/creds): tier-equity-sort.spec.ts\r
-
-        // '#25 | OSE-INV5 covenant twin: local-bronze survives vs nonlocal-title'.\r
-
-        test('COVENANT floor: local-bronze is never zeroed vs nonlocal-title (adversarial: lowest local tier vs highest non-local tier)', function() {\r
-
-        \    expect(idxLocalBronze, 'local-bronze must remain in the covenant rotation, never dropped').to.be.above(-1);\r
-
-        });\r
-
-        test('COVENANT floor: local-platinum is never zeroed', function() {\r
-
-        \    expect(idxLocalPlatinum).to.be.above(-1);\r
-
-        });\r
-
-        test('Uniform eligibility: non-local sponsors are present too (no named-slot drop)', function() {\r
-
-        \    expect(idxNonlocTitle, 'nonlocal-title present').to.be.above(-1);\r
-
-        \    expect(idxNonlocBronze, 'nonlocal-bronze present').to.be.above(-1);\r
-
-        });"
+      code: |
+        // The Local Sponsor Covenant (#25 / OSE-INV5) proved on the deployed worker.
+        // The 4 canonical sponsors are fixture-seeded ALREADY ACCEPTED
+        // (covenant-sponsors-seed.sql), so this is a PURE ASSERT by fixed id — no
+        // seed/mint/respond, no cross-request var capture (the Bruno multi-request
+        // after-response quirk that blocked the API-seed approach). Runnable L1 twin
+        // (no staging/creds): tier-equity-sort.spec.ts '#25 | OSE-INV5 covenant twin'.
+        const COV_MAX_ATTEMPTS = 8;
+        const covAttempt = Number(bru.getCollectionVar('covAttempt') || 0);
+        const idLocalBronze   = 'sb_cov_local_bronze';
+        const idLocalPlatinum = 'sb_cov_local_platinum';
+        const idNonlocBronze  = 'sb_cov_nonlocal_bronze';
+        const idNonlocTitle   = 'sb_cov_nonlocal_title';
+        const covFixtures = [idLocalBronze, idLocalPlatinum, idNonlocBronze, idNonlocTitle];
+        const covJson = res.getBody();
+        const covItems = Array.isArray(covJson.items) ? covJson.items : [];
+        const covIds = covItems.map(function (s) { return s.id; });
+        const covPresentCount = covFixtures.filter(function (id) { return covIds.indexOf(id) > -1; }).length;
+        // Bounded read-after-seed retry: re-queue this same request (NO test() on intermediate
+        // attempts so --bail is not tripped) until all 4 fixtures are visible, then assert.
+        if (covPresentCount < 4 && covAttempt < COV_MAX_ATTEMPTS) {
+          bru.setCollectionVar('covAttempt', covAttempt + 1);
+          console.log('OSE-944 covenant read-after-seed: attempt ' + (covAttempt + 1) + '/' + COV_MAX_ATTEMPTS +
+                      ' — ' + covIds.length + ' sponsors visible, ' + covPresentCount + '/4 fixtures present; retrying after backoff.');
+          bru.runner.setNextRequest(req.getName());
+          return;
+        }
+        bru.setCollectionVar('covAttempt', 0);
+        test('Response is 200 JSON', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getHeader('Content-Type')).to.include('application/json');
+        });
+        test('Response has items array', function () { expect(covJson.items).to.be.an('array'); });
+        const ids = covItems.map(function (s) { return s.id; });
+        const idxLocalBronze   = ids.indexOf(idLocalBronze);
+        const idxLocalPlatinum = ids.indexOf(idLocalPlatinum);
+        const idxNonlocBronze  = ids.indexOf(idNonlocBronze);
+        const idxNonlocTitle   = ids.indexOf(idNonlocTitle);
+        test('All 4 covenant fixture sponsors are present in the public response', function () {
+          expect(idxLocalBronze,   'local-bronze ('   + idLocalBronze   + ')').to.be.above(-1);
+          expect(idxLocalPlatinum, 'local-platinum (' + idLocalPlatinum + ')').to.be.above(-1);
+          expect(idxNonlocBronze,  'nonlocal-bronze (' + idNonlocBronze + ')').to.be.above(-1);
+          expect(idxNonlocTitle,   'nonlocal-title ('  + idNonlocTitle  + ')').to.be.above(-1);
+        });
+        // is_local is derived from placement.locality_band: the two Chicago locals read
+        // is_local=true, the NYC/LA non-locals read false — locality is geo-derived, not tier-bought.
+        const byId = Object.fromEntries(covItems.map(function (s) { return [s.id, s]; }));
+        if (byId[idLocalBronze] && Object.prototype.hasOwnProperty.call(byId[idLocalBronze], 'is_local')) {
+          test('Public list agrees: locals are is_local, non-locals are not (geo-derived)', function () {
+            expect(!!byId[idLocalBronze].is_local,   'local-bronze is_local').to.eql(true);
+            expect(!!byId[idLocalPlatinum].is_local, 'local-platinum is_local').to.eql(true);
+            expect(!!byId[idNonlocBronze].is_local,  'nonlocal-bronze is_local').to.eql(false);
+            expect(!!byId[idNonlocTitle].is_local,   'nonlocal-title is_local').to.eql(false);
+          });
+        }
+        // THE COVENANT (#25): locals are never zeroed/dropped (the floor) and non-locals are
+        // present too (uniform eligibility). Order carries no size/slot/position meaning, so we
+        // deliberately do NOT assert 'local before non-local' (that would re-encode the retired
+        // tierSort model).
+        test('COVENANT floor: local-bronze is never zeroed vs nonlocal-title (adversarial: lowest local tier vs highest non-local tier)', function () {
+          expect(idxLocalBronze, 'local-bronze must remain in the covenant rotation, never dropped').to.be.above(-1);
+        });
+        test('COVENANT floor: local-platinum is never zeroed', function () {
+          expect(idxLocalPlatinum).to.be.above(-1);
+        });
+        test('Uniform eligibility: non-local sponsors are present too (no named-slot drop)', function () {
+          expect(idxNonlocTitle, 'nonlocal-title present').to.be.above(-1);
+          expect(idxNonlocBronze, 'nonlocal-bronze present').to.be.above(-1);
+        });
 
 settings:
   encodeUrl: true

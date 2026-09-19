@@ -14,8 +14,11 @@
 #   - Cloudflare Worker already created for the target environment
 #
 # Required secrets:
-#   ADMIN_KEY                 — Bearer token for /admin routes (openssl rand -hex 32)
-#   FORMS_ENCRYPTION_KEY      — AES-GCM key for email signup encryption (min 32 chars)
+#   ADMIN_KEY                    — Bearer token for /admin routes (openssl rand -hex 32)
+#   FORMS_ENCRYPTION_KEY         — AES-GCM key for email signup encryption (min 32 chars)
+#   SHARED_REPORT_SIGNING_SECRET — HMAC key for SharedReport + sponsor-home signed
+#                                  links (>=32 chars). FAIL-CLOSED: unset -> the whole
+#                                  /sponsor corner and every /sharedReport link is inert.
 #
 # Ref: E2E-LAUNCH.md Part 5
 
@@ -50,6 +53,7 @@ fi
 SECRETS=(
   "ADMIN_KEY"
   "FORMS_ENCRYPTION_KEY"
+  "SHARED_REPORT_SIGNING_SECRET"
 )
 
 echo "════════════════════════════════════════════════════════════"
@@ -62,11 +66,31 @@ echo ""
 
 cd "$WORKER_DIR"
 
+# All three are crypto keys/tokens; enforce a shared minimum length. A signing
+# secret under 32 chars fail-closes the /sponsor + /sharedReport corner just as
+# an unset one does.
+MIN_LEN=32
+
 for SECRET in "${SECRETS[@]}"; do
   echo "──────────────────────────────────────────────────────────"
-  echo "Setting: $SECRET (--env $ENV)"
+  echo "Setting: $SECRET (--env $ENV, min ${MIN_LEN} chars)"
   echo "──────────────────────────────────────────────────────────"
-  wrangler secret put "$SECRET" --env "$ENV"
+  # CCR-PR567 re-run item 5 — read + length-check the value HERE, the one place
+  # it exists in the clear, then pipe it in. `wrangler secret list` can only
+  # confirm PRESENCE afterward, so a fat-fingered short/empty paste that would
+  # ship the fail-closed corner inert must be rejected at provisioning time.
+  while true; do
+    printf 'Paste value for %s, then Enter: ' "$SECRET"
+    IFS= read -rs VALUE
+    echo ""
+    VALUE="$(printf '%s' "$VALUE" | tr -d '[:space:]')" # strip stray paste whitespace
+    if [[ "${#VALUE}" -lt "$MIN_LEN" ]]; then
+      echo "  ✗ Too short (${#VALUE} chars, need >= ${MIN_LEN}). Try again."
+      continue
+    fi
+    break
+  done
+  printf '%s' "$VALUE" | wrangler secret put "$SECRET" --env "$ENV"
   echo ""
 done
 

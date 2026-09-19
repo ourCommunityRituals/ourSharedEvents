@@ -18,6 +18,9 @@ export const NODE_SPECS = [
 // no axe, no cloudflare:test, no fs). Proven green in the node project.
   'tests/count-floor.spec.ts',
   'tests/event-price.spec.ts',
+  // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
+  // name + placement fields). Imports the render module, no runtime.
+  'tests/sponsor-home-xss.spec.ts',
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',
@@ -119,4 +122,14 @@ export const NODE_SPECS = [
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
   'tests/what-external-link.spec.ts',
+  // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
+  // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
+  'tests/inject-marker.spec.ts',
+  // M1 (CCR-PR567) — admin sponsor aria-label attribute escaping. Imports the
+  // admin.html template as Text and asserts the client-JS escaper shape.
+  'tests/admin-sponsor-attr-escape.spec.ts',
+  // L1 (CCR-PR567) — admin go-live transitions honour VALID_TRANSITIONS
+  // (archived->active is direct; only draft hops via ready). Pure over the
+  // admin.html template string + the event-state domain module.
+  'tests/admin-golive-transitions.spec.ts',
 ];

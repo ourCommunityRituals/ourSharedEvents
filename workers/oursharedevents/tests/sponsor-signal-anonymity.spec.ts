@@ -74,6 +74,17 @@ async function createSponsor(eventId: string, name: string): Promise<string> {
   });
   expect(res.status, 'sponsor create must succeed to give the signal a valid FK').toBe(201);
   const body = (await res.json()) as { id: string };
+  // Strict consent (ADR-019 / D3): an admin-created placement is PENDING
+  // (sponsor_accepted = NULL) and does not render, so the impression/click gate
+  // (sponsors.ts: `sponsor_accepted = 1`) 404s it. Mark the sponsor accepted —
+  // the precondition for a RENDERABLE sponsor whose signal we then prove is
+  // never-who. This does not touch the never-who assertions below.
+  const tenv = env as unknown as TestEnv;
+  await tenv.DB.prepare(
+    'UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE sponsor_business_id = ? AND event_id = ?'
+  )
+    .bind(body.id, eventId)
+    .run();
   return body.id;
 }
 

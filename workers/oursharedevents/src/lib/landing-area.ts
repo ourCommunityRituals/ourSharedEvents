@@ -46,6 +46,7 @@
 // live on `/events` and the event page. `phase` is authoritative.
 
 import { escapeHtml } from './html-escape.js';
+import { injectMarker } from './inject-marker.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -321,5 +322,5 @@ function buildAreaMarkup(args: {
  */
 export function injectLandingArea(html: string, area: RenderedLandingArea): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  return html.replace(LANDING_AREA_MARKER, area.html);
+  return injectMarker(html, LANDING_AREA_MARKER, area.html);
 }

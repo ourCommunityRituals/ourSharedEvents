@@ -45,9 +45,18 @@ VALUES
   ('sp_smoke_local', 'ose', 'Smoke Local Sponsor', 'https://example.com', 'venue',
    41.6903, -87.6768, '89266457533ffff', '872664575ffffff');
 
+-- sponsor_accepted = 1: strict consent (ADR-019 / M4) renders a sponsor ONLY when
+-- accepted, and this fixture represents a VISIBLE sponsor (the T4 invariant asserts
+-- the event exposes an active sponsor). A pending (NULL) seed is hidden by the
+-- resolver + the impression/click gate, which is what failed T2/T4 on staging.
 INSERT OR IGNORE INTO sponsor_placement
   (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
-   click_token, display_token, is_active)
+   click_token, display_token, is_active, sponsor_accepted)
 VALUES
   ('spl_smoke_local', 'sp_smoke_local', 'evt_smoke_sponsored', 'gold', 'organizer', 1, 1,
-   'ctok_smoke_local', 'dtok_smoke_local', 1);
+   'ctok_smoke_local', 'dtok_smoke_local', 1, 1);
+
+-- INSERT OR IGNORE above skips a row a prior CI seed already wrote (pending), so
+-- the column default alone would not fix an already-seeded staging D1. Force the
+-- accepted state explicitly — idempotent, and effective on every re-seed.
+UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE id = 'spl_smoke_local';

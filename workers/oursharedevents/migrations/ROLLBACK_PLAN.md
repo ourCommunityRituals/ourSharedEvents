@@ -107,6 +107,50 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0076: event-type categories (OSE-1344). Additive: a lookup TABLE + a nullable
+-- column + one index. Reverse (category_code is additive and safe to leave):
+DROP INDEX IF EXISTS idx_event_type_registry_category;
+DROP TABLE IF EXISTS event_type_category_registry;
+-- ALTER TABLE event_type_registry DROP COLUMN category_code;   -- optional, additive
+
+-- 0075: events.created_by + status/created_by indexes (Epic TRIANGLE). Additive.
+DROP INDEX IF EXISTS idx_events_created_by;
+DROP INDEX IF EXISTS idx_events_status_updated;
+-- ALTER TABLE events DROP COLUMN created_by;   -- optional, additive
+
+-- 0074: events.what_url_enabled + what_url_type (OSE-1319). Additive columns.
+-- ALTER TABLE events DROP COLUMN what_url_type;     -- optional, additive
+-- ALTER TABLE events DROP COLUMN what_url_enabled;  -- optional, additive
+
+-- 0073: shortlinks.target_url + kind + idx_shortlinks_event_kind (QR upgrade).
+DROP INDEX IF EXISTS idx_shortlinks_event_kind;
+-- ALTER TABLE shortlinks DROP COLUMN kind;         -- optional, additive
+-- ALTER TABLE shortlinks DROP COLUMN target_url;   -- optional, additive
+
+-- 0072: events.what_url (OSE-1319). Additive column.
+-- ALTER TABLE events DROP COLUMN what_url;   -- optional, additive
+
+-- 0071: subscribers email encrypted at rest (Anonymous Contract A-5). NOT a pure
+-- add — a TABLE SWAP that DROPS plaintext `email` for email_hash + email_encrypted.
+-- A reverse recreates the pre-0071 plaintext-email shape (0008 + 0028), which is a
+-- DOCTRINE DOWNGRADE (re-exposes PII at rest) and cannot recover plaintext from the
+-- ciphertext. subscribers = 0 prod rows, so the MANDATED posture is ROLLBACK-FORWARD,
+-- never this reverse. Do NOT reverse on a populated table.
+
+-- 0070: events.is_published (the "listed" half of publication) + index. Additive.
+DROP INDEX IF EXISTS idx_events_published_brand_h;
+-- ALTER TABLE events DROP COLUMN is_published;   -- optional, additive
+
+-- 0069: events map-lookup index (OSE-1242).
+DROP INDEX IF EXISTS idx_events_brand_h;
+
+-- 0068: sponsor lifecycle + two-sided acceptance (sponsor_business.is_active +
+-- index; sponsor_placement.organizer_accepted / sponsor_accepted). Additive.
+DROP INDEX IF EXISTS idx_sponsor_business_active;
+-- ALTER TABLE sponsor_placement DROP COLUMN sponsor_accepted;    -- optional, additive
+-- ALTER TABLE sponsor_placement DROP COLUMN organizer_accepted;  -- optional, additive
+-- ALTER TABLE sponsor_business DROP COLUMN is_active;            -- optional, additive
+
 -- 0067: sponsor_placement (per-event attachment) + FK-repoint of the child tables
 -- off the retired `sponsors` onto sponsor_business (OSE-799 A2). DESTRUCTIVE and
 -- non-trivially reversible: 0067 DROPPED `sponsors` and recreated

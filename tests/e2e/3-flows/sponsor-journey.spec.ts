@@ -129,6 +129,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // State shared across serial tests
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -184,8 +185,44 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
     expect(res.body.id).toBeTruthy();
+    expect(res.body.placement_id, 'create exposes placement_id for the accept step').toBeTruthy();
 
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 1b: Sponsor accepts the placement (strict consent — ADR-019)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // An organizer-created placement is PENDING; strict consent hides a pending
+  // sponsor from EVERY public surface until the sponsor accepts on its own
+  // /sponsor page. This is the real triangle flow: admin mints the sponsor-home
+  // link (brand-scoped) → the sponsor's token responds "accept". Without it,
+  // Steps 3–7 (public visibility) correctly see nothing. adminFetch carries the
+  // CF-Access headers so both calls reach the worker through Access (the Bearer
+  // it also adds is ignored by the token-authed respond endpoint).
+
+  test('Step 1b: Sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +255,10 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     // OSE-944: the public sponsors read is cache-fronted (SWR); the sponsor created
     // in Step 1 may not appear on the immediate read. Poll until it propagates
     // instead of asserting once (the flywheel's screen N+1 sees screen N contract).
+    // The poll MUST exceed the 30s cache TTL: invalidation is best-effort
+    // (sponsors.ts), so a missed purge means the write is only visible at TTL
+    // expiry — a 20s poll under-budgeted that worst case and flaked on the first
+    // cold-cache staging deploy (P1-7). 40s covers the full TTL + margin.
     await expect(async () => {
       const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
       expect(res.status).toBe(200);
@@ -225,7 +266,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       const found = res.body.items.find((s: any) => s.id === sponsorId);
       expect(found, 'sponsor present in public list after write→read propagation').toBeTruthy();
       expect(found.name).toBe(SPONSOR_NAME);
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -261,7 +302,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       // Rotation config should be valid
       expect(bundle.rotation_config.rotationMs).toBeGreaterThanOrEqual(3000);
       expect(bundle.rotation_config.rotationMs).toBeLessThanOrEqual(15000);
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -445,7 +486,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       expect(res.body.ok).toBe(true);
       const found = res.body.items.find((s: any) => s.id === sponsorId);
       expect(found, 'deleted sponsor absent from public list after propagation').toBeUndefined();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -471,6 +512,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
 test.describe('Sponsor Journey — Tier Upgrade', () => {
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -499,6 +541,31 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 
     expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // Step 1b: strict consent (ADR-019). An organizer-created placement is PENDING and
+  // hidden from every public surface (incl. Display) until the sponsor accepts. Mint
+  // the sponsor-home link (brand-scoped) → the sponsor's token responds "accept".
+  test('Step 1b: Sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   test('Step 2: Verify bronze tier on Display', async ({ page, request }) => {
@@ -560,6 +627,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
   let eventId: string;
   let sponsorId: string;
+  let placementId: string;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -588,6 +656,29 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     });
     expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+  });
+
+  // Strict consent (ADR-019): accept the placement so it renders on every surface.
+  test('Accept: sponsor accepts the placement (mint home-link → respond)', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+    const res = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   test('Display surface: sponsor in bundle', async ({ page, request }) => {
@@ -602,7 +693,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const tvTop = res.body.bundle?.surface_sponsors?.tvTop || [];
       expect(tvTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Poster surface: sponsor in bundle', async ({ page, request }) => {
@@ -617,7 +708,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const posterTop = res.body.bundle?.surface_sponsors?.posterTop || [];
       expect(posterTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Public surface: sponsor in bundle', async ({ page, request }) => {
@@ -632,7 +723,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
       );
       const mobileBanner = res.body.bundle?.surface_sponsors?.mobileBanner || [];
       expect(mobileBanner.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('SharedReport surface: sponsor in unfiltered list', async ({ page, request }) => {
@@ -643,7 +734,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     await expect(async () => {
       const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
       expect(res.body.items.find((s: any) => s.id === sponsorId)).toBeTruthy();
-    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {

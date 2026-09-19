@@ -1,0 +1,51 @@
+# Stage 2 — Security Finale
+#
+# T6 is a separate closing workflow run. It starts only after the independent
+# T5 — Adversarial Red Team workflow succeeds.
+name: Stage 2 — Security Finale
+
+on:
+  workflow_run:
+    workflows: ['T5 — Adversarial Red Team']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-finale-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  security-closing:
+    name: 'T6 Closing Security (post-test integrity)'
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'full-pipeline/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          clean: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+      - name: 'Closing: committed-secret gate (nothing injected during testing)'
+        run: |
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
+      - name: Install dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: 'Closing: deployed surface carries no injected content'
+        env:
+          BASE_URL: https://stg.oursharedevents.com
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          npx playwright test --config=playwright.red-team.config.ts \
+            tests/red-team/public-list-stored-xss.spec.ts \
+            tests/red-team/security-headers.spec.ts

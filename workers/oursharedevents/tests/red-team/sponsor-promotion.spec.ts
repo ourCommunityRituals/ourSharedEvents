@@ -89,15 +89,25 @@ describe('OSE-736 — happy path crosses the #25 wall exactly once', () => {
     // OSE-799 A2: promotion writes the split model — name on sponsor_business,
     // tier/is_active/event_id on the sponsor_placement it created.
     const sp = await env.DB.prepare(
-      `SELECT sp.tier AS tier, sp.is_active AS is_active, sp.event_id AS event_id, sb.name AS name
+      `SELECT sp.tier AS tier, sp.is_active AS is_active, sp.event_id AS event_id,
+              sp.sponsor_accepted AS sponsor_accepted, sb.name AS name
          FROM sponsor_business sb
          JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
         WHERE sb.id = ?`
     )
       .bind(res.sponsor_id)
-      .first<{ tier: string; is_active: number; event_id: string; name: string }>();
+      .first<{
+        tier: string;
+        is_active: number;
+        event_id: string;
+        sponsor_accepted: number;
+        name: string;
+      }>();
     expect(sp?.is_active).toBe(1);
     expect(sp?.event_id).toBe('evt-P');
+    // Promotion IS the sponsor's consent (ADR-019 / CCR-PR567 re-run): a promoted
+    // self-signup lands sponsor_accepted=1, so the strict resolver renders it.
+    expect(sp?.sponsor_accepted).toBe(1);
     // FIX 1 — tier server-forced to the covenant base (never escalated).
     expect(sp?.tier).toBe(COVENANT_BASE_TIER);
     expect(sovTierOf(sp!.tier)).toBe('base');
@@ -212,10 +222,17 @@ describe('OSE-736 — is_active writer enumeration (truthful, not "sole writer")
       .filter(
         ([, c]) =>
           // OSE-799 A2: is_active moved to sponsor_placement. A writer is an INSERT
-          // of a placement (create/promotion, is_active=1) or an UPDATE of
-          // sponsor_placement.is_active (admin soft-delete).
+          // of a placement (create/promotion, is_active=1) or an UPDATE that
+          // ASSIGNS sponsor_placement.is_active (admin soft-delete).
+          //
+          // The UPDATE match is scoped to the SET clause (before the first WHERE):
+          // a statement that merely FILTERS on `WHERE ... is_active = 1` is a READ,
+          // not a write. The earlier `SET[\s\S]*is_active` matched that too, which
+          // false-flagged sponsor-home.ts's respond UPDATE — it SETs
+          // sponsor_accepted and only references is_active in its WHERE / subquery
+          // (PR #567). A real `SET is_active = …` still matches and still fails.
           /INSERT\s+INTO\s+sponsor_placement\b/i.test(c) ||
-          /UPDATE\s+sponsor_placement\s+SET[\s\S]*is_active/i.test(c)
+          /UPDATE\s+sponsor_placement\s+SET\s+(?:(?!\bWHERE\b)[\s\S])*?\bis_active\s*=/i.test(c)
       )
       .map(([p]) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/'))
       .sort();

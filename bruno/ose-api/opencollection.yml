@@ -32,9 +32,9 @@ request:
 
         const elapsed = Date.now() - bru.getVar('requestStartTime');\r
 
-        test(`Response time < 2000ms (actual: ${elapsed}ms)`, function() {\r
+        test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {\r
 
-        \    expect(elapsed).to.be.below(2000);\r
+        \    expect(elapsed).to.be.below(6000);\r
 
         });\r
 

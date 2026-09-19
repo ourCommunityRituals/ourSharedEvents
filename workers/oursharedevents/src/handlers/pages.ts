@@ -33,6 +33,13 @@ import {
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
 import {
+  parseDiscoveryFilters,
+  applyDiscoveryFilters,
+  renderDiscoveryFilters,
+  injectDiscoveryFilters,
+  discoveryEmptyCopy,
+} from '../lib/event-discovery';
+import {
   renderEventList,
   renderEventListError,
   injectEventList,
@@ -92,6 +99,12 @@ export interface PagesEnv {
    * `src/handlers/data-subject.ts`, which deletes by email on demand.
    */
   SUBSCRIBERS_RETENTION_DAYS?: string;
+  /**
+   * Stale-draft expiry window in days (see `src/lib/draft-expiry.ts`). Read by
+   * the scheduled `runDraftExpiry` job. Unset → 30. `0` → the sweep is off.
+   * Archives (never deletes) drafts untouched for longer than the window.
+   */
+  DRAFT_EXPIRY_DAYS?: string;
 }
 
 /**
@@ -158,7 +171,7 @@ function securityHeaders(nonce: string): Record<string, string> {
  * Replaces `<script` with `<script nonce="..."` so inline scripts are allowed
  * only for this specific response.
  */
-function html(content: string, status = 200): Response {
+export function html(content: string, status = 200): Response {
   const nonce = generateNonce();
   // Inject nonce into all <script> tags (handles <script>, <script type="module">, etc.)
   const nonced = content.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`); // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
@@ -268,9 +281,18 @@ type PublicListEnv = PagesEnv & DataProviderEnv;
 
 export async function handlePublicPage(
   env: PagesEnv,
-  ctx?: DataProviderCtx | null
+  ctx?: DataProviderCtx | null,
+  request?: Request
 ): Promise<Response> {
+  // Attendee discovery (lib/event-discovery): `?when=` (allowlisted) and `?q=`
+  // (capped, escaped once) are parsed from the request and applied over the
+  // already brand-scoped / active / published projection — never in SQL. The
+  // filter bar is server-rendered like the list, so a filtered URL is a link.
+  const filters = parseDiscoveryFilters(
+    request ? new URL(request.url) : new URL('https://x/events')
+  );
   let list: RenderedEventList;
+  let shown = 0;
   try {
     const dp = getDataProvider(env as PublicListEnv, ctx ?? null);
     const result = await dp.listEvents('root');
@@ -282,12 +304,23 @@ export async function handlePublicPage(
     // registration for events that already happened. Same seam the JSON API
     // uses, so the two cannot disagree.
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
-    list = renderEventList(items as EventListItem[]);
+    const filtered = applyDiscoveryFilters(items as EventListItem[], filters);
+    shown = filtered.length;
+    list =
+      filtered.length === 0 && items.length > 0
+        ? {
+            html: `<p class="empty" data-testid="public-events-empty">${discoveryEmptyCopy(filters)}</p>`,
+            countText: '0 events',
+            upcoming: 0,
+          }
+        : renderEventList(filtered);
   } catch {
     list = renderEventListError();
   }
   const shell = injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public');
-  return html(injectEventList(shell, list));
+  return html(
+    injectEventList(injectDiscoveryFilters(shell, renderDiscoveryFilters(filters, shown)), list)
+  );
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
@@ -705,6 +738,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
@@ -893,6 +927,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
@@ -1303,7 +1338,7 @@ async function fetchEventPageSocialData(
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, 1) = 1
-                AND COALESCE(sp.sponsor_accepted, 1) = 1
+                AND sp.sponsor_accepted = 1
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

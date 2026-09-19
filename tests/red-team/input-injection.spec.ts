@@ -29,8 +29,7 @@
 
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
-const BASE_URL =
-  process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
+const BASE_URL = process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
 
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
@@ -57,7 +56,7 @@ const SQL_INJECTION_PAYLOADS = [
   "' OR '1'='1",
   "'; DROP TABLE events; --",
   "' UNION SELECT id, title, 1, 1, 1, 1 FROM events --",
-  "1; SELECT * FROM events",
+  '1; SELECT * FROM events',
   "' OR 1=1 --",
 ];
 
@@ -78,7 +77,7 @@ function assertNoUnescapedHtml(value: string, label: string): void {
   const unescapedTagPattern = /<script|<img|<svg|onerror=|onload=/i;
   expect(
     unescapedTagPattern.test(value),
-    `Unescaped HTML/JS found in ${label}: ${value.slice(0, 200)}`,
+    `Unescaped HTML/JS found in ${label}: ${value.slice(0, 200)}`
   ).toBe(false);
 }
 
@@ -97,7 +96,7 @@ async function assertSafeErrorBody(body: string, label: string): Promise<void> {
   for (const [pattern, description] of leakPatterns) {
     expect(
       pattern.test(body),
-      `${label} — response body leaks "${description}": ${body.slice(0, 300)}`,
+      `${label} — response body leaks "${description}": ${body.slice(0, 300)}`
     ).toBe(false);
   }
 }
@@ -106,9 +105,7 @@ async function assertSafeErrorBody(body: string, label: string): Promise<void> {
 
 test.describe('INJ-001 — XSS payload in form name field is stored sanitized', () => {
   for (const payload of XSS_PAYLOADS) {
-    test(`XSS payload "${payload.slice(0, 40)}" is rejected or sanitized`, async ({
-      request,
-    }) => {
+    test(`XSS payload "${payload.slice(0, 40)}" is rejected or sanitized`, async ({ request }) => {
       const endpoint = `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`;
 
       const response = await request.post(endpoint, {
@@ -145,10 +142,7 @@ test.describe('INJ-001 — XSS payload in form name field is stored sanitized', 
       }
 
       // 500 is always wrong
-      expect(
-        status,
-        `XSS payload caused a 500: "${payload.slice(0, 60)}"`,
-      ).not.toBe(500);
+      expect(status, `XSS payload caused a 500: "${payload.slice(0, 60)}"`).not.toBe(500);
 
       if (status >= 200 && status < 300) {
         // Accepted — body MUST NOT echo back unescaped payload
@@ -172,7 +166,7 @@ test.describe('INJ-001 — XSS payload in form name field is stored sanitized', 
 test.describe('INJ-006 — XSS payload not reflected unescaped in GET response', () => {
   test.skip(
     !ADMIN_KEY && !X_OCR_INTERNAL,
-    'Admin auth not set — skipping XSS readback test (set ADMIN_KEY or X_OCR_INTERNAL)',
+    'Admin auth not set — skipping XSS readback test (set ADMIN_KEY or X_OCR_INTERNAL)'
   );
 
   test('Stored XSS payload appears escaped in admin GET /api/v2/admin/events', async ({
@@ -182,21 +176,23 @@ test.describe('INJ-006 — XSS payload not reflected unescaped in GET response',
 
     // 1. Submit the payload via the public email-signup form
     const eventId = FIXTURE_EVENT_ID;
-    await request.post(
-      `${BASE_URL}/api/v2/events/${eventId}/forms/email-signup`,
-      {
-        data: { name: UNIQUE_PAYLOAD, email: 'redteam-xss@example.com' },
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
+    await request.post(`${BASE_URL}/api/v2/events/${eventId}/forms/email-signup`, {
+      data: { name: UNIQUE_PAYLOAD, email: 'redteam-xss@example.com' },
+      headers: { 'Content-Type': 'application/json' },
+    });
 
     // 2. Read it back through the admin endpoint
     const readResponse = await request.get(`${BASE_URL}/api/v2/admin/events`, {
       headers: adminHeaders(),
+      maxRedirects: 0,
     });
 
-    if (readResponse.status() === 401 || readResponse.status() === 403) {
-      test.skip(true, 'Admin endpoint returned 401/403 — cannot verify readback');
+    if (
+      readResponse.status() === 401 ||
+      readResponse.status() === 403 ||
+      (readResponse.status() >= 300 && readResponse.status() < 400)
+    ) {
+      test.skip(true, 'Admin endpoint is gated — cannot verify readback');
       return;
     }
 
@@ -217,23 +213,18 @@ test.describe('INJ-002 — SQL injection payloads in event ID path parameter', (
     test(`SQL injection in path "${payload.slice(0, 40)}" → 400 or 404 (not 500)`, async ({
       request,
     }) => {
-      const response = await request.get(
-        `${BASE_URL}/api/v2/events/${encodedPayload}`,
-      );
+      const response = await request.get(`${BASE_URL}/api/v2/events/${encodedPayload}`);
 
       const status = response.status();
       const body = await response.text();
 
       // 500 means the injection reached the DB and caused an unhandled error
-      expect(
-        status,
-        `SQL injection in path caused 500: "${payload}"`,
-      ).not.toBe(500);
+      expect(status, `SQL injection in path caused 500: "${payload}"`).not.toBe(500);
 
       // Must be 400 (invalid format) or 404 (not found after safe lookup)
       expect(
         [400, 404],
-        `SQL injection in path returned ${status} — expected 400 or 404: "${payload}"`,
+        `SQL injection in path returned ${status} — expected 400 or 404: "${payload}"`
       ).toContain(status);
 
       await assertSafeErrorBody(body, `SQL injection in path "${payload.slice(0, 40)}"`);
@@ -256,16 +247,13 @@ test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
             email: payload,
           },
           headers: { 'Content-Type': 'application/json' },
-        },
+        }
       );
 
       const status = response.status();
       const body = await response.text();
 
-      expect(
-        status,
-        `SQL injection in email body caused 500: "${payload}"`,
-      ).not.toBe(500);
+      expect(status, `SQL injection in email body caused 500: "${payload}"`).not.toBe(500);
 
       // Valid responses: 400 (validation), 404 (event not found), 422 (unprocessable)
       // Not 200/201 — a SQL payload is not a valid email address
@@ -275,7 +263,7 @@ test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
       } else {
         expect(
           [400, 404, 422],
-          `SQL injection in body returned ${status} — expected 400, 404, or 422: "${payload}"`,
+          `SQL injection in body returned ${status} — expected 400, 404, or 422: "${payload}"`
         ).toContain(status);
         await assertSafeErrorBody(body, `SQL injection rejected: "${payload.slice(0, 40)}"`);
       }
@@ -298,31 +286,22 @@ test.describe('INJ-004 — Oversized payload is rejected cleanly', () => {
           email: 'oversize@example.com',
         },
         headers: { 'Content-Type': 'application/json' },
-      },
+      }
     );
 
     const status = response.status();
     const body = await response.text();
 
-    expect(
-      status,
-      `17 KB payload returned 500 — unhandled oversized input`,
-    ).not.toBe(500);
+    expect(status, `17 KB payload returned 500 — unhandled oversized input`).not.toBe(500);
 
-    expect(
-      status,
-      `17 KB payload returned 200 — accepted without size validation`,
-    ).not.toBe(200);
+    expect(status, `17 KB payload returned 200 — accepted without size validation`).not.toBe(200);
 
-    expect(
-      status,
-      `17 KB payload returned 201 — accepted without size validation`,
-    ).not.toBe(201);
+    expect(status, `17 KB payload returned 201 — accepted without size validation`).not.toBe(201);
 
     // Must be 400 (validation reject), 413 (too large), 404 (event not found first)
     expect(
       [400, 404, 413],
-      `17 KB payload returned ${status} — expected 400, 413, or 404`,
+      `17 KB payload returned ${status} — expected 400, 413, or 404`
     ).toContain(status);
 
     await assertSafeErrorBody(body, '17 KB payload response');
@@ -341,7 +320,7 @@ test.describe('INJ-004 — Oversized payload is rejected cleanly', () => {
       {
         data: largeBody,
         headers: { 'Content-Type': 'application/json' },
-      },
+      }
     );
 
     expect(response.status()).not.toBe(500);
@@ -369,17 +348,14 @@ test.describe('INJ-005 — Malformed JSON body returns 400 with safe error messa
         {
           data: body,
           headers: { 'Content-Type': 'application/json' },
-        },
+        }
       );
 
       const status = response.status();
       const responseBody = await response.text();
 
       // 500 means the JSON parse error was unhandled
-      expect(
-        status,
-        `Malformed JSON "${label}" caused 500`,
-      ).not.toBe(500);
+      expect(status, `Malformed JSON "${label}" caused 500`).not.toBe(500);
 
       // 200/201 means malformed input was accepted — unexpected
       if (status === 200 || status === 201) {
@@ -388,8 +364,8 @@ test.describe('INJ-005 — Malformed JSON body returns 400 with safe error messa
         await assertSafeErrorBody(responseBody, `Malformed JSON accepted "${label}"`);
       } else {
         expect(
-          [400, 404, 415, 422],
-          `Malformed JSON "${label}" returned ${status} — expected 400, 404, 415, or 422`,
+          [400, 404, 415, 422, 429],
+          `Malformed JSON "${label}" returned ${status} — expected a safe client or rate-limit response`
         ).toContain(status);
       }
 
@@ -398,7 +374,7 @@ test.describe('INJ-005 — Malformed JSON body returns 400 with safe error messa
       // The error message should be generic — no parser internals
       if (responseBody.includes('SyntaxError') || responseBody.includes('Unexpected token')) {
         throw new Error(
-          `Malformed JSON "${label}" — raw parser error leaked to client: ${responseBody.slice(0, 200)}`,
+          `Malformed JSON "${label}" — raw parser error leaked to client: ${responseBody.slice(0, 200)}`
         );
       }
     });

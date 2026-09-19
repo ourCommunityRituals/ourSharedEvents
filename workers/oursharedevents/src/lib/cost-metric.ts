@@ -87,6 +87,11 @@ const STATIC_SEGMENTS: ReadonlySet<string> = new Set([
   'draft',
   'event-types',
   'areas',
+  // sponsor-home corner (Epic TRIANGLE, CCR-PR567 L2c)
+  'sponsor',
+  'home-link',
+  'placements',
+  'respond',
   // maps / uec
   'maps',
   'venue-image',

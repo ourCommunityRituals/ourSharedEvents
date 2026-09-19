@@ -14,6 +14,15 @@ export interface HealthEnv extends DataProviderEnv {
   WORKER_BUILD_VERSION?: string;
 }
 
+// CCR-PR567 re-run item 5 (revised): the signing-secret usability boolean was
+// briefly reported on /health, but the NS-3 security-regression gate requires the
+// PUBLIC health endpoint to stay "boring OK" — no secret/key/token-adjacent
+// fields — and it authenticates, so the field cannot be hidden from it. Exposing
+// signing-config state on a public endpoint is exactly the info-disclosure NS-3
+// guards against, so it was removed. Value-validity now lives where it belongs:
+// set-secrets.sh length-checks at provisioning, and the T4 /sponsor journey fails
+// functionally if the signing secret is unset/short (a real usability probe).
+
 export async function handleHealth(env: HealthEnv): Promise<Response> {
   const timestamp = new Date().toISOString();
 

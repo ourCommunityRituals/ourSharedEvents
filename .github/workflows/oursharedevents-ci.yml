@@ -264,7 +264,11 @@ jobs:
           python scripts/check-secrets-baseline.py
 
       - name: npm audit
-        run: npm audit --omit=dev --audit-level=moderate
+        # Audit the committed dependency graph instead of submitting the
+        # installed tree. The first-party @ocr/flags file: dependency is
+        # staged beside this checkout for CI, but npm's audit endpoint rejects
+        # that local linked tree as an invalid package tree.
+        run: npm audit --omit=dev --audit-level=moderate --package-lock-only
 
       # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
@@ -600,6 +604,20 @@ jobs:
         if: matrix.shard == 'lint'
         run: node scripts/check-token-adherence.mjs
 
+      # CCR-PR567 re-run item 7 — the token AA contrast ratios (including the
+      # --on-accent + status-pill pairs added this epic) were static-true but
+      # UNGATED. verify-contrast.mjs already exits non-zero on any sub-AA pair;
+      # run it here so a token edit that drops a pair below 4.5:1 turns CI red.
+      # It imports @ocr/ui's contrast.ts, so install packages/ui (its own
+      # lockfile carries tsx) and run through tsx — the gate VM is Node 20, which
+      # has no native TS type-stripping.
+      - name: 'Lint: token contrast meets WCAG AA (@ocr/ui verify-contrast)'
+        if: matrix.shard == 'lint'
+        working-directory: packages/ui
+        run: |
+          npm ci --prefer-offline || npm ci
+          npx tsx scripts/verify-contrast.mjs
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
@@ -826,6 +844,29 @@ jobs:
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ────────────────────────────────────────────────────────────────────
+      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
+      # BEFORE the remote D1 migrate steps. A missing signing secret would ship
+      # the /sponsor + /sharedReport corner SILENTLY INERT, and we must not mutate
+      # the shared remote D1 for a deploy we already know is doomed. `wrangler
+      # secret list` sees only the NAME (never the value); value-length is enforced
+      # at provisioning (set-secrets.sh) and functionally by the T4 /sponsor
+      # journey (a public /health field would trip the NS-3 boring-OK gate).
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh staging"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on staging (value-length verified post-deploy via /health)."
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1017,6 +1058,11 @@ jobs:
             "$STG_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; exit 1; fi
           echo "✓ Health check passed"
+          # Signing-secret value-validity is NOT asserted here: /health stays
+          # "boring OK" for the NS-3 security gate (no secret-adjacent fields on a
+          # public endpoint). It is covered at provisioning (set-secrets.sh length
+          # check) and functionally by the T4 /sponsor journey, which fails if the
+          # signing secret is unset/short (CCR-PR567 re-run item 5, revised).
 
   # ============================================================================
   # TIER 2: SMOKE — Post-deploy + nightly + dispatch
@@ -1236,6 +1282,25 @@ jobs:
         run: |
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-sponsors-reset.sql
+
+      # CCR-PR567 Stage-2: seed the 4 canonical covenant sponsors ALREADY ACCEPTED
+      # (sponsor_accepted=1) so the covenant Bruno block is a pure ASSERT. Under ADR-019
+      # strict consent an organizer-created placement is PENDING until the sponsor
+      # accepts; the old API-seed-then-mint-then-respond flow could not run reliably on
+      # Bruno CLI (multi-request after-response scripts silently skipped), so consent is
+      # now established in the fixture. Runs AFTER the reset (which clears stale rows by
+      # name) so exactly these 4 exist at read time. Idempotent.
+      - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
+        id: seed-covenant-sponsors
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../postman/fixtures/covenant-sponsors-seed.sql
 
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
@@ -1795,6 +1860,27 @@ jobs:
           fi
           echo "✓ Production DB isolation verified"
 
+      # ────────────────────────────────────────────────────────────────────
+      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
+      # BEFORE the remote D1 migrate steps (production). Same rationale as
+      # staging: never mutate the shared remote D1 for a deploy that would ship
+      # the /sponsor + /sharedReport corner inert. Value-length is enforced at
+      # provisioning (set-secrets.sh) + functionally by the T4 /sponsor journey.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          OUT="$(npx wrangler secret list --env production 2>&1 || true)"
+          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
+            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh production"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "SHARED_REPORT_SIGNING_SECRET present on production (value-length verified post-deploy via /health)."
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1942,6 +2028,9 @@ jobs:
             "$PROD_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; exit 1; fi
           echo "✓ Production health check passed"
+          # Signing-secret value-validity is NOT asserted here — /health stays
+          # "boring OK" for NS-3. Covered at provisioning (set-secrets.sh) + the
+          # T4 /sponsor journey (CCR-PR567 re-run item 5, revised).
 
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)
@@ -2137,6 +2226,7 @@ jobs:
           echo "| T2 Contract STG (Bruno) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T5/T6 Security Finale | separate workflow runs after this pipeline | see PR checks |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,30 @@
+info:
+  name: OSE-213 | verify-qr | 404 on unknown event
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/evt_does_not_exist/verify-qr"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: verify-qr is the single QR-verified door to 'active'. On an
+        // unknown event it is EVENT_NOT_FOUND (404), never a silent success.
+        test('404 on unknown event', function () { expect(res.getStatus()).to.eql(404); });
+        test('code is EVENT_NOT_FOUND', function () { expect(res.getBody().code).to.eql('EVENT_NOT_FOUND'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

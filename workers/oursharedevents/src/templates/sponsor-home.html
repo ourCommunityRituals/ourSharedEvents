@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Your sponsorships</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      /* Sponsor home — the sponsor corner of the triangle. Server-rendered;
+         the only script on the page is the accept / decline POST. Phone-first,
+         big type, token-driven so it inherits the dark theme like every other
+         surface (the reader is a business owner on a phone, in a bar). */
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 1rem 16px 3rem;
+      }
+      .sh-head {
+        margin: 0.5rem 0 1.25rem;
+      }
+      .sh-head h2 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin: 0 0 0.35rem;
+      }
+      .sh-head p {
+        color: var(--text-muted);
+        margin: 0;
+        font-size: 1rem;
+      }
+      .sh-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+      }
+      .sh-stat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 0.75rem 0.5rem;
+        text-align: center;
+      }
+      .sh-stat .n {
+        display: block;
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .sh-stat .l {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: 0.2rem;
+      }
+      .sh-section-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin: 1.25rem 0 0.5rem;
+      }
+      .sh-list {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .sh-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--accent);
+        border-radius: var(--radius-sm);
+        padding: 1rem;
+      }
+      .sh-card.needs-answer {
+        border-left-color: var(--warn);
+      }
+      .sh-card.declined {
+        border-left-color: var(--border);
+        opacity: 0.75;
+      }
+      .sh-card h2 {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin: 0 0 0.25rem;
+        line-height: 1.25;
+      }
+      .sh-when {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .sh-meta {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin: 0 0 0.75rem;
+      }
+      .sh-state {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-right: 0.35rem;
+      }
+      .sh-state.live { background: var(--success); color: var(--bg); }
+      .sh-state.soon { background: var(--accent); color: var(--bg); }
+      .sh-state.done { background: var(--border); color: var(--text); }
+      .sh-state.pending { background: var(--warn); color: var(--bg); }
+      .sh-state.declined { background: var(--border); color: var(--text); }
+      .sh-why {
+        font-size: 0.95rem;
+        color: var(--text);
+        margin: 0.35rem 0 0;
+      }
+      .sh-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .sh-actions .btn {
+        flex: 1 1 auto;
+        min-height: 48px;
+        font-size: 1rem;
+      }
+      .sh-msg {
+        margin: 0.5rem 0 0;
+        font-size: 0.9rem;
+        min-height: 1.2em;
+      }
+      .sh-msg.ok { color: var(--success); }
+      .sh-msg.error { color: var(--danger); }
+      .sh-empty {
+        background: var(--surface);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-sm);
+        padding: 1.5rem 1rem;
+        text-align: center;
+        color: var(--text-muted);
+      }
+      .sh-foot {
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+      .sh-foot code {
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>OurSharedEvents</h1>
+      <a href="/events" data-testid="sponsor-home-nav-events">What's on</a>
+    </header>
+    <main id="main-content" data-testid="sponsor-home" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
+      <div class="sh-head">
+        <h2 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h2>
+        <p data-testid="sponsor-home-sub">Everything you're backing, in one place. Nothing here identifies an attendee.</p>
+      </div>
+
+      <div class="sh-summary" data-testid="sponsor-home-summary">
+        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-live"><!--OCR_COUNT_LIVE--></span><span class="l">Live now</span></div>
+        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-upcoming"><!--OCR_COUNT_UPCOMING--></span><span class="l">Coming up</span></div>
+        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-pending"><!--OCR_COUNT_PENDING--></span><span class="l">Need your answer</span></div>
+      </div>
+
+      <!--OCR_SPONSOR_PLACEMENTS-->
+
+      <p class="sh-foot" data-testid="sponsor-home-foot">
+        This link is yours alone and expires <!--OCR_EXPIRES-->. If it stops working, ask the organizer for a fresh one.
+        Reports show counts within time windows, never who.
+      </p>
+    </main>
+    <!--OCR_LEGAL_FOOTER-->
+    <script>
+      // Accept / decline a placement. The token rides in the URL (?t=) and is
+      // re-sent in the body; the server re-verifies it and checks the placement
+      // belongs to the token's sponsor before writing. No other JS on the page.
+      (function () {
+        var token = new URLSearchParams(window.location.search).get('t') || '';
+        function setMsg(card, text, cls) {
+          var m = card.querySelector('.sh-msg');
+          if (!m) return;
+          m.textContent = text;
+          m.className = 'sh-msg ' + (cls || '');
+        }
+        document.addEventListener('click', async function (ev) {
+          var btn = ev.target && ev.target.closest && ev.target.closest('[data-action="placement-respond"]');
+          if (!btn) return;
+          var card = btn.closest('.sh-card');
+          var pid = btn.getAttribute('data-placement-id');
+          var accepted = btn.getAttribute('data-accepted') === '1';
+          var all = card.querySelectorAll('button');
+          all.forEach(function (b) { b.disabled = true; });
+          try {
+            var res = await fetch('/api/v2/sponsor/placements/' + encodeURIComponent(pid) + '/respond', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: token, accepted: accepted }),
+            });
+            var data = null;
+            try { data = await res.json(); } catch (e) { data = null; }
+            if (res.ok && data && data.ok) {
+              var state = card.querySelector('[data-testid="placement-state"]');
+              if (state) {
+                state.textContent = accepted ? 'Accepted' : 'Declined';
+                state.className = 'sh-state ' + (accepted ? 'live' : 'declined');
+              }
+              card.classList.remove('needs-answer');
+              card.classList.toggle('declined', !accepted);
+              card.setAttribute('data-sponsor-accepted', accepted ? '1' : '0');
+              // Keep the buttons in step with the new state (mirror the server render in
+              // sponsor-home.ts): hide the choice you just made, leave the other visible
+              // so "you can change your mind below" is actually true.
+              var acceptBtn = card.querySelector('[data-testid="placement-accept"]');
+              var declineBtn = card.querySelector('[data-testid="placement-decline"]');
+              if (acceptBtn) acceptBtn.hidden = accepted;
+              if (declineBtn) declineBtn.hidden = !accepted;
+              setMsg(card, accepted ? 'Thanks. Your placement is on.' : 'Declined. You can change your mind below.', 'ok');
+              var pending = document.querySelector('[data-testid="sponsor-home-count-pending"]');
+              if (pending && card.getAttribute('data-was-pending') === '1') {
+                pending.textContent = String(Math.max(0, Number(pending.textContent) - 1));
+                card.setAttribute('data-was-pending', '0');
+              }
+            } else {
+              setMsg(card, (data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ').', 'error');
+            }
+          } catch (e) {
+            setMsg(card, 'No connection. Try again.', 'error');
+          } finally {
+            all.forEach(function (b) { b.disabled = false; });
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
