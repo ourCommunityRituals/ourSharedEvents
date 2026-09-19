@@ -73,6 +73,8 @@ export function publicReadLimitResponse(): Response {
       status: 429,
       headers: {
         'Retry-After': '60',
+        'X-RateLimit-Limit': String(PUBLIC_READ_MAX),
+        'X-RateLimit-Window': '60s',
         'Cache-Control': 'no-store',
       },
     }
