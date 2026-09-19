@@ -35,6 +35,37 @@ function readFile(relPath) {
   return readFileSync(join(ROOT, relPath), 'utf-8');
 }
 
+// ─── Hosted runner migration — production jobs (OSE-1257) ───────────
+
+describe('production jobs use hosted runners', () => {
+  test('no workflow job targets the retired self-hosted runner pool', () => {
+    const yaml = require('js-yaml');
+    const { readdirSync } = require('fs');
+    const workflowsDir = join(ROOT, '.github', 'workflows');
+    const workflowFiles = readdirSync(workflowsDir).filter((file) => /\.(yml|yaml)$/.test(file));
+
+    for (const file of workflowFiles) {
+      const workflow = yaml.load(readFile(`.github/workflows/${file}`)) || {};
+      for (const [jobId, job] of Object.entries(workflow.jobs || {})) {
+        const runner = job && job['runs-on'];
+        const labels = Array.isArray(runner) ? runner : [runner];
+        expect(
+          labels,
+          `${file}:${jobId} must not target the retired self-hosted runner pool`
+        ).not.toContain('self-hosted');
+      }
+    }
+  });
+
+  test('deploy-production and smoke-production use ubuntu-latest', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    expect(workflow.jobs['deploy-production']['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs['smoke-production']['runs-on']).toBe('ubuntu-latest');
+  });
+});
+
 // ─── Token Naming Consistency ────────────────────────────────────────
 
 describe('CLOUDFLARE_API_TOKEN_OSE naming consistency', () => {
