@@ -13,8 +13,11 @@
 | **CodeQL Security Analysis**  | `security-scan.yml`        | Push to main/claude/**, PR to main, Weekly cron |
 
 The canonical OurSharedEvents pipeline is defined in `oursharedevents-ci.yml`.
-T5 and T6 are intentionally separate workflow runs: T5 adversarial testing
-must complete before the independent Stage 2 security finale (T6) starts.
+T5, T6, and the post-T6 security bookend are intentionally separate workflow
+runs: T5 adversarial testing must complete before the independent Stage 2
+security finale (T6) starts, and the post-T6 bookend runs only after T6
+success. The chain accepts both pull-request pipeline runs and the
+corresponding `main` push, so merged changes receive the same sequence.
 
 ## Properly Archived/Disabled Files
 
