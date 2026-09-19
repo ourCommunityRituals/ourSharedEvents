@@ -1,87 +1,37 @@
-# Stage 2 — Security Finale (REUSABLE)
+# Stage 2 — Security Finale
 #
-# The sequenced tail of the two-stage pipeline, after the real-env functional
-# tier (T4):
-#   T5 Adversarial  — the red-team suite run against the DEPLOYED environment,
-#                     confirming the defended behaviours hold on the real surface.
-#   T6 Closing      — post-test integrity: nothing was injected DURING testing
-#                     (committed-secret gate on the tree + a stored-content /
-#                     security-header re-scan of the deployed surface after all
-#                     the T2–T4 + adversarial traffic wrote data).
-#
-# WHY REUSABLE (workflow_call), not inline in oursharedevents-ci.yml:
-#   This is an ORG-LEVEL rule — every OCR product and every OA/OSM white-label
-#   fork should run the SAME security finale. Per the brain's "infra-wide by
-#   default / per-repo copies are the drift pattern" principle, it is defined
-#   ONCE here and CALLED with `needs:` sequencing. It promotes verbatim into an
-#   org-level `.github` repo referenced by tag (`uses: ourCommunityRituals/
-#   .github/.../security-finale.yml@v1`) — move the file, change the `uses:`,
-#   nothing else. CodeQL + ZAP stay in their own files (native code-scanning /
-#   Docker-action SARIF); this owns the adversarial + closing sequence.
-#
-# Sequencing is preserved: the CALLER job declares `needs: functional-staging`,
-# and T6 here declares `needs: red-team-staging`.
-name: Stage 2 — Security Finale (reusable)
+# T6 is a separate closing workflow run. It starts only after the independent
+# T5 — Adversarial Red Team workflow succeeds.
+name: Stage 2 — Security Finale
 
 on:
-  workflow_call:
-    inputs:
-      base_url:
-        description: Deployed environment the adversarial + closing scans target.
-        required: false
-        type: string
-        default: 'https://stg.oursharedevents.com'
-    # secrets: inherit at the call site passes CF_ACCESS_CLIENT_ID/SECRET + ADMIN_KEY.
+  workflow_run:
+    workflows: ['T5 — Adversarial Red Team']
+    types: [completed]
 
 permissions:
   contents: read
 
-jobs:
-  red-team-staging:
-    name: 'T5 Adversarial (red-team) → deployed env'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          clean: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '20'
-      - name: Stage adjacent @ocr/flags package
-        shell: bash
-        continue-on-error: true
-        timeout-minutes: 2
-        env:
-          GIT_TERMINAL_PROMPT: '0'
-        run: bash scripts/ci-stage-ocr-workspace.sh
-      - name: Install dependencies
-        run: npm ci --prefer-offline || npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-      # The red-team suite (playwright.red-team.config.ts, testDir tests/red-team)
-      # asserts the defended behaviours against the LIVE deployed surface: auth
-      # attacks, data-exfiltration, input-injection, stored-XSS, live rate-limit,
-      # security headers. Blocking — a broken defence is a stop, not a warning.
-      - name: 'Adversarial: red-team suite against the deployed env'
-        env:
-          BASE_URL: ${{ inputs.base_url }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-        run: npx playwright test --config=playwright.red-team.config.ts
+concurrency:
+  group: security-finale-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
 
+jobs:
   security-closing:
     name: 'T6 Closing Security (post-test integrity)'
-    needs: red-team-staging
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'full-pipeline/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           clean: false
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
-      # (1) Codebase integrity — nothing was injected into the tree during the run.
       - name: 'Closing: committed-secret gate (nothing injected during testing)'
         run: |
           python -m pip install 'detect-secrets==1.5.0' --quiet
@@ -90,12 +40,9 @@ jobs:
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      # (2) Deployed-surface integrity — after ALL the T2–T4 + adversarial traffic
-      # wrote data, the public surface still serves no persisted/stored injection
-      # and its security headers are intact.
       - name: 'Closing: deployed surface carries no injected content'
         env:
-          BASE_URL: ${{ inputs.base_url }}
+          BASE_URL: https://stg.oursharedevents.com
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
