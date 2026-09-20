@@ -2133,6 +2133,12 @@
           'pd-cancel-delete': function () {
             if (window.loadPosterDeployments) window.loadPosterDeployments(window._pdEventId);
           },
+          'pd-mobile-prev': function () {
+            if (window._pdMobilePrev) window._pdMobilePrev();
+          },
+          'pd-mobile-next': function () {
+            if (window._pdMobileNext) window._pdMobileNext();
+          },
           'event-select': function (el) {
             if (window.selectEvent) {
               window.selectEvent(argOf(el, 'event-id'), argOf(el, 'event-name'), Number(argOf(el, 'event-phase')));
@@ -4580,6 +4586,39 @@
         .poster-deployments-card .qr-card { break-inside: avoid; }
         .poster-deployments-card .qr-card-footer { display: none; }
       }
+      /* Mobile: every deployment's full QR card (image + metadata + actions) is
+         tall. auto-fill already collapses the grid to one column under ~480px,
+         but that still stacks every card in one long scroll — busy and easy to
+         lose your place in with more than a couple of locations. Below 640px,
+         show one card at a time (paged via Prev/Next) instead of the grid. */
+      @media (max-width: 640px) {
+        .pd-qr-grid { display: block; }
+        .pd-qr-grid .qr-card { display: none; }
+        .pd-qr-grid .qr-card.pd-active { display: flex; }
+      }
+      .pd-mobile-nav {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 12px;
+      }
+      @media (max-width: 640px) {
+        .pd-mobile-nav { display: flex; }
+      }
+      .pd-mobile-nav button {
+        min-height: 44px;
+        padding: 0.5rem 0.875rem;
+      }
+      .pd-mobile-nav button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .pd-mobile-counter {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
     </style>
     <script>
       (function () {
@@ -4636,9 +4675,55 @@
                 '</div>'
               );
             }).join('');
-            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>';
+            // Mobile (<=640px, see CSS) hides every .qr-card except the one
+            // tagged .pd-active and steps through them one at a time via this
+            // Prev/Next bar — a deliberate separate-screen experience, not a
+            // long stacked scroll of every deployment's full card at once.
+            // Desktop is unaffected: the grid still shows every card.
+            const nav = items.length > 1
+              ? '<div class="pd-mobile-nav" data-testid="pd-mobile-nav">' +
+                  '<button type="button" class="copy-btn" data-action="pd-mobile-prev" data-testid="pd-mobile-prev" aria-label="Previous poster deployment">&larr; Prev</button>' +
+                  '<span class="pd-mobile-counter" data-testid="pd-mobile-counter" aria-live="polite"></span>' +
+                  '<button type="button" class="copy-btn" data-action="pd-mobile-next" data-testid="pd-mobile-next" aria-label="Next poster deployment">Next &rarr;</button>' +
+                '</div>'
+              : '';
+            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>' + nav;
+            window._pdMobileIndex = 0;
+            window._updatePdMobileView();
           } catch (err) {
             panel.innerHTML = '<div class="card-error" data-testid="poster-deployments-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load poster deployments.</div></div>';
+          }
+        };
+
+        // Mark which single card is visible on mobile (CSS does the actual
+        // hide/show) and keep the counter + Prev/Next disabled-state in sync.
+        // Safe to call with zero cards or on desktop — it's a no-op either way
+        // since the nav bar and .pd-active class only matter under the
+        // <=640px media query.
+        window._updatePdMobileView = function () {
+          const cardEls = document.querySelectorAll('#pd-panel .qr-card');
+          const idx = window._pdMobileIndex || 0;
+          cardEls.forEach(function (el, i) {
+            el.classList.toggle('pd-active', i === idx);
+          });
+          const counter = document.querySelector('#pd-panel [data-testid="pd-mobile-counter"]');
+          if (counter) counter.textContent = cardEls.length ? (idx + 1) + ' of ' + cardEls.length : '';
+          const prevBtn = document.querySelector('#pd-panel [data-testid="pd-mobile-prev"]');
+          const nextBtn = document.querySelector('#pd-panel [data-testid="pd-mobile-next"]');
+          if (prevBtn) prevBtn.disabled = idx === 0;
+          if (nextBtn) nextBtn.disabled = idx >= cardEls.length - 1;
+        };
+        window._pdMobilePrev = function () {
+          if ((window._pdMobileIndex || 0) > 0) {
+            window._pdMobileIndex -= 1;
+            window._updatePdMobileView();
+          }
+        };
+        window._pdMobileNext = function () {
+          const total = document.querySelectorAll('#pd-panel .qr-card').length;
+          if ((window._pdMobileIndex || 0) < total - 1) {
+            window._pdMobileIndex = (window._pdMobileIndex || 0) + 1;
+            window._updatePdMobileView();
           }
         };
 
