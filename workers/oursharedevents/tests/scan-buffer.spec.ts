@@ -13,7 +13,8 @@
  *   4. queue unbound     → direct D1 batch (dark-launch parity with today's code)
  *
  * never-who: the message carries only the same anonymized fields the rows already
- * store (pseudonymous anon id, ua hash, country, hour-bucket) — asserted below.
+ * store (pseudonymous anon id, ua hash, country, hour-bucket) plus two separate
+ * opaque row ids for retry idempotency — asserted below.
  */
 
 import { describe, test, expect, vi } from 'vitest';
@@ -53,6 +54,8 @@ function fakeQueue(opts: { throwOnSend?: boolean } = {}) {
 }
 
 const MSG: ScanMessage = {
+  placement_row_id: 'spe_retry_stable_1',
+  return_row_id: 'snr_retry_stable_1',
   event_id: 'evt_x',
   deployment_id: 'pd_1',
   anon_id: 'anon_abc',
@@ -85,6 +88,9 @@ describe('enqueueOrWriteScan (hot-path producer)', () => {
     expect(stmts).toHaveLength(2);
     expect(stmts.some((s) => s.sql.includes('scan_placement_events'))).toBe(true);
     expect(stmts.some((s) => s.sql.includes('scan_node_returns'))).toBe(true);
+    expect(stmts.every((s) => s.sql.includes('INSERT OR IGNORE'))).toBe(true);
+    expect(stmts[0].args[0]).toBe(MSG.placement_row_id);
+    expect(stmts[1].args[0]).toBe(MSG.return_row_id);
   });
 
   test('queue unbound: uses the direct D1 batch (dark-launch parity with today)', async () => {
@@ -95,6 +101,7 @@ describe('enqueueOrWriteScan (hot-path producer)', () => {
     expect(result).toBe('written');
     expect(DB.batches).toHaveLength(1);
     expect(DB.batches[0]).toHaveLength(2);
+    expect(DB.batches[0].map((s) => s.args[0])).toEqual([MSG.placement_row_id, MSG.return_row_id]);
   });
 });
 

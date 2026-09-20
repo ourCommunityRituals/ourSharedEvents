@@ -136,6 +136,8 @@ export async function handleQrScan(
       // batch, so counts are never lost. Row-building + the direct write live in
       // lib/scan-buffer.ts, shared with the queue() consumer in index.ts.
       const outcome = await enqueueOrWriteScan(env, {
+        placement_row_id: `spe_${crypto.randomUUID()}`,
+        return_row_id: `snr_${crypto.randomUUID()}`,
         event_id: eventId,
         deployment_id: deploymentId,
         anon_id: anonId,

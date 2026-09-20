@@ -17,7 +17,8 @@
  * INVARIANTS:
  *  - never-who: the message carries only the anonymized fields the rows already
  *    store (pseudonymous anon id, ua hash, country, hour-bucket) — no exact
- *    timestamp, no PII, internal-only. The row schema is byte-for-byte unchanged.
+ *    timestamp, no PII, internal-only. The two opaque row ids are pre-generated
+ *    separately so queue retries are idempotent without creating a durable join key.
  *  - SCAN_PATH (no h3-js on the hot path): unchanged — this file only writes the
  *    same rows `handleQrScan` used to; no geo/h3 work here.
  *  - two-DB isolation: writes go only to `DB` (the anonymous surface).
@@ -28,6 +29,8 @@
  * today. Internal-only (never serialized to a client); never-who by construction.
  */
 export interface ScanMessage {
+  placement_row_id: string;
+  return_row_id: string;
   event_id: string;
   deployment_id: string;
   anon_id: string;
@@ -45,26 +48,26 @@ export interface ScanBufferEnv {
 /**
  * The two INSERTs for one scan — split so no durable row carries both a placement
  * id (WHERE) and a session-derived value (WHO) (OSE-798, doctrine rule 6). Row PKs
- * are generated here at write time; they are opaque and carry no meaning. Schema
- * is identical to the pre-buffer inline write in `handleQrScan`.
+ * are generated before enqueue and replayed on retry; they are independent opaque
+ * ids so the two tables still do not gain a shared durable correlation key.
  */
 export function buildScanStatements(db: D1Database, msg: ScanMessage): D1PreparedStatement[] {
   return [
     db
       .prepare(
-        `INSERT INTO scan_placement_events
+        `INSERT OR IGNORE INTO scan_placement_events
            (id, event_id, poster_deployment_id, scan_bucket, created_at)
          VALUES (?, ?, ?, ?, datetime('now'))`
       )
-      .bind(`spe_${crypto.randomUUID()}`, msg.event_id, msg.deployment_id, msg.scan_bucket),
+      .bind(msg.placement_row_id, msg.event_id, msg.deployment_id, msg.scan_bucket),
     db
       .prepare(
-        `INSERT INTO scan_node_returns
+        `INSERT OR IGNORE INTO scan_node_returns
            (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
       )
       .bind(
-        `snr_${crypto.randomUUID()}`,
+        msg.return_row_id,
         msg.event_id,
         msg.anon_id,
         msg.ua_hash,
