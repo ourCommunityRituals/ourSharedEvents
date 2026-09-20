@@ -214,6 +214,10 @@ test.describe('AUTH-004 — Bearer token exhaustion: replayed token remains vali
   test('valid Bearer token survives 1 000 sequential API calls without 401', async ({
     request,
   }) => {
+    // This is the only red-team test that intentionally performs 1,000
+    // sequential live requests; allow slow staging/rate-limit windows to
+    // complete without changing the suite-wide timeout for ordinary tests.
+    test.setTimeout(600_000);
     const CALLS = 1_000;
     // Public endpoint — doesn't consume write quota, won't mutate state
     const endpoint = `${BASE_URL}/api/v2/events`;
