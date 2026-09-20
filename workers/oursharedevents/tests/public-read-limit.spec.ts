@@ -56,6 +56,8 @@ describe('the limit applies, and only past the threshold', () => {
     }
     expect(last.status).toBe(429);
     expect(last.headers.get('Retry-After')).toBe('60');
+    expect(last.headers.get('X-RateLimit-Limit')).toBe(String(PUBLIC_READ_MAX));
+    expect(last.headers.get('X-RateLimit-Remaining')).toBe('0');
   });
 
   test('the 429 is not cacheable — a cached 429 would lock a caller out', async () => {

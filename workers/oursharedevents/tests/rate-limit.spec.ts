@@ -130,6 +130,10 @@ describe('rateLimitResponse', () => {
     expect(rateLimitResponse().headers.get('X-RateLimit-Limit')).toBe('60');
   });
 
+  it('includes X-RateLimit-Remaining header', () => {
+    expect(rateLimitResponse().headers.get('X-RateLimit-Remaining')).toBe('0');
+  });
+
   it('body has ok=false and RATE_LIMITED code', async () => {
     const body = (await rateLimitResponse().json()) as Record<string, unknown>;
     expect(body.ok).toBe(false);
