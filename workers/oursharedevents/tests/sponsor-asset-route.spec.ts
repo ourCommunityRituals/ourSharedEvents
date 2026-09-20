@@ -55,6 +55,16 @@ beforeAll(async () => {
   });
   // A no-asset sponsor: nothing uploaded, no logo → pure monogram.
   await seedSplitSponsor(env.DB, { id: 'spn_bare', eventId: 'evt_asset', name: 'Bare Co' });
+  await seedSplitSponsor(env.DB, {
+    id: 'spn_unconfirmed',
+    eventId: 'evt_asset',
+    name: 'Unconfirmed Co',
+    sponsorAccepted: 0,
+    posterUrl: 'sponsors/spn_unconfirmed/poster',
+  });
+  await e().UPLOADS_BUCKET.put('sponsors/spn_unconfirmed/poster', PNG, {
+    httpMetadata: { contentType: 'image/png' },
+  });
 });
 
 describe('OSE-735 — always-200 across all four formats (headline #25)', () => {
@@ -76,6 +86,14 @@ describe('OSE-735 — always-200 across all four formats (headline #25)', () => 
       expect(res.headers.get('Content-Type') ?? '').toContain('image/svg+xml');
       const body = await res.text();
       expect(body).toMatch(/<svg[\s>]/);
+    }
+  });
+
+  test('unconfirmed sponsor → 404 before creative or monogram can expose its identity', async () => {
+    for (const fmt of FORMATS) {
+      const res = await handleSponsorAsset(new Request('https://x'), e(), 'spn_unconfirmed', fmt);
+      expect(res.status, `format ${fmt} must stay hidden without sponsor consent`).toBe(404);
+      expect(await res.text()).not.toContain('Unconfirmed Co');
     }
   });
 });

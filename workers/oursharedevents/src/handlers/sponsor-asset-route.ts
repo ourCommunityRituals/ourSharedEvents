@@ -113,6 +113,16 @@ export async function handleSponsorAsset(
        FROM sponsor_business sb
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id
       WHERE sb.id = ?
+        -- OSE-1301: this public unauthenticated route serves creative or a
+        -- name-bearing monogram fallback, so it is a consent-traced render
+        -- surface just like the event page, resolver Path 1, and reports.
+        AND EXISTS (
+          SELECT 1 FROM sponsor_placement sp
+           WHERE sp.sponsor_business_id = sb.id
+             AND sp.is_active = 1
+             AND COALESCE(sp.organizer_accepted, 1) = 1
+             AND sp.sponsor_accepted = 1
+        )
       GROUP BY sb.id, sb.name`
   )
     .bind(sponsorId)
