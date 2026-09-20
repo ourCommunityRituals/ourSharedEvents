@@ -111,6 +111,7 @@ jobs:
         timeout-minutes: 2
         env:
           GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
@@ -179,6 +180,7 @@ jobs:
         timeout-minutes: 2
         env:
           GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies

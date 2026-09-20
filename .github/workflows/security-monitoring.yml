@@ -82,6 +82,7 @@ jobs:
           # absence -- same guard the already-ported jobs in
           # oursharedevents-ci.yml use.
           GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies (root)
