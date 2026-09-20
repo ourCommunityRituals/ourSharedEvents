@@ -8,16 +8,16 @@
  * pipeline) updated the spec without updating the workflow. Deploys
  * silently failed every push to main from migration 0031 to PR #213.
  *
- * This story (OSE-303) eliminated the drift class by switching the
- * workflow to extract DB_TABLES / FORMS_DB_TABLES from the spec at
- * runtime via a `node -e` script. This regression guard locks the
+ * OSE-303 eliminated the drift class by making the workflow extract
+ * DB_TABLES / FORMS_DB_TABLES from the spec at runtime. OSE-1347 moved
+ * that extractor into `scripts/verify-d1-canonical-shape.mjs` so the same
+ * deploy gate can also verify columns. This regression guard locks the
  * pattern in:
  *
  *   1. Workflow MUST NOT contain hard-coded `EXPECTED_DB=" "` or
  *      `EXPECTED_FORMS=" "` literals — those are the anti-pattern.
- *   2. Workflow MUST use `node -e` extraction reading from
- *      `tests/migration-smoke.spec.ts`.
- *   3. Executing the extraction script on the current spec MUST
+ *   2. Workflow MUST call the shared verifier for both staging and production.
+ *   3. Executing the verifier's extraction path on the current spec MUST
  *      produce the EXPECTED list (matches what staging/prod will
  *      actually have post-migration-apply).
  *   4. Pattern applies to BOTH staging and production verify steps
@@ -44,7 +44,7 @@ const SPEC_PATH_ABS = join(
   'tests',
   'migration-smoke.spec.ts'
 );
-const SPEC_DIR_ABS = join(process.cwd(), 'workers', 'oursharedevents');
+const VERIFY_SCRIPT_REL = './workers/oursharedevents/scripts/verify-d1-canonical-shape.mjs';
 
 function readWorkflow(): string {
   return readFileSync(WORKFLOW_PATH, 'utf8');
@@ -58,20 +58,18 @@ function extractTablesFromSpec(constName: 'DB_TABLES' | 'FORMS_DB_TABLES'): stri
   return (m[1].match(/'([^']+)'/g) ?? []).map((s) => s.slice(1, -1)).sort();
 }
 
-// Reproduces the exact node script the workflow uses, executed via
-// execFileSync (no shell quoting). This asserts on the actual extraction
-// pipeline's behavior, not a clean-room reimplementation.
-function runExtractionScript(constName: 'DB_TABLES' | 'FORMS_DB_TABLES'): string[] {
-  const minCount = constName === 'DB_TABLES' ? 10 : 3;
+function runVerifierExtraction(binding: 'DB' | 'FORMS_DB'): string[] {
   const script = `
-    const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const ${constName} = \\[([\\s\\S]*?)\\] as const;/);
-    if (!m) { console.error('${constName} not found'); process.exit(1); }
-    const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
-    if (n.length < ${minCount}) { console.error('only ' + n.length); process.exit(1); }
-    console.log(n.join(' '));
+    import('${VERIFY_SCRIPT_REL}').then((m) => {
+      const schema = m.canonicalSchema();
+      console.log([...schema.${binding}.keys()].sort().join(' '));
+    }).catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
   `;
   const out = execFileSync('node', ['-e', script], {
-    cwd: SPEC_DIR_ABS,
+    cwd: process.cwd(),
     encoding: 'utf8',
   }).trim();
   return out.split(' ').filter(Boolean);
@@ -97,31 +95,26 @@ describe('OSE-303 spec-as-source-of-truth — EXPECTED_DB extraction regression 
     ).not.toMatch(/EXPECTED_FORMS="[a-z_]/);
   });
 
-  test('workflow uses node -e extraction for both EXPECTED_DB and EXPECTED_FORMS', () => {
+  test('workflow uses the shared D1 canonical-shape verifier for staging and production', () => {
     const wf = readWorkflow();
-    // Each verify step (staging + production = 2 places each) must
-    // use $(node -e " ... ") to extract from the spec.
-    const dbNodeExtractions = (wf.match(/EXPECTED_DB=\$\(node -e/g) ?? []).length;
-    const formsNodeExtractions = (wf.match(/EXPECTED_FORMS=\$\(node -e/g) ?? []).length;
-    expect(
-      dbNodeExtractions,
-      `EXPECTED_DB node-extraction count = ${dbNodeExtractions}, expected exactly 2 (staging + production verify steps)`
-    ).toBe(2);
-    expect(
-      formsNodeExtractions,
-      `EXPECTED_FORMS node-extraction count = ${formsNodeExtractions}, expected exactly 2 (staging + production verify steps)`
-    ).toBe(2);
+    const verifierCalls = (
+      wf.match(/node scripts\/verify-d1-canonical-shape\.mjs --env (staging|production)/g) ?? []
+    ).sort();
+    expect(verifierCalls, 'workflow must call the shared verifier in both deploy gates').toEqual([
+      'node scripts/verify-d1-canonical-shape.mjs --env production',
+      'node scripts/verify-d1-canonical-shape.mjs --env staging',
+    ]);
   });
 
-  test('running the DB_TABLES extraction script produces a list matching the spec', () => {
-    const fromScript = runExtractionScript('DB_TABLES');
+  test('running the verifier DB extraction path produces a list matching the spec', () => {
+    const fromScript = runVerifierExtraction('DB');
     const fromSpec = extractTablesFromSpec('DB_TABLES');
     expect(fromScript).toEqual(fromSpec);
     expect(fromScript.length).toBeGreaterThanOrEqual(10);
   });
 
-  test('running the FORMS_DB_TABLES extraction script produces a list matching the spec', () => {
-    const fromScript = runExtractionScript('FORMS_DB_TABLES');
+  test('running the verifier FORMS_DB extraction path produces a list matching the spec', () => {
+    const fromScript = runVerifierExtraction('FORMS_DB');
     const fromSpec = extractTablesFromSpec('FORMS_DB_TABLES');
     expect(fromScript).toEqual(fromSpec);
     expect(fromScript.length).toBeGreaterThanOrEqual(3);
@@ -132,7 +125,7 @@ describe('OSE-303 spec-as-source-of-truth — EXPECTED_DB extraction regression 
     const mentions = (wf.match(/OSE-303/g) ?? []).length;
     expect(
       mentions,
-      `OSE-303 mention count = ${mentions}, expected >= 2 (staging + production extraction blocks both annotated)`
-    ).toBeGreaterThanOrEqual(2);
+      `OSE-303 mention count = ${mentions}, expected >= 1 provenance comment for the shared verifier`
+    ).toBeGreaterThanOrEqual(1);
   });
 });
