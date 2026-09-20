@@ -84,6 +84,23 @@ describe('production jobs use hosted runners', () => {
       ])
     );
   });
+
+  test('staging and production deploys verify canonical D1 table and column shape', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    const stagingVerify = workflow.jobs['deploy-staging'].steps.find((step) =>
+      step.name?.includes('Verify staging D1')
+    );
+    const productionVerify = workflow.jobs['deploy-production'].steps.find((step) =>
+      step.name?.includes('Verify production D1')
+    );
+
+    expect(stagingVerify?.run).toBe('node scripts/verify-d1-canonical-shape.mjs --env staging');
+    expect(productionVerify?.run).toBe(
+      'node scripts/verify-d1-canonical-shape.mjs --env production'
+    );
+  });
 });
 
 // ─── Token Naming Consistency ────────────────────────────────────────
