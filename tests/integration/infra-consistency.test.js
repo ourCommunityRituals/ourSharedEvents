@@ -28,10 +28,14 @@ function grep(pattern, path, opts = '') {
 }
 
 function readJSON(relPath) {
+  // Paths are repository-relative test fixtures, resolved beneath ROOT.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   return JSON.parse(readFileSync(join(ROOT, relPath), 'utf-8'));
 }
 
 function readFile(relPath) {
+  // Paths are repository-relative test fixtures, resolved beneath ROOT.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   return readFileSync(join(ROOT, relPath), 'utf-8');
 }
 
@@ -347,7 +351,9 @@ describe('component tier continuity — the component shard gates T0', () => {
 
   test('every spec named in the component step exists on disk', () => {
     for (const spec of named) {
+      // Specs are discovered from this repository's workflow configuration.
       expect(
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
         existsSync(join(ROOT, spec)),
         `component step names ${spec}, which does not exist — the batch would fail to discover it`
       ).toBe(true);
