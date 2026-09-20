@@ -28,8 +28,10 @@ describe('admin repeated action buttons have contextual aria-labels', () => {
     );
   });
 
-  test('the bearer-token Copy button says what it copies', async () => {
-    expect(await adminHtml()).toContain('aria-label="Copy bearer token"');
+  test('the Shared Report mint Copy button says what it copies', async () => {
+    // OSE-1342: the mint-link Copy button now copies the full signed report
+    // URL (not just the bearer token), so its label must say "report link".
+    expect(await adminHtml()).toContain('aria-label="Copy report link"');
   });
 
   test('the poster-deployment Delete button matches its Download/Print siblings', async () => {

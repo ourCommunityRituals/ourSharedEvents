@@ -621,6 +621,23 @@ describe('ADMIN-15 JS: copyUrl function', () => {
   });
 });
 
+describe('OSE-1342: Shared Report mint link', () => {
+  test('builds a browser-openable signed report URL from the minted token', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("location.origin + '/sharedReport?eventId=' +");
+    expect(html).toContain('encodeURIComponent(data.token)');
+    expect(html).toContain('data-testid="mint-report-url"');
+    expect(html).toContain('href="\' + escAttr(reportUrl) + \'"');
+  });
+
+  test('copies the generated report URL instead of only the bearer token', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("var value = argOf(el, 'url') || argOf(el, 'token') || ''");
+    expect(html).toContain('data-action="mint-copy" data-url="\' + escAttr(reportUrl) + \'"');
+    expect(html).toContain('aria-label="Copy report link"');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Auth gate: admin page requires auth
 // ═══════════════════════════════════════════════════════════════════════════════
