@@ -26,10 +26,14 @@
  */
 
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import { enqueueOrWriteScan, type ScanMessage } from '../lib/scan-buffer';
 
 export interface QrScanEnv {
   DB: D1Database;
   RATE_LIMIT_KV?: KVNamespace;
+  // Optional scan write-buffer. Bound → the hot path enqueues and returns;
+  // unbound → the direct D1 batch (dark-launch parity). See lib/scan-buffer.ts.
+  SCAN_QUEUE?: Queue<ScanMessage>;
 }
 
 /** Hour-bucketed UTC timestamp string — privacy invariant for scans.anonymous_id. */
@@ -122,30 +126,29 @@ export async function handleQrScan(
     const ua = request.headers.get('User-Agent') ?? '';
     const uaHash = await hashUserAgent(ua);
     const countryCode = request.headers.get('CF-IPCountry') ?? null;
-    const placementId = `spe_${crypto.randomUUID()}`;
-    const returnId = `snr_${crypto.randomUUID()}`;
 
     try {
-      // OSE-798: split write — the placement event (WHERE) and the node return
-      // (WHO) go to SEPARATE tables so no durable row carries both a placement
-      // id and a session-derived value (doctrine rule 6). Batched so both land
-      // or neither does.
-      await env.DB.batch([
-        env.DB.prepare(
-          `INSERT INTO scan_placement_events
-             (id, event_id, poster_deployment_id, scan_bucket, created_at)
-           VALUES (?, ?, ?, ?, datetime('now'))`
-        ).bind(placementId, eventId, deploymentId, bucket),
-        env.DB.prepare(
-          `INSERT INTO scan_node_returns
-             (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-        ).bind(returnId, eventId, anonId, uaHash, countryCode, bucket),
-      ]);
+      // OSE-798: the placement event (WHERE) and the node return (WHO) are
+      // written to SEPARATE tables so no durable row carries both a placement id
+      // and a session-derived value (doctrine rule 6). The write is buffered
+      // through SCAN_QUEUE when bound so a scan spike can't throttle the hot
+      // path; unbound or on a queue outage it falls straight to the direct D1
+      // batch, so counts are never lost. Row-building + the direct write live in
+      // lib/scan-buffer.ts, shared with the queue() consumer in index.ts.
+      const outcome = await enqueueOrWriteScan(env, {
+        placement_row_id: `spe_${crypto.randomUUID()}`,
+        return_row_id: `snr_${crypto.randomUUID()}`,
+        event_id: eventId,
+        deployment_id: deploymentId,
+        anon_id: anonId,
+        ua_hash: uaHash,
+        country: countryCode,
+        scan_bucket: bucket,
+      });
 
       console.log(
         JSON.stringify({
-          type: 'SCAN_RECORDED',
+          type: outcome === 'enqueued' ? 'SCAN_ENQUEUED' : 'SCAN_RECORDED',
           deployment_id: deploymentId,
           event_id: eventId,
           scan_bucket: bucket,

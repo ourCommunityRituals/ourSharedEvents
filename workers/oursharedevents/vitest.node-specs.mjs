@@ -132,4 +132,9 @@ export const NODE_SPECS = [
   // (archived->active is direct; only draft hops via ready). Pure over the
   // admin.html template string + the event-state domain module.
   'tests/admin-golive-transitions.spec.ts',
+
+  // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
+  // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
+  // No cloudflare:test / SELF.fetch / D1 runtime — node-clean by construction.
+  'tests/scan-buffer.spec.ts',
 ];

@@ -13,6 +13,7 @@ import { runSharedReportMaterialization } from './handlers/shared-report-materia
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
+import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
   instrumentEnvForCost,
@@ -102,6 +103,18 @@ export default {
         runDraftExpiry(env),
       ])
     );
+  },
+
+  // Scan write-buffer consumer (OSE — engine-hardening #1). Drains SCAN_QUEUE
+  // and writes the scan rows in one batched D1 call per queue batch, keeping the
+  // /q/ hot path shed of writes during a spike. Dark-launched: no-op until the
+  // queue is provisioned and bound. See lib/scan-buffer.ts.
+  async queue(
+    batch: MessageBatch<ScanMessage>,
+    env: RouterEnv,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    await handleScanBatch(batch, env);
   },
 };
 
