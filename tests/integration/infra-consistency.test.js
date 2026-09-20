@@ -264,9 +264,15 @@ describe('D1 staging database health', () => {
 describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
   const yaml = require('js-yaml');
   const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const advisoryWf = yaml.load(readFile('.github/workflows/advanced-security-scan.yml'));
   const s0Steps = (wf.jobs && wf.jobs.security && wf.jobs.security.steps) || [];
+  const advisorySbomSteps =
+    (advisoryWf.jobs && advisoryWf.jobs.sbom && advisoryWf.jobs.sbom.steps) || [];
   const installStep = s0Steps.find((s) => s && s.name === 'Install dependencies');
   const sbomFixStep = s0Steps.find((s) => s && s.name === 'Fix @ocr/flags for SBOM resolution');
+  const advisoryGenerateSbomStep = advisorySbomSteps.find(
+    (s) => s && s.name === 'Generate CycloneDX SBOM'
+  );
 
   test('S0 Security job has the "Install dependencies" step', () => {
     expect(installStep, 'security job must have an "Install dependencies" step').toBeDefined();
@@ -303,6 +309,14 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
       run,
       'the SBOM @ocr/flags fix step must `rm -f node_modules/.install-stamp` so the next run reinstalls against the canonical lockfile-derived tree'
     ).toMatch(/rm\s+-f\s+node_modules\/\.install-stamp/);
+  });
+
+  test('advisory SBOM tolerates managed-runner @ocr/flags npm-ls noise', () => {
+    const run = (advisoryGenerateSbomStep && advisoryGenerateSbomStep.run) || '';
+    expect(
+      run,
+      'advanced-security-scan SBOM must match S0 managed-runner tolerance for @ocr/flags file: deps'
+    ).toContain('--ignore-npm-errors');
   });
 });
 

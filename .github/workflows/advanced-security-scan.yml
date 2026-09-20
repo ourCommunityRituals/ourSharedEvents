@@ -93,7 +93,12 @@ jobs:
 
       - name: Generate CycloneDX SBOM
         run: |
-          npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
+          # OSE-1030: managed ubuntu runners stage @ocr/flags as a file:
+          # dependency. CycloneDX shells out to npm ls, which can still report
+          # ELSPROBLEMS for that local tree even after staging/installing flags
+          # devDeps. Keep the SBOM meaningful by inventorying the resolvable
+          # tree; do not let advisory SBOM fail solely on npm ls workspace noise.
+          npx @cyclonedx/cyclonedx-npm --ignore-npm-errors --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
           echo "## 📦 SBOM Generation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
