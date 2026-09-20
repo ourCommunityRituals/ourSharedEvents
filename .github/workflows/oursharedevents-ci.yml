@@ -1,7 +1,8 @@
 # OurSharedEvents – CI/CD Pipeline
 #
-# S0 Security → T0 Gate → T1 Deploy → [T2 Smoke, T3 Contract]
-#                                   → T4 Functional (dispatch only)
+# S0 Security → T0 Gate → T1 Deploy → T2 Contract → T3 Smoke → T4 Functional
+#                                   → T5 Adversarial (separate workflow)
+#                                   → T6 Closing Security (separate workflow)
 #
 # Security runs unconditionally on every PR (no paths filter on pull_request trigger).
 # Gate and all downstream jobs are blocked behind security via needs: — security results
@@ -36,9 +37,10 @@
 #       - Health check                 → curl /health (HTTP 200)
 #
 # Fail-fast test chain after T1 deploy: T2 Contract → T3 E2E Smoke → T4
-# Functional. Each stage `needs:` the prior and gates on its success, so a red
-# stage SKIPS everything downstream — fix one layer at a time. Contract-first:
-# nail the API contract, then perpetuate into the FE.
+# Functional. T5 Adversarial Red Team starts only after this CI/CD workflow
+# succeeds, then T6 Closing Security starts only after T5 succeeds. Each stage
+# gates the next, so a red stage stops everything downstream — fix one layer at
+# a time. Contract-first: nail the API contract, then perpetuate into the FE.
 #
 #   T2: Contract (Bruno) — API + Pages spec compliance [runs first]
 #       - Bruno API collection         → bru run bruno/ose-api (OSE-1191, ex-Newman)
@@ -55,6 +57,13 @@
 #       - Core journeys                → playwright tests/e2e/3-flows/sponsor-journey.spec.ts
 #       - Form E2E (4 types + flows)   → playwright tests/e2e/2-pages/form-*.spec.ts + 3-flows + 4-negative
 #       - UI smoke                     → npm run test:ui:smoke
+#
+#   T5: Adversarial Red Team — separate workflow_run after this workflow succeeds
+#       - red-team-adversarial.yml      → T5 — Adversarial Red Team
+#
+#   T6: Closing Security — separate workflow_run after T5 succeeds
+#       - security-finale.yml           → Stage 2 — Security Finale
+#       - post-t6-security.yml          → final post-T6 security bookend
 #
 # Trigger Matrix:
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
@@ -2209,7 +2218,9 @@ jobs:
           echo "| T2 Contract STG (Bruno) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T5/T6 Security Finale | separate workflow runs after this pipeline | see PR checks |" >> $GITHUB_STEP_SUMMARY
+          echo "| T5 Adversarial Red Team | red-team-adversarial.yml | separate workflow after CI success |" >> $GITHUB_STEP_SUMMARY
+          echo "| T6 Closing Security | security-finale.yml | separate workflow after T5 success |" >> $GITHUB_STEP_SUMMARY
+          echo "| Post-T6 Security Bookend | post-t6-security.yml | separate workflow after T6 success |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
