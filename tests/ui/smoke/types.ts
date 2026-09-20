@@ -24,6 +24,11 @@ export interface RouteSpec {
    */
   auth?: 'none' | 'admin';
   /**
+   * Edge-auth mode for routes that must clear Cloudflare Access but still omit
+   * worker-level auth, such as OSE's unauthenticated /admin sign-in gate.
+   */
+  edgeAuth?: 'cf-access';
+  /**
    * Gated: when visited WITHOUT auth/role, the page must still render a
    * humane gate — an .empty-state (post-@ocr/ui) or the legacy denied element —
    * never a blank screen or bare JSON.

@@ -34,9 +34,9 @@ const { getBaseUrl } = require('./config/environments');
  * Absent env → empty headers (clean no-op); the admin routes stay gated/ skipped
  * exactly as before. SRE owns rotation of these secrets (OSE-865 DevOps AC).
  *
- * NOTE: wiring the headers does not by itself re-enable the admin routes in the
- * blocking gate — the T4d `--grep-invert` stays until a staging run with a live
- * CF Access service token confirms the edge clears (OSE-1010 DoD).
+ * NOTE: the unauthenticated admin sign-in smoke uses a scoped context with only
+ * the CF Access headers so it can assert the worker-level 401 gate without the
+ * Authorization header (OSE-311).
  */
 function adminExtraHeaders(): Record<string, string> {
   const h: Record<string, string> = {};
