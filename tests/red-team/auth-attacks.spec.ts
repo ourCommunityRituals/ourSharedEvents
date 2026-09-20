@@ -21,8 +21,7 @@
 
 import { test, expect, type APIResponse } from '@playwright/test';
 
-const BASE_URL =
-  process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
+const BASE_URL = process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
 
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
@@ -83,15 +82,13 @@ test.describe('AUTH-001/002 — CORS enforcement', () => {
       // on a credentialed route. Either the header is absent, or it must
       // not equal the hostile origin.
       if (acao !== null) {
-        expect(
-          acao,
-          `CORS: server echoed hostile origin "${origin}" in ACAO header`,
-        ).not.toBe(origin);
+        expect(acao, `CORS: server echoed hostile origin "${origin}" in ACAO header`).not.toBe(
+          origin
+        );
 
-        expect(
-          acao,
-          `CORS: server returned wildcard ACAO on credentialed admin route`,
-        ).not.toBe('*');
+        expect(acao, `CORS: server returned wildcard ACAO on credentialed admin route`).not.toBe(
+          '*'
+        );
       }
 
       // Pre-flight to a hostile origin should return a non-2xx status or
@@ -105,7 +102,7 @@ test.describe('AUTH-001/002 — CORS enforcement', () => {
 
       expect(
         statusIsRefusal,
-        `CORS pre-flight for "${origin}" should be refused: status=${response.status()}, ACAO=${acao}`,
+        `CORS pre-flight for "${origin}" should be refused: status=${response.status()}, ACAO=${acao}`
       ).toBe(true);
     });
   }
@@ -124,13 +121,13 @@ test.describe('AUTH-001/002 — CORS enforcement', () => {
     // The preflight should succeed (2xx) and include the ACAO header
     expect(
       response.status(),
-      `Expected 200/204 preflight for allowlisted origin, got ${response.status()}`,
+      `Expected 200/204 preflight for allowlisted origin, got ${response.status()}`
     ).toBeLessThan(300);
 
     const acao = response.headers()['access-control-allow-origin'];
     expect(
       acao,
-      'Allowlisted origin should appear in ACAO or server returns * for public routes',
+      'Allowlisted origin should appear in ACAO or server returns * for public routes'
     ).toBeTruthy();
   });
 });
@@ -151,7 +148,7 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
 
     expect(
       [302, 401, 403],
-      `Admin endpoint without auth returned ${response.status()} — expected 302, 401, or 403`,
+      `Admin endpoint without auth returned ${response.status()} — expected 302, 401, or 403`
     ).toContain(response.status());
   });
 
@@ -168,7 +165,7 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
 
     expect(
       [302, 401, 403],
-      `Forged CF_Authorization cookie returned ${response.status()} — expected 302, 401, or 403`,
+      `Forged CF_Authorization cookie returned ${response.status()} — expected 302, 401, or 403`
     ).toContain(response.status());
   });
 
@@ -185,10 +182,9 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
       // Redirect to a login/auth page is acceptable gating
       (status >= 300 && status < 400);
 
-    expect(
-      isGated,
-      `/admin without auth returned ${status} — expected 401, 403, or redirect`,
-    ).toBe(true);
+    expect(isGated, `/admin without auth returned ${status} — expected 401, 403, or redirect`).toBe(
+      true
+    );
   });
 });
 
@@ -197,7 +193,7 @@ test.describe('AUTH-003 — CF Access bypass: direct API calls without auth', ()
 test.describe('AUTH-004 — Bearer token exhaustion: replayed token remains valid', () => {
   test.skip(
     !ADMIN_KEY,
-    'ADMIN_KEY not set — skipping token exhaustion test (set env var to enable)',
+    'ADMIN_KEY not set — skipping token exhaustion test (set env var to enable)'
   );
 
   /**
@@ -214,6 +210,10 @@ test.describe('AUTH-004 — Bearer token exhaustion: replayed token remains vali
   test('valid Bearer token survives 1 000 sequential API calls without 401', async ({
     request,
   }) => {
+    // This is the only red-team test that intentionally performs 1,000
+    // sequential live requests; allow slow staging/rate-limit windows to
+    // complete without changing the suite-wide timeout for ordinary tests.
+    test.setTimeout(600_000);
     const CALLS = 1_000;
     // Public endpoint — doesn't consume write quota, won't mutate state
     const endpoint = `${BASE_URL}/api/v2/events`;
@@ -244,17 +244,17 @@ test.describe('AUTH-004 — Bearer token exhaustion: replayed token remains vali
     // The token must not have been invalidated by repeated use
     expect(
       unauthorizedCount,
-      `Token was treated as invalid after repeated use: ${unauthorizedCount} × 401/403 out of ${CALLS} calls`,
+      `Token was treated as invalid after repeated use: ${unauthorizedCount} × 401/403 out of ${CALLS} calls`
     ).toBe(0);
 
     // At least some calls should have succeeded
     expect(
       successCount,
-      'Expected at least some successful responses — token should remain valid',
+      'Expected at least some successful responses — token should remain valid'
     ).toBeGreaterThan(0);
 
     console.log(
-      `[AUTH-004] ${CALLS} calls: ${successCount} OK, ${rateLimitedCount} rate-limited, ${unauthorizedCount} unauthorized`,
+      `[AUTH-004] ${CALLS} calls: ${successCount} OK, ${rateLimitedCount} rate-limited, ${unauthorizedCount} unauthorized`
     );
   });
 });
@@ -277,7 +277,7 @@ test.describe('AUTH-005 — X-Frame-Options: admin page cannot be iframed', () =
 
     expect(
       xfo?.toUpperCase(),
-      `Expected X-Frame-Options: DENY on /admin, got: ${xfo ?? '(absent)'}`,
+      `Expected X-Frame-Options: DENY on /admin, got: ${xfo ?? '(absent)'}`
     ).toBe('DENY');
   });
 
@@ -302,7 +302,7 @@ test.describe('AUTH-005 — X-Frame-Options: admin page cannot be iframed', () =
 
     expect(
       hasFrameAncestorsNone || hasXFODeny,
-      `Admin page lacks clickjacking protection. XFO="${xfo}", CSP="${csp}"`,
+      `Admin page lacks clickjacking protection. XFO="${xfo}", CSP="${csp}"`
     ).toBe(true);
 
     // Attempt to embed admin in an iframe — the page should refuse to render
@@ -337,7 +337,7 @@ test.describe('AUTH-005 — X-Frame-Options: admin page cannot be iframed', () =
     // iframeLoaded should be false or undefined.
     expect(
       iframeLoaded,
-      'Admin page loaded inside an iframe — X-Frame-Options may not be enforced',
+      'Admin page loaded inside an iframe — X-Frame-Options may not be enforced'
     ).toBeFalsy();
   });
 });
