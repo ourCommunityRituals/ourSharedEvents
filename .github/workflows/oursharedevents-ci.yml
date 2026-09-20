@@ -1576,12 +1576,11 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           # CF Access service token (ose-staging-t4-admin) — clears the edge so the
-          # admin routes reach the worker; consumed as extraHTTPHeaders in
-          # playwright.ui-smoke.config.ts (OSE-1010 / OSE-865). The authenticated
-          # "admin dashboard" route (200) now GATES as blocking below — this run is
-          # the proof that the edge clears (OSE-865 Fix #1). The two remaining
-          # inverted routes need infra this token can't supply (see the grep-invert
-          # comment): unauth 401 → OSE-1102, /sharedReport signed token → OSE-1101.
+          # admin routes reach the worker. The authenticated "admin dashboard"
+          # route uses the config-level admin headers; the unauthenticated admin
+          # sign-in route uses a scoped context with only these CF Access headers,
+          # proving the worker-level 401 gate without conflating it with the edge
+          # redirect (OSE-311).
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           SMOKE_ADMIN_READY: '1'
@@ -1593,18 +1592,16 @@ jobs:
         # T4d fixes (OSE-554): (1) add the missing --config — tier1.spec.ts lives
         # in tests/ui/smoke, covered ONLY by playwright.ui-smoke.config.ts; with
         # no --config it fell to the default config (testDir tests/playwright) →
-        # "No tests found". (2) --grep-invert 2 routes that still need infra this
-        # step can't supply: the unauthenticated /admin gate (expects 401 but the
-        # config injects admin headers globally, so it can't observe a headerless
-        # request → OSE-1102) + /sharedReport (needs a worker signed-link HMAC
-        # token → OSE-1101). The authenticated "admin dashboard" (200) is now IN
-        # the blocking gate (OSE-865 Fix #1 — the CF Access token clears the edge);
-        # with it, 17 tier-1 page-smokes gate as BLOCKING.
+        # "No tests found". (2) --grep-invert the route that still needs infra this
+        # step can't supply: /sharedReport needs a worker signed-link HMAC token
+        # (OSE-1101). Admin dashboard (200) and admin sign-in gate (401) are both
+        # blocking: the latter uses a scoped context that clears CF Access but
+        # omits Authorization so the worker sign-in gate is observable.
         run: |
           SMOKE_APP=ose SMOKE_ADMIN_READY=1 \
           PW_LABEL='T4d: Tier-1 UI Smoke' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
-            --grep-invert "admin sign-in|shared report shell" \
+            --grep-invert "shared report shell" \
             tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
 

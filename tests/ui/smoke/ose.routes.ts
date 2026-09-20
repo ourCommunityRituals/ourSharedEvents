@@ -52,6 +52,7 @@ export const oseManifest: AppManifest = {
       name: 'admin sign-in gate (no auth)',
       anchor: 'body',
       auth: 'none',
+      edgeAuth: 'cf-access',
       gate: true,
       status: 401,
     },

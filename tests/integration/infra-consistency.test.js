@@ -306,6 +306,34 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
   });
 });
 
+// ─── T4d admin gate continuity — scoped worker-401 smoke (OSE-311) ───────────
+describe('T4d smoke exercises the admin sign-in worker gate', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const smokeSteps =
+    (wf.jobs && wf.jobs['functional-staging'] && wf.jobs['functional-staging'].steps) || [];
+  const tier1Step = smokeSteps.find((s) => s && s.name === 'T4d: UI Smoke — Tier-1 page smoke');
+  const run = (tier1Step && tier1Step.run) || '';
+
+  test('T4d Tier-1 smoke step exists', () => {
+    expect(tier1Step, 'functional-staging must include the T4d Tier-1 smoke step').toBeDefined();
+  });
+
+  test('T4d no longer grep-inverts the admin sign-in route', () => {
+    expect(
+      run,
+      'admin sign-in must remain in blocking T4d smoke; it uses a scoped CF Access context to reach worker 401'
+    ).not.toMatch(/grep-invert[^\n]*admin sign-in/);
+  });
+
+  test('T4d still grep-inverts shared report until signed-link smoke is wired', () => {
+    expect(
+      run,
+      'shared report shell still needs a signed-link token before joining blocking T4d'
+    ).toMatch(/grep-invert[^\n]*shared report shell/);
+  });
+});
+
 // ─── Invariant enforcement continuity — structural specs gate T0 (OSE-350) ────
 //
 // The 0-architecture invariant suite is the brain's "CI-enforced architectural
