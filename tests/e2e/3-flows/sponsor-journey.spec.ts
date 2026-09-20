@@ -31,6 +31,7 @@ const TIMEOUT = 30_000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
+const SMOKE_EVENT_SPONSORED = process.env.SMOKE_EVENT_SPONSORED || '';
 
 // OSE-834: in a blocking CI tier (PW_REQUIRE_PRECONDITIONS=1) an unmet precondition
 // — no admin key, a CF Access edge block — is a FAILURE, not a green skip: "a tier
@@ -100,6 +101,17 @@ async function publicFetch(page: any, path: string) {
   }, path);
 }
 
+function pickSponsorJourneyEvent(items: Array<{ id?: string }>): string | undefined {
+  // OSE-1197: T4b seeds a dedicated sponsored fixture (`SMOKE_EVENT_SPONSORED`).
+  // Prefer it over "first live event" so concurrent shared-staging runs do not
+  // attach journey sponsors to whichever event happens to sort first.
+  if (SMOKE_EVENT_SPONSORED) {
+    const seeded = items.find((item) => item.id === SMOKE_EVENT_SPONSORED);
+    if (seeded?.id) return seeded.id;
+  }
+  return items[0]?.id;
+}
+
 // ─── Test Data ──────────────────────────────────────────────────────────────────
 
 const timestamp = Date.now();
@@ -151,8 +163,9 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     const items = eventsRes.body.items || [];
     test.skip(items.length === 0, 'No events in staging — cannot attach sponsor');
 
-    eventId = items[0].id;
-    expect(eventId).toBeTruthy();
+    const pickedEventId = pickSponsorJourneyEvent(items);
+    expect(pickedEventId).toBeTruthy();
+    eventId = pickedEventId!;
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -524,7 +537,9 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
     const res = await publicFetch(page, '/api/v2/events');
     test.skip(!res.body.ok || !res.body.items?.length, 'No events');
-    eventId = res.body.items[0].id;
+    const pickedEventId = pickSponsorJourneyEvent(res.body.items || []);
+    expect(pickedEventId).toBeTruthy();
+    eventId = pickedEventId!;
   });
 
   test('Step 1: Create bronze sponsor', async ({ page, request }) => {
@@ -640,7 +655,9 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
 
     const evRes = await publicFetch(page, '/api/v2/events');
     test.skip(!evRes.body.ok || !evRes.body.items?.length, 'No events');
-    eventId = evRes.body.items[0].id;
+    const pickedEventId = pickSponsorJourneyEvent(evRes.body.items || []);
+    expect(pickedEventId).toBeTruthy();
+    eventId = pickedEventId!;
 
     const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
       name: `Cross Surface ${timestamp}`,
