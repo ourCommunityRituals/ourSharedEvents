@@ -98,8 +98,20 @@ export default defineConfig({
     {
       // Tablet — tests layout at the medium breakpoint where mobile/desktop
       // patterns often collide (two-column layouts, nav changes, etc.).
+      //
+      // `devices['iPad Air 5']` is not a real Playwright device key (no
+      // version ships one — only 'iPad (gen N)' / 'iPad Mini' / 'iPad Pro 11'
+      // exist). That typo silently spread `undefined`, so this project ran
+      // with NO touch emulation at all: no hasTouch, no isMobile, default
+      // browserType — a plain desktop context wearing an iPad UA string, not
+      // a tablet. It never surfaced because the mobile-workability spec
+      // overrides the viewport itself (MOBILE_VIEWPORT), so the run still
+      // "passed" most checks; it only became visible once a check depended
+      // on pointer:coarse (the footer's touch-target CSS), where this project
+      // started failing identically to Desktop Safari instead of passing like
+      // the other two real touch/device projects.
       name: 'iPad Air',
-      use: { ...devices['iPad Air 5'], userAgent: UA.ipadAir },
+      use: { ...devices['iPad (gen 7)'], userAgent: UA.ipadAir },
     },
     {
       // Desktop — full-width layout, hover states, larger touch targets.
