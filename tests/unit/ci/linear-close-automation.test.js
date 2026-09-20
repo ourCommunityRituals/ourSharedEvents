@@ -37,6 +37,16 @@ describe('OSE-1250 — PR close-guard (evaluate)', () => {
     ).toBe(true);
   });
 
+  test('slice PR: id in branch + "Part of" body for same id → OK (explicit slice intent)', () => {
+    expect(
+      evaluate({
+        branch: 'ci/ose-1172-sponsor-slice-isolation',
+        title: 'slice 1',
+        body: 'Part of OSE-1172',
+      }).ok
+    ).toBe(true);
+  });
+
   test('THE BUG (#466): id in branch, body only "Refs" → violation on that id', () => {
     const r = evaluate({
       branch: 'ci/ose-1172-sponsor-slice-isolation',
@@ -47,9 +57,15 @@ describe('OSE-1250 — PR close-guard (evaluate)', () => {
     expect(r.violations).toEqual(['OSE-1172']);
   });
 
-  test('id in title only, no closing word → violation', () => {
+  test('id in title only + matching "Part of" body → OK', () => {
     expect(
       evaluate({ branch: 'ci/whatever', title: 'work on OSE-946', body: 'Part of OSE-946' }).ok
+    ).toBe(true);
+  });
+
+  test('id in title only, no declaration in body → violation', () => {
+    expect(
+      evaluate({ branch: 'ci/whatever', title: 'work on OSE-946', body: 'notes only' }).ok
     ).toBe(false);
   });
 

@@ -48,8 +48,9 @@ jobs:
       - name: Self-test the guard logic (born-red cases incl. #466)
         run: node scripts/check-pr-linear-close.mjs --self-test
 
-      # Level 2: judge this PR. Fails if an OSE id in branch/title is not
-      # explicitly closed in the body (i.e. an undeclared auto-close on merge).
+      # Level 2: judge this PR. Fails if an OSE id in branch/title has no
+      # explicit body declaration for the same id ("Part of OSE-###" or
+      # "Closes OSE-###").
       - name: Check PR branch/title/body for undeclared auto-close
         env:
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}

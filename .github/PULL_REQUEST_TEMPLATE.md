@@ -53,8 +53,7 @@
   PR TITLE. Pick the line that matches this PR (delete the other):
 
   • COMPLETING the story  →  Closes OSE-###
-  • SLICE of a multi-part story  →  Part of OSE-###   (and use an id-free branch
-    name + title, or CI's close-guard will fail the PR)
+  • SLICE of a multi-part story  →  Part of OSE-###
 -->
 
 Part of OSE-
