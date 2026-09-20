@@ -912,12 +912,11 @@ jobs:
         run: node scripts/check-binding-placeholders.mjs
 
       # ────────────────────────────────────────────────────────────────────
-      # Post-migration canonical-shape verification (OSE-209 hardening).
+      # Post-migration canonical-shape verification (OSE-209/OSE-1347 hardening).
       #
       # Asserts the staging D1 schema, AFTER wrangler applies migrations,
-      # matches the canonical set defined in
-      #   workers/oursharedevents/tests/migration-smoke.spec.ts
-      # (DB_TABLES, FORMS_DB_TABLES, EXPECTED_TRIGGER_COUNT_*).
+      # matches the canonical table set in migration-smoke.spec.ts and the
+      # canonical column set derived from the migration SQL itself.
       #
       # The earlier version of these steps asserted COUNT(*) against a
       # hardcoded 6-table list (DB) / 5-table list (FORMS_DB) and never
@@ -926,87 +925,16 @@ jobs:
       # — the same regressions the PR-time miniflare smoke test (OSE-209)
       # already catches in vitest. Now both layers reference the same
       # canonical set, name-based, with a trigger=0 invariant on top.
+      # OSE-1347 extends the same deploy gate to PRAGMA table_info per table so
+      # column drift blocks before the first staging write path discovers it.
       # ────────────────────────────────────────────────────────────────────
 
-      - name: 'Verify staging D1 (canonical shape from migration-smoke.spec.ts, 0 triggers)'
+      - name: 'Verify staging D1 (canonical tables + columns, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          set -euo pipefail
-          # OSE-303: extract canonical lists from migration-smoke.spec.ts
-          # at runtime instead of copying them here. The spec is the
-          # SINGLE source of truth — workflow MUST NOT carry a duplicate.
-          # Previous drift (PR #213) silently broke deploys for ~2 weeks
-          # because the spec was updated and the workflow's copy wasn't.
-          # See OSE-303 for the discipline rationale.
-          EXPECTED_DB=$(node -e "
-          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const DB_TABLES = \[([\\s\\S]*?)\] as const;/);
-          if (!m) { console.error('::error::OSE-303: could not extract DB_TABLES from spec (regex likely broken; check tests/migration-smoke.spec.ts'); process.exit(1); }
-          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
-          if (n.length < 10) { console.error('::error::OSE-303: extracted ' + n.length + ' DB_TABLES; expected >= 10 (regex likely broken)'); process.exit(1); }
-          console.log(n.join(' '));
-          ")
-          EXPECTED_FORMS=$(node -e "
-          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const FORMS_DB_TABLES = \[([\\s\\S]*?)\] as const;/);
-          if (!m) { console.error('::error::OSE-303: could not extract FORMS_DB_TABLES from spec'); process.exit(1); }
-          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
-          if (n.length < 3) { console.error('::error::OSE-303: extracted ' + n.length + ' FORMS_DB_TABLES; expected >= 3'); process.exit(1); }
-          console.log(n.join(' '));
-          ")
-          DB_COUNT=$(echo "$EXPECTED_DB" | wc -w | tr -d ' ')
-          FORMS_COUNT=$(echo "$EXPECTED_FORMS" | wc -w | tr -d ' ')
-
-          fetch_names() {
-            local DB=$1; local OBJ=$2
-            # Drift-proof extraction (OSE-303): `wrangler d1 execute --json` shape
-            # varies by transport — --local returns [{results:[...]}] (array), but
-            # --remote returns an object envelope — so a fixed `.[0]` index aborts the
-            # deploy with "jq: Cannot index object with number". Walk any depth for the
-            # results rows so array / object / CF-envelope shapes all work.
-            npx wrangler d1 execute "$DB" --env staging --remote --json \
-              --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.. | objects | select(has("results")) | .results[] | .name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
-          }
-
-          ACTUAL_DB=$(fetch_names ocr-db-staging table)
-          if [ "$ACTUAL_DB" != "$EXPECTED_DB" ]; then
-            echo "::error::DB table-set drift on staging."
-            echo "  Expected: [$EXPECTED_DB]"
-            echo "  Got:      [$ACTUAL_DB]"
-            echo "  Update tests/migration-smoke.spec.ts DB_TABLES — workflow extracts from the spec automatically (OSE-303), so updating the spec is sufficient."
-            exit 1
-          fi
-          echo "✓ DB: $DB_COUNT canonical tables verified by name (extracted from spec)"
-
-          ACTUAL_FORMS=$(fetch_names ocr-forms-db-staging table)
-          if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
-            echo "::error::FORMS_DB table-set drift on staging."
-            echo "  Expected: [$EXPECTED_FORMS]"
-            echo "  Got:      [$ACTUAL_FORMS]"
-            echo "  Update tests/migration-smoke.spec.ts FORMS_DB_TABLES — workflow extracts from the spec automatically (OSE-303)."
-            exit 1
-          fi
-          echo "✓ FORMS_DB: $FORMS_COUNT canonical tables verified by name (extracted from spec)"
-
-          # Triggers: must be zero on both DBs (migration 0025 documented
-          # that triggers were removed; D1 parser breaks on ; in trigger
-          # bodies, so state-machine enforcement lives in app code).
-          DB_TRIGGERS=$(fetch_names ocr-db-staging trigger)
-          if [ -n "$DB_TRIGGERS" ]; then
-            echo "::error::Unexpected triggers in staging DB: [$DB_TRIGGERS]"
-            echo "  Migration 0025 documents triggers were removed; any new trigger must justify reintroducing the wrangler-parser fragility."
-            exit 1
-          fi
-          FORMS_TRIGGERS=$(fetch_names ocr-forms-db-staging trigger)
-          if [ -n "$FORMS_TRIGGERS" ]; then
-            echo "::error::Unexpected triggers in staging FORMS_DB: [$FORMS_TRIGGERS]"
-            exit 1
-          fi
-          echo "✓ Triggers: 0 on both DBs (matches canonical)"
-
-          echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_STAGING\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
+        run: node scripts/verify-d1-canonical-shape.mjs --env staging
 
       # ────────────────────────────────────────────────────────────────────
       # OSE-803 — pre-deploy schema gate.
@@ -1924,77 +1852,13 @@ jobs:
 
       # Canonical-shape verification on production. Mirror of the staging
       # step in T1 Deploy → Staging; keep both in sync. Source of truth:
-      # workers/oursharedevents/tests/migration-smoke.spec.ts.
-      - name: 'Verify production D1 (canonical shape from migration-smoke.spec.ts, 0 triggers)'
+      # migration-smoke.spec.ts for live table names, migration SQL for columns.
+      - name: 'Verify production D1 (canonical tables + columns, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          set -euo pipefail
-          # OSE-303: same spec-as-source-of-truth extraction as the
-          # staging step above. Mirror by intent — both production and
-          # staging consume the SAME canonical tables list because
-          # migrations apply identically. Drift between prod and staging
-          # would itself be a separate alarm (migrations out of sync).
-          EXPECTED_DB=$(node -e "
-          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const DB_TABLES = \[([\\s\\S]*?)\] as const;/);
-          if (!m) { console.error('::error::OSE-303: could not extract DB_TABLES from spec'); process.exit(1); }
-          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
-          if (n.length < 10) { console.error('::error::OSE-303: extracted ' + n.length + ' DB_TABLES; expected >= 10'); process.exit(1); }
-          console.log(n.join(' '));
-          ")
-          EXPECTED_FORMS=$(node -e "
-          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const FORMS_DB_TABLES = \[([\\s\\S]*?)\] as const;/);
-          if (!m) { console.error('::error::OSE-303: could not extract FORMS_DB_TABLES from spec'); process.exit(1); }
-          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
-          if (n.length < 3) { console.error('::error::OSE-303: extracted ' + n.length + ' FORMS_DB_TABLES; expected >= 3'); process.exit(1); }
-          console.log(n.join(' '));
-          ")
-          DB_COUNT=$(echo "$EXPECTED_DB" | wc -w | tr -d ' ')
-          FORMS_COUNT=$(echo "$EXPECTED_FORMS" | wc -w | tr -d ' ')
-
-          fetch_names() {
-            local DB=$1; local OBJ=$2
-            # Drift-proof extraction (OSE-303) — see the staging verify: walk any depth
-            # for the results rows so wrangler's array / object / envelope --json shapes
-            # all work (a fixed `.[0]` aborts prod deploys the same way it did staging).
-            npx wrangler d1 execute "$DB" --env production --remote --json \
-              --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.. | objects | select(has("results")) | .results[] | .name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
-          }
-
-          ACTUAL_DB=$(fetch_names ocr-db-production table)
-          if [ "$ACTUAL_DB" != "$EXPECTED_DB" ]; then
-            echo "::error::DB table-set drift on production."
-            echo "  Expected: [$EXPECTED_DB]"
-            echo "  Got:      [$ACTUAL_DB]"
-            exit 1
-          fi
-          echo "✓ Production DB: $DB_COUNT canonical tables verified by name (extracted from spec)"
-
-          ACTUAL_FORMS=$(fetch_names ocr-forms-db-production table)
-          if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
-            echo "::error::FORMS_DB table-set drift on production."
-            echo "  Expected: [$EXPECTED_FORMS]"
-            echo "  Got:      [$ACTUAL_FORMS]"
-            exit 1
-          fi
-          echo "✓ Production FORMS_DB: $FORMS_COUNT canonical tables verified by name (extracted from spec)"
-
-          DB_TRIGGERS=$(fetch_names ocr-db-production trigger)
-          if [ -n "$DB_TRIGGERS" ]; then
-            echo "::error::Unexpected triggers in production DB: [$DB_TRIGGERS]"
-            exit 1
-          fi
-          FORMS_TRIGGERS=$(fetch_names ocr-forms-db-production trigger)
-          if [ -n "$FORMS_TRIGGERS" ]; then
-            echo "::error::Unexpected triggers in production FORMS_DB: [$FORMS_TRIGGERS]"
-            exit 1
-          fi
-          echo "✓ Production triggers: 0 on both DBs"
-
-          echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_PRODUCTION\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
+        run: node scripts/verify-d1-canonical-shape.mjs --env production
 
       # OSE-803 — pre-deploy schema gate. Mirror of the staging step in
       # T1 Deploy → Staging; keep both in sync.

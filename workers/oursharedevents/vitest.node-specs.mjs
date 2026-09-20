@@ -137,4 +137,7 @@ export const NODE_SPECS = [
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
   // No cloudflare:test / SELF.fetch / D1 runtime — node-clean by construction.
   'tests/scan-buffer.spec.ts',
+  // OSE-1347 deploy D1 canonical-shape verifier. Pure parser/diff/query-builder
+  // tests over the migration SQL + fake D1 query runner; no cloudflare:test.
+  'tests/d1-canonical-shape.spec.ts',
 ];
