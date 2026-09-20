@@ -68,6 +68,22 @@ describe('production jobs use hosted runners', () => {
     expect(workflow.jobs['deploy-production']['runs-on']).toBe('ubuntu-latest');
     expect(workflow.jobs['smoke-production']['runs-on']).toBe('ubuntu-latest');
   });
+
+  test('deploy-production requires the staging chain to be green first', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    expect(workflow.jobs['deploy-production'].needs).toEqual(
+      expect.arrayContaining([
+        'security',
+        'gate',
+        'deploy-staging',
+        'smoke-staging',
+        'contract-staging',
+        'functional-staging',
+      ])
+    );
+  });
 });
 
 // ─── Token Naming Consistency ────────────────────────────────────────
