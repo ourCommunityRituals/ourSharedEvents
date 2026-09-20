@@ -74,6 +74,7 @@ export function publicReadLimitResponse(): Response {
       headers: {
         'Retry-After': '60',
         'X-RateLimit-Limit': String(PUBLIC_READ_MAX),
+        'X-RateLimit-Remaining': '0',
         'X-RateLimit-Window': '60s',
         'Cache-Control': 'no-store',
       },

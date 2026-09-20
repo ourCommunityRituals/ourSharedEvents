@@ -119,6 +119,7 @@ export function rateLimitResponse(): Response {
       headers: {
         'Retry-After': '60',
         'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+        'X-RateLimit-Remaining': '0',
         'X-RateLimit-Window': '60s',
         'Content-Type': 'application/json',
       },
