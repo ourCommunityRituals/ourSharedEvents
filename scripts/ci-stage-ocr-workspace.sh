@@ -20,13 +20,27 @@
 # commit is logged so reviewers can spot drift.
 #
 # The fallback does NOT apply to the first-clone case — without an
-# existing cache there's nothing to fall back to, and the script must
-# fail. New runners (or wiped caches) require OSE-341's auth model to
-# be in place.
+# existing cache there's nothing to fall back to. @ocr/flags/@ocr/ui
+# simply won't be staged this run.
 #
 # Follow-up: publish @ocr/flags to a private GitHub Packages registry
 # to eliminate the file: dance entirely. Until then, this script keeps
 # CI jobs honest about the cross-repo dependency.
+#
+# ── ANNOTATION-NOISE CLEANUP (OSE-1344, 2026-09-20) ─────────────────────────
+# Every call site sets `continue-on-error: true` on this step (staging is
+# explicitly documented as best-effort, and npm ci is documented to
+# tolerate @ocr/flags' absence) — so a hard `exit 1` here never actually
+# blocks a job. It only produced a misleading red "failure" annotation
+# (GitHub auto-attaches "Process completed with exit code 1" to any step
+# that exits non-zero) on every single job of every workflow, run after
+# run, for a condition the pipeline already treats as non-fatal. That
+# drowned out real failures in the Annotations panel. Now: still print
+# the same loud, ticket-referencing diagnostic, but as a GitHub
+# `::warning::` annotation and `exit 0`, so the step is correctly shown
+# as "succeeded (with a known, tracked, tolerated gap)" instead of a
+# false "failed". This changes zero pass/fail behavior anywhere it's
+# called — continue-on-error already made the step's own exit code moot.
 # ───────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -37,13 +51,8 @@ SOURCE_REPO="${OCR_WORKSPACE_REPO:-https://github.com/ourCommunityRituals/ourCom
 if [ ! -d "$WS_CACHE/.git" ]; then
   echo "[stage] cloning $SOURCE_REPO into $WS_CACHE"
   if ! git clone --depth 1 "$SOURCE_REPO" "$WS_CACHE"; then
-    echo "[stage] ============================================================" >&2
-    echo "[stage] ERROR: initial clone failed and no cache to fall back to" >&2
-    echo "[stage] ============================================================" >&2
-    echo "[stage] likely cause: runner lacks credentials for $SOURCE_REPO" >&2
-    echo "[stage] fix: land OSE-341 (workspace token via repo secret)." >&2
-    echo "[stage]      runner-machine cred priming is a temporary workaround only." >&2
-    exit 1
+    echo "::warning title=@ocr/flags staging skipped (OSE-341)::initial clone of $SOURCE_REPO failed and no cache to fall back to — likely cause: runner lacks credentials for $SOURCE_REPO. Fix: land OSE-341 (workspace token via repo secret); runner-machine cred priming is a temporary workaround only. npm ci is documented to tolerate @ocr/flags' absence, so this run continues without it."
+    exit 0
   fi
 else
   echo "[stage] updating existing clone at $WS_CACHE"
@@ -77,8 +86,8 @@ else
 fi
 
 if [ ! -d "$WS_CACHE/packages/flags" ]; then
-  echo "[stage] ERROR: $WS_CACHE/packages/flags missing — even fallback cache lacks the package" >&2
-  exit 1
+  echo "::warning title=@ocr/flags staging skipped (OSE-341)::$WS_CACHE/packages/flags is missing — even the fallback cache lacks the package. npm ci is documented to tolerate @ocr/flags' absence, so this run continues without it."
+  exit 0
 fi
 
 mkdir -p "$TARGET_PARENT"
