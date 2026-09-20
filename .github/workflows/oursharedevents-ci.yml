@@ -346,7 +346,7 @@ jobs:
   # 3-runner Bloodraven pool can execute lint / typecheck / tests / a11y in
   # parallel rather than serial. Baseline: PR #160 measured 6.4 min for the
   # monolithic single job. Expected wall-clock after shard: ~3 min, driven
-  # by the gate-tests shard (the long pole due to ~1064 vitest cases).
+  # by the slowest T0 test sub-gate below (formerly the monolithic tests shard).
   #
   # Downstream jobs (`deploy-staging`, `summary`) reference `needs: [gate]`
   # which GitHub Actions resolves to "all matrix children succeeded" — no
@@ -402,7 +402,7 @@ jobs:
         # It is the first tier that executes real FE flows on a PR: every other
         # Playwright config targets a deployed URL, which is why 55 surface specs
         # were gated by nothing while T2→T3→T4 sat behind staging.
-        shard: [lint, typecheck, tests, a11y, invariants, component]
+        shard: [lint, typecheck, a11y, invariants, component]
     steps:
       # Self-hosted runner cleanup: stale _diag/pages/ log files left by
       # cancelled runs cause checkout to fail with "file already exists".
@@ -647,59 +647,6 @@ jobs:
         run: npx tsc --noEmit
         working-directory: ${{ env.WORKER_DIR }}
 
-      # ── Shard: tests ───────────────────────────────────────────────────────
-      # Security-IAC unit tests + root npm test + worker D1 schema (vitest
-      # against the 1064-case suite). This is the long pole and the primary
-      # justification for sharding — letting it own a dedicated runner instead
-      # of blocking lint/typecheck/a11y behind it.
-      - name: 'Security: Unit tests'
-        if: matrix.shard == 'tests'
-        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
-
-      - name: 'Quality: Unit + Contract + Guards'
-        if: matrix.shard == 'tests'
-        run: npx vitest run
-
-      # ── OSE-286: @ocr/ui adoption drift check ──────────────────────────────
-      # Gates on critical violations (local-root-tokens, missing-shared-
-      # stylesheet). Large inline CSS is reported as a migration progress
-      # metric but never blocks — templates are partially migrated.
-      # script mirrors packages/ui/src/contract.ts logic with no build dep.
-      - name: 'Quality: @ocr/ui adoption drift'
-        if: matrix.shard == 'tests'
-        run: node scripts/check-ui-drift.mjs
-
-      # ── OCR-docs brain checkout (for OSE-323 UEC drift check) ──────────────
-      # The drift check in workers/oursharedevents/tests/uec-drift-check.spec.ts
-      # (vitest) compares the OSE consumed UEC copy against the brain canonical.
-      # vitest.config.mts reads the brain artifact at config time and injects
-      # TEST_BRAIN_UEC_JSON. When BRAIN_DIR is absent, the drift gate SKIPS
-      # locally; this step ensures it FIRES in CI by checking out OCR-docs
-      # and pointing BRAIN_DIR at it.
-      - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
-        if: matrix.shard == 'tests' && github.actor != 'dependabot[bot]'
-        uses: actions/checkout@v7
-        with:
-          repository: ourCommunityRituals/OCR-docs
-          ref: main
-          path: ocr-docs-brain-checkout
-          # OCR-docs is private; needs the cross-repo read token (same one
-          # brain-contract-check.yml uses). Default GITHUB_TOKEN can't read
-          # across private repos.
-          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
-
-      - name: 'Quality: Worker D1 schema'
-        if: matrix.shard == 'tests'
-        # OSE-696: route the vitest-pool-workers run through the retry-once
-        # wrapper. workerd intermittently segfaults with
-        # "Check failed: std::numeric_limits<int>::max() >= length_"; the wrapper
-        # re-runs ONCE only on that crash signature and preserves the real exit
-        # code otherwise (a genuine test failure still fails the gate).
-        run: node ../../scripts/vitest-retry.mjs npm test
-        working-directory: ${{ env.WORKER_DIR }}
-        env:
-          BRAIN_DIR: ${{ github.workspace }}/ocr-docs-brain-checkout/ocr-docs-brain
-
       # ── Shard: a11y ────────────────────────────────────────────────────────
       # axe-core WCAG 2.0 AA scan via the worker test runner.
       - name: 'Quality: A11Y axe-core WCAG 2.0 AA scan'
@@ -805,6 +752,117 @@ jobs:
         shell: bash
         run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
 
+  # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
+  # an aggregate below, but split the former 9+ minute long-pole job into
+  # independently visible and parallel sections.
+  gate-tests-sub:
+    name: 'T0 Tests (${{ matrix.section }})'
+    needs: [security]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - section: security-iac
+            workdir: .
+            command: >-
+              npx vitest run
+              tests/unit/worker/sec-iac-03-adminOAuth.test.js
+              tests/unit/worker/sec-iac-04-public-read-only.test.js
+              tests/unit/worker/sec-iac-05-signed-mutations.test.js
+              tests/unit/worker/sec-iac-07-iac-smoke.test.js
+          - section: root-vitest
+            workdir: .
+            command: npx vitest run
+          - section: ui-drift
+            workdir: .
+            command: node scripts/check-ui-drift.mjs
+          - section: worker-d1-schema
+            workdir: workers/oursharedevents
+            command: node ../../scripts/vitest-retry.mjs npm test
+    steps:
+      - name: 'Clear stale runner diag files'
+        shell: bash
+        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
+
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install root dependencies
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      - name: Install worker dependencies
+        if: matrix.section == 'worker-d1-schema'
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && { [ "$RUNNER_OS" != "Windows" ] || [ -f "$WORKERD" ]; }; then
+            echo "worker node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      # The worker D1 schema run imports OCR-docs brain artifacts at vitest config
+      # time. Root/local runs skip when absent; CI must provide them.
+      - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
+        if: matrix.section == 'worker-d1-schema' && github.actor != 'dependabot[bot]'
+        uses: actions/checkout@v7
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          ref: main
+          path: ocr-docs-brain-checkout
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+
+      - name: 'Run T0 test section'
+        working-directory: ${{ matrix.workdir }}
+        run: ${{ matrix.command }}
+        env:
+          BRAIN_DIR: ${{ github.workspace }}/ocr-docs-brain-checkout/ocr-docs-brain
+
+      - name: 'Cleanup: clear diag pages for next run'
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
+
+  gate-tests:
+    name: 'T0 Gate (tests)'
+    needs: [gate-tests-sub]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Summarize T0 test sub-gates
+        run: |
+          echo "## T0 Gate (tests)" >> $GITHUB_STEP_SUMMARY
+          echo "Sub-gates finished with result: \`${{ needs.gate-tests-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.gate-tests-sub.result }}" != "success" ]; then
+            echo "::error::One or more T0 test sub-gates failed or were cancelled"
+            exit 1
+          fi
+
   # ============================================================================
   # TIER 1: DEPLOY — Push to main or dispatch
   # ============================================================================
@@ -816,7 +874,7 @@ jobs:
     # to lose. npm ci resolves @ocr/flags via ci-stage-ocr-workspace.sh, already
     # proven on ubuntu by S0 + the T0 gate. No SBOM step here (that lives in S0).
     runs-on: ubuntu-latest
-    needs: [security, gate]
+    needs: [security, gate, gate-tests]
     # Opt-in full-pipeline-on-PR: a PR whose HEAD branch is named `full-pipeline/*`
     # runs T1 Deploy→Staging (and therefore the whole T2 Contract → T3 E2E Smoke
     # → T4 Functional fail-fast chain, which cascade on deploy-staging success).
@@ -1022,11 +1080,12 @@ jobs:
     # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Bruno
     # contract (T2) is green. A red here SKIPS functional (T4). Depends on
     # contract-staging so the API contract is proven before the FE E2E layer.
-    needs: [security, gate, deploy-staging, contract-staging]
+    needs: [security, gate, gate-tests, deploy-staging, contract-staging]
     if: |
       always() &&
       needs.security.result == 'success' &&
       needs.gate.result == 'success' &&
+      needs.gate-tests.result == 'success' &&
       needs.contract-staging.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
@@ -1148,11 +1207,12 @@ jobs:
     # contract. Contract-first — nail the API contract, THEN perpetuate into the
     # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
     # so a broken API contract is fixed before any FE layer runs.
-    needs: [security, gate, deploy-staging]
+    needs: [security, gate, gate-tests, deploy-staging]
     if: |
       always() &&
       needs.security.result == 'success' &&
       needs.gate.result == 'success' &&
+      needs.gate-tests.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v7
@@ -1341,11 +1401,12 @@ jobs:
     # re-homed S2 integrity tripwire (tail step) rides this move by design: its
     # baseline checkout is at the job START, not a post-execution reset (OSE-1056/1057).
     runs-on: ubuntu-latest
-    needs: [security, gate, deploy-staging, smoke-staging]
+    needs: [security, gate, gate-tests, deploy-staging, smoke-staging]
     if: |
       always() &&
       needs.security.result == 'success' &&
       needs.gate.result == 'success' &&
+      needs.gate-tests.result == 'success' &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true') ||
         (needs.deploy-staging.result == 'success' && needs.smoke-staging.result == 'success')
@@ -1762,7 +1823,7 @@ jobs:
     # OSE-1217: production must be gated by the same-run staging chain, not only
     # S0 + T0. A production tag/dispatch cannot ship a SHA unless T1-T4 staging
     # went green for that SHA in this workflow run.
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging]
+    needs: [security, gate, gate-tests, deploy-staging, smoke-staging, contract-staging, functional-staging]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -1922,7 +1983,7 @@ jobs:
   smoke-production:
     name: 'T2 Smoke → Production'
     runs-on: ubuntu-latest
-    needs: [security, gate, deploy-production]
+    needs: [security, gate, gate-tests, deploy-production]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -2068,7 +2129,7 @@ jobs:
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs: [security, gate, gate-tests, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
     if: always()
     steps:
       - name: Summary
@@ -2079,6 +2140,7 @@ jobs:
           echo "|------|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| S0 Security | security | \`${{ needs.security.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T0 Gate (tests) | gate-tests | \`${{ needs.gate-tests.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Bruno API STG | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 Playwright Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY

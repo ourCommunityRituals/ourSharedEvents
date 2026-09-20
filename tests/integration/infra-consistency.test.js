@@ -436,6 +436,56 @@ describe('component tier continuity — the component shard gates T0', () => {
   });
 });
 
+describe('T0 test sub-gates remain split and aggregated', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const gate = (wf.jobs && wf.jobs.gate) || {};
+  const gateShards = (gate.strategy && gate.strategy.matrix && gate.strategy.matrix.shard) || [];
+  const testSubGate = (wf.jobs && wf.jobs['gate-tests-sub']) || {};
+  const testAggregate = (wf.jobs && wf.jobs['gate-tests']) || {};
+  const testSubGateSteps = testSubGate.steps || [];
+  const workerDepsStep = testSubGateSteps.find(
+    (s) => s && s.name === 'Install worker dependencies'
+  );
+  const sections =
+    (testSubGate.strategy &&
+      testSubGate.strategy.matrix &&
+      testSubGate.strategy.matrix.include &&
+      testSubGate.strategy.matrix.include.map((entry) => entry.section)) ||
+    [];
+
+  test('monolithic tests shard is not in the generic T0 matrix', () => {
+    expect(
+      gateShards,
+      'T0 tests must stay decomposed into named sub-gates instead of returning to one long-pole shard'
+    ).not.toContain('tests');
+  });
+
+  test('T0 test sub-gate matrix covers each bounded section', () => {
+    expect(sections).toEqual(
+      expect.arrayContaining(['security-iac', 'root-vitest', 'ui-drift', 'worker-d1-schema'])
+    );
+  });
+
+  test('required-check-compatible T0 Gate (tests) aggregate depends on the sub-gates', () => {
+    expect(testAggregate.name).toBe('T0 Gate (tests)');
+    expect(testAggregate.needs).toEqual(expect.arrayContaining(['gate-tests-sub']));
+  });
+
+  test('worker D1 schema sub-gate installs worker dependencies before running', () => {
+    expect(
+      workerDepsStep,
+      'worker-d1-schema sub-gate must install worker dependencies'
+    ).toBeDefined();
+    expect(workerDepsStep.if).toBe("matrix.section == 'worker-d1-schema'");
+    expect(workerDepsStep['working-directory']).toBe('${{ env.WORKER_DIR }}');
+  });
+
+  test('staging deploy waits for the test aggregate', () => {
+    expect(wf.jobs['deploy-staging'].needs).toEqual(expect.arrayContaining(['gate-tests']));
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');
