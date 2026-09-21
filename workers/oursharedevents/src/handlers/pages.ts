@@ -801,7 +801,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
+    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>
 
     ${
       whyPurpose
