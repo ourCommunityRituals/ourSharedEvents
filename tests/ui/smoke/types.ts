@@ -30,8 +30,8 @@ export interface RouteSpec {
   edgeAuth?: 'cf-access';
   /**
    * Gated: when visited WITHOUT auth/role, the page must still render a
-   * humane gate — an .empty-state (post-@ocr/ui) or the legacy denied element —
-   * never a blank screen or bare JSON.
+   * humane gate — an .empty-state, explicit sign-in shell, or the legacy denied
+   * element — never a blank screen or bare JSON.
    */
   gate?: boolean;
   /** Page has migrated to the shared stylesheet: assert exactly one /ui.css
