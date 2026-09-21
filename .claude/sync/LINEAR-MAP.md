@@ -50,6 +50,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 | ------------------ | --------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | S0 / advisory SBOM | OSE-1030  | Keep CycloneDX SBOM generation green with the managed-runner `@ocr/flags` file dependency | PR #588 (`f02075a`); `.github/workflows/advanced-security-scan.yml` uses `--ignore-npm-errors`, and `tests/integration/infra-consistency.test.js` guards the tolerance |
 
+## Landing / supply-side experience
+
+| Story ID | Linear ID | Title                                                                         | Evidence / status                                                                                                                                                                                                                                                                                    |
+| -------- | --------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Landing  | OSE-1312  | Supply-side landing with two doors, privacy promise, and filterable area view | PR #550 (`0bbb341`); `workers/oursharedevents/src/lib/landing-area.ts`, `workers/oursharedevents/tests/landing-area.spec.ts`, `tests/e2e/3-flows/landing-to-events.spec.js`, and the a11y surface gate. Slice 2 is merged; real map rendering and hybrid-product backing remain explicit follow-ups. |
+
 ## T4b Core Journeys
 
 | Story ID | Linear ID | Title                                                    | Evidence                                                                                                                                                                                                                                                  |
