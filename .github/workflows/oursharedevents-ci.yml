@@ -74,7 +74,7 @@
 #   |--------------------|----------|------|--------|-------|----------|------------|
 #   | PR to main         | ✅ *     | ✅   | ❌     | ❌    | ❌       | ❌         |
 #   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ❌         |
-#   | Tag vX.Y.Z         | ✅       | ✅   | →prod  | →prod | ❌       | ❌         |
+#   | Tag vX.Y.Z         | ✅       | ✅   | stg→prod | stg→prod | ✅       | ✅         |
 #   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅†   | ✅†      | ❌         |
 #   | Dispatch           | ✅       | ✅   | opt    | opt   | opt      | opt        |
 #   * PR trigger has NO paths filter — security runs on every PR regardless of files changed.
@@ -902,9 +902,14 @@ jobs:
     # Lets you watch the staged pipeline end-to-end on a PR without merging.
     # Normal PRs still skip T1–T4. NOTE: this DEPLOYS the PR branch to the shared
     # staging worker for the duration of the run (same-repo PR → secrets present).
+    # OSE-1217: production tag/dispatch also starts here, so production is gated
+    # by a green staging chain on the SAME SHA rather than a previously-recorded
+    # staging run or only S0/T0.
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION') ||
       (github.event_name == 'pull_request' && startsWith(github.head_ref, 'full-pipeline/'))
     environment:
       name: staging
