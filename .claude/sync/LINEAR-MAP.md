@@ -44,6 +44,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 
 | SharedReport | OSE-923 | Unlinkability — stored anonymous return rows cannot be re-joined without the dedicated pepper | `workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts` (pepper isolation + no raw anon ID) |
 
+## Privacy architecture / scan-path separation
+
+| Story ID       | Linear ID | Title                                                                                   | Evidence / status                                                                                                                                                                                                                                                                                                                |
+| -------------- | --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature A / M0 | OSE-798   | Split placement and anonymous-return scan data so no durable row couples WHO with WHERE | PR #364 (`45646309`); migration `0062_split_scan_path.sql`; `qr-scan.spec.ts`, `anti-logging-proof.spec.ts`, `forbidden-join-blindness.spec.ts`, `migration-smoke.spec.ts`, and `schema.spec.ts`. The single-row coupling goal is complete; the PR records shared-bucket correlation and return-row deduplication as follow-ups. |
+
 ## Supply-chain security
 
 | Story ID           | Linear ID | Title                                                                                     | Evidence                                                                                                                                                               |
