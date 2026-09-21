@@ -16,6 +16,11 @@
 # Required secrets:
 #   ADMIN_KEY                    — Bearer token for /admin routes (openssl rand -hex 32)
 #   FORMS_ENCRYPTION_KEY         — AES-GCM key for email signup encryption (min 32 chars)
+#   FORMS_HASH_PEPPER            — HMAC-SHA256 pepper for email hashing (min 32 chars).
+#                                  FAIL-CLOSED: unset -> register + email-signup return
+#                                  CONFIG_ERROR 503 (OSE-1343). Added to this required
+#                                  list because it was never provisioned on staging in
+#                                  the first place — nothing here ever prompted for it.
 #   SHARED_REPORT_SIGNING_SECRET — HMAC key for SharedReport + sponsor-home signed
 #                                  links (>=32 chars). FAIL-CLOSED: unset -> the whole
 #                                  /sponsor corner and every /sharedReport link is inert.
@@ -53,6 +58,7 @@ fi
 SECRETS=(
   "ADMIN_KEY"
   "FORMS_ENCRYPTION_KEY"
+  "FORMS_HASH_PEPPER"
   "SHARED_REPORT_SIGNING_SECRET"
 )
 
