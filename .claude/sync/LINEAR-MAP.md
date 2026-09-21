@@ -61,6 +61,7 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 | Story ID | Linear ID | Title                                                    | Evidence                                                                                                                                                                                                                                                  |
 | -------- | --------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T4b      | OSE-984   | Admin + sponsor flywheel reaches a green staging journey | PR #384 (`625b409`) stages `ADMIN_SCOPE_ALL` and hardens sponsor journey request/read paths; PR #385 (`90b979a`) makes the covenant read retry-safe; `.github/workflows/oursharedevents-ci.yml` resets synthetic sponsor fixtures before the contract run |
+| T4b      | OSE-1197  | Sponsor journey targets a dedicated sponsored fixture    | PR #587 (`3de16e11`) prefers `SMOKE_EVENT_SPONSORED` in `tests/e2e/3-flows/sponsor-journey.spec.ts`, avoiding concurrent shared-staging event-order flakiness                                                                                             |
 
 ## Incentive spine / field validation
 
