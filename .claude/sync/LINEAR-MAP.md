@@ -58,6 +58,38 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 | Report boundary | OSE-920   | Enforce entitled report depth server-side rather than relying on browser hiding                             | PR #411 (`51acb670`); `shared-report-read.spec.ts` proves sponsor-only filtering, fail-closed premium claims, preserved class aggregates, and no batch-handler bypass.                                                                                    |
 | Geo substrate   | OSE-798   | Use venue-time H3 tags for corridor aggregation without building a viewer geofence or scan-location history | `workers/oursharedevents/src/lib/h3-tagging.ts`; `geo-invariant.spec.ts` and `h3-tagging.spec.ts` pin named res9/res7 cells and forbid H3 imports in scan-path handlers. H3 tags are derived at event/venue write time; viewer location is not collected. |
 
+### Known residual: cross-event anon-ID correlation (not resolved by OSE-798/665/920)
+
+The controls above stop a single row from joining WHO to WHERE, gate low-count
+aggregates, and gate report depth by role. None of them limit **longitudinal**
+correlation of one visitor's own attendance history:
+
+- `lib/anonymous-id.ts` issues a single `ose_anon` cookie (`Max-Age=1yr`)
+  reused across every event/venue the visitor scans at — it is a stable
+  cross-event pseudonym by design, not a per-event token.
+- `lib/scan-buffer.ts` writes the **raw** `anon_id` into
+  `scan_node_returns.anonymous_id` with no TTL or purge job; the row
+  accumulates indefinitely.
+- `lib/shared-report.ts` intentionally re-hashes that raw id and upserts into
+  `anon_id_returns(anon_id_hash, venue_id, first_seen_at, last_seen_at,
+visit_count)` — one row per venue ever attended by the same pseudonym,
+  which is the documented basis for the `return_rate` and "Headcount trend
+  (cross-event)" report fields (`lib/shared-report-builder.ts`,
+  `templates/shared-report.html`).
+- `handlers/data-subject.ts` (GDPR/CCPA erasure) deletes only
+  email-hash-linked rows (`email_signups`, `form_registrations`,
+  `subscribers`). It does not delete or expire `scan_node_returns` or
+  `anon_id_returns` rows, so there is no verified purge path for this
+  pseudonymous cross-event history today.
+- Only pepper rotation (`ANON_ID_HASH_PEPPER`) resets the `anon_id_returns`
+  signal; the underlying raw-id correlation in `scan_node_returns` is
+  unaffected by rotation.
+
+This is a real, currently open privacy gap — not a status this table treats
+as resolved. Follow-up options (not yet decided): add a retention/TTL policy
+for `scan_node_returns`/`anon_id_returns`, extend `data-subject.ts` erasure to
+cover anon-ID-linked rows, or rotate/shorten the `ose_anon` cookie lifetime.
+
 ## Supply-chain security
 
 | Story ID           | Linear ID | Title                                                                                     | Evidence                                                                                                                                                               |
