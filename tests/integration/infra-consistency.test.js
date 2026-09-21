@@ -606,6 +606,34 @@ describe('Playwright browser installs use cache on staging and PR gates', () => 
   });
 });
 
+// ─── npm cache continuity — hosted runner CI speed (OSE-1073/1074) ─────────────
+describe('main CI setup-node steps cache npm downloads', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const setupNodeSteps = Object.entries(wf.jobs || {}).flatMap(([jobId, job]) =>
+    (job.steps || [])
+      .filter((step) => step && step.uses === 'actions/setup-node@v7')
+      .map((step) => ({ jobId, step }))
+  );
+
+  test('the workflow has setup-node steps to guard', () => {
+    expect(setupNodeSteps.length).toBeGreaterThan(0);
+  });
+
+  test('every setup-node step enables npm cache for root and worker lockfiles', () => {
+    for (const { jobId, step } of setupNodeSteps) {
+      expect(step.with && step.with.cache, `${jobId} setup-node must enable npm cache`).toBe('npm');
+      const dependencyPath = step.with && step.with['cache-dependency-path'];
+      expect(dependencyPath, `${jobId} setup-node must key cache on both npm lockfiles`).toContain(
+        'package-lock.json'
+      );
+      expect(dependencyPath, `${jobId} setup-node must include the worker npm lockfile`).toContain(
+        'workers/oursharedevents/package-lock.json'
+      );
+    }
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');

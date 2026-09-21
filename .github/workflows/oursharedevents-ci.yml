@@ -177,6 +177,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -418,6 +422,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -800,6 +808,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -905,6 +917,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -1123,6 +1139,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -1258,6 +1278,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -1461,6 +1485,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -1883,6 +1911,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -2036,6 +2068,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
@@ -2144,6 +2180,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
       - name: Reconcile gate execution
         env:
           EVENT_NAME: ${{ github.event_name }}
