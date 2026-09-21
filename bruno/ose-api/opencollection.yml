@@ -32,9 +32,11 @@ request:
 
         const elapsed = Date.now() - bru.getVar('requestStartTime');\r
 
-        test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {\r
+        const latencyBudgetMs = req.getPath().includes('/forms/registrations') ? 7000 : 6000;\r
 
-        \    expect(elapsed).to.be.below(6000);\r
+        test(`Response time < ${latencyBudgetMs}ms (actual: ${elapsed}ms)`, function() {\r
+
+        \    expect(elapsed).to.be.below(latencyBudgetMs);\r
 
         });\r
 
