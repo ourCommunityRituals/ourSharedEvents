@@ -8,9 +8,32 @@
  *
  *   Raw email is never written to any log or response — only the SHA-256 hash.
  *   Admin-only: caller must pass requireAdmin before this handler is invoked.
+ *
+ * OSE-1350 — anon-ID-linked scan/report rows.
+ *   Before OSE-1350, erasure never touched `scan_node_returns` or
+ *   `anon_id_returns`: those tables are keyed by the pseudonymous `anon_id`
+ *   cookie, not by email, so a request-by-email erasure had no path to them.
+ *   `form_registrations.anonymous_id` / `email_signups.anonymous_id` are the
+ *   ONLY place the platform records "this email and this anon_id belong to
+ *   the same visit" — captured at submission time (OSE-ADMIN-6). This handler
+ *   delegates the identity-column lookup to `lib/erasure-anon-lookup.ts` (the
+ *   single sanctioned "who ↔ anon_id" correlation seam — see that file's
+ *   header) BEFORE deleting the email-keyed rows, then uses the returned
+ *   anon_id(s) to also purge, in THIS file (which never itself reads a
+ *   FORMS_DB identity column, preserving the P5 never-who static gate):
+ *     - `scan_node_returns` (raw anon_id match — no pepper needed)
+ *     - `anon_id_returns`   (peppered anon_id_hash match — same pepper +
+ *       normalization `shared-report.ts` uses at write time)
+ *   A visitor who never submitted a form (scan-only, no email ever given) has
+ *   no email-to-anon_id link recorded anywhere, so this cannot reach their
+ *   scan rows — that residual is unchanged and is documented in
+ *   `.claude/sync/LINEAR-MAP.md` alongside OSE-1350's remaining scope (a
+ *   retention/TTL policy and/or a shorter `ose_anon` cookie lifetime).
  */
 
 import { type FormsDbEnv, hashEmail, assertPepperConfigured } from '../lib/forms-db';
+import { hashAnonIdForReturns } from '../lib/anon-id-hash';
+import { findAnonIdsLinkedToEmailHash } from '../lib/erasure-anon-lookup';
 
 /**
  * OSE-207 — subscribers table erase support.
@@ -23,11 +46,16 @@ import { type FormsDbEnv, hashEmail, assertPepperConfigured } from '../lib/forms
  * the response continues to expose only the emailHash.
  */
 export type DataSubjectEnv = FormsDbEnv & {
-  /** Main DB binding — host of `subscribers` (OSE-207). */
+  /** Main DB binding — host of `subscribers`, `scan_node_returns`, `anon_id_returns`. */
   DB: D1Database;
   // OSE-598: must match FORMS_HASH_PEPPER used at write time so deletion
   // lookups produce the same hash value as the stored email_hash columns.
   FORMS_HASH_PEPPER?: string;
+  // OSE-1350: must match ANON_ID_HASH_PEPPER used at write time (shared-report.ts)
+  // so the anon_id_returns lookup produces the same anon_id_hash value. If unset,
+  // the anon_id_returns purge is skipped with a warning (see Phase E below) —
+  // scan_node_returns purge (Phase D) is unaffected since it matches on the raw id.
+  ANON_ID_HASH_PEPPER?: string;
 };
 
 export async function handleDataSubjectErase(
@@ -85,7 +113,25 @@ export async function handleDataSubjectErase(
   let signupsDeleted = 0;
   let registrationsDeleted = 0;
   let subscribersDeleted = 0;
+  let scanReturnsDeleted = 0;
+  let anonIdReturnsDeleted = 0;
   let errors = 0;
+
+  // OSE-1350: collect anon_id(s) linked to this email BEFORE deleting the rows
+  // that carry the link (email_signups.anonymous_id / form_registrations.anonymous_id
+  // — the only place email and anon_id are ever recorded together). Delegated to
+  // lib/erasure-anon-lookup.ts, the single sanctioned "who ↔ anon_id" correlation
+  // seam (see that file's header) — this keeps data-subject.ts itself free of any
+  // FORMS_DB identity-column SELECT, so the P5 never-who static gate
+  // (tests/anti-logging-proof.spec.ts) never treats this file as a cross-DB join
+  // risk even though it also deletes from the main-DB scan tables below.
+  // Best-effort: a lookup failure must not abort the core email-keyed erasure.
+  let anonIds = new Set<string>();
+  try {
+    anonIds = await findAnonIdsLinkedToEmailHash(env, emailHash);
+  } catch {
+    errors++;
+  }
 
   // Phase A: delete email signups by hash (independent — failure does not abort B)
   try {
@@ -122,6 +168,50 @@ export async function handleDataSubjectErase(
     errors++;
   }
 
+  // Phase D (OSE-1350): purge scan_node_returns rows for any anon_id discovered
+  // above. Matches on the raw anonymous_id column — no pepper required — so
+  // this runs unconditionally regardless of ANON_ID_HASH_PEPPER availability.
+  for (const anonId of anonIds) {
+    try {
+      const res = await env.DB.prepare('DELETE FROM scan_node_returns WHERE anonymous_id = ?')
+        .bind(anonId)
+        .run();
+      scanReturnsDeleted += res.meta?.changes ?? 0;
+    } catch {
+      errors++;
+    }
+  }
+
+  // Phase E (OSE-1350): purge anon_id_returns rows for any anon_id discovered
+  // above. Requires ANON_ID_HASH_PEPPER to re-derive the same anon_id_hash
+  // shared-report.ts wrote at materialization time. A missing pepper skips
+  // this phase with a warning rather than failing the whole erasure request —
+  // Phase D (scan_node_returns) already ran and is independently valid, and
+  // this table is a secondary aggregate, not the subject's identifiable record.
+  if (anonIds.size > 0) {
+    if (!env.ANON_ID_HASH_PEPPER) {
+      console.warn(
+        JSON.stringify({
+          type: 'ANON_ID_HASH_PEPPER_MISSING',
+          note: 'OSE-1350 anon_id_returns erasure purge skipped. Set wrangler/Doppler secret ANON_ID_HASH_PEPPER to enable.',
+        })
+      );
+    } else {
+      for (const anonId of anonIds) {
+        try {
+          const anonIdHash = await hashAnonIdForReturns(anonId, env.ANON_ID_HASH_PEPPER);
+          if (!anonIdHash) continue;
+          const res = await env.DB.prepare('DELETE FROM anon_id_returns WHERE anon_id_hash = ?')
+            .bind(anonIdHash)
+            .run();
+          anonIdReturnsDeleted += res.meta?.changes ?? 0;
+        } catch {
+          errors++;
+        }
+      }
+    }
+  }
+
   // Audit — write failure is non-fatal and must never abort the erasure response
   try {
     const auditId = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
@@ -133,9 +223,21 @@ export async function handleDataSubjectErase(
         auditId,
         'data_subject_erase',
         'admin_api',
-        signupsDeleted + registrationsDeleted + subscribersDeleted,
+        signupsDeleted +
+          registrationsDeleted +
+          subscribersDeleted +
+          scanReturnsDeleted +
+          anonIdReturnsDeleted,
         errors,
-        JSON.stringify({ emailHash, signupsDeleted, registrationsDeleted, subscribersDeleted })
+        JSON.stringify({
+          emailHash,
+          signupsDeleted,
+          registrationsDeleted,
+          subscribersDeleted,
+          scanReturnsDeleted,
+          anonIdReturnsDeleted,
+          anonIdsLinked: anonIds.size,
+        })
       )
       .run();
   } catch {
@@ -149,6 +251,8 @@ export async function handleDataSubjectErase(
       signupsDeleted,
       registrationsDeleted,
       subscribersDeleted,
+      scanReturnsDeleted,
+      anonIdReturnsDeleted,
       errors,
       timestamp: now,
     })
@@ -160,6 +264,8 @@ export async function handleDataSubjectErase(
     signupsDeleted,
     registrationsDeleted,
     subscribersDeleted,
+    scanReturnsDeleted,
+    anonIdReturnsDeleted,
     erasedAt: now,
   });
 }
