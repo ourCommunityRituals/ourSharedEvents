@@ -513,6 +513,51 @@ describe('T3 smoke sub-gates remain split and aggregated', () => {
   });
 });
 
+describe('T2 contract sub-gates remain split and aggregated', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const contractSubGate = (wf.jobs && wf.jobs['contract-staging-sub']) || {};
+  const contractAggregate = (wf.jobs && wf.jobs['contract-staging']) || {};
+  const sections =
+    (contractSubGate.strategy &&
+      contractSubGate.strategy.matrix &&
+      contractSubGate.strategy.matrix.include &&
+      contractSubGate.strategy.matrix.include.map((entry) => entry.section)) ||
+    [];
+  const subSteps = contractSubGate.steps || [];
+  const apiOnlySteps = subSteps.filter((step) => step && step.if === "matrix.section == 'api'");
+
+  test('T2 contract sub-gate matrix covers API and Pages collections', () => {
+    expect(sections).toEqual(expect.arrayContaining(['api', 'pages']));
+  });
+
+  test('required-check-compatible T2 aggregate depends on the sub-gates', () => {
+    expect(contractAggregate.name).toBe('T2 Contract → Staging (Bruno)');
+    expect(contractAggregate.needs).toEqual(expect.arrayContaining(['contract-staging-sub']));
+  });
+
+  test('API-only staging fixture setup does not run in the Pages sub-gate', () => {
+    expect(
+      apiOnlySteps.map((step) => step.name),
+      'CF Access preflight and remote D1 fixture setup should stay scoped to the API contract'
+    ).toEqual(
+      expect.arrayContaining([
+        'CF Access preflight probe',
+        'Seed covenant event geo (OSE-891 fixture)',
+        'Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)',
+        'Seed covenant sponsors accepted (CCR-PR567 fixture)',
+      ])
+    );
+  });
+
+  test('T3 smoke waits for the T2 aggregate, not raw sub-gates', () => {
+    expect(wf.jobs['smoke-staging-sub'].needs).toEqual(
+      expect.arrayContaining(['contract-staging'])
+    );
+    expect(wf.jobs['smoke-staging-sub'].needs).not.toContain('contract-staging-sub');
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');

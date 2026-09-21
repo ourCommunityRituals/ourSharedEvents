@@ -1202,8 +1202,8 @@ jobs:
   # ============================================================================
   # TIER 3: CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191)
   # ============================================================================
-  contract-staging:
-    name: 'T2 Contract → Staging (Bruno)'
+  contract-staging-sub:
+    name: 'T2 Contract (${{ matrix.section }})'
     # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
     # seed only; no deploy. Staging auth is the header-based CF Access service
     # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
@@ -1221,6 +1221,18 @@ jobs:
       needs.gate.result == 'success' &&
       needs.gate-tests.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - section: api
+            label: 'T2: Bruno API contract'
+            collection: bruno/ose-api
+            junit: bru-api-junit.xml
+          - section: pages
+            label: 'T2: Bruno Pages contract'
+            collection: bruno/ose-pages
+            junit: bru-pages-junit.xml
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1256,6 +1268,7 @@ jobs:
       # contract stays the source of truth per the tests-surface-truth doctrine, and this step
       # only auto-classifies the next failure into the step summary.
       - name: CF Access preflight probe
+        if: matrix.section == 'api'
         id: preflight
         shell: bash
         env:
@@ -1273,6 +1286,7 @@ jobs:
       # A standalone fixture (not a migration) on purpose — see the file header
       # (postman/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
       - name: Seed covenant event geo (OSE-891 fixture)
+        if: matrix.section == 'api'
         id: seed-covenant-geo
         continue-on-error: true
         timeout-minutes: 2
@@ -1285,6 +1299,7 @@ jobs:
             --file ../../postman/fixtures/covenant-event-geo.sql
 
       - name: Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)
+        if: matrix.section == 'api'
         id: reset-covenant-sponsors
         continue-on-error: true
         timeout-minutes: 2
@@ -1304,6 +1319,7 @@ jobs:
       # now established in the fixture. Runs AFTER the reset (which clears stale rows by
       # name) so exactly these 4 exist at read time. Idempotent.
       - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
+        if: matrix.section == 'api'
         id: seed-covenant-sponsors
         continue-on-error: true
         timeout-minutes: 2
@@ -1325,9 +1341,9 @@ jobs:
       # (OSE-1191: masked the green result until created). Make the dir first.
       - name: Prepare contract report dir
         run: mkdir -p "$GITHUB_WORKSPACE/.test-results"
-      - name: Bruno API contract
-        id: bru-api
-        working-directory: bruno/ose-api
+
+      - name: Bruno contract section
+        working-directory: ${{ matrix.collection }}
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
@@ -1346,24 +1362,14 @@ jobs:
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
             --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
-            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-api-junit.xml"
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
         timeout-minutes: 5
-        continue-on-error: true
-
-      - name: Bruno Pages contract
-        id: bru-pages
-        working-directory: bruno/ose-pages
-        run: |
-          npx bru run . -r --env ose-staging \
-            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-pages-junit.xml"
-        timeout-minutes: 5
-        continue-on-error: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: contract-staging-${{ github.run_number }}
+          name: contract-staging-${{ matrix.section }}-${{ github.run_number }}
           path: .test-results/
           retention-days: 14
 
@@ -1375,7 +1381,7 @@ jobs:
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: 'T2 Contract Results (Bruno)'
+          name: '${{ matrix.label }} Results (Bruno)'
           path: '.test-results/bru-*-junit.xml'
           reporter: java-junit
           fail-on-error: false
@@ -1383,19 +1389,27 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          echo "## ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Collection:** \`${{ matrix.collection }}\`" >> $GITHUB_STEP_SUMMARY
+
+  contract-staging:
+    name: 'T2 Contract → Staging (Bruno)'
+    needs: [contract-staging-sub]
+    runs-on: ubuntu-latest
+    if: always() && needs.contract-staging-sub.result != 'skipped'
+    steps:
+      - name: Summarize T2 contract sub-gates
+        run: |
           echo "## T2 Contract → Staging (Bruno)" >> $GITHUB_STEP_SUMMARY
           echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Collection | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API (bruno/ose-api) | \`${{ steps.bru-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Pages (bruno/ose-pages) | \`${{ steps.bru-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-
-      - name: Fail check
-        if: steps.bru-api.outcome == 'failure' || steps.bru-pages.outcome == 'failure'
-        run: |
-          echo "::error::Contract failed — API: ${{ steps.bru-api.outcome }}, Pages: ${{ steps.bru-pages.outcome }}"
-          exit 1
+          echo "Sub-gates finished with result: \`${{ needs.contract-staging-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.contract-staging-sub.result }}" != "success" ]; then
+            echo "::error::One or more T2 contract sub-gates failed or were cancelled"
+            exit 1
+          fi
 
   # ============================================================================
   # TIER 4: FUNCTIONAL — Playwright API + UI (on-demand only)
