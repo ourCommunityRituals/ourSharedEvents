@@ -50,6 +50,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 | -------- | --------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T4b      | OSE-984   | Admin + sponsor flywheel reaches a green staging journey | PR #384 (`625b409`) stages `ADMIN_SCOPE_ALL` and hardens sponsor journey request/read paths; PR #385 (`90b979a`) makes the covenant read retry-safe; `.github/workflows/oursharedevents-ci.yml` resets synthetic sponsor fixtures before the contract run |
 
+## Incentive spine / field validation
+
+| Story ID        | Linear ID | Title                                                                      | Evidence / status                                                                                                                                                                     |
+| --------------- | --------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Incentive spine | OSE-797   | Validate the anchor-pledge, corridor-card, and free-local incentive ladder | `workers/oursharedevents/docs/ops/ADR-INCENTIVE-SPINE-2026-09-16.md`, section 10 defines the five-business paper-card experiment; no execution evidence is present in this repository |
+
 ## SharedReport / Contract-tier — OSE-575..892 range · added 2026-09-21 (drift-audit reconcile)
 
 These IDs already appeared as inline citations in `STORIES.md` but had no row here, so a reader relying on this table alone would conclude they don't exist in Linear. Added for traceability only — no status claims changed; see `STORIES.md` for the authoritative status of each.
