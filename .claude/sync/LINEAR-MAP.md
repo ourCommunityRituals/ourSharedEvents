@@ -44,6 +44,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 
 | SharedReport | OSE-923 | Unlinkability — stored anonymous return rows cannot be re-joined without the dedicated pepper | `workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts` (pepper isolation + no raw anon ID) |
 
+## T4b Core Journeys
+
+| Story ID | Linear ID | Title                                                    | Evidence                                                                                                                                                                                                                                                  |
+| -------- | --------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T4b      | OSE-984   | Admin + sponsor flywheel reaches a green staging journey | PR #384 (`625b409`) stages `ADMIN_SCOPE_ALL` and hardens sponsor journey request/read paths; PR #385 (`90b979a`) makes the covenant read retry-safe; `.github/workflows/oursharedevents-ci.yml` resets synthetic sponsor fixtures before the contract run |
+
 ## Incentive spine / field validation
 
 | Story ID        | Linear ID | Title                                                                      | Evidence / status                                                                                                                                                                     |
