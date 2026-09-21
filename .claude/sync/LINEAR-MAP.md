@@ -36,6 +36,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 > Fill in `Linear ID` after importing. Format: `OUR-123`.
 > PRs that include `OUR-XXX` in commit messages auto-link via GitHub integration.
 
+## Security / privacy — OSE-563
+
+| Story ID | Linear ID | Title                                                 | Evidence                                                                                    |
+| -------- | --------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| —        | OSE-563   | Attendee anti-logging proof: born-red absence harness | `workers/oursharedevents/tests/anti-logging-proof.spec.ts` (30 tests, 8 absence properties) |
+
 ## SharedReport / Contract-tier — OSE-575..892 range · added 2026-09-21 (drift-audit reconcile)
 
 These IDs already appeared as inline citations in `STORIES.md` but had no row here, so a reader relying on this table alone would conclude they don't exist in Linear. Added for traceability only — no status claims changed; see `STORIES.md` for the authoritative status of each.
