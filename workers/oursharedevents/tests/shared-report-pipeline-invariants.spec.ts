@@ -552,6 +552,22 @@ describe('OSE-272 hashAnonIdForReturns — anonymity-preserving hash function', 
     expect(hash).not.toBeNull();
     expect(hash!.toLowerCase()).not.toContain('someuniqueidentifier');
   });
+
+  test('OSE-923 unlinkability: stored return hash cannot be re-joined without the dedicated pepper', async () => {
+    const { hashAnonIdForReturns } = await import('../src/lib/anon-id-hash');
+    const anonId = 'anon_ose923_unlinkability_probe';
+    const dedicatedPepper = 'ose923-dedicated-pepper';
+    const wrongPepper = 'ip-hash-pepper-must-not-cross-over';
+
+    const storedHash = await hashAnonIdForReturns(anonId, dedicatedPepper);
+    const attemptedJoin = await hashAnonIdForReturns(anonId, wrongPepper);
+
+    expect(storedHash).toMatch(/^[a-f0-9]{32}$/);
+    expect(attemptedJoin).toMatch(/^[a-f0-9]{32}$/);
+    expect(attemptedJoin).not.toBe(storedHash);
+    expect(storedHash).not.toContain(anonId);
+    expect(storedHash).not.toContain(dedicatedPepper);
+  });
 });
 
 // ─── Gate 7 — H3 denormalization is cron-only; ingest path is tier-blind ─────
