@@ -486,6 +486,33 @@ describe('T0 test sub-gates remain split and aggregated', () => {
   });
 });
 
+describe('T3 smoke sub-gates remain split and aggregated', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const smokeSubGate = (wf.jobs && wf.jobs['smoke-staging-sub']) || {};
+  const smokeAggregate = (wf.jobs && wf.jobs['smoke-staging']) || {};
+  const sections =
+    (smokeSubGate.strategy &&
+      smokeSubGate.strategy.matrix &&
+      smokeSubGate.strategy.matrix.include &&
+      smokeSubGate.strategy.matrix.include.map((entry) => entry.section)) ||
+    [];
+
+  test('T3 smoke sub-gate matrix covers each bounded smoke section', () => {
+    expect(sections).toEqual(expect.arrayContaining(['security', 'iac', 'forms']));
+  });
+
+  test('required-check-compatible T3 aggregate depends on the sub-gates', () => {
+    expect(smokeAggregate.name).toBe('T3 E2E Smoke → Staging (Playwright)');
+    expect(smokeAggregate.needs).toEqual(expect.arrayContaining(['smoke-staging-sub']));
+  });
+
+  test('functional staging waits for the T3 aggregate, not raw sub-gates', () => {
+    expect(wf.jobs['functional-staging'].needs).toEqual(expect.arrayContaining(['smoke-staging']));
+    expect(wf.jobs['functional-staging'].needs).not.toContain('smoke-staging-sub');
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');
