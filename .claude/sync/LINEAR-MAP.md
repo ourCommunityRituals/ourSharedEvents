@@ -36,6 +36,23 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 > Fill in `Linear ID` after importing. Format: `OUR-123`.
 > PRs that include `OUR-XXX` in commit messages auto-link via GitHub integration.
 
+## SharedReport / Contract-tier — OSE-575..892 range · added 2026-09-21 (drift-audit reconcile)
+
+These IDs already appeared as inline citations in `STORIES.md` but had no row here, so a reader relying on this table alone would conclude they don't exist in Linear. Added for traceability only — no status claims changed; see `STORIES.md` for the authoritative status of each.
+
+| Story ID     | Linear ID | Title                                                                    |
+| ------------ | --------- | ------------------------------------------------------------------------ |
+| SharedReport | OSE-628   | corridor_map SVG render on signed-link SharedReport view                 |
+| SharedReport | OSE-631   | `refreshCorridorBaselines` COALESCE(h3_res7, corridor_id) coverage       |
+| SR-15        | OSE-638   | Form page CSP (nonce-based)                                              |
+| SR-25        | OSE-714   | SharedReport depth enforcement — cited evidence (server gate lineage)    |
+| SR-25        | OSE-816   | SharedReport depth enforcement — server-side gate (ADR-017)              |
+| SR-25        | OSE-817   | SharedReport depth enforcement — client `upgrade.locked_sections` render |
+| TP-3         | OSE-838   | Newman entry points repointed at live OSE collections (pre-Bruno)        |
+| TRI-6        | OSE-729   | category_registry — layout-template axis (context reference only)        |
+
+> **Known gap (not yet closed):** `docs/adr/ADR-017-sharedreport-depth-enforcement.md` also cites **OSE-577** and **OSE-815** for the depth-enforcement work; neither appears anywhere in `STORIES.md`, so they are intentionally omitted from the table above pending a STORIES.md update that would give them a story-ID anchor.
+
 ## Epic — Doc→Code→Process Continuity Remediation (CCR 5-loop) · created 2026-09-10
 
 Linear team key is **OSE** (not `OUR`). EPIC = Linear project `Doc→Code→Process Continuity Remediation (CCR 5-loop)`, linked to the "Self-Checking Infrastructure — Invariants as the Core Framework" initiative.
