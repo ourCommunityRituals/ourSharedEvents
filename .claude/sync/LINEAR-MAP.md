@@ -44,6 +44,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 
 | SharedReport | OSE-923 | Unlinkability — stored anonymous return rows cannot be re-joined without the dedicated pepper | `workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts` (pepper isolation + no raw anon ID) |
 
+## Privacy architecture / scan-path separation
+
+| Story ID       | Linear ID | Title                                                                                   | Evidence / status                                                                                                                                                                                                                                                                                                                |
+| -------------- | --------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature A / M0 | OSE-798   | Split placement and anonymous-return scan data so no durable row couples WHO with WHERE | PR #364 (`45646309`); migration `0062_split_scan_path.sql`; `qr-scan.spec.ts`, `anti-logging-proof.spec.ts`, `forbidden-join-blindness.spec.ts`, `migration-smoke.spec.ts`, and `schema.spec.ts`. The single-row coupling goal is complete; the PR records shared-bucket correlation and return-row deduplication as follow-ups. |
+
 ## Geo/privacy composition controls
 
 | Story ID        | Linear ID | Title                                                                                                       | Evidence / status                                                                                                                                                                                                                                         |
@@ -64,11 +70,18 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 | -------- | --------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landing  | OSE-1312  | Supply-side landing with two doors, privacy promise, and filterable area view | PR #550 (`0bbb341`); `workers/oursharedevents/src/lib/landing-area.ts`, `workers/oursharedevents/tests/landing-area.spec.ts`, `tests/e2e/3-flows/landing-to-events.spec.js`, and the a11y surface gate. Slice 2 is merged; real map rendering and hybrid-product backing remain explicit follow-ups. |
 
+## TRIANGLE / publication boundary
+
+| Story ID            | Linear ID | Title                                                                                    | Evidence / status                                                                                                                                                                                                                                                                                                       |
+| ------------------- | --------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TRI-3 / create flow | OSE-1245  | Publication is an explicit owner choice and unpublished events are absent from discovery | PR #460 (`32a59c60`); `workers/oursharedevents/tests/create-flow-publication.spec.ts` proves both create paths ask and send `is_published`, while `events-publication.spec.ts` proves map exclusion and query-level filtering. Location-precision policy remains an explicit follow-up in `public-event-projection.ts`. |
+
 ## T4b Core Journeys
 
 | Story ID | Linear ID | Title                                                    | Evidence                                                                                                                                                                                                                                                  |
 | -------- | --------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T4b      | OSE-984   | Admin + sponsor flywheel reaches a green staging journey | PR #384 (`625b409`) stages `ADMIN_SCOPE_ALL` and hardens sponsor journey request/read paths; PR #385 (`90b979a`) makes the covenant read retry-safe; `.github/workflows/oursharedevents-ci.yml` resets synthetic sponsor fixtures before the contract run |
+| T4b      | OSE-1197  | Sponsor journey targets a dedicated sponsored fixture    | PR #587 (`3de16e11`) prefers `SMOKE_EVENT_SPONSORED` in `tests/e2e/3-flows/sponsor-journey.spec.ts`, avoiding concurrent shared-staging event-order flakiness                                                                                             |
 
 ## Incentive spine / field validation
 
