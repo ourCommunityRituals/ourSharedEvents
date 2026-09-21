@@ -44,6 +44,12 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 
 | SharedReport | OSE-923 | Unlinkability — stored anonymous return rows cannot be re-joined without the dedicated pepper | `workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts` (pepper isolation + no raw anon ID) |
 
+## Supply-chain security
+
+| Story ID           | Linear ID | Title                                                                                     | Evidence                                                                                                                                                               |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S0 / advisory SBOM | OSE-1030  | Keep CycloneDX SBOM generation green with the managed-runner `@ocr/flags` file dependency | PR #588 (`f02075a`); `.github/workflows/advanced-security-scan.yml` uses `--ignore-npm-errors`, and `tests/integration/infra-consistency.test.js` guards the tolerance |
+
 ## SharedReport / Contract-tier — OSE-575..892 range · added 2026-09-21 (drift-audit reconcile)
 
 These IDs already appeared as inline citations in `STORIES.md` but had no row here, so a reader relying on this table alone would conclude they don't exist in Linear. Added for traceability only — no status claims changed; see `STORIES.md` for the authoritative status of each.
