@@ -35,13 +35,15 @@ request:
         const isAdminRegistrationsRead = req.getPath().includes('/forms/registrations');\r
         // Admin registrations decrypts organizer-visible attendee names before responding;\r
         // live staging can exceed the generic API budget while still staying usable.\r
-        const latencyBudgetMs = isAdminRegistrationsRead ? 9000 : 6000;\r
-
-        test(`Response time < ${latencyBudgetMs}ms (actual: ${elapsed}ms)`, function() {\r
-
-        \    expect(elapsed).to.be.below(latencyBudgetMs);\r
-
-        });\r
+        if (isAdminRegistrationsRead) {\r
+        \    test(`Response time < 9000ms (actual: ${elapsed}ms)`, function() {\r
+        \        expect(elapsed).to.be.below(9000);\r
+        \    });\r
+        } else {\r
+        \    test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {\r
+        \        expect(elapsed).to.be.below(6000);\r
+        \    });\r
+        }\r
 
         \r
 

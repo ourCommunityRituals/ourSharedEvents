@@ -249,7 +249,10 @@ describe('Bruno contract latency budgets', () => {
 
     expect(collection).toContain('const isAdminRegistrationsRead');
     expect(collection).toContain("req.getPath().includes('/forms/registrations')");
-    expect(collection).toContain('const latencyBudgetMs = isAdminRegistrationsRead ? 9000 : 6000;');
+    expect(collection).toContain('Response time < 9000ms');
+    expect(collection).toContain('expect(elapsed).to.be.below(9000)');
+    expect(collection).toContain('Response time < 6000ms');
+    expect(collection).toContain('expect(elapsed).to.be.below(6000)');
   });
 });
 
