@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-20 — 432 ids.
+ * Generated 2026-09-21 — 435 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,13 +43,14 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 276 ids
+    // admin.html — 277 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
       'admin-dashboard-card',
       'admin-dashboard-title',
       'admin-header',
+      'admin-intro',
       'admin-main',
       'admin-path-advanced',
       'admin-path-chooser',
@@ -411,7 +412,7 @@
       'poster-sponsors-loading',
       'poster-title',
     ]),
-    // shared-report.html — 76 ids
+    // shared-report.html — 78 ids
     SHARED_REPORT: Object.freeze([
       'advanced-metrics-content',
       'advanced-metrics-section',
@@ -455,12 +456,14 @@
       'report-events-list',
       'report-header',
       'report-home-link',
+      'report-intro',
       'report-main',
       'report-sponsor-card',
       'report-sponsor-metrics',
       'report-sponsor-section',
       'report-stats',
       'report-suppression-note',
+      'report-toolbar',
       'shared-report-skip-link',
       'signed-link-content',
       'signed-link-corridor-density',
