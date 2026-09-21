@@ -957,27 +957,32 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
 
       # ────────────────────────────────────────────────────────────────────
-      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
-      # BEFORE the remote D1 migrate steps. A missing signing secret would ship
-      # the /sponsor + /sharedReport corner SILENTLY INERT, and we must not mutate
-      # the shared remote D1 for a deploy we already know is doomed. `wrangler
-      # secret list` sees only the NAME (never the value); value-length is enforced
+      # CCR-PR567 H2 + re-run item 5 — fail-closed secret PRESENCE gate, BEFORE
+      # the remote D1 migrate steps. A missing secret here ships a corner
+      # SILENTLY INERT or, per OSE-1343, a masked 503 on register/email-signup
+      # (missing FORMS_HASH_PEPPER never surfaced pre-deploy because this gate
+      # only checked SHARED_REPORT_SIGNING_SECRET — the pepper wasn't even in
+      # set-secrets.sh's REQUIRED_SECRETS list). We must not mutate the shared
+      # remote D1 for a deploy we already know is doomed. `wrangler secret
+      # list` sees only the NAME (never the value); value-length is enforced
       # at provisioning (set-secrets.sh) and functionally by the T4 /sponsor
       # journey (a public /health field would trip the NS-3 boring-OK gate).
       # ────────────────────────────────────────────────────────────────────
-      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+      - name: 'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
-          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh staging"
-            echo "$OUT"
-            exit 1
-          fi
-          echo "SHARED_REPORT_SIGNING_SECRET present on staging (value-length verified post-deploy via /health)."
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER; do
+            if ! echo "$OUT" | grep -q "$SECRET"; then
+              echo "::error::$SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343). Provision it: bash scripts/set-secrets.sh staging"
+              echo "$OUT"
+              exit 1
+            fi
+          done
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER present on staging (value-length verified post-deploy via /health)."
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -1962,25 +1967,27 @@ jobs:
           echo "✓ Production DB isolation verified"
 
       # ────────────────────────────────────────────────────────────────────
-      # CCR-PR567 H2 + re-run item 5 — fail-closed signing-secret PRESENCE gate,
-      # BEFORE the remote D1 migrate steps (production). Same rationale as
-      # staging: never mutate the shared remote D1 for a deploy that would ship
-      # the /sponsor + /sharedReport corner inert. Value-length is enforced at
-      # provisioning (set-secrets.sh) + functionally by the T4 /sponsor journey.
+      # CCR-PR567 H2 + re-run item 5 — fail-closed secret PRESENCE gate, BEFORE
+      # the remote D1 migrate steps (production). Mirror of the staging step
+      # in T1 Deploy → Staging; keep both in sync (OSE-1343 — the pepper check
+      # was missing here too, so a production deploy could still ship the
+      # exact masked-503 class of failure OSE-1343 found on staging).
       # ────────────────────────────────────────────────────────────────────
-      - name: 'Gate: signing secret present (pre-migrate, fail-closed corner)'
+      - name: 'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env production 2>&1 || true)"
-          if ! echo "$OUT" | grep -q 'SHARED_REPORT_SIGNING_SECRET'; then
-            echo "::error::SHARED_REPORT_SIGNING_SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship the /sponsor + /sharedReport corners inert. Provision it: bash scripts/set-secrets.sh production"
-            echo "$OUT"
-            exit 1
-          fi
-          echo "SHARED_REPORT_SIGNING_SECRET present on production (value-length verified post-deploy via /health)."
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER; do
+            if ! echo "$OUT" | grep -q "$SECRET"; then
+              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343). Provision it: bash scripts/set-secrets.sh production"
+              echo "$OUT"
+              exit 1
+            fi
+          done
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER present on production (value-length verified post-deploy via /health)."
 
       - name: Apply D1 migrations (main DB)
         env:

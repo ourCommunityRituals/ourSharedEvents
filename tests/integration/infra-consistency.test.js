@@ -83,7 +83,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     const deployPrereqs = [
       'Stage adjacent @ocr/flags package',
       'Install worker dependencies',
-      'Gate: signing secret present (pre-migrate, fail-closed corner)',
+      'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)',
       'Apply D1 migrations (main DB)',
       'Apply D1 migrations (forms DB)',
       'Gate: no unprovisioned binding IDs (OSE-813)',
@@ -200,6 +200,43 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     expect(stagingVerify?.run).toBe('node scripts/verify-d1-canonical-shape.mjs --env staging');
     expect(productionVerify?.run).toBe(
       'node scripts/verify-d1-canonical-shape.mjs --env production'
+    );
+  });
+
+  // ─── Required-secret presence gate — staging pattern applied to prod (OSE-1343) ───
+  //
+  // OSE-1343's staging 503 traced to FORMS_HASH_PEPPER: unset, it made register +
+  // email-signup throw and surface as a masked DB_ERROR. The code fix (#565) made
+  // that a clear CONFIG_ERROR, but the pre-migrate presence gate only ever checked
+  // SHARED_REPORT_SIGNING_SECRET, and set-secrets.sh's required list never included
+  // FORMS_HASH_PEPPER — so neither staging nor production would have been stopped
+  // pre-deploy. Both are fixed here, mirrored across environments.
+  test('staging and production pre-migrate gates require FORMS_HASH_PEPPER (OSE-1343)', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    const secretGate = (jobName) =>
+      workflow.jobs[jobName].steps.find(
+        (step) =>
+          step.name ===
+          'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
+      );
+    const stagingGate = secretGate('deploy-staging');
+    const productionGate = secretGate('deploy-production');
+
+    for (const gate of [stagingGate, productionGate]) {
+      expect(gate?.run).toContain('SHARED_REPORT_SIGNING_SECRET');
+      expect(gate?.run).toContain('FORMS_ENCRYPTION_KEY');
+      expect(gate?.run).toContain('FORMS_HASH_PEPPER');
+    }
+    expect(stagingGate?.run).toContain('--env staging');
+    expect(productionGate?.run).toContain('--env production');
+  });
+
+  test('set-secrets.sh provisions FORMS_HASH_PEPPER alongside the other required secrets (OSE-1343)', () => {
+    const script = readFile('scripts/set-secrets.sh');
+    expect(script).toMatch(
+      /SECRETS=\(\s*\n\s*"ADMIN_KEY"\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*\)/
     );
   });
 });

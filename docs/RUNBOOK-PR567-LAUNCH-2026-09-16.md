@@ -44,7 +44,7 @@ npx wrangler secret list --env production
 
 ## Step 2 — Deploy to staging + run the FULL pyramid
 
-The Bruno/Newman contract + Playwright E2E + staging-mobile tiers **skip on `feat/*`**; this is what makes them run. **Migrations apply automatically** inside the deploy job (the `Apply D1 migrations (main DB)` / `(forms DB)` steps run `wrangler d1 migrations apply {DB,FORMS_DB} --env staging --remote`) — you do **not** run them by hand. A pre-migrate **signing-secret gate** (`Gate: signing secret present (pre-migrate…)`, CCR item 5) aborts the deploy _before_ migrate if `SHARED_REPORT_SIGNING_SECRET` is unset, so a missing secret fails fast with a clear error rather than migrating and shipping the /sponsor corner inert.
+The Bruno/Newman contract + Playwright E2E + staging-mobile tiers **skip on `feat/*`**; this is what makes them run. **Migrations apply automatically** inside the deploy job (the `Apply D1 migrations (main DB)` / `(forms DB)` steps run `wrangler d1 migrations apply {DB,FORMS_DB} --env staging --remote`) — you do **not** run them by hand. A pre-migrate **required-secrets gate** (`Gate: required secrets present (pre-migrate…)`, CCR item 5 + OSE-1343) aborts the deploy _before_ migrate if `SHARED_REPORT_SIGNING_SECRET`, `FORMS_ENCRYPTION_KEY`, or `FORMS_HASH_PEPPER` is unset, so a missing secret fails fast with a clear error rather than migrating and shipping a fail-closed corner inert (or, for the pepper, a masked 503 on register/email-signup).
 
 ```sh
 gh workflow run "OurSharedEvents CI/CD" \
