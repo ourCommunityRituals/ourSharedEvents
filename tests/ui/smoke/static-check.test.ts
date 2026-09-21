@@ -73,6 +73,34 @@ function checkApp(
 
 if (OSE_TPL) checkApp('ose', OSE_TPL, oseManifest, oseFiles);
 if (WKRP_TPL) checkApp('wkrp', WKRP_TPL, wkrpManifest, wkrpFiles);
+if (OSE_TPL) {
+  test('[static:ose] admin + shared report keep simplified layout hierarchy', () => {
+    const admin = readFileSync(join(OSE_TPL, 'admin.html'), 'utf8');
+    const report = readFileSync(join(OSE_TPL, 'shared-report.html'), 'utf8');
+
+    assert.match(admin, /data-testid="admin-intro"/, 'admin intro present');
+    assert.match(admin, /Manage events from one clear workspace/, 'admin intro copy present');
+    assert.match(
+      admin,
+      /class="section-eyebrow">Event workspace<\/p>/,
+      'admin event workspace label present'
+    );
+    assert.match(admin, /Filter the list, select one event/, 'admin event help copy present');
+
+    assert.match(report, /data-testid="report-intro"/, 'report intro present');
+    assert.match(report, /data-testid="report-toolbar"/, 'report export toolbar present');
+    assert.match(
+      report,
+      /class="report-section" aria-labelledby="section-stats"/,
+      'report stats section grouped'
+    );
+    assert.match(
+      report,
+      /class="report-section" aria-labelledby="section-events"/,
+      'report events section grouped'
+    );
+  });
+}
 if (!OSE_TPL && !WKRP_TPL) {
   test('set OSE_TPL and/or WKRP_TPL to template dirs', () => assert.ok(true));
 }

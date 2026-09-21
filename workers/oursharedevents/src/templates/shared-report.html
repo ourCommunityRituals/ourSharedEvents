@@ -45,6 +45,55 @@
         display: grid;
         gap: 1.5rem;
       }
+      .report-intro,
+      .report-section,
+      .report-toolbar {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .report-intro {
+        padding: 1.1rem 1.25rem;
+      }
+      .report-intro h2 {
+        margin: 0 0 0.35rem;
+        color: var(--text);
+        font-size: 1.25rem;
+      }
+      .report-intro p,
+      .section-help {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .report-section {
+        padding: 1rem;
+      }
+      .report-section .section-title {
+        margin-bottom: 0.35rem;
+      }
+      .section-help {
+        margin-bottom: 0.85rem;
+      }
+      .report-toolbar .section-help {
+        margin-bottom: 0;
+      }
+      .report-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem 1rem;
+      }
+      .section-eyebrow {
+        margin: 0 0 0.2rem;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
       .section-title {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -59,10 +108,10 @@
         gap: 1rem;
       }
       .stat-card {
-        background: var(--surface);
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       }
       .stat-card .num {
         font-size: 2rem;
@@ -78,7 +127,7 @@
       .events-list {
         background: var(--surface);
         border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--border);
         overflow: hidden;
       }
       .event-row {
@@ -146,10 +195,10 @@
         display: none;
       }
       .sponsor-metric-card {
-        background: var(--surface);
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 1rem 1.25rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       }
       .sponsor-metric-card .sponsor-name {
         font-weight: 600;
@@ -171,6 +220,7 @@
         display: flex;
         gap: 0.75rem;
         justify-content: flex-end;
+        flex-wrap: wrap;
       }
       .btn {
         display: inline-flex;
@@ -487,6 +537,10 @@
           justify-content: stretch;
           flex-wrap: wrap;
         }
+        .report-toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
         .action-bar .btn {
           flex: 1 1 auto;
           justify-content: center;
@@ -730,6 +784,14 @@
       <span>Shared Report</span>
     </header>
     <main id="main-content" data-testid="report-main">
+      <section class="report-intro" data-testid="report-intro" aria-labelledby="report-intro-heading">
+        <p class="section-eyebrow">Report workspace</p>
+        <h2 id="report-intro-heading">Understand what happened without the clutter</h2>
+        <p>
+          Review the event summary first, then scan events, sponsors, and advanced
+          metrics in consistent sections.
+        </p>
+      </section>
       <aside
         id="signed-link-error"
         role="alert"
@@ -739,6 +801,7 @@
       ></aside>
       <section
         id="signed-link-section"
+        class="report-section"
         data-testid="signed-link-section"
         hidden
         aria-labelledby="signed-link-heading"
@@ -748,22 +811,29 @@
           <p class="loading" role="status" aria-live="polite">Loading your event report&hellip;</p>
         </div>
       </section>
-      <div class="action-bar" data-testid="report-action-bar" id="admin-action-bar">
-        <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
-          &#8595; Export JSON
-        </button>
-        <button
-          class="btn btn-outline"
-          data-testid="export-pdf-btn"
-          id="export-pdf-btn"
-          disabled
-          title="Mid+ plan required"
-        >
-          &#128438; Export PDF
-        </button>
+      <div class="report-toolbar" data-testid="report-toolbar">
+        <div>
+          <p class="section-eyebrow">Exports</p>
+          <p class="section-help">Download the current report when sharing outside the dashboard.</p>
+        </div>
+        <div class="action-bar" data-testid="report-action-bar" id="admin-action-bar">
+          <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
+            &#8595; Export JSON
+          </button>
+          <button
+            class="btn btn-outline"
+            data-testid="export-pdf-btn"
+            id="export-pdf-btn"
+            disabled
+            title="Mid+ plan required"
+          >
+            &#128438; Export PDF
+          </button>
+        </div>
       </div>
-      <section aria-labelledby="section-stats" id="admin-section-stats">
+      <section class="report-section" aria-labelledby="section-stats" id="admin-section-stats">
         <h2 class="section-title" id="section-stats">Events Overview</h2>
+        <p class="section-help">A quick count of the events currently included in this report.</p>
         <div class="stats-row" id="stats-row" data-testid="report-stats">
           <div class="stat-card" data-testid="stat-total">
             <dl class="stat-dl">
@@ -779,18 +849,21 @@
           </div>
         </div>
       </section>
-      <section aria-labelledby="section-events" id="admin-section-events">
+      <section class="report-section" aria-labelledby="section-events" id="admin-section-events">
         <h2 class="section-title" id="section-events">Events</h2>
+        <p class="section-help">The reportable events, dates, venues, and lifecycle state.</p>
         <div class="events-list" id="events-list" data-testid="report-events-list">
           <p class="loading">Loading&hellip;</p>
         </div>
       </section>
       <section
         id="report-sponsor-section"
+        class="report-section"
         aria-labelledby="section-sponsors"
         data-testid="report-sponsor-section"
       >
         <h2 class="section-title" id="section-sponsors">Sponsor Overview</h2>
+        <p class="section-help">Sponsor activity is grouped separately so the report is easier to scan.</p>
         <div
           id="sponsor-metrics"
           class="sponsor-metrics"
@@ -799,6 +872,7 @@
       </section>
       <section
         id="advanced-metrics-section"
+        class="report-section"
         data-testid="advanced-metrics-section"
         style="display:none"
         aria-labelledby="section-advanced-metrics"

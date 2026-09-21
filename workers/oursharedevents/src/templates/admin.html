@@ -376,6 +376,53 @@
         margin: 2rem auto;
         padding: 0 1rem;
       }
+      .admin-intro {
+        display: grid;
+        gap: 0.35rem;
+        margin-bottom: 1rem;
+        padding: 1rem 1.25rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .admin-intro h2 {
+        margin: 0;
+        color: var(--text);
+        font-size: 1.25rem;
+      }
+      .admin-intro p,
+      .section-help {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .section-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      .section-head h2 {
+        margin: 0.1rem 0 0.25rem;
+        color: var(--text);
+        font-size: 1.15rem;
+      }
+      .section-eyebrow {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #events-section {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
       h2 {
         font-size: 1.1rem;
         font-weight: 600;
@@ -792,16 +839,17 @@
       /* OSE-673: persistent context bar + sticky card nav. */
       .event-context-bar {
         position: sticky;
-        top: 0;
+        top: 0.5rem;
         z-index: 40;
         display: flex;
         align-items: center;
         gap: 0.75rem;
         flex-wrap: wrap;
-        margin: 0 0 12px;
-        padding: 0.5rem 1rem;
+        margin: 0 0 1rem;
+        padding: 0.65rem 0.85rem;
         background: var(--surface);
-        border-bottom: 1px solid var(--border);
+        border: 1px solid var(--border);
+        border-radius: 12px;
       }
       .event-context-bar[hidden] {
         display: none;
@@ -810,10 +858,16 @@
         font-weight: 600;
         color: var(--text);
       }
+      .ecb-caption::before {
+        content: 'Selected event: ';
+        color: var(--text-muted);
+        font-weight: 500;
+      }
       .ecb-nav {
         display: flex;
         gap: 0.25rem;
         flex-wrap: wrap;
+        margin-left: auto;
       }
       .ecb-nav button {
         min-height: 44px;
@@ -5155,6 +5209,14 @@
         })();
       </script>
 
+      <section class="admin-intro" data-testid="admin-intro" aria-labelledby="admin-intro-heading">
+        <h2 id="admin-intro-heading">Manage events from one clear workspace</h2>
+        <p>
+          Start with the event list, choose one event, then use the selected-event bar
+          to move through dashboard, forms, poster, sponsors, and surfaces in order.
+        </p>
+      </section>
+
       <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
          K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
       <section
@@ -5183,7 +5245,15 @@
       </section>
 
       <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
-      <h2 id="events-heading">Your events</h2>
+      <div class="section-head">
+        <div>
+          <p class="section-eyebrow">Event workspace</p>
+          <h2 id="events-heading">Your events</h2>
+          <p class="section-help">
+            Filter the list, select one event, then manage only that event in the cards below.
+          </p>
+        </div>
+      </div>
       <!-- Status panel — hydrates from ose:event-selected like the four
            management cards. This is the ONLY place in the admin an event moves
            between draft / ready / live / archived: before it, the UI could
