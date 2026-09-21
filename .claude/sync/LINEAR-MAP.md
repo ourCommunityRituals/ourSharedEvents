@@ -76,19 +76,29 @@ visit_count)` — one row per venue ever attended by the same pseudonym,
   which is the documented basis for the `return_rate` and "Headcount trend
   (cross-event)" report fields (`lib/shared-report-builder.ts`,
   `templates/shared-report.html`).
-- `handlers/data-subject.ts` (GDPR/CCPA erasure) deletes only
-  email-hash-linked rows (`email_signups`, `form_registrations`,
-  `subscribers`). It does not delete or expire `scan_node_returns` or
-  `anon_id_returns` rows, so there is no verified purge path for this
-  pseudonymous cross-event history today.
 - Only pepper rotation (`ANON_ID_HASH_PEPPER`) resets the `anon_id_returns`
   signal; the underlying raw-id correlation in `scan_node_returns` is
   unaffected by rotation.
 
-This is a real, currently open privacy gap — not a status this table treats
-as resolved. Follow-up options (not yet decided): add a retention/TTL policy
-for `scan_node_returns`/`anon_id_returns`, extend `data-subject.ts` erasure to
-cover anon-ID-linked rows, or rotate/shorten the `ose_anon` cookie lifetime.
+OSE-1350 closed part of this gap: `handlers/data-subject.ts` (GDPR/CCPA
+erasure) now uses `lib/erasure-anon-lookup.ts` — the one sanctioned "who ↔
+anon_id" correlation seam, isolated to its own file so it never itself reads
+a FORMS_DB identity column alongside a main-DB scan-table read (preserving
+the P5 never-who static gate, `tests/anti-logging-proof.spec.ts`) — to find
+the anon_id(s) an erased email was ever linked to via a form submission
+(`email_signups.anonymous_id` / `form_registrations.anonymous_id`), then
+purges the matching `scan_node_returns` rows (raw match) and `anon_id_returns`
+rows (re-hashed with `ANON_ID_HASH_PEPPER`; skipped with a warning, not a
+failure, if that pepper is unset). See `tests/data-subject.spec.ts`.
+
+This closes the erasure path for any visitor who ever submitted a form with
+an email. It does **not** close the gap for a visitor who only ever scanned
+QR codes and never gave an email — there is still no identifying credential
+to erase by for that visitor, and their `scan_node_returns` /
+`anon_id_returns` rows persist indefinitely today. Remaining open follow-up
+(not yet decided): a retention/TTL policy for `scan_node_returns` /
+`anon_id_returns` that ages out rows independent of any erasure request, and/or
+rotating or shortening the `ose_anon` cookie lifetime.
 
 ## Supply-chain security
 
