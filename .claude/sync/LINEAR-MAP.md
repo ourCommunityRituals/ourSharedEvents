@@ -44,6 +44,14 @@ Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 
 | SharedReport | OSE-923 | Unlinkability — stored anonymous return rows cannot be re-joined without the dedicated pepper | `workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts` (pepper isolation + no raw anon ID) |
 
+## Geo/privacy composition controls
+
+| Story ID        | Linear ID | Title                                                                                                       | Evidence / status                                                                                                                                                                                                                                         |
+| --------------- | --------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Privacy floor   | OSE-665   | Apply one uniform K=5 floor to aggregate counts across admin, sponsor, map, and report surfaces             | `workers/oursharedevents/src/lib/count-floor.ts`; `count-floor.spec.ts`, `admin-count-honesty.spec.ts`, `public-event-stakeholder-surfaces.spec.ts`, and `anti-logging-proof.spec.ts` prove sub-K suppression before values reach callers.                |
+| Report boundary | OSE-920   | Enforce entitled report depth server-side rather than relying on browser hiding                             | PR #411 (`51acb670`); `shared-report-read.spec.ts` proves sponsor-only filtering, fail-closed premium claims, preserved class aggregates, and no batch-handler bypass.                                                                                    |
+| Geo substrate   | OSE-798   | Use venue-time H3 tags for corridor aggregation without building a viewer geofence or scan-location history | `workers/oursharedevents/src/lib/h3-tagging.ts`; `geo-invariant.spec.ts` and `h3-tagging.spec.ts` pin named res9/res7 cells and forbid H3 imports in scan-path handlers. H3 tags are derived at event/venue write time; viewer location is not collected. |
+
 ## Supply-chain security
 
 | Story ID           | Linear ID | Title                                                                                     | Evidence                                                                                                                                                               |
