@@ -128,6 +128,33 @@ function firstIdentifier(sqlFragment) {
   return match ? unquoteIdentifier(match[1]) : null;
 }
 
+function declaredColumnType(sqlFragment) {
+  const identifier = sqlFragment
+    .trim()
+    .match(/^("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/);
+  if (!identifier) return '';
+  const rest = identifier[2].trim();
+  if (!rest) return '';
+  const tokens = rest.split(/\s+/);
+  const constraintIndex = tokens.findIndex((token) =>
+    /^(PRIMARY|NOT|NULL|UNIQUE|CHECK|DEFAULT|COLLATE|REFERENCES|GENERATED|AS|CONSTRAINT)$/i.test(
+      token
+    )
+  );
+  const typeTokens = constraintIndex >= 0 ? tokens.slice(0, constraintIndex) : tokens;
+  return typeTokens.join(' ').trim();
+}
+
+export function sqliteAffinity(declaredType) {
+  const type = declaredType.trim().toUpperCase();
+  if (!type) return 'NONE';
+  if (type.includes('INT')) return 'INTEGER';
+  if (type.includes('CHAR') || type.includes('CLOB') || type.includes('TEXT')) return 'TEXT';
+  if (type.includes('BLOB')) return 'BLOB';
+  if (type.includes('REAL') || type.includes('FLOA') || type.includes('DOUB')) return 'REAL';
+  return 'NUMERIC';
+}
+
 function createTableColumns(statement) {
   const match = statement.match(
     /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)$/i
@@ -141,6 +168,7 @@ function createTableColumns(statement) {
     if (/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|KEY)$/i.test(name)) continue;
     columns.push(name);
   }
+
   return { table, columns };
 }
 
@@ -209,6 +237,101 @@ function applyStatement(schema, statement) {
   }
 }
 
+function createTableColumnDefinitions(statement) {
+  const match = statement.match(
+    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)$/i
+  );
+  if (!match) return null;
+  const table = unquoteIdentifier(match[1]);
+  const columns = [];
+  for (const part of splitTopLevelComma(match[2])) {
+    const name = firstIdentifier(part);
+    if (!name || /^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|KEY)$/i.test(name)) continue;
+    const declaredType = declaredColumnType(part);
+    columns.push({ name, declaredType, affinity: sqliteAffinity(declaredType) });
+  }
+  return { table, columns };
+}
+
+function applyDefinitionStatement(schema, statement, sourceFile) {
+  const create = createTableColumnDefinitions(statement);
+  if (create) {
+    schema.set(
+      create.table,
+      new Map(
+        create.columns.map((column) => [
+          column.name,
+          { table: create.table, column: column.name, ...column, sourceFile },
+        ])
+      )
+    );
+    return;
+  }
+
+  let match = statement.match(
+    /^ALTER\s+TABLE\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+ADD\s+COLUMN\s+([\s\S]+)$/i
+  );
+  if (match) {
+    const table = unquoteIdentifier(match[1]);
+    const column = firstIdentifier(match[2]);
+    if (column) {
+      if (!schema.has(table)) schema.set(table, new Map());
+      const declaredType = declaredColumnType(match[2]);
+      schema.get(table).set(column, {
+        table,
+        column,
+        declaredType,
+        affinity: sqliteAffinity(declaredType),
+        sourceFile,
+      });
+    }
+    return;
+  }
+
+  match = statement.match(
+    /^ALTER\s+TABLE\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+DROP\s+COLUMN\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)$/i
+  );
+  if (match) {
+    schema.get(unquoteIdentifier(match[1]))?.delete(unquoteIdentifier(match[2]));
+    return;
+  }
+
+  match = statement.match(
+    /^ALTER\s+TABLE\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+RENAME\s+COLUMN\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+TO\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)$/i
+  );
+  if (match) {
+    const table = unquoteIdentifier(match[1]);
+    const oldName = unquoteIdentifier(match[2]);
+    const newName = unquoteIdentifier(match[3]);
+    const columns = schema.get(table);
+    const definition = columns?.get(oldName);
+    if (columns && definition) {
+      columns.delete(oldName);
+      columns.set(newName, { ...definition, column: newName, sourceFile });
+    }
+    return;
+  }
+
+  match = statement.match(
+    /^ALTER\s+TABLE\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s+RENAME\s+TO\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)$/i
+  );
+  if (match) {
+    const from = unquoteIdentifier(match[1]);
+    const to = unquoteIdentifier(match[2]);
+    const columns = schema.get(from);
+    if (columns) {
+      schema.delete(from);
+      schema.set(to, new Map([...columns].map(([name, value]) => [name, { ...value, table: to }])));
+    }
+    return;
+  }
+
+  match = statement.match(
+    /^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)$/i
+  );
+  if (match) schema.delete(unquoteIdentifier(match[1]));
+}
+
 export function extractTableLists(smokeSpecPath = join(rootDir, 'tests/migration-smoke.spec.ts')) {
   const source = readFileSync(smokeSpecPath, 'utf8');
   const result = {};
@@ -235,6 +358,18 @@ export function extractColumnsFromMigrations(migrationsDir) {
   for (const file of files) {
     const sql = stripComments(readFileSync(join(migrationsDir, file), 'utf8'));
     for (const statement of splitSql(sql)) applyStatement(schema, statement);
+  }
+  return schema;
+}
+
+export function extractColumnDefinitionsFromMigrations(migrationsDir) {
+  const schema = new Map();
+  const files = readdirSync(migrationsDir)
+    .filter((file) => /^\d{4}_.*\.sql$/.test(file))
+    .sort();
+  for (const file of files) {
+    const sql = stripComments(readFileSync(join(migrationsDir, file), 'utf8'));
+    for (const statement of splitSql(sql)) applyDefinitionStatement(schema, statement, file);
   }
   return schema;
 }

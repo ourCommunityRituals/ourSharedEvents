@@ -600,6 +600,14 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: node scripts/check-schema-guard.mjs
 
+      # OSE-802 — prevent new cross-schema columns from reusing a name with
+      # an incompatible SQLite affinity. Known legacy collisions are explicit
+      # baselines in the guard and must carry a reason.
+      - name: 'Security: Column type collision guard (OSE-802)'
+        if: matrix.shard == 'lint'
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node scripts/check-column-type-collisions.mjs
+
       - name: 'Quality: Lint'
         if: matrix.shard == 'lint'
         run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache

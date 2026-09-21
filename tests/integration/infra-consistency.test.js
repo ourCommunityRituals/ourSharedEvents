@@ -172,6 +172,20 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     expect(productionGate?.run).toContain('for BINDING in DB FORMS_DB');
   });
 
+  test('T0 lint runs the OSE-802 column type collision guard', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+    const lintJob = workflow.jobs.gate.steps.find(
+      (step) => step.name === 'Security: Column type collision guard (OSE-802)'
+    );
+
+    expect(lintJob).toMatchObject({
+      if: "matrix.shard == 'lint'",
+      'working-directory': '${{ env.WORKER_DIR }}',
+      run: 'node scripts/check-column-type-collisions.mjs',
+    });
+  });
+
   test('staging and production deploys verify canonical D1 table and column shape', () => {
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
