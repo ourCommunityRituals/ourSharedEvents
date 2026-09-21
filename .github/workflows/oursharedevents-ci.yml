@@ -1069,8 +1069,8 @@ jobs:
   # ============================================================================
   # TIER 2: SMOKE — Post-deploy + nightly + dispatch
   # ============================================================================
-  smoke-staging:
-    name: 'T3 E2E Smoke → Staging (Playwright)'
+  smoke-staging-sub:
+    name: 'T3 Smoke (${{ matrix.section }})'
     # OSE-954: runs on ephemeral ubuntu-latest. This job only READS live staging
     # (Playwright smoke) — it does not deploy. Staging auth is header-based CF
     # Access service token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY, all
@@ -1088,6 +1088,25 @@ jobs:
       needs.gate-tests.result == 'success' &&
       needs.contract-staging.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - section: security
+            label: 'T3: Security smoke'
+            config: playwright.e2e-smoke.config.ts
+            specs: tests/e2e/1-smoke/security-smoke.spec.js
+            installBrowser: true
+          - section: iac
+            label: 'T3: IAC health + fail-fast'
+            config: playwright.smoke.config.ts
+            specs: tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
+            installBrowser: false
+          - section: forms
+            label: 'T3: Forms endpoint smoke'
+            config: playwright.smoke.config.ts
+            specs: tests/api/smoke/form-endpoints.spec.ts
+            installBrowser: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1118,44 +1137,24 @@ jobs:
 
       - name: Install Playwright browsers
         # OSE-954: --with-deps pulls chromium system libs on the fresh ubuntu VM.
+        if: matrix.installBrowser == true
         run: npx playwright install --with-deps chromium
 
-      - name: 'Security smoke: XSS + auth boundaries'
-        id: security-smoke
+      - name: Run T3 smoke section
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/1-smoke/security-smoke.spec.js
+        run: npx playwright test --config=${{ matrix.config }} ${{ matrix.specs }}
         timeout-minutes: 10
-        continue-on-error: true
-
-      - name: 'IAC: health + fail-fast gates'
-        id: iac-smoke
-        env:
-          BASE_URL: ${{ env.STG_BASE_URL }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
-        timeout-minutes: 10
-        continue-on-error: true
-
-      - name: 'Forms: endpoint smoke (4 types + admin + validation)'
-        id: forms-smoke
-        env:
-          BASE_URL: ${{ env.STG_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/form-endpoints.spec.ts
-        timeout-minutes: 5
-        continue-on-error: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: smoke-staging-${{ github.run_number }}
+          name: smoke-staging-${{ matrix.section }}-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             .test-results/
@@ -1169,7 +1168,7 @@ jobs:
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: 'T3 E2E Smoke Results (Playwright)'
+          name: '${{ matrix.label }} Results (Playwright)'
           path: '.test-results/*junit.xml'
           reporter: jest-junit
           fail-on-error: false
@@ -1177,20 +1176,28 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          echo "## ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 2 of the fail-fast chain — runs only after T2 contract is green; a red sub-gate makes the aggregate T3 gate red and skips T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Config:** \`${{ matrix.config }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Specs:** \`${{ matrix.specs }}\`" >> $GITHUB_STEP_SUMMARY
+
+  smoke-staging:
+    name: 'T3 E2E Smoke → Staging (Playwright)'
+    needs: [smoke-staging-sub]
+    runs-on: ubuntu-latest
+    if: always() && needs.smoke-staging-sub.result != 'skipped'
+    steps:
+      - name: Summarize T3 smoke sub-gates
+        run: |
           echo "## T3 E2E Smoke → Staging (Playwright)" >> $GITHUB_STEP_SUMMARY
           echo "Stage 2 of the fail-fast chain — runs only after T2 contract is green; a red here skips T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Step | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Security smoke (XSS + auth) | \`${{ steps.security-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| IAC health + fail-fast | \`${{ steps.iac-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Form endpoints | \`${{ steps.forms-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-
-      - name: Fail check
-        if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure' || steps.forms-smoke.outcome == 'failure'
-        run: |
-          echo "::error::Smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}, Forms: ${{ steps.forms-smoke.outcome }}"
-          exit 1
+          echo "Sub-gates finished with result: \`${{ needs.smoke-staging-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.smoke-staging-sub.result }}" != "success" ]; then
+            echo "::error::One or more T3 smoke sub-gates failed or were cancelled"
+            exit 1
+          fi
 
   # ============================================================================
   # TIER 3: CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191)
