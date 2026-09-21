@@ -52,8 +52,7 @@ function runGuardWithStub(listJson, { resultJson, runExit = 0, env: extraEnv = {
   const stub = path.join(dir, 'npx');
   // Default: a healthy result JSON that mirrors the discovered specs as all
   // executed, so pre-0b tests (which only assert discovery behavior) stay green.
-  const emit =
-    resultJson === undefined ? healthyResultFor(listJson) : resultJson;
+  const emit = resultJson === undefined ? healthyResultFor(listJson) : resultJson;
   const writeResult =
     emit === null
       ? ''
@@ -222,15 +221,26 @@ describe('OSE-852 Gate 0 — the bug class cannot return', () => {
     const m = readFileSync(path.join(REPO, cfg), 'utf8').match(/testDir:\s*['"]([^'"]+)['"]/);
     return m ? m[1].replace(/^\.\//, '') : null;
   };
+  const expandMatrixRun = (run, def) => {
+    const rows = def.strategy?.matrix?.include;
+    if (!Array.isArray(rows) || !run.includes('${{ matrix.')) return [run];
+    return rows.map((row) =>
+      run.replace(/\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}/g, (_, key) =>
+        row[key] === undefined ? `\${{ matrix.${key} }}` : String(row[key])
+      )
+    );
+  };
   const runs = Object.entries(wf.jobs ?? {}).flatMap(([job, def]) =>
     (def.steps ?? [])
       .filter((s) => typeof s.run === 'string' && /playwright test|pw-guarded\.sh/.test(s.run))
-      .map((s) => ({
-        job,
-        name: s.name ?? '(unnamed)',
-        run: s.run,
-        coe: s['continue-on-error'] === true,
-      }))
+      .flatMap((s) =>
+        expandMatrixRun(s.run, def).map((run) => ({
+          job,
+          name: s.name ?? '(unnamed)',
+          run,
+          coe: s['continue-on-error'] === true,
+        }))
+      )
   );
 
   it('parses at least one Playwright step (the guard would vacuously pass otherwise)', () => {
@@ -245,8 +255,9 @@ describe('OSE-852 Gate 0 — the bug class cannot return', () => {
       const td = configTestDir(cfg);
       if (!td) continue;
       for (const p of r.run.match(/tests\/[^\s\\"']+/g) ?? []) {
-        if (!p.startsWith(td))
+        if (!p.startsWith(td)) {
           violations.push(`${r.name}: "${p}" is outside ${cfg} testDir "${td}" -> ZERO DISCOVERY`);
+        }
       }
     }
     expect(violations, violations.join('\n')).toEqual([]);
