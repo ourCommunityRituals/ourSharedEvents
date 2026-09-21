@@ -39,9 +39,9 @@ function readFile(relPath) {
   return readFileSync(join(ROOT, relPath), 'utf-8');
 }
 
-// ─── Hosted runner migration — production jobs (OSE-1257) ───────────
+// ─── Hosted runner migration — staging pattern applied to prod (OSE-1257) ───
 
-describe('production jobs use hosted runners', () => {
+describe('OSE-1257 hosted runner migration mirrors staging into production', () => {
   test('no workflow job targets the retired self-hosted runner pool', () => {
     const yaml = require('js-yaml');
     const { readdirSync } = require('fs');
@@ -61,12 +61,74 @@ describe('production jobs use hosted runners', () => {
     }
   });
 
-  test('deploy-production and smoke-production use ubuntu-latest', () => {
+  test('staging and production deploy/smoke jobs use ubuntu-latest', () => {
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
 
+    expect(workflow.jobs['deploy-staging']['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs['contract-staging-sub']['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs['smoke-staging-sub']['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs['functional-staging']['runs-on']).toBe('ubuntu-latest');
     expect(workflow.jobs['deploy-production']['runs-on']).toBe('ubuntu-latest');
     expect(workflow.jobs['smoke-production']['runs-on']).toBe('ubuntu-latest');
+  });
+
+  test('deploy-production mirrors the hosted staging deploy setup', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+    const stagingSteps = workflow.jobs['deploy-staging'].steps;
+    const productionSteps = workflow.jobs['deploy-production'].steps;
+    const findStep = (steps, name) => steps.find((step) => step.name === name);
+    const checkoutStep = (steps) => steps.find((step) => step.uses === 'actions/checkout@v7');
+    const deployPrereqs = [
+      'Stage adjacent @ocr/flags package',
+      'Install worker dependencies',
+      'Gate: signing secret present (pre-migrate, fail-closed corner)',
+      'Apply D1 migrations (main DB)',
+      'Apply D1 migrations (forms DB)',
+      'Gate: no unprovisioned binding IDs (OSE-813)',
+      'Gate: zero unapplied D1 migrations before deploy (OSE-803)',
+      'Stamp build version',
+      'Deploy',
+      'Wait + Health check',
+    ];
+
+    for (const stepName of deployPrereqs) {
+      expect(findStep(stagingSteps, stepName), `staging has ${stepName}`).toBeTruthy();
+      expect(
+        findStep(productionSteps, stepName),
+        `production mirrors staging ${stepName}`
+      ).toBeTruthy();
+    }
+
+    expect(checkoutStep(stagingSteps).with).toMatchObject({ clean: true });
+    expect(checkoutStep(productionSteps).with).toMatchObject({ clean: true });
+    expect(findStep(stagingSteps, 'Stage adjacent @ocr/flags package').run).toBe(
+      findStep(productionSteps, 'Stage adjacent @ocr/flags package').run
+    );
+    expect(findStep(stagingSteps, 'Install worker dependencies').run).toBe(
+      findStep(productionSteps, 'Install worker dependencies').run
+    );
+    expect(findStep(stagingSteps, 'Gate: no unprovisioned binding IDs (OSE-813)').run).toBe(
+      findStep(productionSteps, 'Gate: no unprovisioned binding IDs (OSE-813)').run
+    );
+  });
+
+  test('every job that stages @ocr/flags preserves the adjacent workspace checkout', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    for (const [jobId, job] of Object.entries(workflow.jobs || {})) {
+      const steps = job.steps || [];
+      const stagesAdjacentFlags = steps.some(
+        (step) => step.name === 'Stage adjacent @ocr/flags package'
+      );
+      if (!stagesAdjacentFlags) continue;
+      const checkout = steps.find((step) => step.uses === 'actions/checkout@v7');
+      expect(checkout?.with, `${jobId} must use hosted-runner clean:true checkout`).toMatchObject({
+        clean: true,
+      });
+    }
   });
 
   test('deploy-production requires the staging chain to be green first', () => {

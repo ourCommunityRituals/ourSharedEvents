@@ -7,7 +7,8 @@
 #
 # Idempotent: clones on first run, fast-forwards on subsequent runs.
 # Cache directory (_ocr-workspace-cache) is one level above the OSE
-# checkout; survives `clean: false` checkouts within the same runner.
+# checkout, outside the tree that actions/checkout cleans. Hosted runners are
+# fresh per job, but the script remains idempotent for local and future reuse.
 #
 # ── CREDENTIAL-FAILURE TOLERANCE (OSE-347, 2026-05-18) ─────────────────────
 # Originally written for the self-hosted runner's broken git credential
