@@ -98,13 +98,19 @@ function privacyNotice(formType: string, legalTier = 1): string {
     addenda += `<br/><strong>Children's notice:</strong> For children under 13, a parent or guardian must submit this form (COPPA). `;
   }
 
-  return `<p class="privacy-notice" data-testid="privacy-notice">
-    ${purpose} Legal basis: ${legalBasis} ${retention}
-    You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
-    <strong>supervisory authority</strong>.
-    ${addenda}
-    <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
-  </p>`;
+  return `<div class="privacy-notice" data-testid="privacy-notice">
+    <p class="privacy-summary" data-testid="privacy-summary">We never store your name once the event ends.</p>
+    <details class="privacy-details" data-testid="privacy-details">
+      <summary>Privacy details</summary>
+      <p>
+        ${purpose} Legal basis: ${legalBasis} ${retention}
+        You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
+        <strong>supervisory authority</strong>.
+        ${addenda}
+        <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
+      </p>
+    </details>
+  </div>`;
 }
 
 // ── XSS Prevention ───────────────────────────────────────────────────────────
@@ -146,6 +152,9 @@ const FORM_CSS = `
   .success p { color: #6c757d; font-size: .9rem; margin-top: .5rem; }
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
   .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
+  .privacy-summary { margin-bottom: .25rem; color: #495057; font-weight: 600; }
+  .privacy-details summary { min-height: 44px; display: inline-flex; align-items: center; color: #4361ee; cursor: pointer; font-weight: 600; }
+  .privacy-details p { margin-top: .25rem; }
   /* OSE-292: privacy-policy link must be a real tap target on phones —
      inline-block + padding gives a 44px+ touch area without breaking
      the inline text flow visually. */
