@@ -11,8 +11,8 @@
  *   4. <title>, <html lang>, viewport meta — cheap a11y/SEO floor
  *   5. No horizontal scroll at mobile viewport (unless allowHScroll)
  *   6. Tap targets: visible .btn/.cta/nav links meet the app's min height
- *   7. gate: unauthenticated view renders a humane gate (empty-state or the
- *      legacy denied element), never a blank page
+ *   7. gate: unauthenticated view renders a humane gate (empty-state, sign-in,
+ *      or the legacy denied element), never a blank page
  *   8. sharedSheet (post-migration): exactly one /ui.css link, no big <style>
  *
  * Wire into each repo's Playwright config testMatch. Runtime target: the whole
@@ -108,7 +108,7 @@ for (const route of manifest.routes) {
       // 7. Humane gate
       if (route.gate && route.auth !== 'admin') {
         const gate = testPage.locator(
-          '.empty-state, [data-testid="access-denied"], .access-denied, [data-testid="loading-view"]'
+          '.empty-state, [data-testid="signin-heading"], [data-testid="signin-cta"], [data-testid="access-denied"], .access-denied, [data-testid="loading-view"]'
         );
         await expect(gate.first(), 'gate/loading surface present').toBeVisible();
         // A gate must offer a way forward once partials land; tolerate legacy
