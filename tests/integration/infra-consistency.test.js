@@ -558,6 +558,54 @@ describe('T2 contract sub-gates remain split and aggregated', () => {
   });
 });
 
+// ─── Playwright browser cache continuity — staging/PR CI speed (OSE-1073/1074) ───
+describe('Playwright browser installs use cache on staging and PR gates', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+  const stepIndex = (steps, name) => steps.findIndex((step) => step && step.name === name);
+  const assertCacheStep = (steps, name, expectedIf) => {
+    const cacheStep = steps.find((step) => step && step.name === name);
+    expect(cacheStep, `${name} step must exist`).toBeDefined();
+    expect(cacheStep.uses).toBe('actions/cache@v4');
+    expect(cacheStep.with && cacheStep.with.path).toBe('~/.cache/ms-playwright');
+    expect(cacheStep.with && cacheStep.with.key).toContain('playwright');
+    if (expectedIf) expect(cacheStep.if).toBe(expectedIf);
+  };
+
+  test('T0 browser shards restore the Playwright cache before inline installs', () => {
+    const steps = wf.jobs.gate.steps || [];
+    assertCacheStep(
+      steps,
+      'Restore Playwright browser cache',
+      "matrix.shard == 'invariants' || matrix.shard == 'component'"
+    );
+
+    const cachePos = stepIndex(steps, 'Restore Playwright browser cache');
+    const archPos = stepIndex(steps, 'Architecture: structural invariants');
+    const componentPos = stepIndex(steps, 'Component: viewport specs vs local worker');
+    expect(cachePos).toBeGreaterThanOrEqual(0);
+    expect(cachePos).toBeLessThan(archPos);
+    expect(cachePos).toBeLessThan(componentPos);
+  });
+
+  test('T3 smoke restores the Playwright cache before installing Chromium', () => {
+    const steps = wf.jobs['smoke-staging-sub'].steps || [];
+    assertCacheStep(steps, 'Restore Playwright browser cache', 'matrix.installBrowser == true');
+    expect(stepIndex(steps, 'Restore Playwright browser cache')).toBeLessThan(
+      stepIndex(steps, 'Install Playwright browsers')
+    );
+  });
+
+  test('T4 functional restores the Playwright cache before installing browser engines', () => {
+    const steps = wf.jobs['functional-staging'].steps || [];
+    assertCacheStep(steps, 'Restore Playwright browser cache');
+    expect(stepIndex(steps, 'Restore Playwright browser cache')).toBeLessThan(
+      stepIndex(steps, 'Install Playwright browsers')
+    );
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');

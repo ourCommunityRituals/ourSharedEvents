@@ -654,6 +654,15 @@ jobs:
         run: npm run test:a11y
         working-directory: ${{ env.WORKER_DIR }}
 
+      - name: Restore Playwright browser cache
+        if: matrix.shard == 'invariants' || matrix.shard == 'component'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       # ── Shard: invariants (OSE-350) ────────────────────────────────────────
       # The STRUCTURAL subset of the 0-architecture invariant suite — the
       # code-shape locks that read source files via node:fs and assert the
@@ -1135,6 +1144,15 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
+      - name: Restore Playwright browser cache
+        if: matrix.installBrowser == true
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright browsers
         # OSE-954: --with-deps pulls chromium system libs on the fresh ubuntu VM.
         if: matrix.installBrowser == true
@@ -1463,6 +1481,14 @@ jobs:
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
+
+      - name: Restore Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
       - name: Install Playwright browsers
         # --with-deps installs the system libraries the browsers need on a fresh
