@@ -135,6 +135,12 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
 
+    expect(workflow.jobs['deploy-staging'].if).toContain(
+      "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))"
+    );
+    expect(workflow.jobs['deploy-staging'].if).toContain(
+      "(github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')"
+    );
     expect(workflow.jobs['deploy-production'].needs).toEqual(
       expect.arrayContaining([
         'security',
@@ -145,6 +151,25 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
         'functional-staging',
       ])
     );
+  });
+
+  test('staging and production deploys both enforce the schema guard before deploy', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+
+    const zeroGate = (jobName) =>
+      workflow.jobs[jobName].steps.find(
+        (step) => step.name === 'Gate: zero unapplied D1 migrations before deploy (OSE-803)'
+      );
+    const stagingGate = zeroGate('deploy-staging');
+    const productionGate = zeroGate('deploy-production');
+
+    expect(stagingGate?.run).toContain('node scripts/check-schema-guard.mjs');
+    expect(productionGate?.run).toContain('node scripts/check-schema-guard.mjs');
+    expect(stagingGate?.run).toContain('--env staging --remote');
+    expect(productionGate?.run).toContain('--env production --remote');
+    expect(stagingGate?.run).toContain('for BINDING in DB FORMS_DB');
+    expect(productionGate?.run).toContain('for BINDING in DB FORMS_DB');
   });
 
   test('staging and production deploys verify canonical D1 table and column shape', () => {
