@@ -165,6 +165,18 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   });
 });
 
+// ─── Bruno contract budgets ───────────────────────────────────────────
+
+describe('Bruno contract latency budgets', () => {
+  test('admin registrations read has an explicit decrypted-list budget', () => {
+    const collection = readFile('bruno/ose-api/opencollection.yml');
+
+    expect(collection).toContain('const isAdminRegistrationsRead');
+    expect(collection).toContain("req.getPath().includes('/forms/registrations')");
+    expect(collection).toContain('const latencyBudgetMs = isAdminRegistrationsRead ? 9000 : 6000;');
+  });
+});
+
 // ─── Token Naming Consistency ────────────────────────────────────────
 
 describe('CLOUDFLARE_API_TOKEN_OSE naming consistency', () => {
