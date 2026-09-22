@@ -43,10 +43,12 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
 import { maybeTag } from '../lib/h3-tagging';
+import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
-export interface SponsorsEnv extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv {
+export interface SponsorsEnv
+  extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv, InvalidTrafficEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -1166,6 +1168,28 @@ async function resolvePlacementGeo(
 }
 
 /**
+ * Response for a beacon that was accepted but deliberately NOT written.
+ *
+ * OSE-1310. Two things are being balanced. A caller that is being filtered must
+ * not be handed a diagnostic — `reason` stays server-side, because telling a
+ * flooder which of the three rules tripped is telling them how to tune around
+ * it. But the surfaces firing these beacons are fire-and-forget `fetch().catch()`
+ * calls on a public page, and answering an honest client with 4xx would put
+ * console errors on a page that did nothing wrong.
+ *
+ * 202 Accepted with `counted: false` is the honest shape: the request was
+ * well-formed and understood, and it did not become a row. The field is there so
+ * this is testable and so a future first-party surface can self-diagnose, but it
+ * carries no reason and so is not a probing oracle.
+ */
+function beaconNotCounted(request: Request, rid: string): Response {
+  return Response.json(
+    { ok: true, status: 202, counted: false },
+    { status: 202, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+  );
+}
+
+/**
  * POST /api/v2/events/:id/sponsors/:sid/impression
  */
 export async function handleLogImpression(
@@ -1185,6 +1209,9 @@ export async function handleLogImpression(
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
   // D3: only log for a sponsor actually placed + brand-matched on this event.
+  // Runs BEFORE the IVT filter on purpose: a fabricated (event, sponsor) pair is
+  // a malformed request, not filtered traffic, and must keep answering 404 so it
+  // is never confused with a real placement whose beacon was merely not counted.
   const resolved = await resolvePlacementGeo(env.DB, eventId, sponsorId);
   if (!resolved.ok) {
     return errorResponse(
@@ -1195,6 +1222,17 @@ export async function handleLogImpression(
     );
   }
   const h3Res7 = resolved.h3Res7;
+
+  // OSE-1310: the pair is real; is the SEEING real? Bots, replays of an
+  // already-counted beacon, and flood cadence are refused before the insert.
+  const verdict = await classifyBeacon(request, env, {
+    eventId,
+    sponsorId,
+    surface,
+    placement,
+    kind: 'impression',
+  });
+  if (!verdict.counted) return beaconNotCounted(request, rid);
 
   try {
     const id = generateId('si');
@@ -1308,6 +1346,7 @@ export async function handleLogClick(
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
   // D3: only log for a sponsor actually placed + brand-matched on this event.
+  // Ordered before the IVT filter for the same reason as the impression path.
   const resolved = await resolvePlacementGeo(env.DB, eventId, sponsorId);
   if (!resolved.ok) {
     return errorResponse(
@@ -1318,6 +1357,18 @@ export async function handleLogClick(
     );
   }
   const h3Res7 = resolved.h3Res7;
+
+  // OSE-1310: same filter as the impression path. `kind` differs, so a genuine
+  // click immediately after an impression on the same card is never swallowed
+  // as a duplicate of it.
+  const verdict = await classifyBeacon(request, env, {
+    eventId,
+    sponsorId,
+    surface,
+    placement,
+    kind: 'click',
+  });
+  if (!verdict.counted) return beaconNotCounted(request, rid);
 
   try {
     const id = generateId('sc');
