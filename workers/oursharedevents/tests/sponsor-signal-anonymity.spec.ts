@@ -21,6 +21,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { mintBeaconToken } from '../src/lib/beacon-token';
 
 const ADMIN_HEADERS = {
   Authorization: 'Bearer test-admin-key-e2e-2026',
@@ -125,6 +126,7 @@ beforeAll(async () => {
 describe('OSE-1164 — sponsor signal is never-who even with a cookie present', () => {
   for (const kind of ['impression', 'click'] as const) {
     test(`${kind}: cookie present on the request → 201 and NO identity persisted`, async () => {
+      const beaconToken = await mintBeaconToken(env as unknown as TestEnv, EVENT_ID, sponsorId);
       const res = await SELF.fetch(
         `https://t.test/api/v2/events/${EVENT_ID}/sponsors/${sponsorId}/${kind}`,
         {
@@ -142,7 +144,11 @@ describe('OSE-1164 — sponsor signal is never-who even with a cookie present', 
             // to prove the SERVER cannot link it (the client separately omits it).
             Cookie: `ose_anon=${PLANTED_ANON}`,
           },
-          body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' }),
+          body: JSON.stringify({
+            surface: 'public',
+            placement: 'mobileBanner',
+            beacon_token: beaconToken,
+          }),
         }
       );
       expect(res.status, `${kind} must be accepted`).toBe(201);
