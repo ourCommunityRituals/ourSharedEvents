@@ -29,6 +29,7 @@ import {
   filterSponsorsForSurface,
   buildSponsorBundle,
   type Surface,
+  type SponsorRow,
 } from '../lib/sponsor-resolver';
 import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import {
@@ -44,11 +45,12 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
 import { maybeTag } from '../lib/h3-tagging';
 import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
+import { mintBeaconToken, verifyBeaconToken, type BeaconTokenEnv } from '../lib/beacon-token';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface SponsorsEnv
-  extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv, InvalidTrafficEnv {
+  extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv, InvalidTrafficEnv, BeaconTokenEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -1109,6 +1111,24 @@ export async function handleGetSponsorBundle(
       bundle = buildSponsorBundle(result.data, eventId);
     }
 
+    // OSE-1310: mint one beacon token per unique sponsor in this bundle and
+    // attach it to every reference to that sponsor across sponsors /
+    // surface_sponsors (they share object identity — buildSponsorBundle never
+    // clones a row — so one mint covers every slot a sponsor appears in). The
+    // impression/click handlers require this token; see beacon-token.ts for
+    // why an unset signing secret degrades to "no token" rather than throwing.
+    const tokenBySponsor = new Map<string, string | null>();
+    await Promise.all(
+      bundle.sponsors.map(async (s) => {
+        if (tokenBySponsor.has(s.id)) return;
+        tokenBySponsor.set(s.id, await mintBeaconToken(env, eventId, s.id));
+      })
+    );
+    for (const s of bundle.sponsors) {
+      const token = tokenBySponsor.get(s.id);
+      if (token) (s as SponsorRow & { beacon_token?: string }).beacon_token = token;
+    }
+
     return Response.json(
       { ok: true, status: 200, bundle },
       {
@@ -1223,8 +1243,22 @@ export async function handleLogImpression(
   }
   const h3Res7 = resolved.h3Res7;
 
-  // OSE-1310: the pair is real; is the SEEING real? Bots, replays of an
-  // already-counted beacon, and flood cadence are refused before the insert.
+  // OSE-1310: the pair is real and placed — but did this caller actually
+  // render it? A token minted into THIS bundle response, for THIS exact
+  // (event, sponsor), is required before anything else runs. Cheap
+  // (HMAC verify, no KV) and fails closed, so it's checked ahead of the IVT
+  // heuristics below.
+  const beaconAuth = await verifyBeaconToken(
+    env,
+    typeof body.beacon_token === 'string' ? body.beacon_token : null,
+    eventId,
+    sponsorId
+  );
+  if (!beaconAuth) return beaconNotCounted(request, rid);
+
+  // The pair is real and the render is authenticated; is the SEEING real?
+  // Bots, replays of an already-counted beacon, and flood cadence are refused
+  // before the insert.
   const verdict = await classifyBeacon(request, env, {
     eventId,
     sponsorId,
@@ -1359,6 +1393,16 @@ export async function handleLogClick(
     );
   }
   const h3Res7 = resolved.h3Res7;
+
+  // OSE-1310: same beacon-token authentication as the impression path, ahead of
+  // the IVT filter for the same reason (cheap, fails closed).
+  const beaconAuth = await verifyBeaconToken(
+    env,
+    typeof body.beacon_token === 'string' ? body.beacon_token : null,
+    eventId,
+    sponsorId
+  );
+  if (!beaconAuth) return beaconNotCounted(request, rid);
 
   // OSE-1310: same filter as the impression path. `kind` differs, so a genuine
   // click immediately after an impression on the same card is never swallowed

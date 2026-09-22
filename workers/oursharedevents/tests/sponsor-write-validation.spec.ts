@@ -17,6 +17,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { IMPRESSION_WRITE_MAX } from '../src/lib/invalid-traffic';
+import { mintBeaconToken } from '../src/lib/beacon-token';
 
 const BRAND = 'brand-d3';
 
@@ -79,6 +80,11 @@ async function post(
   init: { ua?: string; ip?: string; placement?: string } = {}
 ) {
   const ip = init.ip ?? `203.0.113.${(callerSeq++ % 250) + 1}`;
+  // OSE-1310: impression/click writes require a beacon token minted for this
+  // exact (event, sponsor) pair — this test suite exercises the write path
+  // directly, so it mints the token itself rather than round-tripping through
+  // the sponsor-bundle endpoint (that mint path is covered by beacon-token.spec.ts).
+  const beaconToken = await mintBeaconToken(tenv(), eventId, sponsorId);
   return SELF.fetch(`https://t.test/api/v2/events/${eventId}/sponsors/${sponsorId}/${kind}`, {
     method: 'POST',
     headers: {
@@ -86,7 +92,11 @@ async function post(
       'User-Agent': init.ua ?? BROWSER_UA,
       'CF-Connecting-IP': ip,
     },
-    body: JSON.stringify({ surface: 'public', placement: init.placement ?? 'strip' }),
+    body: JSON.stringify({
+      surface: 'public',
+      placement: init.placement ?? 'strip',
+      beacon_token: beaconToken,
+    }),
   });
 }
 
