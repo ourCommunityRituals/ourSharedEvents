@@ -77,8 +77,8 @@ export default {
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
     // runBigQueryBackup reads from the main DB and is kept separate for isolation.
     // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
-    //   off by default (env.SUBSCRIBERS_RETENTION_DAYS unset → no-op). When set,
-    //   deletes subscribers older than the window. Audits to DB.admin_audit_log.
+    //   default bounded retention is 365 days when the env knob is unset, and a
+    //   non-positive explicit value disables the sweep. Audits to DB.admin_audit_log.
     // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
     //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
     //   structured warning). Phases 2 + 3 (corridor baseline + event-series
@@ -301,33 +301,36 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
  * forms-security S4 isolation gate stays intact (that gate is now precisely
  * scoped to runFormDataLifecycle's function body, not the whole file).
  *
- * Off-by-default by design:
- *   - subscribers is a marketing list; silent automatic deletion would break
- *     product expectations.
- *   - env.SUBSCRIBERS_RETENTION_DAYS is the documented knob. Unset → no-op
- *     with a structured log line (so ops sees the retention is uncapped).
- *   - When set to a positive integer N, deletes rows whose created_at is
- *     older than N days from now. Bounded retention is the GDPR-aligned
- *     posture once you set the knob; the data-subject erase Phase C
- *     handler covers ad-hoc right-to-be-forgotten requests independently.
+ * Default posture:
+ *   - rolling subscriber list data is bounded by a finite retention window.
+ *   - env.SUBSCRIBERS_RETENTION_DAYS is the override knob. If unset, we fall
+ *     back to a default 365-day window so the system does not silently retain
+ *     the email list forever.
+ *   - If set to 0 or a non-positive value, the cron explicitly disables the
+ *     retention sweep and logs a no-op rather than silently deleting an
+ *     uncapped list.
  *
  * Every run writes an admin_audit_log row (action=SUBSCRIBERS_RETENTION,
  * actor=system:lifecycle) so ops can audit retention activity over time.
  */
+const DEFAULT_SUBSCRIBERS_RETENTION_DAYS = 365;
+
 async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
   const raw = env.SUBSCRIBERS_RETENTION_DAYS;
-  const days = raw != null ? parseInt(String(raw), 10) : NaN;
+  const configured = raw != null ? parseInt(String(raw), 10) : NaN;
+  const days =
+    Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUBSCRIBERS_RETENTION_DAYS;
 
-  if (!Number.isFinite(days) || days <= 0) {
+  if (raw != null && (!Number.isFinite(configured) || configured <= 0)) {
     console.log(
       JSON.stringify({
         type: 'SUBSCRIBERS_RETENTION_NOOP',
-        reason: 'SUBSCRIBERS_RETENTION_DAYS unset or non-positive; retention is uncapped',
+        reason: 'SUBSCRIBERS_RETENTION_DAYS is non-positive; retention is explicitly disabled',
         timestamp: now,
       })
     );
-    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'unset' });
+    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'disabled' });
     return;
   }
 
