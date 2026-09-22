@@ -11,6 +11,7 @@
 As part of the migration from Google Apps Script to Cloudflare Workers (Epic 3: GAS Retirement), the GAS backend has been decommissioned. All API traffic now flows through the Cloudflare Worker which connects directly to Google Sheets via the Sheets API.
 
 **Key Migration Benefits:**
+
 - Sub-500ms latency (vs 2-3s with GAS)
 - No dependency on Google Apps Script quotas
 - Direct control over error handling and observability
@@ -20,33 +21,52 @@ As part of the migration from Google Apps Script to Cloudflare Workers (Epic 3: 
 
 ## Archived Files
 
-| File | Purpose | Lines |
-|------|---------|-------|
-| `Code.gs` | Main router (doGet/doPost) & API handlers | ~900+ |
-| `Config.gs` | Brands, environment, templates, feature flags | ~400 |
-| `TemplateService.gs` | Event templates (bar, rec, school, fundraiser, custom) | ~800 |
-| `ApiSchemas.gs` | JSON Schema validation for API contracts | ~300 |
-| `FormService.gs` | Google Forms creation for signups | ~300 |
-| `SponsorService.gs` | Sponsor management and ROI tracking | ~400 |
-| `SharedReporting.gs` | Analytics views and aggregation | ~300 |
-| `AnalyticsService.gs` | Logging and metrics aggregation | ~400 |
-| `AnalyticsRollup.gs` | Analytics rollup functions | ~200 |
-| `SecurityMiddleware.gs` | Auth, JWT, rate limiting, CSRF | ~350 |
-| `BackupService.gs` | Backup and recovery services | ~300 |
-| `DataHealthChecker.gs` | Data validation and health checks | ~400 |
-| `DiagArchiver.gs` | Diagnostic log archiving | ~300 |
-| `appsscript.json` | Apps Script manifest configuration | - |
+| File                    | Purpose                                                | Lines |
+| ----------------------- | ------------------------------------------------------ | ----- |
+| `Code.gs`               | Main router (doGet/doPost) & API handlers              | ~900+ |
+| `Config.gs`             | Brands, environment, templates, feature flags          | ~400  |
+| `TemplateService.gs`    | Event templates (bar, rec, school, fundraiser, custom) | ~800  |
+| `ApiSchemas.gs`         | JSON Schema validation for API contracts               | ~300  |
+| `FormService.gs`        | Google Forms creation for signups                      | ~300  |
+| `SponsorService.gs`     | Sponsor management and ROI tracking                    | ~400  |
+| `SharedReporting.gs`    | Analytics views and aggregation                        | ~300  |
+| `AnalyticsService.gs`   | Logging and metrics aggregation                        | ~400  |
+| `AnalyticsRollup.gs`    | Analytics rollup functions                             | ~200  |
+| `SecurityMiddleware.gs` | Auth, JWT, rate limiting, CSRF                         | ~350  |
+| `BackupService.gs`      | Backup and recovery services                           | ~300  |
+| `DataHealthChecker.gs`  | Data validation and health checks                      | ~400  |
+| `DiagArchiver.gs`       | Diagnostic log archiving                               | ~300  |
+| `appsscript.json`       | Apps Script manifest configuration                     | -     |
+
+### Repo-root scratch files (moved here under OSE-1215)
+
+These one-off scripts/patches lived at the repo root, unreferenced by any active
+tooling, and each hard-depended on GAS-era artifacts (`Code.gs`, `Admin.html`,
+`HtmlService`, a `script.google.com` deployment URL) that no longer exist in
+this repo. Moved rather than deleted outright, consistent with this
+directory's existing preserve-for-reference convention.
+
+| File                         | Purpose                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `fetch-admin-keys.js`        | GAS `PropertiesService` script to print per-brand admin secrets          |
+| `fix-test-infrastructure.sh` | Patched `Code.gs` for stage2-testing env-var/URL compatibility           |
+| `fix_test_infrastructure.py` | Python equivalent of the above                                           |
+| `fix_alert.sh`               | `awk` patch for a GAS `Admin.html` template alert-call bug               |
+| `fix_include.patch`          | GAS `HtmlService` template-include helper snippet                        |
+| `test-deployment.js`         | Playwright script hitting a hardcoded `script.google.com` deployment URL |
 
 ---
 
 ## Original GAS Projects (For Reference)
 
 ### Staging (DEPRECATED)
+
 - **Script ID:** `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ`
 - **Former Owner:** `mzdano@gmail.com`
 - **Status:** DEPRECATED - No longer receives deployments
 
 ### Production (ARCHIVED)
+
 - **Script ID:** `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l`
 - **Owner:** `zeventbook@gmail.com`
 - **Status:** ARCHIVED - Webapp deployments disabled
@@ -58,6 +78,7 @@ As part of the migration from Google Apps Script to Cloudflare Workers (Epic 3: 
 If you need to restore the GAS backend (emergency rollback scenario):
 
 ### Prerequisites
+
 1. Access to `zeventbook@gmail.com` Google account
 2. `clasp` CLI installed: `npm install -g @google/clasp`
 3. Valid OAuth credentials
@@ -65,12 +86,14 @@ If you need to restore the GAS backend (emergency rollback scenario):
 ### Steps to Restore
 
 1. **Copy archived files back to src/mvp:**
+
    ```bash
    cp archive/gas/*.gs src/mvp/
    cp archive/gas/appsscript.json src/mvp/
    ```
 
 2. **Restore clasp configuration:**
+
    ```bash
    # For production (CI-only)
    cp .clasp-production.json.archived .clasp-production.json
@@ -80,16 +103,19 @@ If you need to restore the GAS backend (emergency rollback scenario):
    ```
 
 3. **Login to clasp:**
+
    ```bash
    clasp login
    ```
 
 4. **Push code to GAS:**
+
    ```bash
    clasp push --force
    ```
 
 5. **Create new deployment:**
+
    ```bash
    clasp deploy -d "Emergency restore - $(date -Iseconds)"
    ```
@@ -138,4 +164,4 @@ Google Sheets API (via service account)
 
 ---
 
-*Archived as part of Story 5.3 - Decommission Apps Script Project*
+_Archived as part of Story 5.3 - Decommission Apps Script Project_
