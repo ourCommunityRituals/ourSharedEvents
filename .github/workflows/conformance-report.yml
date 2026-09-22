@@ -115,6 +115,14 @@ jobs:
             echo "Conformance report unchanged — no refresh PR needed."
             exit 0
           fi
+          # OSE-1151: fail loud and actionable, not with a bare git 403, when the PAT is
+          # missing/mis-scoped — this exact failure mode (token present at the org level but
+          # lacking write access to THIS repo) silently starved the refresh mechanism for
+          # multiple consecutive weekly runs with no clear signal of what to fix.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::OCR_PROPAGATE_TOKEN is empty — the org secret exists but resolved to nothing here. Verify secret access for this repo."
+            exit 1
+          fi
           BRANCH=chore/conformance-refresh
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -123,7 +131,15 @@ jobs:
           git checkout -B "$BRANCH"
           git add "$RPT/CONFORMANCE.md" "$RPT/conformance.json"
           git commit -m "chore: regenerate conformance report (OSE-560)"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
+          if ! git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH" 2>push_err.log; then
+            cat push_err.log
+            if grep -qi "Write access to repository not granted" push_err.log; then
+              echo "::error::OCR_PROPAGATE_TOKEN lacks write access to ${GITHUB_REPOSITORY} — rotate/re-scope the PAT backing this org secret (needs Contents: write on this repo) so the conformance-refresh PR can be opened. The freshly generated report is still available as this run's artifact for manual review in the meantime."
+            else
+              echo "::error::conformance-refresh push failed for an unexpected reason — see push_err.log output above."
+            fi
+            exit 1
+          fi
           if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null)" ]; then
             gh pr create --base main --head "$BRANCH" \
               --title "chore: regenerate conformance report (OSE-560)" \
@@ -133,6 +149,10 @@ jobs:
           fi
 
       - name: Upload report as artifact
+        # OSE-1151: always upload, even if the refresh-PR step above failed (e.g. token
+        # permission gap) — the freshly generated report must not be lost on that failure,
+        # it's the only way to review the current drift until the PAT is fixed.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: conformance-report-${{ github.sha }}
