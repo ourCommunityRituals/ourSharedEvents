@@ -79,7 +79,14 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
       test.skip(!eventId || !sponsorId, 'No events/sponsors');
     }
 
-    // Log impression with surface and placement — these are the NCR data atoms
+    // Log impression with surface and placement — these are the NCR data atoms.
+    // NOTE (OSE-1310): placement is deliberately distinct from the 'display'/'tvTop'
+    // pair used by anonymous-id.invariant.spec.ts's impression test. Both specs POST
+    // a real beacon against the same pinned SMOKE_EVENT_SPONSORED fixture from the
+    // same CI runner IP within the invalid-traffic dedup TTL — an identical
+    // descriptor here would be legitimately deduped as a replay (202, not 201) when
+    // this suite runs after that one, since IVT dedup is keyed on
+    // (ip, eventId, sponsorId, surface, placement, kind).
     const res = await page.evaluate(
       async ({ eid, sid }: { eid: string; sid: string }) => {
         const r = await fetch(
@@ -87,7 +94,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ surface: 'display', placement: 'tvTop' }),
+            body: JSON.stringify({ surface: 'display', placement: 'tvTop-ncr' }),
           }
         );
         return { status: r.status, body: await r.json() };
