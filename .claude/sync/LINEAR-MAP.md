@@ -112,7 +112,12 @@ a pending decision, not yet made. Rotating or shortening the `ose_anon`
 cookie lifetime (`lib/anonymous-id.ts`, currently `Max-Age=1yr`) is also
 still open — OSE-1351 deliberately left it untouched since it changes
 every visitor's cross-session recognition behavior and needs its own
-product ruling, not a data-lifecycle-job PR.
+product ruling, not a data-lifecycle-job PR. That ruling is now tracked in
+its own story, OSE-1352, so it doesn't stall closing OSE-1350/OSE-1351 on a
+product decision rather than an engineering one.
+
+OSE-1350 and OSE-1351 are both Done. OSE-1352 (cookie-lifetime ruling) is
+the only open item left from this residual.
 
 ## Supply-chain security
 
