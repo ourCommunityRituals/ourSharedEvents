@@ -6,6 +6,21 @@ ourSharedEvents powers community event management — registration, check-in, sp
 
 **Privacy by architecture, not policy.** The platform never collects personal information at the scan level. Anonymous data can be kept forever, shared with researchers, and accumulated over years to produce hyperlocal maps of community gathering patterns.
 
+## Documentation reconciliation status (2026-09-22)
+
+This repo is currently reconciling the Linear backlog against the live codebase. The canonical source of truth is the code + tests, not the stale admin/backlog state.
+
+Recent audit: `docs/audits/LINEAR_BACKLOG_RECONCILIATION_2026-09-22.md`
+
+- 23 tickets in the audited 99-ticket slice were already `DONE_IN_CODE`
+- 17 were `PARTIAL` and still need re-scoping
+- 7 were `UNCLEAR` and need a targeted follow-up
+- 52 were legitimately `NOT_STARTED`
+
+Examples of already-implemented, code-verified work that should be treated as closed unless a real regression is found include: OSE-1348, OSE-1346, OSE-1344, OSE-1308, OSE-1307, OSE-1302, OSE-1280, OSE-1216, OSE-1176, OSE-1125, OSE-1124, OSE-1101, OSE-1074, OSE-1061/1066/1067, and OSE-1050.
+
+This means documentation and Linear state may lag the code. When in doubt, verify the behavior in source + tests before reopening or re-implementing a ticket.
+
 ---
 
 ## The ourCommunityRituals Ecosystem

@@ -4,6 +4,10 @@
 
 > **Session protocol**: Read this file → Read STORIES.md → Find next unstarted story → Implement complete solution → Create PR. No other instruction needed.
 
+> **Current reconciliation rule (2026-09-22)**: Do not treat the backlog table as the source of truth. The current code-vs-Linear audit in `docs/audits/LINEAR_BACKLOG_RECONCILIATION_2026-09-22.md` shows 23 items in the audited 99-ticket slice are already **DONE_IN_CODE**, 17 are **PARTIAL**, 7 are **UNCLEAR**, and 52 are still **NOT_STARTED**. For any new story or story update, confirm the repo has direct source + test evidence first; close only when the behavior is implemented and tests validate it, not merely because Linear/admin state says so.
+
+> **ADR alignment rule**: ADRs are the decision rationale; the implemented code is the system-of-record. Read the ADR first for intent, then verify the live implementation. If the code and the ADR differ, update the ADR in the same change set or mark it as superseded/deprecated. See `docs/adr/ADR-RECONCILIATION-PROCESS.md` and `docs/adr/README.md` for the repo-wide reconciliation workflow.
+
 ---
 
 ## 1. Architecture Decisions

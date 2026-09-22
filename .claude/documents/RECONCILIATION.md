@@ -10,6 +10,19 @@
 
 The ourSharedEvents codebase is **further ahead than CLAUDE.md documents** in several areas, but has **two parallel Worker implementations** that need architectural resolution. Documentation is extensive (62+ markdown files in docs/) but references legacy systems (GAS/Apps Script) that are archived. The Triangle Framework (Events at apex, Sponsors bottom-left, Customers bottom-right, SharedReports center) is implemented in schema but not yet wired in the active Worker routes.
 
+### ADR/code reconciliation rule
+
+The repo's reconciliation loop must treat the implementation as the system-of-record and the ADRs as decision rationale. When the ADR and code differ, the ADR is stale until reconciled.
+
+This is the standard for every sync pass:
+
+1. Read the relevant ADR(s) first for intent
+2. Verify the implementation in the code and tests
+3. If they differ, reconcile the ADR in the same change set or mark it superseded/deprecated
+4. Treat Linear/admin/backlog state as drift unless it is directly verified against the code
+
+This rule is now codified in `docs/adr/ADR-RECONCILIATION-PROCESS.md` and should be part of every sync / rebase / doc-reconciliation pass.
+
 ### Traffic Light Summary
 
 | Area                        | Status           | Notes                                                                             |
