@@ -9,18 +9,19 @@
 
 **The platform captures signal of presence — not personal identity.**
 
-This isn't a privacy policy bolted on after the fact. The database schema itself makes it impossible to store PII in the scan system. There is no column for email, name, or IP address in the `scans` table. The anonymous ID system and the forms system are **completely separate databases** with no cross-linking.
+This isn't a privacy policy bolted on after the fact. The database schema itself makes it impossible to store PII in the scan system. There is no column for email, name, or IP address in either scan table (`scan_placement_events` / `scan_node_returns` — the combined `scans` table was split and dropped in migration 0062). The anonymous ID system and the forms system are **completely separate databases** with no cross-linking.
 
 ```
 FORMS_DB (opt-in personal data)     DB (anonymous presence signal)
 ───────────────────────────────     ────────────────────────────
-Registrations (name, email hash)    Scans (scan_bucket, agent_hash)
-Surveys (responses, PII-scrubbed)   Poster deployments (qr_token, lat/lng)
-Email signups (encrypted, 30d TTL)  Scan aggregates (counts by hour)
-Check-in counts (aggregate only)    Sponsors (click/impression tokens)
+Registrations (name, email hash)    Scan placement events (WHERE)
+Surveys (responses, PII-scrubbed)   Scan node returns (WHO)
+Email signups (encrypted, 30d TTL)  Poster deployments (qr_token, lat/lng)
+Check-in counts (aggregate only)    Scan aggregates (counts by hour)
+                                    Sponsors (click/impression tokens)
                                     Events (the core entity)
     ↓                                   ↓
-  Auto-deleted on schedule          Permanent anonymous signal
+  Auto-deleted on schedule          Retained indefinitely (historical record)
   Customer opted in voluntarily     No opt-in needed — no PII exists
 ```
 
@@ -28,24 +29,80 @@ Check-in counts (aggregate only)    Sponsors (click/impression tokens)
 
 **For sponsors:** The analytics you see are real aggregate signal, not individual tracking. You know how many people engaged with your placement — not who they are.
 
+### Sponsor signal is filtered, but the filter keeps nothing (OSE-1310)
+
+Sponsor impression/click beacons pass through an invalid-traffic filter before a
+row is written, so a crawler, a replayed beacon, or a flood does not become a
+number a sponsor is shown. That filter necessarily _looks at_ visitor-derived
+signals — the client IP, the `User-Agent`, and Cloudflare's bot score.
+
+It retains none of them. Every one of those inputs is read, reduced to a
+yes/no answer, and dropped inside the request:
+
+- **Nothing identifying is written to D1.** `sponsor_impressions` still carries
+  zero attendee-identifying columns; the table shape is unchanged and enforced
+  against the live schema by `tests/red-team/impression-privacy.spec.ts`.
+- **Nothing identifying is written to KV.** Dedup and cadence buckets are stored
+  as SHA-256 keys with a TTL of minutes — opaque, un-enumerable, and
+  self-deleting. This is the same primitive `lib/rate-limit.ts` already hashes
+  its buckets with, for the same reason.
+
+The distinction that matters: the filter answers _"is this seeing real?"_ and
+never _"who is seeing?"_ — an anti-fraud control, not a tracker. See
+`workers/oursharedevents/src/lib/invalid-traffic.ts`.
+
 ---
 
 ## The Two Data Systems
 
-### System 1: Anonymous Scan Signal (DB — permanent)
+### System 1: Anonymous Scan Signal (DB)
 
-The scan system stores **presence signal only**. By schema design, no PII can enter:
+The scan system stores **presence signal only**. By schema design, no directly
+identifying PII can enter. Since OSE-798 a single scan is written as **two rows
+in two tables**, deliberately split so that no durable row carries both a
+placement and a session-derived value:
 
-| What's Stored                 | How                         | Purpose                       |
-| ----------------------------- | --------------------------- | ----------------------------- |
-| `scan_bucket`                 | Hourly time window          | When (approximate)            |
-| `user_agent_hash`             | SHA-256 of user agent       | Device class (not individual) |
-| `country_code`, `region_code` | From CF headers             | Where (approximate)           |
-| `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
+**`scan_placement_events` — the WHERE (permanent)**
 
-**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint.
+| What's Stored          | How                         | Purpose                     |
+| ---------------------- | --------------------------- | --------------------------- |
+| `scan_bucket`          | Hourly time window          | When (approximate)          |
+| `poster_deployment_id` | FK to physical QR placement | Which placement was scanned |
 
-This data is **permanent** — it's safe to keep forever because it contains no personal information. It becomes the foundation for geo-spatial intelligence at scale.
+This side is **permanent and safe to keep forever** — it contains nothing
+derived from the visitor at all. It is the count of record: the scan gauge and
+the "this event met reality" delete guard both read it.
+
+**`scan_node_returns` — the WHO (retained indefinitely)**
+
+| What's Stored     | How                        | Purpose                       |
+| ----------------- | -------------------------- | ----------------------------- |
+| `scan_bucket`     | Hourly time window         | When (approximate)            |
+| `anonymous_id`    | From the `ose_anon` cookie | Distinct-visitor counting     |
+| `user_agent_hash` | SHA-256 of user agent      | Device class (not individual) |
+| `country_code`    | From CF headers            | Where (approximate)           |
+
+**What's explicitly excluded:** email, name, IP address, exact timestamp, device
+fingerprint.
+
+Be precise about `anonymous_id`: it is **not** PII, but it **is** a pseudonymous
+identifier read from a cookie, and it is the one value on the platform that
+could link a visitor's scans across events.
+
+**Scan data is retained indefinitely, by design.** Scans are part of an event's
+permanent historical record — the basis for longitudinal and geo-spatial
+intelligence — so unlike opt-in form data (bounded lifecycle) and subscribers
+(365 days), scan signal has no expiry. That is a deliberate product ruling, not
+an oversight.
+
+What bounds it instead is **erasure on request** (OSE-1350): a visitor who ever
+linked an email via a form can have their scan rows purged by that email.
+
+Two deletion mechanisms exist in the codebase and are wired into the cron, but
+both ship **off** and are not active: prune-raw (OSE-1091) and an age-based
+retention window (OSE-1351). They are kept available for a deployment that ever
+needs bounded raw retention — a stricter regulatory tier, a customer contract —
+not because the default is expected to change.
 
 ### System 2: Opt-In Form Data (FORMS_DB — temporary)
 

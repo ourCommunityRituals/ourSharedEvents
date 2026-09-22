@@ -119,6 +119,29 @@ product decision rather than an engineering one.
 OSE-1350 and OSE-1351 are both Done. OSE-1352 (cookie-lifetime ruling) is
 the only open item left from this residual.
 
+OSE-1091 (scan-ingest pipeline) adds a **third, narrower** mechanism against
+the same residual: `lib/scan-raw-prune.ts` closes the pipeline's missing
+prune-raw stage. It is not another TTL. It deletes a raw
+`scan_node_returns` row only once that row's value is provably already
+extracted — the event must have a `scan_aggregates` row (proof
+`aggregateScanBuckets` ran) **and** `ANON_ID_HASH_PEPPER` must be set (else
+`materializeAnonIdReturns` no-ops and the return signal was never captured)
+**and** the row's whole hour-bucket must be past the cutoff (a partially
+pruned bucket would make the rollup recompute a lower count over the correct
+one — a silent undercount, proven born-red in `tests/scan-raw-prune.spec.ts`).
+It never touches `scan_placement_events`, so scan counts, the event-stats
+gauge, and `handleDeleteEvent`'s activity guard are unaffected.
+
+**RULING (2026-09-22) — scan retention is INDEFINITE.** The product owner
+ruled that QR scan data stays in the DB permanently as part of the event's
+historical record, since longitudinal and geo-spatial intelligence is the
+point of collecting it. Bounded retention applies to FORMS_DB (opt-in PII)
+and `subscribers` (365d), **not** to scans or shortlinks. So both OSE-1091's
+prune and OSE-1351's retention window ship OFF (`SCAN_RAW_PRUNE_DAYS = "0"`),
+and the erasure path (OSE-1350) remains the only active deletion route for
+scan rows. Both jobs stay in the tree as ready mechanisms should a specific
+deployment ever need bounded raw retention.
+
 ## Supply-chain security
 
 | Story ID           | Linear ID | Title                                                                                     | Evidence                                                                                                                                                               |

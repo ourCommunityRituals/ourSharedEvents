@@ -305,6 +305,21 @@ export type RouterEnv = PagesEnv &
      * purges by email on demand regardless of this window.
      */
     SCAN_RETURNS_RETENTION_DAYS?: string;
+    /**
+     * OSE-1091 — prune-raw window in days for `scan_node_returns`, the "WHO"
+     * half of a scan. Optional; unset → no prune (raw rows retained).
+     *
+     * Read by the scheduled `runScanRawPrune` job in `lib/scan-raw-prune.ts`.
+     * Distinct from SCAN_RETURNS_RETENTION_DAYS above: that is an age-based TTL
+     * across both return tables, whereas this deletes ONLY raw rows whose value
+     * is already captured in `scan_aggregates` + `anon_id_returns`, and never
+     * touches `scan_placement_events` (so scan counts are unaffected). Values
+     * below `MIN_PRUNE_DAYS` (2) are raised to it so a prune can never race the
+     * 26-hour materialization ceiling.
+     *
+     * Ships "0" (disabled) — QR scan data is retained indefinitely by ruling.
+     */
+    SCAN_RAW_PRUNE_DAYS?: string;
   };
 
 export async function route(

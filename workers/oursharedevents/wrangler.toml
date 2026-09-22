@@ -99,6 +99,18 @@ DRAFT_EXPIRY_DAYS = "30"
 # Subscriber retention defaults to a 365-day bounded window so the email list does
 # not retain PII forever when no explicit override is configured.
 SUBSCRIBERS_RETENTION_DAYS = "365"
+# OSE-1091 — prune-raw stage of the scan-ingest pipeline. DISABLED BY RULING.
+#
+# QR scan data is retained INDEFINITELY, by product decision: scans are part of
+# the event's permanent historical record and are the basis for longitudinal /
+# geo-spatial intelligence. Unlike FORMS_DB (opt-in PII, bounded lifecycle) and
+# subscribers (365d above), there is no expiry on scan signal.
+#
+# The prune job stays in the codebase as an available MECHANISM — it is wired
+# into scheduled() and fully tested — but ships off. "0" is written explicitly
+# rather than omitted so the decision is visible config, not an absent default
+# someone later mistakes for an oversight (CCR-PR567 L2).
+SCAN_RAW_PRUNE_DAYS = "0"
 # Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities

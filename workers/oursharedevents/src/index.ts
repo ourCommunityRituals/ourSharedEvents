@@ -14,6 +14,7 @@ import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import { runScanRawPrune } from './lib/scan-raw-prune';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
@@ -101,6 +102,17 @@ export default {
     //   both tables independently. Does NOT touch the ose_anon cookie
     //   lifetime — that remains a separate open decision. Audits to
     //   admin_audit_log.
+    // runScanRawPrune (lib/scan-raw-prune.ts, OSE-1091) closes the scan-ingest
+    //   pipeline: aggregate-in (aggregateScanBuckets) → prune-raw. Deletes raw
+    //   DB.scan_node_returns rows ONLY — never scan_placement_events, so scan
+    //   counts, event stats, and the delete-activity guard are untouched. Three
+    //   interlocks: the event must already have a scan_aggregates row (proof the
+    //   rollup ran), ANON_ID_HASH_PEPPER must be set (else the return-signal
+    //   half never ran), and a bucket is pruned all-or-nothing so the rollup can
+    //   never recompute a partial bucket into a lower count. DISABLED BY RULING
+    //   (SCAN_RAW_PRUNE_DAYS = "0"): QR scan data is retained indefinitely as
+    //   the event's permanent historical record. Present as a mechanism only.
+    //   Audits to admin_audit_log.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
@@ -111,6 +123,7 @@ export default {
         runSecurityMetricsCron(env),
         runDraftExpiry(env),
         runScanReturnsRetention(env),
+        runScanRawPrune(env),
       ])
     );
   },
