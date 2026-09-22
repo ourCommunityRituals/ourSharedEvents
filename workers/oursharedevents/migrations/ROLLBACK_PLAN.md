@@ -107,6 +107,13 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0077: node_hierarchy.legal_clearance_tier disambiguation (OSE-1221 — schema
+-- guard `check-column-type-collisions.mjs`, OSE-802). Pure RENAME COLUMN, no
+-- data change (dead column: not read/written by any src/ code; the growth-wave
+-- model it belonged to was superseded by ADR-018 — see ADR-009's 2026-09-10
+-- note). Reverse renames it back:
+ALTER TABLE node_hierarchy RENAME COLUMN node_hierarchy_legal_tier_label TO legal_clearance_tier;
+
 -- 0076: event-type categories (OSE-1344). Additive: a lookup TABLE + a nullable
 -- column + one index. Reverse (category_code is additive and safe to leave):
 DROP INDEX IF EXISTS idx_event_type_registry_category;

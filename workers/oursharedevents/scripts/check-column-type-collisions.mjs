@@ -27,14 +27,11 @@ const ALLOWED_COLUMN_TYPE_COLLISIONS = new Map([
         'Legacy schemas use text UUIDs for application entities and an integer sequence for subscribers.',
     },
   ],
-  [
-    'legal_clearance_tier',
-    {
-      affinities: ['INTEGER', 'TEXT'],
-      reason:
-        'Legacy OSE-802/OSE-1221 drift: node_hierarchy uses regime labels while event types/events use numeric tiers.',
-    },
-  ],
+  // 'legal_clearance_tier' collision resolved by OSE-1221 (migration 0077):
+  // node_hierarchy's TEXT column was renamed to
+  // `node_hierarchy_legal_tier_label`, leaving `legal_clearance_tier` as a
+  // single-affinity (INTEGER) name shared only by events/event_type_registry.
+  // No allowlist entry needed here anymore — a regression would now fail CI.
   [
     'phase',
     {

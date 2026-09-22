@@ -1,0 +1,28 @@
+-- Migration 0077: resolve OSE-1221 legal_clearance_tier type collision
+--
+-- `scripts/check-column-type-collisions.mjs` (OSE-802 schema guard) flags any
+-- column name reused across tables with different SQLite affinities as a
+-- likely "hidden model fork." `legal_clearance_tier` was one of two baselined
+-- legacy collisions:
+--
+--   events / event_type_registry . legal_clearance_tier   INTEGER (1-5 tier;
+--     drives template selectability — see src/lib/template-clearance.ts —
+--     and the OSE-1220 declined-regime ceiling)
+--   node_hierarchy               . legal_clearance_tier   TEXT
+--     ('OPEN' | 'RESTRICTED' | 'REGULATED'; migration 0011's corridor
+--     growth-wave model)
+--
+-- These are two genuinely different concepts that happened to share a name.
+-- The node_hierarchy side is also confirmed dead: no application code under
+-- src/ reads or writes it (grep-verified), and ADR-009's own 2026-09-10
+-- supersession note (OSE-1285) retired the growth-wave model this column
+-- belonged to in favor of ADR-018's declined-regimes doctrine — the
+-- HIPAA/COPPA waves this column staged for are refused, not routed to.
+--
+-- Rather than drop the column outright (a one-way operation for a table this
+-- migration doesn't own the full lifecycle of), this rename disambiguates it
+-- from the live, load-bearing events/event_type_registry column, which is
+-- what actually removes the type collision the guard flags. Reversible via
+-- RENAME COLUMN back (see migrations/ROLLBACK_PLAN.md), matching the pattern
+-- migration 0064 used for the honesty-lexicon renames.
+ALTER TABLE node_hierarchy RENAME COLUMN legal_clearance_tier TO node_hierarchy_legal_tier_label;
