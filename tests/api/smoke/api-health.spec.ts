@@ -1,7 +1,8 @@
 /**
  * API Smoke Test: Health Check (/health, /api/status)
  *
- * Validates the D1-backed Cloudflare Worker health endpoint against staging.
+ * Validates the D1-backed Cloudflare Worker health endpoint. Runs against
+ * whichever environment BASE_URL resolves to (staging or production).
  *
  * Actual contract (workers/oursharedevents/src/handlers/health.ts):
  * {
@@ -16,6 +17,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+
+// Single source of truth for BASE_URL -> environment resolution, so this
+// suite validates against whichever environment it's actually pointed at
+// (staging or production), rather than assuming staging.
+const { getEnvironment } = require('../../../config/environments');
 
 test.describe('Health Check (/health, /api/status)', () => {
   test.describe('Success Path', () => {
@@ -88,12 +94,13 @@ test.describe('Health Check (/health, /api/status)', () => {
     });
   });
 
-  test.describe('Staging Environment Validation', () => {
-    test('env field is "staging"', async ({ request }) => {
+  test.describe('Target Environment Validation', () => {
+    test('env field matches the environment under test', async ({ request }) => {
       const response = await request.get('/health');
       const json = await response.json();
 
-      expect(json.env).toBe('staging');
+      const expectedEnv = getEnvironment().name.toLowerCase();
+      expect(json.env).toBe(expectedEnv);
     });
 
     test('db is "ok" (D1 is configured and reachable)', async ({ request }) => {
