@@ -116,7 +116,7 @@ Wave 4 is where corridors span into countryside — where people actually live. 
 ## Consequences
 
 - D1 migration `0010_create_ncr_v2_hierarchy.sql` implements `node_hierarchy` and `corridors` tables
-- D1 migration `0011_corridor_growth_model.sql` adds `parent_corridor_id`, `growth_pattern`, `reverb_strength`, `event_verticals`, `legal_clearance_tier`
+- D1 migration `0011_corridor_growth_model.sql` adds `parent_corridor_id`, `growth_pattern`, `reverb_strength`, `event_verticals`, `legal_clearance_tier` (renamed `node_hierarchy_legal_tier_label` by migration `0077`, OSE-1221 — see supersession note above; disambiguates from the live, numeric `events`/`event_type_registry.legal_clearance_tier`)
 - All geographic seed data (founding communities + highway corridors) follows this schema
 - Founding corridors are children of highway corridors (e.g., Hammond and SW Michigan are children of I-94 East)
 - SharedReport BI wing can query by hierarchy level for multi-scale analytics

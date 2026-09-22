@@ -76,7 +76,7 @@ const EXPECTED_INDEXES = [
   // Corridor growth model (migration 0011)
   'idx_corridors_parent',
   'idx_corridors_growth_pattern',
-  'idx_node_hierarchy_legal_tier',
+  'idx_node_hierarchy_legal_tier', // column renamed by 0077 (OSE-1221); index name unchanged
   // Ring emergence support (migration 0012)
   'idx_corridors_directionality',
   'idx_corridors_temporal',
