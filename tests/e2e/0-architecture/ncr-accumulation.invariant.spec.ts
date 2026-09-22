@@ -47,17 +47,25 @@ async function publicFetch(page: any, path: string) {
 // mock-fallback FK 503 (the read path can surface a sponsor with no backing row).
 const SPONSORED_EVENT = process.env.SMOKE_EVENT_SPONSORED || '';
 
-async function resolveSponsorTarget(page: any): Promise<{ eventId: string; sponsorId: string }> {
+async function resolveSponsorTarget(
+  page: any
+): Promise<{ eventId: string; sponsorId: string; beaconToken: string }> {
   return page.evaluate(async (pref: string) => {
     const evRes = await fetch('/api/v2/events');
     const evJson = await evRes.json();
     const items = (evJson && evJson.items) || [];
     const eventId = pref || (items[0] ? items[0].id : '');
-    if (!eventId) return { eventId: '', sponsorId: '' };
+    if (!eventId) return { eventId: '', sponsorId: '', beaconToken: '' };
     const spRes = await fetch(`/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
     const spJson = await spRes.json();
     const sid = spJson && spJson.items && spJson.items[0] ? spJson.items[0].id : '';
-    return { eventId, sponsorId: sid };
+    if (!sid) return { eventId, sponsorId: '', beaconToken: '' };
+    // OSE-1310: impression/click writes now require a beacon token minted into
+    // a sponsor-bundle response for this exact (event, sponsor) pair.
+    const bundleRes = await fetch(`/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle`);
+    const bundleJson = await bundleRes.json();
+    const bundled = (bundleJson.bundle?.sponsors || []).find((s: { id: string }) => s.id === sid);
+    return { eventId, sponsorId: sid, beaconToken: bundled?.beacon_token || '' };
   }, SPONSORED_EVENT);
 }
 
@@ -69,7 +77,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('impression POST captures surface and placement', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    const { eventId, sponsorId, beaconToken } = await resolveSponsorTarget(page);
     if (SPONSORED_EVENT) {
       expect(
         sponsorId,
@@ -88,18 +96,22 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
     // this suite runs after that one, since IVT dedup is keyed on
     // (ip, eventId, sponsorId, surface, placement, kind).
     const res = await page.evaluate(
-      async ({ eid, sid }: { eid: string; sid: string }) => {
+      async ({ eid, sid, token }: { eid: string; sid: string; token: string }) => {
         const r = await fetch(
           `/api/v2/events/${encodeURIComponent(eid)}/sponsors/${encodeURIComponent(sid)}/impression`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ surface: 'display', placement: 'tvTop-ncr' }),
+            body: JSON.stringify({
+              surface: 'display',
+              placement: 'tvTop-ncr',
+              beacon_token: token,
+            }),
           }
         );
         return { status: r.status, body: await r.json() };
       },
-      { eid: eventId, sid: sponsorId }
+      { eid: eventId, sid: sponsorId, token: beaconToken }
     );
 
     expect(res.status).toBe(201);
@@ -109,7 +121,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('click POST captures surface and placement', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    const { eventId, sponsorId, beaconToken } = await resolveSponsorTarget(page);
     if (SPONSORED_EVENT) {
       expect(
         sponsorId,
@@ -120,18 +132,22 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
     }
 
     const res = await page.evaluate(
-      async ({ eid, sid }: { eid: string; sid: string }) => {
+      async ({ eid, sid, token }: { eid: string; sid: string; token: string }) => {
         const r = await fetch(
           `/api/v2/events/${encodeURIComponent(eid)}/sponsors/${encodeURIComponent(sid)}/click`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ surface: 'poster', placement: 'posterTop' }),
+            body: JSON.stringify({
+              surface: 'poster',
+              placement: 'posterTop',
+              beacon_token: token,
+            }),
           }
         );
         return { status: r.status, body: await r.json() };
       },
-      { eid: eventId, sid: sponsorId }
+      { eid: eventId, sid: sponsorId, token: beaconToken }
     );
 
     expect(res.status).toBe(201);
@@ -141,7 +157,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('impression surface values are constrained to known surfaces', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    const { eventId, sponsorId, beaconToken } = await resolveSponsorTarget(page);
     if (SPONSORED_EVENT) {
       expect(
         sponsorId,
@@ -154,18 +170,22 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
     // Even with an unknown surface value, the API should accept it
     // (the schema truncates to 50 chars — it doesn't reject unknown surfaces)
     const res = await page.evaluate(
-      async ({ eid, sid }: { eid: string; sid: string }) => {
+      async ({ eid, sid, token }: { eid: string; sid: string; token: string }) => {
         const r = await fetch(
           `/api/v2/events/${encodeURIComponent(eid)}/sponsors/${encodeURIComponent(sid)}/impression`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ surface: 'unknown_surface', placement: 'test' }),
+            body: JSON.stringify({
+              surface: 'unknown_surface',
+              placement: 'test',
+              beacon_token: token,
+            }),
           }
         );
         return { status: r.status };
       },
-      { eid: eventId, sid: sponsorId }
+      { eid: eventId, sid: sponsorId, token: beaconToken }
     );
 
     // System accepts unknown surfaces (logs them) — doesn't crash

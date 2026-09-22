@@ -534,9 +534,11 @@
           function logImpression(s, placement) {
             // OSE-1164: credentials:'omit' — the anon_id cookie is never sent to the
             // aggregate-only sponsor-signal endpoint (structural never-who).
+            // OSE-1310: s.beacon_token is minted per-sponsor into THIS bundle
+            // response; the write is dropped (honest 202, not counted) without it.
             fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
               method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ surface: 'display', placement: placement })
+              body: JSON.stringify({ surface: 'display', placement: placement, beacon_token: s.beacon_token })
             }).catch(() => {});
           }
           tvTop.forEach(s => logImpression(s, 'tvTop'));

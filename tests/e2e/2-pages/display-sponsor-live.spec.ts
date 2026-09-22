@@ -318,19 +318,26 @@ test.describe('Live Display — Impression API', () => {
 
       if (allSponsors.length > 0) {
         const sponsorId = allSponsors[0].id;
+        // OSE-1310: impression writes require the beacon token minted into
+        // this exact bundle response for this sponsor.
+        const beaconToken = allSponsors[0].beacon_token || '';
         const impressionRes = await page.evaluate(
-          async ({ eid, sid }: { eid: string; sid: string }) => {
+          async ({ eid, sid, token }: { eid: string; sid: string; token: string }) => {
             const res = await fetch(
               `/api/v2/events/${encodeURIComponent(eid)}/sponsors/${encodeURIComponent(sid)}/impression`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ surface: 'display', placement: 'tvTop' }),
+                body: JSON.stringify({
+                  surface: 'display',
+                  placement: 'tvTop',
+                  beacon_token: token,
+                }),
               }
             );
             return { status: res.status, body: await res.json() };
           },
-          { eid: eventId, sid: sponsorId }
+          { eid: eventId, sid: sponsorId, token: beaconToken }
         );
 
         expect(impressionRes.status).toBe(201);

@@ -386,7 +386,9 @@
                 // chooses not to read it. Locked by sponsor-signal-never-who.invariant.spec.ts.
                 credentials: 'omit',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' }),
+                // OSE-1310: beacon_token is minted per-sponsor into this bundle
+                // response; without it the write is dropped (honest 202, not counted).
+                body: JSON.stringify({ surface: 'public', placement: 'mobileBanner', beacon_token: s.beacon_token }),
               }
             ).catch(() => {});
           });
