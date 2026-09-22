@@ -434,7 +434,13 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       { eid: eventId, sid: sponsorId }
     );
 
-    expect([200, 201]).toContain(res.status);
+    // OSE-1310: a well-formed beacon is always `ok: true`. 201 means it became a
+    // fresh row; 202 { counted: false } is the equally-legitimate "accepted but
+    // filtered" shape (bot/dedup/flood heuristics) -- this step only asserts the
+    // journey's endpoint call succeeds, not that a specific row was written, so
+    // it must not fail merely because shared CI fixture traffic tripped a
+    // cadence/dedup control on this pinned smoke event.
+    expect([200, 201, 202]).toContain(res.status);
     expect(res.body.ok).toBe(true);
   });
 
@@ -461,7 +467,9 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       { eid: eventId, sid: sponsorId }
     );
 
-    expect([200, 201]).toContain(res.status);
+    // OSE-1310: see the impression-step note above -- 202 { counted: false } is
+    // an equally legitimate "accepted but filtered" response.
+    expect([200, 201, 202]).toContain(res.status);
     expect(res.body.ok).toBe(true);
   });
 
