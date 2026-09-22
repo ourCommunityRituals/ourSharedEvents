@@ -131,6 +131,13 @@ describe('OSE-1164 — sponsor signal is never-who even with a cookie present', 
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            // OSE-1310: a real browser always sends a User-Agent, and the IVT
+            // filter refuses clients that send none. This test is about what the
+            // SERVER persists for an accepted signal, so it must present as the
+            // real browser it stands for or it would exercise the bot path.
+            'User-Agent':
+              'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            'CF-Connecting-IP': `198.51.100.${kind === 'impression' ? 11 : 12}`,
             // The anon cookie a real browser would carry — deliberately sent here
             // to prove the SERVER cannot link it (the client separately omits it).
             Cookie: `ose_anon=${PLANTED_ANON}`,

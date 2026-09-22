@@ -1229,6 +1229,12 @@ export async function route(
   // D3 (CCR 2026-09-14): per-IP rate-limited so a flood can't inflate a sponsor's
   // proof-layer numbers. The handler separately rejects any (event,sponsor) pair
   // that is not a resolved, brand-matched placement.
+  //
+  // OSE-1310: this route limit is the READ-sized 120/min allowance, which is a
+  // backstop, not the control — 120 writes/min into a billing-adjacent table is
+  // too generous to be one. The real filter (bot classification, replay dedup,
+  // and a write-sized cadence ceiling) lives in lib/invalid-traffic.ts and runs
+  // inside the handler, where it can see the beacon's surface/placement.
   const impressionMatch = pathname.match(
     /^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/impression$/
   );
