@@ -96,6 +96,9 @@ WORKER_BUILD_VERSION = "dev-local"
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
 DRAFT_EXPIRY_DAYS = "30"
+# Subscriber retention defaults to a 365-day bounded window so the email list does
+# not retain PII forever when no explicit override is configured.
+SUBSCRIBERS_RETENTION_DAYS = "365"
 # Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities

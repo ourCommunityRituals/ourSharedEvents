@@ -368,10 +368,10 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     expect(recentStill).not.toBeNull();
   });
 
-  test('source code: runSubscribersRetentionLifecycle is a no-op when env knob unset', () => {
-    // Locked into the file's behaviour via static check — if someone changes
-    // the function to default-to-deleting (e.g. hardcoded 365 days), this
-    // catches it.
+  test('source code: runSubscribersRetentionLifecycle defaults to a bounded retention window', () => {
+    // The retention cron must not leave subscriber PII uncapped by default.
+    // A blank/unset env knob falls back to a finite default window, while an
+    // explicit non-positive value remains a no-op/disabled state.
     const sources: Record<string, string> = JSON.parse(
       (env as unknown as { TEST_SOURCE_FILES_JSON: string }).TEST_SOURCE_FILES_JSON
     );
@@ -381,12 +381,10 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     expect(indexFile, 'src/index.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
     const content = indexFile![1];
 
-    // The function must read SUBSCRIBERS_RETENTION_DAYS, must early-return
-    // a noop log when not finite/positive, and must NOT contain a hardcoded
-    // `'-NNN days'` fallback that bypasses the env knob.
     expect(content).toMatch(/SUBSCRIBERS_RETENTION_DAYS/);
+    expect(content).toMatch(/DEFAULT_SUBSCRIBERS_RETENTION_DAYS/);
+    expect(content).toMatch(/365/);
     expect(content).toMatch(/SUBSCRIBERS_RETENTION_NOOP/);
-    expect(content).not.toMatch(/-\s*\d{2,}\s*days/);
   });
 });
 
