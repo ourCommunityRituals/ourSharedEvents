@@ -29,15 +29,18 @@
 
 ```
 1. Read CLAUDE.md          → full project context
-2. Read STORIES.md         → find next unstarted story
-3. Read .claude/inputs/    → any new intake items
-4. Pick next story         → respect prerequisites
-5. Implement complete      → all 6 role POVs
-6. Create PR               → CI runs automatically
-7. Update STORIES.md       → mark IN PROGRESS
+2. Read relevant ADR(s)    → capture architectural intent
+3. Read code + tests       → verify current implementation truth
+4. Reconcile drift         → update ADR or mark it superseded/deprecated when needed
+5. Read STORIES.md         → find next unstarted story
+6. Read .claude/inputs/    → any new intake items
+7. Pick next story         → respect prerequisites
+8. Implement complete      → all 6 role POVs
+9. Create PR               → CI runs automatically
+10. Update STORIES.md      → mark IN PROGRESS
 ```
 
-See CLAUDE.md §5 "The Loop" for full protocol.
+See CLAUDE.md §5 "The Loop" for full protocol. The ADR/code reconciliation step is mandatory whenever the story touches architecture, behavior contracts, invariants, or CI policy.
 
 ---
 

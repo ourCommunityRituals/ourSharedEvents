@@ -4,6 +4,20 @@ This directory holds the formal Architecture Decision Records (ADRs) for OurShar
 
 ADRs are **descriptive, not prescriptive**. They record decisions that have already been made (or are imminently about to be made), so future contributors can understand _why_ the system is the way it is without having to re-derive the reasoning. They are **the only place** where the long-form "why" lives — the [Brain invariants](../../../OCR-docs/ocr-docs-brain/architectural-invariants.yaml), CI gates, and doctrine memory files capture the _what_ and the _enforcement_, but not the trade-off reasoning behind them.
 
+## Documentation reconciliation status (2026-09-22)
+
+Architecture and backlog docs are being reconciled to the live codebase. The backlog/admin state is not the source of truth for implementation status; direct code + test evidence is.
+
+The live audit in `../audits/LINEAR_BACKLOG_RECONCILIATION_2026-09-22.md` found a meaningful set of already-implemented tickets in the reviewed slice, including OSE-1348, OSE-1346, OSE-1344, OSE-1280, OSE-1216, OSE-1176, OSE-1125, OSE-1101, OSE-1074, and OSE-1061/1066/1067. Those items should not be treated as still-open backlog work unless a regression or missing contract is demonstrated in code.
+
+This ADR index reflects decisions that are accepted and implemented in the codebase; it is intentionally not a backlog tracker for stale Linear/admin state.
+
+## ADR reconciliation process
+
+This repo uses a code-first reconciliation rule: the implementation and tests are the source of truth, and ADRs are the explanation of the decision. If they differ, the ADR must be updated in the same change set.
+
+See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full process, required PR checklist, and the drift-register format used to keep architecture docs aligned with the code.
+
 ## Status
 
 | #                                                                | Title                                                      | Status   | Date       |

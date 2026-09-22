@@ -1,0 +1,151 @@
+# Linear Backlog ↔ Code Reconciliation — 2026-09-22
+
+## Scope & method
+
+Source: a manual export of the Backlog-status Linear board (708 Backlog issues; 312
+Urgent/High). This pass covers the **99 highest-numbered Urgent/High Backlog
+tickets** (OSE-1029 .. OSE-1348) from that export.
+
+**Linear MCP access was attempted and is NOT available in this environment** (the
+`board-reconciler` custom agent has no callable `mcp__linear__*`/`mcp__Linear__*`
+tool registered here — confirmed by direct dispatch, not assumed). This pass is
+therefore a **one-directional, code-side verification**: for each ticket title/id,
+we searched the actual repositories (primarily `ourSharedEvents`; `ourCommunityRituals`
+for hub/`@ocr/*` tickets) for implementing code, tests, and docs, and verify or
+refute the ticket's implicit claim that the work is not yet done. We did **not**
+read or write Linear itself — recommendations below are for a human (or a session
+with working Linear MCP) to apply.
+
+Five parallel read-only agents each audited ~20 tickets against the live repo tree,
+citing file:line evidence for every verdict. Recommendations are advisory only —
+nothing in Linear was changed by this pass.
+
+## Verdict legend
+
+- **DONE_IN_CODE** — code + tests clearly implement what the ticket describes.
+  Recommend closing/marking Done in Linear.
+- **PARTIAL** — some of it is implemented but a real gap remains. Recommend
+  narrowing the Linear description to the actual remaining gap, not closing.
+- **NOT_STARTED** — no evidence found. Legitimate open backlog item.
+- **UNCLEAR** — adjacent artifacts exist (docs, related tests) but the specific
+  claim in the ticket could not be confirmed or refuted within the search budget.
+  Needs a targeted follow-up, not an automatic close.
+
+## Summary
+
+| Verdict                                 | Count | % of 99 |
+| --------------------------------------- | ----- | ------- |
+| NOT_STARTED (legitimate, keep open)     | 52    | 53%     |
+| DONE_IN_CODE (recommend close)          | 23    | 23%     |
+| PARTIAL (recommend re-scope, keep open) | 17    | 17%     |
+| UNCLEAR (needs targeted follow-up)      | 7     | 7%      |
+
+**Headline finding:** the user's hypothesis is confirmed — **23 of 99 (23%) Urgent/High
+Backlog tickets are already fully implemented and tested in code**, and a further
+**17 (17%) are partially implemented** with Linear's description no longer matching
+the real remaining gap. Combined, **40% of this slice (40/99) has Linear state that
+lags the codebase**, consistent with the pattern already documented in
+`STORIES.md`'s 2026-09-09 reconciliation note and the hub's
+`OSE_CONSISTENCY_AUDIT_2026-08-12.md`. The majority (53%) are genuinely
+NOT_STARTED — the backlog is not primarily "phantom debt," but the closed/partial
+slice is large enough to be worth a real Linear pass.
+
+## Recommend CLOSE / mark Done (23) — code + tests confirmed
+
+| ID       | Title                                                                       | Evidence                                                                                                                          |
+| -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| OSE-1348 | Revert Bruno CONFIG_ERROR tolerance once FORMS_HASH_PEPPER provisioned      | `workers/oursharedevents/src/handlers/forms.ts:233-250,443-453`; `tests/forms-pepper-preflight.spec.ts`                           |
+| OSE-1346 | PUT /admin/events/:id enforces event state machine (409 INVALID_TRANSITION) | `src/handlers/events.ts:949-978`; `tests/admin-event-lifecycle-ui.spec.ts:108-114`; `tests/qr-verify.spec.ts`                     |
+| OSE-1344 | Create Event hierarchical event-type picker (Category → Type)               | `src/lib/event-type-catalog.ts:1-88`; `src/handlers/events.ts:1243-1253`; `tests/event-type-catalog.spec.ts:68-92,192-215`        |
+| OSE-1308 | Impression definition and threshold — a counting rule that can fail         | `src/handlers/event-stats.ts:1-80`; `tests/event-stats.spec.ts` (K=5 suppression/exactness)                                       |
+| OSE-1307 | Sponsor measurement contract: impression must be defensible claim           | `src/handlers/sponsors.ts:1139-1160,1171-1245,1294-1334`; `tests/red-team/impression-privacy.spec.ts:62-156`                      |
+| OSE-1302 | Sponsor confirmation loopback — only confirmed sponsor renders              | `src/handlers/sponsors.ts:1159-1160` (`sponsor_accepted=1` gate); `tests/sponsor-signal-anonymity.spec.ts:78-84`                  |
+| OSE-1280 | authZ mutation slice 3 — extractAdminActor untested                         | `src/auth/admin.ts:194` used across handlers; `tests/red-team/auth-boundary.spec.ts:521-545`                                      |
+| OSE-1267 | Sponsorship page admin curation card (accept/decline)                       | `src/handlers/sponsors.ts:1159-1160`; `tests/sponsor-home.spec.ts:255-310`                                                        |
+| OSE-1226 | OSE-946 c4 — slim workers project, restore parallelism                      | `docs/testing/vitest-pool-triage.md`; `scripts/vitest-retry.mjs`; `vitest.config.mts` maxWorkers fix                              |
+| OSE-1216 | Branch-protection truth — phantom S2 required check                         | `scripts/audit-required-checks.mjs`; `tests/unit/ci/required-checks-audit.test.js`; `scripts/apply-branch-protection.mjs --check` |
+| OSE-1176 | Story A1 — pw-guarded.sh fail-closed on all-skipped                         | `scripts/pw-guarded.sh` Gate 0b; `tests/unit/ci-gate0-discovery.test.js` (OSE-1170)                                               |
+| OSE-1149 | Warehouse grain: floor at read, not write                                   | `src/lib/shared-report.ts`; `shared-report-builder.ts` applyCountFloor; `docs/features/SHARED-REPORT-L1-MATRIX.md:138,240,252`    |
+| OSE-1129 | Hub workspace typecheck gap (audit itself)                                  | `ourCommunityRituals/eslint.config.js:51-63` documents gap explicitly; typecheck scripts added                                    |
+| OSE-1125 | Open-redirect guard on stale-event forward has no test                      | `src/lib/event-staleness.ts:48,73-90`; `tests/qr-staleness.spec.ts:79-118`                                                        |
+| OSE-1124 | Dead checkins/registrations tables hold PII outside retention cron          | `migrations/0005_create_checkins_registrations.sql`; `src/index.ts:184-263` retention lifecycle                                   |
+| OSE-1101 | T4d: /sharedReport renders with minted signed-link token                    | `tests/shared-report-read-depth-wiring.spec.ts:1-160` (OSE-714)                                                                   |
+| OSE-1074 | S3.1 — cache Playwright browsers + de-dup CI                                | `.github/workflows/oursharedevents-ci.yml`; `docs/qa/E2E_PLAYWRIGHT_GUIDE.md`                                                     |
+| OSE-1070 | S2.1 — classify tests/e2e, engine tiering                                   | `playwright.component.config.ts:55,89,110` (Chromium+WebKit, fullyParallel)                                                       |
+| OSE-1067 | S1.2 — mutation-score floors on privacy/security modules                    | `workers/oursharedevents/stryker.conf.mjs:14-16,36-52,63` (95/95/95 thresholds on count-floor/report-depth/pii/auth)              |
+| OSE-1066 | S1.1 — Stryker pilot baseline                                               | `package.json:14,32`; `stryker.conf.mjs:36-63`                                                                                    |
+| OSE-1061 | F1 — mutation testing (Stryker) proves suite catches faults                 | same Stryker config as above                                                                                                      |
+| OSE-1055 | Decide ADR numbering namespace before ADR-0001                              | `docs/adr/ADR-017-sharedreport-depth-enforcement.md:8,31,148,164` resolves this re: OSE-815                                       |
+| OSE-1050 | Blocking staleness gate for conformance meter                               | `.github/workflows/conformance-report.yml`; `scripts/generate-conformance-report.ts`                                              |
+
+## Recommend RE-SCOPE (not close) — partially implemented (17)
+
+| ID       | Title                                                            | What's done                                                                                                                                                                                                                                                                                                                                                                                     | What's still missing                                                                                                                                                                                                                                                                  |
+| -------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OSE-1310 | Authenticated impression write + invalid-traffic filtration      | **IVT filtration now implemented** (`workers/oursharedevents/src/lib/invalid-traffic.ts`): bot/crawler refusal, per-caller replay dedup (5 min), and a write-sized 20/min cadence ceiling, all wired into both write handlers (`sponsors.ts`). Placement gate unchanged (`sponsors.ts:1139-1160`)                                                                                               | Remaining: the **authenticated** half. A signed per-render beacon token (mint in the sponsor bundle, verify on write) is not implemented — the endpoint is still an unauthenticated public beacon, now filtered rather than open                                                      |
+| OSE-1265 | EPIC: Sponsorship Page self-serve+curation+Connect               | Core sponsorship flow (`sponsors.ts:1139-1334`, `sponsor-home.spec.ts`)                                                                                                                                                                                                                                                                                                                         | Full epic (self-serve config→outcome preview, Connect buy-flow) not verified end-to-end                                                                                                                                                                                               |
+| OSE-1221 | legal_clearance_tier type collision                              | Collision is baselined/allowed as known legacy drift (`scripts/check-column-type-collisions.mjs`)                                                                                                                                                                                                                                                                                               | Underlying type collision itself not resolved                                                                                                                                                                                                                                         |
+| OSE-1215 | Delete GAS-era scratch files, verify decommission                | `scripts/guard-no-gas.js` CI guard exists; `archive/` documented as legacy-preserved                                                                                                                                                                                                                                                                                                            | No confirmation the repo-root scratch files were actually deleted                                                                                                                                                                                                                     |
+| OSE-1151 | Invariant constitution reconciled against code/docs              | `CONFORMANCE.md` + `threat-ledger.yaml` exist                                                                                                                                                                                                                                                                                                                                                   | No implementation resolving the `live`-vs-no-PR-gate mismatch itself                                                                                                                                                                                                                  |
+| OSE-1147 | Invariant #25 auditability for local sponsors                    | General auditability infra exists                                                                                                                                                                                                                                                                                                                                                               | No local-sponsor-facing rotation-floor verification flow found                                                                                                                                                                                                                        |
+| OSE-1146 | ADR + brain: unit of publication/epoch sealing/dominance ceiling | Read/write floor logic exists (`shared-report-builder.ts`, `count-floor.ts`)                                                                                                                                                                                                                                                                                                                    | No ADR/brain doc confirming the full package is complete                                                                                                                                                                                                                              |
+| OSE-1145 | Venue identity entity — remove venue_id=eventId shortcut         | —                                                                                                                                                                                                                                                                                                                                                                                               | `src/handlers/events.ts:1061-1062` **explicitly confirms the shortcut is still in place** — real, unclosed gap                                                                                                                                                                        |
+| OSE-1140 | Display #25 conformance contract + staging E2E                   | Conformance/audit infra exists generally                                                                                                                                                                                                                                                                                                                                                        | Exact contract + staging E2E for this specific display rule not found                                                                                                                                                                                                                 |
+| OSE-1130 | Reconcile @ocr/ui onto @ocr/tokens                               | Both packages exist and wired (`ourCommunityRituals/packages/tokens`, `packages/ui`)                                                                                                                                                                                                                                                                                                            | `eslint.config.js:59` — only `packages/*` source typechecked; full reconciliation incomplete                                                                                                                                                                                          |
+| OSE-1123 | DB.subscribers uncapped PII retention (Invariant #8)             | Retention lifecycle + cron exist (`workers/oursharedevents/src/index.ts:318-336`); default guard in `wrangler.toml` and code now enforce 365-day retention                                                                                                                                                                                                                                      | Resolved in code: unset precedence now falls back to a 365-day bounded window; explicit non-positive values disable the sweep                                                                                                                                                         |
+| OSE-1091 | Scan-ingest pipeline on Queues+Cron                              | Queue consumer exists (`src/index.ts:56-58,72-80` `handleScanBatch`); **prune-raw stage now implemented** (`workers/oursharedevents/src/lib/scan-raw-prune.ts`, wired into `scheduled()`) with three interlocks: event must already have a `scan_aggregates` row, pepper must be set, and buckets prune all-or-nothing (a partial bucket made the rollup silently undercount — caught born-red) | **Closed as designed.** Ruling 2026-09-22: QR scan data is retained indefinitely as the event's historical record, so the prune ships disabled (`SCAN_RAW_PRUNE_DAYS = "0"`) and exists as a ready mechanism only. Bounded retention applies to FORMS_DB and `subscribers`, not scans |
+| OSE-1064 | Device/engine coverage tiering                                   | Chromium+WebKit tiering exists (`playwright.component.config.ts`)                                                                                                                                                                                                                                                                                                                               | Mobile matrix / nightly sweep not found                                                                                                                                                                                                                                               |
+| OSE-1063 | CI cost levers: same coverage, fewer minutes                     | Some tiered-pipeline cost controls exist                                                                                                                                                                                                                                                                                                                                                        | No clear end-to-end "same coverage, fewer minutes" proof                                                                                                                                                                                                                              |
+| OSE-1062 | Pyramid rebalance: demote assertions to cheapest layer           | Some demotion to Stryker-tested pure logic                                                                                                                                                                                                                                                                                                                                                      | Full rebalance across all assertions unverified                                                                                                                                                                                                                                       |
+| OSE-1060 | EPIC: Test Coverage Economics                                    | Mutation-floor work exists (S1.1/S1.2/S2.1 above)                                                                                                                                                                                                                                                                                                                                               | Epic is broader than the verified sub-slices                                                                                                                                                                                                                                          |
+| OSE-1048 | EPIC: participant-choice as enforced capability                  | `forbidden-join-boundary.spec.ts` / `forbidden-join-blindness.spec.ts` exist                                                                                                                                                                                                                                                                                                                    | Full epic scope (first-class enforced capability) unverified                                                                                                                                                                                                                          |
+
+## Needs targeted follow-up (UNCLEAR, 7) — do not auto-close or auto-narrow
+
+| ID       | Title                                                              | Why unclear                                                                                                                                                |
+| -------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OSE-1337 | Red-team cold-open→flywheel scenario                               | Red-team auth-boundary tests exist but not the specific never-who/re-id/floor-consistency scenario named                                                   |
+| OSE-1211 | Cloudflare bot challenge blocks /events/:id previews               | Bot-controls docs + a CF-access probe test exist; no verified in-code behavior for this specific page                                                      |
+| OSE-1175 | Per-flow Security Ledger                                           | Only a cross-repo discovery-doc mention found; no implementation or tests                                                                                  |
+| OSE-1148 | BigQuery readiness audit                                           | No concrete audit artifact found beyond generic auditability mentions                                                                                      |
+| OSE-1142 | EPIC: Unit of publication (scope/dominance/sealing/venue identity) | Sub-pieces exist but full epic scope unverified — likely should be split into the sub-tickets already covered elsewhere in this table (OSE-1145/1146/1147) |
+| OSE-1132 | EPIC: SharedReport Map render-by-type                              | Related shared-render work found in `@ocr/ui`, not the specific privacy-critical render-by-type epic                                                       |
+| OSE-1126 | Covenant drift check false-green when brain absent                 | Auditability docs/threat-ledger exist; no direct implementation proving this specific false-green fix                                                      |
+
+## NOT_STARTED (52) — legitimate, unchanged
+
+The remaining 52 tickets (53% of this slice) had no code, test, or doc evidence
+found and should remain open as-is. Full per-ticket detail (including several that
+are explicitly **non-code operational tasks** — OSE-1209 field test, OSE-1208
+UX panel, OSE-1115 legal/counsel engagement — which cannot be "found in code" by
+definition and are correctly tracked as backlog work, not code drift) is in the
+session audit log; see IDs: OSE-1340, OSE-1337(see UNCLEAR), OSE-1318, OSE-1269,
+OSE-1248, OSE-1244, OSE-1241, OSE-1231, OSE-1229, OSE-1227, OSE-1222, OSE-1214,
+OSE-1212, OSE-1209, OSE-1208, OSE-1198, OSE-1195, OSE-1193, OSE-1189, OSE-1185,
+OSE-1182, OSE-1181, OSE-1180, OSE-1178, OSE-1177, OSE-1153, OSE-1152, OSE-1150,
+OSE-1144, OSE-1143, OSE-1133, OSE-1122, OSE-1120, OSE-1117, OSE-1116, OSE-1115,
+OSE-1114, OSE-1109, OSE-1108, OSE-1107, OSE-1099, OSE-1097, OSE-1092, OSE-1090,
+OSE-1079, OSE-1041, OSE-1039, OSE-1038, OSE-1037, OSE-1034, OSE-1033, OSE-1032,
+OSE-1029.
+
+## Documentation gaps observed in passing
+
+Several DONE_IN_CODE items are implemented but their existence is not surfaced in
+top-level docs a newcomer would read first (`CLAUDE.md`, `STORIES.md`, `README.md`):
+mutation-testing/Stryker setup (OSE-1061/1066/1067), the branch-protection audit
+tooling (OSE-1216), and the conformance-report generator (OSE-1050) are all real,
+tested, wired-into-CI systems with no one-line pointer from `STORIES.md`. Given
+`STORIES.md`'s own 2026-09-09 note ("~60 OSE-#### tickets have merged that this
+table does not model"), recommend a follow-up documentation pass rather than
+re-auditing further — the code-vs-Linear drift is now itemized above.
+
+## Caveats
+
+- No live Linear read/write occurred; every "recommend close" above needs a human
+  (or a session with working `mcp__linear__*`) to actually apply it in Linear.
+- This covers only 99 of the 312 Urgent/High Backlog tickets (the highest-numbered
+  slice from the manual export). The remaining ~213 Urgent/High tickets and all
+  Medium/Low/No-priority tickets (708 total Backlog) are out of scope for this pass.
+- Verdicts are evidence-based but time-boxed (a few searches per ticket); UNCLEAR
+  items in particular should not be treated as either DONE or NOT_STARTED without
+  a closer look.
