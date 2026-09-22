@@ -13,6 +13,7 @@ import { runSharedReportMaterialization } from './handlers/shared-report-materia
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
+import { runScanReturnsRetention } from './lib/scan-returns-retention';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
@@ -92,6 +93,14 @@ export default {
     // runDraftExpiry (lib/draft-expiry.ts) touches DB.events ONLY: archives
     //   (never deletes) drafts untouched for DRAFT_EXPIRY_DAYS (default 30;
     //   0 = off). Future-dated drafts are left alone. Audits to admin_audit_log.
+    // runScanReturnsRetention (lib/scan-returns-retention.ts, OSE-1351) reads
+    //   DB.scan_node_returns + DB.anon_id_returns ONLY; off by default
+    //   (env.SCAN_RETURNS_RETENTION_DAYS unset → no-op — Q3-ratified "no
+    //   table-level windowing" stays the default until an explicit ruling
+    //   sets the knob). When set, deletes rows older than the window from
+    //   both tables independently. Does NOT touch the ose_anon cookie
+    //   lifetime — that remains a separate open decision. Audits to
+    //   admin_audit_log.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
@@ -101,6 +110,7 @@ export default {
         runSharedReportBigQueryExport(env),
         runSecurityMetricsCron(env),
         runDraftExpiry(env),
+        runScanReturnsRetention(env),
       ])
     );
   },

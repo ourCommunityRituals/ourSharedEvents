@@ -294,6 +294,17 @@ export type RouterEnv = PagesEnv &
     // Set this alongside the key whenever rotating; the security cron uses it
     // to alert when the key age exceeds the 90-day rotation window.
     FORMS_KEY_ROTATED_AT?: string;
+    /**
+     * OSE-1351 — scan_node_returns / anon_id_returns TTL retention window in
+     * days. Optional; unset → uncapped (no windowing at the table level,
+     * per the Q3-ratified decision in migrations/0031_create_anon_id_returns.sql).
+     * Read by the scheduled `runScanReturnsRetention` job in
+     * `lib/scan-returns-retention.ts`. Setting this is the documented way to
+     * layer a bounded retention window on top of Q3 once that ruling is made
+     * — it is independent of the OSE-1350 data-subject erasure path, which
+     * purges by email on demand regardless of this window.
+     */
+    SCAN_RETURNS_RETENTION_DAYS?: string;
   };
 
 export async function route(

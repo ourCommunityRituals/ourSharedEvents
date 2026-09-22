@@ -94,11 +94,25 @@ failure, if that pepper is unset). See `tests/data-subject.spec.ts`.
 This closes the erasure path for any visitor who ever submitted a form with
 an email. It does **not** close the gap for a visitor who only ever scanned
 QR codes and never gave an email — there is still no identifying credential
-to erase by for that visitor, and their `scan_node_returns` /
-`anon_id_returns` rows persist indefinitely today. Remaining open follow-up
-(not yet decided): a retention/TTL policy for `scan_node_returns` /
-`anon_id_returns` that ages out rows independent of any erasure request, and/or
-rotating or shortening the `ose_anon` cookie lifetime.
+to erase by for that visitor.
+
+OSE-1351 (follow-up, tracked separately) adds the mechanism half of the
+remaining gap: `lib/scan-returns-retention.ts` is a new scheduled job
+(wired into the same `scheduled()` cron as the other lifecycle jobs in
+`src/index.ts`) that can delete `scan_node_returns` rows by `created_at` and
+`anon_id_returns` rows by `last_seen_at` once `SCAN_RETURNS_RETENTION_DAYS`
+is set. It ships **off by default** — unset, both tables remain unbounded,
+same as today — because Q3 (2026-05-15, see
+`migrations/0031_create_anon_id_returns.sql`) already ratified "no
+table-level windowing" as the default, and defaulting a delete job to "on"
+would silently overturn that ruling rather than layer an explicit ops
+decision on top of it. Enabling a bounded window (a scan-only visitor's only
+real erasure lever, since they have no email to erase by) is therefore still
+a pending decision, not yet made. Rotating or shortening the `ose_anon`
+cookie lifetime (`lib/anonymous-id.ts`, currently `Max-Age=1yr`) is also
+still open — OSE-1351 deliberately left it untouched since it changes
+every visitor's cross-session recognition behavior and needs its own
+product ruling, not a data-lifecycle-job PR.
 
 ## Supply-chain security
 
