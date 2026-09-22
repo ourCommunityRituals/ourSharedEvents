@@ -59,6 +59,19 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 },
+    // OSE-1310 / OSE-306: default headless Chromium sends `HeadlessChrome/...`
+    // as its User-Agent. OSE-306 already found Cloudflare Bot Management
+    // 403-challenging that exact UA on staging (see the UA override in
+    // playwright.config.ts). classifyBeacon() (OSE-1310, invalid-traffic.ts)
+    // now ALSO treats it as automated traffic on the impression/click write
+    // path — not a 403, but a silent 202 "accepted, not counted" — so T4a's
+    // functional checks against real staging (ncr-accumulation, anonymous-id,
+    // sponsor-journey) stopped seeing their writes land. This suite drives a
+    // real browser to prove the real pipeline works; it is not a bot, so it
+    // must present a real-browser UA like every other staging Playwright
+    // config already does. Guarded by tests/unit/playwright-ua-override.test.ts.
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   },
 
   projects: [

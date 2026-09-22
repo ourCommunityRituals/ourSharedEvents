@@ -59,3 +59,43 @@ describe('OSE-306 Playwright UA override — regression guard', () => {
     expect(config).toMatch(/Cloudflare|CF|bot[- ]?challenge/i);
   });
 });
+
+/**
+ * OSE-1310 regression guard for the e2e-smoke Playwright UA override.
+ *
+ * playwright.e2e-smoke.config.ts is what T4a/T4b/etc. actually run against
+ * real staging (playwright.config.ts above is mobile-workability only). Its
+ * `devices['Desktop Chrome']` project defaults to headless Chromium's
+ * `HeadlessChrome/...` UA, which classifyBeacon() (invalid-traffic.ts,
+ * OSE-1310) treats as automated traffic on the impression/click write path —
+ * a silent 202 "not counted" instead of the 201 these functional checks
+ * assert. If a future edit drops this override, that collision comes back
+ * and fails at PR-time here, not as a mystery staging-only red.
+ */
+describe('OSE-1310 e2e-smoke UA override — regression guard', () => {
+  const SMOKE_CONFIG_PATH = join(process.cwd(), 'playwright.e2e-smoke.config.ts');
+
+  test('playwright.e2e-smoke.config.ts exists at OSE root', () => {
+    expect(existsSync(SMOKE_CONFIG_PATH)).toBe(true);
+  });
+
+  test('config sets a non-HeadlessChrome userAgent (avoids the IVT bot classifier)', () => {
+    const config = readFileSync(SMOKE_CONFIG_PATH, 'utf8');
+    expect(config).toMatch(/userAgent\s*:/);
+    const stripped = config.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const uaLiterals = stripped.match(/['"]Mozilla[^'"]+['"]/g) ?? [];
+    expect(uaLiterals.length).toBeGreaterThan(0);
+    for (const literal of uaLiterals) {
+      expect(
+        literal,
+        `UA literal contains "Headless" — classifyBeacon() will drop writes as bot traffic: ${literal}`
+      ).not.toMatch(/Headless/i);
+    }
+  });
+
+  test('config references OSE-1310 in change comments (provenance trace)', () => {
+    const config = readFileSync(SMOKE_CONFIG_PATH, 'utf8');
+    expect(config).toContain('OSE-1310');
+    expect(config).toMatch(/classifyBeacon|invalid-traffic|IVT/i);
+  });
+});
