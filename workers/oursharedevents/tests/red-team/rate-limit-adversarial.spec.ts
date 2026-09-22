@@ -29,6 +29,7 @@ import {
   RATE_LIMIT_WINDOW_MS,
   _deleteRateLimitKey,
 } from '../../src/lib/rate-limit';
+import { IMPRESSION_WRITE_MAX } from '../../src/lib/invalid-traffic';
 
 // ─── Test env bindings ───────────────────────────────────────────────────────
 
@@ -41,6 +42,17 @@ interface TestEnv {
 }
 
 const tenv = () => env as unknown as TestEnv;
+
+/** Rows actually written into the sponsor proof layer for one (event, sponsor). */
+async function impressionRowCount(eventId: string, sponsorId: string): Promise<number> {
+  const row = await tenv()
+    .DB.prepare(
+      'SELECT COUNT(*) AS c FROM sponsor_impressions WHERE event_id = ? AND sponsor_id = ?'
+    )
+    .bind(eventId, sponsorId)
+    .first<{ c: number }>();
+  return row?.c ?? 0;
+}
 
 // ─── DB + KV setup ───────────────────────────────────────────────────────────
 
@@ -362,7 +374,7 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
     }
   });
 
-  test('POST sponsor impression endpoint has no rate limit — can be flooded', async () => {
+  test('POST sponsor impression flooding no longer reaches the proof layer (OSE-1310)', async () => {
     // Seed a sponsor if possible (best-effort). OSE-799 A2: split model.
     try {
       await seedSplitSponsor(tenv().DB, {
@@ -375,28 +387,67 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
       /* already exists or table structure differs */
     }
 
-    const ip = 'impression-flood-10.0.0.1';
-    // Send many impression requests — these have no rate limit
-    const impressionResults = await Promise.all(
-      Array.from({ length: 20 }, () =>
-        SELF.fetch('http://localhost/api/v2/events/evt_rl_test/sponsors/spon_rl_test/impression', {
+    // This test used to ASSERT the gap: it sent 20 beacons, observed no 429,
+    // and recorded "impression flooding confirmed". That was accurate when the
+    // endpoint had no control in front of it, and stayed green afterwards for
+    // the wrong reason — the 120/min READ allowance later added to the route is
+    // too generous to bite at 20 requests, so the test could not tell a
+    // hardened endpoint from an unprotected one.
+    //
+    // OSE-1310 makes the question answerable: what matters is not the status
+    // code but whether a flood becomes ROWS in the proof layer. It must not.
+    const ip = '192.0.2.77';
+    const before = await impressionRowCount('evt_rl_test', 'spon_rl_test');
+
+    // Vary `placement` so dedup is not what is under test — this isolates the
+    // write-cadence ceiling from the replay control.
+    for (let i = 0; i < 40; i++) {
+      await SELF.fetch(
+        'http://localhost/api/v2/events/evt_rl_test/sponsors/spon_rl_test/impression',
+        {
           method: 'POST',
           headers: {
             'CF-Connecting-IP': ip,
             'Content-Type': 'application/json',
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ surface: 'public', placement: `slot-${i}` }),
+        }
+      );
+    }
+
+    const written = (await impressionRowCount('evt_rl_test', 'spon_rl_test')) - before;
+    console.log(`[RL-005] 40 flood beacons → ${written} rows written`);
+    expect(written).toBeLessThan(40);
+    expect(written).toBeLessThanOrEqual(IMPRESSION_WRITE_MAX + 1);
+  });
+
+  test('a scripted flood with no User-Agent writes NOTHING (OSE-1310)', async () => {
+    try {
+      await seedSplitSponsor(tenv().DB, {
+        id: 'spon_rl_bot',
+        eventId: 'evt_rl_bot',
+        brandId: 'brand_rl',
+        name: 'Bot Target',
+      });
+    } catch {
+      /* already exists */
+    }
+
+    const before = await impressionRowCount('evt_rl_bot', 'spon_rl_bot');
+    // The shape of the original attack in this file: raw scripted POSTs.
+    await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        SELF.fetch('http://localhost/api/v2/events/evt_rl_bot/sponsors/spon_rl_bot/impression', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': '192.0.2.78', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ surface: 'public', placement: `slot-${i}` }),
         })
       )
     );
-    // None should be 429 — confirms no rate limiting on this endpoint
-    const statusCodes = impressionResults.map((r) => r.status);
-    const has429 = statusCodes.includes(429);
-    console.log(`[RL-005] Impression endpoint: ${statusCodes.join(', ')}`);
-    expect(has429).toBe(false);
-    console.log(
-      '[RL-005] Impression flooding confirmed: no rate limit on POST /sponsors/:id/impression'
-    );
+
+    expect(await impressionRowCount('evt_rl_bot', 'spon_rl_bot')).toBe(before);
   });
 });
 
