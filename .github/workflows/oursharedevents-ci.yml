@@ -2076,6 +2076,12 @@ jobs:
           # "boring OK" for NS-3. Covered at provisioning (set-secrets.sh) + the
           # T4 /sponsor journey (CCR-PR567 re-run item 5, revised).
 
+      - name: 'Gate: production route uses production Cloudflare Access app'
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          EXPECTED_ACCESS_HOST: oursharedevents.com
+        run: node scripts/assert-access-routing.mjs
+
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)
   #
