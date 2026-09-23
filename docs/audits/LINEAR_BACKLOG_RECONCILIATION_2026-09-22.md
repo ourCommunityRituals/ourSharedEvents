@@ -128,6 +128,27 @@ OSE-1114, OSE-1109, OSE-1108, OSE-1107, OSE-1099, OSE-1097, OSE-1092, OSE-1090,
 OSE-1079, OSE-1041, OSE-1039, OSE-1038, OSE-1037, OSE-1034, OSE-1033, OSE-1032,
 OSE-1029.
 
+## New finding discovered during OSE-1064 follow-up (not a reconciled ticket — a live production defect)
+
+While investigating OSE-1064 ("Device/engine coverage tiering"), confirmed the
+test infrastructure it describes already exists and runs
+(`.github/workflows/mobile-workability-audit.yml`: nightly cron `30 9 * * *`,
+`pr-code` + `nightly-staging` jobs, Chromium+WebKit device projects, covering
+Invariant #14 mobile workability — touch targets, no horizontal scroll,
+font-size, CTA above fold, no pinch-zoom block). That is unrelated to this
+finding.
+
+Separately, the **`nightly-staging` job has failed its last 5 consecutive
+scheduled runs** (`35737835486`, `35622375534`, `35514032850`, `35445144303`,
+`35351649822`) with 2 real touch-target violations (< 44×44px) on deployed
+staging's `/` (landing) and `/events` (public listing) pages, observed at
+375×812 on the "Desktop Safari" Playwright project. This is a genuine,
+unaddressed product/UI defect — not CI flakiness, and not something an
+autonomous docs/CI PR should silently "fix" without design input. Recommend a
+dedicated Linear ticket (Urgent/High, UI/a11y) to size and land the touch-target
+fix on those two pages; this reconciliation pass does not change any ticket's
+verdict as a result of this finding.
+
 ## Documentation gaps observed in passing
 
 Several DONE_IN_CODE items are implemented but their existence is not surfaced in
