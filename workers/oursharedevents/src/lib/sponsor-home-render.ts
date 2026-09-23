@@ -26,6 +26,7 @@ export interface PlacementRow {
   placement_id: string;
   event_id: string;
   tier: string;
+  source?: string;
   locality_band: number;
   organizer_accepted: number | null;
   sponsor_accepted: number | null;
@@ -50,9 +51,18 @@ export function humanDate(iso: string | null): string {
   });
 }
 
+export interface AvailableEventRow {
+  id: string;
+  title: string;
+  start_date: string | null;
+  location: string | null;
+}
+
 export interface SponsorHomeRenderInput {
   sponsor: { id: string; name: string };
   placements: PlacementRow[];
+  /** Other events in this sponsor's brand they could request attachment to. */
+  availableEvents?: AvailableEventRow[];
   /** ISO timestamp the link expires — rendered human-friendly. */
   expiresIso: string;
   /**
@@ -64,9 +74,13 @@ export interface SponsorHomeRenderInput {
   reportLinkFor?: (eventId: string) => string | null;
 }
 
+// Must match SPONSOR_REQUESTED_SOURCE in handlers/sponsor-event-request.ts.
+// Duplicated as a literal (not imported) so this lib stays handler-independent.
+const SPONSOR_REQUESTED_SOURCE = 'sponsor_requested';
+
 /** Build the full /sponsor page HTML (populated or empty). Pure — no env/DB. */
 export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
-  const { sponsor, placements, expiresIso, reportLinkFor } = input;
+  const { sponsor, placements, availableEvents = [], expiresIso, reportLinkFor } = input;
 
   let live = 0;
   let upcoming = 0;
@@ -82,6 +96,11 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
     const publicOk = canRender(state, 'public');
     const isPending = p.sponsor_accepted == null;
     const declined = p.sponsor_accepted === 0;
+    // A request THIS sponsor initiated (source=sponsor_requested) still needs
+    // the ORGANIZER'S answer, distinct from the sponsor's own pending/declined
+    // state above (they already implicitly accepted by asking, ADR-019).
+    const awaitingOrganizer =
+      p.source === SPONSOR_REQUESTED_SOURCE && p.organizer_accepted !== 1 && !declined;
     if (isPending) pending++;
     if (publicOk && phase === 'event') live++;
     if (publicOk && phase === 'pre_event') upcoming++;
@@ -101,7 +120,13 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
       stateLabel = 'Organizer still setting up';
       stateCls = 'done';
     }
-    const answerLabel = isPending ? 'Please confirm' : declined ? 'Declined' : 'Accepted';
+    const answerLabel = isPending
+      ? 'Please confirm'
+      : declined
+        ? 'Declined'
+        : awaitingOrganizer
+          ? 'Waiting for organizer'
+          : 'Accepted';
     const answerCls = isPending ? 'pending' : declined ? 'declined' : 'live';
 
     const links: string[] = [];
@@ -132,6 +157,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
         <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
         <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
         ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting shows your name on this event's page, poster, and live screen.</p>` : ''}
+        ${awaitingOrganizer ? `<p class="sh-why" data-testid="placement-awaiting-organizer">You requested this event. It won't appear anywhere until the organizer accepts.</p>` : ''}
         <div class="sh-actions">${links.join('')}${respond}</div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
       </article>`
@@ -143,6 +169,23 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
       ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>`
       : `<p class="sh-section-title">Your placements</p><div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`;
 
+  const availableCards = availableEvents.map(
+    (e) =>
+      `<article class="sh-card" data-testid="available-event-card" data-event-id="${esc(e.id)}">
+        <h2 data-testid="available-event-title">${esc(e.title)}</h2>
+        <p class="sh-when" data-testid="available-event-when">${esc(humanDate(e.start_date))}</p>
+        <p class="sh-meta">${e.location ? esc(e.location) : ''}</p>
+        <div class="sh-actions">
+          <button type="button" class="btn btn-primary" data-action="request-event" data-event-id="${esc(e.id)}" data-testid="request-event-btn">Request this event</button>
+        </div>
+        <p class="sh-msg" role="status" aria-live="polite"></p>
+      </article>`
+  );
+  const availableSection =
+    availableCards.length === 0
+      ? ''
+      : `<p class="sh-section-title">Request another event</p><p class="sh-meta" data-testid="available-events-hint">Other events in your brand you don't yet have a placement for. Requesting sends it to the organizer for review — nothing shows publicly until they accept.</p><div class="sh-list" data-testid="available-events-list">${availableCards.join('')}</div>`;
+
   // injectMarker (not String.replace) so a sponsor name or placement markup
   // carrying a `$` cannot splice the trusted page shell (CCR-PR567 H1).
   let page = injectMarker(SPONSOR_HOME_HTML, '<!--OCR_SPONSOR_ID-->', esc(sponsor.id));
@@ -151,6 +194,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
   page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
   page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list);
+  page = injectMarker(page, '<!--OCR_AVAILABLE_EVENTS-->', availableSection);
   page = injectMarker(page, '<!--OCR_EXPIRES-->', esc(humanDate(expiresIso)));
 
   return injectLegalFooter(page, 'public');

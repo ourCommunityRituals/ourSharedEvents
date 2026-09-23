@@ -238,8 +238,14 @@ describe('OSE-736 — is_active writer enumeration (truthful, not "sole writer")
       .sort();
 
     // The ONLY writers: the admin sponsor handlers (create + soft-delete, admin-
-    // gated + brand-scoped) and the promotion lib (covenant + brand gated). If a
-    // new writer appears, this test fails until it is reviewed and enumerated.
-    expect(writers).toEqual(['src/handlers/sponsors.ts', 'src/lib/sponsor-promotion.ts']);
+    // gated + brand-scoped), the promotion lib (covenant + brand gated), and the
+    // sponsor-event-request handler (sponsor-home-token-gated create; admin
+    // brand-scoped accept/decline — OSE sponsor-event-request slice). If a new
+    // writer appears, this test fails until it is reviewed and enumerated.
+    expect(writers).toEqual([
+      'src/handlers/sponsor-event-request.ts',
+      'src/handlers/sponsors.ts',
+      'src/lib/sponsor-promotion.ts',
+    ]);
   });
 });

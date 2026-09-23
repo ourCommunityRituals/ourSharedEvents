@@ -147,6 +147,12 @@ import {
   type SponsorOnboardEnv,
 } from './handlers/sponsor-onboard';
 import {
+  handleSponsorPlacementRequest,
+  handleAdminListPendingSponsorRequests,
+  handleAdminRespondToSponsorRequest,
+  type SponsorEventRequestEnv,
+} from './handlers/sponsor-event-request';
+import {
   logAdminAction,
   logReportAccess,
   logExportManifest,
@@ -270,6 +276,7 @@ export type RouterEnv = PagesEnv &
   AdminObjectScopeEnv &
   SponsorHomeEnv &
   SponsorOnboardEnv &
+  SponsorEventRequestEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -766,6 +773,33 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminSponsorOutcomePreview(request, env);
+  }
+
+  // GET /api/v2/admin/sponsors/requests/pending — pending sponsor-initiated
+  // per-event requests awaiting organizer accept/decline (brand-scoped inside
+  // the handler). Placed BEFORE the /:id matchers so 'requests' is never
+  // parsed as a sponsor id.
+  if (pathname === '/api/v2/admin/sponsors/requests/pending' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListPendingSponsorRequests(request, env);
+  }
+
+  // POST /api/v2/admin/sponsors/requests/:id/respond — accept or decline one
+  // pending sponsor-initiated request. Brand-scoped + audited inside the
+  // handler (source pinned to sponsor_requested — can never touch an
+  // organizer-authored or corridor_covenant placement).
+  const sponsorRequestRespondMatch = pathname.match(
+    /^\/api\/v2\/admin\/sponsors\/requests\/([^/]+)\/respond$/
+  );
+  if (sponsorRequestRespondMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'SPONSOR_REQUEST_RESPOND', 'denied', 'sponsor', sponsorRequestRespondMatch[1]);
+      return deny;
+    }
+    return handleAdminRespondToSponsorRequest(request, env, sponsorRequestRespondMatch[1]);
   }
 
   // POST /api/v2/admin/sponsors/promote — promote a sponsor onboarding draft to a
@@ -1280,6 +1314,15 @@ export async function route(
       (req, e: typeof env) => handleSponsorPlacementRespond(req, e, placementRespondMatch[1]),
       60
     )(request, env);
+  }
+
+  // POST /api/v2/sponsor/placements/request — sponsor requests attachment to
+  // ANOTHER event in their own brand (not the invite-scoped one), from their
+  // own /sponsor page. Authorized by the sponsor-home token in the body (never
+  // admin); tenant + ownership proven in SQL inside the handler. Rate-limited
+  // like /respond, same rationale (CCR-PR567 re-run item 9 pattern).
+  if (pathname === '/api/v2/sponsor/placements/request' && method === 'POST') {
+    return publicReadLimited('sponsor-request', handleSponsorPlacementRequest, 30)(request, env);
   }
 
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).

@@ -51,6 +51,7 @@ import {
   type SponsorHomeAuthEnv,
 } from '../lib/sponsor-home-auth';
 import { mintSignedLinkToken, type SharedReportAuthEnv } from '../lib/shared-report-auth';
+import { listAvailableEventsForSponsor } from './sponsor-event-request';
 
 export interface SponsorHomeEnv
   extends
@@ -162,7 +163,7 @@ export async function handleSponsorHomePage(
   if (!sponsor || Number(sponsor.is_active) === 0) return invalidLinkPage();
 
   const rows = await env.DB.prepare(
-    `SELECT sp.id AS placement_id, sp.event_id, sp.tier, COALESCE(sp.locality_band, 0) AS locality_band,
+    `SELECT sp.id AS placement_id, sp.event_id, sp.tier, sp.source, COALESCE(sp.locality_band, 0) AS locality_band,
             sp.organizer_accepted, sp.sponsor_accepted, sp.is_active AS placement_active,
             e.title, e.status, e.start_date, e.end_date, e.location, e.is_published
        FROM sponsor_placement sp
@@ -174,6 +175,11 @@ export async function handleSponsorHomePage(
     .bind(sponsor.id, claim.brand_id)
     .all<PlacementRow>();
   const placements = rows.results ?? [];
+
+  // Other events in this sponsor's own brand they don't already hold a
+  // placement for (any status) — lets an already-onboarded sponsor request
+  // attachment to ONE more event without waiting on a fresh organizer invite.
+  const availableEvents = await listAvailableEventsForSponsor(env.DB, sponsor.id, claim.brand_id);
 
   // Pre-mint the sponsor-scoped SharedReport links (async, env-bound) into a
   // lookup so the page render stays PURE — a11y- + XSS-testable with no env/DB
@@ -198,6 +204,7 @@ export async function handleSponsorHomePage(
   const page = renderSponsorHomePage({
     sponsor: { id: sponsor.id, name: sponsor.name },
     placements,
+    availableEvents,
     expiresIso: new Date(claim.exp * 1000).toISOString(),
     reportLinkFor: (eventId) => reportLinks.get(eventId) ?? null,
   });

@@ -1168,6 +1168,22 @@
         cursor: pointer;
         transition: background 0.2s;
       }
+      /* Pending sponsor-initiated per-event requests (born alongside the
+         sponsor-event-request slice) — no inline style=, per OSE-1239. */
+      #sponsor-requests-section {
+        margin-top: 1.5rem;
+      }
+      #sponsor-requests-section h3 {
+        margin: 0 0 0.5rem;
+      }
+      .spon-request-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border, #e2e2e2);
+      }
       .add-spon-btn:hover {
         background: var(--accent-hover);
       }
@@ -2238,6 +2254,15 @@
           },
           'reload-page': function () {
             location.reload();
+          },
+          'sponsor-request-accept': function (el) {
+            if (window._respondToSponsorRequest) window._respondToSponsorRequest(argOf(el, 'placement-id'), true, el);
+          },
+          'sponsor-request-decline': function (el) {
+            if (window._respondToSponsorRequest) window._respondToSponsorRequest(argOf(el, 'placement-id'), false, el);
+          },
+          'sponsor-requests-reload': function () {
+            if (window._loadPendingSponsorRequests) window._loadPendingSponsorRequests();
           },
         };
 
@@ -3777,6 +3802,14 @@
           <div class="skeleton skeleton-row"></div>
         </div>
       </div>
+
+      <div id="sponsor-requests-section" data-testid="sponsor-requests-section">
+        <h3>Pending sponsor requests</h3>
+        <p class="loading" data-testid="sponsor-requests-hint">Sponsors who asked to attach themselves to one of your other events, awaiting your accept/decline. Not organizer-added — those never need review.</p>
+        <div id="sponsor-requests-list" data-testid="sponsor-requests-list">
+          <p class="loading" data-testid="sponsor-requests-loading">Loading…</p>
+        </div>
+      </div>
       </div>
     </div>
     <script>
@@ -3890,6 +3923,55 @@
         window._loadSponsors = function() { return loadSponsors(); };
         // Event-row selection drives the scope.
         window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
+
+        // ── Pending sponsor-initiated per-event requests (brand-wide, not
+        // event-scoped like the table above — a sponsor can request ANY of the
+        // brand's events). Accept flips organizer_accepted=1 (resolver-visible);
+        // decline retires the row. ──
+        async function loadPendingSponsorRequests() {
+          const wrap = document.getElementById('sponsor-requests-list');
+          if (!wrap) return;
+          try {
+            const data = await fetch('/api/v2/admin/sponsors/requests/pending').then(function(r) { return r.json(); });
+            if (!data.ok) throw new Error(data.error || 'Load failed');
+            const items = data.requests || [];
+            if (!items.length) {
+              wrap.innerHTML = '<p class="loading" data-testid="sponsor-requests-empty">No pending requests.</p>';
+              return;
+            }
+            wrap.innerHTML = items.map(function(r) {
+              return '<div class="spon-request-row" data-testid="sponsor-request-row" data-placement-id="' + escAttr(r.placement_id) + '">' +
+                '<span>' + esc(r.sponsor_name) + ' &rarr; ' + esc(r.event_title) + '</span> ' +
+                '<button type="button" class="btn btn-primary" data-action="sponsor-request-accept" data-placement-id="' + escAttr(r.placement_id) + '" data-testid="sponsor-request-accept">Accept</button> ' +
+                '<button type="button" class="btn btn-secondary" data-action="sponsor-request-decline" data-placement-id="' + escAttr(r.placement_id) + '" data-testid="sponsor-request-decline">Decline</button>' +
+              '</div>';
+            }).join('');
+          } catch (err) {
+            wrap.innerHTML = '<div class="card-error" data-testid="sponsor-requests-error"><div class="error-msg">Could not load pending requests.</div><button class="retry-btn" data-testid="sponsor-requests-retry" data-action="sponsor-requests-reload">Retry</button></div>';
+          }
+        }
+        // Routed through the delegated ACTIONS dispatcher above (OSE-1239 — no
+        // second document-level listener; a nonce CSP only wires up the one).
+        window._loadPendingSponsorRequests = function() { return loadPendingSponsorRequests(); };
+        window._respondToSponsorRequest = async function(placementId, accepted, el) {
+          const row = el && el.closest ? el.closest('.spon-request-row') : null;
+          if (row) row.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+          try {
+            const res = await fetch('/api/v2/admin/sponsors/requests/' + encodeURIComponent(placementId) + '/respond', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accepted: accepted }),
+            });
+            if (res.ok) {
+              await loadPendingSponsorRequests();
+              if (window._loadSponsors) window._loadSponsors();
+            } else if (row) {
+              row.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+            }
+          } catch (e) {
+            if (row) row.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+          }
+        };
 
         let _sponsorPreviewSeq = 0;
         function resetSponsorOutcomePreview() {
@@ -4138,6 +4220,7 @@
         });
 
         loadSponsors();
+        loadPendingSponsorRequests();
       })();
     </script>
     <!-- Registration & Forms — step 3 of the build sequence.

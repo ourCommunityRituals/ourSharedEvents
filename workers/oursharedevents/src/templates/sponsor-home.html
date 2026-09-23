@@ -167,6 +167,8 @@
 
       <!--OCR_SPONSOR_PLACEMENTS-->
 
+      <!--OCR_AVAILABLE_EVENTS-->
+
       <p class="sh-foot" data-testid="sponsor-home-foot">
         This link is yours alone and expires <!--OCR_EXPIRES-->. If it stops working, ask the organizer for a fresh one.
         Reports show counts within time windows, never who.
@@ -186,6 +188,40 @@
           m.className = 'sh-msg ' + (cls || '');
         }
         document.addEventListener('click', async function (ev) {
+          var reqBtn = ev.target && ev.target.closest && ev.target.closest('[data-action="request-event"]');
+          if (reqBtn) {
+            var reqCard = reqBtn.closest('.sh-card');
+            var eventId = reqBtn.getAttribute('data-event-id');
+            reqBtn.disabled = true;
+            try {
+              var reqRes = await fetch('/api/v2/sponsor/placements/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: token, event_id: eventId }),
+              });
+              var reqData = null;
+              try { reqData = await reqRes.json(); } catch (e) { reqData = null; }
+              var reqMsg = reqCard.querySelector('.sh-msg');
+              if (reqRes.ok && reqData && reqData.ok) {
+                reqBtn.textContent = 'Requested';
+                if (reqMsg) {
+                  reqMsg.textContent = 'Sent to the organizer for review.';
+                  reqMsg.className = 'sh-msg ok';
+                }
+              } else {
+                reqBtn.disabled = false;
+                if (reqMsg) {
+                  reqMsg.textContent = (reqData && (reqData.error || reqData.code)) || 'Could not send request (server said ' + reqRes.status + ').';
+                  reqMsg.className = 'sh-msg error';
+                }
+              }
+            } catch (e) {
+              reqBtn.disabled = false;
+              var reqMsg2 = reqCard.querySelector('.sh-msg');
+              if (reqMsg2) { reqMsg2.textContent = 'No connection. Try again.'; reqMsg2.className = 'sh-msg error'; }
+            }
+            return;
+          }
           var btn = ev.target && ev.target.closest && ev.target.closest('[data-action="placement-respond"]');
           if (!btn) return;
           var card = btn.closest('.sh-card');
