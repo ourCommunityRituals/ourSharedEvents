@@ -1194,6 +1194,27 @@
         margin-bottom: 1rem;
         border-left: 3px solid var(--accent);
       }
+      .spon-outcome-preview {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .spon-outcome-preview h3 {
+        margin: 0 0 0.35rem;
+        font-size: 0.9rem;
+      }
+      .spon-outcome-preview ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+      .spon-preview-caveat {
+        margin: 0.35rem 0 0;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
       .spon-tier-pill {
         display: inline-block;
         padding: 0.15rem 0.5rem;
@@ -3636,6 +3657,19 @@
                 aria-required="true"
               ></select>
             </div>
+            <div class="full-width">
+              <label for="spon-address">Business address</label>
+              <input
+                type="text"
+                id="spon-address"
+                name="address"
+                data-testid="spon-address"
+                placeholder="123 Main St, Your City, ST"
+                maxlength="500"
+                autocomplete="street-address"
+              />
+              <p class="fineprint">We use this address once to derive the sponsor's H3 node. The address and coordinates are not saved or shown after submission.</p>
+            </div>
             <div>
               <label for="spon-tier">Tier</label>
               <select id="spon-tier" name="tier" data-testid="spon-tier">
@@ -3690,6 +3724,14 @@
                 <strong>capped, locally-floored share of rotation frequency</strong>
                 (never a bigger logo, better slot, or fixed position).
               </p>
+              <div
+                class="spon-outcome-preview"
+                id="spon-outcome-preview"
+                data-testid="spon-outcome-preview"
+                role="status"
+                aria-live="polite"
+                hidden
+              ></div>
               <span
                 class="is-local-pill"
                 id="spon-is-local-pill"
@@ -3849,6 +3891,51 @@
         // Event-row selection drives the scope.
         window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
 
+        let _sponsorPreviewSeq = 0;
+        function resetSponsorOutcomePreview() {
+          const box = document.getElementById('spon-outcome-preview');
+          if (!box) return;
+          box.hidden = true;
+          box.innerHTML = '';
+        }
+
+        async function refreshSponsorOutcomePreview() {
+          const box = document.getElementById('spon-outcome-preview');
+          if (!box) return;
+          const eventId = document.getElementById('spon-event').value.trim();
+          const tier = document.getElementById('spon-tier').value.trim();
+          const sponsorId = document.getElementById('spon-edit-id').value.trim();
+          if (!eventId || !tier) {
+            resetSponsorOutcomePreview();
+            return;
+          }
+          const seq = ++_sponsorPreviewSeq;
+          box.hidden = false;
+          box.innerHTML = '<span class="muted-sm">Loading live outcome preview…</span>';
+          try {
+            const qs = new URLSearchParams({ eventId: eventId, tier: tier });
+            if (sponsorId) qs.set('sponsorId', sponsorId);
+            const res = await fetch('/api/v2/admin/sponsors/preview?' + qs.toString());
+            const data = await res.json();
+            if (seq !== _sponsorPreviewSeq) return;
+            if (!res.ok || !data.ok || !data.preview) throw new Error(data.error || 'Preview unavailable');
+            const p = data.preview;
+            const sections = (p.report_sections || []).map(function(s) {
+              return '<li>' + esc(String(s).replace(/_/g, ' ')) + '</li>';
+            }).join('');
+            box.innerHTML =
+              '<h3 data-testid="spon-preview-title">Live outcome preview</h3>' +
+              '<p><strong data-testid="spon-preview-frequency">' + esc(data.copy.frequencyLabel) + ': ' + esc(p.frequency_share_pct) + '%</strong></p>' +
+              '<p class="spon-preview-caveat" data-testid="spon-preview-caveat">' + esc(data.copy.frequencyCaveat) + '</p>' +
+              '<p class="spon-preview-caveat" data-testid="spon-preview-depth">Report depth: ' + esc(p.report_depth) + ' · aggregate-only, no attendee questions.</p>' +
+              '<ul data-testid="spon-preview-sections">' + sections + '</ul>';
+          } catch (err) {
+            if (seq !== _sponsorPreviewSeq) return;
+            box.innerHTML = '<span class="muted-sm">Outcome preview unavailable.</span>';
+          }
+        }
+        window._refreshSponsorOutcomePreview = refreshSponsorOutcomePreview;
+
         function openForm() {
           const wrap = document.getElementById('spon-form-wrap');
           const btn = document.getElementById('add-spon-toggle');
@@ -3871,6 +3958,7 @@
           const ctx = document.getElementById('spon-edit-ctx');
           ctx.hidden = true;
           ctx.textContent = '';
+          resetSponsorOutcomePreview();
           document.getElementById('add-spon-toggle').focus();
         }
         window._doCloseForm = doCloseForm;
@@ -3905,6 +3993,8 @@
           if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
         });
         document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+        document.getElementById('spon-event').addEventListener('change', refreshSponsorOutcomePreview);
+        document.getElementById('spon-tier').addEventListener('change', refreshSponsorOutcomePreview);
 
         document.addEventListener('keydown', function(e) {
           if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
@@ -3928,6 +4018,8 @@
             document.getElementById('spon-tier').value = s.tier || 'primary';
             document.getElementById('spon-logo').value = s.logo_url || '';
             document.getElementById('spon-website').value = s.website_url || '';
+            document.getElementById('spon-address').value = '';
+            refreshSponsorOutcomePreview();
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
             const localPill = document.getElementById('spon-is-local-pill');
@@ -4015,6 +4107,8 @@
           // uniform and non-purchasable; the server forces the uniform value and
           // ignores any client-supplied slot. Tier is what governs share.
           const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value };
+          const addressVal = document.getElementById('spon-address').value.trim();
+          if (addressVal) body.address = addressVal;
           const logoVal = document.getElementById('spon-logo').value.trim();
           if (logoVal) body.logo_url = logoVal;
           const siteVal = document.getElementById('spon-website').value.trim();

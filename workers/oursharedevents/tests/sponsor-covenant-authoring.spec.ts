@@ -160,6 +160,16 @@ describe('OSE-670 — admin form exposes no slot toggles', () => {
     expect(html).toContain('capped, locally-floored share');
   });
 
+  test('address is a one-time H3 input, never a stored/displayed coordinate field', async () => {
+    const html = await adminHtml();
+    expect(html).toContain('data-testid="spon-address"');
+    expect(html).toContain("derive the sponsor's H3 node");
+    expect(html).toContain('address and coordinates are not saved or shown after submission');
+    expect(html).toContain('body.address = addressVal');
+    expect(html).not.toContain('body.lat =');
+    expect(html).not.toContain('body.lon =');
+  });
+
   test('the form no longer builds placement_formats from checkboxes', async () => {
     const html = await adminHtml();
     expect(html).not.toContain(

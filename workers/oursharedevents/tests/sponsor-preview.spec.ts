@@ -60,18 +60,54 @@ describe('OSE-1266 outcome preview — CONTRACT: preview == what the engine woul
     });
   }
 
-  it('frequency estimate == allocateShares for the same pool', () => {
-    const others: RotationSponsor[] = [
-      { id: 'a', tier: 'premium', is_local: false },
-      { id: 'b', tier: 'mid', is_local: true },
-    ];
-    const p = buildOutcomePreview(
-      base({ tier: 'mid', sponsorId: 'sp_self', isLocal: true, corridorSponsors: others })
-    );
-    const engine = allocateShares([...others, { id: 'sp_self', tier: 'mid', is_local: true }]);
-    const mine = engine.find((s) => s.id === 'sp_self')!;
-    expect(p.frequency_share_pct).toBeCloseTo(Math.round(mine.sharePct * 10) / 10, 5);
-  });
+  const corpora: Array<{
+    name: string;
+    tier: PreviewInput['tier'];
+    isLocal: boolean;
+    others: RotationSponsor[];
+  }> = [
+    { name: 'empty corridor', tier: 'local', isLocal: false, others: [] },
+    {
+      name: 'local mid sponsor among premium non-locals',
+      tier: 'mid',
+      isLocal: true,
+      others: [
+        { id: 'a', tier: 'premium', is_local: false },
+        { id: 'b', tier: 'premium', is_local: false },
+      ],
+    },
+    {
+      name: 'premium non-local among local floor',
+      tier: 'premium',
+      isLocal: false,
+      others: [
+        { id: 'a', tier: 'base', is_local: true },
+        { id: 'b', tier: 'mid', is_local: true },
+        { id: 'c', tier: 'premium', is_local: false },
+      ],
+    },
+  ];
+
+  for (const corpus of corpora) {
+    it(`${corpus.name}: frequency estimate == allocateShares for the same pool`, () => {
+      const p = buildOutcomePreview(
+        base({
+          tier: corpus.tier,
+          sponsorId: 'sp_self',
+          isLocal: corpus.isLocal,
+          corridorSponsors: corpus.others,
+        })
+      );
+      const selfTier =
+        corpus.tier === 'premium' ? 'premium' : corpus.tier === 'mid' ? 'mid' : 'base';
+      const engine = allocateShares([
+        ...corpus.others,
+        { id: 'sp_self', tier: selfTier, is_local: corpus.isLocal },
+      ]);
+      const mine = engine.find((s) => s.id === 'sp_self')!;
+      expect(p.frequency_share_pct).toBeCloseTo(Math.round(mine.sharePct * 10) / 10, 5);
+    });
+  }
 });
 
 describe('OSE-1266 outcome preview — RED LINES (born-red)', () => {

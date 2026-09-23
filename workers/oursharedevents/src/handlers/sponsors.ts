@@ -46,11 +46,25 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 import { maybeTag } from '../lib/h3-tagging';
 import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
 import { mintBeaconToken, verifyBeaconToken, type BeaconTokenEnv } from '../lib/beacon-token';
+import { geocodeVenue } from '../lib/geo';
+import type { MapsEnv } from '../lib/maps';
+import {
+  buildOutcomePreview,
+  commercialTierOfDbTier,
+  type PreviewInput,
+} from '../lib/sponsor-preview';
+import type { RotationSponsor } from '../lib/sponsor-allocation';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface SponsorsEnv
-  extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv, InvalidTrafficEnv, BeaconTokenEnv {
+  extends
+    DataProviderEnv,
+    AdminBrandScopeEnv,
+    AdminEnv,
+    InvalidTrafficEnv,
+    BeaconTokenEnv,
+    MapsEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -330,6 +344,106 @@ export async function handleAdminGetSponsor(
   }
 }
 
+// ─── Admin: Sponsor Outcome Preview ────────────────────────────────────────────
+
+export async function handleAdminSponsorOutcomePreview(
+  request: Request,
+  env: SponsorsEnv
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+
+  const url = new URL(request.url);
+  const eventId = url.searchParams.get('eventId')?.trim();
+  const dbTier = url.searchParams.get('tier')?.trim() || 'primary';
+  const sponsorId = url.searchParams.get('sponsorId')?.trim() || null;
+
+  if (!eventId) return errorResponse('MISSING_EVENT', 'eventId is required', 400, rid);
+  if (!(VALID_TIERS as readonly string[]).includes(dbTier)) {
+    return errorResponse(
+      'INVALID_TIER',
+      `tier must be one of: ${VALID_TIERS.join(', ')}`,
+      400,
+      rid
+    );
+  }
+
+  const scope = await resolvePerIdSponsorScope(request, env);
+  if (!scope.reachable) return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
+  const eventClause = brandScopeClause(scope.brandIds, 'brand_id');
+  const event = await env.DB.prepare(
+    `SELECT id, brand_id FROM events WHERE id = ?${eventClause.sql}`
+  )
+    .bind(eventId, ...eventClause.params)
+    .first<{ id: string; brand_id: string }>();
+  if (!event) return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
+
+  let isLocal = false;
+  let selfId = sponsorId || 'preview-sponsor';
+  if (sponsorId) {
+    const sponsorClause = brandScopeClause(scope.brandIds, 'sb.brand_id');
+    const sponsor = await env.DB.prepare(
+      `SELECT sb.id, COALESCE(sp.locality_band, 0) AS is_local
+           FROM sponsor_business sb
+           LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id AND sp.event_id = ?
+          WHERE sb.id = ?${sponsorClause.sql}
+          LIMIT 1`
+    )
+      .bind(eventId, sponsorId, ...sponsorClause.params)
+      .first<{ id: string; is_local: number }>();
+    if (!sponsor) return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+    selfId = sponsor.id;
+    isLocal = Number(sponsor.is_local) === 1;
+  }
+
+  const rows = await env.DB.prepare(
+    `SELECT sb.id, sp.tier, COALESCE(sp.locality_band, 0) AS is_local
+         FROM sponsor_placement sp
+         JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+        WHERE sp.event_id = ?
+          AND sb.brand_id = ?
+          AND sp.is_active = 1
+          AND sb.is_active = 1
+          AND COALESCE(sp.organizer_accepted, 1) = 1
+          AND sp.sponsor_accepted = 1
+          AND sb.id <> ?`
+  )
+    .bind(event.id, event.brand_id, selfId)
+    .all<{ id: string; tier: string; is_local: number }>();
+
+  const corridorSponsors: RotationSponsor[] = (rows.results ?? []).map((row) => ({
+    id: row.id,
+    tier:
+      commercialTierOfDbTier(row.tier) === 'premium'
+        ? 'premium'
+        : commercialTierOfDbTier(row.tier) === 'mid'
+          ? 'mid'
+          : 'base',
+    is_local: Number(row.is_local) === 1,
+  }));
+  const input: PreviewInput = {
+    tier: commercialTierOfDbTier(dbTier),
+    sponsorId: selfId,
+    isLocal,
+    corridorSponsors,
+  };
+  const preview = buildOutcomePreview(input);
+
+  return Response.json(
+    {
+      ok: true,
+      status: 200,
+      preview,
+      copy: {
+        frequencyLabel: 'Estimated rotation frequency share',
+        frequencyCaveat:
+          'Transparency estimate only — not a reserved slot, rank, size, or position.',
+      },
+    },
+    { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
+  );
+}
+
 // ─── Admin: Create Sponsor ──────────────────────────────────────────────────────
 
 export async function handleAdminCreateSponsor(
@@ -375,7 +489,27 @@ export async function handleAdminCreateSponsor(
     typeof body.display_token === 'string' ? body.display_token.slice(0, 256) : null;
   const now = new Date().toISOString();
 
-  // ── H3 geo-tagging (opt-in, admin creation path) ─────────────────────────
+  // ── H3 geo-tagging (address-first admin creation path) ───────────────────
+  // The card submits a human-readable address only for the one-time geocode.
+  // We retain the H3 cells needed for locality matching, never the address or
+  // the resolved coordinates. The legacy coordinate input remains supported
+  // for API compatibility only.
+  const address = typeof body.address === 'string' ? body.address.trim() : null;
+  let sponsorLat: number | null = null;
+  let sponsorLon: number | null = null;
+  let sponsorH3Res9: string | null = null;
+  let sponsorH3Res7: string | null = null;
+
+  if (address) {
+    const outcome = await geocodeVenue(env, address);
+    if (!outcome.ok) return errorResponse(outcome.code, outcome.error, outcome.status, rid);
+    sponsorLat = outcome.result.lat;
+    sponsorLon = outcome.result.lng;
+    const h3Tags = maybeTag(sponsorLat, sponsorLon);
+    sponsorH3Res9 = h3Tags?.h3_res9 ?? null;
+    sponsorH3Res7 = h3Tags?.h3_res7 ?? null;
+  }
+
   const rawLat = body.lat;
   const rawLon = body.lon;
   const hasCoords =
@@ -393,11 +527,18 @@ export async function handleAdminCreateSponsor(
     );
   }
 
-  const sponsorLat = hasCoords ? (rawLat as number) : null;
-  const sponsorLon = hasCoords ? (rawLon as number) : null;
-  const h3Tags = maybeTag(sponsorLat, sponsorLon);
-  const sponsorH3Res9 = h3Tags?.h3_res9 ?? null;
-  const sponsorH3Res7 = h3Tags?.h3_res7 ?? null;
+  if (!address && hasCoords) {
+    sponsorLat = rawLat as number;
+    sponsorLon = rawLon as number;
+    const h3Tags = maybeTag(sponsorLat, sponsorLon);
+    sponsorH3Res9 = h3Tags?.h3_res9 ?? null;
+    sponsorH3Res7 = h3Tags?.h3_res7 ?? null;
+  }
+  // Address-derived coordinates are intentionally transient: H3 is the retained
+  // locality representation for the admin flow. Legacy coordinate API callers
+  // retain their existing storage behavior until that interface is retired.
+  const storedLat = address ? null : sponsorLat;
+  const storedLon = address ? null : sponsorLon;
 
   // ── is_local: GEO-DERIVED, non-purchasable (OSE-661 / #25) ────────────────
   // A sponsor is local iff its corridor cell (h3_res7) matches the event's.
@@ -440,8 +581,8 @@ export async function handleAdminCreateSponsor(
       eventBrandId,
       name,
       websiteUrl,
-      sponsorLat,
-      sponsorLon,
+      storedLat,
+      storedLon,
       sponsorH3Res9,
       sponsorH3Res7,
       now,
@@ -623,7 +764,9 @@ export async function handleAdminUpdateSponsor(
     }
   }
 
-  // ── H3 geo-tagging on update (re-tag when lat/lon provided) ──────────────
+  // ── H3 geo-tagging on update (address-first; legacy coords remain supported) ──
+  const hasAddress = 'address' in body && body.address !== null;
+  const address = typeof body.address === 'string' ? body.address.trim().slice(0, 500) : null;
   const rawLat = body.lat;
   const rawLon = body.lon;
   const hasCoords =
@@ -643,7 +786,14 @@ export async function handleAdminUpdateSponsor(
 
   let updateH3Res7: string | null = null;
 
-  if (hasCoords) {
+  if (hasAddress) {
+    const outcome = await geocodeVenue(env, address ?? '');
+    if (!outcome.ok) return errorResponse(outcome.code, outcome.error, outcome.status, rid);
+    const h3Tags = maybeTag(outcome.result.lat, outcome.result.lng);
+    businessSets.push('lat = NULL', 'lon = NULL', 'h3_res9 = ?', 'h3_res7 = ?');
+    businessVals.push(h3Tags?.h3_res9 ?? null, h3Tags?.h3_res7 ?? null);
+    updateH3Res7 = h3Tags?.h3_res7 ?? null;
+  } else if (hasCoords) {
     const updateLat = rawLat as number;
     const updateLon = rawLon as number;
     const h3Tags = maybeTag(updateLat, updateLon);

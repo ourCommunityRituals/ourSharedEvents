@@ -142,6 +142,11 @@ import {
   type SponsorHomeEnv,
 } from './handlers/sponsor-home';
 import {
+  handleSponsorDraftPreview,
+  handleSponsorOnboardPage,
+  type SponsorOnboardEnv,
+} from './handlers/sponsor-onboard';
+import {
   logAdminAction,
   logReportAccess,
   logExportManifest,
@@ -186,6 +191,7 @@ import {
 import {
   handleAdminListSponsors,
   handleAdminGetSponsor,
+  handleAdminSponsorOutcomePreview,
   handleAdminCreateSponsor,
   handleAdminUpdateSponsor,
   handleAdminDeleteSponsor,
@@ -263,6 +269,7 @@ export type RouterEnv = PagesEnv &
   ShortlinkResolveEnv &
   AdminObjectScopeEnv &
   SponsorHomeEnv &
+  SponsorOnboardEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -753,6 +760,12 @@ export async function route(
     const response = await handleAdminCreateSponsor(request, env);
     _audit(reqId, 'CREATE_SPONSOR', 'success', 'sponsor');
     return response;
+  }
+
+  if (pathname === '/api/v2/admin/sponsors/preview' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminSponsorOutcomePreview(request, env);
   }
 
   // POST /api/v2/admin/sponsors/promote — promote a sponsor onboarding draft to a
@@ -1277,6 +1290,13 @@ export async function route(
     return handleCreateSponsorDraft(request, env);
   }
 
+  // GET /api/v2/sponsors/draft/preview — read-only sponsor onboarding outcome
+  // preview (invite-token auth). Placed before /draft/:draftToken/asset so the
+  // literal "preview" is never parsed as a draft token.
+  if (pathname === '/api/v2/sponsors/draft/preview' && method === 'GET') {
+    return handleSponsorDraftPreview(request, env);
+  }
+
   // POST /api/v2/sponsors/draft/:draftToken/asset/:format — per-format asset
   // upload for an onboarding draft (invite-token auth, R2 sponsors/ namespace, OSE-733).
   const draftAssetMatch = pathname.match(/^\/api\/v2\/sponsors\/draft\/([^/]+)\/asset\/([^/]+)$/);
@@ -1469,6 +1489,11 @@ export async function route(
   // GET /sponsor?t=<token> — the sponsor's own page (token-gated, read-limited).
   if (pathname === '/sponsor' && method === 'GET') {
     return handleSponsorHomePage(request, env);
+  }
+
+  // GET /sponsor/onboard?t=<invite> — sponsor self-serve draft capture screen.
+  if (pathname === '/sponsor/onboard' && method === 'GET') {
+    return handleSponsorOnboardPage(request, env);
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────

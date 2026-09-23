@@ -29,7 +29,12 @@ import {
   filterReportByDepth,
   type ReportDepth,
 } from './report-depth';
-import { allocateShares, type RotationSponsor, type SponsorTier } from './sponsor-allocation';
+import {
+  allocateShares,
+  sovTierOf,
+  type RotationSponsor,
+  type SponsorTier,
+} from './sponsor-allocation';
 
 /** The three commercial choices the sponsorship page offers. */
 export type CommercialTier = 'local' | 'mid' | 'premium';
@@ -74,6 +79,11 @@ export interface OutcomePreview {
     position_uniform: true;
     local_not_purchasable: true;
   };
+}
+
+export function commercialTierOfDbTier(dbTier: string): CommercialTier {
+  const tier = sovTierOf(dbTier);
+  return tier === 'premium' ? 'premium' : tier === 'mid' ? 'mid' : 'local';
 }
 
 /**
