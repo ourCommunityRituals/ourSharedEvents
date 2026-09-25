@@ -135,6 +135,19 @@ describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
     expect(ids).toContain('u-bronze-nl');
   });
 
+  test('public sponsor reads are not browser-cacheable across write→read journeys', async () => {
+    const eventId = 'ose661-evt-cache-control';
+    await seedEvent(eventId);
+
+    for (const path of ['sponsors', 'sponsor-bundle?surface=display']) {
+      const res = await SELF.fetch(
+        `https://test.local/api/v2/events/${encodeURIComponent(eventId)}/${path}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+    }
+  });
+
   test('#25 | local floor: a local is never zeroed, even against many premium non-locals', async () => {
     const eventId = `ose661-evt-floor`;
     await seedEvent(eventId);

@@ -1061,7 +1061,7 @@ export async function handleGetSponsorsForEvent(
       {
         headers: {
           ...corsHeaders(request),
-          'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'Cache-Control': 'no-store',
           'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
@@ -1134,7 +1134,7 @@ export async function handleGetSponsorBundle(
       {
         headers: {
           ...corsHeaders(request),
-          'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'Cache-Control': 'no-store',
           'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
