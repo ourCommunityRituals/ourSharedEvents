@@ -121,7 +121,7 @@ on:
     tags:
       - 'v*.*.*'
   schedule:
-    - cron: '7 3 * * *'  # Nightly 3:07 AM UTC — Gate + Smoke + Contract (no deploy)
+    - cron: '7 3 * * *' # Nightly 3:07 AM UTC — Gate + Smoke + Contract (no deploy)
   workflow_dispatch:
     inputs:
       deploy_staging:
@@ -165,7 +165,7 @@ jobs:
   # ============================================================================
   security:
     name: 'S0 Security'
-    runs-on: ubuntu-latest   # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
+    runs-on: ubuntu-latest # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
     permissions:
       security-events: write
       contents: read
@@ -805,6 +805,17 @@ jobs:
           - section: worker-d1-schema
             workdir: workers/oursharedevents
             command: node ../../scripts/vitest-retry.mjs npm test
+          - section: launch-contracts
+            workdir: workers/oursharedevents
+            command: >-
+              npx vitest run
+              tests/public-event-page.spec.ts
+              tests/public-event-calendar.spec.ts
+              tests/admin-draft-preview.spec.ts
+              tests/admin-event-lifecycle-ui.spec.ts
+              tests/admin-ui.spec.ts
+              tests/poster-qr.spec.ts
+              tests/tier-equity-sort.spec.ts
     steps:
       - name: 'Clear stale runner diag files'
         shell: bash
@@ -842,7 +853,7 @@ jobs:
           fi
 
       - name: Install worker dependencies
-        if: matrix.section == 'worker-d1-schema'
+        if: matrix.workdir == 'workers/oursharedevents'
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -1809,6 +1820,39 @@ jobs:
             tests/e2e/3-flows/sharedreport-depth.spec.ts
         timeout-minutes: 5
 
+      - name: 'T4g: Launch Story Smoke'
+        id: launch-story-smoke
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PW_REQUIRE_PRECONDITIONS: '1'
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4g: Launch Story Smoke' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/launch-story-smoke.spec.ts
+        timeout-minutes: 6
+
+      # OSE-1366: poster-print.data.spec.ts's "Print Layout" describe was written
+      # for the staging E2E tier (see the file header) but no CI step named it —
+      # it only ran manually. --grep scopes THIS gate to that one describe (the
+      # OSE-1356/1357 rendered print regression + its 6 pre-existing checks) so a
+      # newly-wired gate does not also inherit any unaudited failure from the
+      # file's OTHER (pre-existing, unrelated) describes.
+      - name: 'T4h: Poster Print Layout'
+        id: poster-print-layout
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+        run: |
+          PW_LABEL='T4h: Poster Print Layout' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            --grep "Print Layout" \
+            tests/e2e/2-pages/poster-print.data.spec.ts
+        timeout-minutes: 5
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -1826,8 +1870,8 @@ jobs:
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: "Functional Results"
-          path: ".test-results/*-junit.xml"
+          name: 'Functional Results'
+          path: '.test-results/*-junit.xml'
           reporter: jest-junit
           fail-on-error: false
 
@@ -1844,6 +1888,8 @@ jobs:
           echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4g Launch Story Smoke | \`${{ steps.launch-story-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: split the T4 umbrella into per-gate NAMED CHECKS ───────────────
       # This job stays ONE job (one setup, serialized D1 seeds — no new shared-staging
@@ -1887,6 +1933,8 @@ jobs:
           post "T4d: UI Smoke (Tier-1)"                           "${{ steps.ui-tests.outcome }}"
           post "T4e: Attendee Arc Journey"                        "${{ steps.attendee-arc-tests.outcome }}"
           post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
+          post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
+          post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
 
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
       # the untrusted T4 execution (OSE-1056/1057). This is the migration-correct home
@@ -1917,7 +1965,16 @@ jobs:
     # OSE-1217: production must be gated by the same-run staging chain, not only
     # S0 + T0. A production tag/dispatch cannot ship a SHA unless T1-T4 staging
     # went green for that SHA in this workflow run.
-    needs: [security, gate, gate-tests, deploy-staging, smoke-staging, contract-staging, functional-staging]
+    needs:
+      [
+        security,
+        gate,
+        gate-tests,
+        deploy-staging,
+        smoke-staging,
+        contract-staging,
+        functional-staging,
+      ]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -2248,7 +2305,18 @@ jobs:
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
-    needs: [security, gate, gate-tests, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs:
+      [
+        security,
+        gate,
+        gate-tests,
+        deploy-staging,
+        smoke-staging,
+        contract-staging,
+        functional-staging,
+        deploy-production,
+        smoke-production,
+      ]
     if: always()
     steps:
       - name: Summary

@@ -18,17 +18,17 @@ npm run ci:all:verbose
 
 The `ci:all` gate runs all contract guards that protect the codebase:
 
-| Guard | Purpose |
-|-------|---------|
-| MVP Surfaces | Only 5 surfaces allowed: admin, public, display, poster, report |
-| RPC Inventory | API inventory comment matches actual usage |
-| API vs Schemas | All api_* functions have corresponding schemas |
-| Event Schema | Event schema consistency validation |
-| Service Tests | form-service, sponsor-service, security-middleware |
-| Dead Exports | No unused api_* functions in Code.gs |
-| Schema Fields | HTML surfaces only reference schema-defined fields |
-| Analytics Schema | Analytics schema consistency |
-| Banned Origins | No GAS URLs (`script.google.com`) in CI/runtime code |
+| Guard            | Purpose                                                         |
+| ---------------- | --------------------------------------------------------------- |
+| MVP Surfaces     | Only 5 surfaces allowed: admin, public, display, poster, report |
+| RPC Inventory    | API inventory comment matches actual usage                      |
+| API vs Schemas   | All api_* functions have corresponding schemas                  |
+| Event Schema     | Event schema consistency validation                             |
+| Service Tests    | form-service, sponsor-service, security-middleware              |
+| Dead Exports     | No unused api_* functions in Code.gs                            |
+| Schema Fields    | HTML surfaces only reference schema-defined fields              |
+| Analytics Schema | Analytics schema consistency                                    |
+| Banned Origins   | No GAS URLs (`script.google.com`) in CI/runtime code            |
 
 ## Origin Invariants
 
@@ -36,16 +36,17 @@ The `ci:all` gate runs all contract guards that protect the codebase:
 
 ### Allowed Origins (CI/Runtime)
 
-| Environment | URL |
-|-------------|-----|
-| Staging | `https://stg.eventangle.com` |
-| Production | `https://www.eventangle.com` |
+| Environment | URL                          |
+| ----------- | ---------------------------- |
+| Staging     | `https://stg.eventangle.com` |
+| Production  | `https://www.eventangle.com` |
 
 ### GAS Direct is BANNED
 
 `script.google.com` URLs are **never** allowed in CI or runtime code.
 
 GAS Direct may **only** be used for:
+
 - Local, manual debugging
 - Explicitly allowlisted files (archive, docs, schemas)
 
@@ -126,3 +127,6 @@ npm run lint               # ESLint
 - Check existing tests for patterns
 - Run `npm run ci:all:verbose` for detailed failure info
 - See [tests/README.md](./tests/README.md) for test documentation
+- Chasing a T3/T4/T5 CI failure? See
+  [docs/testing/local-first-t3-t4-t5-vetting.md](./docs/testing/local-first-t3-t4-t5-vetting.md)
+  before spending another staging rerun on it.

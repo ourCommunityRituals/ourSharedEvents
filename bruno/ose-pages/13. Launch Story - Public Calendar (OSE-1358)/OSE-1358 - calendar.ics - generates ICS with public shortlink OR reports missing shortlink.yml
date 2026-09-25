@@ -1,0 +1,24 @@
+info:
+  name: OSE-1358 | calendar.ics | generates ICS with public shortlink OR reports missing shortlink
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/test-event-001/calendar.ics"
+  headers:
+    - name: Accept
+      value: text/calendar
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Contract (workers/oursharedevents/src/handlers/calendar.ts): 200 is a published/active event WITH an existing public shortlink — a real .ics body using the /s/<code> share URL, never the internal event id. 409 PUBLIC_SHORTLINK_MISSING is a published/active event with no minted public shortlink yet (documented gap, not a worker failure — the GET path never mints one, read-only by design, OSE-1358). Either outcome is a passing contract; only 200 gets the deep ICS assertions.\r\ntest('200 (ICS) OR 409 (shortlink not yet minted)', function () { expect([200, 409]).to.include(res.getStatus()); });\r\nconst body = (typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody()));\r\nif (res.getStatus() === 200) {\r\n    test('Content-Type is text/calendar', function () { expect(res.getHeader('Content-Type') || '').to.include('text/calendar'); });\r\n    test('Content-Disposition offers an .ics attachment', function () { expect(res.getHeader('Content-Disposition') || '').to.include('.ics'); });\r\n    test('body is a VCALENDAR with one VEVENT', function () {\r\n        expect(body).to.include('BEGIN:VCALENDAR');\r\n        expect(body).to.include('BEGIN:VEVENT');\r\n        expect(body).to.include('DTSTART');\r\n    });\r\n    test('body carries the public /s/<code> share link, not the internal event id', function () {\r\n        expect(body).to.match(/URL:https?:\\/\\/[^\\r\\n]+\\/s\\/[A-Za-z0-9]+/);\r\n        expect(body).to.not.include('test-event-001');\r\n    });\r\n} else {\r\n    test('409 code is PUBLIC_SHORTLINK_MISSING', function () { expect(res.getBody().code).to.eql('PUBLIC_SHORTLINK_MISSING'); });\r\n}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

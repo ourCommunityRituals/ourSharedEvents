@@ -226,4 +226,131 @@ test.describe('Poster Page — Print Layout', () => {
       true
     );
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // OSE-1356/OSE-1366 — RENDERED 11x14 print layout regression.
+  //
+  // The static source-file assertions in poster-qr.spec.ts (Worker unit tier)
+  // lock the CSS TEXT for the 11x14 @page rule, art viewport max-height, title
+  // font-size, and QR quiet-zone padding. They cannot prove the rules actually
+  // APPLY to the rendered DOM under print media — a selector typo or a rule
+  // shadowed by specificity would still pass a `toContain('max-height: 6.2in')`
+  // string check. These tests render the real poster card in a browser under
+  // `page.emulateMedia({ media: 'print' })` and read computed styles, so a
+  // regression that breaks the CASCADE (not just the source text) goes red.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  test('@media print — poster shell keeps a single-page-safe box (page-break-inside: avoid)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ media: 'print' });
+    const poster = page.locator('[data-testid="poster-area"] .poster');
+    const pageBreak = await poster.evaluate(
+      (el) => window.getComputedStyle(el).getPropertyValue('page-break-inside') || ''
+    );
+    // Some engines normalize page-break-inside to break-inside internally;
+    // accept either the legacy or standard property reporting 'avoid'.
+    if (pageBreak) {
+      expect(pageBreak).toBe('avoid');
+    } else {
+      const breakInside = await poster.evaluate(
+        (el) => window.getComputedStyle(el).getPropertyValue('break-inside') || ''
+      );
+      expect(breakInside).toBe('avoid');
+    }
+  });
+
+  test('@media print — title renders at a large, legible print size (OSE-1356)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ media: 'print' });
+    const title = page.locator('[data-testid="poster-area"] [data-testid="poster-title"]');
+    await expect(title).toBeVisible();
+    const fontSizePx = await title.evaluate((el) =>
+      parseFloat(window.getComputedStyle(el).fontSize)
+    );
+    // 38pt ≈ 50.7px at the browser's 96dpi/72pt convention. Assert a floor
+    // comfortably below that (48px) rather than an exact match, so a small
+    // token/line-height rebalance does not false-red this test — the
+    // property under test is "large enough to read across a room", not an
+    // exact pixel value.
+    expect(
+      fontSizePx,
+      `title font-size ${fontSizePx}px is too small for print`
+    ).toBeGreaterThanOrEqual(48);
+  });
+
+  test('@media print — art viewport enlarges and height-clamps when artwork is present', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ media: 'print' });
+    const art = page.locator('[data-testid="poster-area"] [data-testid="poster-art-img"]');
+    const count = await art.count();
+    test.skip(count === 0, 'This event has no cover artwork — nothing to clamp');
+
+    const maxHeightPx = await art
+      .first()
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).maxHeight));
+    // 6.2in ≈ 595px at 96dpi. Floor it generously (400px) so this asserts
+    // "large viewport", the property OSE-1356 changed, without being brittle
+    // to a future fine-tune of the exact inch value.
+    expect(
+      maxHeightPx,
+      `art max-height ${maxHeightPx}px is not an enlarged viewport`
+    ).toBeGreaterThanOrEqual(400);
+
+    const renderedHeight = await art.first().evaluate((el) => el.getBoundingClientRect().height);
+    expect(
+      renderedHeight,
+      'art must not render taller than its own max-height clamp'
+    ).toBeLessThanOrEqual(maxHeightPx + 2);
+  });
+
+  test('@media print — every rendered QR keeps a white quiet-zone padding (OSE-1356)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ media: 'print' });
+    const qrImages = page.locator('[data-testid="poster-area"] .qr-section .qr-img');
+    const count = await qrImages.count();
+    test.skip(count === 0, 'No QR codes rendered for this event — nothing to check');
+
+    for (let i = 0; i < count; i++) {
+      const img = qrImages.nth(i);
+      const { paddingPx, bg } = await img.evaluate((el) => {
+        const cs = window.getComputedStyle(el);
+        return { paddingPx: parseFloat(cs.paddingLeft), bg: cs.backgroundColor };
+      });
+      expect(paddingPx, `QR #${i} has no quiet-zone padding`).toBeGreaterThan(0);
+      expect(
+        bg === 'rgb(255, 255, 255)' ||
+          bg === 'rgba(0, 0, 0, 0)' ||
+          bg === 'transparent' ||
+          bg === '',
+        `QR #${i} quiet zone is not white (got "${bg}")`
+      ).toBe(true);
+    }
+  });
+
+  test('@media print — multiple minted QR slots (if any) stay inside the printable section, no overflow (OSE-1357)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ media: 'print' });
+    const qrSection = page.locator('[data-testid="poster-area"] .qr-section');
+    const qrImages = page.locator('[data-testid="poster-area"] .qr-section .qr-img');
+    const count = await qrImages.count();
+    test.skip(count < 2, 'Fewer than 2 minted slots on this event — nothing to check for overflow');
+
+    const sectionBox = await qrSection.boundingBox();
+    expect(sectionBox, 'qr-section has no layout box').not.toBeNull();
+    for (let i = 0; i < count; i++) {
+      const box = await qrImages.nth(i).boundingBox();
+      expect(box, `QR #${i} has no layout box`).not.toBeNull();
+      if (box && sectionBox) {
+        expect(
+          box.x >= sectionBox.x - 1 && box.x + box.width <= sectionBox.x + sectionBox.width + 1,
+          `QR #${i} overflows the printable qr-section horizontally`
+        ).toBe(true);
+      }
+    }
+  });
 });

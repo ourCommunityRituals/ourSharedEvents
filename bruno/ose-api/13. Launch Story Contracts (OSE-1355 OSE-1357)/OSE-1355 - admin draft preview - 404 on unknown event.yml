@@ -1,0 +1,28 @@
+info:
+  name: OSE-1355 | admin draft preview | 404 on unknown event
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/evt_does_not_exist_1355/preview"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// A preview link for an unknown event is a branded 404, never a raw DB dump or a silent success, same unified contract as OSE-R-004's /events/:id error page. Also accepts CF Access edge blocking.\r\ntest('404 (unknown event) OR blocked at edge', function () { expect([302, 401, 403, 404]).to.include(res.getStatus()); });\r\nif (res.getStatus() === 404) {\r\n    const body = (typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody()));\r\n    test('branded 404 copy present (not a raw error dump)', function () { expect(body).to.include('find that event'); });\r\n}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

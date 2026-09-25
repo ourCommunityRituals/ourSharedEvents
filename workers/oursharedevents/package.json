@@ -18,7 +18,10 @@
     "test:d1": "vitest run tests/schema.spec.ts tests/constraints.spec.ts",
     "test:forms": "vitest run tests/forms-schema.spec.ts tests/forms-constraints.spec.ts tests/forms-security.spec.ts",
     "test:all": "vitest run",
-    "test:a11y": "vitest run --config vitest.config.a11y.mts"
+    "test:a11y": "vitest run --config vitest.config.a11y.mts",
+    "dev:local-launch": "wrangler d1 migrations apply ocr-db-local --local && npm run seed:local-launch && wrangler dev --ip 127.0.0.1 --port 8787",
+    "seed:local-launch": "wrangler d1 execute ocr-db-local --local --file ../../tests/ui/smoke/fixtures/launch-story-local.sql",
+    "test:local:launch-contracts": "vitest run tests/public-event-page.spec.ts tests/public-event-calendar.spec.ts tests/admin-draft-preview.spec.ts tests/admin-event-lifecycle-ui.spec.ts tests/admin-ui.spec.ts tests/poster-qr.spec.ts tests/tier-equity-sort.spec.ts"
   },
   "dependencies": {
     "@ocr/data-provider": "file:../../packages/data-provider",
