@@ -1,0 +1,24 @@
+info:
+  name: OSE-1358 | calendar.ics | 404 on nonexistent event
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/evt_does_not_exist_1358/calendar.ics"
+  headers:
+    - name: Accept
+      value: text/calendar
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Non-existent event blocked (worker 404 OR edge WAF 403), same unified contract as OSE-R-004's /events/:id error page (OSE-348).\r\ntest('404 worker OR 403 WAF block', function () { expect([404, 403]).to.include(res.getStatus()); });\r\nif (res.getStatus() === 404) {\r\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\r\n}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
