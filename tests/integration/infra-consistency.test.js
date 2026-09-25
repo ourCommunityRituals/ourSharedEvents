@@ -616,7 +616,13 @@ describe('T0 test sub-gates remain split and aggregated', () => {
 
   test('T0 test sub-gate matrix covers each bounded section', () => {
     expect(sections).toEqual(
-      expect.arrayContaining(['security-iac', 'root-vitest', 'ui-drift', 'worker-d1-schema'])
+      expect.arrayContaining([
+        'security-iac',
+        'root-vitest',
+        'ui-drift',
+        'worker-d1-schema',
+        'launch-contracts',
+      ])
     );
   });
 
@@ -625,12 +631,16 @@ describe('T0 test sub-gates remain split and aggregated', () => {
     expect(testAggregate.needs).toEqual(expect.arrayContaining(['gate-tests-sub']));
   });
 
-  test('worker D1 schema sub-gate installs worker dependencies before running', () => {
+  test('worker-dependent sub-gates (worker-d1-schema, launch-contracts) install worker dependencies before running', () => {
+    // OSE-1364 added a second workers/oursharedevents-workdir section
+    // (launch-contracts) alongside worker-d1-schema; both need the worker's
+    // own node_modules installed, so the gate is keyed on matrix.workdir
+    // rather than a single hardcoded matrix.section value.
     expect(
       workerDepsStep,
-      'worker-d1-schema sub-gate must install worker dependencies'
+      'a workers/oursharedevents-workdir sub-gate must install worker dependencies'
     ).toBeDefined();
-    expect(workerDepsStep.if).toBe("matrix.section == 'worker-d1-schema'");
+    expect(workerDepsStep.if).toBe("matrix.workdir == 'workers/oursharedevents'");
     expect(workerDepsStep['working-directory']).toBe('${{ env.WORKER_DIR }}');
   });
 
