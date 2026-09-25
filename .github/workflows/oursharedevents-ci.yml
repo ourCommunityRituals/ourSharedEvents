@@ -1836,6 +1836,23 @@ jobs:
             tests/e2e/3-flows/launch-story-smoke.spec.ts
         timeout-minutes: 6
 
+      # OSE-1366: poster-print.data.spec.ts's "Print Layout" describe was written
+      # for the staging E2E tier (see the file header) but no CI step named it —
+      # it only ran manually. --grep scopes THIS gate to that one describe (the
+      # OSE-1356/1357 rendered print regression + its 6 pre-existing checks) so a
+      # newly-wired gate does not also inherit any unaudited failure from the
+      # file's OTHER (pre-existing, unrelated) describes.
+      - name: 'T4h: Poster Print Layout'
+        id: poster-print-layout
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+        run: |
+          PW_LABEL='T4h: Poster Print Layout' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            --grep "Print Layout" \
+            tests/e2e/2-pages/poster-print.data.spec.ts
+        timeout-minutes: 5
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -1872,6 +1889,7 @@ jobs:
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4g Launch Story Smoke | \`${{ steps.launch-story-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: split the T4 umbrella into per-gate NAMED CHECKS ───────────────
       # This job stays ONE job (one setup, serialized D1 seeds — no new shared-staging
@@ -1916,6 +1934,7 @@ jobs:
           post "T4e: Attendee Arc Journey"                        "${{ steps.attendee-arc-tests.outcome }}"
           post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
           post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
+          post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
 
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
       # the untrusted T4 execution (OSE-1056/1057). This is the migration-correct home
