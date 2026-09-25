@@ -49,9 +49,9 @@ ADMIN_KEY="local-t4-admin"
 ALLOW_OCR_INTERNAL="true"
 X_OCR_INTERNAL="local-t4-internal"
 ADMIN_SCOPE_ALL="true"
-SPONSOR_HOME_SIGNING_SECRET="local-sponsor-home-signing-secret-min-32-chars"
-SHARED_REPORT_SIGNING_SECRET="local-shared-report-signing-secret-min-32-chars"
-BEACON_TOKEN_SECRET="local-beacon-token-secret-min-32-chars"
+SPONSOR_HOME_SIGNING_SECRET="local-sponsor-home-signing-secret-min-32-chars" # pragma: allowlist secret
+SHARED_REPORT_SIGNING_SECRET="local-shared-report-signing-secret-min-32-chars" # pragma: allowlist secret
+BEACON_TOKEN_SECRET="local-beacon-token-secret-min-32-chars" # pragma: allowlist secret
 ```
 
 Then start the worker:
