@@ -1054,7 +1054,7 @@ export async function handleGetSponsorsForEvent(
 
   try {
     const dp = getDataProvider(env, ctx);
-    const result = await dp.getSponsors(eventId);
+    const result = await dp.getSponsors(eventId, { bypassCache: true });
 
     return Response.json(
       { ok: true, status: 200, items: result.data },
@@ -1096,7 +1096,7 @@ export async function handleGetSponsorBundle(
 
   try {
     const dp = getDataProvider(env, ctx);
-    const result = await dp.getSponsors(eventId);
+    const result = await dp.getSponsors(eventId, { bypassCache: true });
     const url = new URL(request.url);
     const surface = url.searchParams.get('surface') as Surface | null;
 
