@@ -11,8 +11,24 @@
  */
 
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 console.log('Running service tests...\n');
+
+const legacyBrandConfig = path.join(
+  process.cwd(),
+  'archive',
+  'legacy-tests',
+  'config',
+  'brand-config.js'
+);
+
+if (!fs.existsSync(legacyBrandConfig)) {
+  console.log('ℹ️  Legacy service tests are archived but their GAS brand config is absent.');
+  console.log('ℹ️  Skipping legacy Jest service tests; Worker service coverage runs via Vitest.');
+  process.exit(0);
+}
 
 try {
   execSync(
@@ -20,7 +36,7 @@ try {
     {
       stdio: 'inherit',
       cwd: process.cwd(),
-      env: { ...process.env, FORCE_COLOR: '1' }
+      env: { ...process.env, FORCE_COLOR: '1' },
     }
   );
   console.log('\n✓ Service tests passed');

@@ -141,21 +141,23 @@ export function renderEventList(
         : '';
       const phase = escapeHtml(str(e.phase));
       const wrapped = e.phase === 'post_event';
+      const eventHref = `/events/${safeId}`;
       // A wrapped event links to its recap, never to a registration form.
       const cta = wrapped
-        ? `<a class="cta cta-secondary" href="/events/${safeId}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`
+        ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`
         : `<a class="cta" href="/forms/${safeId}?type=register&amp;event=${encodedName}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
       const wrappedTag = wrapped
         ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>'
         : '';
       return `
-          <div class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
+          <article class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
+            <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="public-event-name">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>
             </div>
             ${cta}
-          </div>`;
+          </article>`;
     })
     .join('');
 

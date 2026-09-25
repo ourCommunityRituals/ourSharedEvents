@@ -11,6 +11,7 @@
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
+ *   GET /events/:id/calendar.ics → public event calendar download
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
@@ -120,6 +121,7 @@ import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handlePublicPage,
   handlePublicEventPage,
+  handleAdminEventPreviewPage,
   handleAdminPage,
   handleAdminSignInPage,
   handleLandingPage,
@@ -151,6 +153,7 @@ import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
+import { handleEventCalendar, type CalendarEnv } from './handlers/calendar';
 import { handleUecResolve } from './handlers/uec-resolve';
 import {
   handleV2AdminVerifyQr,
@@ -261,6 +264,7 @@ export type RouterEnv = PagesEnv &
   DataSubjectEnv &
   SharedReportReadEnv &
   ShortlinkResolveEnv &
+  CalendarEnv &
   AdminObjectScopeEnv &
   SponsorHomeEnv &
   RateLimitEnv & {
@@ -601,6 +605,14 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handlePortfolioRollup(request, env);
+  }
+
+  // PUT/DELETE /api/v2/admin/events/:id — update, or hard-delete (OSE-982) one event
+  const adminEventPreviewMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/preview$/);
+  if (adminEventPreviewMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminEventPreviewPage(request, env, adminEventPreviewMatch[1]);
   }
 
   // PUT/DELETE /api/v2/admin/events/:id — update, or hard-delete (OSE-982) one event
@@ -1450,6 +1462,12 @@ export async function route(
     pathname === '/info'
   ) {
     return handleLandingPage(env, ctx);
+  }
+
+  // ── Public event calendar download (OSE-1358) ─────────────────────────────
+  const eventCalendarMatch = pathname.match(/^\/events\/([^/]+)\/calendar\.ics$/);
+  if (eventCalendarMatch && method === 'GET') {
+    return handleEventCalendar(request, env, eventCalendarMatch[1]);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────

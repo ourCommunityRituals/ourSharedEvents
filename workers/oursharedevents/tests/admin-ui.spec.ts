@@ -77,22 +77,23 @@ describe('ADMIN-5: Form config toggles', () => {
     expect(html).toContain('/api/v2/admin/flags/resolve?eventId=');
   });
 
-  test('JS generates form gate data-testids for all 4 types', async () => {
+  test('JS generates one form row for all 4 types', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically by loadForms() — verify the JS patterns
-    expect(html).toContain("form-gate-' + t.key");
+    expect(html).toContain("form-row-' + t.key");
+    expect(html).toContain("form-count-' + t.key");
     expect(html).toContain("key: 'register'");
     expect(html).toContain("key: 'checkin'");
     expect(html).toContain("key: 'survey'");
     expect(html).toContain("key: 'email'");
   });
 
-  test('toggle switch CSS and config section defined', async () => {
+  test('toggle switch CSS and form row anatomy defined', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('.toggle');
     expect(html).toContain('.toggle .slider');
-    expect(html).toContain('.config-section');
-    expect(html).toContain('.form-config');
+    expect(html).toContain('.form-row');
+    expect(html).toContain('.form-row-actions');
   });
 
   test('toggleFormFlag function calls PUT event flag API', async () => {
@@ -102,10 +103,10 @@ describe('ADMIN-5: Form config toggles', () => {
     expect(html).toContain("method: 'PUT'");
   });
 
-  test('JS generates form config and toggle data-testid patterns', async () => {
+  test('JS generates one row with toggle data-testid patterns', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically — verify the JS template patterns
-    expect(html).toContain("form-config-' + t.key");
+    expect(html).toContain("form-row-' + t.key");
     expect(html).toContain("form-toggle-' + t.key");
   });
 
@@ -236,6 +237,14 @@ describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
     expect(html).toContain('data-testid="poster-deployments-panel"');
     expect(html).toContain('data-action="pd-toggle"');
     expect(html).toContain('data-target="poster-deployments-card"');
+  });
+
+  test('OSE-1357 poster deployments surface existing shortlink slots with QR codes', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="pd-shortlink-slots"');
+    expect(html).toContain('data-testid="pd-shortlink-slot"');
+    expect(html).toContain('data-testid="pd-shortlink-qr"');
+    expect(html).toContain('data-testid="pd-shortlink-url"');
   });
 });
 
@@ -809,10 +818,10 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     expect(html).toContain('upgradePhaseLabel');
   });
 
-  test('form gate elements are keyed by form type via t.key', async () => {
+  test('form row elements are keyed by form type via t.key', async () => {
     const html = await fetchAdminHtml();
-    // JS builds: data-testid="form-gate-' + t.key + '"
-    expect(html).toContain("form-gate-' + t.key");
+    // JS builds: data-testid="form-row-' + t.key + '"
+    expect(html).toContain("form-row-' + t.key");
   });
 
   test('form types comment documents both axes (upgradeTier and upgradePhase)', async () => {

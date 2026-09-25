@@ -219,6 +219,42 @@ export async function ensureSlotShortlinks(
   return slots;
 }
 
+/**
+ * Read the existing public shortlink for an event without minting or counting
+ * anything. Use this from read-only public surfaces such as calendar downloads.
+ */
+export async function getPublicShortlinkForEvent(
+  env: ShortlinksEnv,
+  eventId: string
+): Promise<string | null> {
+  if (!env.DB) throw new Error('[shortlinks] DB binding missing');
+  const existing = await env.DB.prepare(
+    `SELECT code FROM shortlinks
+       WHERE event_id = ? AND (kind IS NULL OR kind = 'public')
+       ORDER BY created_at ASC LIMIT 1`
+  )
+    .bind(eventId)
+    .first<{ code: string }>();
+  return existing?.code ?? null;
+}
+
+/** Read all existing shortlink slots for an event without minting or counting. */
+export async function listShortlinksForEvent(
+  env: ShortlinksEnv,
+  eventId: string
+): Promise<SlotShortlink[]> {
+  if (!env.DB) throw new Error('[shortlinks] DB binding missing');
+  const rows = await env.DB.prepare(
+    `SELECT code, COALESCE(NULLIF(kind, ''), 'public') AS kind, target_url
+       FROM shortlinks
+      WHERE event_id = ?
+      ORDER BY CASE WHEN kind IS NULL OR kind = 'public' THEN 0 ELSE 1 END, created_at ASC`
+  )
+    .bind(eventId)
+    .all<SlotShortlink>();
+  return rows.results ?? [];
+}
+
 export interface ResolvedShortlink {
   code: string;
   event_id: string;

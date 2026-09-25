@@ -384,6 +384,7 @@ export interface PublicEventRow {
   price_cents: number | null;
   price_model: string | null;
   price_note: string | null;
+  is_published: number | null;
 }
 
 function esc(s: string | null | undefined): string {
@@ -564,6 +565,24 @@ function renderShareBlock(
 <script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
 }
 
+function renderEventActions(
+  row: PublicEventRow,
+  shareUrl: string,
+  nonce: string,
+  lang: 'en' | 'es'
+): string {
+  const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
+  const calendarHref = `/events/${esc(row.id)}/calendar.ics`;
+  return `<div class="ose-event-actions" data-testid="event-actions">
+  ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+  ${
+    row.start_date
+      ? `<a class="ose-calendar-link" data-testid="add-to-calendar" href="${calendarHref}" download>${calendarLabel}</a>`
+      : ''
+  }
+</div>`;
+}
+
 interface SponsorBasicRow {
   id: string;
   name: string;
@@ -721,9 +740,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-geo-link:hover { text-decoration: underline; }
     .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
     .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
@@ -799,7 +820,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
        the room for the host, sponsor and report — never to persuade the room.
        The post-event recap card keeps its counts (OSE-657 keepsake). -->
 
-    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+    ${renderEventActions(row, shareUrl, nonce, lang)}
 
     <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>
 
@@ -910,9 +931,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-geo-link:hover { text-decoration: underline; }
     .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
     .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
@@ -981,7 +1004,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`;
     })()}
 
-    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+    ${renderEventActions(row, shareUrl, nonce, lang)}
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
 
@@ -1183,9 +1206,11 @@ ${ogMeta}
     .ose-suggestions-connect { margin-top: 0.75rem; }
     .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: var(--on-accent); border-radius: 6px; text-decoration: none; font-weight: 600; }
     .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
-    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
@@ -1289,7 +1314,7 @@ ${ogMeta}
        the return loop (share the recap, find the next one) — curated, bounded (an
        <aside>, visually demoted, always after the recap), never a full listing. -->
     <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
-      ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+      ${renderEventActions(row, shareUrl, nonce, lang)}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
@@ -1432,7 +1457,7 @@ export async function handlePublicEventPage(
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
-              lat, lon, price_cents, price_model, price_note
+              lat, lon, price_cents, price_model, price_note, is_published
        FROM events WHERE id = ?`
     )
       .bind(eventId)
@@ -1457,12 +1482,13 @@ export async function handlePublicEventPage(
     );
   }
 
-  // State-machine gate: draft/ready events are NOT renderable to public.
+  // Publication/state-machine gate: draft/ready/unpublished events are NOT
+  // renderable to public.
   // 404 (not 403) so an attacker can't probe to discover unpublished events.
   // The friendly copy MUST be byte-identical to the not-found case above so
   // a probe attacker can't differentiate a missing row from a draft row.
   const status = (row.status || '').toLowerCase();
-  if (status === 'draft' || status === 'ready') {
+  if (row.is_published !== 1 || status === 'draft' || status === 'ready') {
     return renderErrorPage(
       404,
       "We couldn't find that event",
@@ -1545,6 +1571,113 @@ export async function handlePublicEventPage(
         { status: row.status, start_date: row.start_date, end_date: row.end_date },
         phase
       ),
+    },
+  });
+}
+
+function injectAdminPreviewToolbar(
+  body: string,
+  eventId: string,
+  status: string,
+  nonce: string
+): string {
+  const safeId = esc(eventId);
+  const safeStatus = esc(status || 'draft');
+  const toolbar = `<div class="admin-preview-toolbar" data-testid="admin-draft-preview-toolbar">
+  <div>
+    <strong>Admin preview</strong>
+    <span data-testid="admin-draft-preview-status">${safeStatus}</span>
+  </div>
+  <div class="admin-preview-actions">
+    <a class="ose-calendar-link" data-testid="admin-preview-back" href="/admin">Back to admin</a>
+    <button class="ose-share-btn" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}">Go live</button>
+  </div>
+  <p class="ose-meta" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
+</div>
+<script nonce="${nonce}">(function(){var btn=document.querySelector('[data-testid="admin-preview-go-live"]');var msg=document.querySelector('[data-testid="admin-preview-msg"]');if(!btn)return;function say(t){if(msg)msg.textContent=t;}function jsonFetch(url,method,body){return fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t||('HTTP '+r.status));});return r.json().catch(function(){return {};});});}btn.addEventListener('click',function(){var id=btn.dataset.eventId;btn.disabled=true;say('Going live...');jsonFetch('/api/v2/admin/events/'+encodeURIComponent(id),'PUT',{status:'ready',is_published:true}).then(function(){return fetch('/api/v2/admin/events/'+encodeURIComponent(id)+'/verify-qr',{method:'POST'});}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t||('HTTP '+r.status));});say('Live. Opening the public page...');window.location.href='/events/'+encodeURIComponent(id);}).catch(function(e){btn.disabled=false;say('Could not go live: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
+  const style = `<style>
+    .admin-preview-toolbar { position: sticky; top: 0; z-index: 1000; margin: -1.5rem -1.25rem 1.25rem; padding: 0.75rem 1.25rem; background: var(--ose-card, #fff); border-bottom: 1px solid rgba(42,42,42,0.16); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .admin-preview-toolbar, .admin-preview-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .admin-preview-toolbar .ose-meta { flex-basis: 100%; margin: 0; }
+  </style>`;
+  return body.replace('</style>', `${style}</style>`).replace('<body>', `<body>${toolbar}`);
+}
+
+export async function handleAdminEventPreviewPage(
+  request: Request,
+  env: PublicEventEnv,
+  eventId: string
+): Promise<Response> {
+  if (!env.DB) {
+    return renderErrorPage(
+      503,
+      "We're having trouble loading this event",
+      'The admin event preview is briefly unavailable. Try again in a minute.',
+      '/admin',
+      'Back to admin'
+    );
+  }
+
+  if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
+    return renderErrorPage(
+      404,
+      "We couldn't find that event",
+      'This admin preview link is invalid.',
+      '/admin',
+      'Back to admin'
+    );
+  }
+
+  let row: PublicEventRow | null;
+  try {
+    row = await env.DB.prepare(
+      `SELECT id, brand_id, title, slug, status, description, location,
+              start_date, end_date, timezone,
+              what_short, who_host, why_purpose, how_details, where_address,
+              who_story, who_image_url, what_video_url, what_url,
+              what_url_enabled, what_url_type,
+              lat, lon, price_cents, price_model, price_note, is_published
+       FROM events WHERE id = ?`
+    )
+      .bind(eventId)
+      .first<PublicEventRow>();
+  } catch {
+    return renderErrorPage(
+      503,
+      "We're having trouble loading this event",
+      'The admin event preview is briefly unavailable. Try again in a minute.',
+      '/admin',
+      'Back to admin'
+    );
+  }
+
+  if (!row) {
+    return renderErrorPage(
+      404,
+      "We couldn't find that event",
+      'This admin preview link no longer points to an event.',
+      '/admin',
+      'Back to admin'
+    );
+  }
+
+  const nonce = generateNonce();
+  const lang = preferredLang(request);
+  const url = new URL(request.url);
+  const shareUrl = `${url.origin}/events/${row.id}`;
+  const social = await fetchEventPageSocialData(env, row.id);
+  const body = injectAdminPreviewToolbar(
+    renderPreEventHtml(row, shareUrl, social, { nonce, lang }),
+    row.id,
+    row.status,
+    nonce
+  );
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      ...securityHeaders(nonce),
+      'Cache-Control': 'no-store',
     },
   });
 }

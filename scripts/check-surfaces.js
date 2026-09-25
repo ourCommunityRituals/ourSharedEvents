@@ -28,18 +28,35 @@ const SRC_MVP = path.join(ROOT, 'src', 'mvp');
 const CODE_GS = path.join(SRC_MVP, 'Code.gs');
 
 // Known API endpoints that use page= but are NOT surfaces (JSON responses)
-const API_ENDPOINTS = ['status', 'statusmvp', 'status-mvp', 'setup', 'setupcheck', 'permissions', 'checkpermissions', 'ping', 'whoami'];
+const API_ENDPOINTS = [
+  'status',
+  'statusmvp',
+  'status-mvp',
+  'setup',
+  'setupcheck',
+  'permissions',
+  'checkpermissions',
+  'ping',
+  'whoami',
+];
 
 // Redirect handlers (not surfaces)
 const REDIRECT_PAGES = ['r', 'redirect'];
 
 // Analytics alias for report
-const SURFACE_ALIASES = { 'analytics': 'report' };
+const SURFACE_ALIASES = { analytics: 'report' };
 
 // V2 surfaces - BLOCKED in MVP router (no longer whitelisted)
 // These surfaces are explicitly blocked in Code.gs doGet() to prevent scope creep
 // The check-surfaces script should NOT allow references to these surfaces
-const BLOCKED_V2_SURFACES = ['templates-v2', 'randomizer', 'teams', 'picker', 'portfolio', 'portfolio-dashboard'];
+const BLOCKED_V2_SURFACES = [
+  'templates-v2',
+  'randomizer',
+  'teams',
+  'picker',
+  'portfolio',
+  'portfolio-dashboard',
+];
 
 // ============================================================================
 // Extract MVP surfaces from Code.gs
@@ -78,8 +95,8 @@ function extractMvpSurfacesFromCode() {
   const arrayContents = match[1];
   const surfaces = arrayContents
     .split(',')
-    .map(s => s.trim().replace(/['"]/g, ''))
-    .filter(s => s.length > 0);
+    .map((s) => s.trim().replace(/['"]/g, ''))
+    .filter((s) => s.length > 0);
 
   console.log('📋 MVP surfaces from _listMvpSurfaces_():', surfaces.join(', '));
   return surfaces;
@@ -116,14 +133,14 @@ function findPageReferences(filePath, content) {
     /pageParam\s*[=!]=+\s*['"]([a-zA-Z0-9_-]+)['"]/g,
     /page:\s*['"]([a-zA-Z0-9_-]+)['"]/g,
     // pageFile_ calls
-    /pageFile_\s*\(\s*['"]([a-zA-Z0-9_-]+)['"]\s*\)/g
+    /pageFile_\s*\(\s*['"]([a-zA-Z0-9_-]+)['"]\s*\)/g,
   ];
 
   // Additional pattern for ?p= but we need to filter out scope values
   const pPattern = /[?&]p=([a-zA-Z0-9_-]+)/g;
 
   lines.forEach((line, index) => {
-    patterns.forEach(pattern => {
+    patterns.forEach((pattern) => {
       let match;
       // Reset lastIndex for global regex
       pattern.lastIndex = 0;
@@ -131,7 +148,7 @@ function findPageReferences(filePath, content) {
         results.push({
           line: index + 1,
           match: match[0],
-          value: match[1]
+          value: match[1],
         });
       }
     });
@@ -146,7 +163,7 @@ function findPageReferences(filePath, content) {
         results.push({
           line: index + 1,
           match: match[0],
-          value
+          value,
         });
       }
     }
@@ -203,23 +220,32 @@ function scanSourceFiles(mvpSurfaces) {
   const valid = [];
   const invalid = [];
 
-  // Get all files in src/mvp
-  const files = fs.readdirSync(SRC_MVP)
-    .filter(f => f.endsWith('.gs') || f.endsWith('.html'))
-    .map(f => path.join(SRC_MVP, f));
+  // GAS source files were archived after the Cloudflare Workers migration.
+  // When src/mvp is absent, this guard has no GAS page references to scan.
+  if (!fs.existsSync(SRC_MVP)) {
+    console.log('ℹ️  src/mvp not found (archived after GAS→Worker migration)');
+    console.log('ℹ️  Skipping page= reference scan - Worker routes are validated elsewhere');
+    return { valid, invalid };
+  }
 
-  files.forEach(filePath => {
+  // Get all files in src/mvp
+  const files = fs
+    .readdirSync(SRC_MVP)
+    .filter((f) => f.endsWith('.gs') || f.endsWith('.html'))
+    .map((f) => path.join(SRC_MVP, f));
+
+  files.forEach((filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
     const fileName = path.basename(filePath);
     const refs = findPageReferences(filePath, content);
 
-    refs.forEach(ref => {
+    refs.forEach((ref) => {
       const check = isValidPageValue(ref.value, mvpSurfaces);
       const entry = {
         file: fileName,
         line: ref.line,
         match: ref.match,
-        value: ref.value
+        value: ref.value,
       };
 
       if (check.valid) {
@@ -246,7 +272,7 @@ function checkUrlAliases(mvpSurfaces) {
     console.log('ℹ️  Config.gs not found in src/mvp/ (archived after GAS→Worker migration)');
     console.log('ℹ️  Skipping URL_ALIASES check - use wrangler.toml routes instead');
     console.log('ℹ️  See docs/GAS-TO-CLOUDFLARE-MIGRATION.md for architecture details');
-    return [];  // No invalid aliases if file doesn't exist
+    return []; // No invalid aliases if file doesn't exist
   }
 
   const content = fs.readFileSync(configPath, 'utf8');
@@ -277,7 +303,7 @@ function checkUrlAliases(mvpSurfaces) {
           line: index + 1,
           match: match[0],
           value,
-          reason: 'URL alias points to non-MVP surface'
+          reason: 'URL alias points to non-MVP surface',
         });
       }
     }
@@ -317,7 +343,7 @@ function main() {
     console.log(`\n❌ INVALID references found: ${allInvalid.length}`);
     console.log('\nThe following page references are not valid MVP surfaces:\n');
 
-    allInvalid.forEach(ref => {
+    allInvalid.forEach((ref) => {
       console.log(`  ${ref.file}:${ref.line}`);
       console.log(`    Match: ${ref.match}`);
       console.log(`    Value: "${ref.value}" - ${ref.reason}`);

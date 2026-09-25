@@ -82,6 +82,13 @@ describe('events list — lifecycle filters, only-mine, show more', () => {
     const html = await adminHtml();
     expect(html).toContain('data-status="${st}"');
   });
+
+  test('draft rows expose an admin-only public-page preview link', async () => {
+    const html = await adminHtml();
+    expect(html).toContain('data-testid="event-preview-link"');
+    expect(html).toContain("e.status === 'draft'");
+    expect(html).toContain('href="/api/v2/admin/events/\' + safeId + \'/preview"');
+  });
 });
 
 describe('status panel — the only lifecycle driver', () => {
@@ -162,18 +169,21 @@ describe('event timeline — the chain at a glance', () => {
     expect(html).toMatch(
       /id="event-timeline-card"[^>]*data-testid="event-timeline-card"[^>]*hidden/
     );
+    expect(html).toContain('<h3 class="mcard-title">Event checklist</h3>');
     expect(html).toContain('window.renderEventTimeline(d.id)');
   });
 
-  test('six steps in chain order, each with a data-state', async () => {
+  test('five checklist steps in chain order, each with a data-state', async () => {
     const html = await adminHtml();
-    const order = ['setup', 'live', 'poster', 'scans', 'sponsors', 'report'];
+    const order = ['setup', 'live', 'get-word-out', 'scans', 'report'];
     let last = -1;
     for (const k of order) {
       const i = html.indexOf(`key: '${k}'`);
       expect(i, k).toBeGreaterThan(last);
       last = i;
     }
+    expect(html).not.toContain("key: 'sponsors'");
+    expect(html).not.toContain("label: 'Sponsors on'");
     expect(html).toContain(`data-testid="tl-' + s.key + '" data-state="' + s.state + '"`);
   });
 
@@ -183,18 +193,26 @@ describe('event timeline — the chain at a glance', () => {
     expect(html).toContain("if (f.suppressed) return 'fewer than ' + (f.floor || 5)");
   });
 
-  test('the "Sponsors on" step counts ACCEPTED sponsors only, not pending (item 9)', async () => {
+  test('the "Get the word out" step folds sponsors in and counts ACCEPTED sponsors only', async () => {
     const html = await adminHtml();
     // sponsor_accepted: 1 accepted, 0 declined, null pending. Only accepted
     // (=== 1) renders on the public surfaces (ADR-019 strict consent), so the
     // timeline must not count a pending (null) sponsor as "on". `!== 0` wrongly
     // treated pending as on; accepted-only is the honest count.
+    expect(html).toContain("label: 'Get the word out'");
     expect(html, 'timeline sponsor count must not treat pending (null) as on').not.toMatch(
       /s\.sponsor_accepted\s*!==\s*0/
     );
-    expect(html, 'timeline "Sponsors on" must count accepted-only').toMatch(
+    expect(html, 'timeline "Get the word out" sponsor count must be accepted-only').toMatch(
       /Number\(s\.sponsor_accepted\)\s*===\s*1/
     );
+  });
+
+  test('live checklist copy never tells an already-live event to press Go live', async () => {
+    const html = await adminHtml();
+    expect(html).toContain('live ? (Number(e.is_published) === 0');
+    expect(html).toContain("'Public page, poster and display are on'");
+    expect(html).toContain("st === 'ready' ? 'Marked ready. Press Go live above.'");
   });
 
   test('the next step is one link into the right card, in chain order', async () => {

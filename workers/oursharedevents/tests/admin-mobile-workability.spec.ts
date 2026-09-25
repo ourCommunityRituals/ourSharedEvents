@@ -119,14 +119,11 @@ describe('OSE-294 admin mobile workability — API layer', () => {
     );
   });
 
-  test('OSE-294 | API | GET /admin (mobile media query) | form-count boxes collapse to 2x2 on a phone', async () => {
+  test('OSE-294 | API | GET /admin (mobile media query) | form rows stack on a phone', async () => {
     const html = await fetchAdminHtml();
-    // The four count boxes are a fixed 4-across grid by default; on a 375px
-    // screen that squeezes each to ~80px. The ≤480px rule collapses them to 2x2.
     const mediaBlock = extractMediaBlock(html, 480);
-    expect(mediaBlock).toMatch(
-      /\.form-counts\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/
-    );
+    expect(mediaBlock).toMatch(/\.form-row\s*\{[^}]*flex-direction:\s*column/);
+    expect(mediaBlock).toMatch(/\.form-row-actions\s*\{[^}]*width:\s*100%/);
   });
 });
 
