@@ -62,14 +62,22 @@ describe('OSE-1205 | /events phase-aware cards', () => {
     expect(cta.getAttribute('data-cta')).toBe('recap');
     expect(cta.getAttribute('href')).toBe('/events/evt-wrapped');
     expect(cta.textContent).toBe('See how it went');
+    const cardLink = card.querySelector(
+      '[data-testid="public-event-card-link"]'
+    ) as HTMLAnchorElement;
+    expect(cardLink.getAttribute('href')).toBe('/events/evt-wrapped');
     expect(card.innerHTML).not.toContain('type=register');
   });
 
-  test('pre_event → Register CTA to /forms/:id?type=register, no Wrapped tag', () => {
+  test('pre_event → card links to the public page; Register CTA remains the shortcut', () => {
     const { el } = render([upcoming]);
     const card = el.querySelector('[data-testid="public-event-card"]') as HTMLElement;
     expect(card.getAttribute('data-phase')).toBe('pre_event');
     expect(card.querySelector('[data-testid="public-event-wrapped"]')).toBeNull();
+    const cardLink = card.querySelector(
+      '[data-testid="public-event-card-link"]'
+    ) as HTMLAnchorElement;
+    expect(cardLink.getAttribute('href')).toBe('/events/evt-next');
     const cta = card.querySelector('[data-testid="public-event-cta"]') as HTMLAnchorElement;
     expect(cta.getAttribute('data-cta')).toBe('register');
     expect(cta.getAttribute('href')).toMatch(/^\/forms\/evt-next\?type=register/);

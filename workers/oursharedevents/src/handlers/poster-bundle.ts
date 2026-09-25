@@ -142,7 +142,7 @@ export const POSTER_SLOT_LABELS: Record<string, string> = {
   menu: 'Menu & reservations',
   website: 'Visit the site',
 };
-function posterSlotLabel(kind: string): string {
+export function posterSlotLabel(kind: string): string {
   return POSTER_SLOT_LABELS[kind] ?? 'More';
 }
 

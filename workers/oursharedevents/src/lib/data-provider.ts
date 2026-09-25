@@ -297,9 +297,14 @@ export class DataProvider {
 
   async getSponsors(
     eventId: string,
-    opts: { count?: number } = {}
+    opts: { count?: number; bypassCache?: boolean } = {}
   ): Promise<DataResult<SponsorRow[]>> {
     if (!this.isMockActive) {
+      if (opts.bypassCache) {
+        const rows = await this.fetchSponsors(eventId);
+        if (rows) return { data: rows, source: 'live', cacheAge: null };
+      }
+
       const keyPath = sponsorsCacheKeyPath(eventId);
       const ttl = TTL.sponsor;
 

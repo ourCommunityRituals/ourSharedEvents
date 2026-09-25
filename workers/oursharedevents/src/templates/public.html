@@ -36,6 +36,7 @@
         gap: 1rem;
       }
       .event-card {
+        position: relative;
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
@@ -50,7 +51,19 @@
       .event-card:hover {
         background: var(--surface-hover);
       }
+      .event-card-link {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        border-radius: var(--radius-sm);
+      }
+      .event-card-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+      }
       .event-card .event-info {
+        position: relative;
+        z-index: 2;
         flex: 1;
         min-width: 0;
       }
@@ -139,6 +152,8 @@
         color: var(--text-muted);
       }
       .event-card .cta {
+        position: relative;
+        z-index: 3;
         display: inline-flex;
         align-items: center;
         padding: 0.5rem 1.25rem;

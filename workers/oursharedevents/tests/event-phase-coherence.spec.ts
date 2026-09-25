@@ -121,6 +121,25 @@ beforeAll(async () => {
       farPastPlus
     )
     .run();
+
+  // Event D — active but unpublished: admin-only parking state. It must never
+  // appear in public listing APIs even though its lifecycle status is active.
+  await db()
+    .prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      'evt_active_unpublished',
+      'phase-coherence',
+      'Active Unpublished Event',
+      'active-unpublished',
+      'active',
+      0,
+      farFuture,
+      farFuturePlus
+    )
+    .run();
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -171,15 +190,20 @@ describe('OSE-242 cross-surface phase coherence (#1 bundled with #2)', () => {
     }
   });
 
+  test('public list endpoint omits unpublished events server-side', async () => {
+    const items = await fetchPublicList();
+    expect(items.map((e) => e.id)).not.toContain('evt_active_unpublished');
+  });
+
   test('public single endpoint enriches the event with phase', async () => {
     const e = await fetchPublicSingle('evt_active_live');
     expect(e).not.toBeNull();
     expect(e!.phase).toBe<EventPhase>('event');
   });
 
-  test('admin list endpoint enriches every event with phase (including archived)', async () => {
+  test('admin list endpoint enriches every event with phase (including archived and unpublished)', async () => {
     const items = await fetchAdminList();
-    expect(items.length).toBe(3); // all 3 fixtures visible to admin
+    expect(items.length).toBe(4); // all fixtures visible to admin
     for (const e of items) {
       expect(e.phase).toBeDefined();
       expect(['pre_event', 'event', 'post_event']).toContain(e.phase);

@@ -164,6 +164,21 @@
         display: block;
         margin: 0.75rem auto 0;
       }
+      .event-preview-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .event-preview-link:hover {
+        text-decoration: underline;
+      }
+      .event-preview-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       .events-count {
         font-size: 0.85rem;
         color: var(--text-muted);
@@ -300,15 +315,34 @@
       .feature-locked .lock-overlay {
         display: block;
       }
+      .form-row,
       .form-config {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.5rem 0;
+        gap: 1rem;
+        padding: 0.75rem 0;
         border-bottom: 1px solid var(--border);
       }
+      .form-row:last-child,
       .form-config:last-child {
         border-bottom: none;
+      }
+      .form-row-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .form-row-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .form-row-count {
+        min-width: 44px;
+        text-align: center;
+        font-weight: 700;
       }
       .form-config-label {
         font-size: 0.9rem;
@@ -536,28 +570,6 @@
         font-size: 0.8rem;
         color: var(--text-muted);
         margin-top: 0.15rem;
-      }
-      .form-counts {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 0.5rem;
-        margin-top: 1rem;
-      }
-      .form-counts .count-box {
-        text-align: center;
-        padding: 0.5rem;
-        background: var(--surface-hover);
-        border-radius: 6px;
-      }
-      .form-counts .count-num {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text);
-      }
-      .form-counts .count-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
       }
       .surface-cards {
         display: grid;
@@ -2057,12 +2069,13 @@
         .wizard-links-grid {
           grid-template-columns: 1fr;
         }
-        /* The four form-count boxes are a fixed 4-across grid; on a 375px phone
-           that squeezes each to ~80px and truncates the labels. 2x2 keeps the
-           number + label legible. (Every other admin grid already collapses on
-           mobile — this was the one that didn't.) */
-        .form-counts {
-          grid-template-columns: repeat(2, 1fr);
+        .form-row {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .form-row-actions {
+          justify-content: space-between;
+          width: 100%;
         }
         .wizard-progress-step .step-label {
           display: none;
@@ -4112,7 +4125,6 @@
           ),
         ]);
         const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
-        const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
         // Retry re-runs the whole load for the currently-selected event.
         window._lastFormsArgs = [eventId, eventName, legalPhase];
         window.reloadForms = function () {
@@ -4127,59 +4139,46 @@
           return String(c);
         };
 
-        // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
+        // Form rows — one row per form. Link, purpose, count and lock/toggle
+        // state live together so each form appears exactly once.
         const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-        const linksHtml = types.map(t => {
+        const formRowsHtml = types.map((t, i) => {
           const tierEnabled = flags[t.flagKey] !== false;
           const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
           const enabled = tierEnabled && phaseEnabled;
           const lockedClass = enabled ? '' : ' feature-locked';
+          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
+          const disabled = !globalEnabled ? ' disabled' : '';
+          const checked = tierEnabled ? ' checked' : '';
           // OSE-R-005: friendly plan + event-type names in the lock overlay.
           const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
           const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
           const lockMsg = enabled ? '' : !tierEnabled
             ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
             : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
-          return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
-            '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
-              '<div class="form-type">' + t.label + '</div>' +
-              '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
-            '</a>' + lockMsg + '</div>';
-        }).join('');
-
-        // Inline form config toggles
-        const configHtml = types.map((t, i) => {
-          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
-          const eventEnabled = flags[t.flagKey] !== false;
-          const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
-          const disabled = !globalEnabled ? ' disabled' : '';
-          const checked = eventEnabled ? ' checked' : '';
-          return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
-            '<div>' +
-              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + renderCount(counts[i]) + ')</span></div>' +
-              '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
+          return '<div class="form-row' + lockedClass + '" data-testid="form-row-' + t.key + '">' +
+            '<div class="form-row-main">' +
+              '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
+                '<div class="form-type">' + t.label + '</div>' +
+                '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
+              '</a>' +
+              lockMsg +
             '</div>' +
-            '<label class="toggle">' +
+            '<div class="form-row-actions">' +
+              '<span class="form-row-count" data-testid="form-count-' + t.key + '">' + renderCount(counts[i]) + '</span>' +
+              '<label class="toggle" aria-label="' + t.label + ' enabled">' +
               '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
               ' data-change="form-flag" />' +
               '<span class="slider"></span>' +
-            '</label>' +
+              '</label>' +
+            '</div>' +
           '</div>';
         }).join('');
 
         window._mintEventId = eventId;
 
         panel.innerHTML =
-          '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
-          '<div class="form-counts" data-testid="form-counts">' +
-            counts.map((c, i) =>
-              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + renderCount(c) + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
-            ).join('') +
-          '</div>' +
-          '<div class="config-section" data-testid="config-section">' +
-            '<h3>Form Config</h3>' +
-            configHtml +
-          '</div>' +
+          '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' +
           '<div class="report-links-section" data-testid="report-links-section">' +
             '<h3>Shared Report Links</h3>' +
             '<p style="margin:0 0 12px;font-size:13px;color:#5a5a5a">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
@@ -4627,6 +4626,31 @@
       .pd-meta { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
       .pd-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
       .pd-meta-row code { word-break: break-all; }
+      .pd-slot-list {
+        width: 100%;
+        display: grid;
+        gap: 8px;
+      }
+      .pd-slot {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+      .pd-slot img {
+        width: 48px;
+        height: 48px;
+        image-rendering: pixelated;
+        padding: 4px;
+        background: white;
+      }
+      .pd-slot code {
+        word-break: break-all;
+      }
       .poster-deployments-card .qr-card-footer {
         display: flex;
         flex-wrap: wrap;
@@ -4707,6 +4731,16 @@
               const qrCell = pd.qr_data_uri
                 ? '<img class="qr-img" src="' + esc(pd.qr_data_uri) + '" alt="Scan QR for ' + esc(pd.placement_label || 'poster deployment') + '" data-testid="pd-qr-img" width="160" height="160" />'
                 : '<code data-testid="pd-qr-fallback">' + esc(pd.qr_token) + '</code>';
+              const slots = Array.isArray(pd.slots) ? pd.slots : [];
+              const slotHtml = slots.length
+                ? '<div class="pd-slot-list" data-testid="pd-shortlink-slots">' + slots.map(function (s) {
+                    return '<div class="pd-slot" data-testid="pd-shortlink-slot">' +
+                      (s.qr ? '<img src="' + esc(s.qr) + '" alt="' + esc(s.label || s.kind || 'Short link') + ' short link QR" data-testid="pd-shortlink-qr" />' : '') +
+                      '<div><div class="pd-card-title">' + esc(s.label || s.kind || 'Short link') + '</div>' +
+                      '<code data-testid="pd-shortlink-url">' + esc(s.url || '') + '</code></div>' +
+                    '</div>';
+                  }).join('') + '</div>'
+                : '';
               return (
                 '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
                   '<div class="qr-card-header">' +
@@ -4720,6 +4754,7 @@
                       '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</span></div>' +
                       '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token">' + esc(pd.qr_token) + '</code></div>' +
                     '</dl>' +
+                    slotHtml +
                   '</div>' +
                   '<div class="qr-card-footer">' +
                     '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" data-action="pd-download" data-pd-id="' + esc(pd.id) + '" aria-label="Download poster QR">Download</button>' +
@@ -5279,7 +5314,7 @@
            in the flow they are. -->
       <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
         <div class="mcard-head">
-          <h3 class="mcard-title">Where this event is</h3>
+          <h3 class="mcard-title">Event checklist</h3>
           <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
         </div>
         <div class="mcard-body">
@@ -5514,6 +5549,7 @@
             var iso = e.startDateISO ? String(e.startDateISO) : '';
             var when = iso ? esc(new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso).toLocaleDateString()) : '—';
             var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Live, but kept off the public map and list">(unlisted)</span>' : '';
+            var preview = e.status === 'draft' ? '<a class="event-preview-link" data-testid="event-preview-link" href="/api/v2/admin/events/' + safeId + '/preview" target="_blank" rel="noopener">Preview</a>' : '';
             return `
           <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}" data-status="${st}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
@@ -5522,6 +5558,7 @@
             <td data-label="Venue" data-testid="event-venue">${esc(e.venue || '—')}</td>
             <td data-label="Status"><span class="badge ${st}" data-testid="event-status">${stLabel}</span>${unlisted}</td>
             <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
+            <td data-label="Preview" data-testid="event-preview">${preview}</td>
           </tr>
         `;
           };
@@ -5543,7 +5580,7 @@
               const safeBrand = esc(b);
               const evs = byBrand[b];
               const header = multiBrand
-                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" data-action="brand-toggle"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
+                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" data-action="brand-toggle"><td colspan="7"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
                 : '';
               return header + evs.map(rowFor).join('');
             })
@@ -5557,7 +5594,7 @@
             '<span class="events-count" data-testid="events-count">' + countLine + '</span>' +
           '</div>' +
           '<table class="events-table" data-testid="events-table">' +
-            '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th></tr></thead>' +
+            '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th><th data-testid="events-col-preview">Preview</th></tr></thead>' +
             '<tbody data-testid="events-tbody">' + rows + '</tbody>' +
           '</table>' +
           (hasMore ? '<button type="button" class="copy-btn events-load-more" data-action="events-load-more" data-testid="events-load-more">Show more</button>' : '');
@@ -5705,12 +5742,10 @@
             detail: (e.name || 'Untitled') + (e.startDateISO ? ' · ' + esc(e.startDateISO) : ' · no date yet') },
           { key: 'live', label: over ? 'Was live' : 'Live', state: live || over ? 'done' : st === 'ready' ? 'now' : 'todo',
             detail: live ? (Number(e.is_published) === 0 ? 'Live, but kept off the public map' : 'Public page, poster and display are on') : over ? 'Archived' : st === 'ready' ? 'Marked ready. Press Go live above.' : 'Still a draft. Go live when the details are right.' },
-          { key: 'poster', label: 'Poster out', state: posters == null ? 'todo' : posters > 0 ? 'done' : (live ? 'now' : 'todo'),
-            detail: posters == null ? 'Could not load' : posters > 0 ? posters + ' placement' + (posters === 1 ? '' : 's') + ' logged' : 'No poster placements logged yet' },
+          { key: 'get-word-out', label: 'Get the word out', state: posters == null || sponsors == null ? 'todo' : posters > 0 && sponsors > 0 ? 'done' : (live ? 'now' : 'todo'),
+            detail: (posters == null ? 'Poster placements could not load' : posters > 0 ? posters + ' poster placement' + (posters === 1 ? '' : 's') : 'No poster placements yet') + ' · ' + (sponsors == null ? 'sponsors could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'no sponsors on yet') },
           { key: 'scans', label: 'People scanning', state: anyScans ? 'done' : (live && posters > 0 ? 'now' : 'todo'),
             detail: stats ? 'Scans ' + scans + ' · registered ' + regs + ' · checked in ' + checkins : 'Could not load counts' },
-          { key: 'sponsors', label: 'Sponsors on', state: sponsors == null ? 'todo' : sponsors > 0 ? 'done' : 'todo',
-            detail: sponsors == null ? 'Could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'No sponsors on this event yet' },
           { key: 'report', label: 'Report', state: (live && anyScans) || over ? 'now' : 'todo',
             detail: over || (live && anyScans) ? 'Ready to share with the venue and sponsors' : 'Fills in once people start scanning' },
         ];

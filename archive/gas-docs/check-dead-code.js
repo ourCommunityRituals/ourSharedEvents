@@ -225,6 +225,14 @@ function analyzeCodeGs() {
 function analyzeOtherGsFiles() {
   const dead = [];
 
+  // GAS source files were archived after the Cloudflare Workers migration.
+  // With no src/mvp directory, there are no .gs exports to classify as dead.
+  if (!fs.existsSync(SRC_MVP)) {
+    console.log('ℹ️  src/mvp not found (archived after GAS→Worker migration)');
+    console.log('ℹ️  Skipping dead export analysis for other .gs files\n');
+    return dead;
+  }
+
   // Get all .gs files except Code.gs
   const gsFiles = fs
     .readdirSync(SRC_MVP)

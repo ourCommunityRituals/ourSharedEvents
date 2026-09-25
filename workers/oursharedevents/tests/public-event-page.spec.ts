@@ -55,6 +55,7 @@ async function applyMigrations(): Promise<void> {
 interface SeedOpts {
   id: string;
   status?: string;
+  isPublished?: number;
   startOffsetDays?: number;
   endOffsetDays?: number;
   withFiveW?: boolean;
@@ -83,10 +84,10 @@ async function seedEvent(opts: SeedOpts): Promise<void> {
       };
   await tenv.DB.prepare(`DELETE FROM events WHERE id = ?`).bind(opts.id).run();
   await tenv.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date,
+    `INSERT INTO events (id, brand_id, title, slug, status, is_published, location, start_date, end_date,
                            what_short, who_host, why_purpose, how_details, where_address,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
   )
     .bind(
       opts.id,
@@ -94,6 +95,7 @@ async function seedEvent(opts: SeedOpts): Promise<void> {
       'OSE-243a Smoke Event',
       opts.id, // slug = id for uniqueness
       opts.status ?? 'active',
+      opts.isPublished ?? 1,
       'Eagles Bowl',
       start ? start.toISOString() : null,
       end ? end.toISOString() : null,
@@ -340,6 +342,22 @@ describe('OSE-243a: state gate + 404 semantics', () => {
     expect(res.status).toBe(404);
   });
 
+  test('active but unpublished event → 404 (admin-only draft parking, MUST NOT leak)', async () => {
+    const eventId = 'evt_ose1354_unpublished';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      isPublished: 0,
+      startOffsetDays: 7,
+      withFiveW: true,
+    });
+    const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+    expect(res.status).toBe(404);
+    const html = await res.text();
+    expect(html).toMatch(/data-testid="error-title"/);
+    expect(html).not.toContain('OSE-243a Smoke Event');
+  });
+
   test('unknown event ID → 404', async () => {
     const res = await SELF.fetch('https://t.test/events/evt_does_not_exist_ose243a');
     expect(res.status).toBe(404);
@@ -423,6 +441,10 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
     'handleDisplayPage',
     'handlePosterPage',
     'handleSharedReportPage',
+    // OSE-1355 — admin-authenticated draft preview uses the public pre-event
+    // renderer. It is not public, but it is still an HTML render surface and
+    // must not introduce per-attendee identity reads.
+    'handleAdminEventPreviewPage',
     // R-001 (2026-05-15) — HTML sign-in page for unauth GET /admin. Public-
     // render because it's served to anonymous prospects; must be anonymity-safe.
     'handleAdminSignInPage',

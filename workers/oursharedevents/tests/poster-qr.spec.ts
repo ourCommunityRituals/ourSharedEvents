@@ -117,6 +117,15 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(pages).not.toContain('qr-img-register');
   });
 
+  test('OSE-1356 print poster layout uses 11x14 page, large art viewport, legible title, and QR quiet zone', () => {
+    const pages = sourceFile('templates/poster.html');
+    expect(pages).toContain('size: 11in 14in');
+    expect(pages).toContain('max-height: 6.2in');
+    expect(pages).toContain('font-size: 38pt');
+    expect(pages).toContain('padding: 0.08in');
+    expect(pages).toContain('background: #fff');
+  });
+
   test('poster page calls loadPosterQR in both init() and picker change handler', () => {
     const pages = sourceFile('templates/poster.html');
     // Count occurrences — must appear at least twice (init + picker listener)
@@ -131,6 +140,15 @@ describe('DESIGN-9 L1: static source file checks', () => {
     const router = sourceFile('router.ts');
     expect(router).toContain('poster-bundle');
     expect(router).toContain('handleGetPosterBundle');
+  });
+
+  test('OSE-1357 deployment API enriches rows from existing shortlink slots without minting', () => {
+    const handler = sourceFile('handlers/poster-deployments.ts');
+    expect(handler).toContain('listShortlinksForEvent');
+    expect(handler).toContain('posterSlotLabel');
+    expect(handler).toContain('/s/${slot.code}');
+    expect(handler).toContain('slots }');
+    expect(handler).not.toContain('ensureSlotShortlinks');
   });
 
   // REMOVED (OSE-1127): a test asserting the handler SOURCE FILE contained the

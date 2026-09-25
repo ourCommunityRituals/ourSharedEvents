@@ -22,6 +22,8 @@
 import { corsHeaders } from '../lib/cors';
 import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
+import { listShortlinksForEvent } from '../lib/shortlinks';
+import { posterSlotLabel } from './poster-bundle';
 
 /**
  * Physical scan URL a poster QR encodes: `{origin}/q/{qr_token}`.
@@ -209,6 +211,17 @@ export async function handleAdminListPosterDeployments(
   // failure (e.g. token too long) degrades to empty string rather than 500-ing
   // the whole list — the admin card falls back to showing the token text.
   const origin = new URL(request.url).origin;
+  const slotRows = await listShortlinksForEvent(env, eventId);
+  const slots = slotRows.map((slot) => {
+    const url = `${origin}/s/${slot.code}`;
+    return {
+      kind: slot.kind,
+      label: posterSlotLabel(slot.kind),
+      code: slot.code,
+      url,
+      qr: generateQrCode(url, { errorCorrection: 'M', scale: 4 }),
+    };
+  });
   const items = (rows.results ?? []).map((row) => {
     const scan_url = scanUrlFor(origin, row.qr_token);
     let qr_data_uri = '';
@@ -217,7 +230,7 @@ export async function handleAdminListPosterDeployments(
     } catch {
       qr_data_uri = '';
     }
-    return { ...row, scan_url, qr_data_uri };
+    return { ...row, scan_url, qr_data_uri, slots };
   });
 
   return Response.json(

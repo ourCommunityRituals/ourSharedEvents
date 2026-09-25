@@ -91,9 +91,9 @@
         margin-bottom: 0.75rem;
       }
       .poster-header h2 {
-        font-size: clamp(1.5rem, 5vw, 2.25rem);
+        font-size: clamp(1.75rem, 5.6vw, 2.75rem);
         font-weight: 800;
-        line-height: 1.2;
+        line-height: 1.12;
       }
       .poster-body {
         padding: 2rem;
@@ -131,7 +131,7 @@
       .poster-art-img {
         display: block;
         width: 100%;
-        max-height: 320px;
+        max-height: min(46vh, 520px);
         object-fit: cover;
       }
       .poster-art--empty {
@@ -246,7 +246,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 0.85rem 0.75rem;
+        padding: 1rem 0.9rem;
       }
       /* OSE-1200: UEC word + path + consent tier. Plain text, prints in black —
          the hue lives on the code and the frame; the words carry it for everyone. */
@@ -466,6 +466,10 @@
         }
       }
       @media print {
+        @page {
+          size: 11in 14in;
+          margin: 0.35in;
+        }
         /* TOKEN-ADHERENCE NOTE: the raw hex in THIS @media print block is
            deliberate and gated at BASELINE poster:6. Print is PAPER — white
            bg + dark ink, theme-invariant — which no semantic token expresses
@@ -514,9 +518,25 @@
           box-shadow: none;
           border: none;
           page-break-inside: avoid;
+          min-height: 13.25in;
+        }
+        .poster-header {
+          padding: 0.45in 0.35in 0.3in;
+        }
+        .poster-header h2 {
+          font-size: 38pt;
+          line-height: 1.05;
+        }
+        .poster-body {
+          padding: 0.3in 0.35in 0.25in;
+        }
+        .poster-meta {
+          margin-bottom: 0.2in;
         }
         .qr-section {
           page-break-inside: avoid;
+          padding: 0.18in 0;
+          gap: 0.3in;
         }
         .poster-sponsors {
           page-break-inside: avoid;
@@ -543,6 +563,11 @@
         }
         .poster-art {
           page-break-inside: avoid;
+          margin: 0.12in 0 0.2in;
+        }
+        .poster-art-img {
+          max-height: 6.2in;
+          object-fit: cover;
         }
         /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
            if ANY QR is still a loading placeholder, hide the whole section so
@@ -564,7 +589,15 @@
           padding: 0 0 0.2rem;
         }
         .qr-card-body {
-          padding: 0;
+          padding: 0.12in;
+          background: white;
+        }
+        .qr-img {
+          width: 1.25in;
+          height: 1.25in;
+          margin: 0 auto 0.08in;
+          padding: 0.08in;
+          background: white;
         }
       }
     </style>
