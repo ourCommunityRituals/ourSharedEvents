@@ -135,10 +135,10 @@ test.describe('Journey: Cross-Surface Lifecycle', () => {
     await expect(page.locator('[data-testid="events-table"]')).toBeVisible({ timeout: 15_000 });
 
     await page.locator('[data-testid^="event-row-"]').first().click();
-    await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15_000 });
 
-    // Count boxes visible
-    const counts = page.locator('[data-testid="count-num"]');
+    // Counts visible in the consolidated form rows.
+    const counts = page.locator('[data-testid^="form-count-"]');
     await expect(counts.first()).toBeVisible({ timeout: 10_000 });
   });
 

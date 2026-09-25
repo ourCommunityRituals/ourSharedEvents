@@ -277,24 +277,24 @@ test.describe('Forms Card — Event Selected', () => {
     test.skip(!(await hasEvents(page)), 'No events to select');
     // Select the first event row
     await page.locator('[data-testid^="event-row-"]').first().click();
-    // Wait for the forms panel to update (skeleton -> gates)
-    await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15_000 });
+    // Wait for the forms panel to update (skeleton -> consolidated rows)
+    await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15_000 });
   });
 
-  test('should render the register form gate', async ({ page }) => {
-    await expect(page.locator('[data-testid="form-gate-register"]')).toBeVisible();
+  test('should render the register form row', async ({ page }) => {
+    await expect(page.locator('[data-testid="form-row-register"]')).toBeVisible();
   });
 
-  test('should render the checkin form gate', async ({ page }) => {
-    await expect(page.locator('[data-testid="form-gate-checkin"]')).toBeVisible();
+  test('should render the checkin form row', async ({ page }) => {
+    await expect(page.locator('[data-testid="form-row-checkin"]')).toBeVisible();
   });
 
-  test('should render the survey form gate', async ({ page }) => {
-    await expect(page.locator('[data-testid="form-gate-survey"]')).toBeVisible();
+  test('should render the survey form row', async ({ page }) => {
+    await expect(page.locator('[data-testid="form-row-survey"]')).toBeVisible();
   });
 
-  test('should render the email form gate', async ({ page }) => {
-    await expect(page.locator('[data-testid="form-gate-email"]')).toBeVisible();
+  test('should render the email form row', async ({ page }) => {
+    await expect(page.locator('[data-testid="form-row-email"]')).toBeVisible();
   });
 
   test('register gate should contain a link to the forms page', async ({ page }) => {
@@ -337,28 +337,20 @@ test.describe('Forms Card — Event Selected', () => {
     }
   });
 
-  test('should display registration count with count-num element', async ({ page }) => {
-    const countCard = page.locator('[data-testid="count-registrations"]');
-    await expect(countCard).toBeVisible();
-    await expect(countCard.locator('[data-testid="count-num"]')).toBeVisible();
+  test('should display registration count in the form row', async ({ page }) => {
+    await expect(page.locator('[data-testid="form-count-register"]')).toBeVisible();
   });
 
   test('should display check-in count', async ({ page }) => {
-    const countCard = page.locator('[data-testid="count-check-ins"]');
-    await expect(countCard).toBeVisible();
-    await expect(countCard.locator('[data-testid="count-num"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-count-checkin"]')).toBeVisible();
   });
 
   test('should display survey count', async ({ page }) => {
-    const countCard = page.locator('[data-testid="count-surveys"]');
-    await expect(countCard).toBeVisible();
-    await expect(countCard.locator('[data-testid="count-num"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-count-survey"]')).toBeVisible();
   });
 
   test('should display email count', async ({ page }) => {
-    const countCard = page.locator('[data-testid="count-emails"]');
-    await expect(countCard).toBeVisible();
-    await expect(countCard.locator('[data-testid="count-num"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-count-email"]')).toBeVisible();
   });
 });
 

@@ -97,8 +97,8 @@ test.describe('Admin Event Management Flow', () => {
       const formsPanel = page.locator('[data-testid="forms-panel"]');
       await expect(formsPanel).toBeVisible({ timeout: 10000 });
 
-      const registerGate = page.locator('[data-testid="form-gate-register"]');
-      await expect(registerGate).toBeVisible();
+      const registerRow = page.locator('[data-testid="form-row-register"]');
+      await expect(registerRow).toBeVisible();
     });
 
     test('should render form gates for expected types', async ({ page }) => {
@@ -107,10 +107,10 @@ test.describe('Admin Event Management Flow', () => {
 
       const formTypes = ['register', 'checkin', 'survey', 'email'];
       for (const type of formTypes) {
-        const gate = page.locator(`[data-testid="form-gate-${type}"]`);
-        // At least some gates should be present; not all may be enabled
-        if (await gate.isVisible()) {
-          await expect(gate).toBeVisible();
+        const row = page.locator(`[data-testid="form-row-${type}"]`);
+        // At least some rows should be present; not all may be enabled
+        if (await row.isVisible()) {
+          await expect(row).toBeVisible();
         }
       }
     });
@@ -152,7 +152,7 @@ test.describe('Admin Event Management Flow', () => {
     });
 
     test('should display registration count as a numeric value', async ({ page }) => {
-      const countBox = page.locator('[data-testid="count-registrations"]');
+      const countBox = page.locator('[data-testid="form-count-register"]');
       if (await countBox.isVisible()) {
         const text = await countBox.textContent();
         expect(text?.trim()).toMatch(/^\d+$/);
@@ -161,10 +161,10 @@ test.describe('Admin Event Management Flow', () => {
 
     test('should display count boxes with numeric values', async ({ page }) => {
       const countTestIds = [
-        'count-registrations',
-        'count-checkins',
-        'count-surveys',
-        'count-emails',
+        'form-count-register',
+        'form-count-checkin',
+        'form-count-survey',
+        'form-count-email',
       ];
       for (const testId of countTestIds) {
         const countBox = page.locator(`[data-testid="${testId}"]`);
@@ -233,22 +233,22 @@ test.describe('Admin Event Management Flow', () => {
       test.skip(rowCount === 0, 'No events available');
 
       await page.locator('[data-testid^="event-row-"]').first().click();
-      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+      await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15000 });
 
-      // Config section should be visible
-      await expect(page.locator('[data-testid="config-section"]')).toBeVisible();
+      // Consolidated form rows should be visible.
+      await expect(page.locator('[data-testid="forms-list"]')).toBeVisible();
     });
 
-    test('should render forms-grid container', async ({ page }) => {
+    test('should render forms-list container', async ({ page }) => {
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
       const rowCount = await page.locator('[data-testid^="event-row-"]').count();
       test.skip(rowCount === 0, 'No events available');
 
       await page.locator('[data-testid^="event-row-"]').first().click();
-      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+      await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15000 });
 
-      await expect(page.locator('[data-testid="forms-grid"]')).toBeVisible();
+      await expect(page.locator('[data-testid="forms-list"]')).toBeVisible();
     });
 
     test('clicking a toggle fires PUT to flags API', async ({ page }) => {
@@ -258,7 +258,7 @@ test.describe('Admin Event Management Flow', () => {
       test.skip(rowCount === 0, 'No events available');
 
       await page.locator('[data-testid^="event-row-"]').first().click();
-      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+      await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15000 });
 
       // Find an enabled toggle (not disabled by tier)
       const toggle = page.locator('[data-testid="form-toggle-register"]');

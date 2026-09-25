@@ -45,10 +45,10 @@ test.describe('Journey: Post-Event — Organizer Reviews Results', () => {
     test.skip(!(await firstRow.isVisible().catch(() => false)), 'No event rows');
 
     await firstRow.click();
-    await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15_000 });
 
-    await expect(page.locator('[data-testid="form-gate-register"]')).toBeVisible();
-    await expect(page.locator('[data-testid="form-gate-checkin"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-row-register"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-row-checkin"]')).toBeVisible();
   });
 
   test('Step 3: Count boxes show numeric values', async ({ page }) => {
@@ -58,10 +58,10 @@ test.describe('Journey: Post-Event — Organizer Reviews Results', () => {
     test.skip((await rows.count()) === 0, 'No events');
 
     await rows.first().click();
-    await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15_000 });
 
-    // Count boxes should be visible with numeric values
-    const countCards = page.locator('[data-testid="count-num"]');
+    // Counts should be visible in the consolidated form rows.
+    const countCards = page.locator('[data-testid^="form-count-"]');
     await expect(countCards.first()).toBeVisible({ timeout: 10_000 });
 
     const count = await countCards.count();

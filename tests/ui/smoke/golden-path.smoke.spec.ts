@@ -91,13 +91,13 @@ test.describe('Golden Path — First-Time Organizer', () => {
     await row.click();
 
     // Wait for forms panel to load
-    await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15_000 });
+    await page.waitForSelector('[data-testid="forms-list"]', { timeout: 15_000 });
 
-    // Forms card should show the 4 form gates
-    await expect(page.locator('[data-testid="form-gate-register"]')).toBeVisible();
-    await expect(page.locator('[data-testid="form-gate-checkin"]')).toBeVisible();
-    await expect(page.locator('[data-testid="form-gate-survey"]')).toBeVisible();
-    await expect(page.locator('[data-testid="form-gate-email"]')).toBeVisible();
+    // Forms card should show the 4 consolidated form rows
+    await expect(page.locator('[data-testid="form-row-register"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-row-checkin"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-row-survey"]')).toBeVisible();
+    await expect(page.locator('[data-testid="form-row-email"]')).toBeVisible();
   });
 
   // ── Step 5: Registration link is present and correct ────────────────────

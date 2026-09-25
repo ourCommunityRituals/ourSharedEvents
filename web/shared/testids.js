@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-21 — 435 ids.
+ * Generated 2026-09-25 — 439 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 277 ids
+    // admin.html — 281 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -81,13 +81,11 @@
       'card-public',
       'card-report',
       'close-after-save',
-      'config-section',
       'confirm-discard',
       'copy-display',
       'copy-poster',
       'copy-public',
       'copy-report',
-      'count-num',
       'count-retry',
       'count-suppressed',
       'create-category',
@@ -130,6 +128,8 @@
       'event-id',
       'event-name',
       'event-phase',
+      'event-preview',
+      'event-preview-link',
       'event-status',
       'event-status-actions',
       'event-status-badge',
@@ -144,6 +144,7 @@
       'events-col-date',
       'events-col-id',
       'events-col-name',
+      'events-col-preview',
       'events-col-status',
       'events-col-type',
       'events-col-venue',
@@ -163,10 +164,9 @@
       'events-section',
       'events-table',
       'events-tbody',
-      'form-counts',
       'forms-card',
       'forms-error',
-      'forms-grid',
+      'forms-list',
       'forms-loading-initial',
       'forms-panel',
       'forms-retry',
@@ -206,6 +206,10 @@
       'pd-qr-fallback',
       'pd-qr-img',
       'pd-qr-token',
+      'pd-shortlink-qr',
+      'pd-shortlink-slot',
+      'pd-shortlink-slots',
+      'pd-shortlink-url',
       'phase-badge',
       'portfolio-rollup',
       'poster-art-card',
