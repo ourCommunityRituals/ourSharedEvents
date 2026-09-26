@@ -81,6 +81,28 @@ async function createEvent(
   return json.id;
 }
 
+async function createPosterDeployment(
+  request: any,
+  eventId: string,
+  suffix: string
+): Promise<{ id: string; qrToken: string }> {
+  const resp = await adminFetch(
+    request,
+    'POST',
+    `/api/v2/admin/events/${encodeURIComponent(eventId)}/poster-deployments`,
+    {
+      placement_label: `Launch Smoke Poster ${suffix} ${RUN_ID}`,
+      location_desc: 'Launch smoke verification',
+      is_active: true,
+    }
+  );
+  expect(resp.status(), 'create poster deployment').toBe(201);
+  const json = await resp.json();
+  expect(json.id).toBeTruthy();
+  expect(json.qr_token).toBeTruthy();
+  return { id: json.id, qrToken: json.qr_token };
+}
+
 async function deleteEvent(request: any, eventId: string | null): Promise<void> {
   if (!eventId) return;
   try {
@@ -90,17 +112,33 @@ async function deleteEvent(request: any, eventId: string | null): Promise<void> 
   }
 }
 
+async function deletePosterDeployment(request: any, deploymentId: string | null): Promise<void> {
+  if (!deploymentId) return;
+  try {
+    await adminFetch(
+      request,
+      'DELETE',
+      `/api/v2/admin/poster-deployments/${encodeURIComponent(deploymentId)}`
+    );
+  } catch {
+    // Cleanup is best-effort; this smoke spec only reads redirect behaviour.
+  }
+}
+
 test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
   let publicEventId: string | null = null;
   let draftEventId: string | null = null;
+  let posterDeploymentId: string | null = null;
 
   test.beforeAll(() => {
     precondition(!ADMIN_KEY, 'ADMIN_KEY or X_OCR_INTERNAL is required');
   });
 
   test.afterEach(async ({ request }) => {
+    await deletePosterDeployment(request, posterDeploymentId);
     await deleteEvent(request, publicEventId);
     await deleteEvent(request, draftEventId);
+    posterDeploymentId = null;
     publicEventId = null;
     draftEventId = null;
   });
@@ -186,6 +224,31 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     ).toContain(liveStatus);
     if (liveStatus === 200) {
       await expect(page.locator('[data-testid="event-title"]')).toContainText('Launch Smoke draft');
+    }
+  });
+
+  test('poster scan route replays to /events/:id with type and deployment context (OSE-1359)', async ({
+    request,
+  }) => {
+    publicEventId = await createEvent(request, 'active', true, 'scan-route');
+    const deployment = await createPosterDeployment(request, publicEventId, 'scan-route');
+    posterDeploymentId = deployment.id;
+
+    const res = await request.get(
+      `${BASE_URL}/q/${encodeURIComponent(deployment.qrToken)}?type=checkin`,
+      { maxRedirects: 0 }
+    );
+    expect(
+      [302, 403],
+      'scan route is handled by Worker OR blocked by the staging WAF edge'
+    ).toContain(res.status());
+    if (res.status() === 302) {
+      const location = res.headers()['location'] ?? '';
+      expect(location, 'good token must deep-link to the event page, not fallback /').toContain(
+        `/events/${publicEventId}`
+      );
+      expect(location).toContain('type=checkin');
+      expect(location).toContain(`deployment=${deployment.id}`);
     }
   });
 });
