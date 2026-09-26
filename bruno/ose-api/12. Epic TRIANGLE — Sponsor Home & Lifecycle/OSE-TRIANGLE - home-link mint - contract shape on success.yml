@@ -1,0 +1,60 @@
+info:
+  name: TRIANGLE | sponsor home-link | contract shape on success
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors/{{testSponsorId}}/home-link"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // TRI-5 reconciliation slice:
+        // explicit contract check for home-link mint endpoint.
+        const ct = res.getHeader('Content-Type') || '';
+        const isJson = ct.includes('application/json');
+        if (!isJson) {
+          test('CF Access/admin boundary blocks non-JSON', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const body = res.getBody();
+        if (res.getStatus() === 200) {
+          test('ok/status on success', function () {
+            expect(body.ok).to.eql(true);
+            expect(body.status).to.eql(200);
+          });
+          test('returns sponsor URL and expiry', function () {
+            expect(body.url).to.be.a('string');
+            expect(body.url).to.contain('/sponsor?t=');
+            expect(body.expiresAt).to.be.a('string');
+          });
+        } else if (res.getStatus() === 401) {
+          test('401 uses UNAUTH', function () { expect(body.code).to.eql('UNAUTH'); });
+        } else if (res.getStatus() === 404) {
+          test('404 uses NOT_FOUND', function () { expect(body.code).to.eql('NOT_FOUND'); });
+        } else if (res.getStatus() === 503) {
+          test('503 when signing is not configured', function () {
+            expect(body.code).to.eql('SIGNING_NOT_CONFIGURED');
+          });
+        } else {
+          test('unexpected status is not allowed', function () {
+            expect.fail(`Unexpected status ${res.getStatus()}`);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

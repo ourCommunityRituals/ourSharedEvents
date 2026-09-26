@@ -1,0 +1,39 @@
+info:
+  name: TRIANGLE | placement respond | requires accepted boolean
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/placements/{{testPlacementId}}/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"token":"not.a.valid.token"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // TRI-5 reconciliation slice:
+        // respond endpoint contract includes strict body validation and token auth.
+        test('returns 4xx for invalid body/token', function () {
+          expect(res.getStatus()).to.be.within(400, 401);
+        });
+        const body = res.getBody();
+        test('ok is false', function () { expect(body.ok).to.eql(false); });
+        test('error code is one of contract codes', function () {
+          expect(['UNAUTHORIZED', 'MISSING_FIELD', 'INVALID_BODY', 'BAD_CONTENT_TYPE']).to.include(body.code);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

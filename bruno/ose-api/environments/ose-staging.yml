@@ -10,6 +10,10 @@ variables:
     value: test-event-001
   - name: testEventSlug
     value: test-event
+  - name: testSponsorId
+    value: sb_test_2026
+  - name: testPlacementId
+    value: spl_test_2026
   - name: testFlagKey
     value: forms.register
   - name: testRegistrationId

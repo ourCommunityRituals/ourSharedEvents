@@ -1334,10 +1334,10 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 
 ### TRI-5: Reconciliation to the shared brain
 
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS
 
 - [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` audit actions, `DRAFT_EXPIRY_DAYS` env knob
-- [ ] Bruno collection: admin list filters, home-link mint, respond endpoint
+- [x] Bruno collection: admin list filters, home-link mint, respond endpoint
 - [ ] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id`
 - [ ] `admin.html` split (now ~250 KB; sponsor page is deliberately its own template)
 

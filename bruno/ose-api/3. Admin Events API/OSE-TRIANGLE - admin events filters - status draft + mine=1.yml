@@ -1,0 +1,49 @@
+info:
+  name: TRIANGLE | admin events filters | status=draft + mine=1
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events?status=draft&mine=1"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // TRI-5 reconciliation slice:
+        // contract coverage for lifecycle filters added in OSE-1245/0075.
+        const ct = res.getHeader('Content-Type') || '';
+        const isJson = ct.includes('application/json');
+        if (!isJson) {
+          test('CF Access/admin boundary blocks non-JSON', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+        } else if (res.getStatus() === 200) {
+          const body = res.getBody();
+          test('ok is true', function () { expect(body.ok).to.eql(true); });
+          test('items is array', function () { expect(body.items).to.be.an('array'); });
+          test('filters are echoed', function () { expect(body.filters).to.be.an('object'); });
+          test('status filter is draft', function () { expect(body.filters.status).to.eql('draft'); });
+          test('mine filter is boolean', function () { expect(typeof body.filters.mine).to.eql('boolean'); });
+        } else if (res.getStatus() === 401) {
+          const body = res.getBody();
+          test('401 uses UNAUTH code', function () { expect(body.code).to.eql('UNAUTH'); });
+        } else {
+          test('unexpected status is still an auth boundary response', function () {
+            expect([401, 403]).to.include(res.getStatus());
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
