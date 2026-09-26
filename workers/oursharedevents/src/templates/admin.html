@@ -5544,6 +5544,8 @@
             var phaseLabel = esc(window.friendlyPhase(safePhase));
             var st = esc(e.status || 'draft');
             var stLabel = esc(window.friendlyStatus ? window.friendlyStatus(e.status) : e.status);
+            var typeLabel = e.event_type_name || e.event_type_id || '—';
+            var safeTypeLabel = esc(typeLabel);
             // A bare YYYY-MM-DD parses as UTC midnight and shows the previous
             // day in every US timezone; pin it to local noon.
             var iso = e.startDateISO ? String(e.startDateISO) : '';
@@ -5557,7 +5559,7 @@
             <td data-label="Date" data-testid="event-date">${when}</td>
             <td data-label="Venue" data-testid="event-venue">${esc(e.venue || '—')}</td>
             <td data-label="Status"><span class="badge ${st}" data-testid="event-status">${stLabel}</span>${unlisted}</td>
-            <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
+            <td data-label="Event type"><span data-testid="event-type">${safeTypeLabel}</span></td>
             <td data-label="Preview" data-testid="event-preview">${preview}</td>
           </tr>
         `;

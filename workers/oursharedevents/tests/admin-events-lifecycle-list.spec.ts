@@ -60,6 +60,8 @@ interface Row {
   status: string;
   created_by: string | null;
   is_published: number;
+  event_type_id?: string | null;
+  event_type_name?: string | null;
 }
 interface ListBody {
   ok: boolean;
@@ -93,6 +95,14 @@ beforeAll(async () => {
   await seed('lc-ready-mine', 'ready', ME);
   await seed('lc-active-other', 'active', OTHER);
   await seed('lc-archived-legacy', 'archived', null);
+  const activeType = await env.DB.prepare(
+    'SELECT id, name FROM event_type_registry WHERE is_active = 1 ORDER BY name LIMIT 1'
+  ).first<{ id: string; name: string }>();
+  if (activeType) {
+    await env.DB.prepare('UPDATE events SET event_type_id = ? WHERE id = ?')
+      .bind(activeType.id, 'lc-draft-mine')
+      .run();
+  }
   // Both operators are members of the same brand — "mine" must be a FILTER
   // inside the brand, never a permission boundary.
   eventsEnv.ADMIN_BRAND_MEMBERSHIP = JSON.stringify({ [ME]: [BRAND], [OTHER]: [BRAND] });
@@ -151,6 +161,13 @@ describe('admin list — ?status= lifecycle filter', () => {
     const mine = ofBrand(body.items).find((r) => r.id === 'lc-draft-mine');
     expect(mine?.created_by).toBe(ME);
     expect(mine?.is_published).toBe(1);
+  });
+
+  test('rows carry event_type_id + event_type_name for admin list rendering', async () => {
+    const body = await list(reqAsEmail(ME, '?status=draft'));
+    const mine = ofBrand(body.items).find((r) => r.id === 'lc-draft-mine');
+    expect(mine?.event_type_id ?? null).not.toBeNull();
+    expect(mine?.event_type_name ?? null).not.toBeNull();
   });
 });
 

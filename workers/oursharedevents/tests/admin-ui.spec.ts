@@ -777,16 +777,15 @@ describe('ADMIN-2: Events table phase column', () => {
 
   test('events table header includes the friendly event-type column', async () => {
     const html = await fetchAdminHtml();
-    // OSE-R-005: the "Phase" column header used to leak the internal phase
-    // terminology to bar owners. Replaced with "Event type" which matches
-    // the friendly cell values rendered via friendlyPhase().
+    // OSE-R-005/OSE-1344: "Phase" is an internal axis; the column is a
+    // human event-type label on the event row.
     expect(html).toMatch(/<th[^>]*>Event type<\/th>/);
   });
 
-  test('phase cell has event-phase data-testid and phase-badge class template', async () => {
+  test('event type cell renders event_type_name with event_type_id fallback', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('data-testid="event-phase"');
-    expect(html).toContain('class="phase-badge phase-${safePhase}"');
+    expect(html).toContain("var typeLabel = e.event_type_name || e.event_type_id || '—';");
+    expect(html).toContain('data-testid="event-type"');
   });
 });
 
