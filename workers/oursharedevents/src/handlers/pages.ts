@@ -385,6 +385,8 @@ export interface PublicEventRow {
   price_model: string | null;
   price_note: string | null;
   is_published: number | null;
+  event_type_id: string | null;
+  event_type_name: string | null;
 }
 
 function esc(s: string | null | undefined): string {
@@ -395,6 +397,12 @@ function esc(s: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function renderEventTypeMeta(row: PublicEventRow, testId = 'event-type'): string {
+  const label = esc(row.event_type_name) || esc(row.event_type_id);
+  if (!label) return '';
+  return `<p class="ose-meta" data-testid="${testId}">Type: ${label}</p>`;
 }
 
 /**
@@ -808,6 +816,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
+      ${renderEventTypeMeta(row)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${row.timezone ? ` &middot; ${esc(row.timezone)}` : ''}</p>` : ''}
     </header>
 
@@ -1003,6 +1012,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
       </span>
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
+      ${renderEventTypeMeta(row, 'event-type-live')}
     </header>
 
     ${
@@ -1107,6 +1117,7 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
 <body>
   <main role="main" aria-labelledby="event-title-minimal" data-testid="event-main-minimal">
     <h1 id="event-title-minimal" data-testid="event-title-minimal">${title}</h1>
+    ${renderEventTypeMeta(row, 'event-type-minimal')}
     <p class="msg" data-testid="event-phase-msg">${message}</p>
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1269,6 +1280,7 @@ ${ogMeta}
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
+    ${renderEventTypeMeta(row, 'event-type-post')}
     <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
 
     <!-- OSE-1136 / OSE-657: the recap is the canonical 5W table in PAST TENSE and
@@ -1497,13 +1509,16 @@ export async function handlePublicEventPage(
   let row: PublicEventRow | null;
   try {
     row = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, description, location,
+      `SELECT e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,
               start_date, end_date, timezone,
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
-              lat, lon, price_cents, price_model, price_note, is_published
-       FROM events WHERE id = ?`
+              lat, lon, price_cents, price_model, price_note, is_published,
+              e.event_type_id, etr.name AS event_type_name
+       FROM events e
+       LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+       WHERE e.id = ?`
     )
       .bind(eventId)
       .first<PublicEventRow>();
@@ -1686,13 +1701,16 @@ export async function handleAdminEventPreviewPage(
   let row: PublicEventRow | null;
   try {
     row = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, description, location,
+      `SELECT e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,
               start_date, end_date, timezone,
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
-              lat, lon, price_cents, price_model, price_note, is_published
-       FROM events WHERE id = ?`
+              lat, lon, price_cents, price_model, price_note, is_published,
+              e.event_type_id, etr.name AS event_type_name
+       FROM events e
+       LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+       WHERE e.id = ?`
     )
       .bind(eventId)
       .first<PublicEventRow>();

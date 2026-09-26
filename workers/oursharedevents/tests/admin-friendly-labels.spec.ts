@@ -124,13 +124,11 @@ describe('OSE-R-005 admin friendly labels — API layer', () => {
     );
   });
 
-  test('OSE-R-005 | API | GET /admin (any visitor) | events table phase cell renders the friendly label via friendlyPhase', async () => {
+  test('OSE-R-005 | API | GET /admin (any visitor) | events table Event type cell uses event_type_name/id, never raw phase text', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('window.friendlyPhase(safePhase)');
-    // The raw "Phase ${safePhase}" template literal pattern must NOT appear
-    // as the visible cell text anymore. (Still permitted in CSS class
-    // template `phase-badge phase-${safePhase}` — that's a class hook.)
-    expect(html).not.toMatch(/data-testid="event-phase"[^>]*>Phase \$\{safePhase\}</);
+    expect(html).toContain("var typeLabel = e.event_type_name || e.event_type_id || '—';");
+    expect(html).toContain('data-testid="event-type"');
+    expect(html).not.toMatch(/>Phase \$\{safePhase\}</);
   });
 
   test('OSE-R-005 | API | GET /admin (any visitor) | events table header uses "Event type" not "Phase"', async () => {

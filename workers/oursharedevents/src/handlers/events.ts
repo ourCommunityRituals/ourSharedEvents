@@ -295,36 +295,36 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
 
   try {
     const EVENT_SELECT_COLS =
-      'id, brand_id, title, slug, status, description, location,' +
-      ' start_date, end_date, timezone, cover_image_url, created_at, updated_at,' +
-      ' legal_clearance_tier,' +
-      ' what_short, who_host, why_purpose, how_details, where_address,' +
-      ' who_story, who_image_url, what_video_url,' +
-      ' lat, lon, corridor_id, h3_res9, h3_res7,' +
-      ' is_published, created_by';
+      'e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,' +
+      ' e.start_date, e.end_date, e.timezone, e.cover_image_url, e.created_at, e.updated_at,' +
+      ' e.legal_clearance_tier, e.event_type_id, etr.name AS event_type_name,' +
+      ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
+      ' e.who_story, e.who_image_url, e.what_video_url,' +
+      ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
+      ' e.is_published, e.created_by';
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
     const whereParts: string[] = [];
     const bindings: (string | number)[] = [];
     if (cursor) {
-      whereParts.push('created_at < ?');
+      whereParts.push('e.created_at < ?');
       bindings.push(cursor);
     }
     if (scope.mode === 'scoped') {
       const placeholders = scope.brandIds.map(() => '?').join(', ');
-      whereParts.push(`brand_id IN (${placeholders})`);
+      whereParts.push(`e.brand_id IN (${placeholders})`);
       bindings.push(...scope.brandIds);
     }
     if (statusFilter) {
-      whereParts.push('status = ?');
+      whereParts.push('e.status = ?');
       bindings.push(statusFilter);
     }
     // "Only mine" is meaningful only for a personal (email) actor; a key actor
     // has no creator identity to match, so the flag is a no-op for it rather
     // than an empty list.
     if (mine && actor && !actor.startsWith('key:')) {
-      whereParts.push('created_by = ?');
+      whereParts.push('e.created_by = ?');
       bindings.push(actor);
     }
     bindings.push(limit + 1);
@@ -332,9 +332,9 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     const adminListSql =
       'SELECT ' +
       EVENT_SELECT_COLS +
-      ' FROM events' +
+      ' FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id' +
       whereClause +
-      ' ORDER BY created_at DESC LIMIT ?';
+      ' ORDER BY e.created_at DESC LIMIT ?';
 
     const result = await env.DB.prepare(adminListSql)
       .bind(...bindings)

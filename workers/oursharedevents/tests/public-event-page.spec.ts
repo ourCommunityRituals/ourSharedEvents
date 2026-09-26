@@ -193,6 +193,31 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     expect(html).not.toContain('../bad');
   });
 
+  test('renders event type metadata when event_type_id is set', async () => {
+    const eventId = 'evt_ose243a_type_meta';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: 7,
+      endOffsetDays: 8,
+      withFiveW: true,
+    });
+    const type = await (env as unknown as TestEnv).DB.prepare(
+      'SELECT id, name FROM event_type_registry WHERE is_active = 1 ORDER BY name LIMIT 1'
+    ).first<{ id: string; name: string }>();
+    expect(type).not.toBeNull();
+    await (env as unknown as TestEnv).DB.prepare('UPDATE events SET event_type_id = ? WHERE id = ?')
+      .bind(type!.id, eventId)
+      .run();
+
+    const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="event-type"');
+    const escapedTypeName = type!.name.replace(/&/g, '&amp;');
+    expect(html).toContain(`Type: ${escapedTypeName}`);
+  });
+
   test('anonymity affordance is rendered with user-facing language', async () => {
     const eventId = 'evt_ose243a_anon';
     await seedEvent({ id: eventId, status: 'active', startOffsetDays: 7, withFiveW: true });
