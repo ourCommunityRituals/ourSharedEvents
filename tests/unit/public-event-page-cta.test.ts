@@ -17,8 +17,10 @@ describe('OSE-R-008 — public event page registration CTA copy', () => {
     );
 
     expect(pagesSource).toContain(
-      '<a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>'
+      '<a class="ose-rsvp-btn" data-testid="event-rsvp" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>'
     );
+    expect(pagesSource).toContain("const formContext = opts?.formContext ?? { type: 'register' };");
+    expect(pagesSource).toContain("return 'Register for this event';");
     expect(pagesSource).not.toContain('>RSVP for this event</a>');
   });
 });

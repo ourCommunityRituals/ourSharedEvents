@@ -153,6 +153,46 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     expect(html).toContain(`/forms/${eventId}?type=register`);
   });
 
+  test('OSE-1318: poster scan context lands on event page and CTA preserves form/deployment attribution', async () => {
+    const eventId = 'evt_ose1318_poster_scan';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: 7,
+      endOffsetDays: 8,
+      withFiveW: true,
+    });
+
+    const res = await SELF.fetch(
+      `https://t.test/events/${eventId}?type=survey&deployment=pd_poster_1318`
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="event-rsvp"');
+    expect(html).toContain(`/forms/${eventId}?type=survey&amp;deployment=pd_poster_1318`);
+    expect(html).toContain('Share feedback');
+  });
+
+  test('OSE-1318: invalid poster scan context falls back to register CTA without leaking deployment', async () => {
+    const eventId = 'evt_ose1318_bad_context';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: 7,
+      endOffsetDays: 8,
+      withFiveW: true,
+    });
+
+    const res = await SELF.fetch(
+      `https://t.test/events/${eventId}?type=javascript:alert(1)&deployment=../bad`
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(`/forms/${eventId}?type=register`);
+    expect(html).not.toContain('javascript:alert');
+    expect(html).not.toContain('../bad');
+  });
+
   test('anonymity affordance is rendered with user-facing language', async () => {
     const eventId = 'evt_ose243a_anon';
     await seedEvent({ id: eventId, status: 'active', startOffsetDays: 7, withFiveW: true });

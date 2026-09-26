@@ -583,6 +583,49 @@ function renderEventActions(
 </div>`;
 }
 
+type EventFormType = 'register' | 'checkin' | 'survey' | 'email-signup';
+
+interface EventFormContext {
+  type: EventFormType;
+  deploymentId?: string | null;
+}
+
+const EVENT_FORM_TYPES = new Set<EventFormType>(['register', 'checkin', 'survey', 'email-signup']);
+
+function eventFormContextFromRequest(request: Request, fallback: EventFormType): EventFormContext {
+  const url = new URL(request.url);
+  const rawType = url.searchParams.get('type');
+  const type = EVENT_FORM_TYPES.has(rawType as EventFormType)
+    ? (rawType as EventFormType)
+    : fallback;
+  const rawDeployment = url.searchParams.get('deployment');
+  const deploymentId =
+    rawDeployment && rawDeployment.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(rawDeployment)
+      ? rawDeployment
+      : null;
+  return { type, deploymentId };
+}
+
+function eventFormHref(eventId: string, ctx: EventFormContext): string {
+  const params = new URLSearchParams({ type: ctx.type });
+  if (ctx.deploymentId) params.set('deployment', ctx.deploymentId);
+  return `/forms/${encodeURIComponent(eventId)}?${params.toString()}`;
+}
+
+function eventFormCtaLabel(type: EventFormType): string {
+  switch (type) {
+    case 'checkin':
+      return 'Check in at this event';
+    case 'survey':
+      return 'Share feedback';
+    case 'email-signup':
+      return 'Get event updates';
+    case 'register':
+    default:
+      return 'Register for this event';
+  }
+}
+
 interface SponsorBasicRow {
   id: string;
   name: string;
@@ -666,10 +709,11 @@ export function renderPreEventHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es' }
+  opts?: { nonce?: string; lang?: 'en' | 'es'; formContext?: EventFormContext }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
+  const formContext = opts?.formContext ?? { type: 'register' };
   const title = esc(row.title);
   // OSE: the What card leads with the host-authored short blurb (`what_short`),
   // falling back to the general `description` so the card is never empty when a
@@ -822,7 +866,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${renderEventActions(row, shareUrl, nonce, lang)}
 
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>
+    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>
 
     ${
       whyPurpose
@@ -868,10 +912,11 @@ export function renderEventLiveHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es' }
+  opts?: { nonce?: string; lang?: 'en' | 'es'; formContext?: EventFormContext }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
+  const formContext = opts?.formContext ?? { type: 'checkin' };
   const title = esc(row.title);
   // Same What fallback as the pre-event render: host blurb, else description.
   const whatShort = esc(row.what_short) || esc(row.description);
@@ -1006,7 +1051,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${renderEventActions(row, shareUrl, nonce, lang)}
 
-    <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
+    <a class="ose-checkin-btn" data-testid="event-checkin" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>
 
     ${
       whyPurpose
@@ -1515,15 +1560,25 @@ export async function handlePublicEventPage(
   const lang = preferredLang(request);
   const url = new URL(request.url);
   const shareUrl = `${url.origin}/events/${row.id}`;
+  const preEventFormContext = eventFormContextFromRequest(request, 'register');
+  const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
   // Fetch social data (sponsors + counts) in parallel; fail-open on any error.
   const social = await fetchEventPageSocialData(env, row.id);
 
   let body: string;
   if (phase === 'pre_event') {
-    body = renderPreEventHtml(row, shareUrl, social, { nonce, lang });
+    body = renderPreEventHtml(row, shareUrl, social, {
+      nonce,
+      lang,
+      formContext: preEventFormContext,
+    });
   } else if (phase === 'event') {
-    body = renderEventLiveHtml(row, shareUrl, social, { nonce, lang });
+    body = renderEventLiveHtml(row, shareUrl, social, {
+      nonce,
+      lang,
+      formContext: liveEventFormContext,
+    });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
     // renderMinimalPhaseHtml is kept as the defensive fallback for phase==='event'

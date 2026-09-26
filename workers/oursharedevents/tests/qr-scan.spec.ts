@@ -5,8 +5,9 @@
  * real miniflare D1 database and an in-memory KV stub for dedup.
  *
  * Coverage:
- *   - Valid token writes a scan row and 302-redirects to form page
- *   - Redirect URL embeds correct ?type= and ?deployment= params
+ *   - Valid token writes a scan row and 302-redirects to event page
+ *   - Redirect URL lands on the event page and embeds correct ?type= and
+ *     ?deployment= params for the event-page CTA
  *   - New visitor gets Set-Cookie header with ose_anon cookie
  *   - Returning visitor does NOT get Set-Cookie header
  *   - Duplicate within 5-min window is suppressed (no second scan row)
@@ -171,7 +172,7 @@ beforeEach(async () => {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
-  test('OSE-625 | UNIT | valid token, new visitor | writes scan row and 302-redirects to form page', async () => {
+  test('OSE-625/OSE-1318 | UNIT | valid token, new visitor | writes scan row and 302-redirects to event page', async () => {
     const kv = makeInMemoryKV();
     const res = await handleQrScan(
       makeRequest(VALID_QR_TOKEN, { type: 'register' }),
@@ -181,7 +182,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
     expect(res.status).toBe(302);
     const location = res.headers.get('Location') ?? '';
-    expect(location).toContain(`/forms/${TEST_EVENT_ID}`);
+    expect(location).toContain(`/events/${TEST_EVENT_ID}`);
     expect(location).toContain('type=register');
     expect(location).toContain(`deployment=${TEST_DEPLOYMENT_ID}`);
 
