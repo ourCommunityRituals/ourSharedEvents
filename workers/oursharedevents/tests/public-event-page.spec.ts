@@ -23,31 +23,40 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { setEventFlag } from '../src/lib/feature-flags';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose243a-test';
 
 interface TestEnv {
   DB: D1Database;
+  FORMS_DB: D1Database;
   TEST_MIGRATION_STATEMENTS: string;
+  TEST_FORMS_MIGRATION_STATEMENTS: string;
   TEST_SOURCE_FILES_JSON: string;
 }
 
 async function applyMigrations(): Promise<void> {
   const tenv = env as unknown as TestEnv;
-  const stmts: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
-  for (const stmt of stmts) {
-    try {
-      await tenv.DB.prepare(stmt).run();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (
-        msg.includes('duplicate column name') ||
-        msg.includes('already exists') ||
-        msg.includes('no such column')
-      )
-        continue;
-      throw e;
+  const all: Array<[D1Database, string]> = [
+    [tenv.DB, tenv.TEST_MIGRATION_STATEMENTS],
+    [tenv.FORMS_DB, tenv.TEST_FORMS_MIGRATION_STATEMENTS],
+  ];
+  for (const [db, raw] of all) {
+    const stmts: string[] = JSON.parse(raw);
+    for (const stmt of stmts) {
+      try {
+        await db.prepare(stmt).run();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (
+          msg.includes('duplicate column name') ||
+          msg.includes('already exists') ||
+          msg.includes('no such column')
+        )
+          continue;
+        throw e;
+      }
     }
   }
 }
@@ -149,6 +158,24 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     // RSVP CTA points at the existing register form route
     expect(html).toContain('data-testid="event-rsvp"');
     expect(html).toContain(`/forms/${eventId}?type=register`);
+  });
+
+  test('register CTA is hidden when forms.register is disabled for the event', async () => {
+    const eventId = 'evt_ose243a_pre_register_disabled';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: 7,
+      endOffsetDays: 8,
+      withFiveW: true,
+    });
+    await setEventFlag((env as unknown as TestEnv).FORMS_DB, eventId, 'forms.register', false);
+
+    const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="event-rsvp"');
+    expect(html).not.toContain(`/forms/${eventId}?type=register`);
   });
 
   test('anonymity affordance is rendered with user-facing language', async () => {

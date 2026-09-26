@@ -59,6 +59,7 @@ import {
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { applyCountFloor } from '../lib/count-floor.js';
+import { isFeatureEnabled } from '../lib/feature-flags';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -647,10 +648,11 @@ export function renderPreEventHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es' }
+  opts?: { nonce?: string; lang?: 'en' | 'es'; showRegisterCta?: boolean }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
+  const showRegisterCta = opts?.showRegisterCta ?? true;
   const title = esc(row.title);
   // OSE: the What card leads with the host-authored short blurb (`what_short`),
   // falling back to the general `description` so the card is never empty when a
@@ -801,7 +803,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>
+    ${
+      showRegisterCta
+        ? `<a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">Register for this event</a>`
+        : ''
+    }
 
     ${
       whyPurpose
@@ -1385,6 +1391,19 @@ async function fetchEventPageSocialData(
   };
 }
 
+async function isPublicFormCtaEnabled(
+  env: PublicEventEnv,
+  flagKey: string,
+  eventId: string
+): Promise<boolean> {
+  if (!env.FORMS_DB) return true;
+  try {
+    return await isFeatureEnabled(env.FORMS_DB, flagKey, eventId);
+  } catch {
+    return true;
+  }
+}
+
 /**
  * GET /events/:id — public event landing page. Phase-aware.
  *
@@ -1492,10 +1511,11 @@ export async function handlePublicEventPage(
 
   // Fetch social data (sponsors + counts) in parallel; fail-open on any error.
   const social = await fetchEventPageSocialData(env, row.id);
+  const showRegisterCta = await isPublicFormCtaEnabled(env, 'forms.register', row.id);
 
   let body: string;
   if (phase === 'pre_event') {
-    body = renderPreEventHtml(row, shareUrl, social, { nonce, lang });
+    body = renderPreEventHtml(row, shareUrl, social, { nonce, lang, showRegisterCta });
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl, social, { nonce, lang });
   } else {
