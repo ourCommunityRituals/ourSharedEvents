@@ -82,6 +82,18 @@ jobs:
     name: Security Regression Gate
     runs-on: ubuntu-latest
 
+    # ADR-020 / check-pr-secret-exposure: this job targets STAGING (else-branch
+    # TARGET_URL below) and injects CF_ACCESS_CLIENT_ID/SECRET. A plain (e.g.
+    # agent-authored `copilot/*`) PR runs the PR-HEAD's workflow content with
+    # secrets available, so an auto-run PR that edited this file could exfiltrate
+    # those CF Access service-token creds. Match the rest of the pipeline's
+    # posture — plain PRs never touch staging; only `full-pipeline/*` PRs do
+    # (see deploy-staging). Regression against staging still runs on push /
+    # schedule / workflow_dispatch and on full-pipeline/* PRs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      startsWith(github.head_ref, 'full-pipeline/')
+
     # Allow failures on scheduled runs to not block development
     continue-on-error: ${{ github.event_name == 'schedule' }}
 

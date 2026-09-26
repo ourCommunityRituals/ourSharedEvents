@@ -27,6 +27,8 @@
     "check:v2-files": "node scripts/check-v2-files.js",
     "guard:no-gas": "node scripts/guard-no-gas.js",
     "test:guard-no-gas": "node scripts/guard-no-gas.test.js",
+    "guard:pr-secrets": "node scripts/check-pr-secret-exposure.mjs",
+    "test:guard-pr-secrets": "node scripts/check-pr-secret-exposure.mjs --self-test",
     "guard:declined-regimes": "node scripts/guard-declined-regimes.js",
     "test:guard-declined-regimes": "node scripts/guard-declined-regimes.test.js",
     "test:vitest-retry": "node scripts/vitest-retry.test.js",
