@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-25 — 439 ids.
+ * Generated 2026-09-26 — 439 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -127,7 +127,6 @@
       'event-date',
       'event-id',
       'event-name',
-      'event-phase',
       'event-preview',
       'event-preview-link',
       'event-status',
@@ -140,6 +139,7 @@
       'event-timeline',
       'event-timeline-card',
       'event-timeline-next',
+      'event-type',
       'event-venue',
       'events-col-date',
       'events-col-id',
