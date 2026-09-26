@@ -2,7 +2,8 @@
  * GET /q/:qr_token — QR scan ingestion endpoint. OSE-625 / BE-SCAN-1.
  *
  * Resolves a poster deployment QR token, records an anonymous scan row,
- * then 302-redirects the attendee to the appropriate form page.
+ * then 302-redirects the attendee to the event page with enough query context
+ * for the event-page CTA to continue to the appropriate attributed form.
  *
  * Privacy invariants:
  *   - Only scan_bucket (hour-granularity UTC) is stored — no exact timestamp.
@@ -169,15 +170,16 @@ export async function handleQrScan(
     }
   }
 
-  // Pass `?type=` through to the form page (e.g. ?type=checkin from the QR URL).
-  // Also embed `?deployment=` so the form submission can attribute the scan.
+  // Pass `?type=` through to the event page (e.g. ?type=checkin from the QR URL).
+  // Also embed `?deployment=` so the event-page CTA can continue to the form
+  // without losing sourcePlacementId attribution.
   const url = new URL(request.url);
   const formType = url.searchParams.get('type') ?? 'register';
   const ALLOWED_TYPES = new Set(['register', 'checkin', 'survey', 'email-signup']);
   const safeType = ALLOWED_TYPES.has(formType) ? formType : 'register';
 
   const origin = url.origin;
-  const redirectTarget = `${origin}/forms/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
+  const redirectTarget = `${origin}/events/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
 
   const redirectResponse = new Response(null, {
     status: 302,

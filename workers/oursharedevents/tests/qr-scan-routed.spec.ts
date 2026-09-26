@@ -16,7 +16,7 @@
  *   NETWORK E2E (OSE-554); this proves the app-level scan path in-process.
  *
  * DoD asserted here (no CF edge, so no managed challenge in the way):
- *   - Routed `/q/<valid active token>` 302-redirects to `/forms/<eventId>`
+ *   - Routed `/q/<valid active token>` 302-redirects to `/events/<eventId>`
  *     (the deep-link IS replayed) — NOT to `/`.
  *   - Exactly one scan_placement_events row (WHERE) AND one scan_node_returns
  *     row (WHO) land for the event.
@@ -117,7 +117,7 @@ beforeEach(async () => {
 });
 
 describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
-  test('OSE-939 | INTEGRATION | valid active token | routed request replays deep link → 302 /forms/<eventId>, not /', async () => {
+  test('OSE-939/OSE-1318 | INTEGRATION | valid active token | routed request replays deep link → 302 /events/<eventId>, not /', async () => {
     const res = await SELF.fetch(
       `https://t.test/q/${encodeURIComponent(VALID_QR_TOKEN)}?type=register`,
       {
@@ -129,12 +129,12 @@ describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
     expect(res.status).toBe(302);
     const location = res.headers.get('Location') ?? '';
     // The staging symptom was a `/` landing for a good token — assert we did NOT
-    // land on `/`, and that the deep link to the form page IS replayed.
+    // land on `/`, and that the deep link to the event page IS replayed.
     expect(
       location,
       'good token must not fall back to `/` — that was the OSE-939 symptom'
     ).not.toBe('/');
-    expect(location).toContain(`/forms/${TEST_EVENT_ID}`);
+    expect(location).toContain(`/events/${TEST_EVENT_ID}`);
     expect(location).toContain('type=register');
     expect(location).toContain(`deployment=${TEST_DEPLOYMENT_ID}`);
   });

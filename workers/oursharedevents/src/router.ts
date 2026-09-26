@@ -31,7 +31,7 @@
  *   GET  /api/v2/admin/events/:id/forms/checkin-count  → check-in count (admin)
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
- *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page (QR landing)
+ *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
  *   GET /poster                   → printable poster with QR codes
@@ -395,10 +395,10 @@ export async function route(
 
   // ── Health ─────────────────────────────────────────────────────────────────
   // ── QR scan ingestion (OSE-625) — `/q/<qr_token>` ─────────────────────────
-  // PUBLIC route. Records an anonymous scan row and 302-redirects to the
-  // form page with ?deployment=<id> for attribution. qr_token starts with
-  // 'qrt_' (distinguishes from /s/ shortlink codes). Set-Cookie for anon_id
-  // if the visitor is new.
+  // PUBLIC route. Records an anonymous scan row and 302-redirects to the event
+  // page with ?type=<form>&deployment=<id> so the CTA can continue to the
+  // attributed form. qr_token starts with 'qrt_' (distinguishes from /s/
+  // shortlink codes). Set-Cookie for anon_id if the visitor is new.
   if (pathname.startsWith('/q/') && method === 'GET') {
     const qrToken = pathname.slice('/q/'.length);
     return handleQrScan(request, env, qrToken);

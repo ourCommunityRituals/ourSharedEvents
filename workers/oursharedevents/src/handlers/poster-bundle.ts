@@ -9,7 +9,8 @@
  *
  * Two consumption modes (same bundle, same data):
  *   Physical: organiser prints the QR codes on posters/tabletops.
- *             Attendees scan → land on the form page.
+ *             Attendees scan → record an anonymous placement scan → land on
+ *             the event page, whose CTA continues to the attributed form.
  *   Mobile:   same content delivered as tappable anchor links on
  *             digital ads. No QR scan needed — links are clickable.
  *
@@ -121,7 +122,7 @@ function formUrl(origin: string, eventId: string, type: FormType, deploymentId?:
   return deploymentId ? `${base}&deployment=${encodeURIComponent(deploymentId)}` : base;
 }
 
-// Scan URL for QR codes that record a physical scan before redirect.
+// Scan URL for QR codes that record a physical scan before the event-page landing.
 // Used when a deployment ID + qr_token is known (deployment-specific bundle).
 function scanUrl(origin: string, qrToken: string, type: FormType): string {
   return `${origin}/q/${encodeURIComponent(qrToken)}?type=${type}`;
@@ -179,10 +180,11 @@ export async function handleGetPosterBundle(
   const requestUrl = new URL(request.url);
   const origin = requestUrl.origin;
 
-  // OSE-627: if ?deployment=<id> is provided, generate deployment-specific QR
-  // codes that route through /q/:qr_token (scan ingestion) before redirecting
-  // to the form. This gives physical poster scans an anonymous scan record
-  // before the attendee sees the form.
+  // OSE-627/OSE-1318: if ?deployment=<id> is provided, generate
+  // deployment-specific QR codes that route through /q/:qr_token (scan
+  // ingestion) before redirecting to the event page. This gives physical poster
+  // scans an anonymous scan record and still lets the event-page CTA preserve
+  // the deployment attribution when the attendee continues to the form.
   const requestedDeploymentId = requestUrl.searchParams.get('deployment');
   let deployment: { id: string; qr_token: string } | null = null;
   if (requestedDeploymentId) {

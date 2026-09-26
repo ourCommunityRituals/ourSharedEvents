@@ -1,7 +1,7 @@
 /**
- * OSE-627 / INT-03 — wire poster_deployment_id through QR URL → form page →
- * scan write, so poster_attribution stops reporting scan_count=0 for every
- * deployment.
+ * OSE-627 / INT-03 — wire poster_deployment_id through QR URL → event page CTA
+ * → form page → scan write, so poster_attribution stops reporting scan_count=0
+ * for every deployment.
  *
  * Three links, three assertions:
  *   1. poster-bundle.ts formUrl embeds `?deployment=<id>` (source gate).
