@@ -768,3 +768,111 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     await adminFetch(request, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRI-5: organizer → sponsor link → sponsor accepts → visible on /events/:id
+// ═══════════════════════════════════════════════════════════════════════════════
+test.describe('Sponsor Journey — Event Page Visibility After Acceptance', () => {
+  let eventId: string;
+  let sponsorId: string;
+  let placementId: string;
+  const sponsorName = `TRI5 Sponsor ${Date.now()}`;
+
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async () => {
+    precondition(!ADMIN_KEY, 'ADMIN_KEY not set — required for TRI-5 sponsor acceptance flow');
+  });
+
+  test('Step 0: Resolve an active event', async ({ page }) => {
+    await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    const eventsRes = await publicFetch(page, '/api/v2/events');
+    expect(eventsRes.status).toBe(200);
+    expect(eventsRes.body.ok).toBe(true);
+    const items = eventsRes.body.items || [];
+    test.skip(items.length === 0, 'No active events in staging');
+    const pickedEventId = pickSponsorJourneyEvent(items);
+    expect(pickedEventId).toBeTruthy();
+    eventId = pickedEventId!;
+  });
+
+  test('Step 1: Organizer creates a pending sponsor placement', async ({ page, request }) => {
+    test.skip(!eventId, 'No event available');
+    await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
+      name: sponsorName,
+      event_id: eventId,
+      tier: 'gold',
+      logo_url: 'https://via.placeholder.com/300x100?text=TRI5+Sponsor',
+      website_url: 'https://tri5-sponsor.example.com',
+      placement_formats: JSON.stringify({
+        tvTop: true,
+        tvSide: true,
+        posterTop: true,
+        mobileBanner: true,
+      }),
+    });
+    precondition(
+      res.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked sponsor create — an infra block is not a pass'
+    );
+    expect([200, 201]).toContain(res.status);
+    expect(res.body.ok).toBe(true);
+    sponsorId = res.body.id;
+    placementId = res.body.placement_id;
+    expect(sponsorId).toBeTruthy();
+    expect(placementId).toBeTruthy();
+  });
+
+  test('Step 2: Pending sponsor is not visible on /events/:id yet', async ({ page }) => {
+    test.skip(!eventId, 'No event available');
+    await page.goto(`/events/${encodeURIComponent(eventId)}`, {
+      waitUntil: 'networkidle',
+      timeout: TIMEOUT,
+    });
+    await expect(page.locator('body')).not.toContainText(sponsorName);
+  });
+
+  test('Step 3: Sponsor accepts via minted sponsor-home link token', async ({ request }) => {
+    test.skip(!sponsorId || !placementId, 'Sponsor/placement not created');
+    const mint = await adminFetch(request, 'POST', `/api/v2/admin/sponsors/${sponsorId}/home-link`);
+    precondition(
+      mint.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked home-link mint — an infra block is not a pass'
+    );
+    expect(mint.status).toBe(200);
+    expect(mint.body.ok).toBe(true);
+    const token = new URL(mint.body.url).searchParams.get('t');
+    expect(token).toBeTruthy();
+
+    const respond = await adminFetch(
+      request,
+      'POST',
+      `/api/v2/sponsor/placements/${placementId}/respond`,
+      { token, accepted: true }
+    );
+    expect(respond.status).toBe(200);
+    expect(respond.body.ok).toBe(true);
+  });
+
+  test('Step 4: Accepted sponsor becomes visible on /events/:id', async ({ page }) => {
+    test.skip(!eventId || !sponsorId, 'No event/sponsor available');
+    await expect(async () => {
+      await page.goto(`/events/${encodeURIComponent(eventId)}`, {
+        waitUntil: 'networkidle',
+        timeout: TIMEOUT,
+      });
+      const body = page.locator('body');
+      await expect(body).toContainText(sponsorName);
+      const hasPre = (await page.locator('[data-testid="pre-sponsor-strip"]').count()) > 0;
+      const hasLive = (await page.locator('[data-testid="live-sponsor-strip"]').count()) > 0;
+      expect(hasPre || hasLive).toBe(true);
+    }).toPass({ timeout: 40000, intervals: [500, 1000, 2000, 3000, 5000] });
+  });
+
+  test('Cleanup: Delete TRI-5 sponsor', async ({ page, request }) => {
+    test.skip(!sponsorId, 'No sponsor to clean up');
+    await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    await adminFetch(request, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
+  });
+});
