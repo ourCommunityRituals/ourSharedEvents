@@ -198,6 +198,17 @@ describe('AS-6: ARIA attributes on Public page (OSE-51)', () => {
     expect(pre).toContain('aria-label="Register for Bocce Thursday"');
     expect(post).toContain('aria-label="See how Game Night went"');
   });
+
+  test('event cards expose the article role via a semantic <article> (AS-6 role criterion)', () => {
+    // AS-6: "Event cards use role='article' or role='region'." The card is a
+    // semantic <article>, which conveys role="article" to assistive tech — the
+    // WAI-ARIA-preferred native mechanism (a redundant explicit role="article"
+    // on <article> is an anti-pattern). This locks the contract: a refactor of
+    // the card wrapper to a <div> would silently drop the role and fail here.
+    const list = renderEventList([{ id: 'e1', name: 'Bocce Thursday', phase: 'pre_event' }]).html;
+    expect(list).toMatch(/<article\b[^>]*\bclass="event-card"/);
+    expect(list).toContain('data-testid="public-event-card"');
+  });
 });
 
 // ─── AS-5: Admin ARIA ─────────────────────────────────────────────────────────

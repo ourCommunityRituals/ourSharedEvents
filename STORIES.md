@@ -82,9 +82,9 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | AS-3                                               | —        | ✅ DONE        | data-testid on Display (1→10+) _(xref DESIGN-3)_                      | —                |
 | AS-4                                               | —        | ✅ DONE        | data-testid on Public (3→15+) _(xref DESIGN-3)_                       | —                |
 | AS-5                                               | —        | 📋 BACKLOG     | ARIA attributes on Admin                                              | A11Y-1           |
-| AS-6                                               | —        | 📋 BACKLOG     | ARIA attributes on Public                                             | A11Y-1           |
-| AS-7                                               | —        | 📋 BACKLOG     | ARIA attributes on Display                                            | A11Y-1           |
-| AS-8                                               | —        | 📋 BACKLOG     | ARIA attributes on Poster                                             | A11Y-1           |
+| AS-6                                               | —        | 🔄 IN PROGRESS | ARIA attributes on Public (DONE_IN_CODE; +card-role test)             | A11Y-1           |
+| AS-7                                               | —        | ✅ DONE        | ARIA attributes on Display (DONE_IN_CODE; kiosk N/A criteria)         | A11Y-1           |
+| AS-8                                               | —        | 🔄 IN PROGRESS | ARIA attributes on Poster (DONE_IN_CODE; +print-btn aria-label)       | A11Y-1           |
 | AS-9                                               | —        | 📋 BACKLOG     | Sponsor surface module integration                                    | AS-1             |
 | AS-10                                              | —        | 📋 BACKLOG     | Print styles on Admin                                                 | —                |
 | AS-11                                              | —        | 📋 BACKLOG     | Keyboard nav on Admin                                                 | —                |
@@ -828,46 +828,95 @@ _Stories sourced from CCR audit FE uniformity matrix. Goal: consistent experienc
 
 ### AS-6: ARIA attributes on Public
 
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS (DONE_IN_CODE — reconciled 2026-09-27)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
 **Description:** Add ARIA roles and labels to Public surface.
 **Acceptance criteria:**
 
-- Event cards use `role="article"` or `role="region"`
-- Sections use `aria-label` for screen readers
-- CTA buttons use `aria-label` for context
+- [x] Event cards use `role="article"` or `role="region"` — cards render as a
+      semantic `<article>` (native `role="article"`; a redundant explicit role on
+      `<article>` is an ARIA anti-pattern). `src/lib/event-list.ts:153`.
+- [x] Sections use `aria-label` for screen readers — header (`role="banner"` +
+      `aria-label`), `<main aria-label>`, sponsor section/banner (`aria-label`),
+      events + anonymity sections (`aria-labelledby`). `src/templates/public.html`.
+- [x] CTA buttons use `aria-label` for context — both list CTA variants
+      (Register / recap) + the card overlay link. `src/lib/event-list.ts:147-154`.
+
+**Reconciliation note (2026-09-27):** the ARIA implementation was already on
+`main` before this session (verified in source + the 8-test AS-6 block, OSE-51, in
+`tests/as-display-public-admin.spec.ts:152-201`). The backlog table was stale
+(per the CLAUDE.md reconciliation rule). The one criterion implemented-but-not-
+test-validated — the card **role** — is now locked by a born-red test
+("event cards expose the article role via a semantic `<article>`") appended to
+that block; verified red against an `<article>`→`<div>` mutation, green restored.
+Flip to ✅ DONE on merge.
 
 ---
 
 ### AS-7: ARIA attributes on Display
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (DONE_IN_CODE — reconciled 2026-09-27)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
 **Description:** Add ARIA roles and labels to Display surface.
 **Acceptance criteria:**
 
-- Rotation panes use `aria-live="polite"` for announcements
-- Controls use `aria-label` for keyboard users
-- Mode indicator uses `role="status"`
+- [x] Rotation panes use `aria-live="polite"` for announcements — the event
+      rotation region is `<main aria-live="polite" aria-atomic="false">`
+      (`src/templates/display.html:358`); the clock is deliberately
+      `aria-live="off"` so ticking never spams a reader. Tested:
+      `tests/as-display-public-admin.spec.ts` (AS-7 block, OSE-52).
+- [~] Controls use `aria-label` — **N/A: the display is a passive venue-TV
+  kiosk with no interactive controls** (see brain `display_no_counts`). It
+  auto-rotates; there is nothing for a keyboard user to operate, so there is
+  no control to label. Header/sidebar already carry `aria-label`; ticker is
+  `aria-hidden`.
+- [~] Mode indicator uses `role="status"` — **N/A as a discrete widget: there is
+  no separate mode-indicator element.** The `<main aria-live="polite">`
+  region _is_ the status/announcement channel (content changes are
+  announced), and the privacy line carries `role="note"`. Adding a fake mode
+  indicator would manufacture UI the surface does not have.
+
+**Reconciliation note (2026-09-27):** the ARIA implementation and its test block
+were already on `main` (verified in source + `as-display-public-admin.spec.ts`,
+OSE-52). The two "missing" criteria are not applicable to a passive kiosk (no
+controls, no discrete mode widget); the applicable criterion (rotation
+`aria-live`) is implemented and tested. Closed as DONE_IN_CODE; backlog table was
+stale (CLAUDE.md reconciliation rule).
 
 ---
 
 ### AS-8: ARIA attributes on Poster
 
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS (DONE_IN_CODE — reconciled 2026-09-27)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
 **Description:** Add ARIA roles and labels to Poster surface.
 **Acceptance criteria:**
 
-- QR images use `alt` text with destination URL description
-- Print button uses `aria-label`
-- Sponsor logos use `alt` text
+- [x] QR images use `alt` text with destination URL description — each QR `<img>`
+      is `alt="<label> QR code"` and its link wrapper carries
+      `aria-label="<label> QR code — tap to open"`
+      (`src/templates/poster.html`, `loadPosterQR`). Tested.
+- [x] Print button uses `aria-label` — **added this session:** the print
+      `<button>` now carries `aria-label="Print poster"` and its printer emoji is
+      wrapped in `<span aria-hidden="true">` so the announced name is clean
+      (`src/templates/poster.html:698`). Born-red test in
+      `tests/poster-print-gate.spec.ts` (verified red against a removed label).
+- [x] Sponsor logos use `alt` text — each sponsor `<img>` is
+      `alt="<sponsor name> logo"`, inside `role="listitem"` items under a
+      `role="list"` strip. Tested (`tests/poster-spon4-as2-spon10.spec.ts`).
+
+**Reconciliation note (2026-09-27):** the poster carried a strong ARIA set
+already (poster card `role="article"` + `aria-label`, QR alt + link labels,
+sponsor `role=list`/`listitem` + alt, meta icons `aria-hidden`) with an existing
+test block. The one genuine gap — the Print button had no `aria-label` (its
+accessible name was the printer-emoji + "Print") — is closed this session. Flip
+to ✅ DONE on merge.
 
 ---
 
