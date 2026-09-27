@@ -82,7 +82,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | AS-3                                               | —        | ✅ DONE        | data-testid on Display (1→10+) _(xref DESIGN-3)_                      | —                |
 | AS-4                                               | —        | ✅ DONE        | data-testid on Public (3→15+) _(xref DESIGN-3)_                       | —                |
 | AS-5                                               | —        | 📋 BACKLOG     | ARIA attributes on Admin                                              | A11Y-1           |
-| AS-6                                               | —        | 📋 BACKLOG     | ARIA attributes on Public                                             | A11Y-1           |
+| AS-6                                               | —        | 🔄 IN PROGRESS | ARIA attributes on Public (DONE_IN_CODE; +card-role test)             | A11Y-1           |
 | AS-7                                               | —        | 📋 BACKLOG     | ARIA attributes on Display                                            | A11Y-1           |
 | AS-8                                               | —        | 📋 BACKLOG     | ARIA attributes on Poster                                             | A11Y-1           |
 | AS-9                                               | —        | 📋 BACKLOG     | Sponsor surface module integration                                    | AS-1             |
@@ -828,16 +828,30 @@ _Stories sourced from CCR audit FE uniformity matrix. Goal: consistent experienc
 
 ### AS-6: ARIA attributes on Public
 
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS (DONE_IN_CODE — reconciled 2026-09-27)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
 **Description:** Add ARIA roles and labels to Public surface.
 **Acceptance criteria:**
 
-- Event cards use `role="article"` or `role="region"`
-- Sections use `aria-label` for screen readers
-- CTA buttons use `aria-label` for context
+- [x] Event cards use `role="article"` or `role="region"` — cards render as a
+      semantic `<article>` (native `role="article"`; a redundant explicit role on
+      `<article>` is an ARIA anti-pattern). `src/lib/event-list.ts:153`.
+- [x] Sections use `aria-label` for screen readers — header (`role="banner"` +
+      `aria-label`), `<main aria-label>`, sponsor section/banner (`aria-label`),
+      events + anonymity sections (`aria-labelledby`). `src/templates/public.html`.
+- [x] CTA buttons use `aria-label` for context — both list CTA variants
+      (Register / recap) + the card overlay link. `src/lib/event-list.ts:147-154`.
+
+**Reconciliation note (2026-09-27):** the ARIA implementation was already on
+`main` before this session (verified in source + the 8-test AS-6 block, OSE-51, in
+`tests/as-display-public-admin.spec.ts:152-201`). The backlog table was stale
+(per the CLAUDE.md reconciliation rule). The one criterion implemented-but-not-
+test-validated — the card **role** — is now locked by a born-red test
+("event cards expose the article role via a semantic `<article>`") appended to
+that block; verified red against an `<article>`→`<div>` mutation, green restored.
+Flip to ✅ DONE on merge.
 
 ---
 
