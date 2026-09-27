@@ -82,6 +82,18 @@ jobs:
     name: Security Regression Gate
     runs-on: ubuntu-latest
 
+    # ADR-020 / check-pr-secret-exposure: this job targets STAGING (else-branch
+    # TARGET_URL below) and injects CF_ACCESS_CLIENT_ID/SECRET. A plain (e.g.
+    # agent-authored `copilot/*`) PR runs the PR-HEAD's workflow content with
+    # secrets available, so an auto-run PR that edited this file could exfiltrate
+    # those CF Access service-token creds. Match the rest of the pipeline's
+    # posture — plain PRs never touch staging; only `full-pipeline/*` PRs do
+    # (see deploy-staging). Regression against staging still runs on push /
+    # schedule / workflow_dispatch and on full-pipeline/* PRs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      startsWith(github.head_ref, 'full-pipeline/')
+
     # Allow failures on scheduled runs to not block development
     continue-on-error: ${{ github.event_name == 'schedule' }}
 
@@ -209,8 +221,12 @@ jobs:
     name: QR-0 Contract Verification
     runs-on: ubuntu-latest
     needs: security-regression
-    # Only run if main security checks pass
-    if: ${{ success() || github.event_name == 'schedule' }}
+    # Static QR-0 SOURCE check — must run on every trigger INCLUDING plain PRs.
+    # security-regression now SKIPS on plain PRs (its staging scan is
+    # full-pipeline-gated per ADR-020), so the old `if: success()` collaterally
+    # dropped this static check from plain PRs. Run unless the security scan
+    # actively FAILED (a skipped upstream must not drop QR-0); ordering via needs.
+    if: ${{ !cancelled() && needs.security-regression.result != 'failure' }}
 
     steps:
     - name: Checkout repository

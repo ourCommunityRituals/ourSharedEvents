@@ -12,3 +12,17 @@
 /workers/oursharedevents/src/lib/ai-sanitization.ts            @mzdano
 /tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts   @mzdano
 /docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md           @mzdano
+
+# ── CI approval-gate safety review-lock (ADR-020) ─────────────────────────────
+# Workflow files run the PR-HEAD's content with secrets available on a
+# same-repo PR, and are protected only at MERGE time (here) — not at RUN time.
+# Any workflow edit can change the PR-reachable secret surface, so it MUST get
+# explicit security-owner review, and the guard that enforces the surface (its
+# scanner, allowlist, and invariant spec) must not be quietly weakened.
+# See docs/adr/ADR-020-copilot-ci-human-approval-gate.md and
+# docs/security/PR_SECRET_EXPOSURE_GUARD.md.
+/.github/workflows/                                             @mzdano
+/scripts/check-pr-secret-exposure.mjs                           @mzdano
+/scripts/check-pr-secret-exposure.allowlist.json               @mzdano
+/tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts  @mzdano
+/docs/adr/ADR-020-copilot-ci-human-approval-gate.md            @mzdano

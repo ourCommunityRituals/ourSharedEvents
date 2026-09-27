@@ -591,6 +591,18 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run guard:no-gas
 
+      # ADR-020 — PR-reachable secret surface stays within the reviewed allowlist
+      # (no deploy/infra cred reachable on a plain, agent-authorable PR) and no
+      # pull_request_target. Self-test first so a "simplified" evaluator that
+      # stops detecting leaks is caught before the guard itself runs. Static,
+      # deps-free (~1s); runs on every PR so a new exposure is red pre-merge.
+      - name: 'Security: PR-secret exposure guard — self-tests'
+        if: matrix.shard == 'lint'
+        run: npm run test:guard-pr-secrets
+      - name: 'Security: PR-secret exposure guard (ADR-020)'
+        if: matrix.shard == 'lint'
+        run: npm run guard:pr-secrets
+
       # OSE-803 — schema guard constants must track the migration directories.
       # Static, deps-free, ~1s. Runs on every PR so a forgotten constant bump is
       # a red check pre-merge, not a silently-weakened guard discovered at deploy.
@@ -732,6 +744,7 @@ jobs:
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
             tests/e2e/0-architecture/edge-token-verification.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-signal-never-who.invariant.spec.ts \
+            tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts \
             tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
