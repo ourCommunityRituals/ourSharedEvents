@@ -50,13 +50,24 @@ this repo, and GitHub treats them oppositely:
   no approval gate.**
 
 The approval gate therefore protects the Copilot path only. On the **Claude / auto-run path there is
-no approval break** — the machine `check-pr-secret-exposure` guard is the _sole_ defense, and because
-it runs from PR-head content with no human in the loop it is **best-effort, not tamper-proof** (a PR
-that edited the workflow to neuter the guard would run before anyone saw it). The robust end-state
-for the ungated path is thus **Alternative B — drive the PR-reachable secret surface to zero**, so
-there is nothing to exfiltrate even with no gate and an editable workflow. That reframes Alt B from
-"optional future" to the actual target for the Claude path; the guard's `--report` is the instrument
-that measures progress toward it.
+no approval break** — the machine `check-pr-secret-exposure` guard is the _sole in-workflow_ defense,
+and because it runs from PR-head content with no human in the loop it is **best-effort, not
+tamper-proof** (a PR that edited the workflow to neuter the guard, or that simply _added_ a new
+`${{ secrets.X }}` reference, would run before anyone saw it). The guard + **Alternative B**
+(driving the PR-reachable surface toward zero) reduce the wired surface and catch accidents — they
+are necessary defense-in-depth — but they are **not sufficient** for the ungated path: a trusted-user
+auto-run PR can reference **any repo-level secret**, not just the ones currently wired.
+
+The **tamper-proof close for the ungated path is a GitHub-level control, not more scanning**: store
+the sensitive secrets as **Environment secrets** under `staging`/`production` environments protected
+with **required reviewers**, so accessing them needs approval even for a trusted-user PR (or,
+alternatively, require approval on _all_ agent PRs including Claude). **Verified gap (2026-09-26):**
+`ADMIN_KEY`, `CF_ACCESS_CLIENT_ID/SECRET`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN_OSE`,
+`SMOKE_RPT_*`, and `X_OCR_INTERNAL` are all **repo-level** secrets today, and the `staging` /
+`production` / `copilot` environments have **zero protection rules and zero required reviewers** — so
+the `environment: staging` on deploy jobs currently protects nothing. Closing this is the outstanding
+security action for the ungated path; remediation steps are in
+[`docs/security/PR_SECRET_EXPOSURE_GUARD.md`](../security/PR_SECRET_EXPOSURE_GUARD.md).
 
 ## Decision
 
@@ -127,11 +138,13 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
 - The behavior is non-obvious ("looks broken but is a gate") — mitigated by the runbook, which is the
   first thing to read when a Copilot PR shows no CI.
 - **The Claude / Claude-Code path has no approval backstop.** Its PRs author as the human and
-  auto-run CI, so the `check-pr-secret-exposure` guard is the sole defense — and, being in-workflow
-  and editable from PR-head with no human in the loop, it is best-effort, not tamper-proof. Residual
-  risk remains while any secret is PR-reachable (today: `OCR_PROPAGATE_TOKEN`, `ANTHROPIC_API_KEY`,
-  `LINEAR_API_KEY`, etc.). It closes only when **Alternative B** drives that surface to zero — the
-  real target for this path, tracked via the guard's `--report`.
+  auto-run CI, so the `check-pr-secret-exposure` guard is the sole _in-workflow_ defense — and, being
+  editable from PR-head with no human in the loop, it is best-effort, not tamper-proof. The guard +
+  Alt-B are necessary defense-in-depth but **not sufficient**: a trusted-user auto-run PR can
+  reference **any repo-level secret**. The tamper-proof close is **Environment protection** — sensitive
+  secrets moved to `staging`/`production` Environment secrets with required reviewers (chosen
+  direction, 2026-09-26). **Until that lands, the residual is open and knowingly accepted**, mitigated
+  best-effort by the guard; verified gap and remediation steps in `docs/security/PR_SECRET_EXPOSURE_GUARD.md`.
 
 ### Neutral
 

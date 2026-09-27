@@ -43,10 +43,59 @@ the **Claude / auto-run path it is the _only_ defense** — and, running from
 PR-head content with no human in the loop, it is **best-effort, not
 tamper-proof** (a PR that edits the workflow to neuter it runs before anyone sees
 it). So the guard catches accidents and non-workflow-editing exposures on the
-auto-run path, but the robust close is **ADR-020 Alternative B — drive the
-PR-reachable secret surface to zero** (`--report` measures it). Treat every
-secret this guard reports as reachable as a standing item to eliminate, not just
-to keep allowlisted.
+auto-run path, but Alt-B is **necessary, not sufficient**: a trusted-user
+auto-run PR can reference **any repo-level secret**, not just the wired ones, so
+zeroing the current surface does not by itself stop a workflow-editing PR. Treat
+every reported secret as a standing item to eliminate — but the tamper-proof
+close is the Environment control below.
+
+## Closing the ungated path — Environment protection (the tamper-proof control)
+
+**Chosen direction (2026-09-26, ADR-020):** store sensitive secrets as
+**Environment secrets** under `staging`/`production` environments protected with
+**required reviewers**, so accessing them needs approval even for a trusted-user
+auto-run PR. This is the only control that stops a PR from referencing a secret
+it doesn't currently use.
+
+**Verified gap (2026-09-26 — this is INFRA/settings work, run in a separate
+terminal; never paste secret values into chat):**
+
+- All sensitive secrets are **repo-level** today (exposed to every same-repo PR
+  workflow): `ADMIN_KEY`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`,
+  `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN_OSE`, `SMOKE_RPT_ADMIN_TOKEN`,
+  `SMOKE_RPT_LOCAL_TOKEN`, `SMOKE_RPT_MID_TOKEN`, `SMOKE_RPT_OTHER_EVENT_TOKEN`,
+  `X_OCR_INTERNAL`.
+- The `staging`, `production`, and `copilot` environments have **zero protection
+  rules / zero required reviewers** — so `environment: staging` on deploy jobs
+  currently protects nothing.
+
+**Remediation (per environment; requires admin):**
+
+1. Add required-reviewer protection to the environment (UI: Settings →
+   Environments → `staging` → Required reviewers; or API):
+
+   ```bash
+   gh api -X PUT repos/ourCommunityRituals/ourSharedEvents/environments/staging \
+     -f 'reviewers[][type=User]' -F 'reviewers[][id]=<REVIEWER_USER_ID>'
+   ```
+
+2. Re-add each sensitive secret as an **Environment** secret (this removes it from
+   the global repo scope):
+
+   ```bash
+   gh secret set CLOUDFLARE_API_TOKEN_OSE --env staging   # prompts for the value
+   # …repeat for each sensitive secret, per environment…
+   gh secret delete CLOUDFLARE_API_TOKEN_OSE               # remove the repo-level copy
+   ```
+
+3. Confirm the deploy/staging jobs already declare `environment: staging` (they
+   do) so they can still read the now-scoped secrets.
+4. Verify: `gh api …/environments` shows `required_reviewers`, and
+   `gh api …/actions/secrets` no longer lists the sensitive names.
+
+Keep the `check-pr-secret-exposure` guard + Alt-B as defense-in-depth on top —
+they still catch accidental exposure and the currently-wired surface on both
+paths.
 
 ## How reachability is decided
 
