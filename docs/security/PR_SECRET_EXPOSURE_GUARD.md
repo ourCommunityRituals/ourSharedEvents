@@ -28,6 +28,26 @@ must **never** be added to the allowlist. The invariant spec fails if any of the
 appears as an allowlist key, so you cannot silence the guard by allowlisting a
 crown-jewel secret — you gate the job instead.
 
+## Why this matters MORE for the ungated author
+
+Two agent authors already open PRs into this repo, gated oppositely:
+
+- **GitHub Copilot** (`app/copilot-swe-agent`) → workflows are **held** for
+  "Approve and run" (ADR-020). The human approval break is a tamper-proof
+  backstop on this path.
+- **Claude / Claude Code** → commits as the human (`@mzdano`), so its PRs
+  **auto-run CI with no approval gate.**
+
+On the Copilot path this guard is defense-in-depth behind the approval break. On
+the **Claude / auto-run path it is the _only_ defense** — and, running from
+PR-head content with no human in the loop, it is **best-effort, not
+tamper-proof** (a PR that edits the workflow to neuter it runs before anyone sees
+it). So the guard catches accidents and non-workflow-editing exposures on the
+auto-run path, but the robust close is **ADR-020 Alternative B — drive the
+PR-reachable secret surface to zero** (`--report` measures it). Treat every
+secret this guard reports as reachable as a standing item to eliminate, not just
+to keep allowlisted.
+
 ## How reachability is decided
 
 A job is treated as **reachable on a plain PR unless proven gated** (fail-closed).

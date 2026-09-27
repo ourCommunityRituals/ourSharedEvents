@@ -41,6 +41,23 @@ The forces in tension:
 The PO's stated preference, made explicitly during this decision: _"The more we move forward with
 this, the more I want the human breaks where I need to do the approval."_
 
+**Two agent authors, gated differently (the sharper framing).** Two AI agents already open PRs into
+this repo, and GitHub treats them oppositely:
+
+- **GitHub Copilot** (`app/copilot-swe-agent`, a bot) → workflows are **held** for "Approve and run."
+  The ADR-020 approval break is a tamper-proof backstop on this path.
+- **Claude / Claude Code** → commits as the human operator (`@mzdano`), so its PRs **auto-run CI with
+  no approval gate.**
+
+The approval gate therefore protects the Copilot path only. On the **Claude / auto-run path there is
+no approval break** — the machine `check-pr-secret-exposure` guard is the _sole_ defense, and because
+it runs from PR-head content with no human in the loop it is **best-effort, not tamper-proof** (a PR
+that edited the workflow to neuter the guard would run before anyone saw it). The robust end-state
+for the ungated path is thus **Alternative B — drive the PR-reachable secret surface to zero**, so
+there is nothing to exfiltrate even with no gate and an editable workflow. That reframes Alt B from
+"optional future" to the actual target for the Claude path; the guard's `--report` is the instrument
+that measures progress toward it.
+
 ## Decision
 
 **Retain GitHub's manual approval gate for Actions workflows on Copilot-authored (`app/copilot-swe-agent`)
@@ -94,10 +111,10 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
 
 ### Positive
 
-- Repo secrets used by `pull_request` jobs are never exposed to unreviewed agent-authored workflow
-  content — a human approves each Copilot run first.
-- A human-in-the-loop review point on every agent push, matching the platform's agentic-swarm threat
-  posture.
+- On the **Copilot path**, repo secrets used by `pull_request` jobs are never exposed to unreviewed
+  agent-authored workflow content — a human approves each run first.
+- A human-in-the-loop review point on every **Copilot** push, matching the platform's agentic-swarm
+  threat posture.
 - The required-check mapping (`S0`, `T0 Gate (*)`, reconciler, Invariant #22) is untouched; the
   enforcement is additive (a guard step in the existing lint shard + one invariant spec).
 - The decision is enforced, not vigilance-dependent: the PR-reachable secret surface is now a
@@ -109,6 +126,12 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
   not zero-touch. During high-volume agent work this is real friction.
 - The behavior is non-obvious ("looks broken but is a gate") — mitigated by the runbook, which is the
   first thing to read when a Copilot PR shows no CI.
+- **The Claude / Claude-Code path has no approval backstop.** Its PRs author as the human and
+  auto-run CI, so the `check-pr-secret-exposure` guard is the sole defense — and, being in-workflow
+  and editable from PR-head with no human in the loop, it is best-effort, not tamper-proof. Residual
+  risk remains while any secret is PR-reachable (today: `OCR_PROPAGATE_TOKEN`, `ANTHROPIC_API_KEY`,
+  `LINEAR_API_KEY`, etc.). It closes only when **Alternative B** drives that surface to zero — the
+  real target for this path, tracked via the guard's `--report`.
 
 ### Neutral
 
