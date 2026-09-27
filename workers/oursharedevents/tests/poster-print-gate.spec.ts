@@ -70,6 +70,16 @@ describe('OSE-286 poster Print gate — API layer', () => {
     expect(control).toMatch(/\sdisabled(\s|>|=)/);
   });
 
+  test('AS-8 | API | GET /poster (any visitor) | Print button has an aria-label for screen readers', async () => {
+    const html = await fetchPosterHtml();
+    const control = extractPrintControl(html);
+    // AS-8: the print control must expose a clean accessible name. Its visible
+    // label is an emoji + "Print"; the printer emoji pollutes the announced
+    // name, so an explicit aria-label is the screen-reader label (the emoji is
+    // additionally wrapped in aria-hidden). Locks the label against regression.
+    expect(control).toMatch(/aria-label="[^"]+"/);
+  });
+
   test('OSE-286 | API | GET /poster (any visitor) | a loading status region sits beside the button', async () => {
     const html = await fetchPosterHtml();
     expect(html).toMatch(/data-testid="poster-print-status"/);
