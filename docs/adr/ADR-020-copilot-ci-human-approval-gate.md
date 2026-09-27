@@ -134,8 +134,13 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
     (matching `deploy-staging`).
 - **Merge-time protection:** `.github/CODEOWNERS` locks `/.github/workflows/`, the guard scanner,
   the allowlist, and this ADR to the security owner (`@mzdano`).
-- **Constitution (pending, cross-repo):** the brain invariant (#26) + OA-template registration that
-  makes this reusable across other OCR sites is a paired OCR-docs PR, not yet landed.
+- **Constitution (cross-repo):** brain invariant **#28** `ci_approval_gate_secret_surface`
+  (`ocr-docs-brain/architectural-invariants.yaml`, branch `feat/invariant-28-ci-approval-gate`,
+  status `partial` — live in OSE, fleet-live when the OA template carries it). Numbers 26/27 were
+  reserved by in-flight brain proposals, so this took 28. Because the brain's `invariant_ids_sequential`
+  gate is strictly contiguous, the #28 brain PR goes green only after the #26/#27 work (`_inv26-wt`)
+  merges first — a merge-order dependency. OA-template registration (so a new OCR site inherits the
+  guard) is the remaining piece.
 
 ## References
 
