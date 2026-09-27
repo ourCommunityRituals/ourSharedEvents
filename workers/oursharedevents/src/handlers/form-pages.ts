@@ -209,6 +209,18 @@ const FORM_CSS = `
 //     mapped.
 
 const FORM_JS_SUBMIT = `
+  // FE-15: broken sponsor logos hide gracefully. Inline onerror= is CSP-blocked
+  // (script-src 'nonce-…' does not cover inline event handlers), so sponsor <img>s
+  // carry data-hide-on-error and this ONE capture-phase listener hides them. The
+  // 'error' event does NOT bubble — capture phase is required for the dynamically
+  // added imgs (success-state thanks + the sponsor strip in FORM_JS_SPONSOR).
+  // Mirrors the public/display/poster surfaces.
+  document.addEventListener('error', function (ev) {
+    var el = ev.target;
+    if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
+      el.style.display = 'none';
+    }
+  }, true);
   // OSE-R-002: code → friendly copy. Update both this map AND the standard
   // doc tests when a new server code is added.
   var FORM_ERROR_FRIENDLY_COPY = {
@@ -302,7 +314,8 @@ const FORM_JS_SUBMIT = `
     if (cache && cache.length) {
       // OSE-R-015 (2026-05-15): escape every attribute value, set
       // referrerpolicy="no-referrer" so the sponsor host cannot fingerprint
-      // the attendee, and add onerror to gracefully hide broken images.
+      // the attendee, and mark data-hide-on-error (FE-15) so the capture-phase
+      // listener hides broken images — inline onerror= is CSP-blocked.
       var escAttr = function(v) {
         return String(v || '').replace(/[<>&"']/g, function(c) {
           return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
@@ -311,7 +324,7 @@ const FORM_JS_SUBMIT = `
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.name);
         var logo = s.logo_url && s.id
-          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=&#39;none&#39;" />'
+          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" />'
           : '';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');
@@ -346,7 +359,7 @@ const FORM_JS_SPONSOR = `
         var strip = document.getElementById('form-sponsor-strip');
         if (!strip) return;
         // OSE-R-015 (2026-05-15): see FORM_JS_SUBMIT counterpart above for
-        // the same escape + referrerpolicy + onerror contract.
+        // the same escape + referrerpolicy + data-hide-on-error contract.
         var escAttr = function(v) {
           return String(v || '').replace(/[<>&"']/g, function(c) {
             return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
@@ -355,7 +368,7 @@ const FORM_JS_SPONSOR = `
         var items = banner.slice(0, 3).map(function(s) {
           var name = escAttr(s.name);
           var logo = s.logo_url && s.id
-            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=&#39;none&#39;" />'
+            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" />'
             : '';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
         }).join('');

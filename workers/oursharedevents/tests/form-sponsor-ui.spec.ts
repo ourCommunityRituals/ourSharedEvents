@@ -165,6 +165,52 @@ describe('OSE-223: sponsor acknowledgment on form success state', () => {
   });
 });
 
+// ─── FE-15 — CSP-safe broken-logo hiding (no inline onerror=) ───────────────
+
+describe('FE-15: sponsor logos hide gracefully without CSP-blocked inline onerror', () => {
+  test('no inline onerror= handler is emitted on any sponsor img', async () => {
+    const body = await html();
+    // The form page CSP is `script-src 'self' 'nonce-…'` (no 'unsafe-inline'),
+    // so an inline `onerror="…"` attribute would be BLOCKED by the browser and
+    // the broken-image would never hide. Assert the inline-handler ATTRIBUTE is
+    // absent. NB: the FE-15 rationale comments legitimately contain the bare
+    // substring "onerror=" (inside the FORM_JS template literal), so match the
+    // attribute form `onerror="`/`onerror='` specifically, not the substring.
+    expect(body).not.toMatch(/onerror\s*=\s*["']/);
+  });
+
+  test('both sponsor-logo renderers mark data-hide-on-error on the img', async () => {
+    const body = await html();
+    // Two renderers emit a sponsor <img>: the success-state thanks block
+    // (FORM_JS_SUBMIT) and the header strip (FORM_JS_SPONSOR). Both must carry
+    // the attribute the capture-phase listener keys off.
+    const marks = body.match(/data-hide-on-error="1"/g) || [];
+    expect(
+      marks.length,
+      'expected both the thanks-block and strip img renderers to mark data-hide-on-error'
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  test('one capture-phase document error listener hides marked broken imgs', async () => {
+    const body = await html();
+    // The 'error' event does NOT bubble, so a delegated listener MUST use
+    // capture phase (the `true` 3rd arg) to catch failures on the dynamically
+    // added sponsor imgs. Assert the listener exists, gates on the
+    // data-hide-on-error attribute, and is registered in capture phase.
+    expect(body).toMatch(
+      /addEventListener\(\s*['"]error['"][\s\S]*?data-hide-on-error[\s\S]*?,\s*true\s*\)/
+    );
+  });
+
+  test('listener hides the img (display:none), matching the removed inline behavior', async () => {
+    const body = await html();
+    // The listener must reproduce what the old inline onerror did:
+    // hide the broken <img>. Assert the effect is present in the handler.
+    expect(body).toMatch(/tagName\s*===\s*['"]IMG['"]/);
+    expect(body).toMatch(/style\.display\s*=\s*['"]none['"]/);
+  });
+});
+
 // ─── Cross-cutting: applies to all 4 form types ─────────────────────────────
 
 describe('OSE-222 + OSE-223: applies to all 4 form types', () => {
