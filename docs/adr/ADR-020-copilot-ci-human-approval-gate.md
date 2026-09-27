@@ -173,10 +173,14 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
 - **Constitution (cross-repo):** brain invariant **#28** `ci_approval_gate_secret_surface`
   (`ocr-docs-brain/architectural-invariants.yaml`, branch `feat/invariant-28-ci-approval-gate`,
   status `partial` — live in OSE, fleet-live when the OA template carries it). Numbers 26/27 were
-  reserved by in-flight brain proposals, so this took 28. Because the brain's `invariant_ids_sequential`
-  gate is strictly contiguous, the #28 brain PR goes green only after the #26/#27 work (`_inv26-wt`)
-  merges first — a merge-order dependency. OA-template registration (so a new OCR site inherits the
-  guard) is the remaining piece.
+  reserved by in-flight brain proposals, so this took 28. **Merge order is constrained on both
+  sides:** (1) the brain's `invariant_ids_sequential` gate is strictly contiguous, so #28 goes green
+  only after #26/#27 (`_inv26-wt`) merge first; and (2) `check_brain_contract` requires a `partial`
+  invariant's `test_file` to exist, so #28 must merge **after** the OSE spec
+  (`ci-approval-gate-safety.invariant.spec.ts`) is on OSE `main` — else OSE's brain-contract-check
+  fails. Sequence: **`_inv26-wt` → OSE B+C → brain #28.** OA-template registration (so a new OCR site
+  inherits the guard) is the remaining piece; `ourAirwaves` is a docs skeleton today, so it is
+  deferred until OA is built out or a real second site exists.
 
 ## References
 

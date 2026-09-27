@@ -221,8 +221,12 @@ jobs:
     name: QR-0 Contract Verification
     runs-on: ubuntu-latest
     needs: security-regression
-    # Only run if main security checks pass
-    if: ${{ success() || github.event_name == 'schedule' }}
+    # Static QR-0 SOURCE check — must run on every trigger INCLUDING plain PRs.
+    # security-regression now SKIPS on plain PRs (its staging scan is
+    # full-pipeline-gated per ADR-020), so the old `if: success()` collaterally
+    # dropped this static check from plain PRs. Run unless the security scan
+    # actively FAILED (a skipped upstream must not drop QR-0); ordering via needs.
+    if: ${{ !cancelled() && needs.security-regression.result != 'failure' }}
 
     steps:
     - name: Checkout repository

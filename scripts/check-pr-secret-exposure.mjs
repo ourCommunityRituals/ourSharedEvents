@@ -144,10 +144,15 @@ function makeParser(tokens, env) {
     if (path === 'github.head_ref') return env.head_ref;
     if (path === 'github.base_ref') return env.base_ref;
     if (path === 'github.ref') return env.ref;
-    if (path.startsWith('github.event.inputs.')) return ''; // dispatch inputs absent on PR
+    if (path.startsWith('github.event.inputs.')) return ''; // dispatch inputs absent on PR (modeled)
     const m = /^needs\.(.+)\.result$/.exec(path);
     if (m) return env.needsResult(m[1]);
-    return ''; // unknown context → empty string (safe)
+    // UNKNOWN context ref (e.g. github.event.pull_request.draft, github.actor,
+    // steps.*, env.*). We cannot model its value, so record that the verdict is
+    // built on an unmodeled input — isReachableOnPlainPR fail-closes to reachable
+    // if such a verdict comes out "not reachable" (never miss an exposure).
+    env.sawUnknown = true;
+    return '';
   }
 
   function parsePrimary() {
@@ -277,6 +282,7 @@ export function isReachableOnPlainPR(jobName, jobs, memo = {}) {
     head_ref: 'copilot/x',
     base_ref: 'main',
     ref: 'refs/pull/1/merge',
+    sawUnknown: false,
     needsResult: (n) => (isReachableOnPlainPR(n, jobs, memo) ? 'success' : 'skipped'),
   };
   const ifStr = job.if == null ? '' : String(job.if).trim();
@@ -287,6 +293,11 @@ export function isReachableOnPlainPR(jobName, jobs, memo = {}) {
   } else {
     try {
       reachable = evaluateIf(ifStr, env);
+      // Fail-closed on UNMODELED inputs: if the "not reachable" verdict was built
+      // on an unknown context ref (github.event.pull_request.*, github.actor,
+      // steps.*, env.*, …), we cannot trust it — assume reachable so a
+      // secret-bearing job gated by an if: we don't understand is never missed.
+      if (!reachable && env.sawUnknown) reachable = true;
     } catch {
       reachable = true; // unparseable → fail-closed (assume exposed)
     }
@@ -342,6 +353,12 @@ export function analyzeWorkflows(workflowMap) {
     const memo = {};
     for (const [jobName, job] of Object.entries(jobs)) {
       if (!isReachableOnPlainPR(jobName, jobs, memo)) continue;
+      // Collect at JOB level (the whole job, incl. step-level `env:` even where a
+      // step's own `if:` would skip it on a plain PR). This is DELIBERATE, not a
+      // gap: under the tamper model an auto-run PR controls the workflow content
+      // and can flip any step's `if:` (or add a new step), so a secret referenced
+      // anywhere in a plain-PR-reachable job is exfiltratable. Do NOT "optimize"
+      // this into step-level `if:` filtering — that would open a real hole.
       const secrets = new Set();
       collectSecretsDeep(job, secrets);
       for (const s of secrets) {
@@ -444,6 +461,24 @@ function runSelfTest() {
             'deploy-staging': {
               if: "github.event_name == 'pull_request'",
               steps: [{ env: { CF: '${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: sensitive-secret job gated by an UNKNOWN if-ref (must fail-closed to reachable)',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            // github.event.pull_request.draft is not modeled — the evaluator
+            // must NOT resolve it to '' and gate the job (that would miss the
+            // ADMIN_KEY exposure). It must fail-closed to reachable.
+            leaky: {
+              if: "github.event.pull_request.draft == false",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
         },
