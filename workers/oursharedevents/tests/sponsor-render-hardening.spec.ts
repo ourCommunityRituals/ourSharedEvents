@@ -24,7 +24,11 @@
  * Single fix point: every sponsor `<img>` tag (across 6 sites) gets:
  *   1. Attribute escaping for `logo_url` (XSS guard).
  *   2. `referrerpolicy="no-referrer"` (anti-fingerprinting).
- *   3. `onerror="this.style.display='none'"` (broken-image hide).
+ *   3. A broken-image hide. Originally `onerror="this.style.display='none'"`;
+ *      FE-15 (2026-09-27) migrated the FORM page to the CSP-safe equivalent
+ *      (`data-hide-on-error` + a capture-phase document 'error' listener),
+ *      because the nonce CSP (`script-src 'self' 'nonce-…'`) blocks inline
+ *      event handlers. The onerror assertion below accepts EITHER mechanism.
  * Plus the display TV rotation gets a special advance-on-error handler
  * that calls showNext() so the next sponsor rotates in immediately.
  */
@@ -68,9 +72,18 @@ describe('OSE-R-011 + OSE-R-015 sponsor render hardening — API layer', () => {
 
     test(`OSE-R-015 | API | GET ${surface.path} (${surface.name}) | sponsor img tags have onerror handler to hide broken images`, async () => {
       const html = await fetchPage(surface.path);
-      expect(html, `${surface.name} must include onerror on sponsor imgs`).toMatch(
-        /onerror=["']this\.style\.display=/
-      );
+      // FE-15 (2026-09-27): the broken-image hide is mechanism-agnostic. The
+      // original inline `onerror="this.style.display=…"` is CSP-blocked under the
+      // nonce policy (`script-src 'self' 'nonce-…'`, no 'unsafe-inline'), so the
+      // form page now hides broken sponsor logos via `data-hide-on-error` + one
+      // capture-phase document 'error' listener (the wiring is asserted in
+      // form-sponsor-ui.spec.ts + tests/unit/form-page-js-integrity.test.js). The
+      // other surfaces still carry inline onerror. Accept EITHER — the guarantee
+      // is "a broken sponsor logo is hidden", not one specific attribute.
+      expect(
+        html,
+        `${surface.name} must hide broken sponsor imgs (inline onerror or CSP-safe data-hide-on-error)`
+      ).toMatch(/onerror=["']this\.style\.display=|data-hide-on-error=["']/);
     });
   }
 
