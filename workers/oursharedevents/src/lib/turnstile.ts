@@ -32,6 +32,8 @@ export interface TurnstileEnv {
    * A production value MUST NOT include `localhost`/`127.0.0.1`.
    */
   TURNSTILE_HOSTNAMES?: string;
+  /** Public sitekey for the client widget (Slice 2). Non-secret; set at activation. */
+  TURNSTILE_SITE_KEY?: string;
 }
 
 export interface SiteverifyResult {
@@ -44,6 +46,39 @@ export interface SiteverifyResult {
 /** True only for the exact string 'true' — every other value is dark/off. */
 export function isTurnstileEnabled(env: TurnstileEnv): boolean {
   return env.TURNSTILE_ENABLED === 'true';
+}
+
+// ─── Client widget render (Slice 2) ──────────────────────────────────────────
+// Pure string builders. A page renders the widget ONLY when enforcement is on
+// AND a sitekey is configured; otherwise every builder returns '' (zero markup).
+
+/** Turnstile edge host — added to script-src + frame-src when the widget renders. */
+export const TURNSTILE_HOST = 'https://challenges.cloudflare.com';
+
+/** Renderable only when enabled AND a sitekey is configured. */
+export function turnstileClientEnabled(env: TurnstileEnv): boolean {
+  return isTurnstileEnabled(env) && !!env.TURNSTILE_SITE_KEY?.trim();
+}
+
+function escapeTurnstileAttr(v: string): string {
+  return v.replace(
+    /[<>&"']/g,
+    (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c] ?? c
+  );
+}
+
+/** The async widget loader `<script>` for the page head — '' when off. */
+export function turnstileScriptTag(env: TurnstileEnv): string {
+  return turnstileClientEnabled(env)
+    ? `<script src="${TURNSTILE_HOST}/turnstile/v0/api.js" async defer></script>`
+    : '';
+}
+
+/** The `.cf-turnstile` widget div for one action — '' when off. */
+export function turnstileWidgetHtml(env: TurnstileEnv, action: string): string {
+  if (!turnstileClientEnabled(env)) return '';
+  const sitekey = escapeTurnstileAttr((env.TURNSTILE_SITE_KEY ?? '').trim());
+  return `<div class="cf-turnstile" data-testid="turnstile-widget" data-sitekey="${sitekey}" data-action="${escapeTurnstileAttr(action)}"></div>`;
 }
 
 /**

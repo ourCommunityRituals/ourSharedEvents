@@ -147,4 +147,7 @@ export const NODE_SPECS = [
   // L4 Turnstile-dark (OSE-1378) — pure lib guardTurnstile over a stubbed global
   // fetch; no cloudflare:test / SELF.fetch / D1. Born-red per guard clause. Node-clean.
   'tests/turnstile.spec.ts',
+  // L4 Slice 2 — client render helpers + handleFormPage widget/CSP wiring. Pure
+  // render over a fake env (no DB / cloudflare:test). Node-clean.
+  'tests/turnstile-render.spec.ts',
 ];
