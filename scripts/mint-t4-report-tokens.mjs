@@ -99,23 +99,29 @@ const specs = [
   { name: 'SMOKE_RPT_OTHER_EVENT_TOKEN', event: OTHER_EVENT, body: { role: 'admin' } },
 ];
 
-const out = [];
-for (const s of specs) {
-  const token = await mint(s.name, s.event, s.body);
-  out.push([s.name, token]);
-}
-// The local token's sponsor is what the slice-isolation test asserts against.
-out.push(['SMOKE_RPT_SPONSOR_ID', LOCAL_SPONSOR]);
+// Wrapped in an async main() so there is no top-level await (the scripts/
+// eslint parser rejects it; Node runs it fine either way).
+async function main() {
+  const out = [];
+  for (const s of specs) {
+    const token = await mint(s.name, s.event, s.body);
+    out.push([s.name, token]);
+  }
+  // The local token's sponsor is what the slice-isolation test asserts against.
+  out.push(['SMOKE_RPT_SPONSOR_ID', LOCAL_SPONSOR]);
 
-const ghEnv = process.env.GITHUB_ENV;
-for (const [name, value] of out) {
-  // Mask the token values in the CI log (SMOKE_RPT_SPONSOR_ID is not secret).
-  if (name !== 'SMOKE_RPT_SPONSOR_ID') console.log(`::add-mask::${value}`);
-  if (ghEnv) fs.appendFileSync(ghEnv, `${name}=${value}\n`);
+  const ghEnv = process.env.GITHUB_ENV;
+  for (const [name, value] of out) {
+    // Mask the token values in the CI log (SMOKE_RPT_SPONSOR_ID is not secret).
+    if (name !== 'SMOKE_RPT_SPONSOR_ID') console.log(`::add-mask::${value}`);
+    if (ghEnv) fs.appendFileSync(ghEnv, `${name}=${value}\n`);
+  }
+
+  console.log(
+    ghEnv
+      ? `✓ minted ${specs.length} SharedReport tokens (ttl ${TTL_DAYS}d) → $GITHUB_ENV; sponsor=${LOCAL_SPONSOR}`
+      : `✓ minted ${specs.length} SharedReport tokens (ttl ${TTL_DAYS}d); GITHUB_ENV unset (local run) — not exported.`
+  );
 }
 
-console.log(
-  ghEnv
-    ? `✓ minted ${specs.length} SharedReport tokens (ttl ${TTL_DAYS}d) → $GITHUB_ENV; sponsor=${LOCAL_SPONSOR}`
-    : `✓ minted ${specs.length} SharedReport tokens (ttl ${TTL_DAYS}d); GITHUB_ENV unset (local run) — not exported.`
-);
+main().catch((e) => die(e instanceof Error ? e.message : String(e)));
