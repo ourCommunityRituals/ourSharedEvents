@@ -1,0 +1,23 @@
+-- Migration 0078: events.starts_at — the canonical UTC instant of the event start
+--
+-- OSE-1313. Until now the event carried only start_date (a 'YYYY-MM-DD' local
+-- date) + timezone, with no time-of-day. The wizard collected a date but no
+-- time, and nothing pinned the instant, so "6pm" was unknowable and any
+-- date-only render drifted a calendar day in western zones (UTC-midnight parse).
+--
+-- starts_at is the unambiguous answer: the UTC instant (ISO-8601 with `Z`, e.g.
+-- '2026-10-24T23:00:00Z') computed from the organizer's wall-clock date+time in
+-- the event's IANA `timezone` at write time (lib/event-datetime.ts). Every
+-- surface renders it back IN THE EVENT'S ZONE — never the viewer's browser zone.
+--
+-- Nullable, no default, additive:
+--   * OPTIONAL — an event may still be saved with only a date (start_date) and no
+--     time; starts_at stays NULL and renderers fall back to the date-only path.
+--   * Existing rows are untouched (NULL) — no backfill guess about a time nobody
+--     entered. When a host edits and sets a time, starts_at is populated then.
+--   * start_date/timezone are retained: start_date remains the local calendar
+--     date (phase/staleness code reads it as a date), timezone is the render zone.
+--     starts_at is the new source of truth for the instant; the two stay in sync
+--     because the write path derives starts_at from date+time+timezone.
+
+ALTER TABLE events ADD COLUMN starts_at TEXT;
