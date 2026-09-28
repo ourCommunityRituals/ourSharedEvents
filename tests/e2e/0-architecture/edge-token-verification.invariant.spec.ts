@@ -91,8 +91,11 @@ test.describe('Invariant: edge identity token cryptographic verification (OSE-57
   test('requireAdmin wires the check: calls verifyCfAccessJWT and gates on the result', () => {
     const src = adminSrc();
     expect(
-      /verifyCfAccessJWT\(\s*cfJwt\s*,\s*env\.CF_ACCESS_TEAM_DOMAIN\s*\)/.test(src),
-      'requireAdmin must call verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN) — the verifier must not be dormant'
+      // OSE-1377: trailing `[,)]` (not `\)`) so the aud/iss pin's optional 3rd arg
+      // — verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN, { expectedAud }) — is
+      // allowed. Still requires the verifier be wired with cfJwt + the env team domain.
+      /verifyCfAccessJWT\(\s*cfJwt\s*,\s*env\.CF_ACCESS_TEAM_DOMAIN\s*[,)]/.test(src),
+      'requireAdmin must call verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN[, opts]) — the verifier must not be dormant'
     ).toBe(true);
     expect(
       /verification\.valid/.test(src),

@@ -216,7 +216,9 @@ describe('OSE-590 — CF Access JWT signature verification (TL-018)', () => {
     expect(
       adminSrc,
       'requireAdmin must call verifyCfAccessJWT when CF_ACCESS_TEAM_DOMAIN is set (OSE-590)'
-    ).toMatch(/verifyCfAccessJWT\(cfJwt,\s*env\.CF_ACCESS_TEAM_DOMAIN\)/);
+      // OSE-1377: trailing [,)] (not \)) allows the aud/iss pin's optional 3rd arg —
+      // verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN, { expectedAud }).
+    ).toMatch(/verifyCfAccessJWT\(cfJwt,\s*env\.CF_ACCESS_TEAM_DOMAIN[,)]/);
     expect(
       adminSrc,
       'requireAdmin must return 401 when verifyCfAccessJWT returns valid:false'

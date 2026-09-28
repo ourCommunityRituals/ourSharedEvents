@@ -24,6 +24,15 @@ export interface AdminEnv extends AdminAllowlistEnv {
   X_OCR_INTERNAL?: string; // CI/CD internal auth secret
   ALLOW_OCR_INTERNAL?: string; // gate for X-OCR-Internal header
   CF_ACCESS_TEAM_DOMAIN?: string; // e.g. "mzdano.cloudflareaccess.com"
+  /**
+   * OSE-1377: Application Audience (AUD) tag of the OSE admin Access app. When set,
+   * verifyCfAccessJWT additionally pins `aud` (this app) + `iss` (the team) — the
+   * team JWKS signs tokens for EVERY app in the tenant, so without the aud pin a
+   * signature-valid token minted for any other same-team app would verify. DARK by
+   * default (empty ⇒ no aud/iss check ⇒ current behavior). Non-secret; set from the
+   * Access app Overview once it exists (OSE-1377 CCR gate V3).
+   */
+  CF_ACCESS_AUD?: string;
   WORKER_ENV?: string; // 'production' | 'staging' | undefined (local dev)
   /**
    * LOCAL DEV ONLY. When 'true' AND WORKER_ENV is not production/staging,
@@ -87,7 +96,8 @@ export function __resetJwksCacheForTests(): void {
  */
 export async function verifyCfAccessJWT(
   jwt: string,
-  teamDomain: string
+  teamDomain: string,
+  opts?: { expectedAud?: string }
 ): Promise<{ valid: true; email?: string } | { valid: false }> {
   try {
     const parts = jwt.split('.');
@@ -101,6 +111,8 @@ export async function verifyCfAccessJWT(
       exp?: number;
       iat?: number;
       email?: string;
+      aud?: string | string[];
+      iss?: string;
     };
     if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
 
@@ -115,6 +127,17 @@ export async function verifyCfAccessJWT(
       )
     );
     if (!results.some(Boolean)) return { valid: false };
+
+    // OSE-1377: audience + issuer pin. The team JWKS signs tokens for EVERY Access
+    // app in the tenant, so a valid signature proves only "some app in this team",
+    // not "the OSE admin app". When CF_ACCESS_AUD is configured, require the
+    // signature-verified payload's `iss` to be this team AND its `aud` (string or
+    // array) to include the expected tag. DARK when expectedAud is unset.
+    if (opts?.expectedAud) {
+      if (payload.iss !== `https://${teamDomain}`) return { valid: false };
+      const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
+      if (!auds.includes(opts.expectedAud)) return { valid: false };
+    }
 
     return { valid: true, email: payload.email };
   } catch {
@@ -251,7 +274,9 @@ export async function requireAdmin(
     // Skipping this check allows a forged JWT with any email to bypass auth.
     let cfTrustable = true;
     if (env.CF_ACCESS_TEAM_DOMAIN) {
-      const verification = await verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN);
+      const verification = await verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN, {
+        expectedAud: env.CF_ACCESS_AUD?.trim() || undefined,
+      });
       if (!verification.valid) {
         return new Response(JSON.stringify({ ok: false, status: 401, code: 'UNAUTH', requestId }), {
           status: 401,
