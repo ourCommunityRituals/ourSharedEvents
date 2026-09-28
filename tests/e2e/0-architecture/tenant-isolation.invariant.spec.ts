@@ -85,13 +85,15 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'handlers/events.ts:335':
+  'handlers/events.ts:336':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
     'the 2026-09-16 lifecycle filters — ?status= / ?mine= parsing and the ' +
     'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
-    'resolveEventType helper + import land above it. Scope enforcement unchanged; ' +
+    'resolveEventType helper + import land above it; 335→336 by OSE-1313, whose ' +
+    'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
+    'it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
