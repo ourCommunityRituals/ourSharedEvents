@@ -17,6 +17,7 @@ import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
+import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 
 // Page shells extracted to template files (Wrangler [[rules]] type="Text").
 import PUBLIC_HTML from '../templates/public.html';
@@ -60,7 +61,7 @@ import {
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { applyCountFloor } from '../lib/count-floor.js';
 
-export interface PagesEnv {
+export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
   GOOGLE_MAPS_API_KEY?: string;
@@ -1891,6 +1892,15 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
         { status: 400 }
       );
     }
+
+    // L4 (OSE-1378): dark by default — no-op unless TURNSTILE_ENABLED === 'true'.
+    const turnstileDeny = await guardTurnstile(
+      request,
+      env,
+      'subscribe',
+      (body as { 'cf-turnstile-response'?: unknown })['cf-turnstile-response']
+    );
+    if (turnstileDeny) return turnstileDeny;
 
     // Persist to D1 if available (graceful fallback if DB not provisioned).
     // Data-at-rest doctrine (A-5): subscribers.email is NEVER stored plaintext

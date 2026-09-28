@@ -21,6 +21,12 @@
 
 import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
 import { HARDENING_HEADERS } from '../lib/security-headers';
+import {
+  turnstileScriptTag,
+  turnstileWidgetHtml,
+  turnstileClientEnabled,
+  TURNSTILE_HOST,
+} from '../lib/turnstile';
 
 export interface FormPagesEnv {
   // OSE-R-007 (2026-05-15): event title must come from the canonical
@@ -28,6 +34,9 @@ export interface FormPagesEnv {
   // handler stays compatible with test environments that don't bind DB.
   DB?: D1Database;
   WORKER_ENV?: string;
+  // L4 (OSE-1378) Slice 2: Turnstile client widget — dark unless BOTH are set.
+  TURNSTILE_ENABLED?: string;
+  TURNSTILE_SITE_KEY?: string;
 }
 
 // ── Security headers (SEC-2 / OSE-638 DESIGN-SEC-1) ─────────────────────────
@@ -41,10 +50,15 @@ function generateNonce(): string {
 // style-src keeps 'unsafe-inline' (nonce for CSS requires moving ALL inline
 // styles — tracked as a follow-on story). base-uri and frame-ancestors
 // are not directives accepted by all browsers but are included for defence depth.
-function buildSecurityHeaders(nonce: string): Record<string, string> {
+function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string, string> {
+  // L4 (OSE-1378) Slice 2: when the widget renders, allow the Turnstile host in
+  // script-src (the api.js loader) and add frame-src (the challenge iframe).
+  const tsOn = env ? turnstileClientEnabled(env) : false;
+  const scriptExtra = tsOn ? ` ${TURNSTILE_HOST}` : '';
+  const frameSrc = tsOn ? ` frame-src ${TURNSTILE_HOST};` : '';
   return {
     ...HARDENING_HEADERS,
-    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'${scriptExtra}; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none';${frameSrc} base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
@@ -257,9 +271,15 @@ const FORM_JS_SUBMIT = `
     var controller = new AbortController();
     var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
     try {
+      // L4 (OSE-1378) Slice 2: attach the Turnstile token as a header when the
+      // widget is present (window.turnstile exists only when the loader ran). The
+      // server reads it via extractTurnstileToken (header fallback). Dark → no header.
+      var _headers = { 'Content-Type': 'application/json' };
+      var _tsToken = (window.turnstile && window.turnstile.getResponse) ? window.turnstile.getResponse() : '';
+      if (_tsToken) _headers['cf-turnstile-response'] = _tsToken;
       var res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _headers,
         body: JSON.stringify(data),
         signal: controller.signal,
       });
@@ -558,7 +578,8 @@ function formPage(
   formType: string,
   legalTier = 1,
   deploymentId?: string,
-  nonce = ''
+  nonce = '',
+  env?: FormPagesEnv
 ): string {
   let formHtml: string;
   switch (formType) {
@@ -577,6 +598,32 @@ function formPage(
       break;
   }
 
+  // L4 (OSE-1378) Slice 2: inject the Turnstile widget before the submit control
+  // (dark → widget is '' and nothing changes). Action matches the server guard.
+  const turnstileScript = env ? turnstileScriptTag(env) : '';
+  if (env) {
+    const action =
+      formType === 'checkin'
+        ? 'checkin'
+        : formType === 'survey'
+          ? 'survey'
+          : formType === 'email' || formType === 'email-signup'
+            ? 'email-signup'
+            : 'register';
+    const widget = turnstileWidgetHtml(env, action);
+    if (widget) {
+      const marker =
+        formType === 'checkin'
+          ? '<button type="button" id="checkin-btn" data-testid="checkin-submit">'
+          : formType === 'survey'
+            ? '<button type="submit" data-testid="survey-submit">'
+            : formType === 'email' || formType === 'email-signup'
+              ? '<button type="submit" data-testid="email-submit">'
+              : '<button type="submit" data-testid="register-submit">';
+      formHtml = formHtml.replace(marker, widget + marker);
+    }
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -584,6 +631,7 @@ function formPage(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
   <style>${FORM_CSS}</style>
+  ${turnstileScript}
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
@@ -661,12 +709,20 @@ export async function handleFormPage(
   const eventName = escapeHtml((canonicalTitle ?? 'Event').slice(0, 200));
 
   const nonce = generateNonce();
-  const html = formPage(eventId, eventName, formType, legalTier, deploymentId ?? undefined, nonce);
+  const html = formPage(
+    eventId,
+    eventName,
+    formType,
+    legalTier,
+    deploymentId ?? undefined,
+    nonce,
+    env
+  );
   return new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      ...buildSecurityHeaders(nonce),
+      ...buildSecurityHeaders(nonce, env),
     },
   });
 }

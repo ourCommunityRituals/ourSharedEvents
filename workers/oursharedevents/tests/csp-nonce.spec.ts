@@ -113,7 +113,9 @@ describe('OSE-638 | DESIGN-SEC-1 | CSP nonce + HSTS gate', () => {
   test('formPage sponsor <script> tag includes nonce attribute', () => {
     const src = getFormPagesTs();
     // The FORM_JS_SPONSOR script tag in formPage() must use nonce
-    expect(src).toMatch(/FORM_JS_SPONSOR[\s\S]{0,200}nonce="\$\{nonce\}"|nonce="\$\{nonce\}"[\s\S]{0,200}FORM_JS_SPONSOR/);
+    expect(src).toMatch(
+      /FORM_JS_SPONSOR[\s\S]{0,200}nonce="\$\{nonce\}"|nonce="\$\{nonce\}"[\s\S]{0,200}FORM_JS_SPONSOR/
+    );
   });
 
   test('handleFormPage calls generateNonce() and buildSecurityHeaders(nonce)', () => {
@@ -123,6 +125,8 @@ describe('OSE-638 | DESIGN-SEC-1 | CSP nonce + HSTS gate', () => {
     expect(fnIdx).toBeGreaterThan(-1);
     const fnBody = src.slice(fnIdx);
     expect(fnBody).toContain('generateNonce()');
-    expect(fnBody).toContain('buildSecurityHeaders(nonce)');
+    // L4 (OSE-1378): the call gained an optional env arg → buildSecurityHeaders(nonce, env).
+    // The invariant is unchanged (the nonce still flows into the CSP headers).
+    expect(fnBody).toContain('buildSecurityHeaders(nonce');
   });
 });
