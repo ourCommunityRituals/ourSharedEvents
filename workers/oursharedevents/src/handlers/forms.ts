@@ -46,9 +46,9 @@ import {
   trimStr,
   type FormType,
 } from '../lib/form-validation';
-import { guardTurnstile } from '../lib/turnstile';
+import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 
-export interface FormsEnv extends FormsDbEnv {
+export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
   // OSE-598: HMAC-SHA256 pepper for email hashing. Without this, bare SHA-256
   // is rainbow-table-precomputable. Production MUST set this via Wrangler secret.
