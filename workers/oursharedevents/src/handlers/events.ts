@@ -576,6 +576,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // (date-only event, prior behaviour).
   // Not sliced: zonedDateTimeToUtcIso checks the WHOLE string is HH:MM, so
   // "18:00garbage" is refused rather than silently stored as 18:00.
+  if (
+    'start_time' in body &&
+    body.start_time !== null &&
+    body.start_time !== undefined &&
+    typeof body.start_time !== 'string'
+  ) {
+    return errorResponse('INVALID_TIME', 'start_time must be HH:MM (24h)', 400, rid);
+  }
   const startTime = typeof body.start_time === 'string' ? body.start_time : null;
   let startsAt: string | null = null;
   if (startTime !== null) {

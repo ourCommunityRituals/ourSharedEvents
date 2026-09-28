@@ -100,7 +100,7 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     const src = getPagesTs();
     // One per render fn. OSE-1313: the canonical UTC instant (starts_at) is
     // preferred when the event has a time; the date-only start_date is the fallback.
-    const matches = src.match(/startTime:\s*row\.starts_at \?\? row\.start_date/g);
+    const matches = src.match(/startTime:\s*row\.starts_at\s*\?\?\s*row\.start_date/g);
     expect(matches).not.toBeNull();
     expect(matches!.length).toBeGreaterThanOrEqual(3);
   });

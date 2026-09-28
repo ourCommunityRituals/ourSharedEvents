@@ -411,13 +411,16 @@
           const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
           // OSE-1313 — render in the EVENT's zone, never the viewer's (see poster.html).
           const inZone = (iso, tz, opts) => {
-            try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(new Date(iso)); }
-            catch (err) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(new Date(iso)); }
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return ''; // dirty value: render nothing, never throw
+            try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(d); }
+            catch (err) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(d); } // unknown zone only
           };
           const DATE_OPTS = { weekday:'long', month:'long', day:'numeric' };
           const fmt = ev => {
-            if (ev.starts_at) {
-              return inZone(ev.starts_at, ev.timezone, DATE_OPTS) + ' · ' +
+            const day = ev.starts_at ? inZone(ev.starts_at, ev.timezone, DATE_OPTS) : '';
+            if (day) {
+              return day + ' · ' +
                 inZone(ev.starts_at, ev.timezone, { hour:'numeric', minute:'2-digit', timeZoneName:'short' });
             }
             const d = String(ev.startDateISO || '').slice(0, 10);

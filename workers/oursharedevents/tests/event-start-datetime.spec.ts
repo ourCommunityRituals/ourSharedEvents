@@ -35,11 +35,9 @@ async function applyMigrations(): Promise<void> {
       await tenv.DB.prepare(stmt).run();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (
-        msg.includes('duplicate column name') ||
-        msg.includes('already exists') ||
-        msg.includes('no such column')
-      ) {
+      // Idempotency-safe re-runs only; a missing column is real schema drift
+      // and must fail this suite loudly (PR #657 review).
+      if (msg.includes('duplicate column name') || msg.includes('already exists')) {
         continue;
       }
       throw e;
@@ -137,6 +135,8 @@ describe('OSE-1313 create path stores the UTC instant', () => {
     // PR #657 review: JS normalizes impossible days (2026-02-31 → March 3);
     // they are refused, dated or timed, rather than stored.
     [{ start_date: '2026-02-31' }, 'INVALID_DATE'],
+    // A non-string time is refused, not silently treated as absent (PR #657 review).
+    [{ start_date: '2026-10-24', start_time: 1800 }, 'INVALID_TIME'],
     [{ start_date: '2026-04-31', start_time: '18:00' }, 'INVALID_DATE'],
   ])('refuses %j with 400 %s', async (fields, code) => {
     const res = await createEvent({ title: 'OSE-1313 bad', ...fields });
@@ -323,6 +323,8 @@ describe('OSE-1313 poster + display render the event zone, never the viewer zone
     const h = await res.text();
     expect(h).toContain('inZone(ev.starts_at, ev.timezone');
     expect(h).toContain("inZone(d + 'T00:00:00Z', 'UTC'");
+    // A dirty date renders nothing instead of throwing twice (PR #657 review).
+    expect(h).toContain('if (isNaN(d.getTime())) return');
     // The viewer-zone formatters that produced the off-by-one / invented time are gone.
     expect(h).not.toMatch(/new Date\(iso\)\.toLocale(Date|Time)String/);
   });
@@ -402,6 +404,9 @@ describe('OSE-1313 phase pivots at the timed start, not UTC midnight of the date
 
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     expect(html).toContain('data-testid="event-live-badge"');
+    // The scheduled time stays visible on the live page, in the event zone.
+    const when = html.match(/data-testid="event-when-live">([^<]*)</)?.[1] ?? '';
+    expect(when).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/);
   });
 
   test('post-event recap keeps the entered time in the event zone', async () => {

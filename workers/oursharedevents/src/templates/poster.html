@@ -716,8 +716,10 @@
       // date-only YYYY-MM-DD is a calendar date, pinned via UTC so no zone can
       // shift it a day (and it shows no invented time).
       const inZone = (iso, tz, opts) => {
-        try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(new Date(iso)); }
-        catch (e) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(new Date(iso)); }
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return ''; // dirty value: render nothing, never throw
+        try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(d); }
+        catch (e) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(d); } // unknown zone only
       };
       const DATE_OPTS = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
       const fmtEventDate = ev => {

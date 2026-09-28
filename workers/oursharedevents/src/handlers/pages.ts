@@ -951,6 +951,8 @@ export function renderEventLiveHtml(
   const lang = opts?.lang ?? 'en';
   const formContext = opts?.formContext ?? { type: 'checkin' };
   const title = esc(row.title);
+  // OSE-1313 — keep the scheduled time visible once the page flips to live.
+  const liveWhen = formatEventWhen(row);
   // Same What fallback as the pre-event render: host blurb, else description.
   const whatShort = esc(row.what_short) || esc(row.description);
   const whatLink = renderWhatLink(
@@ -1037,6 +1039,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
       </span>
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
       ${renderEventTypeMeta(row, 'event-type-live')}
+      ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
     </header>
 
     ${
