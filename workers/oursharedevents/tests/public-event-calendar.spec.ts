@@ -191,3 +191,21 @@ describe('OSE-1313 calendar prefers the canonical UTC start instant', () => {
     expect(body).toContain('DTSTART;TZID=America/Chicago:20261201T200000');
   });
 });
+
+describe('OSE-1313 multi-day timed event: date-only end is a day in the event zone (PR #657 review)', () => {
+  test('end_date 2026-10-25 ends at 23:59:59 Chicago, not UTC midnight read back as the 24th', async () => {
+    const eventId = 'evt_ose1313_calendar_multiday';
+    await seedEvent({
+      id: eventId,
+      startDate: '2026-10-24',
+      endDate: '2026-10-25',
+      timezone: 'America/Chicago',
+      startsAt: '2026-10-24T23:00:00Z',
+    });
+    await seedShortlink(eventId, 'Tz13C1');
+
+    const body = await (await SELF.fetch(`https://t.test/events/${eventId}/calendar.ics`)).text();
+    expect(body).toContain('DTSTART;TZID=America/Chicago:20261024T180000');
+    expect(body).toContain('DTEND;TZID=America/Chicago:20261025T235959');
+  });
+});

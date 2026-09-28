@@ -1,4 +1,5 @@
 import { getPublicShortlinkForEvent, type ShortlinksEnv } from '../lib/shortlinks';
+import { phaseTimesFor, zonedDatePart } from '../lib/event-datetime';
 
 export interface CalendarEnv extends ShortlinksEnv {
   DB?: D1Database;
@@ -157,7 +158,22 @@ export async function handleEventCalendar(
     );
   }
 
-  const parsedEnd = row.end_date ? new Date(row.end_date) : null;
+  // OSE-1313 — for a timed event, a date-only end_date is a calendar day in the
+  // EVENT zone (phaseTimesFor), not UTC midnight: read raw it lands the evening
+  // before in the Americas and gives multi-day events a wrong DTEND. A same-day
+  // date-only end says nothing about the end TIME, so it keeps the one-hour
+  // default below rather than blocking out the rest of the day.
+  const sameDayDateOnlyEnd =
+    !!row.starts_at &&
+    !!row.end_date &&
+    /^\d{4}-\d{2}-\d{2}$/.test(row.end_date.trim()) &&
+    row.end_date.trim() === zonedDatePart(row.starts_at, row.timezone);
+  const endIso = sameDayDateOnlyEnd
+    ? null
+    : row.starts_at
+      ? phaseTimesFor(row).end_date
+      : row.end_date;
+  const parsedEnd = endIso ? new Date(endIso) : null;
   const end =
     parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > start.getTime()
       ? parsedEnd

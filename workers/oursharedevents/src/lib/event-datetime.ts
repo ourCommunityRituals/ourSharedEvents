@@ -193,7 +193,9 @@ export function phaseTimesFor(row: {
   let end = row.end_date;
   if (end && /^\d{4}-\d{2}-\d{2}$/.test(end.trim())) {
     const zone = isValidIanaTimezone(row.timezone) ? (row.timezone as string) : 'UTC';
-    end = zonedDateTimeToUtcIso(end.trim(), '23:59', zone);
+    const lastMinute = zonedDateTimeToUtcIso(end.trim(), '23:59', zone);
+    // Through 23:59:59.999 local — the whole final minute, not its first second.
+    end = lastMinute ? new Date(new Date(lastMinute).getTime() + 59_999).toISOString() : null;
   }
   // An end that still precedes the start is bad data: drop it so the event
   // stays live until archived rather than skipping straight to the recap.

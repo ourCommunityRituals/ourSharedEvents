@@ -525,3 +525,31 @@ describe('OSE-1313 OpenGraph end never precedes the timed start (PR #657 review)
     expect(new Date(end).getTime()).toBeGreaterThan(new Date(start).getTime());
   });
 });
+
+describe('OSE-1313 same-day events are listed in start-time order (PR #657 review)', () => {
+  test('the list orders by start_date, then starts_at', async () => {
+    const tenv = env as unknown as TestEnv;
+    const brand = 'ose1313order';
+    await tenv.DB.prepare('DELETE FROM events WHERE brand_id = ?').bind(brand).run();
+    // Inserted late-first so insertion order can't make the test pass.
+    for (const [id, startsAt] of [
+      ['evt_ose1313_order_late', '2099-10-24T23:00:00Z'],
+      ['evt_ose1313_order_early', '2099-10-24T15:00:00Z'],
+    ]) {
+      await tenv.DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, is_published, location,
+                             start_date, timezone, starts_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'active', 1, 'Eagles Bowl', '2099-10-24', 'America/Chicago', ?,
+                   datetime('now'), datetime('now'))`
+      )
+        .bind(id, brand, id, id, startsAt)
+        .run();
+    }
+    const res = await SELF.fetch(`https://t.test/api/v2/events?brand=${brand}`);
+    const body = (await res.json()) as { items: { id: string }[] };
+    expect(body.items.map((i) => i.id)).toEqual([
+      'evt_ose1313_order_early',
+      'evt_ose1313_order_late',
+    ]);
+  });
+});

@@ -280,7 +280,7 @@ export class DataProvider {
               lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active'
-       ORDER BY start_date ASC
+       ORDER BY start_date ASC, starts_at ASC
        LIMIT 1000`
     )
       // LIMIT 1000 (CCR-PR567 L3d): a worst-case guard so the uncached,

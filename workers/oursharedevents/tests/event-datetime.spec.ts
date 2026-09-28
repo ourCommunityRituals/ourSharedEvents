@@ -246,7 +246,7 @@ describe('OSE-1313 phaseTimesFor — what the phase resolver sees', () => {
         starts_at: '2026-10-24T23:00:00Z',
         timezone: 'America/Chicago',
       })
-    ).toEqual({ start_date: '2026-10-24T23:00:00Z', end_date: '2026-10-25T04:59:00Z' });
+    ).toEqual({ start_date: '2026-10-24T23:00:00Z', end_date: '2026-10-25T04:59:59.999Z' });
   });
 
   test('a full ISO end after the start is kept as-is', () => {
