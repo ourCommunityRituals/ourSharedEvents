@@ -603,6 +603,18 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run guard:pr-secrets
 
+      # OSE-1389 — the static SMOKE_RPT_* SharedReport tokens are retired for
+      # run-time minting via the worker mint-link route (scripts/
+      # mint-t4-report-tokens.mjs). This fails if the static GitHub-secret
+      # reference or the retired offline signer (mint-smoke-rpt-tokens) returns.
+      # Self-test first so the guard cannot rot into a false green.
+      - name: 'Security: no static SharedReport smoke-token secrets — self-tests'
+        if: matrix.shard == 'lint'
+        run: npm run test:guard-no-smoke-rpt
+      - name: 'Security: no static SharedReport smoke-token secrets (OSE-1389)'
+        if: matrix.shard == 'lint'
+        run: npm run guard:no-smoke-rpt
+
       # OSE-803 — schema guard constants must track the migration directories.
       # Static, deps-free, ~1s. Runs on every PR so a forgotten constant bump is
       # a red check pre-merge, not a silently-weakened guard discovered at deploy.
@@ -1810,24 +1822,39 @@ jobs:
         timeout-minutes: 5
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
-      # OSE-834 ARM: continue-on-error removed. The SMOKE_RPT_* tokens must be minted
-      # on staging (P1) so the 18 cases execute — with them absent the run all-skips
+      # OSE-834 ARM: continue-on-error removed — with tokens absent the run all-skips
       # and Gate 0b reds it, which is the point: an unverified depth gate is not
       # green (this is the half of #25 money buys). PW_MAX_SKIP_RATIO (repo var
       # T4_MAX_SKIP_RATIO, unset = no ceiling) also reds a mostly-skipped run.
+      #
+      # OSE-1389: the SMOKE_RPT_* tokens are minted HERE, at run time, by calling
+      # the deployed worker's admin mint-link route — not read from static GitHub
+      # secrets. The signing secret never leaves the worker, and the tokens live
+      # one day, not ninety (the static tokens used to desync from staging and 401
+      # the whole gate — the OSE-349 token-shadow family). The mint step exports the
+      # four tokens + the local sponsor id via $GITHUB_ENV for the gate step below.
+      - name: 'T4f-mint: SharedReport run-time tokens'
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # The depth E2E targets the multi-tier event so its sponsor-scoped tokens
+          # resolve against real seeded sponsors (sponsors-tiers-smoke.sql).
+          SMOKE_EVENT_POST: evt_smoke_tiers
+          SMOKE_EVENT_OTHER: evt_smoke_other
+        run: node scripts/mint-t4-report-tokens.mjs
+        timeout-minutes: 2
+
       - name: 'T4f: SharedReport Depth Gate'
         id: sharedreport-depth-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
-          # OSE-834: the depth E2E targets the multi-tier event (slice 1) so its
-          # sponsor-scoped tokens resolve against real seeded sponsors. Mint the
-          # SMOKE_RPT_* tokens for evt_smoke_tiers to match this.
           SMOKE_EVENT_POST: evt_smoke_tiers
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
-          SMOKE_RPT_ADMIN_TOKEN: ${{ secrets.SMOKE_RPT_ADMIN_TOKEN }}
-          SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
-          SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
-          SMOKE_RPT_OTHER_EVENT_TOKEN: ${{ secrets.SMOKE_RPT_OTHER_EVENT_TOKEN }}
+          # SMOKE_RPT_ADMIN/LOCAL/MID/OTHER_EVENT_TOKEN + SMOKE_RPT_SPONSOR_ID come
+          # from the T4f-mint step above via $GITHUB_ENV (OSE-1389).
         run: |
           PW_LABEL='T4f: SharedReport Depth Gate' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \

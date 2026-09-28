@@ -117,8 +117,11 @@ test.describe('SharedReport depth gate', () => {
       // Every row must belong to the token's sponsor_id claim
       const ids = new Set(impressions.map((r: { sponsor_id: string }) => r.sponsor_id));
       expect(ids.size).toBe(1);
-      // The fixture token was minted with sponsor_id='sp_test'
-      expect(ids.has('sp_test')).toBe(true);
+      // The slice must be isolated to the token's OWN sponsor. OSE-1389 mints the
+      // token per-run against a real seeded sponsor and exports its id as
+      // SMOKE_RPT_SPONSOR_ID; the legacy static token defaulted to 'sp_test'.
+      const expectedSponsor = process.env.SMOKE_RPT_SPONSOR_ID ?? 'sp_test';
+      expect(ids.has(expectedSponsor)).toBe(true);
     }
   });
 
