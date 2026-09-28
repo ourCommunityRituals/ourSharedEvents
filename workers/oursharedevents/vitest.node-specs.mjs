@@ -144,6 +144,10 @@ export const NODE_SPECS = [
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',
 
+  // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
+  // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.
+  'tests/mint-ttl.spec.ts',
+
   // L4 Turnstile-dark (OSE-1378) — pure lib guardTurnstile over a stubbed global
   // fetch; no cloudflare:test / SELF.fetch / D1. Born-red per guard clause. Node-clean.
   'tests/turnstile.spec.ts',

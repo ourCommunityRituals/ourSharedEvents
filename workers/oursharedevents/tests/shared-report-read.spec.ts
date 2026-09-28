@@ -1064,6 +1064,53 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(payload.depth).toBe('mid');
   });
 
+  // OSE-1390 — sub-day TTL. ttl_minutes mints a run-scoped token; the server-
+  // computed expires_at echoes it (a day-scoped mint would be ~1440 min out).
+  test('OSE-1390: mint with ttl_minutes=30 → 200, expires_at ~30 min out', async () => {
+    await seedEvent({ id: 'test-evt-ttlmin' });
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-ttlmin/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'admin', ttl_minutes: 30 }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; token: string; expires_at: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.token).toBe('string');
+    const deltaMin = (Date.parse(body.expires_at) - Date.now()) / 60000;
+    expect(deltaMin).toBeGreaterThan(28);
+    expect(deltaMin).toBeLessThan(32);
+  });
+
+  test('OSE-1390: ttl_minutes below floor (4) → 400', async () => {
+    await seedEvent({ id: 'test-evt-ttlmin-lo' });
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-ttlmin-lo/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'admin', ttl_minutes: 4 }),
+      }
+    );
+    expect(res.status).toBe(400);
+  });
+
+  test('OSE-1390: both ttl_minutes and ttl_days → 400 (ambiguous)', async () => {
+    await seedEvent({ id: 'test-evt-ttlmin-both' });
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-ttlmin-both/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'admin', ttl_minutes: 30, ttl_days: 1 }),
+      }
+    );
+    expect(res.status).toBe(400);
+  });
+
   test('Q2: minting non-sponsor token with depth="mid" is rejected', async () => {
     await seedEvent({ id: 'test-evt-read-q2-reject' });
 

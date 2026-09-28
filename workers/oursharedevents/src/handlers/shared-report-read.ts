@@ -28,6 +28,7 @@ import {
   type SignedLinkRole,
 } from '../lib/shared-report-auth';
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
+import { resolveMintTtlSeconds } from '../lib/mint-ttl';
 import { applyCountFloor } from '../lib/count-floor';
 import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 import { logReportAccess } from '../lib/audit-log';
@@ -440,25 +441,17 @@ export async function handleAdminMintSharedReportLink(
     }
   }
 
-  // Validate TTL (1–365 days, default 7)
-  const ttlDays = b.ttl_days === undefined ? 7 : b.ttl_days;
-  if (!Number.isInteger(ttlDays) || (ttlDays as number) < 1 || (ttlDays as number) > 365) {
-    return jsonResponse(
-      { ok: false, code: 'BAD_REQUEST', error: 'ttl_days must be an integer between 1 and 365' },
-      400
-    );
+  // Validate TTL: ttl_minutes (5–1440) mints run-scoped tokens; else ttl_days
+  // (1–365, default 7). Both is ambiguous → 400. Logic is pure (lib/mint-ttl).
+  const ttl = resolveMintTtlSeconds(b);
+  if ('error' in ttl) {
+    return jsonResponse({ ok: false, code: 'BAD_REQUEST', error: ttl.error }, 400);
   }
 
-  const token = await mintSignedLinkToken(
-    env,
-    eventId,
-    role as SignedLinkRole,
-    (ttlDays as number) * 24 * 60 * 60,
-    {
-      ...(effectiveDepth !== undefined ? { depth: effectiveDepth as string } : {}),
-      ...(typeof sponsorId === 'string' ? { sponsor_id: sponsorId } : {}),
-    }
-  );
+  const token = await mintSignedLinkToken(env, eventId, role as SignedLinkRole, ttl.ttlSeconds, {
+    ...(effectiveDepth !== undefined ? { depth: effectiveDepth as string } : {}),
+    ...(typeof sponsorId === 'string' ? { sponsor_id: sponsorId } : {}),
+  });
 
   if (!token) {
     return jsonResponse(
@@ -471,7 +464,7 @@ export async function handleAdminMintSharedReportLink(
     );
   }
 
-  const expiresAt = new Date(Date.now() + (ttlDays as number) * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + ttl.ttlSeconds * 1000).toISOString();
   return jsonResponse({ ok: true, token, expires_at: expiresAt }, 200, {
     'Cache-Control': 'no-store',
   });
