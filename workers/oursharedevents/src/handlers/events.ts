@@ -37,6 +37,7 @@ import {
   type EventTypeCategoryRow,
   type EventTypeRow,
 } from '../lib/event-type-catalog';
+import { isValidIanaTimezone, zonedDateTimeToUtcIso } from '../lib/event-datetime';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -296,7 +297,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   try {
     const EVENT_SELECT_COLS =
       'e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,' +
-      ' e.start_date, e.end_date, e.timezone, e.cover_image_url, e.created_at, e.updated_at,' +
+      ' e.start_date, e.end_date, e.timezone, e.starts_at, e.cover_image_url, e.created_at, e.updated_at,' +
       ' e.legal_clearance_tier, e.event_type_id, etr.name AS event_type_name,' +
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
@@ -560,6 +561,32 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   }
   const timezone =
     typeof body.timezone === 'string' ? body.timezone.slice(0, 50) : 'America/Chicago';
+  // OSE-1313 — an explicitly-supplied timezone must be a real IANA zone; a typo
+  // stored here would garble Intl on every render. The default is valid, so only
+  // validate when the client actually sent one (stays additive).
+  if (typeof body.timezone === 'string' && !isValidIanaTimezone(timezone)) {
+    return errorResponse('INVALID_TIMEZONE', 'timezone must be a valid IANA zone', 400, rid);
+  }
+  // OSE-1313 — optional wall-clock start time (HH:MM, 24h) in the event's zone.
+  // When present with a date, persist the canonical UTC instant in starts_at;
+  // start_date stays the local calendar date. Absent time → starts_at NULL
+  // (date-only event, prior behaviour).
+  const startTime = typeof body.start_time === 'string' ? body.start_time.slice(0, 5) : null;
+  let startsAt: string | null = null;
+  if (startTime !== null) {
+    if (startDate === null) {
+      return errorResponse('INVALID_TIME', 'start_time requires start_date', 400, rid);
+    }
+    startsAt = zonedDateTimeToUtcIso(startDate.slice(0, 10), startTime, timezone);
+    if (startsAt === null) {
+      return errorResponse(
+        'INVALID_TIME',
+        'start_time must be HH:MM (24h) in a valid timezone',
+        400,
+        rid
+      );
+    }
+  }
   const coverImageUrl =
     typeof body.cover_image_url === 'string' ? body.cover_image_url.slice(0, 500) : null;
   const templateId = typeof body.template_id === 'string' ? body.template_id.slice(0, 64) : null;
@@ -612,14 +639,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
 
   try {
     await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
+      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published, created_by,
                            event_type_id,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -632,6 +659,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         startDate,
         endDate,
         timezone,
+        startsAt,
         coverImageUrl,
         templateId,
         whatShort,

@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0077_node_hierarchy_disambiguate_legal_clearance_tier.sql */
-export const REQUIRED_DB_MIGRATION = 77;
+/** Highest migration in migrations/ — currently 0078_events_add_starts_at.sql */
+export const REQUIRED_DB_MIGRATION = 78;
 
 /** Highest migration in migrations-forms/ — currently 0014_encrypt_attendee_name.sql */
 export const REQUIRED_FORMS_MIGRATION = 14;
