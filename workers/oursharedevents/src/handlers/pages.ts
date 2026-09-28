@@ -789,7 +789,7 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: row.end_date })}
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
@@ -986,7 +986,7 @@ export function renderEventLiveHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: row.end_date })}
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
@@ -1211,7 +1211,9 @@ export function renderPostEventHtml(
     url: esc(shareUrl),
     twitterCard: 'summary',
     startTime: row.starts_at ?? row.start_date,
-    endTime: row.end_date,
+    // OSE-1313 — same normalized end as phase resolution, so a timed start
+    // never pairs with a date-only end read as an earlier UTC midnight.
+    endTime: phaseTimesFor(row).end_date,
   });
   const whoHost = esc(row.who_host);
   const whoStory = esc(row.who_story);

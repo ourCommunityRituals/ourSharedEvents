@@ -12,6 +12,7 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { handleAdminPage } from '../src/handlers/pages';
+import { handleUpdateEvent } from '../src/handlers/events';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose1313-test';
@@ -438,5 +439,89 @@ describe('OSE-1313 real calendar dates still pass the round-trip check', () => {
     const row = await readRow(id);
     expect(row.start_date).toBe('2028-02-29');
     expect(row.starts_at).toBe('2028-03-01T00:00:00Z'); // 18:00 CST = 00:00Z next day
+  });
+});
+
+describe('OSE-1313 update is guarded against a concurrent time edit (PR #657 review)', () => {
+  // A fake D1 that plays the race deterministically: the handler reads the
+  // row, then another edit lands before its UPDATE, so the guarded UPDATE
+  // matches nothing while the row still exists.
+  function racingDb(log: { sql: string; args: unknown[] }[]): D1Database {
+    return {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            log.push({ sql, args });
+            return {
+              async first() {
+                if (sql.startsWith('SELECT start_date, timezone, starts_at')) {
+                  return {
+                    start_date: '2026-10-24',
+                    timezone: 'America/Chicago',
+                    starts_at: '2026-10-24T23:00:00Z',
+                  };
+                }
+                if (sql.startsWith('SELECT id FROM events')) return { id: args[0] };
+                return null;
+              },
+              async run() {
+                return { meta: { changes: 0 } };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as D1Database;
+  }
+
+  test('a stale read yields 409 EVENT_TIME_CONFLICT, never a mismatched write', async () => {
+    const log: { sql: string; args: unknown[] }[] = [];
+    const res = await handleUpdateEvent(
+      new Request('https://t.test/api/v2/admin/events/evt_race', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_time: '19:30' }),
+      }),
+      { DB: racingDb(log) } as never,
+      'evt_race'
+    );
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as ApiResponse).code).toBe('EVENT_TIME_CONFLICT');
+
+    const update = log.find((l) => l.sql.startsWith('UPDATE events SET'));
+    expect(update?.sql).toContain('AND start_date IS ? AND timezone IS ? AND starts_at IS ?');
+    // Guard binds are the values the recompute was based on.
+    expect(update?.args.slice(-3)).toEqual([
+      '2026-10-24',
+      'America/Chicago',
+      '2026-10-24T23:00:00Z',
+    ]);
+  });
+
+  test('an update that does not touch the time is not guarded', async () => {
+    const id = await createTimed('OSE-1313 unguarded', '2026-10-24', '18:00', 'America/Chicago');
+    const res = await updateEvent(id, { title: 'renamed again' });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('OSE-1313 OpenGraph end never precedes the timed start (PR #657 review)', () => {
+  test('same-day timed event: og:event:end_time is after og:event:start_time', async () => {
+    const tenv = env as unknown as TestEnv;
+    const id = 'evt_ose1313_og_order';
+    await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, location,
+                           start_date, end_date, timezone, starts_at, created_at, updated_at)
+         VALUES (?, ?, 'OSE-1313 og', ?, 'active', 1, 'Eagles Bowl', '2099-10-24', '2099-10-24',
+                 'America/Chicago', '2099-10-24T23:00:00Z', datetime('now'), datetime('now'))`
+    )
+      .bind(id, BRAND, id)
+      .run();
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const start = html.match(/og:event:start_time" content="([^"]+)"/)?.[1] ?? '';
+    const end = html.match(/og:event:end_time" content="([^"]+)"/)?.[1] ?? '';
+    expect(start).toBe('2099-10-24T23:00:00Z');
+    expect(new Date(end).getTime()).toBeGreaterThan(new Date(start).getTime());
   });
 });

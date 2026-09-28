@@ -970,6 +970,15 @@ export async function handleUpdateEvent(
   // (starts_at read back in the OLD zone) is carried over so the event keeps its
   // time-of-day. start_time: null clears it → date-only event (starts_at NULL).
   // starts_at is always server-computed; a client-supplied value is ignored.
+  // Optimistic-concurrency guard for the starts_at recompute below: the UPDATE
+  // only applies if the wall-clock fields it was computed from are unchanged,
+  // so two concurrent partial edits cannot pair one request's start_date with a
+  // starts_at derived from the other's (PR #657 review).
+  let timeGuard: {
+    start_date: string | null;
+    timezone: string | null;
+    starts_at: string | null;
+  } | null = null;
   if ('start_time' in body || 'start_date' in body || 'timezone' in body) {
     // The zone cannot be cleared: starts_at is always computed in a concrete
     // zone, and a NULL column would make every surface render in UTC instead.
@@ -996,6 +1005,7 @@ export async function handleUpdateEvent(
       .bind(eventId)
       .first<{ start_date: string | null; timezone: string | null; starts_at: string | null }>();
     if (existing) {
+      timeGuard = existing;
       const tz =
         typeof body.timezone === 'string'
           ? body.timezone.slice(0, 50)
@@ -1101,11 +1111,31 @@ export async function handleUpdateEvent(
       }
     }
 
-    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + ' WHERE id = ?')
+    let where = ' WHERE id = ?';
+    if (timeGuard) {
+      // SQLite `IS` compares NULL as a value, so a date-only row guards too.
+      where += ' AND start_date IS ? AND timezone IS ? AND starts_at IS ?';
+      values.push(timeGuard.start_date, timeGuard.timezone, timeGuard.starts_at);
+    }
+    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where)
       .bind(...values)
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
+      if (timeGuard) {
+        const still = await env.DB.prepare('SELECT id FROM events WHERE id = ?')
+          .bind(eventId)
+          .first<{ id: string }>();
+        if (still) {
+          // The row's date/zone/time moved between our read and this write.
+          return errorResponse(
+            'EVENT_TIME_CONFLICT',
+            'The event time changed while this edit was being saved — reload and try again',
+            409,
+            rid
+          );
+        }
+      }
       // The transition guard above reads the row first, so a no-op UPDATE here
       // is a genuine miss, not a refused transition.
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
