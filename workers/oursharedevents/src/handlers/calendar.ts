@@ -1,4 +1,5 @@
 import { getPublicShortlinkForEvent, type ShortlinksEnv } from '../lib/shortlinks';
+import { phaseTimesFor, zonedDatePart } from '../lib/event-datetime';
 
 export interface CalendarEnv extends ShortlinksEnv {
   DB?: D1Database;
@@ -12,6 +13,8 @@ interface CalendarEventRow {
   start_date: string | null;
   end_date: string | null;
   timezone: string | null;
+  /** OSE-1313 — canonical UTC start instant; preferred over start_date when set. */
+  starts_at: string | null;
   status: string | null;
   is_published: number | null;
 }
@@ -63,7 +66,7 @@ function formatInTimezone(date: Date, timezone: string): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // hourCycle only — `hour12` overrides it and can yield h24 ("24" at midnight).
     hourCycle: 'h23',
   }).formatToParts(date);
   const byType = new Map<string, string>(parts.map((p) => [p.type, p.value]));
@@ -73,7 +76,7 @@ function formatInTimezone(date: Date, timezone: string): string {
     part('month') +
     part('day') +
     'T' +
-    part('hour') +
+    (part('hour') === '24' ? '00' : part('hour')) +
     part('minute') +
     part('second')
   );
@@ -122,7 +125,7 @@ export async function handleEventCalendar(
   }
 
   const row = await env.DB.prepare(
-    `SELECT id, title, description, location, start_date, end_date, timezone, status, is_published
+    `SELECT id, title, description, location, start_date, end_date, timezone, starts_at, status, is_published
        FROM events WHERE id = ? LIMIT 1`
   )
     .bind(eventId)
@@ -144,7 +147,10 @@ export async function handleEventCalendar(
     );
   }
 
-  const start = new Date(row.start_date);
+  // OSE-1313 — a timed event carries its canonical UTC instant in starts_at
+  // (date+time in the event's zone, server-computed). Prefer it: the date-only
+  // start_date parses as UTC midnight, which is not when the event starts.
+  const start = new Date(row.starts_at || row.start_date);
   if (Number.isNaN(start.getTime())) {
     return Response.json(
       { ok: false, status: 409, code: 'EVENT_TIME_INVALID', error: 'Event start time is invalid' },
@@ -152,9 +158,24 @@ export async function handleEventCalendar(
     );
   }
 
-  const parsedEnd = row.end_date ? new Date(row.end_date) : null;
+  // OSE-1313 — for a timed event, a date-only end_date is a calendar day in the
+  // EVENT zone (phaseTimesFor), not UTC midnight: read raw it lands the evening
+  // before in the Americas and gives multi-day events a wrong DTEND. A same-day
+  // date-only end says nothing about the end TIME, so it keeps the one-hour
+  // default below rather than blocking out the rest of the day.
+  const sameDayDateOnlyEnd =
+    !!row.starts_at &&
+    !!row.end_date &&
+    /^\d{4}-\d{2}-\d{2}$/.test(row.end_date.trim()) &&
+    row.end_date.trim() === zonedDatePart(row.starts_at, row.timezone);
+  const endIso = sameDayDateOnlyEnd
+    ? null
+    : row.starts_at
+      ? phaseTimesFor(row).end_date
+      : row.end_date;
+  const parsedEnd = endIso ? new Date(endIso) : null;
   const end =
-    parsedEnd && !Number.isNaN(parsedEnd.getTime())
+    parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > start.getTime()
       ? parsedEnd
       : new Date(start.getTime() + 60 * 60 * 1000);
   const timezone = safeTimezone(row.timezone);

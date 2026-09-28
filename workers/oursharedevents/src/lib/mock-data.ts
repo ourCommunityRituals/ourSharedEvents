@@ -32,6 +32,8 @@ export interface MockEvent {
   location: string | null;
   cover_image_url: string | null;
   timezone: string;
+  /** OSE-1313 — canonical UTC start instant; null/absent for date-only events. */
+  starts_at?: string | null;
   template_id: string | null;
   event_type_id: string | null;
   what_short: string | null;

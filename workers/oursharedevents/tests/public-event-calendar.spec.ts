@@ -35,6 +35,7 @@ async function seedEvent(opts: {
   startDate?: string | null;
   endDate?: string | null;
   timezone?: string | null;
+  startsAt?: string | null;
   title?: string;
   description?: string;
 }): Promise<void> {
@@ -43,8 +44,8 @@ async function seedEvent(opts: {
   await tenv.DB.prepare(`DELETE FROM events WHERE id = ?`).bind(opts.id).run();
   await tenv.DB.prepare(
     `INSERT INTO events (id, brand_id, title, slug, status, is_published, location, description,
-                         start_date, end_date, timezone, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+                         start_date, end_date, timezone, starts_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
   )
     .bind(
       opts.id,
@@ -57,7 +58,8 @@ async function seedEvent(opts: {
       opts.description ?? 'Bring friends.',
       opts.startDate ?? '2026-12-02T02:00:00.000Z',
       opts.endDate ?? '2026-12-02T04:00:00.000Z',
-      opts.timezone ?? 'America/Chicago'
+      opts.timezone ?? 'America/Chicago',
+      opts.startsAt ?? null
     )
     .run();
 }
@@ -155,5 +157,55 @@ describe('OSE-1358 public event calendar download', () => {
       .bind('NoMut8')
       .first<{ clicks: number }>();
     expect(row?.clicks).toBe(0);
+  });
+});
+
+describe('OSE-1313 calendar prefers the canonical UTC start instant', () => {
+  test('a timed event (starts_at) anchors DTSTART at its wall time in the event zone, not UTC midnight', async () => {
+    const eventId = 'evt_ose1313_calendar_starts_at';
+    // Date-only start_date + 18:30 in Chicago (CDT, UTC-5) → 23:30Z.
+    await seedEvent({
+      id: eventId,
+      startDate: '2026-10-24',
+      endDate: '2026-10-24',
+      timezone: 'America/Chicago',
+      startsAt: '2026-10-24T23:30:00Z',
+    });
+    await seedShortlink(eventId, 'Tz13A1');
+
+    const res = await SELF.fetch(`https://t.test/events/${eventId}/calendar.ics`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('DTSTART;TZID=America/Chicago:20261024T183000');
+    // A date-only end_date lands before the timed start → one-hour default, never a negative span.
+    expect(body).toContain('DTEND;TZID=America/Chicago:20261024T193000');
+  });
+
+  test('a date-only event (no starts_at) keeps the prior start_date behaviour', async () => {
+    const eventId = 'evt_ose1313_calendar_date_only';
+    await seedEvent({ id: eventId, startsAt: null });
+    await seedShortlink(eventId, 'Tz13B1');
+
+    const res = await SELF.fetch(`https://t.test/events/${eventId}/calendar.ics`);
+    const body = await res.text();
+    expect(body).toContain('DTSTART;TZID=America/Chicago:20261201T200000');
+  });
+});
+
+describe('OSE-1313 multi-day timed event: date-only end is a day in the event zone (PR #657 review)', () => {
+  test('end_date 2026-10-25 ends at 23:59:59 Chicago, not UTC midnight read back as the 24th', async () => {
+    const eventId = 'evt_ose1313_calendar_multiday';
+    await seedEvent({
+      id: eventId,
+      startDate: '2026-10-24',
+      endDate: '2026-10-25',
+      timezone: 'America/Chicago',
+      startsAt: '2026-10-24T23:00:00Z',
+    });
+    await seedShortlink(eventId, 'Tz13C1');
+
+    const body = await (await SELF.fetch(`https://t.test/events/${eventId}/calendar.ics`)).text();
+    expect(body).toContain('DTSTART;TZID=America/Chicago:20261024T180000');
+    expect(body).toContain('DTEND;TZID=America/Chicago:20261025T235959');
   });
 });

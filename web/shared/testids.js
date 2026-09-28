@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-26 — 439 ids.
+ * Generated 2026-09-28 — 443 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 281 ids
+    // admin.html — 285 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -101,8 +101,10 @@
       'create-slot-chip-typed',
       'create-slot-preview',
       'create-submit',
+      'create-time',
       'create-title',
       'create-type-picker-msg',
+      'create-tz',
       'create-venue',
       'create-warnings',
       'create-what-short',
@@ -290,7 +292,9 @@
       'wizard-copy-signup',
       'wizard-event-date',
       'wizard-event-name',
+      'wizard-event-time',
       'wizard-event-type',
+      'wizard-event-tz',
       'wizard-event-venue',
       'wizard-finish-btn',
       'wizard-go-live',

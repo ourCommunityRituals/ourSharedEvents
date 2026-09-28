@@ -38,11 +38,13 @@ function zoneOffsetMs(instant: Date, tz: string): number {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // hourCycle only — `hour12` takes precedence over it, and some ICU builds
+    // then pick h24, rendering midnight as "24" (seen on CI's Node).
     hourCycle: 'h23',
   }).formatToParts(instant);
   const map: Record<string, number> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = Number(p.value);
+  if (map.hour === 24) map.hour = 0; // defensive: an h24 runtime labels midnight 24
   const wallAsUtc = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
   return wallAsUtc - instant.getTime();
 }
@@ -54,9 +56,9 @@ function zoneOffsetMs(instant: Date, tz: string): number {
  * DST handling: we start from the "naive" instant (treat the wall clock as if it
  * were UTC), read the zone offset there, subtract it, then refine ONCE — the
  * offset can differ across a DST boundary, and one refinement lands on the right
- * side for every real transition. Spring-forward gaps (a wall time that does not
- * exist) and fall-back overlaps (one that happens twice) still resolve to a
- * single deterministic, valid instant.
+ * side for every real transition. A fall-back overlap (a wall time that happens
+ * twice) resolves to a single deterministic, valid instant; a spring-forward gap
+ * (a wall time that does not exist) returns null rather than a different time.
  *
  * @param dateStr local date "YYYY-MM-DD"
  * @param timeStr local time "HH:MM" (24h)
@@ -77,7 +79,13 @@ export function zonedDateTimeToUtcIso(dateStr: string, timeStr: string, tz: stri
   const off2 = zoneOffsetMs(new Date(utcMs), tz);
   if (off2 !== off1) utcMs = naiveUtc - off2;
 
-  return new Date(utcMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const iso = new Date(utcMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // A wall time that does not exist in the zone (the spring-forward gap, e.g.
+  // 02:30 on the US DST start day) would otherwise resolve to an instant that
+  // reads back as a DIFFERENT time — the event would be stored at a time
+  // nobody entered. Refuse it; the fall-back overlap still round-trips.
+  if (zonedDatePart(iso, tz) !== dateStr || zonedTimePart(iso, tz) !== timeStr) return null;
+  return iso;
 }
 
 /**
@@ -135,4 +143,62 @@ export function zonedDatePart(utcIso: string | null | undefined, tz: string | nu
   const map: Record<string, string> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
   return `${map.year}-${map.month}-${map.day}`;
+}
+
+/**
+ * The local wall-clock time ("HH:MM", 24h) of a UTC instant in `tz`. The update
+ * path uses it to keep an event's time-of-day when only its date or zone moves.
+ */
+export function zonedTimePart(utcIso: string | null | undefined, tz: string | null): string {
+  if (!utcIso) return '';
+  const d = new Date(utcIso);
+  if (Number.isNaN(d.getTime())) return '';
+  const zone = isValidIanaTimezone(tz) ? (tz as string) : 'UTC';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hour: '2-digit',
+    minute: '2-digit',
+    // hourCycle only — `hour12` takes precedence over it, and some ICU builds
+    // then pick h24, rendering midnight as "24" (seen on CI's Node).
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const map: Record<string, string> = {};
+  for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
+  const hour = map.hour === '24' ? '00' : map.hour; // defensive: h24 runtimes
+  return `${hour}:${map.minute}`;
+}
+
+/**
+ * The ISO start/end the canonical phase resolver (domain/event-phase) should
+ * see for an event. The resolver's contract takes ISO datetimes and is left
+ * untouched; this feeds it the most precise ones we have.
+ *
+ * - A timed event (starts_at set) starts at starts_at, not at UTC midnight of
+ *   the date-only start_date — otherwise an 18:00 event goes "live" at 00:00Z.
+ * - Its date-only end_date is a CALENDAR DAY, not an instant: it ends at the
+ *   end of that day in the event's zone. Read as UTC midnight it would land
+ *   before a same-day timed start and flip the event to post_event the moment
+ *   it went live.
+ * - A date-only event (no starts_at) passes through unchanged.
+ */
+export function phaseTimesFor(row: {
+  start_date: string | null;
+  end_date: string | null;
+  starts_at?: string | null;
+  timezone?: string | null;
+}): { start_date: string | null; end_date: string | null } {
+  if (!row.starts_at || Number.isNaN(new Date(row.starts_at).getTime())) {
+    return { start_date: row.start_date, end_date: row.end_date };
+  }
+  let end = row.end_date;
+  if (end && /^\d{4}-\d{2}-\d{2}$/.test(end.trim())) {
+    const zone = isValidIanaTimezone(row.timezone) ? (row.timezone as string) : 'UTC';
+    const lastMinute = zonedDateTimeToUtcIso(end.trim(), '23:59', zone);
+    // Through 23:59:59.999 local — the whole final minute, not its first second.
+    end = lastMinute ? new Date(new Date(lastMinute).getTime() + 59_999).toISOString() : null;
+  }
+  // An end that still precedes the start is bad data: drop it so the event
+  // stays live until archived rather than skipping straight to the recap.
+  if (end && new Date(end).getTime() < new Date(row.starts_at).getTime()) end = null;
+  return { start_date: row.starts_at, end_date: end };
 }

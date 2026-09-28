@@ -409,7 +409,23 @@
             return;
           }
           const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-          const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
+          // OSE-1313 — render in the EVENT's zone, never the viewer's (see poster.html).
+          const inZone = (iso, tz, opts) => {
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return ''; // dirty value: render nothing, never throw
+            try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(d); }
+            catch (err) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(d); } // unknown zone only
+          };
+          const DATE_OPTS = { weekday:'long', month:'long', day:'numeric' };
+          const fmt = ev => {
+            const day = ev.starts_at ? inZone(ev.starts_at, ev.timezone, DATE_OPTS) : '';
+            if (day) {
+              return day + ' · ' +
+                inZone(ev.starts_at, ev.timezone, { hour:'numeric', minute:'2-digit', timeZoneName:'short' });
+            }
+            const d = String(ev.startDateISO || '').slice(0, 10);
+            return /^\d{4}-\d{2}-\d{2}$/.test(d) ? inZone(d + 'T00:00:00Z', 'UTC', DATE_OPTS) : '';
+          };
           // OSE-1081: the deep-linked event takes the featured slot; the rest of
           // the board is unchanged (still every other event, original order), so
           // a scoped link narrows the focus without hiding what else is coming up.
@@ -420,13 +436,13 @@
             '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
             '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
             '<div class="meta" data-testid="display-featured-meta">' +
-            (featured.startDateISO ? '<span data-testid="display-featured-date">' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
+            (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
             (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
             '</div></div>';
           if (rest.length) {
             html += '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
               rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
-                '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
+                '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
               '</div>';
           }
           main.innerHTML = html;

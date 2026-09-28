@@ -44,6 +44,9 @@ const PUBLIC_EVENT_COLUMNS = [
   'start_date',
   'end_date',
   'timezone',
+  // OSE-1313 — the canonical UTC start instant (null for date-only events).
+  // Additive; carries no identity. Surfaces render it in `timezone`.
+  'starts_at',
   'cover_image_url',
   'created_at',
   'updated_at',

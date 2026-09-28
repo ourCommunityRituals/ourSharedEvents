@@ -21,6 +21,7 @@
 // Brain contract: OCR-docs/ocr-docs-brain/event-phase-contract.yaml
 
 import { computeEventPhase, type EventPhase } from '../domain/event-phase';
+import { phaseTimesFor } from './event-datetime';
 
 export function enrichWithPhase(
   row: Record<string, unknown>
@@ -39,10 +40,15 @@ export function enrichWithPhase(
     name: typeof row.title === 'string' ? row.title : (row.name ?? null),
     startDateISO: typeof row.start_date === 'string' ? row.start_date : (row.startDateISO ?? null),
     venue: typeof row.location === 'string' ? row.location : (row.venue ?? null),
+    // OSE-1313 — timed events pivot at starts_at (see phaseTimesFor).
     phase: computeEventPhase({
       status: typeof row.status === 'string' ? row.status : '',
-      start_date: typeof row.start_date === 'string' ? row.start_date : null,
-      end_date: typeof row.end_date === 'string' ? row.end_date : null,
+      ...phaseTimesFor({
+        start_date: typeof row.start_date === 'string' ? row.start_date : null,
+        end_date: typeof row.end_date === 'string' ? row.end_date : null,
+        starts_at: typeof row.starts_at === 'string' ? row.starts_at : null,
+        timezone: typeof row.timezone === 'string' ? row.timezone : null,
+      }),
     }),
   };
 }

@@ -37,7 +37,7 @@ import {
   type EventTypeCategoryRow,
   type EventTypeRow,
 } from '../lib/event-type-catalog';
-import { isValidIanaTimezone, zonedDateTimeToUtcIso } from '../lib/event-datetime';
+import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -401,7 +401,10 @@ function isValidBrand(brand: string): boolean {
 function isValidIsoDate(date: string): boolean {
   if (!ISO_DATE_PATTERN.test(date)) return false;
   const parsed = new Date(date + 'T00:00:00Z');
-  return !isNaN(parsed.getTime());
+  if (isNaN(parsed.getTime())) return false;
+  // JS normalizes impossible days (2026-02-31 → March 3) instead of failing,
+  // so round-trip: the parsed calendar date must be the one that was sent.
+  return parsed.toISOString().slice(0, 10) === date;
 }
 
 function isValidContentType(request: Request): boolean {
@@ -571,7 +574,17 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // When present with a date, persist the canonical UTC instant in starts_at;
   // start_date stays the local calendar date. Absent time → starts_at NULL
   // (date-only event, prior behaviour).
-  const startTime = typeof body.start_time === 'string' ? body.start_time.slice(0, 5) : null;
+  // Not sliced: zonedDateTimeToUtcIso checks the WHOLE string is HH:MM, so
+  // "18:00garbage" is refused rather than silently stored as 18:00.
+  if (
+    'start_time' in body &&
+    body.start_time !== null &&
+    body.start_time !== undefined &&
+    typeof body.start_time !== 'string'
+  ) {
+    return errorResponse('INVALID_TIME', 'start_time must be HH:MM (24h)', 400, rid);
+  }
+  const startTime = typeof body.start_time === 'string' ? body.start_time : null;
   let startsAt: string | null = null;
   if (startTime !== null) {
     if (startDate === null) {
@@ -581,7 +594,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     if (startsAt === null) {
       return errorResponse(
         'INVALID_TIME',
-        'start_time must be HH:MM (24h) in a valid timezone',
+        'start_time must be HH:MM (24h) and exist on that date in the timezone',
         400,
         rid
       );
@@ -732,7 +745,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   }
 
   return Response.json(
-    { ok: true, status: 201, id, slug, shortcode, warnings },
+    { ok: true, status: 201, id, slug, shortcode, starts_at: startsAt, timezone, warnings },
     {
       status: 201,
       headers: { ...corsHeaders(request), 'X-Request-Id': rid },
@@ -951,6 +964,89 @@ export async function handleUpdateEvent(
     values.push(raw != null && raw !== '' ? String(raw).slice(0, 32) : null);
   }
 
+  // OSE-1313 — keep starts_at (the canonical UTC instant) in step with the
+  // wall-clock inputs. A partial patch fills whatever the client didn't send
+  // from the stored row; when only the date or zone moves, the stored wall time
+  // (starts_at read back in the OLD zone) is carried over so the event keeps its
+  // time-of-day. start_time: null clears it → date-only event (starts_at NULL).
+  // starts_at is always server-computed; a client-supplied value is ignored.
+  // Optimistic-concurrency guard for the starts_at recompute below: the UPDATE
+  // only applies if the wall-clock fields it was computed from are unchanged,
+  // so two concurrent partial edits cannot pair one request's start_date with a
+  // starts_at derived from the other's (PR #657 review).
+  let timeGuard: {
+    start_date: string | null;
+    timezone: string | null;
+    starts_at: string | null;
+  } | null = null;
+  if ('start_time' in body || 'start_date' in body || 'timezone' in body) {
+    // The zone cannot be cleared: starts_at is always computed in a concrete
+    // zone, and a NULL column would make every surface render in UTC instead.
+    if ('timezone' in body) {
+      if (
+        typeof body.timezone !== 'string' ||
+        body.timezone.length > 50 ||
+        !isValidIanaTimezone(body.timezone)
+      ) {
+        return errorResponse(
+          'INVALID_TIMEZONE',
+          'timezone must be a valid IANA zone (it cannot be cleared)',
+          400,
+          rid
+        );
+      }
+    }
+    if ('start_time' in body && body.start_time !== null && typeof body.start_time !== 'string') {
+      return errorResponse('INVALID_TIME', 'start_time must be HH:MM (24h)', 400, rid);
+    }
+    const existing = await env.DB.prepare(
+      'SELECT start_date, timezone, starts_at FROM events WHERE id = ?'
+    )
+      .bind(eventId)
+      .first<{ start_date: string | null; timezone: string | null; starts_at: string | null }>();
+    if (existing) {
+      timeGuard = existing;
+      const tz =
+        typeof body.timezone === 'string'
+          ? body.timezone.slice(0, 50)
+          : (existing.timezone ?? 'America/Chicago');
+      const date =
+        'start_date' in body
+          ? typeof body.start_date === 'string'
+            ? body.start_date.slice(0, 10)
+            : null
+          : (existing.start_date?.slice(0, 10) ?? null);
+      const time =
+        'start_time' in body
+          ? typeof body.start_time === 'string'
+            ? body.start_time
+            : null
+          : zonedTimePart(existing.starts_at, existing.timezone) || null;
+
+      let startsAt: string | null = null;
+      if (time !== null) {
+        if (date === null) {
+          if (typeof body.start_time === 'string') {
+            return errorResponse('INVALID_TIME', 'start_time requires start_date', 400, rid);
+          }
+          // Date cleared on a timed event → it is no longer anchored; drop the instant.
+        } else {
+          startsAt = zonedDateTimeToUtcIso(date, time, tz);
+          if (startsAt === null) {
+            return errorResponse(
+              'INVALID_TIME',
+              'start_time must be HH:MM (24h) and exist on that date in the timezone',
+              400,
+              rid
+            );
+          }
+        }
+      }
+      sets.push('starts_at = ?');
+      values.push(startsAt);
+    }
+  }
+
   if (sets.length === 0) {
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
@@ -1015,11 +1111,31 @@ export async function handleUpdateEvent(
       }
     }
 
-    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + ' WHERE id = ?')
+    let where = ' WHERE id = ?';
+    if (timeGuard) {
+      // SQLite `IS` compares NULL as a value, so a date-only row guards too.
+      where += ' AND start_date IS ? AND timezone IS ? AND starts_at IS ?';
+      values.push(timeGuard.start_date, timeGuard.timezone, timeGuard.starts_at);
+    }
+    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where)
       .bind(...values)
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
+      if (timeGuard) {
+        const still = await env.DB.prepare('SELECT id FROM events WHERE id = ?')
+          .bind(eventId)
+          .first<{ id: string }>();
+        if (still) {
+          // The row's date/zone/time moved between our read and this write.
+          return errorResponse(
+            'EVENT_TIME_CONFLICT',
+            'The event time changed while this edit was being saved — reload and try again',
+            409,
+            rid
+          );
+        }
+      }
       // The transition guard above reads the row first, so a no-op UPDATE here
       // is a genuine miss, not a refused transition.
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);

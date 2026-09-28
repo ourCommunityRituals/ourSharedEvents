@@ -96,10 +96,11 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     expect(src).toContain("twitterCard: 'summary'");
   });
 
-  test('all three render functions pass row.start_date to buildOgMeta', () => {
+  test('all three render functions pass the event start to buildOgMeta', () => {
     const src = getPagesTs();
-    // Count occurrences of startTime: row.start_date — should be 3 (one per render fn)
-    const matches = src.match(/startTime:\s*row\.start_date/g);
+    // One per render fn. OSE-1313: the canonical UTC instant (starts_at) is
+    // preferred when the event has a time; the date-only start_date is the fallback.
+    const matches = src.match(/startTime:\s*row\.starts_at\s*\?\?\s*row\.start_date/g);
     expect(matches).not.toBeNull();
     expect(matches!.length).toBeGreaterThanOrEqual(3);
   });

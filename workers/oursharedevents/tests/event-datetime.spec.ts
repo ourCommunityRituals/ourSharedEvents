@@ -12,6 +12,8 @@ import {
   formatEventDateTime,
   formatEventTime,
   zonedDatePart,
+  zonedTimePart,
+  phaseTimesFor,
 } from '../src/lib/event-datetime';
 
 // The ticket's parameterized zone list.
@@ -177,5 +179,95 @@ describe('OSE-1313 malformed input → null (no silent bad store)', () => {
     ['2026-10-24', '18:00', 'America/Chicagoo'], // typo zone
   ])('rejects (%s, %s, %s)', (d, t, z) => {
     expect(zonedDateTimeToUtcIso(d, t, z)).toBeNull();
+  });
+});
+
+describe('OSE-1313 zonedTimePart (update path keeps the wall time)', () => {
+  test.each(ZONES)('%s: time part round-trips the entered wall time', (tz) => {
+    const utc = zonedDateTimeToUtcIso('2026-10-24', '18:30', tz) as string;
+    expect(zonedTimePart(utc, tz)).toBe('18:30');
+  });
+
+  test('midnight renders as 00:00, not 24:00', () => {
+    const utc = zonedDateTimeToUtcIso('2026-10-24', '00:00', 'America/Chicago') as string;
+    expect(zonedTimePart(utc, 'America/Chicago')).toBe('00:00');
+  });
+
+  test('empty / unparseable instant → empty string', () => {
+    expect(zonedTimePart(null, 'America/Chicago')).toBe('');
+    expect(zonedTimePart('nope', 'America/Chicago')).toBe('');
+  });
+});
+
+describe('OSE-1313 midnight wall time (h23 vs h24 runtimes)', () => {
+  // Some ICU builds render midnight as hour "24" when hour12:false is set;
+  // in zoneOffsetMs that would roll the wall clock a day forward and shift the
+  // stored instant by 24h. Pin the conversion at 00:00 across DST and non-DST zones.
+  test.each([
+    ['America/Chicago', '2026-10-24', '2026-10-24T05:00:00Z'],
+    ['America/Phoenix', '2026-01-15', '2026-01-15T07:00:00Z'],
+    ['Europe/London', '2026-12-31', '2026-12-31T00:00:00Z'],
+    ['Asia/Kolkata', '2026-10-24', '2026-10-23T18:30:00Z'],
+  ])('%s %s 00:00 → %s', (tz, date, expected) => {
+    expect(zonedDateTimeToUtcIso(date, '00:00', tz)).toBe(expected);
+  });
+});
+
+describe('OSE-1313 spring-forward gap is refused, not silently shifted', () => {
+  test.each([
+    ['America/New_York', '2026-03-08', '02:30'],
+    ['America/Chicago', '2026-03-08', '02:00'],
+    ['Europe/Berlin', '2026-03-29', '02:15'],
+  ])('%s %s %s does not exist → null', (tz, date, time) => {
+    expect(zonedDateTimeToUtcIso(date, time, tz)).toBeNull();
+  });
+
+  test('the fall-back overlap still resolves (it exists, twice)', () => {
+    expect(zonedDateTimeToUtcIso('2026-11-01', '01:30', 'America/New_York')).not.toBeNull();
+  });
+});
+
+describe('OSE-1313 phaseTimesFor — what the phase resolver sees', () => {
+  test('date-only event passes through unchanged', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-24',
+        timezone: 'America/Chicago',
+      })
+    ).toEqual({ start_date: '2026-10-24', end_date: '2026-10-24' });
+  });
+
+  test('timed event starts at starts_at; a date-only end closes at the end of that local day', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-24',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      })
+    ).toEqual({ start_date: '2026-10-24T23:00:00Z', end_date: '2026-10-25T04:59:59.999Z' });
+  });
+
+  test('a full ISO end after the start is kept as-is', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-25T03:00:00Z',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      }).end_date
+    ).toBe('2026-10-25T03:00:00Z');
+  });
+
+  test('an end before the start is dropped, so the event never skips straight to the recap', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-20',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      }).end_date
+    ).toBeNull();
   });
 });
