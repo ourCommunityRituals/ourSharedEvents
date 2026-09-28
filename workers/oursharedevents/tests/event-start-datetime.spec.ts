@@ -134,6 +134,10 @@ describe('OSE-1313 create path stores the UTC instant', () => {
     [{ start_time: '18:00' }, 'INVALID_TIME'],
     // PR #657 review: validated whole, not sliced to 5 chars first.
     [{ start_date: '2026-10-24', start_time: '18:00garbage' }, 'INVALID_TIME'],
+    // PR #657 review: JS normalizes impossible days (2026-02-31 → March 3);
+    // they are refused, dated or timed, rather than stored.
+    [{ start_date: '2026-02-31' }, 'INVALID_DATE'],
+    [{ start_date: '2026-04-31', start_time: '18:00' }, 'INVALID_DATE'],
   ])('refuses %j with 400 %s', async (fields, code) => {
     const res = await createEvent({ title: 'OSE-1313 bad', ...fields });
     expect(res.status).toBe(400);
@@ -194,6 +198,7 @@ describe('OSE-1313 update path recomputes starts_at', () => {
     // and a time is validated whole rather than truncated to HH:MM.
     [{ timezone: null }, 'INVALID_TIMEZONE'],
     [{ start_time: '19:30garbage' }, 'INVALID_TIME'],
+    [{ start_date: '2026-02-30' }, 'INVALID_DATE'],
   ])('refuses %j with 400 %s and stores nothing', async (fields, code) => {
     const id = await createTimed(
       `OSE-1313 upd bad ${code} ${JSON.stringify(fields)}`,
@@ -419,5 +424,14 @@ describe('OSE-1313 phase pivots at the timed start, not UTC midnight of the date
     });
     expect(res.status).toBe(400);
     expect(((await res.json()) as ApiResponse).code).toBe('INVALID_TIME');
+  });
+});
+
+describe('OSE-1313 real calendar dates still pass the round-trip check', () => {
+  test('a leap day is accepted and timed correctly', async () => {
+    const id = await createTimed('OSE-1313 leap day', '2028-02-29', '18:00', 'America/Chicago');
+    const row = await readRow(id);
+    expect(row.start_date).toBe('2028-02-29');
+    expect(row.starts_at).toBe('2028-03-01T00:00:00Z'); // 18:00 CST = 00:00Z next day
   });
 });

@@ -401,7 +401,10 @@ function isValidBrand(brand: string): boolean {
 function isValidIsoDate(date: string): boolean {
   if (!ISO_DATE_PATTERN.test(date)) return false;
   const parsed = new Date(date + 'T00:00:00Z');
-  return !isNaN(parsed.getTime());
+  if (isNaN(parsed.getTime())) return false;
+  // JS normalizes impossible days (2026-02-31 → March 3) instead of failing,
+  // so round-trip: the parsed calendar date must be the one that was sent.
+  return parsed.toISOString().slice(0, 10) === date;
 }
 
 function isValidContentType(request: Request): boolean {
