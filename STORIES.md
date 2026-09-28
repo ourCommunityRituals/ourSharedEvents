@@ -27,153 +27,153 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 
 > **Shipped 2026-09-09/10 (SharedReport line).** **OSE-628** ✅ DONE ([#510](https://github.com/ourCommunityRituals/ourSharedEvents/pull/510), `dbfde44`) — corridor_map SVG composed into the signed-link SharedReport view (`section#corridor-map-container`), mobile/tablet/laptop responsive; the previously-orphaned `renderCorridorMap` module now renders on a real surface. **OSE-631** ✅ DONE ([#511](https://github.com/ourCommunityRituals/ourSharedEvents/pull/511), `d7b17da`) — `refreshCorridorBaselines` `COALESCE(h3_res7, corridor_id)` coverage verified born-red + one window-count test closing a surviving mutant Stryker structurally can't reach (SQL-in-string on the workers pool). Both Linear-tracked, auto-closed on merge via the close-guard.
 
-| Story ID                                           | Linear # | Status         | Title                                                                 | Prerequisite     |
-| -------------------------------------------------- | -------- | -------------- | --------------------------------------------------------------------- | ---------------- |
-| **Phase 0 — Project Setup**                        |          |                |                                                                       |                  |
-| P0-1                                               | —        | 📋 BACKLOG     | Create Linear project + import all stories                            | —                |
-| **Phase 1 — Build (code + docs)**                  |          |                |                                                                       |                  |
-| P1-1                                               | —        | ✅ DONE        | Cloudflare Worker code                                                | —                |
-| P1-2                                               | —        | ✅ DONE        | CI/CD pipeline (GitHub Actions)                                       | P1-1             |
-| P1-3                                               | —        | ✅ DONE        | README — ourSharedEvents identity                                     | P1-1             |
-| P1-4                                               | —        | ✅ DONE        | STORIES.md — project tracking registry                                | P1-3             |
-| P1-5                                               | —        | ✅ DONE        | E2E launch checklist (this doc's guide)                               | P1-4             |
-| **Phase 1 — Operations (go live)**                 |          |                |                                                                       |                  |
-| P1-6                                               | —        | ✅ DONE        | Infra provisioning — Google Cloud + Cloudflare                        | P1-5             |
-| P1-7                                               | —        | 🔄 IN PROGRESS | Secrets + first staging deploy                                        | P1-6             |
-| P1-8                                               | —        | 📋 BACKLOG     | Staging sign-off — all checks pass                                    | P1-7             |
-| P1-9                                               | —        | 📋 BACKLOG     | Repo migration → ourCommunityRituals/ourSharedEvents                  | P1-8             |
-| P1-10                                              | —        | 📋 BACKLOG     | Production launch — v1.0.0 live                                       | P1-9             |
-| **Phase 2 — D1 Database (replace Google Sheets)**  |          |                |                                                                       |                  |
-| P2-1                                               | OSE-16   | ✅ DONE        | D1 database creation + schema migrations                              | P1-10            |
-| P2-2                                               | —        | ✅ DONE        | Data migration script: Sheets → D1                                    | P2-1             |
-| P2-3                                               | —        | ✅ DONE        | Swap data layer: sheets.ts → d1.ts                                    | P2-2             |
-| P2-4                                               | —        | ✅ DONE        | Remove Google SA credentials (cleanup)                                | P2-3             |
-| P2-5                                               | —        | ✅ DONE        | Event templates table + seed (32 types, ADR-010)                      | P2-1             |
-| **Phase 3 — Firebase (auth + modern UI)**          |          |                |                                                                       |                  |
-| P3-1                                               | —        | 📋 BACKLOG     | Firebase Hosting + React/Tailwind UI                                  | P2-3             |
-| P3-2                                               | —        | 📋 BACKLOG     | Firebase Auth — replace Bearer token admin                            | P3-1             |
-| **Epic A11Y — ADA Accessibility**                  |          |                |                                                                       |                  |
-| A11Y-1                                             | —        | ✅ DONE        | Accessibility foundation — lang, skip links, landmarks, focus styles  | —                |
-| A11Y-2                                             | —        | 📋 BACKLOG     | Form accessibility — labels, errors, `role="alert"`, `autocomplete`   | A11Y-1           |
-| A11Y-3                                             | —        | 📋 BACKLOG     | Table & tab panel accessibility (report.html)                         | A11Y-1           |
-| A11Y-4                                             | —        | ✅ DONE        | Data-testid foundation (all surfaces)                                 | A11Y-1           |
-| A11Y-5                                             | —        | 📋 BACKLOG     | Color contrast remediation                                            | A11Y-1           |
-| A11Y-6                                             | —        | 📋 BACKLOG     | Keyboard navigation & focus trap                                      | A11Y-1           |
-| A11Y-7                                             | —        | 📋 BACKLOG     | axe-core CI integration                                               | A11Y-1           |
-| A11Y-8                                             | —        | 📋 BACKLOG     | Screen reader testing & polish                                        | A11Y-7           |
-| **Epic SR — SharedReport Hardening**               |          |                |                                                                       |                  |
-| SR-12                                              | —        | ✅ DONE        | Runtime flag gating on sharedReport endpoint                          | —                |
-| SR-13                                              | —        | 📋 BACKLOG     | Export JSON button (FE)                                               | SR-12            |
-| SR-14                                              | —        | 📋 BACKLOG     | CSP headers on all remaining surfaces _(subsumes SEC-2)_              | —                |
-| SR-15                                              | —        | 📋 BACKLOG     | Form page CSP (nonce-based) _(subsumes SEC-2)_                        | —                |
-| SR-16                                              | —        | 📋 BACKLOG     | Rate limiting on form endpoints _(subsumes BE-2)_                     | —                |
-| SR-17                                              | —        | 📋 BACKLOG     | Advanced metrics (conversion funnels, trends)                         | SR-12            |
-| SR-18                                              | —        | 📋 BACKLOG     | PDF export (mid tier)                                                 | SR-12            |
-| SR-19                                              | —        | 📋 BACKLOG     | Custom date range picker                                              | SR-17            |
-| SR-20                                              | —        | 📋 BACKLOG     | Sponsor-scoped deep link                                              | —                |
-| SR-21                                              | —        | 📋 BACKLOG     | Portfolio multi-event view (enterprise)                               | SR-17            |
-| SR-22                                              | —        | 📋 BACKLOG     | White-label branding on report (enterprise)                           | —                |
-| SR-23                                              | —        | 📋 BACKLOG     | Distributed rate limiting (CF Rules)                                  | SR-16            |
-| SR-24                                              | —        | 📋 BACKLOG     | Report email share (enterprise)                                       | SR-18            |
-| SR-25                                              | —        | 📋 BACKLOG     | SharedReport competitive intelligence — local-vs-paid sponsor frame   | SR-12            |
-| **Epic AS — All-Surface FE Uniformity**            |          |                |                                                                       |                  |
-| AS-1                                               | —        | 📋 BACKLOG     | Uniform DesignTokens across all surfaces _(xref DESIGN-8)_            | —                |
-| AS-2                                               | —        | ✅ DONE        | data-testid on Poster (0→10+) _(xref DESIGN-3)_                       | —                |
-| AS-3                                               | —        | ✅ DONE        | data-testid on Display (1→10+) _(xref DESIGN-3)_                      | —                |
-| AS-4                                               | —        | ✅ DONE        | data-testid on Public (3→15+) _(xref DESIGN-3)_                       | —                |
-| AS-5                                               | —        | 📋 BACKLOG     | ARIA attributes on Admin                                              | A11Y-1           |
-| AS-6                                               | —        | 🔄 IN PROGRESS | ARIA attributes on Public (DONE_IN_CODE; +card-role test)             | A11Y-1           |
-| AS-7                                               | —        | ✅ DONE        | ARIA attributes on Display (DONE_IN_CODE; kiosk N/A criteria)         | A11Y-1           |
-| AS-8                                               | —        | 🔄 IN PROGRESS | ARIA attributes on Poster (DONE_IN_CODE; +print-btn aria-label)       | A11Y-1           |
-| AS-9                                               | —        | 📋 BACKLOG     | Sponsor surface module integration                                    | AS-1             |
-| AS-10                                              | —        | 📋 BACKLOG     | Print styles on Admin                                                 | —                |
-| AS-11                                              | —        | 📋 BACKLOG     | Keyboard nav on Admin                                                 | —                |
-| AS-12                                              | —        | 📋 BACKLOG     | Keyboard nav on Public                                                | —                |
-| AS-13                                              | —        | 📋 BACKLOG     | axe-core CI integration _(xref A11Y-7)_                               | A11Y-7           |
-| **Epic INFRA — Infrastructure Provisioning**       |          |                |                                                                       |                  |
-| INFRA-1                                            | —        | ✅ DONE        | Provision D1 databases (main + forms, staging + prod)                 | —                |
-| INFRA-2                                            | —        | ✅ DONE        | Activate Cloudflare zone + DNS for oursharedevents.com                | —                |
-| INFRA-3                                            | —        | 📋 BACKLOG     | Create Google Cloud service account + set secrets                     | —                |
-| INFRA-4                                            | —        | 📋 BACKLOG     | Document FORMS_ENCRYPTION_KEY generation + rotation                   | —                |
-| **Epic BE — Backend Architecture**                 |          |                |                                                                       |                  |
-| BE-7                                               | —        | 📋 BACKLOG     | API envelope standardization (match schema)                           | —                |
-| BE-8                                               | —        | 📋 BACKLOG     | Pagination on admin list endpoints                                    | —                |
-| BE-9                                               | —        | 📋 BACKLOG     | Privacy notice at point of collection (GDPR Art. 13)                  | —                |
-| BE-10                                              | —        | 📋 BACKLOG     | Privacy policy link on form pages                                     | —                |
-| BE-11                                              | —        | ✅ DONE        | Email format validation on form submit                                | —                |
-| BE-12                                              | —        | 📋 BACKLOG     | Flag resolution optimization (batch query)                            | —                |
-| **Epic SEC — Security**                            |          |                |                                                                       |                  |
-| SEC-1                                              | —        | ✅ DONE        | Fix CORS wildcard in forms.ts (use corsOrigin())                      | —                |
-| **Epic ADMIN — Admin Page Architecture**           |          |                |                                                                       |                  |
-| ADMIN-1                                            | —        | ✅ DONE        | Feature flag tier model (D1 + API + resolution chain)                 | P2-1             |
-| ADMIN-2                                            | —        | ✅ DONE        | Admin tier badge + gated UI (locked icons, upgrade prompts)           | ADMIN-1          |
-| ADMIN-3                                            | —        | ✅ DONE        | Native registration form (submit, count, QR routing)                  | ADMIN-1          |
-| ADMIN-4                                            | —        | ✅ DONE        | Native check-in form (door mode, anonymous ID foundation)             | ADMIN-3          |
-| ADMIN-5                                            | —        | ✅ DONE        | Card 3 redesign — inline form config                                  | ADMIN-4          |
-| ADMIN-6                                            | —        | ✅ DONE        | Anonymous ID system (cookie + D1, scan correlation)                   | ADMIN-4          |
-| ADMIN-7                                            | —        | ✅ DONE        | PII destruction jobs (scrub, audit log, retention)                    | ADMIN-3          |
-| ADMIN-8                                            | —        | ✅ DONE        | Native survey form (tier-aware)                                       | ADMIN-1, ADMIN-3 |
-| ADMIN-9                                            | —        | ✅ DONE        | Email signup form (duplicate detection)                               | ADMIN-1, ADMIN-3 |
-| ADMIN-10                                           | —        | ✅ DONE        | Self-serve event config                                               | ADMIN-1          |
-| ADMIN-11                                           | —        | ✅ DONE        | Form data export (CSV/JSON)                                           | ADMIN-3          |
-| ADMIN-12                                           | —        | ✅ DONE        | Admin inline styles → CSS classes                                     | —                |
-| ADMIN-13                                           | —        | ✅ DONE        | Skeleton loaders + per-card error states                              | —                |
-| ADMIN-14                                           | —        | ✅ DONE        | Card 5 QR code + Card 7 QR visibility                                 | —                |
-| ADMIN-15                                           | —        | ✅ DONE        | Copy button feedback ("Copied!" 2s state)                             | —                |
-| ADMIN-16                                           | —        | ✅ DONE        | data-testid complete coverage (all interactive elements)              | —                |
-| ADMIN-17                                           | —        | 📋 BACKLOG     | File upload to R2 (logos, posters, custom QR)                         | ADMIN-1          |
-| ADMIN-18                                           | —        | 📋 BACKLOG     | White-label branding (colors/logo/domain)                             | ADMIN-1          |
-| ADMIN-19                                           | —        | 📋 BACKLOG     | Newman E2E chain (create→config→submit→count→scrub)                   | ADMIN-3, ADMIN-7 |
-| ADMIN-20                                           | —        | 📋 BACKLOG     | Cross-surface sponsor integration test suite                          | —                |
-| ADMIN-21                                           | —        | 📋 BACKLOG     | Multi-event aggregate dashboard                                       | ADMIN-1          |
-| ADMIN-22                                           | —        | 📋 BACKLOG     | Sponsor ROI click-through attribution                                 | ADMIN-6          |
-| ADMIN-23                                           | —        | ✅ DONE        | Consent tracking on form submit (privacy notice + timestamp)          | —                |
-| **Epic DESIGN — Design System**                    |          |                |                                                                       |                  |
-| DESIGN-1                                           | —        | 📋 BACKLOG     | Viewport meta tags on Admin + Report surfaces                         | —                |
-| DESIGN-2                                           | —        | 📋 BACKLOG     | Breakpoint direction standardization (eliminate max-width)            | —                |
-| DESIGN-3                                           | —        | 📋 BACKLOG     | data-testid parity — all surfaces to 30+ each _(xref AS-2/3/4)_       | —                |
-| DESIGN-4                                           | —        | 📋 BACKLOG     | CI viewport matrix — add iPad, TV 1080p, iPhone SE                    | —                |
-| DESIGN-5                                           | —        | 📋 BACKLOG     | Visual regression baseline — toHaveScreenshot()                       | DESIGN-3         |
-| DESIGN-6                                           | —        | 📋 BACKLOG     | Report print stylesheet (sponsor handout)                             | —                |
-| DESIGN-7                                           | —        | 📋 BACKLOG     | Tabletop tent card surface (4x6 poster variant)                       | —                |
-| DESIGN-8                                           | —        | 📋 BACKLOG     | External design token file (stop inline duplication) _(xref AS-1)_    | —                |
-| DESIGN-9                                           | —        | 📋 BACKLOG     | Poster mobile landing (QR scan → mobile view)                         | —                |
-| DESIGN-10                                          | —        | 📋 BACKLOG     | Report responsive tables (horizontal scroll)                          | —                |
-| DESIGN-11                                          | —        | 📋 BACKLOG     | Color palette hardcode audit — extract 500+ inline hex                | —                |
-| DESIGN-12                                          | —        | 📋 BACKLOG     | Cross-browser CI — Firefox + WebKit weekly                            | DESIGN-5         |
-| DESIGN-13                                          | —        | 📋 BACKLOG     | Wizard step 3 UX simplification (3 options → 2)                       | —                |
-| DESIGN-14                                          | —        | 📋 BACKLOG     | "Last updated" timestamp on Card 1                                    | —                |
-| DESIGN-15                                          | —        | 📋 BACKLOG     | Skip links on Display, Poster, Report                                 | —                |
-| **Epic QA — Test Coverage**                        |          |                |                                                                       |                  |
-| QA-1                                               | —        | 📋 BACKLOG     | Edge case test suite (double submit, archived form, flag mid-session) | ADMIN-3          |
-| QA-2                                               | —        | 📋 BACKLOG     | Flag toggle → surface gating E2E test                                 | ADMIN-1          |
-| QA-3                                               | —        | 📋 BACKLOG     | API smoke tests for form endpoints in CI                              | INFRA-1          |
-| QA-4                                               | —        | 📋 BACKLOG     | E2E flow: admin→configure→QR→submit→verify count                      | QA-3             |
-| QA-5                                               | —        | 📋 BACKLOG     | Contract tests (Pact) for form API shapes                             | —                |
-| QA-6                                               | —        | 📋 BACKLOG     | Feature flag seed parity CI gate                                      | —                |
-| QA-7                                               | —        | 📋 BACKLOG     | Newman E2E chain (create→config→submit→count→scrub)                   | QA-3, ADMIN-7    |
-| **Epic SRE — Observability**                       |          |                |                                                                       |                  |
-| SRE-1                                              | —        | 📋 BACKLOG     | Form submission rate dashboard + alerting                             | INFRA-1          |
-| SRE-2                                              | —        | 📋 BACKLOG     | PII destruction job monitoring + failure alerts                       | ADMIN-7          |
-| SRE-3                                              | —        | 📋 BACKLOG     | Wire k6 load tests to staging CI gate                                 | INFRA-1          |
-| SRE-4                                              | —        | ✅ DONE        | Enable Workers Logs/Traces in wrangler.toml                           | —                |
-| SRE-5                                              | —        | 📋 BACKLOG     | Define SLOs (availability, latency, error rate)                       | SRE-4            |
-| **Epic HK — Housekeeping**                         |          |                |                                                                       |                  |
-| HK-1                                               | —        | ✅ DONE        | Archive legacy worker/ directory                                      | —                |
-| HK-2                                               | —        | 📋 BACKLOG     | Sync STORIES.md with implemented features                             | —                |
-| HK-3                                               | —        | ✅ DONE        | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK)                 | HK-1             |
-| **Epic DAC — Documentation Domain Reconciliation** |          |                |                                                                       |                  |
-| DAC-1                                              | —        | ✅ DONE        | Batch rename — Security docs (13 files, ~295 refs)                    | P1-8             |
-| DAC-2                                              | —        | ✅ DONE        | Batch rename — Runbooks (12 files, ~386 refs)                         | P1-8             |
-| DAC-3                                              | —        | ✅ DONE        | Batch rename — Architecture docs (9 files, ~126 refs)                 | P1-8             |
-| DAC-4                                              | —        | ✅ DONE        | Batch rename — Deploy + Monitor + QA docs (16 files, ~161 refs)       | P1-8             |
-| DAC-5                                              | —        | ✅ DONE        | Final verification — zero active eventangle references                | DAC-1,2,3,4      |
-| **Epic TP — Test Pyramid Enforcement**             |          |                |                                                                       |                  |
-| TP-1                                               | —        | ✅ DONE        | Wire 78 E2E Playwright files into CI pipeline (post-smoke gate)       | P1-8             |
-| TP-2                                               | —        | 📋 BACKLOG     | Cross-surface E2E: poster → pre-event → event → post-event flow       | TP-1             |
-| TP-3                                               | —        | 📋 BACKLOG     | Newman collection audit — verify all 6 surfaces covered               | P1-8             |
-| TP-4                                               | —        | 📋 BACKLOG     | Wire k6 load tests into staging CI gate                               | TP-1             |
-| TP-5                                               | —        | ✅ DONE        | Retroactive audit — 43/43 pre-TP, no full pyramid at completion       | TP-1             |
+| Story ID                                           | Linear # | Status         | Title                                                                  | Prerequisite     |
+| -------------------------------------------------- | -------- | -------------- | ---------------------------------------------------------------------- | ---------------- |
+| **Phase 0 — Project Setup**                        |          |                |                                                                        |                  |
+| P0-1                                               | —        | 📋 BACKLOG     | Create Linear project + import all stories                             | —                |
+| **Phase 1 — Build (code + docs)**                  |          |                |                                                                        |                  |
+| P1-1                                               | —        | ✅ DONE        | Cloudflare Worker code                                                 | —                |
+| P1-2                                               | —        | ✅ DONE        | CI/CD pipeline (GitHub Actions)                                        | P1-1             |
+| P1-3                                               | —        | ✅ DONE        | README — ourSharedEvents identity                                      | P1-1             |
+| P1-4                                               | —        | ✅ DONE        | STORIES.md — project tracking registry                                 | P1-3             |
+| P1-5                                               | —        | ✅ DONE        | E2E launch checklist (this doc's guide)                                | P1-4             |
+| **Phase 1 — Operations (go live)**                 |          |                |                                                                        |                  |
+| P1-6                                               | —        | ✅ DONE        | Infra provisioning — Google Cloud + Cloudflare                         | P1-5             |
+| P1-7                                               | —        | 🔄 IN PROGRESS | Secrets + first staging deploy                                         | P1-6             |
+| P1-8                                               | —        | 📋 BACKLOG     | Staging sign-off — all checks pass                                     | P1-7             |
+| P1-9                                               | —        | 📋 BACKLOG     | Repo migration → ourCommunityRituals/ourSharedEvents                   | P1-8             |
+| P1-10                                              | —        | 📋 BACKLOG     | Production launch — v1.0.0 live                                        | P1-9             |
+| **Phase 2 — D1 Database (replace Google Sheets)**  |          |                |                                                                        |                  |
+| P2-1                                               | OSE-16   | ✅ DONE        | D1 database creation + schema migrations                               | P1-10            |
+| P2-2                                               | —        | ✅ DONE        | Data migration script: Sheets → D1                                     | P2-1             |
+| P2-3                                               | —        | ✅ DONE        | Swap data layer: sheets.ts → d1.ts                                     | P2-2             |
+| P2-4                                               | —        | ✅ DONE        | Remove Google SA credentials (cleanup)                                 | P2-3             |
+| P2-5                                               | —        | ✅ DONE        | Event templates table + seed (32 types, ADR-010)                       | P2-1             |
+| **Phase 3 — Firebase (auth + modern UI)**          |          |                |                                                                        |                  |
+| P3-1                                               | —        | 📋 BACKLOG     | Firebase Hosting + React/Tailwind UI                                   | P2-3             |
+| P3-2                                               | —        | 📋 BACKLOG     | Firebase Auth — replace Bearer token admin                             | P3-1             |
+| **Epic A11Y — ADA Accessibility**                  |          |                |                                                                        |                  |
+| A11Y-1                                             | —        | ✅ DONE        | Accessibility foundation — lang, skip links, landmarks, focus styles   | —                |
+| A11Y-2                                             | —        | 📋 BACKLOG     | Form accessibility — labels, errors, `role="alert"`, `autocomplete`    | A11Y-1           |
+| A11Y-3                                             | —        | 📋 BACKLOG     | Table & tab panel accessibility (report.html)                          | A11Y-1           |
+| A11Y-4                                             | —        | ✅ DONE        | Data-testid foundation (all surfaces)                                  | A11Y-1           |
+| A11Y-5                                             | —        | 📋 BACKLOG     | Color contrast remediation                                             | A11Y-1           |
+| A11Y-6                                             | —        | 📋 BACKLOG     | Keyboard navigation & focus trap                                       | A11Y-1           |
+| A11Y-7                                             | —        | 📋 BACKLOG     | axe-core CI integration                                                | A11Y-1           |
+| A11Y-8                                             | —        | 📋 BACKLOG     | Screen reader testing & polish                                         | A11Y-7           |
+| **Epic SR — SharedReport Hardening**               |          |                |                                                                        |                  |
+| SR-12                                              | —        | ✅ DONE        | Runtime flag gating on sharedReport endpoint                           | —                |
+| SR-13                                              | —        | 📋 BACKLOG     | Export JSON button (FE)                                                | SR-12            |
+| SR-14                                              | —        | 📋 BACKLOG     | CSP headers on all remaining surfaces _(subsumes SEC-2)_               | —                |
+| SR-15                                              | —        | 📋 BACKLOG     | Form page CSP (nonce-based) _(subsumes SEC-2)_                         | —                |
+| SR-16                                              | —        | 📋 BACKLOG     | Rate limiting on form endpoints _(subsumes BE-2)_                      | —                |
+| SR-17                                              | —        | 📋 BACKLOG     | Advanced metrics (conversion funnels, trends)                          | SR-12            |
+| SR-18                                              | —        | 📋 BACKLOG     | PDF export (mid tier)                                                  | SR-12            |
+| SR-19                                              | —        | 📋 BACKLOG     | Custom date range picker                                               | SR-17            |
+| SR-20                                              | —        | 📋 BACKLOG     | Sponsor-scoped deep link                                               | —                |
+| SR-21                                              | —        | 📋 BACKLOG     | Portfolio multi-event view (enterprise)                                | SR-17            |
+| SR-22                                              | —        | 📋 BACKLOG     | White-label branding on report (enterprise)                            | —                |
+| SR-23                                              | —        | 📋 BACKLOG     | Distributed rate limiting (CF Rules)                                   | SR-16            |
+| SR-24                                              | —        | 📋 BACKLOG     | Report email share (enterprise)                                        | SR-18            |
+| SR-25                                              | —        | 📋 BACKLOG     | SharedReport competitive intelligence — local-vs-paid sponsor frame    | SR-12            |
+| **Epic AS — All-Surface FE Uniformity**            |          |                |                                                                        |                  |
+| AS-1                                               | —        | 📋 BACKLOG     | Uniform DesignTokens across all surfaces _(xref DESIGN-8)_             | —                |
+| AS-2                                               | —        | ✅ DONE        | data-testid on Poster (0→10+) _(xref DESIGN-3)_                        | —                |
+| AS-3                                               | —        | ✅ DONE        | data-testid on Display (1→10+) _(xref DESIGN-3)_                       | —                |
+| AS-4                                               | —        | ✅ DONE        | data-testid on Public (3→15+) _(xref DESIGN-3)_                        | —                |
+| AS-5                                               | —        | 📋 BACKLOG     | ARIA attributes on Admin                                               | A11Y-1           |
+| AS-6                                               | —        | ✅ DONE        | ARIA attributes on Public (DONE_IN_CODE; +card-role test) — #653       | A11Y-1           |
+| AS-7                                               | —        | ✅ DONE        | ARIA attributes on Display (DONE_IN_CODE; kiosk N/A criteria)          | A11Y-1           |
+| AS-8                                               | —        | ✅ DONE        | ARIA attributes on Poster (DONE_IN_CODE; +print-btn aria-label) — #653 | A11Y-1           |
+| AS-9                                               | —        | 📋 BACKLOG     | Sponsor surface module integration                                     | AS-1             |
+| AS-10                                              | —        | 📋 BACKLOG     | Print styles on Admin                                                  | —                |
+| AS-11                                              | —        | 📋 BACKLOG     | Keyboard nav on Admin                                                  | —                |
+| AS-12                                              | —        | 📋 BACKLOG     | Keyboard nav on Public                                                 | —                |
+| AS-13                                              | —        | 🔄 IN PROGRESS | axe-core CI integration (@axe-core/playwright, browser tier)           | A11Y-7           |
+| **Epic INFRA — Infrastructure Provisioning**       |          |                |                                                                        |                  |
+| INFRA-1                                            | —        | ✅ DONE        | Provision D1 databases (main + forms, staging + prod)                  | —                |
+| INFRA-2                                            | —        | ✅ DONE        | Activate Cloudflare zone + DNS for oursharedevents.com                 | —                |
+| INFRA-3                                            | —        | 📋 BACKLOG     | Create Google Cloud service account + set secrets                      | —                |
+| INFRA-4                                            | —        | 📋 BACKLOG     | Document FORMS_ENCRYPTION_KEY generation + rotation                    | —                |
+| **Epic BE — Backend Architecture**                 |          |                |                                                                        |                  |
+| BE-7                                               | —        | 📋 BACKLOG     | API envelope standardization (match schema)                            | —                |
+| BE-8                                               | —        | 📋 BACKLOG     | Pagination on admin list endpoints                                     | —                |
+| BE-9                                               | —        | 📋 BACKLOG     | Privacy notice at point of collection (GDPR Art. 13)                   | —                |
+| BE-10                                              | —        | 📋 BACKLOG     | Privacy policy link on form pages                                      | —                |
+| BE-11                                              | —        | ✅ DONE        | Email format validation on form submit                                 | —                |
+| BE-12                                              | —        | 📋 BACKLOG     | Flag resolution optimization (batch query)                             | —                |
+| **Epic SEC — Security**                            |          |                |                                                                        |                  |
+| SEC-1                                              | —        | ✅ DONE        | Fix CORS wildcard in forms.ts (use corsOrigin())                       | —                |
+| **Epic ADMIN — Admin Page Architecture**           |          |                |                                                                        |                  |
+| ADMIN-1                                            | —        | ✅ DONE        | Feature flag tier model (D1 + API + resolution chain)                  | P2-1             |
+| ADMIN-2                                            | —        | ✅ DONE        | Admin tier badge + gated UI (locked icons, upgrade prompts)            | ADMIN-1          |
+| ADMIN-3                                            | —        | ✅ DONE        | Native registration form (submit, count, QR routing)                   | ADMIN-1          |
+| ADMIN-4                                            | —        | ✅ DONE        | Native check-in form (door mode, anonymous ID foundation)              | ADMIN-3          |
+| ADMIN-5                                            | —        | ✅ DONE        | Card 3 redesign — inline form config                                   | ADMIN-4          |
+| ADMIN-6                                            | —        | ✅ DONE        | Anonymous ID system (cookie + D1, scan correlation)                    | ADMIN-4          |
+| ADMIN-7                                            | —        | ✅ DONE        | PII destruction jobs (scrub, audit log, retention)                     | ADMIN-3          |
+| ADMIN-8                                            | —        | ✅ DONE        | Native survey form (tier-aware)                                        | ADMIN-1, ADMIN-3 |
+| ADMIN-9                                            | —        | ✅ DONE        | Email signup form (duplicate detection)                                | ADMIN-1, ADMIN-3 |
+| ADMIN-10                                           | —        | ✅ DONE        | Self-serve event config                                                | ADMIN-1          |
+| ADMIN-11                                           | —        | ✅ DONE        | Form data export (CSV/JSON)                                            | ADMIN-3          |
+| ADMIN-12                                           | —        | ✅ DONE        | Admin inline styles → CSS classes                                      | —                |
+| ADMIN-13                                           | —        | ✅ DONE        | Skeleton loaders + per-card error states                               | —                |
+| ADMIN-14                                           | —        | ✅ DONE        | Card 5 QR code + Card 7 QR visibility                                  | —                |
+| ADMIN-15                                           | —        | ✅ DONE        | Copy button feedback ("Copied!" 2s state)                              | —                |
+| ADMIN-16                                           | —        | ✅ DONE        | data-testid complete coverage (all interactive elements)               | —                |
+| ADMIN-17                                           | —        | 📋 BACKLOG     | File upload to R2 (logos, posters, custom QR)                          | ADMIN-1          |
+| ADMIN-18                                           | —        | 📋 BACKLOG     | White-label branding (colors/logo/domain)                              | ADMIN-1          |
+| ADMIN-19                                           | —        | 📋 BACKLOG     | Newman E2E chain (create→config→submit→count→scrub)                    | ADMIN-3, ADMIN-7 |
+| ADMIN-20                                           | —        | 📋 BACKLOG     | Cross-surface sponsor integration test suite                           | —                |
+| ADMIN-21                                           | —        | 📋 BACKLOG     | Multi-event aggregate dashboard                                        | ADMIN-1          |
+| ADMIN-22                                           | —        | 📋 BACKLOG     | Sponsor ROI click-through attribution                                  | ADMIN-6          |
+| ADMIN-23                                           | —        | ✅ DONE        | Consent tracking on form submit (privacy notice + timestamp)           | —                |
+| **Epic DESIGN — Design System**                    |          |                |                                                                        |                  |
+| DESIGN-1                                           | —        | 📋 BACKLOG     | Viewport meta tags on Admin + Report surfaces                          | —                |
+| DESIGN-2                                           | —        | 📋 BACKLOG     | Breakpoint direction standardization (eliminate max-width)             | —                |
+| DESIGN-3                                           | —        | 📋 BACKLOG     | data-testid parity — all surfaces to 30+ each _(xref AS-2/3/4)_        | —                |
+| DESIGN-4                                           | —        | 📋 BACKLOG     | CI viewport matrix — add iPad, TV 1080p, iPhone SE                     | —                |
+| DESIGN-5                                           | —        | 📋 BACKLOG     | Visual regression baseline — toHaveScreenshot()                        | DESIGN-3         |
+| DESIGN-6                                           | —        | 📋 BACKLOG     | Report print stylesheet (sponsor handout)                              | —                |
+| DESIGN-7                                           | —        | 📋 BACKLOG     | Tabletop tent card surface (4x6 poster variant)                        | —                |
+| DESIGN-8                                           | —        | 📋 BACKLOG     | External design token file (stop inline duplication) _(xref AS-1)_     | —                |
+| DESIGN-9                                           | —        | 📋 BACKLOG     | Poster mobile landing (QR scan → mobile view)                          | —                |
+| DESIGN-10                                          | —        | 📋 BACKLOG     | Report responsive tables (horizontal scroll)                           | —                |
+| DESIGN-11                                          | —        | 📋 BACKLOG     | Color palette hardcode audit — extract 500+ inline hex                 | —                |
+| DESIGN-12                                          | —        | 📋 BACKLOG     | Cross-browser CI — Firefox + WebKit weekly                             | DESIGN-5         |
+| DESIGN-13                                          | —        | 📋 BACKLOG     | Wizard step 3 UX simplification (3 options → 2)                        | —                |
+| DESIGN-14                                          | —        | 📋 BACKLOG     | "Last updated" timestamp on Card 1                                     | —                |
+| DESIGN-15                                          | —        | 📋 BACKLOG     | Skip links on Display, Poster, Report                                  | —                |
+| **Epic QA — Test Coverage**                        |          |                |                                                                        |                  |
+| QA-1                                               | —        | 📋 BACKLOG     | Edge case test suite (double submit, archived form, flag mid-session)  | ADMIN-3          |
+| QA-2                                               | —        | 📋 BACKLOG     | Flag toggle → surface gating E2E test                                  | ADMIN-1          |
+| QA-3                                               | —        | 📋 BACKLOG     | API smoke tests for form endpoints in CI                               | INFRA-1          |
+| QA-4                                               | —        | 📋 BACKLOG     | E2E flow: admin→configure→QR→submit→verify count                       | QA-3             |
+| QA-5                                               | —        | 📋 BACKLOG     | Contract tests (Pact) for form API shapes                              | —                |
+| QA-6                                               | —        | 📋 BACKLOG     | Feature flag seed parity CI gate                                       | —                |
+| QA-7                                               | —        | 📋 BACKLOG     | Newman E2E chain (create→config→submit→count→scrub)                    | QA-3, ADMIN-7    |
+| **Epic SRE — Observability**                       |          |                |                                                                        |                  |
+| SRE-1                                              | —        | 📋 BACKLOG     | Form submission rate dashboard + alerting                              | INFRA-1          |
+| SRE-2                                              | —        | 📋 BACKLOG     | PII destruction job monitoring + failure alerts                        | ADMIN-7          |
+| SRE-3                                              | —        | 📋 BACKLOG     | Wire k6 load tests to staging CI gate                                  | INFRA-1          |
+| SRE-4                                              | —        | ✅ DONE        | Enable Workers Logs/Traces in wrangler.toml                            | —                |
+| SRE-5                                              | —        | 📋 BACKLOG     | Define SLOs (availability, latency, error rate)                        | SRE-4            |
+| **Epic HK — Housekeeping**                         |          |                |                                                                        |                  |
+| HK-1                                               | —        | ✅ DONE        | Archive legacy worker/ directory                                       | —                |
+| HK-2                                               | —        | 📋 BACKLOG     | Sync STORIES.md with implemented features                              | —                |
+| HK-3                                               | —        | ✅ DONE        | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK)                  | HK-1             |
+| **Epic DAC — Documentation Domain Reconciliation** |          |                |                                                                        |                  |
+| DAC-1                                              | —        | ✅ DONE        | Batch rename — Security docs (13 files, ~295 refs)                     | P1-8             |
+| DAC-2                                              | —        | ✅ DONE        | Batch rename — Runbooks (12 files, ~386 refs)                          | P1-8             |
+| DAC-3                                              | —        | ✅ DONE        | Batch rename — Architecture docs (9 files, ~126 refs)                  | P1-8             |
+| DAC-4                                              | —        | ✅ DONE        | Batch rename — Deploy + Monitor + QA docs (16 files, ~161 refs)        | P1-8             |
+| DAC-5                                              | —        | ✅ DONE        | Final verification — zero active eventangle references                 | DAC-1,2,3,4      |
+| **Epic TP — Test Pyramid Enforcement**             |          |                |                                                                        |                  |
+| TP-1                                               | —        | ✅ DONE        | Wire 78 E2E Playwright files into CI pipeline (post-smoke gate)        | P1-8             |
+| TP-2                                               | —        | 📋 BACKLOG     | Cross-surface E2E: poster → pre-event → event → post-event flow        | TP-1             |
+| TP-3                                               | —        | 📋 BACKLOG     | Newman collection audit — verify all 6 surfaces covered                | P1-8             |
+| TP-4                                               | —        | 📋 BACKLOG     | Wire k6 load tests into staging CI gate                                | TP-1             |
+| TP-5                                               | —        | ✅ DONE        | Retroactive audit — 43/43 pre-TP, no full pyramid at completion        | TP-1             |
 
 ---
 
@@ -828,7 +828,7 @@ _Stories sourced from CCR audit FE uniformity matrix. Goal: consistent experienc
 
 ### AS-6: ARIA attributes on Public
 
-**Status:** 🔄 IN PROGRESS (DONE_IN_CODE — reconciled 2026-09-27)
+**Status:** ✅ DONE (DONE_IN_CODE — reconciled 2026-09-27; merged #653)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
@@ -891,7 +891,7 @@ stale (CLAUDE.md reconciliation rule).
 
 ### AS-8: ARIA attributes on Poster
 
-**Status:** 🔄 IN PROGRESS (DONE_IN_CODE — reconciled 2026-09-27)
+**Status:** ✅ DONE (DONE_IN_CODE — reconciled 2026-09-27; merged #653)
 **Rating:** MVP-UX
 **Prerequisite:** A11Y-1
 **Effort:** S
@@ -983,16 +983,34 @@ to ✅ DONE on merge.
 
 ### AS-13: axe-core CI integration
 
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS (2026-09-27)
 **Rating:** V2↑MVP
 **Prerequisite:** A11Y-7
 **Effort:** M
 **Description:** Add automated accessibility testing using axe-core via Playwright. Runs on all 7 surfaces in CI.
 **Acceptance criteria:**
 
-- `@axe-core/playwright` installed
-- Test spec runs axe on each surface
-- CI blocks merge on critical a11y violations
+- [x] `@axe-core/playwright` installed — `^4.13.0` in root devDependencies.
+- [x] Test spec runs axe on each surface — `tests/e2e/2-pages/a11y-axe-surfaces.spec.ts`
+      runs `AxeBuilder` (wcag2a/wcag2aa, critical+serious, one-`<h1>`) in a real
+      browser against the local worker. **Two-tier design:** this covers the four
+      publicly-reachable surfaces (`/`, `/events`, `/display`, `/poster`) in
+      Chromium **and** WebKit; the auth/token-gated surfaces (`/admin`,
+      `/sharedReport`, `/sponsor`) stay on the pre-existing jsdom axe gate
+      (`workers/oursharedevents/tests/a11y-axe.spec.ts`, A11Y-7), which reaches
+      them via direct handler calls — a browser can't satisfy their CF Access /
+      signed-token requirement on the unseeded local worker. So **every surface is
+      axe-scanned in CI**; the browser tier adds contrast/computed-role/focus
+      coverage jsdom is blind to. Wiring browser auth for the gated 3 is a
+      follow-up.
+- [x] CI blocks merge on critical a11y violations — added to the T0 `component`
+      shard's explicit spec list (`.github/workflows/oursharedevents-ci.yml`),
+      run through `scripts/pw-guarded.sh` (blocking, executed>0 floor). A
+      critical/serious violation turns the T0 gate red before deploy.
+
+**Note:** real-browser axe can surface colour-contrast issues jsdom cannot
+(that's the point). Any it finds are genuine debt overlapping **A11Y-5**; triaged
+against CI on first run.
 
 ---
 
