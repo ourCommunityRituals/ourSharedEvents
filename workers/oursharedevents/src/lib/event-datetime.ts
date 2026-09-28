@@ -38,11 +38,13 @@ function zoneOffsetMs(instant: Date, tz: string): number {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // hourCycle only — `hour12` takes precedence over it, and some ICU builds
+    // then pick h24, rendering midnight as "24" (seen on CI's Node).
     hourCycle: 'h23',
   }).formatToParts(instant);
   const map: Record<string, number> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = Number(p.value);
+  if (map.hour === 24) map.hour = 0; // defensive: an h24 runtime labels midnight 24
   const wallAsUtc = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
   return wallAsUtc - instant.getTime();
 }
@@ -150,10 +152,12 @@ export function zonedTimePart(utcIso: string | null | undefined, tz: string | nu
     timeZone: zone,
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    // hourCycle only — `hour12` takes precedence over it, and some ICU builds
+    // then pick h24, rendering midnight as "24" (seen on CI's Node).
     hourCycle: 'h23',
   }).formatToParts(d);
   const map: Record<string, string> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
-  return `${map.hour}:${map.minute}`;
+  const hour = map.hour === '24' ? '00' : map.hour; // defensive: h24 runtimes
+  return `${hour}:${map.minute}`;
 }

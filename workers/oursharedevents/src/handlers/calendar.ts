@@ -65,7 +65,7 @@ function formatInTimezone(date: Date, timezone: string): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // hourCycle only — `hour12` overrides it and can yield h24 ("24" at midnight).
     hourCycle: 'h23',
   }).formatToParts(date);
   const byType = new Map<string, string>(parts.map((p) => [p.type, p.value]));
@@ -75,7 +75,7 @@ function formatInTimezone(date: Date, timezone: string): string {
     part('month') +
     part('day') +
     'T' +
-    part('hour') +
+    (part('hour') === '24' ? '00' : part('hour')) +
     part('minute') +
     part('second')
   );

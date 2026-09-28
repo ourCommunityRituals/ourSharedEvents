@@ -197,3 +197,17 @@ describe('OSE-1313 zonedTimePart (update path keeps the wall time)', () => {
     expect(zonedTimePart('nope', 'America/Chicago')).toBe('');
   });
 });
+
+describe('OSE-1313 midnight wall time (h23 vs h24 runtimes)', () => {
+  // Some ICU builds render midnight as hour "24" when hour12:false is set;
+  // in zoneOffsetMs that would roll the wall clock a day forward and shift the
+  // stored instant by 24h. Pin the conversion at 00:00 across DST and non-DST zones.
+  test.each([
+    ['America/Chicago', '2026-10-24', '2026-10-24T05:00:00Z'],
+    ['America/Phoenix', '2026-01-15', '2026-01-15T07:00:00Z'],
+    ['Europe/London', '2026-12-31', '2026-12-31T00:00:00Z'],
+    ['Asia/Kolkata', '2026-10-24', '2026-10-23T18:30:00Z'],
+  ])('%s %s 00:00 → %s', (tz, date, expected) => {
+    expect(zonedDateTimeToUtcIso(date, '00:00', tz)).toBe(expected);
+  });
+});
