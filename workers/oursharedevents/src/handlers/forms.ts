@@ -46,6 +46,7 @@ import {
   trimStr,
   type FormType,
 } from '../lib/form-validation';
+import { guardTurnstile } from '../lib/turnstile';
 
 export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -208,6 +209,15 @@ export async function handleFormRegistration(
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
+  // L4 (OSE-1378): dark by default — no-op unless TURNSTILE_ENABLED === 'true'.
+  const turnstileDeny = await guardTurnstile(
+    request,
+    env,
+    'register',
+    body!['cf-turnstile-response']
+  );
+  if (turnstileDeny) return turnstileDeny;
+
   const { anonId, isNew } = getOrCreateAnonId(request);
   const name = trimStr(body!.name, 200);
   if (typeof body!.email === 'string' && body!.email.length > 320) {
@@ -351,6 +361,10 @@ export async function handleFormCheckin(
   const { error } = await validateFormRequest(request, eventId, false);
   if (error) return error;
 
+  // L4 (OSE-1378): bodyless handler — token arrives via the cf-turnstile-response header.
+  const turnstileDeny = await guardTurnstile(request, env, 'checkin');
+  if (turnstileDeny) return turnstileDeny;
+
   const { anonId, isNew } = getOrCreateAnonId(request);
 
   try {
@@ -394,6 +408,14 @@ export async function handleFormSurvey(
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
+  const turnstileDeny = await guardTurnstile(
+    request,
+    env,
+    'survey',
+    body!['cf-turnstile-response']
+  );
+  if (turnstileDeny) return turnstileDeny;
+
   const { anonId, isNew } = getOrCreateAnonId(request);
   const responses = body!.responses;
   if (!responses || typeof responses !== 'object') {
@@ -431,6 +453,14 @@ export async function handleFormEmailSignup(
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
+
+  const turnstileDeny = await guardTurnstile(
+    request,
+    env,
+    'email-signup',
+    body!['cf-turnstile-response']
+  );
+  if (turnstileDeny) return turnstileDeny;
 
   const { anonId, isNew } = getOrCreateAnonId(request);
   const email = trimStr(body!.email, 320) ?? '';

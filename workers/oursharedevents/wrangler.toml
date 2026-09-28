@@ -101,6 +101,11 @@ DRAFT_EXPIRY_DAYS = "30"
 SUBSCRIBERS_RETENTION_DAYS = "365"
 # Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
 SPONSOR_GEO_MATCH_ENABLED = "0"
+# L4 scale-readiness lever (OSE-1378): Turnstile bot-check on mutation endpoints.
+# DARK by default ("0") — a true no-op. Activation (separate infra step) = set to "true",
+# provide TURNSTILE_SECRET (secret) + TURNSTILE_HOSTNAMES/TURNSTILE_SITE_KEY (vars), and
+# ship the client widget (Slice 2). Never flip to "true" before the widget renders a token.
+TURNSTILE_ENABLED = "0"
 # Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities
 ALLOWED_ADMIN_EMAILS = ""
 ALLOWED_ADMIN_DOMAINS = ""
@@ -187,6 +192,8 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 # (CCR-PR567 re-run item 9 / L2). Otherwise staging runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
 SPONSOR_GEO_MATCH_ENABLED = "0"
+# L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
+TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
 ALLOW_ADMIN_KEY_FALLBACK = "true"
 # Allow X-OCR-Internal header for CI/CD automation
@@ -215,6 +222,7 @@ VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
 GCP_REGION         = "us-central1"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
+#   TURNSTILE_SECRET         (Turnstile siteverify secret — ONLY when activating L4/OSE-1378; dark by default)
 #   ADMIN_KEY                (strong random string, min 32 chars)
 #   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY     (AES-GCM key for email encryption — min 32 chars, DIFFERENT from prod)
@@ -304,6 +312,8 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 # (CCR-PR567 re-run item 9 / L2). Otherwise production runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
 SPONSOR_GEO_MATCH_ENABLED = "0"
+# L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
+TURNSTILE_ENABLED = "0"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
 # Admin email allowlist — set explicitly here (not inherited from [vars])
@@ -322,6 +332,7 @@ VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
 GCP_REGION         = "us-central1"
 
 # Required secrets for production (set with wrangler secret put … --env production):
+#   TURNSTILE_SECRET         (Turnstile siteverify secret — ONLY when activating L4/OSE-1378; dark by default)
 #   ADMIN_KEY                (strong random string, min 32 chars)
 #   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY     (AES-GCM key for email encryption — min 32 chars, unique per env)

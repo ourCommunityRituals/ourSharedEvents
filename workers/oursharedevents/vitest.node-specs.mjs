@@ -143,4 +143,8 @@ export const NODE_SPECS = [
   // OSE-1313 event date+time+timezone → UTC. Pure Intl/Date math over
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',
+
+  // L4 Turnstile-dark (OSE-1378) — pure lib guardTurnstile over a stubbed global
+  // fetch; no cloudflare:test / SELF.fetch / D1. Born-red per guard clause. Node-clean.
+  'tests/turnstile.spec.ts',
 ];
