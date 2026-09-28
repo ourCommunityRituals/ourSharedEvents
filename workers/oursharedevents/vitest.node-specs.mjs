@@ -154,4 +154,8 @@ export const NODE_SPECS = [
   // L4 Slice 2 — client render helpers + handleFormPage widget/CSP wiring. Pure
   // render over a fake env (no DB / cloudflare:test). Node-clean.
   'tests/turnstile-render.spec.ts',
+
+  // L7 observability (OSE-1380) — Cloudflare GraphQL Analytics baseline tool. Pure
+  // query/aggregate/never-who fns imported from the .mjs script; no network / D1.
+  'tests/observability-cf-analytics.spec.ts',
 ];
