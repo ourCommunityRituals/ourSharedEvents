@@ -802,7 +802,8 @@
         font-size: 0.9375rem;
         color: var(--text-muted, #64748b);
       }
-      .create-form input[type='date'] {
+      .create-form input[type='date'],
+      .create-form input[type='time'] {
         -webkit-appearance: none;
         appearance: none;
         min-width: 0;
@@ -2475,6 +2476,37 @@
               <label for="wizard-event-date">When is it?</label>
               <input type="date" id="wizard-event-date" data-testid="wizard-event-date" />
             </div>
+            <!-- OSE-1313 — start time + the EVENT's time zone. The API stores the
+                 UTC instant (starts_at) and every surface renders it back in this
+                 zone, never the viewer's. Curated IANA list, not free text; the
+                 default is the founding node's zone and stays editable. -->
+            <div>
+              <label for="wizard-event-time">What time does it start?</label>
+              <input type="time" id="wizard-event-time" data-testid="wizard-event-time" step="60" />
+            </div>
+            <div>
+              <label for="wizard-event-tz">Time zone</label>
+              <select id="wizard-event-tz" data-testid="wizard-event-tz">
+                <option value="America/New_York">Eastern (New York)</option>
+                <option value="America/Chicago" selected>Central (Chicago)</option>
+                <option value="America/Denver">Mountain (Denver)</option>
+                <option value="America/Phoenix">Arizona (Phoenix, no DST)</option>
+                <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                <option value="America/Anchorage">Alaska (Anchorage)</option>
+                <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+                <option value="Europe/London">London</option>
+                <option value="Europe/Berlin">Berlin</option>
+                <option value="Europe/Athens">Athens</option>
+                <option value="Africa/Lagos">Lagos</option>
+                <option value="Africa/Johannesburg">Johannesburg</option>
+                <option value="Africa/Nairobi">Nairobi</option>
+                <option value="America/Sao_Paulo">São Paulo</option>
+                <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                <option value="America/Bogota">Bogotá</option>
+                <option value="Asia/Kolkata">India (Kolkata)</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </div>
             <div>
               <label for="wizard-event-venue">Where is it? <span class="required-star">*</span></label>
               <input
@@ -2939,6 +2971,18 @@
             var body = { title: document.getElementById('wizard-event-name').value.trim() };
             var dateVal = document.getElementById('wizard-event-date').value;
             if (dateVal) body.start_date = dateVal;
+            // OSE-1313 — the zone always rides along (the API validates it); the
+            // time only with a date, since a time alone anchors nothing.
+            var tzEl = document.getElementById('wizard-event-tz');
+            var tzVal = tzEl && tzEl.value ? tzEl.value : '';
+            if (tzVal) body.timezone = tzVal;
+            var timeEl = document.getElementById('wizard-event-time');
+            var timeVal = timeEl && timeEl.value ? timeEl.value.slice(0, 5) : '';
+            if (timeVal && !dateVal) {
+              setMsg('Pick a date for that start time.', 'error');
+              return;
+            }
+            if (timeVal) body.start_time = timeVal;
             var venueVal = document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
             // OSE-1245 — ALWAYS sent, never omitted. The API defaults an absent
@@ -3031,9 +3075,22 @@
                 if (summary) {
                   // Honest state: it is SAVED, not live. "Ready to go" was a
                   // lie the public page contradicted with a 404.
+                  // OSE-1313 — echo the start in the EVENT's zone (from the
+                  // server's starts_at when present), never the browser's.
+                  var whenTxt = '';
+                  if (data.starts_at) {
+                    try {
+                      whenTxt = new Intl.DateTimeFormat('en-US', {
+                        timeZone: data.timezone || tzVal || 'UTC',
+                        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+                      }).format(new Date(data.starts_at));
+                    } catch (e) { whenTxt = ''; }
+                  }
                   summary.textContent =
                     '✅ "' + body.title + '" is saved' +
-                    (venueVal ? ' at ' + venueVal : '') + ' as a draft.';
+                    (venueVal ? ' at ' + venueVal : '') +
+                    (whenTxt ? ' for ' + whenTxt : '') + ' as a draft.';
                 }
                 wiz.step = 4;
                 updateUI();
@@ -3323,6 +3380,34 @@
             <div>
               <label for="create-date">Start Date</label>
               <input type="date" id="create-date" name="start_date" data-testid="create-date" />
+            </div>
+            <!-- OSE-1313 — start time + the event's time zone (see the wizard). -->
+            <div>
+              <label for="create-time">Start Time</label>
+              <input type="time" id="create-time" name="start_time" data-testid="create-time" step="60" />
+            </div>
+            <div>
+              <label for="create-tz">Time Zone</label>
+              <select id="create-tz" name="timezone" data-testid="create-tz">
+                <option value="America/New_York">Eastern (New York)</option>
+                <option value="America/Chicago" selected>Central (Chicago)</option>
+                <option value="America/Denver">Mountain (Denver)</option>
+                <option value="America/Phoenix">Arizona (Phoenix, no DST)</option>
+                <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                <option value="America/Anchorage">Alaska (Anchorage)</option>
+                <option value="Pacific/Honolulu">Hawaii (Honolulu)</option>
+                <option value="Europe/London">London</option>
+                <option value="Europe/Berlin">Berlin</option>
+                <option value="Europe/Athens">Athens</option>
+                <option value="Africa/Lagos">Lagos</option>
+                <option value="Africa/Johannesburg">Johannesburg</option>
+                <option value="Africa/Nairobi">Nairobi</option>
+                <option value="America/Sao_Paulo">São Paulo</option>
+                <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
+                <option value="America/Bogota">Bogotá</option>
+                <option value="Asia/Kolkata">India (Kolkata)</option>
+                <option value="UTC">UTC</option>
+              </select>
             </div>
             <div>
               <label for="create-venue">Venue</label>
@@ -5947,6 +6032,16 @@
           }
         }
 
+        // OSE-1313 — a start time needs a date to anchor it (the API 400s
+        // otherwise). Checked before the button disables, like the link guard.
+        const earlyTime = document.getElementById('create-time');
+        if (earlyTime && earlyTime.value && !document.getElementById('create-date').value) {
+          msg.textContent = 'Pick a date for that start time.';
+          msg.className = 'create-msg error';
+          earlyTime.focus();
+          return;
+        }
+
         btn.disabled = true;
         btn.textContent = 'Creating\u2026';
         msg.textContent = '';
@@ -5956,6 +6051,12 @@
           const body = { title };
           const dateVal = document.getElementById('create-date').value;
           if (dateVal) body.start_date = dateVal;
+          // OSE-1313 — event time zone + optional start time (needs a date).
+          const tzSel = document.getElementById('create-tz');
+          if (tzSel && tzSel.value) body.timezone = tzSel.value;
+          const timeInput = document.getElementById('create-time');
+          const timeVal = timeInput && timeInput.value ? timeInput.value.slice(0, 5) : '';
+          if (timeVal && dateVal) body.start_time = timeVal;
           const venueVal = document.getElementById('create-venue').value.trim();
           if (venueVal) body.location = venueVal;
 
@@ -6021,6 +6122,8 @@
             msg.className = 'create-msg success';
             document.getElementById('create-title').value = '';
             document.getElementById('create-date').value = '';
+            const createTimeEl = document.getElementById('create-time');
+            if (createTimeEl) createTimeEl.value = '';
             document.getElementById('create-venue').value = '';
             if (window.oseTypePicker) window.oseTypePicker.reset('create-category');
             for (const [domId] of fivew) {

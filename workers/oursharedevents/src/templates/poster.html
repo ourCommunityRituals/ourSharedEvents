@@ -711,8 +711,21 @@
     </main>
     <script>
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-      const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
-      const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
+      // OSE-1313 — dates and times render in the EVENT's zone, never the
+      // viewer's. A timed event carries its UTC instant in starts_at; a
+      // date-only YYYY-MM-DD is a calendar date, pinned via UTC so no zone can
+      // shift it a day (and it shows no invented time).
+      const inZone = (iso, tz, opts) => {
+        try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(new Date(iso)); }
+        catch (e) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(new Date(iso)); }
+      };
+      const DATE_OPTS = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
+      const fmtEventDate = ev => {
+        if (ev.starts_at) return inZone(ev.starts_at, ev.timezone, DATE_OPTS);
+        const d = String(ev.startDateISO || '').slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(d) ? inZone(d + 'T00:00:00Z', 'UTC', DATE_OPTS) : '';
+      };
+      const fmtEventTime = ev => ev.starts_at ? inZone(ev.starts_at, ev.timezone, { hour:'numeric', minute:'2-digit', timeZoneName:'short' }) : '';
 
       // OSE-286: the Print button is gated on QR readiness. It starts disabled
       // (in the markup) and toggles here as posters render and their codes
@@ -749,7 +762,8 @@
         // it. A genuinely-missing value renders its empty state, not a literal.
         const venue = event.venue || '';
         const address = '';
-        const startISO = event.startDateISO || '';
+        const startDate = fmtEventDate(event);
+        const startTime = fmtEventTime(event);
         const name = event.name || '';
         // R4 — poster art viewport. Source is the event's cover image (public
         // projection allowlist includes cover_image_url). Snake/camel tolerant
@@ -763,7 +777,7 @@
           '</div>' +
           '<div class="poster-body" data-testid="poster-body">' +
             '<div class="poster-meta" data-testid="poster-meta">' +
-            (startISO ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
+            (startDate ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '') + '</div></div>' : '') +
             (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
             '</div>' +
             '<div class="poster-art' + (art ? '' : ' poster-art--empty') + '" data-testid="poster-art-viewport">' +

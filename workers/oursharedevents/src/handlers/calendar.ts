@@ -12,6 +12,8 @@ interface CalendarEventRow {
   start_date: string | null;
   end_date: string | null;
   timezone: string | null;
+  /** OSE-1313 — canonical UTC start instant; preferred over start_date when set. */
+  starts_at: string | null;
   status: string | null;
   is_published: number | null;
 }
@@ -122,7 +124,7 @@ export async function handleEventCalendar(
   }
 
   const row = await env.DB.prepare(
-    `SELECT id, title, description, location, start_date, end_date, timezone, status, is_published
+    `SELECT id, title, description, location, start_date, end_date, timezone, starts_at, status, is_published
        FROM events WHERE id = ? LIMIT 1`
   )
     .bind(eventId)
@@ -144,7 +146,10 @@ export async function handleEventCalendar(
     );
   }
 
-  const start = new Date(row.start_date);
+  // OSE-1313 — a timed event carries its canonical UTC instant in starts_at
+  // (date+time in the event's zone, server-computed). Prefer it: the date-only
+  // start_date parses as UTC midnight, which is not when the event starts.
+  const start = new Date(row.starts_at || row.start_date);
   if (Number.isNaN(start.getTime())) {
     return Response.json(
       { ok: false, status: 409, code: 'EVENT_TIME_INVALID', error: 'Event start time is invalid' },
@@ -154,7 +159,7 @@ export async function handleEventCalendar(
 
   const parsedEnd = row.end_date ? new Date(row.end_date) : null;
   const end =
-    parsedEnd && !Number.isNaN(parsedEnd.getTime())
+    parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > start.getTime()
       ? parsedEnd
       : new Date(start.getTime() + 60 * 60 * 1000);
   const timezone = safeTimezone(row.timezone);

@@ -136,3 +136,24 @@ export function zonedDatePart(utcIso: string | null | undefined, tz: string | nu
   for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
   return `${map.year}-${map.month}-${map.day}`;
 }
+
+/**
+ * The local wall-clock time ("HH:MM", 24h) of a UTC instant in `tz`. The update
+ * path uses it to keep an event's time-of-day when only its date or zone moves.
+ */
+export function zonedTimePart(utcIso: string | null | undefined, tz: string | null): string {
+  if (!utcIso) return '';
+  const d = new Date(utcIso);
+  if (Number.isNaN(d.getTime())) return '';
+  const zone = isValidIanaTimezone(tz) ? (tz as string) : 'UTC';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const map: Record<string, string> = {};
+  for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
+  return `${map.hour}:${map.minute}`;
+}

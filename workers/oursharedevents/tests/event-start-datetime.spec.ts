@@ -1,0 +1,318 @@
+/**
+ * OSE-1313 — event start date + time + timezone → canonical UTC `starts_at`,
+ * through the deployed handlers (workers pool).
+ *
+ * The pure zone/DST math is covered by `event-datetime.spec.ts` (node pool).
+ * This spec proves the wiring: create + update store the right instant, bad
+ * input is refused (400) rather than silently stored, `starts_at` is always
+ * server-computed, and the public surfaces (JSON projection + event page)
+ * render the EVENT's zone — never the viewer's.
+ */
+
+import { describe, test, expect, beforeAll } from 'vitest';
+import { env, SELF } from 'cloudflare:test';
+import { handleAdminPage } from '../src/handlers/pages';
+
+const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
+const BRAND = 'ose1313-test';
+
+interface TestEnv {
+  DB: D1Database;
+  TEST_MIGRATION_STATEMENTS: string;
+}
+
+interface ApiResponse {
+  ok: boolean;
+  id?: string;
+  code?: string;
+}
+
+async function applyMigrations(): Promise<void> {
+  const tenv = env as unknown as TestEnv;
+  const stmts: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
+  for (const stmt of stmts) {
+    try {
+      await tenv.DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        msg.includes('duplicate column name') ||
+        msg.includes('already exists') ||
+        msg.includes('no such column')
+      ) {
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+beforeAll(async () => {
+  await applyMigrations();
+  const tenv = env as unknown as TestEnv;
+  await tenv.DB.prepare('DELETE FROM events WHERE brand_id = ?').bind(BRAND).run();
+});
+
+async function createEvent(body: Record<string, unknown>): Promise<Response> {
+  return SELF.fetch('https://t.test/api/v2/admin/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+    body: JSON.stringify({ brand_id: BRAND, ...body }),
+  });
+}
+
+async function updateEvent(id: string, body: Record<string, unknown>): Promise<Response> {
+  return SELF.fetch(`https://t.test/api/v2/admin/events/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+    body: JSON.stringify(body),
+  });
+}
+
+async function readRow(
+  id: string
+): Promise<{ start_date: string | null; timezone: string | null; starts_at: string | null }> {
+  const tenv = env as unknown as TestEnv;
+  const row = await tenv.DB.prepare(
+    'SELECT start_date, timezone, starts_at FROM events WHERE id = ?'
+  )
+    .bind(id)
+    .first<{ start_date: string | null; timezone: string | null; starts_at: string | null }>();
+  return row!;
+}
+
+async function createTimed(
+  title: string,
+  date: string,
+  time: string,
+  timezone: string
+): Promise<string> {
+  const res = await createEvent({ title, start_date: date, start_time: time, timezone });
+  expect(res.status).toBe(201);
+  const body = (await res.json()) as ApiResponse;
+  return body.id as string;
+}
+
+describe('OSE-1313 create path stores the UTC instant', () => {
+  test.each([
+    ['America/Chicago', '2026-10-24', '18:00', '2026-10-24T23:00:00Z'],
+    ['America/Phoenix', '2026-07-04', '20:00', '2026-07-05T03:00:00Z'], // no DST, crosses UTC day
+    ['Europe/London', '2026-12-31', '23:30', '2026-12-31T23:30:00Z'],
+    ['Asia/Kolkata', '2026-10-24', '09:15', '2026-10-24T03:45:00Z'], // half-hour offset
+  ])('%s %s %s → %s', async (tz, date, time, expected) => {
+    const id = await createTimed(`OSE-1313 create ${tz}`, date, time, tz);
+    const row = await readRow(id);
+    expect(row.starts_at).toBe(expected);
+    expect(row.timezone).toBe(tz);
+  });
+
+  test('date-only create leaves starts_at NULL (prior behaviour)', async () => {
+    const res = await createEvent({ title: 'OSE-1313 date only', start_date: '2026-10-24' });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as ApiResponse;
+    expect((await readRow(id!)).starts_at).toBeNull();
+  });
+
+  test('a client-supplied starts_at is ignored — the instant is server-computed', async () => {
+    const res = await createEvent({
+      title: 'OSE-1313 spoofed instant',
+      start_date: '2026-10-24',
+      start_time: '18:00',
+      timezone: 'America/Chicago',
+      starts_at: '1999-01-01T00:00:00Z',
+    });
+    const { id } = (await res.json()) as ApiResponse;
+    expect((await readRow(id!)).starts_at).toBe('2026-10-24T23:00:00Z');
+  });
+
+  test.each([
+    [
+      { start_date: '2026-10-24', start_time: '18:00', timezone: 'America/Chicagoo' },
+      'INVALID_TIMEZONE',
+    ],
+    [{ start_date: '2026-10-24', start_time: '6pm' }, 'INVALID_TIME'],
+    [{ start_time: '18:00' }, 'INVALID_TIME'],
+  ])('refuses %j with 400 %s', async (fields, code) => {
+    const res = await createEvent({ title: 'OSE-1313 bad', ...fields });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as ApiResponse).code).toBe(code);
+  });
+});
+
+describe('OSE-1313 update path recomputes starts_at', () => {
+  test('changing the time moves the instant', async () => {
+    const id = await createTimed('OSE-1313 upd time', '2026-10-24', '18:00', 'America/Chicago');
+    const res = await updateEvent(id, { start_time: '19:30' });
+    expect(res.status).toBe(200);
+    expect((await readRow(id)).starts_at).toBe('2026-10-25T00:30:00Z');
+  });
+
+  test('changing only the date keeps the wall time (tracks the new date, across DST)', async () => {
+    // 18:00 CDT (UTC-5) → move to a CST date (UTC-6): wall time stays 18:00.
+    const id = await createTimed('OSE-1313 upd date', '2026-10-24', '18:00', 'America/Chicago');
+    await updateEvent(id, { start_date: '2026-11-14' });
+    const row = await readRow(id);
+    expect(row.start_date).toBe('2026-11-14');
+    expect(row.starts_at).toBe('2026-11-15T00:00:00Z');
+  });
+
+  test('changing only the zone keeps the wall time in the new zone', async () => {
+    const id = await createTimed('OSE-1313 upd zone', '2026-10-24', '18:00', 'America/Chicago');
+    await updateEvent(id, { timezone: 'America/New_York' });
+    expect((await readRow(id)).starts_at).toBe('2026-10-24T22:00:00Z');
+  });
+
+  test('clearing start_time makes it a date-only event again', async () => {
+    const id = await createTimed('OSE-1313 upd clear', '2026-10-24', '18:00', 'America/Chicago');
+    await updateEvent(id, { start_time: null });
+    const row = await readRow(id);
+    expect(row.starts_at).toBeNull();
+    expect(row.start_date).toBe('2026-10-24');
+  });
+
+  test('adding a time to a date-only event', async () => {
+    const res = await createEvent({ title: 'OSE-1313 upd add', start_date: '2026-03-08' });
+    const { id } = (await res.json()) as ApiResponse;
+    // Spring-forward day in Chicago: 14:00 is CDT (UTC-5).
+    await updateEvent(id!, { start_time: '14:00' });
+    expect((await readRow(id!)).starts_at).toBe('2026-03-08T19:00:00Z');
+  });
+
+  test('a field-only update leaves starts_at untouched', async () => {
+    const id = await createTimed('OSE-1313 upd other', '2026-10-24', '18:00', 'America/Chicago');
+    await updateEvent(id, { title: 'renamed' });
+    expect((await readRow(id)).starts_at).toBe('2026-10-24T23:00:00Z');
+  });
+
+  test.each([
+    [{ timezone: 'Not/AZone' }, 'INVALID_TIMEZONE'],
+    [{ start_time: '24:00' }, 'INVALID_TIME'],
+    [{ start_time: 1800 }, 'INVALID_TIME'],
+  ])('refuses %j with 400 %s and stores nothing', async (fields, code) => {
+    const id = await createTimed(
+      `OSE-1313 upd bad ${code} ${JSON.stringify(fields)}`,
+      '2026-10-24',
+      '18:00',
+      'America/Chicago'
+    );
+    const res = await updateEvent(id, fields);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as ApiResponse).code).toBe(code);
+    const row = await readRow(id);
+    expect(row.starts_at).toBe('2026-10-24T23:00:00Z');
+    expect(row.timezone).toBe('America/Chicago');
+  });
+});
+
+describe('OSE-1313 public surfaces render the event zone', () => {
+  async function seedPublic(id: string, startsAt: string | null, tz: string): Promise<void> {
+    const tenv = env as unknown as TestEnv;
+    await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, location,
+                           start_date, timezone, starts_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', 1, 'Eagles Bowl', ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(id, BRAND, 'OSE-1313 public', id, '2099-10-24', tz, startsAt)
+      .run();
+  }
+
+  test('event page shows the event-zone time with its abbreviation (viewer zone is irrelevant)', async () => {
+    const id = 'evt_ose1313_page_timed';
+    // 18:00 in Chicago on 2099-10-24 (CDT).
+    await seedPublic(id, '2099-10-24T23:00:00Z', 'America/Chicago');
+    const res = await SELF.fetch(`https://t.test/events/${id}`, {
+      // A viewer in Tokyo: nothing about the request can move the rendered zone.
+      headers: { 'Accept-Language': 'ja-JP', 'CF-Timezone': 'Asia/Tokyo' },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const when = html.match(/data-testid="event-when">([^<]*)</)?.[1] ?? '';
+    expect(when).toContain('October 24, 2099');
+    expect(when).toContain('6:00');
+    expect(when).toContain('PM');
+    expect(when).toContain('CDT');
+    expect(when).not.toContain('JST');
+  });
+
+  test('date-only event page keeps the date · zone shape', async () => {
+    const id = 'evt_ose1313_page_date_only';
+    await seedPublic(id, null, 'America/Chicago');
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const when = html.match(/data-testid="event-when">([^<]*)</)?.[1] ?? '';
+    expect(when).toContain('October 24, 2099');
+    expect(when).toContain('America/Chicago');
+  });
+
+  test('public JSON projection carries starts_at', async () => {
+    const id = 'evt_ose1313_json';
+    await seedPublic(id, '2099-10-24T23:00:00Z', 'America/Chicago');
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${id}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { item: Record<string, unknown> };
+    expect(body.item.starts_at).toBe('2099-10-24T23:00:00Z');
+    expect(body.item.timezone).toBe('America/Chicago');
+  });
+});
+
+describe('OSE-1313 admin create paths collect time + event zone', () => {
+  const html = () => handleAdminPage({} as never).text();
+
+  test.each([
+    ['wizard', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz'],
+    ['advanced form', 'create-date', 'create-time', 'create-tz'],
+  ])('%s: date, then a time input, then a curated IANA zone select', async (_p, d, t, z) => {
+    const h = await html();
+    const di = h.indexOf(`id="${d}"`);
+    const ti = h.indexOf(`id="${t}"`);
+    const zi = h.indexOf(`id="${z}"`);
+    expect(di).toBeGreaterThan(-1);
+    expect(ti).toBeGreaterThan(di);
+    expect(zi).toBeGreaterThan(ti);
+    expect(h).toMatch(new RegExp(`<input[^>]*type="time"[^>]*id="${t}"`));
+    // A select (not free text), defaulting to the founding node's zone, and
+    // carrying every zone in the ticket's test matrix.
+    const select = h.slice(zi, h.indexOf('</select>', zi));
+    expect(select).toContain('value="America/Chicago" selected');
+    for (const zone of [
+      'America/New_York',
+      'America/Phoenix',
+      'Pacific/Honolulu',
+      'Europe/London',
+      'Africa/Nairobi',
+      'America/Argentina/Buenos_Aires',
+      'Asia/Kolkata',
+    ]) {
+      expect(select).toContain(`value="${zone}"`);
+    }
+  });
+
+  test('both paths submit start_time + timezone', async () => {
+    const h = await html();
+    expect(h).toContain('if (timeVal) body.start_time = timeVal;');
+    expect(h).toContain('if (timeVal && dateVal) body.start_time = timeVal;');
+    expect(h).toContain('if (tzVal) body.timezone = tzVal;');
+    expect(h).toContain('if (tzSel && tzSel.value) body.timezone = tzSel.value;');
+  });
+
+  test('wizard summary renders the server instant in the EVENT zone', async () => {
+    const h = await html();
+    expect(h).toMatch(/timeZone: data\.timezone \|\| tzVal \|\| 'UTC'/);
+    expect(h).toContain('new Date(data.starts_at)');
+  });
+});
+
+describe('OSE-1313 poster + display render the event zone, never the viewer zone', () => {
+  test.each([
+    ['/poster', 'fmtEventTime'],
+    ['/display', 'fmt'],
+  ])('%s formats starts_at in ev.timezone and pins date-only dates via UTC', async (path) => {
+    const res = await SELF.fetch(`https://t.test${path}`);
+    expect(res.status).toBe(200);
+    const h = await res.text();
+    expect(h).toContain('inZone(ev.starts_at, ev.timezone');
+    expect(h).toContain("inZone(d + 'T00:00:00Z', 'UTC'");
+    // The viewer-zone formatters that produced the off-by-one / invented time are gone.
+    expect(h).not.toMatch(/new Date\(iso\)\.toLocale(Date|Time)String/);
+  });
+});

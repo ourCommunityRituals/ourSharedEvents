@@ -12,6 +12,7 @@ import {
   formatEventDateTime,
   formatEventTime,
   zonedDatePart,
+  zonedTimePart,
 } from '../src/lib/event-datetime';
 
 // The ticket's parameterized zone list.
@@ -177,5 +178,22 @@ describe('OSE-1313 malformed input → null (no silent bad store)', () => {
     ['2026-10-24', '18:00', 'America/Chicagoo'], // typo zone
   ])('rejects (%s, %s, %s)', (d, t, z) => {
     expect(zonedDateTimeToUtcIso(d, t, z)).toBeNull();
+  });
+});
+
+describe('OSE-1313 zonedTimePart (update path keeps the wall time)', () => {
+  test.each(ZONES)('%s: time part round-trips the entered wall time', (tz) => {
+    const utc = zonedDateTimeToUtcIso('2026-10-24', '18:30', tz) as string;
+    expect(zonedTimePart(utc, tz)).toBe('18:30');
+  });
+
+  test('midnight renders as 00:00, not 24:00', () => {
+    const utc = zonedDateTimeToUtcIso('2026-10-24', '00:00', 'America/Chicago') as string;
+    expect(zonedTimePart(utc, 'America/Chicago')).toBe('00:00');
+  });
+
+  test('empty / unparseable instant → empty string', () => {
+    expect(zonedTimePart(null, 'America/Chicago')).toBe('');
+    expect(zonedTimePart('nope', 'America/Chicago')).toBe('');
   });
 });

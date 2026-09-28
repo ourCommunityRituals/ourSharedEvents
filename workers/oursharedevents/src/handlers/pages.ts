@@ -59,6 +59,7 @@ import {
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { applyCountFloor } from '../lib/count-floor.js';
+import { formatEventTime, zonedDatePart } from '../lib/event-datetime.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -364,6 +365,8 @@ export interface PublicEventRow {
   start_date: string | null;
   end_date: string | null;
   timezone: string | null;
+  /** OSE-1313 — canonical UTC start instant; null for date-only events. */
+  starts_at?: string | null;
   what_short: string | null;
   who_host: string | null;
   why_purpose: string | null;
@@ -666,6 +669,27 @@ function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading
   </section>`;
 }
 
+/**
+ * OSE-1313 — the "when" line, rendered in the EVENT's zone, never the viewer's.
+ * A timed event (starts_at set) reads "Saturday, October 24, 2026 · 6:00 PM CDT";
+ * a date-only event keeps its prior shape (date · zone name). Pure Intl — no zone
+ * string is interpolated into markup except through esc() at the call site.
+ */
+function formatEventWhen(row: {
+  start_date: string | null;
+  starts_at?: string | null;
+  timezone: string | null;
+}): string {
+  if (row.starts_at) {
+    const time = formatEventTime(row.starts_at, row.timezone);
+    const date = formatHumanDate(zonedDatePart(row.starts_at, row.timezone));
+    if (time && date) return `${date} · ${time}`;
+  }
+  const date = formatHumanDate(row.start_date);
+  if (!date) return '';
+  return row.timezone ? `${date} · ${row.timezone}` : date;
+}
+
 function formatHumanDate(iso: string | null): string {
   if (!iso) return '';
   try {
@@ -746,7 +770,7 @@ export function renderPreEventHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const startHuman = formatHumanDate(row.start_date);
+  const startHuman = formatEventWhen(row);
   const venueParam = encodeURIComponent(row.location || row.where_address || '');
   const mapImg = venueParam
     ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map" />`
@@ -765,7 +789,7 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.start_date, endTime: row.end_date })}
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: row.end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
@@ -817,7 +841,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
-      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${row.timezone ? ` &middot; ${esc(row.timezone)}` : ''}</p>` : ''}
+      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
     </header>
 
     ${
@@ -960,7 +984,7 @@ export function renderEventLiveHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.start_date, endTime: row.end_date })}
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: row.end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
@@ -1183,7 +1207,7 @@ export function renderPostEventHtml(
     description: whatShort,
     url: esc(shareUrl),
     twitterCard: 'summary',
-    startTime: row.start_date,
+    startTime: row.starts_at ?? row.start_date,
     endTime: row.end_date,
   });
   const whoHost = esc(row.who_host);
@@ -1510,7 +1534,7 @@ export async function handlePublicEventPage(
   try {
     row = await env.DB.prepare(
       `SELECT e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,
-              start_date, end_date, timezone,
+              start_date, end_date, timezone, starts_at,
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
@@ -1702,7 +1726,7 @@ export async function handleAdminEventPreviewPage(
   try {
     row = await env.DB.prepare(
       `SELECT e.id, e.brand_id, e.title, e.slug, e.status, e.description, e.location,
-              start_date, end_date, timezone,
+              start_date, end_date, timezone, starts_at,
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,

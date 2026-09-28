@@ -37,7 +37,7 @@ import {
   type EventTypeCategoryRow,
   type EventTypeRow,
 } from '../lib/event-type-catalog';
-import { isValidIanaTimezone, zonedDateTimeToUtcIso } from '../lib/event-datetime';
+import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -732,7 +732,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   }
 
   return Response.json(
-    { ok: true, status: 201, id, slug, shortcode, warnings },
+    { ok: true, status: 201, id, slug, shortcode, starts_at: startsAt, timezone, warnings },
     {
       status: 201,
       headers: { ...corsHeaders(request), 'X-Request-Id': rid },
@@ -949,6 +949,68 @@ export async function handleUpdateEvent(
     }
     sets.push('what_url_type = ?');
     values.push(raw != null && raw !== '' ? String(raw).slice(0, 32) : null);
+  }
+
+  // OSE-1313 — keep starts_at (the canonical UTC instant) in step with the
+  // wall-clock inputs. A partial patch fills whatever the client didn't send
+  // from the stored row; when only the date or zone moves, the stored wall time
+  // (starts_at read back in the OLD zone) is carried over so the event keeps its
+  // time-of-day. start_time: null clears it → date-only event (starts_at NULL).
+  // starts_at is always server-computed; a client-supplied value is ignored.
+  if ('start_time' in body || 'start_date' in body || 'timezone' in body) {
+    if ('timezone' in body && body.timezone !== null) {
+      if (typeof body.timezone !== 'string' || !isValidIanaTimezone(body.timezone.slice(0, 50))) {
+        return errorResponse('INVALID_TIMEZONE', 'timezone must be a valid IANA zone', 400, rid);
+      }
+    }
+    if ('start_time' in body && body.start_time !== null && typeof body.start_time !== 'string') {
+      return errorResponse('INVALID_TIME', 'start_time must be HH:MM (24h)', 400, rid);
+    }
+    const existing = await env.DB.prepare(
+      'SELECT start_date, timezone, starts_at FROM events WHERE id = ?'
+    )
+      .bind(eventId)
+      .first<{ start_date: string | null; timezone: string | null; starts_at: string | null }>();
+    if (existing) {
+      const tz =
+        typeof body.timezone === 'string'
+          ? body.timezone.slice(0, 50)
+          : (existing.timezone ?? 'America/Chicago');
+      const date =
+        'start_date' in body
+          ? typeof body.start_date === 'string'
+            ? body.start_date.slice(0, 10)
+            : null
+          : (existing.start_date?.slice(0, 10) ?? null);
+      const time =
+        'start_time' in body
+          ? typeof body.start_time === 'string'
+            ? body.start_time.slice(0, 5)
+            : null
+          : zonedTimePart(existing.starts_at, existing.timezone) || null;
+
+      let startsAt: string | null = null;
+      if (time !== null) {
+        if (date === null) {
+          if (typeof body.start_time === 'string') {
+            return errorResponse('INVALID_TIME', 'start_time requires start_date', 400, rid);
+          }
+          // Date cleared on a timed event → it is no longer anchored; drop the instant.
+        } else {
+          startsAt = zonedDateTimeToUtcIso(date, time, tz);
+          if (startsAt === null) {
+            return errorResponse(
+              'INVALID_TIME',
+              'start_time must be HH:MM (24h) in a valid timezone',
+              400,
+              rid
+            );
+          }
+        }
+      }
+      sets.push('starts_at = ?');
+      values.push(startsAt);
+    }
   }
 
   if (sets.length === 0) {
