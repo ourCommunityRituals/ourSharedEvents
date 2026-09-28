@@ -59,7 +59,7 @@ import {
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { applyCountFloor } from '../lib/count-floor.js';
-import { formatEventTime, zonedDatePart } from '../lib/event-datetime.js';
+import { formatEventTime, phaseTimesFor, zonedDatePart } from '../lib/event-datetime.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -1216,7 +1216,8 @@ export function renderPostEventHtml(
   const whyPurpose = esc(row.why_purpose);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location) || esc(row.where_address);
-  const whenHuman = formatHumanDate(row.start_date);
+  // OSE-1313 — a timed event's recap keeps its entered time, in the event zone.
+  const whenHuman = row.starts_at ? formatEventWhen(row) : formatHumanDate(row.start_date);
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row);
@@ -1583,11 +1584,10 @@ export async function handlePublicEventPage(
   }
 
   // Phase-aware dispatch via the OSE-242 canonical resolver.
-  const phase = computeEventPhase({
-    status: row.status,
-    start_date: row.start_date,
-    end_date: row.end_date,
-  });
+  // OSE-1313 — a timed event's phase pivots at its canonical start instant
+  // (starts_at) and its date-only end closes at the end of that local day.
+  const phaseTimes = phaseTimesFor(row);
+  const phase = computeEventPhase({ status: row.status, ...phaseTimes });
 
   // CSP nonce — generated for the response headers regardless of whether
   // the body uses it. `securityHeaders(nonce)` writes the nonce into the
@@ -1661,10 +1661,7 @@ export async function handlePublicEventPage(
     status: 200,
     headers: {
       ...securityHeaders(nonce),
-      'Cache-Control': publicEventCacheControl(
-        { status: row.status, start_date: row.start_date, end_date: row.end_date },
-        phase
-      ),
+      'Cache-Control': publicEventCacheControl({ status: row.status, ...phaseTimes }, phase),
     },
   });
 }

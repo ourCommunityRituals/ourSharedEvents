@@ -13,6 +13,7 @@ import {
   formatEventTime,
   zonedDatePart,
   zonedTimePart,
+  phaseTimesFor,
 } from '../src/lib/event-datetime';
 
 // The ticket's parameterized zone list.
@@ -209,5 +210,64 @@ describe('OSE-1313 midnight wall time (h23 vs h24 runtimes)', () => {
     ['Asia/Kolkata', '2026-10-24', '2026-10-23T18:30:00Z'],
   ])('%s %s 00:00 → %s', (tz, date, expected) => {
     expect(zonedDateTimeToUtcIso(date, '00:00', tz)).toBe(expected);
+  });
+});
+
+describe('OSE-1313 spring-forward gap is refused, not silently shifted', () => {
+  test.each([
+    ['America/New_York', '2026-03-08', '02:30'],
+    ['America/Chicago', '2026-03-08', '02:00'],
+    ['Europe/Berlin', '2026-03-29', '02:15'],
+  ])('%s %s %s does not exist → null', (tz, date, time) => {
+    expect(zonedDateTimeToUtcIso(date, time, tz)).toBeNull();
+  });
+
+  test('the fall-back overlap still resolves (it exists, twice)', () => {
+    expect(zonedDateTimeToUtcIso('2026-11-01', '01:30', 'America/New_York')).not.toBeNull();
+  });
+});
+
+describe('OSE-1313 phaseTimesFor — what the phase resolver sees', () => {
+  test('date-only event passes through unchanged', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-24',
+        timezone: 'America/Chicago',
+      })
+    ).toEqual({ start_date: '2026-10-24', end_date: '2026-10-24' });
+  });
+
+  test('timed event starts at starts_at; a date-only end closes at the end of that local day', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-24',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      })
+    ).toEqual({ start_date: '2026-10-24T23:00:00Z', end_date: '2026-10-25T04:59:00Z' });
+  });
+
+  test('a full ISO end after the start is kept as-is', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-25T03:00:00Z',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      }).end_date
+    ).toBe('2026-10-25T03:00:00Z');
+  });
+
+  test('an end before the start is dropped, so the event never skips straight to the recap', () => {
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-20',
+        starts_at: '2026-10-24T23:00:00Z',
+        timezone: 'America/Chicago',
+      }).end_date
+    ).toBeNull();
   });
 });

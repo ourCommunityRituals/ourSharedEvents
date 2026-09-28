@@ -322,3 +322,102 @@ describe('OSE-1313 poster + display render the event zone, never the viewer zone
     expect(h).not.toMatch(/new Date\(iso\)\.toLocale(Date|Time)String/);
   });
 });
+
+describe('OSE-1313 phase pivots at the timed start, not UTC midnight of the date', () => {
+  const tenv = () => env as unknown as TestEnv;
+
+  function localParts(instant: Date, tz: string): { date: string; hour: number } {
+    const p = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(instant);
+    const m: Record<string, string> = {};
+    for (const x of p) if (x.type !== 'literal') m[x.type] = x.value;
+    return { date: `${m.year}-${m.month}-${m.day}`, hour: Number(m.hour) };
+  }
+
+  // A zone where "now" is mid-day, so now±3h stays on the same local date —
+  // keeps the assertions independent of when CI happens to run.
+  function midDayZone(now: Date): string {
+    for (const tz of ['America/Chicago', 'Europe/London', 'Asia/Tokyo', 'Pacific/Honolulu']) {
+      const h = localParts(now, tz).hour;
+      if (h >= 4 && h <= 19) return tz;
+    }
+    throw new Error('no mid-day zone found');
+  }
+
+  async function seed(
+    id: string,
+    startsAt: string,
+    tz: string,
+    startDate: string,
+    endDate: string | null
+  ): Promise<void> {
+    await tenv().DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, is_published, location,
+                             start_date, end_date, timezone, starts_at, created_at, updated_at)
+           VALUES (?, ?, 'OSE-1313 phase', ?, 'active', 1, 'Eagles Bowl', ?, ?, ?, ?,
+                   datetime('now'), datetime('now'))`
+      )
+      .bind(id, BRAND, id, startDate, endDate, tz, startsAt)
+      .run();
+  }
+
+  test('today, starting in 3h → still pre-event on the page and in the API', async () => {
+    const now = new Date();
+    const tz = midDayZone(now);
+    const startsAt = new Date(now.getTime() + 3 * 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const day = localParts(now, tz).date;
+    const id = 'evt_ose1313_phase_pre';
+    await seed(id, startsAt, tz, day, day);
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    expect(html).not.toContain('data-testid="event-live-badge"');
+    expect(html).not.toContain('data-testid="event-phase-chip"');
+
+    const api = (await (await SELF.fetch(`https://t.test/api/v2/events/${id}`)).json()) as {
+      item: { phase: string };
+    };
+    expect(api.item.phase).toBe('pre_event');
+  });
+
+  test('started 1h ago with a same-day date-only end → live, not already a recap', async () => {
+    const now = new Date();
+    const tz = midDayZone(now);
+    const startsAt = new Date(now.getTime() - 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const day = localParts(now, tz).date;
+    const id = 'evt_ose1313_phase_live';
+    await seed(id, startsAt, tz, day, day);
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    expect(html).toContain('data-testid="event-live-badge"');
+  });
+
+  test('post-event recap keeps the entered time in the event zone', async () => {
+    const id = 'evt_ose1313_phase_post';
+    // 18:00 Chicago (CDT) on 2020-10-24 → long past.
+    await seed(id, '2020-10-24T23:00:00Z', 'America/Chicago', '2020-10-24', '2020-10-24');
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const when = html.match(/data-testid="event-when-post">([^<]*)</)?.[1] ?? '';
+    expect(when).toContain('October 24, 2020');
+    expect(when).toContain('6:00');
+    expect(when).toContain('CDT');
+  });
+
+  test('a spring-forward gap time is refused with 400 INVALID_TIME', async () => {
+    const res = await createEvent({
+      title: 'OSE-1313 dst gap',
+      start_date: '2026-03-08',
+      start_time: '02:30',
+      timezone: 'America/New_York',
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as ApiResponse).code).toBe('INVALID_TIME');
+  });
+});

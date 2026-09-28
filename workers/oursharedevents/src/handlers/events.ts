@@ -583,7 +583,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     if (startsAt === null) {
       return errorResponse(
         'INVALID_TIME',
-        'start_time must be HH:MM (24h) in a valid timezone',
+        'start_time must be HH:MM (24h) and exist on that date in the timezone',
         400,
         rid
       );
@@ -1014,7 +1014,7 @@ export async function handleUpdateEvent(
           if (startsAt === null) {
             return errorResponse(
               'INVALID_TIME',
-              'start_time must be HH:MM (24h) in a valid timezone',
+              'start_time must be HH:MM (24h) and exist on that date in the timezone',
               400,
               rid
             );
