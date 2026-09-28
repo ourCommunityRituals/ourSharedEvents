@@ -13,7 +13,7 @@
  *
  * Usage (inputs via env — never hardcode the token):
  *   CF_API_TOKEN="$(...)" \                              # required — Account Analytics:Read
- *   CF_ACCOUNT_TAG=c4dee735e39737db94d7befeecf96e82 \    # optional (defaults to the OSE account)
+ *   CF_ACCOUNT_TAG=<account-tag> \                       # required (or CLOUDFLARE_ACCOUNT_ID)
  *   CF_WORKER_SCRIPT=oursharedevents-stg \               # optional (default staging worker)
  *   WINDOW_HOURS=24 \                                     # optional (default 24h)
  *   node scripts/observability/cf-analytics-baseline.mjs
@@ -24,8 +24,6 @@
 import { pathToFileURL } from 'node:url';
 
 export const GRAPHQL_ENDPOINT = 'https://api.cloudflare.com/client/v4/graphql';
-// Non-secret: the OSE account tag is the account_id already committed in wrangler.toml.
-export const DEFAULT_ACCOUNT_TAG = 'c4dee735e39737db94d7befeecf96e82';
 export const DEFAULT_SCRIPT = 'oursharedevents-stg';
 
 // Dataset: workersInvocationsAdaptive. Grouped by `status` so we get one row per
@@ -147,7 +145,16 @@ async function main() {
     );
     process.exit(1);
   }
-  const accountTag = (process.env.CF_ACCOUNT_TAG || DEFAULT_ACCOUNT_TAG).trim();
+  // Account tag from env only — CF_ACCOUNT_TAG, else the standard CLOUDFLARE_ACCOUNT_ID
+  // (already a repo/CI secret). Nothing account-identifying is hardcoded (OSE-1389 S0).
+  const accountTag = (process.env.CF_ACCOUNT_TAG || process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+  if (!accountTag) {
+    console.error(
+      'ERROR: set CF_ACCOUNT_TAG (or CLOUDFLARE_ACCOUNT_ID) to the OSE Cloudflare account tag.\n' +
+        'Find it at dash → account → Account ID. It is not a secret, but it is not hardcoded here.'
+    );
+    process.exit(1);
+  }
   const scriptName = (process.env.CF_WORKER_SCRIPT || DEFAULT_SCRIPT).trim();
   const windowHours = Number(process.env.WINDOW_HOURS || 24);
   if (!Number.isFinite(windowHours) || windowHours <= 0) {
