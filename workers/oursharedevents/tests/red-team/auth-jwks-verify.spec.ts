@@ -148,3 +148,75 @@ describe('OSE-1278 — CF Access JWT signature verification (domain set)', () =>
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── OSE-1377 — audience + issuer pin (dark unless CF_ACCESS_AUD is set) ──────
+const AUD = 'ose-admin-aud-tag-abc123';
+const envWithAud = (): AdminEnv =>
+  ({
+    WORKER_ENV: 'production',
+    CF_ACCESS_TEAM_DOMAIN: DOMAIN,
+    CF_ACCESS_AUD: AUD,
+    ALLOWED_ADMIN_EMAILS: ALLOWLISTED,
+  }) as unknown as AdminEnv;
+
+const audClaims = (over: Record<string, unknown> = {}) => ({
+  ...validClaims(),
+  aud: [AUD],
+  iss: `https://${DOMAIN}`,
+  ...over,
+});
+
+describe('OSE-1377 — audience + issuer pin (CF_ACCESS_AUD set)', () => {
+  test('valid sig + correct aud + correct iss + allowlisted email → authenticated (null)', async () => {
+    const { requireAdmin } = armFetch();
+    const res = await requireAdmin(req(await signJwt(audClaims())), envWithAud(), 'ok');
+    expect(res).toBeNull();
+  });
+
+  test('valid sig but WRONG aud → 401 (a signature-valid token for another same-team app)', async () => {
+    const { requireAdmin } = armFetch();
+    const res = await requireAdmin(
+      req(await signJwt(audClaims({ aud: ['some-other-app-aud'] }))),
+      envWithAud(),
+      'x'
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(401);
+  });
+
+  test('valid sig but MISSING aud → 401', async () => {
+    const { requireAdmin } = armFetch();
+    const res = await requireAdmin(
+      req(await signJwt(audClaims({ aud: undefined }))),
+      envWithAud(),
+      'x'
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(401);
+  });
+
+  test('valid sig but WRONG iss → 401', async () => {
+    const { requireAdmin } = armFetch();
+    const res = await requireAdmin(
+      req(await signJwt(audClaims({ iss: 'https://evil.cloudflareaccess.com' }))),
+      envWithAud(),
+      'x'
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(401);
+  });
+
+  test('aud as a single string (not an array) is accepted', async () => {
+    const { requireAdmin } = armFetch();
+    const res = await requireAdmin(req(await signJwt(audClaims({ aud: AUD }))), envWithAud(), 'ok');
+    expect(res).toBeNull();
+  });
+
+  test('DARK: CF_ACCESS_AUD unset → aud/iss NOT enforced (backward compatible)', async () => {
+    const { requireAdmin } = armFetch();
+    // Token carries NO aud/iss, but with CF_ACCESS_AUD unset (envWithDomain) it
+    // still authenticates — proving the pin is a no-op until activated.
+    const res = await requireAdmin(req(await signJwt(validClaims())), envWithDomain(), 'ok');
+    expect(res).toBeNull();
+  });
+});
