@@ -132,6 +132,8 @@ describe('OSE-1313 create path stores the UTC instant', () => {
     ],
     [{ start_date: '2026-10-24', start_time: '6pm' }, 'INVALID_TIME'],
     [{ start_time: '18:00' }, 'INVALID_TIME'],
+    // PR #657 review: validated whole, not sliced to 5 chars first.
+    [{ start_date: '2026-10-24', start_time: '18:00garbage' }, 'INVALID_TIME'],
   ])('refuses %j with 400 %s', async (fields, code) => {
     const res = await createEvent({ title: 'OSE-1313 bad', ...fields });
     expect(res.status).toBe(400);
@@ -188,6 +190,10 @@ describe('OSE-1313 update path recomputes starts_at', () => {
     [{ timezone: 'Not/AZone' }, 'INVALID_TIMEZONE'],
     [{ start_time: '24:00' }, 'INVALID_TIME'],
     [{ start_time: 1800 }, 'INVALID_TIME'],
+    // PR #657 review: the zone cannot be cleared (would render every surface in UTC),
+    // and a time is validated whole rather than truncated to HH:MM.
+    [{ timezone: null }, 'INVALID_TIMEZONE'],
+    [{ start_time: '19:30garbage' }, 'INVALID_TIME'],
   ])('refuses %j with 400 %s and stores nothing', async (fields, code) => {
     const id = await createTimed(
       `OSE-1313 upd bad ${code} ${JSON.stringify(fields)}`,

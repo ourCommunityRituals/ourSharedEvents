@@ -571,7 +571,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // When present with a date, persist the canonical UTC instant in starts_at;
   // start_date stays the local calendar date. Absent time → starts_at NULL
   // (date-only event, prior behaviour).
-  const startTime = typeof body.start_time === 'string' ? body.start_time.slice(0, 5) : null;
+  // Not sliced: zonedDateTimeToUtcIso checks the WHOLE string is HH:MM, so
+  // "18:00garbage" is refused rather than silently stored as 18:00.
+  const startTime = typeof body.start_time === 'string' ? body.start_time : null;
   let startsAt: string | null = null;
   if (startTime !== null) {
     if (startDate === null) {
@@ -958,9 +960,20 @@ export async function handleUpdateEvent(
   // time-of-day. start_time: null clears it → date-only event (starts_at NULL).
   // starts_at is always server-computed; a client-supplied value is ignored.
   if ('start_time' in body || 'start_date' in body || 'timezone' in body) {
-    if ('timezone' in body && body.timezone !== null) {
-      if (typeof body.timezone !== 'string' || !isValidIanaTimezone(body.timezone.slice(0, 50))) {
-        return errorResponse('INVALID_TIMEZONE', 'timezone must be a valid IANA zone', 400, rid);
+    // The zone cannot be cleared: starts_at is always computed in a concrete
+    // zone, and a NULL column would make every surface render in UTC instead.
+    if ('timezone' in body) {
+      if (
+        typeof body.timezone !== 'string' ||
+        body.timezone.length > 50 ||
+        !isValidIanaTimezone(body.timezone)
+      ) {
+        return errorResponse(
+          'INVALID_TIMEZONE',
+          'timezone must be a valid IANA zone (it cannot be cleared)',
+          400,
+          rid
+        );
       }
     }
     if ('start_time' in body && body.start_time !== null && typeof body.start_time !== 'string') {
@@ -985,7 +998,7 @@ export async function handleUpdateEvent(
       const time =
         'start_time' in body
           ? typeof body.start_time === 'string'
-            ? body.start_time.slice(0, 5)
+            ? body.start_time
             : null
           : zonedTimePart(existing.starts_at, existing.timezone) || null;
 
