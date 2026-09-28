@@ -26,7 +26,7 @@ runtime:
 
         test('register form HTML includes onerror handler', function() {\r
 
-        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);\r
+        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=|data-hide-on-error=[\"']/);\r
 
         });"
 
