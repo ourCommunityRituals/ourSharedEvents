@@ -140,69 +140,75 @@ function escapeHtml(text: string): string {
 
 // ── Shared CSS: mobile-first, system fonts, 10-second comprehension ──────────
 
+// Colours come from @ocr/ui tokens (/ui.css is linked ahead of this block), so
+// the forms follow the viewer's light/dark theme like every other surface.
+// No literal colour belongs here — tests/forms-error-privacy-theming.spec.ts.
 const FORM_CSS = `
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; min-height: 100vh; }
-  header { background: #1a1a2e; color: #fff; padding: 1rem 1.5rem; text-align: center; }
-  header h1 { font-size: 1.1rem; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
+  body { line-height: 1.4; }
+  header { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; text-align: center; }
+  header h1 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
   header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; }
   main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
-  .form-card { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-  .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a2e; }
-  label { display: block; font-size: .85rem; font-weight: 500; color: #495057; margin-bottom: .25rem; }
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+  .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
+  .form-intro { color: var(--text-muted); font-size: .9rem; margin-bottom: 1rem; }
+  label { display: block; font-size: .85rem; font-weight: 500; color: var(--text); margin-bottom: .25rem; }
   /* Walkthrough 2026-09-03: inputs measured 42px at 390px — under the 44px floor
-     (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics. */
-  input, textarea, select { width: 100%; min-height: 44px; padding: .65rem .75rem; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 1rem; margin-bottom: .75rem; font-family: inherit; }
-  input:focus, textarea:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+     (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics.
+     16px text stops iOS zooming on focus; the edge is --border-strong (WCAG 1.4.11). */
+  input, textarea, select { width: 100%; min-height: 44px; padding: .65rem .75rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); border-radius: 8px; font-size: 16px; margin-bottom: .75rem; font-family: inherit; }
+  input::placeholder, textarea::placeholder { color: var(--text-muted); }
+  input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
   textarea { resize: vertical; min-height: 80px; }
   /* OSE-292 (2026-05-16): min-height 44px on every button to meet
      WCAG 2.5.5 + Apple HIG touch-target floor. */
-  button { width: 100%; padding: .75rem; min-height: 44px; background: #4361ee; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; }
-  button:active { background: #3451d1; }
-  button:disabled { background: #adb5bd; cursor: not-allowed; }
+  button { width: 100%; padding: .75rem; min-height: 44px; background: var(--accent); color: var(--on-accent); border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; font-family: inherit; }
+  button:active { background: var(--accent-hover); }
+  button:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
   .success { text-align: center; padding: 2rem 1rem; }
   .success .icon { font-size: 3rem; margin-bottom: .5rem; }
-  .success h2 { color: #155724; font-size: 1.2rem; }
-  .success p { color: #6c757d; font-size: .9rem; margin-top: .5rem; }
-  .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
-  .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
-  .privacy-summary { margin-bottom: .25rem; color: #495057; font-weight: 600; }
-  .privacy-details summary { min-height: 44px; display: inline-flex; align-items: center; color: #4361ee; cursor: pointer; font-weight: 600; }
+  .success h2 { color: var(--success); font-size: 1.2rem; }
+  .success p { color: var(--text-muted); font-size: .9rem; margin-top: .5rem; }
+  .error-msg { color: var(--error); font-size: .85rem; margin-bottom: .5rem; display: none; }
+  .privacy-notice { font-size: .85rem; color: var(--text-muted); margin-top: .75rem; line-height: 1.5; }
+  .privacy-summary { margin-bottom: .25rem; color: var(--text); font-weight: 600; }
+  .privacy-details summary { min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); cursor: pointer; font-weight: 600; }
   .privacy-details p { margin-top: .25rem; }
   /* OSE-292: privacy-policy link must be a real tap target on phones —
      inline-block + padding gives a 44px+ touch area without breaking
      the inline text flow visually. */
-  .privacy-notice a { color: #4361ee; display: inline-block; min-height: 44px; padding: .5rem .25rem; line-height: 1.4; }
+  .privacy-notice a { color: var(--accent); display: inline-block; min-height: 44px; padding: .5rem .25rem; line-height: 1.4; }
   .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
-  .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
-  button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+  .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
+  summary:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
-  /* OSE-292: 44px floor for survey rating tap targets. */
-  .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
-  .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
+  /* OSE-292: 44px floor for survey rating tap targets. The unselected edge is
+     --border-strong so each button is findable against the card (WCAG 1.4.11). */
+  .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: var(--surface); color: var(--text); border: 2px solid var(--border-strong); }
+  .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
   .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
-  .checkin-tap .count { font-size: 2rem; font-weight: 700; color: #1a1a2e; margin-top: 1rem; }
+  .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
   /* OSE-222: sponsor logo strip in form header. Renders hidden by
      default; gets .has-sponsors class via JS only if sponsor-bundle
      for this event returns mobileBanner sponsors. Non-critical
      load — silently no-ops on fetch failure. */
-  .form-sponsor-strip { display: none; padding: 0.5rem 1rem; background: #fff; border-bottom: 1px solid #e9ecef; }
+  .form-sponsor-strip { display: none; padding: 0.5rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); }
   .form-sponsor-strip.has-sponsors { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
-  .form-sponsor-strip .strip-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .form-sponsor-strip .strip-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
   .form-sponsor-strip .sponsor-item { display: inline-flex; align-items: center; gap: 0.35rem; }
   .form-sponsor-strip img { height: 24px; width: auto; max-width: 80px; object-fit: contain; }
-  .form-sponsor-strip .sponsor-name { font-size: 0.8rem; color: #495057; }
+  .form-sponsor-strip .sponsor-name { font-size: 0.8rem; color: var(--text); }
   /* OSE-223: sponsor acknowledgment on form success state. Renders
      inside .success block below the "you can close this page" line.
      Uses the same fetched sponsor bundle (cached on page load by
      the strip loader) — no second fetch. */
-  .form-sponsor-thanks { margin-top: 1.25rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; }
-  .form-sponsor-thanks .thanks-label { display: block; font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 0.5rem; }
+  .form-sponsor-thanks { margin-top: 1.25rem; padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+  .form-sponsor-thanks .thanks-label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 0.5rem; }
   .form-sponsor-thanks .sponsor-row { display: inline-flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
   .form-sponsor-thanks .sponsor-item { display: inline-flex; align-items: center; gap: 0.4rem; }
   .form-sponsor-thanks img { height: 32px; width: auto; max-width: 120px; object-fit: contain; }
-  .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: #495057; font-weight: 500; }
+  .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: var(--text); font-weight: 500; }
 `;
 
 // ── Form JS: shared submit logic ─────────────────────────────────────────────
@@ -546,7 +552,7 @@ function emailSignupForm(
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
-      <p style="color:#6c757d;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
+      <p class="form-intro">Get notified about future events. We'll never share your email.</p>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="email-form">
         ${hiddenDeployment}
@@ -630,6 +636,7 @@ function formPage(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
+  <link rel="stylesheet" href="/ui.css" />
   <style>${FORM_CSS}</style>
   ${turnstileScript}
 </head>

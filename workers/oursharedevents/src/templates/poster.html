@@ -34,7 +34,9 @@
       }
       .page-header a,
       .page-header .print-btn {
-        color: rgba(255, 255, 255, 0.7);
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         font-size: 0.85rem;
         text-decoration: none;
       }
@@ -50,9 +52,12 @@
         gap: 0.6rem;
       }
       .print-btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         background: none;
         border: none;
-        padding: 0;
+        padding: 0 0.5rem;
         cursor: pointer;
         font-family: inherit;
       }
@@ -62,8 +67,8 @@
         opacity: 0.45;
       }
       .print-status {
-        font-size: 0.7rem;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.75rem;
+        color: var(--text-muted);
       }
       .container {
         max-width: 680px;
@@ -87,7 +92,7 @@
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.12em;
-        opacity: 0.6;
+        color: var(--text-muted);
         margin-bottom: 0.75rem;
       }
       .poster-header h2 {
@@ -303,10 +308,11 @@
       }
       .event-select select {
         width: 100%;
+        min-height: 44px;
         padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border);
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        font-size: 0.95rem;
+        font-size: 16px;
         background: var(--surface);
         color: var(--text);
       }
@@ -377,8 +383,8 @@
       }
       .event-select select:focus {
         border-color: var(--accent);
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+        outline: 2px solid var(--accent);
+        outline-offset: 0;
       }
       .skip-link {
         position: absolute;
@@ -422,11 +428,7 @@
         .page-header h1 {
           font-size: 1.05rem;
         }
-        .page-header a,
-        .page-header .print-btn {
-          display: inline-flex;
-          align-items: center;
-          min-height: 44px;
+        .page-header a {
           padding: 0 0.5rem;
         }
         .container {
@@ -440,8 +442,6 @@
           padding: 1.25rem 1rem;
         }
         .event-select select {
-          font-size: 16px;
-          min-height: 44px;
           padding: 0.65rem 0.75rem;
         }
         .qr-section {
@@ -663,12 +663,8 @@
       }
       .event-select select {
         background: var(--surface);
-        border-color: var(--border);
+        border-color: var(--border-strong);
         color: var(--text);
-      }
-      .event-select select:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(212, 149, 75, 0.15);
       }
       .poster-sponsor-name,
       .poster-sponsor-label,

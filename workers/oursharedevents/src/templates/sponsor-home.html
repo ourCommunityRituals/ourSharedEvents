@@ -7,10 +7,15 @@
     <title>Your sponsorships</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>
-      /* Sponsor home — the sponsor corner of the triangle. Server-rendered;
-         the only script on the page is the accept / decline POST. Phone-first,
-         big type, token-driven so it inherits the dark theme like every other
-         surface (the reader is a business owner on a phone, in a bar). */
+      /* Sponsor home: server-rendered, phone-first, token-driven. */
+      .header a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 8px;
+        color: var(--accent);
+        font-weight: 600;
+      }
       main {
         max-width: 720px;
         margin: 0 auto;

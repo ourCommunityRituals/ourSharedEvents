@@ -423,9 +423,11 @@ describe('OSE-262: create-event warnings banner', () => {
     expect(html).toContain('.create-warnings');
     expect(html).toContain('.warning-banner');
     expect(html).toContain('.warning-dismiss-btn');
-    // Banner uses a distinct color from success (green) / error (red) — yellow/amber palette
-    expect(html).toMatch(/\.warning-banner\s*\{[^}]*background:\s*#fef3c7/);
-    expect(html).toMatch(/\.warning-banner\s*\{[^}]*border-left:[^}]*#d97706/);
+    // Banner uses a distinct color from success (green) / error (red) — the amber
+    // --warn token. It was a light-only #fef3c7/#d97706 pair (white-on-amber dismiss
+    // button 3.2:1); theme parity (2026-09-29) routes it through the token.
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*background:\s*var\(--surface\)/);
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*border-left:[^}]*var\(--warn\)/);
   });
 
   test('submit handler reads data.warnings and renders per-code testids', async () => {
@@ -565,8 +567,9 @@ describe('ADMIN-15 CSS: Copy button visual states', () => {
   test('copied success state with green styling', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('.copy-btn.copied');
-    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#d3f9d8/);
-    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#155724/);
+    // Was a light-only #d3f9d8/#155724 pair; now the --success token (both themes).
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*border-color:\s*var\(--success\)/);
   });
 });
 

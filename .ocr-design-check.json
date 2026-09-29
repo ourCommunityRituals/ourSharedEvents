@@ -15,22 +15,16 @@
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
-    "workers/oursharedevents/src/handlers/form-pages.ts": {
-      "own-tokens": 0,
-      "own-stylesheet": 0,
-      "raw-hex": 1,
-      "foreign-stylesheet": 0
-    },
     "workers/oursharedevents/src/handlers/pages.ts": {
       "own-tokens": 0,
-      "own-stylesheet": 28576,
-      "raw-hex": 12,
+      "own-stylesheet": 28429,
+      "raw-hex": 1,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/handlers/privacy.ts": {
       "own-tokens": 0,
-      "own-stylesheet": 715,
-      "raw-hex": 9,
+      "own-stylesheet": 711,
+      "raw-hex": 0,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/lib/landing-area.ts": {
@@ -41,19 +35,19 @@
     },
     "workers/oursharedevents/src/templates/admin-signin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3910,
+      "own-stylesheet": 3907,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 65714,
-      "raw-hex": 94,
+      "own-stylesheet": 65546,
+      "raw-hex": 30,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/display.html": {
       "own-tokens": 0,
-      "own-stylesheet": 8496,
+      "own-stylesheet": 8460,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -65,25 +59,25 @@
     },
     "workers/oursharedevents/src/templates/poster.html": {
       "own-tokens": 0,
-      "own-stylesheet": 19277,
+      "own-stylesheet": 19132,
       "raw-hex": 8,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/public.html": {
       "own-tokens": 0,
-      "own-stylesheet": 7218,
+      "own-stylesheet": 7203,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/shared-report.html": {
       "own-tokens": 0,
-      "own-stylesheet": 19656,
+      "own-stylesheet": 19632,
       "raw-hex": 11,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/sponsor-home.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3390,
+      "own-stylesheet": 3340,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     }

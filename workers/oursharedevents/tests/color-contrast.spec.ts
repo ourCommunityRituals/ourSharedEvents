@@ -82,8 +82,12 @@ describe('A11Y-5: #94a3b8 removed from light-bg pages', () => {
 // ─── Accessible replacements present ────────────────────────────────────────
 
 describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
-  test('admin page has #6c757d for muted text', async () => {
-    expect(await adminHtml()).toContain('#6c757d');
+  // Admin's #6c757d only survived as dead var(--text-muted, #6c757d) fallbacks
+  // (/ui.css always defines the token); theme parity (2026-09-29) removed them.
+  test('admin page routes muted text through var(--text-muted), not raw hex', async () => {
+    const body = await adminHtml();
+    expect(body).toContain('var(--text-muted)');
+    expect(body).not.toContain('#6c757d');
   });
 
   // shared-report migrated muted text to var(--text-muted) (token-adherence
@@ -95,26 +99,38 @@ describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
     expect(body).not.toContain('#6c757d');
   });
 
-  test('register form has #6c757d for privacy notice', async () => {
-    expect(await formHtml('register')).toContain('#6c757d');
+  // Forms moved onto /ui.css tokens (theme parity, 2026-09-29): the fixed
+  // #6c757d was light-only — the forms never followed a dark theme.
+  test('register form routes the privacy notice through var(--text-muted)', async () => {
+    const body = await formHtml('register');
+    expect(body).toMatch(/\.privacy-notice\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#6c757d');
   });
 
-  test('email form has #6c757d for description text', async () => {
-    expect(await formHtml('email')).toContain('#6c757d');
+  test('email form routes its description text through var(--text-muted)', async () => {
+    const body = await formHtml('email');
+    expect(body).toMatch(/\.form-intro\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#6c757d');
   });
 });
 
 describe('A11Y-5: #155724 (8.69:1 on white, 7.59:1 on green bg) for success/badge-active', () => {
-  test('admin page badges use #155724', async () => {
-    expect(await adminHtml()).toContain('#155724');
+  // Admin's active badge / copied state were a light-only #d3f9d8/#155724 pair;
+  // theme parity (2026-09-29) routes them through var(--success).
+  test('admin page active badge uses var(--success)', async () => {
+    const body = await adminHtml();
+    expect(body).toMatch(/\.badge\.active\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(body).not.toContain('#155724');
   });
 
   test('shared report badges use #155724', async () => {
     expect(await reportHtml()).toContain('#155724');
   });
 
-  test('register form success uses #155724', async () => {
-    expect(await formHtml('register')).toContain('#155724');
+  test('register form success uses var(--success)', async () => {
+    const body = await formHtml('register');
+    expect(body).toMatch(/\.success h2\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(body).not.toContain('#155724');
   });
 });
 
@@ -156,9 +172,11 @@ describe('A11Y-5: #64748b (4.76:1 on white) for poster/admin hint text', () => {
     expect(body).not.toContain('#64748b');
   });
 
-  test('admin page qr-hint uses #64748b', async () => {
+  // Admin's #64748b only survived as dead var(--text-muted, #64748b) fallbacks;
+  // theme parity (2026-09-29) removed them. .qr-hint is var(--text-muted).
+  test('admin page qr-hint routes through var(--text-muted)', async () => {
     const body = await adminHtml();
-    expect(body).toContain('.qr-hint');
-    expect(body).toContain('#64748b');
+    expect(body).toMatch(/\.qr-hint\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#64748b');
   });
 });
