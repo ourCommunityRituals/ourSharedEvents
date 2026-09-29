@@ -60,7 +60,12 @@ import {
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { applyCountFloor } from '../lib/count-floor.js';
-import { formatEventTime, phaseTimesFor, zonedDatePart } from '../lib/event-datetime.js';
+import {
+  formatEventTime,
+  formatDateOnly,
+  phaseTimesFor,
+  zonedDatePart,
+} from '../lib/event-datetime.js';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
@@ -693,18 +698,14 @@ function formatEventWhen(row: {
 
 function formatHumanDate(iso: string | null): string {
   if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  // Callers pass date-only values — `row.start_date`, or `zonedDatePart(starts_at)`
+  // (already "YYYY-MM-DD"). formatDateOnly anchors them at UTC so the rendered day
+  // can't drift with the runtime zone (OSE-1363 — this was correct only because
+  // the Worker runtime happens to be UTC). Anything not date-only falls back to
+  // the raw string, matching the prior NaN/catch behaviour.
+  return (
+    formatDateOnly(iso, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) || iso
+  );
 }
 
 /**
