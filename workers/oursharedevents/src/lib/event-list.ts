@@ -23,6 +23,7 @@
 
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
+import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -82,23 +83,21 @@ export function renderEventListError(): RenderedEventList {
  * longer varies by who is looking.
  */
 function formatEventDate(iso: string, timezone: string | null): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
   const opts: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   };
-  if (timezone) {
-    try {
-      return d.toLocaleDateString('en-US', { ...opts, timeZone: timezone });
-    } catch {
-      // An unknown IANA zone throws RangeError. A bad row must not cost the
-      // reader the whole list — fall through to UTC.
-    }
-  }
-  return d.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' });
+  // A date-only value ("YYYY-MM-DD") is a calendar day, not an instant. Read as
+  // UTC midnight and rendered in the event's zone it rolled back a day for any
+  // negative-offset zone (OSE-1363). Anchor + format in UTC via formatDateOnly so
+  // the day always matches the value, whoever is looking.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDateOnly(iso, opts);
+  // A full instant DOES have a zone: take its local calendar day in the event's
+  // own zone (UTC fallback for a missing/invalid zone), then format that day. A
+  // bad instant yields '' from zonedDatePart → '' from formatDateOnly.
+  return formatDateOnly(zonedDatePart(iso, timezone), opts);
 }
 
 function str(v: unknown): string {
