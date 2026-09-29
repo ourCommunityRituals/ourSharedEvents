@@ -816,8 +816,10 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     // OSE-R-005: the lock overlay used to say "Requires Phase 2 regulatory
     // clearance" — internal compliance jargon. Replaced with the friendly
     // "Available for Commerce events" pattern keyed by PHASE_LABELS.
-    expect(html).toContain('Available for ');
-    expect(html).toContain('upgradePhaseLabel');
+    // OSE-1361: now one section line, lower-case mid-sentence ("Survey and
+    // Email List are available for Commerce events."), same friendly map.
+    expect(html).toContain("' available for ' + ph");
+    expect(html).toContain('o.phaseLabel(t.upgradePhase || 2)');
   });
 
   test('form row elements are keyed by form type via t.key', async () => {
@@ -846,8 +848,9 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     // but rephrased to plain English. The tier axis says "Upgrade to <plan>"
     // (was "Upgrade to mid"), the phase axis says "Available for <event type>"
     // (was "Requires Phase N regulatory clearance").
+    // OSE-1361: both axes now feed the ONE section upsell line, still distinct.
     expect(html).toContain('Upgrade to');
-    expect(html).toContain('Available for ');
+    expect(html).toContain("' available for ' + ph");
   });
 });
 
