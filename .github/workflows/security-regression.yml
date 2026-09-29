@@ -80,7 +80,7 @@ jobs:
   # ============================================================================
   security-regression:
     name: Security Regression Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # ADR-020 / check-pr-secret-exposure: this job targets STAGING (else-branch
     # TARGET_URL below) and injects CF_ACCESS_CLIENT_ID/SECRET. A plain (e.g.
@@ -219,7 +219,7 @@ jobs:
   # ============================================================================
   qr-contract-check:
     name: QR-0 Contract Verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: security-regression
     # Static QR-0 SOURCE check — must run on every trigger INCLUDING plain PRs.
     # security-regression now SKIPS on plain PRs (its staging scan is

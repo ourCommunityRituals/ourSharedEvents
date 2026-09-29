@@ -34,7 +34,7 @@ defaults:
 jobs:
   triage:
     name: "🚨 Triage Security Findings"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only triage when the scan failed (findings detected)
     if: github.event.workflow_run.conclusion == 'failure'
     steps:

@@ -96,7 +96,7 @@ jobs:
   pr-code:
     name: Mobile workability — PR code (375×812, blocking)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -164,7 +164,7 @@ jobs:
   nightly-staging:
     name: Mobile workability — deployed staging (375×812)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     env:
