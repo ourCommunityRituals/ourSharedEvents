@@ -30,7 +30,7 @@ on:
 jobs:
   collect:
     name: Collect CI job durations
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write # to commit the history file back to main
       actions: read # to read workflow run + job durations

@@ -25,7 +25,7 @@ defaults:
 jobs:
   contract-check:
     name: Validate against OCR-docs brain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: github.actor != 'dependabot[bot]'
 

@@ -31,7 +31,7 @@ jobs:
   # ============================================================================
   check-overdue:
     name: "⏰ Check Overdue Security Issues"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -167,7 +167,7 @@ jobs:
   # ============================================================================
   check-exceptions:
     name: "📋 Check Security Exceptions"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

@@ -31,7 +31,7 @@ concurrency:
 jobs:
   review:
     name: "Claude PR Review"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
     defaults:
       run:
