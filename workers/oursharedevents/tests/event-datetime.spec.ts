@@ -271,14 +271,35 @@ describe('OSE-1363 formatDateOnly — a calendar day, never a UTC-shifted instan
 });
 
 describe('OSE-1313 phaseTimesFor — what the phase resolver sees', () => {
-  test('date-only event passes through unchanged', () => {
+  test('date-only event spans its whole local day, not UTC midnight to UTC midnight', () => {
     expect(
       phaseTimesFor({
         start_date: '2026-10-24',
         end_date: '2026-10-24',
         timezone: 'America/Chicago',
       })
-    ).toEqual({ start_date: '2026-10-24', end_date: '2026-10-24' });
+    ).toEqual({ start_date: '2026-10-24T05:00:00Z', end_date: '2026-10-25T04:59:59.999Z' });
+  });
+
+  test('date-only with no end → the start day; with an end → through that local day', () => {
+    expect(
+      phaseTimesFor({ start_date: '2026-10-24', end_date: null, timezone: 'America/Chicago' })
+        .end_date
+    ).toBe('2026-10-25T04:59:59.999Z');
+    expect(
+      phaseTimesFor({
+        start_date: '2026-10-24',
+        end_date: '2026-10-26',
+        timezone: 'Pacific/Auckland',
+      })
+    ).toEqual({ start_date: '2026-10-23T11:00:00Z', end_date: '2026-10-26T10:59:59.999Z' });
+  });
+
+  test('date-only with no/invalid zone reads the day in America/Chicago', () => {
+    expect(
+      phaseTimesFor({ start_date: '2026-10-24', end_date: '2026-10-24', timezone: 'Mars/Base' })
+        .start_date
+    ).toBe('2026-10-24T05:00:00Z');
   });
 
   test('timed event starts at starts_at; a date-only end closes at the end of that local day', () => {
