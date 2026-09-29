@@ -28,8 +28,24 @@ Use it to set the first **performance baselines** (p50/p99 CPU time, error rate)
 
 ### Structured logs already emitted (consume these)
 
-The Worker already logs structured JSON lines — parse these in a Tail Worker or Instant Logs:
-`FORM_EVENT`, `FLAG_EVENT`, `LIFECYCLE`, `OPERATION_COST` (never-who, gated), `TURNSTILE_EVENT`.
+The Worker already logs structured single-line JSON to stdout — each line carries a
+`type` tag. Parse them in a Tail Worker or Instant Logs. The operationally useful tags
+today, by purpose (request-path is never-who; the error/alert tags feed the Notifications
+below):
+
+<!-- STRUCTURED_LOG_TAGS:start — every tag below is asserted to exist as `type: '…'` in src/ by tests/observability-runbook-tags.spec.ts; edit the two in lockstep -->
+
+- **request-path:** `FORM_EVENT`, `FLAG_EVENT`, `TURNSTILE_EVENT`, `OPERATION_COST` (never-who, gated)
+- **scheduled-job completion:** `LIFECYCLE_COMPLETE`, `SECURITY_CRON_COMPLETE`
+- **error / alert (watch these):** `LIFECYCLE_PHASE_ERROR`, `UNHANDLED_ERROR`, `DB_ERROR`, `SCHEMA_DRIFT`, `SECURITY_ALERT_RAISED`
+
+<!-- STRUCTURED_LOG_TAGS:end -->
+
+There is no bare `LIFECYCLE` line — the scheduled phase job emits `LIFECYCLE_COMPLETE`
+(and `LIFECYCLE_PHASE_ERROR` on failure). More `*_COMPLETE` / `*_ERROR` / `*_NOOP` tags
+exist per scheduled subsystem (draft-expiry, subscribers/scan-returns retention,
+shared-report materialize/export, bigquery-backup, security-cron); `grep "type: '" src/`
+for the full set.
 
 ## What's dashboard / API (separate terminal — not code)
 
@@ -43,10 +59,14 @@ is available there too.
 
 Create these (email/webhook), scoped to the OSE zone/worker:
 
-- **HTTP 5xx spike** (zone) — origin/worker error surge.
+- **HTTP 5xx spike** (zone) — origin/worker error surge; corroborate in Logs with the
+  `UNHANDLED_ERROR` / `DB_ERROR` lines above.
 - **Health Check failure** — if a CF Health Check is configured on `/health`.
-- **Security Events spike** — WAF/bot activity surge (ties into the OSE-1377 edge work).
+- **Security Events spike** — WAF/bot activity surge (ties into the OSE-1377 edge work);
+  the Worker's own `SECURITY_ALERT_RAISED` line is the in-app counterpart.
 - **Worker errors / CPU-limit** — via Workers alerting where available on the plan.
+- **Schema drift** — the `SCHEMA_DRIFT` line fires when the live D1 shape diverges from
+  the canonical set; a saved Logs view on it is the cheapest guard until a Tail Worker lands.
 
 ## Next slice (post-launch) — Tail Worker (`tail_consumers`)
 
