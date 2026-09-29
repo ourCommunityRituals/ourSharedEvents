@@ -61,6 +61,7 @@ export const primitives = {
   // Light scale
   '--ocr-light-050': '#F4F7FC', // light mode bg
   '--ocr-light-100': '#FFFFFF', // light mode surface
+  '--ocr-light-150': '#E8EEF6', // light mode surface-hover — every text/status role clears 4.5:1 on it
   '--ocr-light-200': '#D4E0ED', // light mode border
   '--ocr-dark-900': '#162945', // light mode text (CARTO dark navy)
   '--ocr-dark-500': '#5A7A9A', // light mode muted
@@ -96,6 +97,7 @@ export const primitives = {
   '--ocr-blue-700': '#0057D6', // accent light mode (4.7:1 on light-050)
   '--ocr-blue-600l': '#2E6FDF', // accent hover light
   '--ocr-slate-600': '#4A6882', // muted light mode (4.6:1 on light-050)
+  '--ocr-slate-500': '#72879F', // light-mode control edge (WCAG 1.4.11: 3.1–3.7:1 on bg/surface/surface-hover)
 } as const;
 
 export type PrimitiveName = keyof typeof primitives;
@@ -106,6 +108,9 @@ export const semanticDark = {
   '--bg': 'var(--ocr-navy-925)', // OSE-1325: lifted one step from navy-950 (#0F1824 → #141F30)
   '--surface': 'var(--ocr-navy-900)',
   '--border': 'var(--ocr-navy-700)',
+  // Edge of a form control (input, search, select). Dark keeps its current look:
+  // same colour as --border. Light needs 3:1 for WCAG 1.4.11.
+  '--border-strong': 'var(--ocr-navy-700)',
   '--text': 'var(--ocr-navy-100)',
   '--text-muted': 'var(--ocr-navy-500)',
   '--accent': 'var(--ocr-blue-600)',
@@ -130,13 +135,16 @@ export const semanticLight = {
   '--bg': 'var(--ocr-light-050)',
   '--surface': 'var(--ocr-light-100)',
   '--border': 'var(--ocr-light-200)',
+  '--border-strong': 'var(--ocr-slate-500)', // 3.4:1 on --bg, 3.7:1 on --surface
   '--text': 'var(--ocr-dark-900)',
   '--text-muted': 'var(--ocr-slate-600)', // 4.6:1 — full AA
   '--accent': 'var(--ocr-blue-700)', // 4.7:1 — full AA
   '--accent-hover': 'var(--ocr-blue-600l)',
   '--live': 'var(--ocr-teal-700)', // 4.9:1 — full AA
   '--live-hover': 'var(--ocr-teal-600)',
-  '--surface-hover': 'var(--ocr-light-200)',
+  // Was light-200 (= --border): muted/live/warn/success text on a hovered
+  // card or row fell to 3.97–4.43:1. light-150 keeps every role >= 4.5:1.
+  '--surface-hover': 'var(--ocr-light-150)',
   '--danger': 'var(--ocr-red-700)', // 5.2:1 — full AA
   '--danger-hover': 'var(--ocr-red-600)',
   '--error': 'var(--ocr-red-700)', // alias — form validation / error banners

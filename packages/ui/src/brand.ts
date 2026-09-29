@@ -19,6 +19,7 @@ export const BRAND_CUSTOMIZABLE = [
   '--surface',
   '--surface-hover',
   '--border',
+  '--border-strong',
   '--text',
   '--text-muted',
   // Foreground on the (customizable) --accent surface — a brand whose accent is

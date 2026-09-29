@@ -24,7 +24,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 /* Buttons — all meet the 48px tap target */
 .btn{padding:14px 20px;border:none;border-radius:var(--radius-sm);font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font);min-height:var(--tap-min);transition:opacity .2s;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-.btn-primary{background:var(--accent);color:#000}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
 .btn-primary:hover{background:var(--accent-hover)}
 .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{background:var(--surface-hover)}
@@ -62,7 +62,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
    (see .ui-preview-section in pages.ts) — nothing could measure a page that
    rendered nothing. Guarded by the mobile-workability audit's /ui-preview
    surface, which now runs against PR code and blocks. */
-.input{width:100%;min-height:44px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
+.input{width:100%;min-height:44px;padding:12px 14px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .input:focus{border-color:var(--accent)}
 .input::placeholder{color:var(--text-muted)}
 
@@ -167,7 +167,7 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .meta-badge.high{color:var(--accent);background:color-mix(in srgb, var(--accent) 15%, transparent)}
 
 /* Attribution button */
-.attr-btn{background:var(--accent);color:#000;border:none;border-radius:20px;padding:8px 16px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:var(--font);min-height:44px;min-width:44px;transition:opacity .2s;flex-shrink:0}
+.attr-btn{background:var(--accent);color:var(--on-accent);border:none;border-radius:20px;padding:8px 16px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:var(--font);min-height:44px;min-width:44px;transition:opacity .2s;flex-shrink:0}
 .attr-btn:disabled{opacity:.4;cursor:default}
 .attr-btn.done{background:var(--surface);color:var(--accent);border:1px solid var(--accent)}
 
@@ -225,11 +225,11 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .genre-link-label{font-weight:500}
 .genre-link-desc{font-size:.75rem;color:var(--text-muted)}
 .genre-link::after{content:'↗';font-size:.8rem;color:var(--text-muted);margin-left:auto;padding-left:8px}
-.genre-filter-btn{width:100%;padding:14px;margin-top:8px;background:var(--accent);color:#000;border:none;border-radius:var(--radius-sm);font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font);min-height:48px}
+.genre-filter-btn{width:100%;padding:14px;margin-top:8px;background:var(--accent);color:var(--on-accent);border:none;border-radius:var(--radius-sm);font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font);min-height:48px}
 
 /* Toolbar + view controls (catalog) */
 .toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;font-size:.75rem;color:var(--text-muted)}
-.sort-select{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:16px;padding:6px 10px;font-family:var(--font);outline:none;min-height:44px;-webkit-appearance:none}
+.sort-select{background:var(--surface);border:1px solid var(--border-strong);border-radius:6px;color:var(--text);font-size:16px;padding:6px 10px;font-family:var(--font);outline:none;min-height:44px;-webkit-appearance:none}
 .view-toggle{display:flex;gap:4px}
 .view-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;font-size:.75rem;font-family:var(--font);min-height:44px;min-width:44px;padding:6px 10px;transition:all .15s}
 .view-btn.active{border-color:var(--accent);color:var(--accent)}
@@ -248,7 +248,7 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 
 /* Search bar + loading shimmer (catalog) */
 /* min-height 44px: 10px padding rendered 40px — font-size was already right. */
-.search-bar{width:100%;min-height:44px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
+.search-bar{width:100%;min-height:44px;padding:10px 14px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .search-bar:focus{border-color:var(--accent)}
 .search-bar::placeholder{color:var(--text-muted)}
 .search-bar.loading{background-image:linear-gradient(90deg,var(--surface) 0,var(--surface-hover) 50%,var(--surface) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite}
@@ -297,13 +297,13 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 
 /* Profile components */
 .profile-header{padding:32px 20px 20px;text-align:center;border-bottom:1px solid var(--border)}
-.profile-avatar{width:72px;height:72px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:700;color:#000;margin:0 auto 12px}
+.profile-avatar{width:72px;height:72px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:700;color:var(--on-accent);margin:0 auto 12px}
 .source-list{display:flex;flex-wrap:wrap;gap:8px}
 .source-badge{font-size:.75rem;padding:6px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--border);color:var(--text);min-height:44px;line-height:30px}
 
 /* Contributor leaderboard (stats) */
 .contributor-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-sm)}
-.contributor-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;color:#000;flex-shrink:0}
+.contributor-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;color:var(--on-accent);flex-shrink:0}
 .contributor-info{flex:1}
 .contributor-name{font-size:.85rem;font-weight:500}
 .contributor-role{font-size:.7rem;color:var(--text-muted)}
