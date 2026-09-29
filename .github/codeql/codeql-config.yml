@@ -25,9 +25,12 @@ queries:
   # JavaScript-specific deep analysis
   - uses: security-experimental
 
-  # OSE's own Cloudflare Workers / D1 / CI queries (custom-queries/*.ql):
-  # D1 SQL injection, timing-safe compare, insecure random, CORS wildcard, …
-  - uses: ./.github/codeql/custom-queries
+  # OSE's own Cloudflare Workers / D1 / CI queries (custom-queries/*.ql) are
+  # NOT enabled yet: they had never been compiled, and on first compile
+  # (CodeQL 2.27.1) html-innerhtml-xss.ql fails ("could not resolve type
+  # PropWrite"), which aborts the whole analysis. Repair + re-enable with
+  #   - uses: ./.github/codeql/custom-queries
+  # is OSE-1414.
 
 query-filters:
   # Include ALL security queries regardless of precision
