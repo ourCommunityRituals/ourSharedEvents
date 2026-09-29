@@ -56,6 +56,9 @@ on:
     # regressions actually come from: the violations this gate found on its
     # first PR-code run were in src/templates/admin.html and
     # packages/ui/src/styles.ts, neither of which was listed here.
+    # ADR-008 Phase 0: @ocr/ui now lives in the hub, pinned by .ocr-hub-ref —
+    # a change to the shared stylesheet/tokens reaches OSE only as a bump of
+    # that file, so the pin file is the trigger (was 'packages/ui/src/**').
     paths:
       # ALL three specs this job runs (playwright.mobile.config.ts testMatch:
       # mobile-workability | admin-wizard-isolation | admin-csp-controls). The
@@ -72,7 +75,7 @@ on:
       - 'workers/oursharedevents/src/handlers/**'
       - 'workers/oursharedevents/src/templates/**'
       - 'workers/oursharedevents/src/lib/legal-footer.ts'
-      - 'packages/ui/src/**'
+      - '.ocr-hub-ref'
   workflow_dispatch:
 
 concurrency:

@@ -38,11 +38,17 @@ function walk(dir, exts, acc = []) {
   return acc;
 }
 
-/** Source files that emit testids: worker surfaces + shared UI package. */
+/**
+ * Source files that emit testids: worker surfaces + in-repo packages + the
+ * shared UI package. @ocr/ui is no longer in this repo (ADR-008 Phase 0): it is
+ * the hub's packages/ui, staged beside the checkout at ../packages/ui from the
+ * commit pinned in .ocr-hub-ref (scripts/ci-stage-ocr-workspace.sh).
+ */
 function sourceFiles(repoRoot) {
   return [
     ...walk(path.join(repoRoot, 'workers', 'oursharedevents', 'src'), ['.ts', '.html']),
     ...walk(path.join(repoRoot, 'packages'), ['.ts', '.tsx']),
+    ...walk(path.join(repoRoot, '..', 'packages', 'ui', 'src'), ['.ts', '.tsx']),
   ];
 }
 

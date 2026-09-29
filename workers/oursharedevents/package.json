@@ -26,7 +26,7 @@
   "dependencies": {
     "@ocr/data-provider": "file:../../packages/data-provider",
     "@ocr/flags": "file:../../packages/flags",
-    "@ocr/ui": "file:../../packages/ui",
+    "@ocr/ui": "file:../../../packages/ui",
     "h3-js": "^4.5.0"
   },
   "devDependencies": {

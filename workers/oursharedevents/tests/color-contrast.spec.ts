@@ -148,7 +148,7 @@ describe('A11Y-5: #64748b (4.76:1 on white) for poster/admin hint text', () => {
   // (poster.html screen hex -> tokens). The A11Y-5 contrast guarantee did not
   // weaken — it moved from this one hardcoded hex to the token layer, where
   // --text-muted is contrast-verified across themes by
-  // packages/ui/scripts/verify-contrast.mjs. Admin still holds the raw hex until
+  // the hub @ocr/ui scripts/verify-contrast.mjs (pinned by .ocr-hub-ref). Admin still holds the raw hex until
   // it converts (BASELINE admin.html), so its assertion below is unchanged.
   test('poster page routes muted hint text through var(--text-muted), not raw hex', async () => {
     const body = await posterHtml();

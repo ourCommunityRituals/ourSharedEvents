@@ -666,28 +666,7 @@ jobs:
         if: matrix.shard == 'lint'
         run: node scripts/check-token-adherence.mjs
 
-      # CCR-PR567 re-run item 7 — the token AA contrast ratios (including the
-      # --on-accent + status-pill pairs added this epic) were static-true but
-      # UNGATED. verify-contrast.mjs already exits non-zero on any sub-AA pair;
-      # run it here so a token edit that drops a pair below 4.5:1 turns CI red.
-      # It imports @ocr/ui's contrast.ts, so install packages/ui (its own
-      # lockfile carries tsx) and run through tsx — the gate VM is Node 20, which
-      # has no native TS type-stripping.
-      - name: 'Lint: token contrast meets WCAG AA (@ocr/ui verify-contrast)'
-        if: matrix.shard == 'lint'
-        working-directory: packages/ui
-        run: |
-          npm ci --prefer-offline || npm ci
-          npx tsx scripts/verify-contrast.mjs
-
-      # @ocr/ui's own suite (tokens, brand designation, partials, styles and the
-      # rendered-pair light-contrast gate) was never run by any workflow, so a
-      # regression in the shared stylesheet could not turn a PR red. Same shard,
-      # same install as the contrast step above.
-      - name: 'Unit: @ocr/ui package tests'
-        if: matrix.shard == 'lint'
-        working-directory: packages/ui
-        run: npx vitest run tests/
+      # ADR-008 Phase 0: @ocr/ui's contrast gate and its own unit suite moved to the hub CI (pnpm ui:contrast, pnpm ui:test) with the package itself.
 
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.

@@ -1,6 +1,6 @@
 # @ocr/ui Component Inventory
 
-**Source:** `workers/oursharedevents/node_modules/@ocr/ui/src/`
+**Source:** `workers/oursharedevents/node_modules/@ocr/ui/src/` — a link to the hub's `packages/ui` (ourCommunityRituals/ourCommunityRituals), staged at `../packages/ui` from the commit pinned in `.ocr-hub-ref` (ADR-008 Phase 0; the in-repo `packages/ui` copy was deleted)
 **Import:** `import { ... } from '@ocr/ui'`
 **Purpose:** Reference for Claude Design — what exists, how it's structured, and how to add new components without breaking the token contract.
 
@@ -243,25 +243,25 @@ All values reference Tier 2 tokens. No hex values in component styles.
 
 ### Chips / Tags
 
-| Class                 | Description                              |
+| Class | Description |
 | --------------------- | ---------------------------------------- | ----------------------------------- |
-| `.filter-chip`        | Scrollable filter chip, accent on active | `--surface`, `--border`, `--accent` |
-| `.filter-chip.active` | Selected state                           | `--accent`                          |
-| `.genre-tag`          | Small inline genre tag                   | `--accent` tinted bg                |
-| `.meta-badge`         | Tiny metadata chip                       | `--surface`, `--text-muted`         |
-| `.meta-badge.high`    | High-prominence badge                    | `--accent`                          |
-| `.user-badge`         | Identity pill for logged-in user         | `--accent` tinted                   |
-| `.brand`              | Uppercase brand label                    | `--accent`                          |
-| `.source-badge`       | Content source attribution pill          | `--surface`, `--border`             |
+| `.filter-chip` | Scrollable filter chip, accent on active | `--surface`, `--border`, `--accent` |
+| `.filter-chip.active` | Selected state | `--accent` |
+| `.genre-tag` | Small inline genre tag | `--accent` tinted bg |
+| `.meta-badge` | Tiny metadata chip | `--surface`, `--text-muted` |
+| `.meta-badge.high` | High-prominence badge | `--accent` |
+| `.user-badge` | Identity pill for logged-in user | `--accent` tinted |
+| `.brand` | Uppercase brand label | `--accent` |
+| `.source-badge` | Content source attribution pill | `--surface`, `--border` |
 
 ### Charts
 
-| Class        | Description                         |
+| Class | Description |
 | ------------ | ----------------------------------- | ---------- |
 | `.stats-row` | Horizontal scroll row of stat cards |
-| `.bar-chart` | Vertical stack of labeled bars      |
-| `.bar-row`   | Single bar with label and count     |
-| `.bar-fill`  | Animated fill bar                   | `--accent` |
+| `.bar-chart` | Vertical stack of labeled bars |
+| `.bar-row` | Single bar with label and count |
+| `.bar-fill` | Animated fill bar | `--accent` |
 
 ### Form partials — classes
 
@@ -284,53 +284,53 @@ is guaranteed.
 
 ### Forms (advanced)
 
-| Class                 | Description                           |
+| Class | Description |
 | --------------------- | ------------------------------------- | ----------------------- |
-| `.toggle-row`         | Label + toggle switch row             |
-| `.toggle`             | Toggle switch container               |
-| `.toggle-track`       | Clickable track — accent when checked | `--border`, `--accent`  |
-| `.range-group`        | Label + range slider row              |
-| `.drop-zone`          | Drag-and-drop file target             | `--border`, `--accent`  |
-| `.drop-zone.dragover` | Active drag state                     | `--accent`              |
-| `.preview-table`      | Tabular preview of imported data      | `--surface`, `--border` |
-| `.progress-bar`       | Upload/import progress bar            | `--accent`              |
-| `.result-success`     | Success result card                   | `--accent` tinted       |
-| `.result-error`       | Error result card                     | `--error` tinted        |
+| `.toggle-row` | Label + toggle switch row |
+| `.toggle` | Toggle switch container |
+| `.toggle-track` | Clickable track — accent when checked | `--border`, `--accent` |
+| `.range-group` | Label + range slider row |
+| `.drop-zone` | Drag-and-drop file target | `--border`, `--accent` |
+| `.drop-zone.dragover` | Active drag state | `--accent` |
+| `.preview-table` | Tabular preview of imported data | `--surface`, `--border` |
+| `.progress-bar` | Upload/import progress bar | `--accent` |
+| `.result-success` | Success result card | `--accent` tinted |
+| `.result-error` | Error result card | `--error` tinted |
 
 ### Genre Popup
 
-| Class                   | Description                         |
+| Class | Description |
 | ----------------------- | ----------------------------------- | --------------------------- |
-| `.genre-popup`          | Bottom sheet, slides up from bottom | `--surface`, `--border`     |
-| `.genre-popup.open`     | Visible state (translateY(0))       | —                           |
-| `.genre-popup-backdrop` | Full-screen scrim                   | `rgba(0,0,0,.5)`            |
-| `.genre-link`           | Tap target inside popup             | `--text`, `--surface-hover` |
+| `.genre-popup` | Bottom sheet, slides up from bottom | `--surface`, `--border` |
+| `.genre-popup.open` | Visible state (translateY(0)) | — |
+| `.genre-popup-backdrop` | Full-screen scrim | `rgba(0,0,0,.5)` |
+| `.genre-link` | Tap target inside popup | `--text`, `--surface-hover` |
 
 ### Profile
 
-| Class                 | Description                  |
+| Class | Description |
 | --------------------- | ---------------------------- | ----------------------- |
-| `.profile-header`     | Centered profile top section | `--border`              |
-| `.profile-avatar`     | Round avatar with initials   | `--accent; color: #000` |
-| `.contributor-item`   | Leaderboard row              | —                       |
-| `.contributor-avatar` | Small round avatar           | `--accent; color: #000` |
+| `.profile-header` | Centered profile top section | `--border` |
+| `.profile-avatar` | Round avatar with initials | `--accent; color: #000` |
+| `.contributor-item` | Leaderboard row | — |
+| `.contributor-avatar` | Small round avatar | `--accent; color: #000` |
 
 ### QR / Display
 
-| Class           | Description                        |
+| Class | Description |
 | --------------- | ---------------------------------- | ------------------------------ |
-| `.display-card` | Centered card for TV/kiosk view    | —                              |
-| `.qr-frame`     | White rounded frame around QR code | Hardcoded `#fff` — intentional |
-| `.sponsor-slot` | Sponsor attribution below QR       | `--border`, `--text-muted`     |
+| `.display-card` | Centered card for TV/kiosk view | — |
+| `.qr-frame` | White rounded frame around QR code | Hardcoded `#fff` — intentional |
+| `.sponsor-slot` | Sponsor attribution below QR | `--border`, `--text-muted` |
 
 ### Utility
 
-| Class            | Description               |
+| Class | Description |
 | ---------------- | ------------------------- | ---------------------- |
-| `.hidden`        | `display: none`           |
-| `.body-centered` | Flex column, centered     |
-| `.content-wrap`  | 80px bottom padding       |
-| `.footer-cta`    | Centered footer with link | `--border`, `--accent` |
+| `.hidden` | `display: none` |
+| `.body-centered` | Flex column, centered |
+| `.content-wrap` | 80px bottom padding |
+| `.footer-cta` | Centered footer with link | `--border`, `--accent` |
 
 ---
 
