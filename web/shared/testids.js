@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-29 — 443 ids.
+ * Generated 2026-09-29 — 452 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 286 ids
+    // admin.html — 295 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -188,10 +188,14 @@
       'mint-sponsor-id',
       'mint-token',
       'mint-ttl',
+      'pd-address',
+      'pd-advanced',
+      'pd-copy-link',
       'pd-create-btn',
       'pd-create-msg',
       'pd-delete-btn',
       'pd-download-btn',
+      'pd-geo-msg',
       'pd-h3-res9',
       'pd-is-active',
       'pd-label',
@@ -208,10 +212,15 @@
       'pd-qr-fallback',
       'pd-qr-img',
       'pd-qr-token',
+      'pd-short-link',
+      'pd-short-link-block',
       'pd-shortlink-qr',
       'pd-shortlink-slot',
       'pd-shortlink-slots',
       'pd-shortlink-url',
+      'pd-target',
+      'pd-target-label',
+      'pd-target-url',
       'phase-badge',
       'portfolio-rollup',
       'poster-art-card',

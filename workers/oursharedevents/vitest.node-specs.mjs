@@ -137,6 +137,10 @@ export const NODE_SPECS = [
   // (archived->active is direct; only draft hops via ready). Pure over the
   // admin.html template string + the event-state domain module.
   'tests/admin-golive-transitions.spec.ts',
+  // OSE-1357 — admin poster card (address default, geocode-then-create, row
+  // order). Runs the card's script from the admin.html Text import in a jsdom
+  // window with a stubbed fetch; no cloudflare:test / D1.
+  'tests/poster-deployment-address-ui.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.

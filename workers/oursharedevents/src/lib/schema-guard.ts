@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0078_events_add_starts_at.sql */
-export const REQUIRED_DB_MIGRATION = 78;
+/** Highest migration in migrations/ — currently 0079_poster_deployments_add_address.sql */
+export const REQUIRED_DB_MIGRATION = 79;
 
 /** Highest migration in migrations-forms/ — currently 0014_encrypt_attendee_name.sql */
 export const REQUIRED_FORMS_MIGRATION = 14;

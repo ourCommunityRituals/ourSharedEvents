@@ -20,6 +20,14 @@
  * 10. List endpoint returns all deployments for an event
  * 11. Get-single endpoint returns one deployment
  * 12. Hot-path guard: poster-deployments.ts is NOT in SCAN_PATH
+ * 8b–8e. Attribution rule gate (OSE-1357): a physical scan resolves to the
+ *     poster's res9 placement cell, a digital short-link click to res7 at most,
+ *     and NO scan/click path reads device geolocation.
+ *
+ * @born-red OSE-1357 | method: mutation injection — each 8b–8e assertion went red
+ *   when a violation was injected into the source (request.cf.latitude in
+ *   qr-scan.ts, navigator.geolocation in admin.html, an h3_res10 column on
+ *   scan_placement_events, an h3_res9 column on shortlinks), then reverted | date: 2026-09-29
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -389,6 +397,148 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
     expect(body.item.id).toBe(id);
     expect(body.item.h3_res9).toBe('89266454447ffff');
     expect(body.item.h3_res7).toBe('872664544ffffff');
+  });
+});
+
+// ─── Attribution rule gate (OSE-1357) ─────────────────────────────────────────
+// The address field made it tempting to reach for "use my location". It must
+// never happen: a poster's place comes from the ADDRESS the organizer typed
+// (geocoded once, at creation, by an admin), never from anyone's device, and
+// each signal is attributed no finer than its rule allows:
+//   physical scan (/q/)  → the poster's res9 placement cell (via the deployment)
+//   digital click (/s/)  → res7 vicinity at most (today: no location at all)
+
+/** Files a scanner/clicker's request passes through, server and served client JS. */
+const SCAN_CLICK_PATH = [
+  'src/handlers/qr-scan.ts',
+  'src/lib/scan-buffer.ts',
+  'src/handlers/shortlink-resolve.ts',
+  'src/lib/shortlinks.ts',
+  'src/handlers/uec-resolve.ts',
+  'src/handlers/forms.ts',
+  'src/handlers/form-pages.ts',
+  'src/handlers/pages.ts',
+] as const;
+
+/**
+ * Device geolocation, in every shape it can arrive: the browser API, the
+ * Cloudflare request.cf geo fields (derived from the visitor's IP), and the
+ * CF-IP* geo headers finer than a country. CF-IPCountry stays allowed — a
+ * country is the documented coarse aggregate qr-scan.ts already records.
+ */
+const DEVICE_GEO =
+  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode)\b|cf-ip(city|latitude|longitude|postal-code|region)/i;
+
+function sourcesMatching(pred: (p: string) => boolean): Array<[string, string]> {
+  const sources: Record<string, string> = JSON.parse(
+    (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+  );
+  return Object.entries(sources)
+    .map(([p, c]) => [p.replace(/\\/g, '/'), c] as [string, string])
+    .filter(([p]) => pred(p));
+}
+
+async function columnsOf(table: string): Promise<string[]> {
+  const info = await (env as unknown as TestEnv).DB.prepare(`PRAGMA table_info(${table})`).all<{
+    name: string;
+  }>();
+  return (info.results ?? []).map((r) => r.name);
+}
+
+describe('8b–8e. attribution rule gate — physical res9, digital res7, no device geo (OSE-1357)', () => {
+  test('8b. no scan/click path reads device geolocation', () => {
+    for (const rel of SCAN_CLICK_PATH) {
+      const hit = sourcesMatching((p) => p.endsWith(rel));
+      expect(hit.length, `${rel} missing from TEST_SOURCE_FILES_JSON`).toBe(1);
+      const m = hit[0][1].match(DEVICE_GEO);
+      expect(m, `${rel} reads device geolocation: "${m?.[0]}"`).toBeNull();
+    }
+  });
+
+  test('8b. nothing the Worker serves asks the browser for its position (admin included)', () => {
+    const served = sourcesMatching(
+      (p) => /(^|\/)src\//.test(p) && (p.endsWith('.ts') || p.endsWith('.html'))
+    );
+    expect(served.length).toBeGreaterThan(20);
+    for (const [p, c] of served) {
+      expect(c, `${p} calls the browser geolocation API`).not.toMatch(
+        /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition/
+      );
+    }
+  });
+
+  test('8c. a physical scan carries only the placement — its place is the poster res9 cell', async () => {
+    const res = await createDeployment('evt-pdh3-eagles', {
+      placement_label: 'PDH3Test Attribution Scan',
+      latitude: EAGLES.lat,
+      longitude: EAGLES.lon,
+    });
+    expect(res.status).toBe(201);
+    const { id, qr_token } = (await res.json()) as { id: string; qr_token: string };
+
+    const scan = await SELF.fetch(`https://t.test/q/${qr_token}`, { redirect: 'manual' });
+    expect(scan.status).toBe(302);
+
+    const tenv = env as unknown as TestEnv;
+    const placed = await tenv.DB.prepare(
+      `SELECT pd.h3_res9 AS cell
+         FROM scan_placement_events spe
+         JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+        WHERE spe.poster_deployment_id = ?`
+    )
+      .bind(id)
+      .first<{ cell: string }>();
+    expect(placed?.cell).toBe('89266454447ffff'); // the POSTER's res9 node
+
+    // The scan rows themselves carry no coordinate or cell of their own — the
+    // only place a scan has is the placement it references.
+    for (const t of ['scan_placement_events', 'scan_node_returns']) {
+      const cols = await columnsOf(t);
+      expect(cols.length).toBeGreaterThan(0);
+      for (const c of cols) expect(c, `${t}.${c}`).not.toMatch(/lat|lon|lng|h3|geo|city|postal/i);
+    }
+  });
+
+  test('8d. a digital short-link click records nothing finer than res7', async () => {
+    const tenv = env as unknown as TestEnv;
+    const code = 'PDH3ck';
+    await tenv.DB.prepare('DELETE FROM shortlinks WHERE code = ?').bind(code).run();
+    await tenv.DB.prepare(
+      `INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
+       VALUES (?, 'evt-pdh3-eagles', 'public', 0, datetime('now'))`
+    )
+      .bind(code)
+      .run();
+
+    const click = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    expect(click.status).toBe(302);
+    const row = await tenv.DB.prepare('SELECT clicks FROM shortlinks WHERE code = ?')
+      .bind(code)
+      .first<{ clicks: number }>();
+    expect(row?.clicks).toBe(1);
+
+    const cols = await columnsOf('shortlinks');
+    for (const c of cols) {
+      expect(c, `shortlinks.${c} is finer than res7`).not.toMatch(
+        /lat|lon|lng|city|postal|h3_res(8|9|1[0-5])/i
+      );
+    }
+    for (const rel of ['src/handlers/shortlink-resolve.ts', 'src/lib/shortlinks.ts']) {
+      const [[, src]] = sourcesMatching((p) => p.endsWith(rel));
+      expect(src, `${rel} writes a cell finer than res7`).not.toMatch(/h3_res(8|9|1[0-5])/);
+    }
+  });
+
+  test('8e. no table anywhere stores a cell finer than the poster res9 node', async () => {
+    const tables = await (env as unknown as TestEnv).DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+    ).all<{ name: string }>();
+    for (const { name } of tables.results ?? []) {
+      if (name.startsWith('_cf') || name.startsWith('d1_')) continue;
+      for (const c of await columnsOf(name)) {
+        expect(c, `${name}.${c}`).not.toMatch(/h3_res1[0-5]/i);
+      }
+    }
   });
 });
 
