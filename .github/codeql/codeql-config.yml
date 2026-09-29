@@ -43,6 +43,19 @@ query-filters:
   - include:
       tags contain: external/cwe
 
+  # ── Reviewed exclusions (each needs a reason; the OSE-1410 gate treats every
+  #    remaining security result in production code as a failure) ──
+  #
+  # js/untrusted-data-to-external-api-more-sources — security-experimental
+  # variant that treats EVERY fetch() response as untrusted. Its only hit
+  # (2026-09-29) was auth/admin.ts _fetchJwks: importKey() on the CF Access
+  # JWKS from https://${env.CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs — an
+  # operator-configured HTTPS origin (both callers pass env, never request
+  # data), and importing those public keys IS JWT verification. The standard
+  # js/untrusted-data-to-external-api query stays enabled.
+  - exclude:
+      id: js/untrusted-data-to-external-api-more-sources
+
 paths:
   # ── Cloudflare Workers (the deployed bundle's source) ──
   - workers
