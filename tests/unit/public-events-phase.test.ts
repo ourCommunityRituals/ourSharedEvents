@@ -16,7 +16,7 @@
  * proving is that the markup is well-formed and structured, not that it
  * matches a particular concatenation.
  */
-import { describe, test, expect, afterEach } from 'vitest';
+import { describe, test, expect, afterEach, vi } from 'vitest';
 import {
   renderEventList,
   renderEventListError,
@@ -24,6 +24,7 @@ import {
   EVENT_LIST_MARKER,
   EVENT_COUNT_MARKER,
 } from '../../workers/oursharedevents/src/lib/event-list.js';
+import { enrichWithPhase } from '../../workers/oursharedevents/src/lib/event-enrich.js';
 
 /** Render, then parse into a real DOM so structure is what gets asserted. */
 function render(items: unknown[]): { el: HTMLElement; countText: string } {
@@ -106,6 +107,118 @@ describe('OSE-1205 | /events phase-aware cards', () => {
 // errors.spec.ts, where each one cost a browser, a route interception and a
 // settled microtask queue. They are the same cases; only the price changed.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A date-only event (start_date/end_date set, starts_at NULL) is a CALENDAR
+// DAY in the event's own zone. Read raw, "2026-09-29" is UTC midnight — the
+// evening of Sep 28 in Chicago — so the event went live the night before and
+// rendered as the recap ("This one's a wrap") for the whole of its own day.
+// Found in the rendered audit of 2026-09-29. These go through enrichWithPhase,
+// the one seam the list, the API and the detail page all share.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function phaseAt(nowIso: string, row: Record<string, unknown>): string {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(nowIso));
+  try {
+    return enrichWithPhase({ status: 'active', starts_at: null, ...row }).phase;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
+describe("date-only events live for the whole of their day in the event's zone", () => {
+  const chicagoDay = {
+    start_date: '2026-09-29',
+    end_date: '2026-09-29',
+    timezone: 'America/Chicago',
+  };
+
+  test('on its day (10:00 CDT) → live, not the recap', () => {
+    expect(phaseAt('2026-09-29T15:00:00Z', chicagoDay)).toBe('event');
+  });
+
+  test('late on its day (23:30 CDT, already the next day in UTC) → still live', () => {
+    expect(phaseAt('2026-09-30T04:30:00Z', chicagoDay)).toBe('event');
+  });
+
+  test('the evening before (21:00 CDT, already its date in UTC) → pre', () => {
+    expect(phaseAt('2026-09-29T02:00:00Z', chicagoDay)).toBe('pre_event');
+  });
+
+  test('the day after (01:00 CDT) → post', () => {
+    expect(phaseAt('2026-09-30T06:00:00Z', chicagoDay)).toBe('post_event');
+  });
+
+  test('no end_date → the start day is the whole event, post once it ends', () => {
+    const noEnd = { ...chicagoDay, end_date: null };
+    expect(phaseAt('2026-09-29T15:00:00Z', noEnd)).toBe('event');
+    expect(phaseAt('2026-09-30T06:00:00Z', noEnd)).toBe('post_event');
+  });
+
+  test('a missing timezone falls back to America/Chicago', () => {
+    const noZone = { ...chicagoDay, timezone: null };
+    expect(phaseAt('2026-09-30T04:30:00Z', noZone)).toBe('event');
+    expect(phaseAt('2026-09-29T02:00:00Z', noZone)).toBe('pre_event');
+  });
+});
+
+describe('a multi-day date-only event runs through the end of its last local day', () => {
+  const weekend = {
+    start_date: '2026-09-29',
+    end_date: '2026-10-01',
+    timezone: 'America/Chicago',
+  };
+
+  test('the middle day → live', () => {
+    expect(phaseAt('2026-09-30T18:00:00Z', weekend)).toBe('event');
+  });
+
+  test('late on the last day (22:00 CDT Oct 1) → still live', () => {
+    expect(phaseAt('2026-10-02T03:00:00Z', weekend)).toBe('event');
+  });
+
+  test('after the last day ends (01:00 CDT Oct 2) → post', () => {
+    expect(phaseAt('2026-10-02T06:00:00Z', weekend)).toBe('post_event');
+  });
+});
+
+describe('date-only events in zones far from UTC', () => {
+  test('Auckland (UTC+13): 01:00 local on the day is the previous UTC day → live', () => {
+    const row = { start_date: '2026-10-10', end_date: '2026-10-10', timezone: 'Pacific/Auckland' };
+    expect(phaseAt('2026-10-09T12:00:00Z', row)).toBe('event');
+    expect(phaseAt('2026-10-09T10:00:00Z', row)).toBe('pre_event'); // 23:00 Oct 9 NZDT
+    expect(phaseAt('2026-10-10T11:30:00Z', row)).toBe('post_event'); // 00:30 Oct 11 NZDT
+  });
+
+  test('Honolulu (UTC-10): 22:00 local on the day is the next UTC day → live', () => {
+    const row = { start_date: '2026-10-10', end_date: '2026-10-10', timezone: 'Pacific/Honolulu' };
+    expect(phaseAt('2026-10-11T08:00:00Z', row)).toBe('event');
+    expect(phaseAt('2026-10-10T09:00:00Z', row)).toBe('pre_event'); // 23:00 Oct 9 HST
+    expect(phaseAt('2026-10-11T10:30:00Z', row)).toBe('post_event'); // 00:30 Oct 11 HST
+  });
+});
+
+describe('timed events (starts_at set) are unchanged', () => {
+  const timed = {
+    start_date: '2026-09-29',
+    end_date: '2026-09-29',
+    starts_at: '2026-09-29T23:00:00Z', // 18:00 CDT
+    timezone: 'America/Chicago',
+  };
+
+  test('before the start instant → pre, even on the same local day', () => {
+    expect(phaseAt('2026-09-29T15:00:00Z', timed)).toBe('pre_event');
+  });
+
+  test('after the start instant, through the end of the local day → live', () => {
+    expect(phaseAt('2026-09-30T04:30:00Z', timed)).toBe('event');
+  });
+
+  test('after the local day ends → post', () => {
+    expect(phaseAt('2026-09-30T06:00:00Z', timed)).toBe('post_event');
+  });
+});
 
 describe('OSE-1243 | hostile and malformed input', () => {
   test('a script payload in the name is escaped, not executed', () => {

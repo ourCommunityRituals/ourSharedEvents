@@ -202,7 +202,12 @@ export function zonedTimePart(utcIso: string | null | undefined, tz: string | nu
  *   end of that day in the event's zone. Read as UTC midnight it would land
  *   before a same-day timed start and flip the event to post_event the moment
  *   it went live.
- * - A date-only event (no starts_at) passes through unchanged.
+ * - A date-only event (no starts_at) is live for the WHOLE of its calendar
+ *   day(s) in the event's zone (default America/Chicago): from local 00:00 of
+ *   start_date through local 23:59:59.999 of end_date (or of start_date when
+ *   there is no end). Read raw, "2026-09-29" is UTC midnight — the evening
+ *   before in the Americas — so the event went live the night before and was
+ *   the recap for all of its own day.
  */
 export function phaseTimesFor(row: {
   start_date: string | null;
@@ -211,17 +216,58 @@ export function phaseTimesFor(row: {
   timezone?: string | null;
 }): { start_date: string | null; end_date: string | null } {
   if (!row.starts_at || Number.isNaN(new Date(row.starts_at).getTime())) {
-    return { start_date: row.start_date, end_date: row.end_date };
+    return dateOnlyPhaseTimes(row);
   }
   let end = row.end_date;
-  if (end && /^\d{4}-\d{2}-\d{2}$/.test(end.trim())) {
+  if (end && DATE_ONLY_RE.test(end.trim())) {
     const zone = isValidIanaTimezone(row.timezone) ? (row.timezone as string) : 'UTC';
-    const lastMinute = zonedDateTimeToUtcIso(end.trim(), '23:59', zone);
-    // Through 23:59:59.999 local — the whole final minute, not its first second.
-    end = lastMinute ? new Date(new Date(lastMinute).getTime() + 59_999).toISOString() : null;
+    end = endOfLocalDayUtcIso(end.trim(), zone);
   }
   // An end that still precedes the start is bad data: drop it so the event
   // stays live until archived rather than skipping straight to the recap.
   if (end && new Date(end).getTime() < new Date(row.starts_at).getTime()) end = null;
   return { start_date: row.starts_at, end_date: end };
+}
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The zone a date-only event's day is read in when events.timezone is unusable. */
+const DATE_ONLY_DEFAULT_ZONE = 'America/Chicago';
+
+/** Local 23:59:59.999 of `dateStr` in `zone`, as a UTC ISO instant. */
+function endOfLocalDayUtcIso(dateStr: string, zone: string): string | null {
+  const lastMinute = zonedDateTimeToUtcIso(dateStr, '23:59', zone);
+  // Through 23:59:59.999 local — the whole final minute, not its first second.
+  return lastMinute ? new Date(new Date(lastMinute).getTime() + 59_999).toISOString() : null;
+}
+
+function dateOnlyPhaseTimes(row: {
+  start_date: string | null;
+  end_date: string | null;
+  timezone?: string | null;
+}): { start_date: string | null; end_date: string | null } {
+  const startDay = row.start_date?.trim() ?? '';
+  // Anything that is not a plain calendar date (a full ISO instant, garbage)
+  // is the resolver's business, exactly as before.
+  if (!DATE_ONLY_RE.test(startDay)) return { start_date: row.start_date, end_date: row.end_date };
+  const zone = isValidIanaTimezone(row.timezone)
+    ? (row.timezone as string)
+    : DATE_ONLY_DEFAULT_ZONE;
+
+  const start = zonedDateTimeToUtcIso(startDay, '00:00', zone);
+  // Local midnight can fall in a DST gap in a handful of zones; keep the raw
+  // date there rather than invent an instant.
+  if (!start) return { start_date: row.start_date, end_date: row.end_date };
+
+  const endRaw = row.end_date?.trim() ?? '';
+  let end: string | null;
+  if (!endRaw) {
+    end = endOfLocalDayUtcIso(startDay, zone);
+  } else if (DATE_ONLY_RE.test(endRaw)) {
+    // An end day before the start day is bad data: the start day is the event.
+    end = endOfLocalDayUtcIso(endRaw < startDay ? startDay : endRaw, zone);
+  } else {
+    end = row.end_date;
+  }
+  return { start_date: start, end_date: end };
 }
