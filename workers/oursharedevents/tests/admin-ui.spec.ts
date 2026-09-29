@@ -565,8 +565,9 @@ describe('ADMIN-15 CSS: Copy button visual states', () => {
   test('copied success state with green styling', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('.copy-btn.copied');
-    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#d3f9d8/);
-    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#155724/);
+    // Was a light-only #d3f9d8/#155724 pair; now the --success token (both themes).
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*border-color:\s*var\(--success\)/);
   });
 });
 

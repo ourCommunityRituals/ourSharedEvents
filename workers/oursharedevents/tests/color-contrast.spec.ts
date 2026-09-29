@@ -82,8 +82,12 @@ describe('A11Y-5: #94a3b8 removed from light-bg pages', () => {
 // ─── Accessible replacements present ────────────────────────────────────────
 
 describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
-  test('admin page has #6c757d for muted text', async () => {
-    expect(await adminHtml()).toContain('#6c757d');
+  // Admin's #6c757d only survived as dead var(--text-muted, #6c757d) fallbacks
+  // (/ui.css always defines the token); theme parity (2026-09-29) removed them.
+  test('admin page routes muted text through var(--text-muted), not raw hex', async () => {
+    const body = await adminHtml();
+    expect(body).toContain('var(--text-muted)');
+    expect(body).not.toContain('#6c757d');
   });
 
   // shared-report migrated muted text to var(--text-muted) (token-adherence

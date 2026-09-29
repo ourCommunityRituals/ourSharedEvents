@@ -620,24 +620,23 @@
         align-items: center;
         min-height: 44px; /* WCAG 2.5.5 — rendered 73x22 (OSE-1236) */
         padding: 0.2rem 0.5rem;
-        background: #f1f3f5;
-        border: 1px solid var(--border);
+        background: var(--surface-hover);
+        border: 1px solid var(--border-strong);
         border-radius: 4px;
         font-size: 0.75rem;
         cursor: pointer;
-        color: var(--text-muted);
+        color: var(--text);
         margin-left: 0.5rem;
         transition:
           background 0.2s,
           color 0.2s;
       }
       .copy-btn:hover {
-        background: #e9ecef;
+        border-color: var(--accent);
       }
       .copy-btn.copied {
-        background: #d3f9d8;
-        color: #155724;
-        border-color: #b2f2bb;
+        color: var(--success);
+        border-color: var(--success);
       }
       .clickable-row {
         cursor: pointer;
@@ -704,10 +703,10 @@
       .card-error {
         text-align: center;
         padding: 1.5rem;
-        background: #fff5f5;
-        border: 1px solid #ffc9c9;
+        background: var(--surface);
+        border: 1px solid var(--error);
         border-radius: 8px;
-        color: #c92a2a;
+        color: var(--error);
       }
       .card-error .error-icon {
         font-size: 1.5rem;
@@ -800,7 +799,7 @@
       .type-picker-msg {
         margin: 0;
         font-size: 0.9375rem;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
       .create-form input[type='date'],
       .create-form input[type='time'] {
@@ -1058,7 +1057,7 @@
           padding: 0.5rem 0.75rem;
         }
         tr.brand-group-header:hover {
-          background: var(--surface-hover, #e9ecef);
+          background: var(--surface-hover);
         }
         tr.brand-group-header:focus-visible {
           outline: 2px solid var(--accent);
@@ -1067,7 +1066,7 @@
         .brand-group-caret {
           display: inline-block;
           width: 1rem;
-          color: var(--text-muted, #5a5a5a);
+          color: var(--text-muted);
         }
         .brand-count-pill {
           display: inline-block;
@@ -1310,7 +1309,7 @@
       .spon-covenant-note {
         margin: 0;
         font-size: 0.8rem;
-        color: var(--text-muted, #5a5a5a);
+        color: var(--text-muted);
       }
       .is-local-pill {
         display: inline-block;
@@ -1319,7 +1318,7 @@
         padding: 0.125rem 0.5rem;
         border-radius: 10px;
         background: var(--success-bg, #e6f4ea);
-        color: var(--success, #137333);
+        color: var(--success);
       }
       .is-local-pill[hidden] {
         display: none;
@@ -1388,15 +1387,15 @@
         display: flex;
         flex-direction: column;
         padding: 0.85rem 1rem;
-        background: var(--surface, #fff);
-        border: 1px solid var(--border, #e5e7eb);
-        border-left: 4px solid var(--dash-accent, var(--accent, #2563eb));
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--dash-accent, var(--accent));
         border-radius: 8px;
       }
       /* Per-tile accent hints — carried over from the GAS frame's colour-coding.
          Token-first with hex fallback; swap to /ui.css tokens when they exist. */
       .dash-stat.scans {
-        --dash-accent: var(--accent, #2563eb);
+        --dash-accent: var(--accent);
       }
       .dash-stat.appearances {
         --dash-accent: var(--dash-accent-appearances, #10b981);
@@ -1411,25 +1410,25 @@
         font-size: 1.5rem;
         font-weight: 700;
         line-height: 1.1;
-        color: var(--text, #1f2937);
+        color: var(--text);
       }
       .dash-stat__label {
         font-size: 0.72rem;
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--text-muted, #6b7280);
+        color: var(--text-muted);
       }
       .dash-lifecycle-title {
         margin: 1.25rem 0 0.5rem;
         font-size: 0.95rem;
-        color: var(--text, #1f2937);
+        color: var(--text);
       }
       .dash-phase {
         padding: 0.85rem 1rem;
         margin-bottom: 0.6rem;
         background: var(--surface-alt, #f8fafc);
-        border: 1px solid var(--border, #e5e7eb);
+        border: 1px solid var(--border);
         border-radius: 8px;
       }
       .dash-phase__header {
@@ -1441,7 +1440,7 @@
       .dash-phase__title {
         font-weight: 600;
         font-size: 0.9rem;
-        color: var(--text, #1f2937);
+        color: var(--text);
       }
       .dash-phase__badge {
         display: inline-block;
@@ -1451,29 +1450,29 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--text-muted, #6b7280);
-        background: var(--surface-hover, #e9ecef);
+        color: var(--text-muted);
+        background: var(--surface-hover);
       }
       .dash-phase__badge[data-active='true'] {
-        color: var(--on-accent, #fff);
-        background: var(--accent, #2563eb);
+        color: var(--on-accent);
+        background: var(--accent);
       }
       .dash-phase__desc {
         margin: 0.4rem 0 0;
         font-size: 0.8rem;
-        color: var(--text-muted, #6b7280);
+        color: var(--text-muted);
       }
       .dash-progress {
         height: 8px;
         margin-top: 0.6rem;
-        background: var(--surface-hover, #e9ecef);
+        background: var(--surface-hover);
         border-radius: 4px;
         overflow: hidden;
       }
       .dash-progress__fill {
         height: 100%;
         width: 0;
-        background: var(--accent, #2563eb);
+        background: var(--accent);
         border-radius: 4px;
         transition: width 0.6s ease;
       }
@@ -1608,13 +1607,8 @@
         background: rgba(0, 0, 0, 0.7);
       }
 
-      /* ── Two paths, one admin (FE dev-prep Phase B, 2026-08-29) ─────────────
-         The guided wizard serves the first-time organizer (a bar owner setting
-         up their first night); the dashboard below stays the "advanced" path
-         for power users. One admin, two doors — plan:
-         docs/plans/FE-DEV-PREP-2026-08-29.md. Styles adapted from the archived
-         prototype (archive/experimental-frontends/AdminWizard.html), re-themed
-         to today's admin palette. Inline-style cleanup + tokens = Phase C. */
+      /* ── Two paths, one admin: guided wizard + advanced dashboard
+         (docs/plans/FE-DEV-PREP-2026-08-29.md). */
       /* While the launch wizard is open, the dashboard behind it is HIDDEN.
          Reported from a phone, 2026-09-05: choosing the guided path showed the
          wizard, but the advanced admin screen kept rendering underneath it —
@@ -1706,7 +1700,7 @@
         padding: 0.5rem;
         background: none;
         border: none;
-        color: var(--text-muted, #6c757d);
+        color: var(--text-muted);
         font-family: inherit;
         font-size: 0.85rem;
         text-decoration: underline;
@@ -1732,7 +1726,6 @@
       .path-option:focus-visible {
         border-color: var(--accent);
         background: var(--surface);
-        outline: none;
       }
       .path-option-title {
         font-size: 0.95rem;
@@ -1850,14 +1843,14 @@
         margin: 0.25rem 0 0 1.875rem;
         font-size: 0.875rem;
         line-height: 1.5;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
       /* R3/R5 (OSE-1319) — typed external-link controls + poster-slot preview. */
       .create-linkctl {
         padding: 0.75rem 0.875rem;
-        border: 1px solid var(--border, #e2e8f0);
+        border: 1px solid var(--border);
         border-radius: 8px;
-        background: var(--surface-hover, #f8fafc);
+        background: var(--surface-hover);
       }
       .create-linkctl-fields {
         display: grid;
@@ -1883,10 +1876,10 @@
         min-height: 44px;
         font-size: 16px;
         padding: 0.5rem 0.625rem;
-        border: 1px solid var(--border, #dee2e6);
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
-        background: var(--surface, #fff);
-        color: var(--text, #1e293b);
+        background: var(--surface);
+        color: var(--text);
       }
       .create-field-error {
         margin: 0.5rem 0 0;
@@ -1902,7 +1895,7 @@
         gap: 0.5rem;
         margin-top: 0.75rem;
         font-size: 0.875rem;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
       .create-slot-preview-label {
         font-weight: 600;
@@ -1911,9 +1904,9 @@
         display: inline-block;
         padding: 0.15rem 0.6rem;
         border-radius: 999px;
-        background: var(--surface, #fff);
-        border: 1px solid var(--border, #cbd5e1);
-        color: var(--text, #1e293b);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
         font-size: 0.8125rem;
         line-height: 1.4;
       }
@@ -1925,13 +1918,13 @@
       .wizard-publish {
         margin-top: 1.25rem;
         padding-top: 1.25rem;
-        border-top: 1px solid var(--border, #e2e8f0);
+        border-top: 1px solid var(--border);
       }
       .wizard-publish-note {
         margin: 0.75rem 0 0;
         font-size: 0.875rem;
         line-height: 1.5;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
       .wizard-signup-grid {
         display: grid;
@@ -1948,25 +1941,32 @@
         text-align: left;
         padding: 0.9rem;
         background: var(--surface-hover);
-        border: 2px solid var(--border);
+        border: 2px solid var(--border-strong);
         border-radius: 8px;
         cursor: pointer;
         transition: border-color 0.15s;
       }
+      /* Focus is the global button:focus-visible outline, not a border tint. */
       .wizard-template-card:hover,
       .wizard-signup-option:hover,
-      .wizard-publish-option:hover,
-      .wizard-publish-option:focus-visible,
-      .wizard-template-card:focus-visible,
-      .wizard-signup-option:focus-visible {
+      .wizard-publish-option:hover {
         border-color: var(--accent);
-        outline: none;
       }
+      /* OSE-1340: selected = emerald tint over the theme's own surface (deep
+         green in dark, pale in light), a bright edge, and a check glyph so the
+         state is not carried by colour alone (aria-pressed carries it for AT). */
       .wizard-template-card.selected,
       .wizard-signup-option.selected,
       .wizard-publish-option.selected {
-        border-color: #16a34a;
-        background: #f0fdf4;
+        border-color: var(--success);
+        background: color-mix(in srgb, var(--success) 15%, var(--surface));
+      }
+      .selected > .wizard-card-title::before {
+        content: '\2713  ';
+        color: var(--success);
+      }
+      .selected > .wizard-card-desc {
+        color: var(--text);
       }
       .wizard-card-title {
         font-size: 0.9rem;
@@ -2041,8 +2041,8 @@
         cursor: pointer;
       }
       .wizard-copy-btn:hover {
-        background: #f0fdf4;
-        border-color: #16a34a;
+        background: var(--surface-hover);
+        border-color: var(--success);
       }
       .wizard-checklist {
         list-style: none;
@@ -2057,8 +2057,8 @@
         color: var(--text);
       }
       .wizard-summary {
-        background: #f0fdf4;
-        border: 1px solid #16a34a;
+        background: color-mix(in srgb, var(--success) 15%, var(--surface));
+        border: 1px solid var(--success);
         border-radius: 8px;
         padding: 0.9rem;
         font-size: 0.95rem;
@@ -2542,6 +2542,7 @@
             <div class="wizard-signup-grid">
               <button
                 type="button"
+                aria-pressed="true"
                 class="wizard-publish-option selected"
                 data-option="published"
                 data-testid="wizard-publish-yes"
@@ -2553,6 +2554,7 @@
               </button>
               <button
                 type="button"
+                aria-pressed="false"
                 class="wizard-publish-option"
                 data-option="unpublished"
                 data-testid="wizard-publish-no"
@@ -2603,19 +2605,19 @@
           </div>
           <p class="wizard-step-help">Want a head start on the description? Pick one, or start blank.</p>
           <div class="wizard-template-grid" id="wizardTemplatePicker">
-            <button type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
+            <button aria-pressed="false" type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
               <span class="wizard-card-title">Trivia Night</span>
               <span class="wizard-card-desc">Teams, questions, bragging rights.</span>
             </button>
-            <button type="button" class="wizard-template-card" data-template="games" data-testid="wizard-template-games">
+            <button aria-pressed="false" type="button" class="wizard-template-card" data-template="games" data-testid="wizard-template-games">
               <span class="wizard-card-title">Game Night</span>
               <span class="wizard-card-desc">Bocce, pinball, cards — friendly competition.</span>
             </button>
-            <button type="button" class="wizard-template-card" data-template="music" data-testid="wizard-template-music">
+            <button aria-pressed="false" type="button" class="wizard-template-card" data-template="music" data-testid="wizard-template-music">
               <span class="wizard-card-title">Live Music</span>
               <span class="wizard-card-desc">A night built around the music.</span>
             </button>
-            <button type="button" class="wizard-template-card selected" data-template="other" data-testid="wizard-template-other">
+            <button aria-pressed="true" type="button" class="wizard-template-card selected" data-template="other" data-testid="wizard-template-other">
               <span class="wizard-card-title">Something Else</span>
               <span class="wizard-card-desc">Start blank — describe it your way.</span>
             </button>
@@ -2629,11 +2631,11 @@
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
           <p class="wizard-step-help">Want people to sign up ahead of time?</p>
           <div class="wizard-signup-grid">
-            <button type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
+            <button aria-pressed="true" type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
               <span class="wizard-card-title">Yes — use the built-in sign-up page</span>
               <span class="wizard-card-desc">We make it for you. You'll get the link in the next step.</span>
             </button>
-            <button type="button" class="wizard-signup-option" data-option="none" data-testid="wizard-signup-none">
+            <button aria-pressed="false" type="button" class="wizard-signup-option" data-option="none" data-testid="wizard-signup-none">
               <span class="wizard-card-title">No sign-ups needed</span>
               <span class="wizard-card-desc">People can just show up. You can add this later.</span>
             </button>
@@ -3234,7 +3236,9 @@
             // Skipping = "no sign-ups" + straight to create. Still one POST.
             wiz.signup = 'none';
             document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
-              c.classList.toggle('selected', c.getAttribute('data-option') === 'none');
+              var on = c.getAttribute('data-option') === 'none';
+              c.classList.toggle('selected', on);
+              c.setAttribute('aria-pressed', String(on));
             });
             createEvent();
           }
@@ -3316,6 +3320,7 @@
               wiz.template = el.getAttribute('data-template') || 'other';
               document.querySelectorAll('.wizard-template-card').forEach(function (c) {
                 c.classList.toggle('selected', c === el);
+                c.setAttribute('aria-pressed', String(c === el));
               });
             });
           });
@@ -3324,6 +3329,7 @@
               wiz.signup = el.getAttribute('data-option') || 'create';
               document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
                 c.classList.toggle('selected', c === el);
+                c.setAttribute('aria-pressed', String(c === el));
               });
             });
           });
@@ -3338,6 +3344,7 @@
               wiz.published = el.getAttribute('data-option') !== 'unpublished';
               document.querySelectorAll('.wizard-publish-option').forEach(function (c) {
                 c.classList.toggle('selected', c === el);
+                c.setAttribute('aria-pressed', String(c === el));
               });
             });
           });
@@ -4266,7 +4273,7 @@
           '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' +
           '<div class="report-links-section" data-testid="report-links-section">' +
             '<h3>Shared Report Links</h3>' +
-            '<p style="margin:0 0 12px;font-size:13px;color:#5a5a5a">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
+            '<p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
             '<div class="mint-form-grid" data-testid="mint-form-grid">' +
               '<div class="mint-field">' +
                 '<label for="mint-role">Role</label>' +
@@ -4346,17 +4353,17 @@
           const reportUrl = location.origin + '/sharedReport?eventId=' +
             encodeURIComponent(eventId) + '&token=' + encodeURIComponent(data.token);
           result.innerHTML =
-            '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
+              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
               '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + escAttr(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
             '</div>' +
             '<a data-testid="mint-report-url" href="' + escAttr(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
-            '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--success);border-radius:6px';
         } catch (err) {
           result.textContent = err.message || 'Failed to generate link.';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:#fff0f0;border:1px solid #e2b6b6;border-radius:6px;color:#c0392b';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--error);border-radius:6px;color:var(--error)';
         } finally {
           btn.disabled = false;
           btn.textContent = 'Generate Link';
@@ -4522,12 +4529,12 @@
         max-width: 100%;
         max-height: 220px;
         border-radius: 8px;
-        border: 1px solid var(--border, #e2e8f0);
+        border: 1px solid var(--border);
       }
       .pa-preview-none {
         margin: 0;
         font-size: 0.9375rem;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
       .pa-upload-label > span {
         display: block;
@@ -4544,14 +4551,14 @@
         min-height: 44px;
         font-size: 16px;
         padding: 0.5rem;
-        border: 1px solid var(--border, #dee2e6);
+        border: 1px solid var(--border);
         border-radius: 6px;
-        background: var(--surface, #fff);
+        background: var(--surface);
       }
       .pa-hint {
         margin: 0.5rem 0 0;
         font-size: 0.875rem;
-        color: var(--text-muted, #64748b);
+        color: var(--text-muted);
       }
     </style>
     <script>
