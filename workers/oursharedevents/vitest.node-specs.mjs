@@ -168,4 +168,8 @@ export const NODE_SPECS = [
   // L7 observability (OSE-1380) — Cloudflare GraphQL Analytics baseline tool. Pure
   // query/aggregate/never-who fns imported from the .mjs script; no network / D1.
   'tests/observability-cf-analytics.spec.ts',
+  // L7 observability (OSE-1380) — runbook↔code drift guard: every structured-log
+  // tag OBSERVABILITY.md tells operators to consume must be emitted by src/.
+  // Reads files via node:fs (like d1-canonical-shape); node-clean, no runtime.
+  'tests/observability-runbook-tags.spec.ts',
 ];
