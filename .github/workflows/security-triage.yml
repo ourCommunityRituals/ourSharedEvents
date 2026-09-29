@@ -19,6 +19,10 @@ on:
       - "CodeQL Security Analysis"
       # Extended scans (advanced-security-scan.yml)
       - "Advanced Security Scans"
+      # Nightly input-validation fuzz (overnight-fuzz.yml). OSE-1409: it sat
+      # red for 10+ nights with no one notified; a failure now files (or
+      # comments on) a tracked issue like every other scan here.
+      - "Overnight fat-finger fuzz"
     types:
       - completed
 
@@ -34,7 +38,7 @@ defaults:
 jobs:
   triage:
     name: "🚨 Triage Security Findings"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only triage when the scan failed (findings detected)
     if: github.event.workflow_run.conclusion == 'failure'
     steps:

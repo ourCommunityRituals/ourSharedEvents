@@ -54,7 +54,7 @@ env:
 jobs:
   npm-audit:
     name: npm audit — all packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       status: ${{ steps.audit.outputs.status }}
       critical: ${{ steps.audit.outputs.critical }}
@@ -173,7 +173,7 @@ jobs:
 # ─── Job 2: gitleaks secret scan ─────────────────────────────────────────────
   secret-scan:
     name: gitleaks — commits last 24 h
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       status: ${{ steps.gitleaks.outputs.status }}
       leak_count: ${{ steps.gitleaks.outputs.leak_count }}
@@ -258,7 +258,7 @@ jobs:
 # ─── Job 3: Playwright health + security check ───────────────────────────────
   health-check:
     name: Playwright — staging health + security headers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       status: ${{ steps.pw.outputs.status }}
       summary: ${{ steps.pw.outputs.summary }}
@@ -449,7 +449,7 @@ jobs:
 # ─── Job 4: Create Linear issues for failures ────────────────────────────────
   linear-issues:
     name: Create Linear issues for findings
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [npm-audit, secret-scan, health-check]
     if: always()
     outputs:
@@ -641,7 +641,7 @@ jobs:
 # ─── Job 5: Daily digest webhook ─────────────────────────────────────────────
   digest:
     name: Post daily security digest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [npm-audit, secret-scan, health-check, linear-issues]
     if: always()
     steps:

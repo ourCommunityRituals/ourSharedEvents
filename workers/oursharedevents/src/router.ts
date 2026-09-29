@@ -8,6 +8,8 @@
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
  *   GET /health                  → health check
+ *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
+ *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
@@ -113,6 +115,7 @@ async function uiCssEtag(css: string): Promise<string> {
 }
 import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
+import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
 import { publicReadLimited } from './lib/public-read-limit.js';
 import {
@@ -460,6 +463,15 @@ export async function route(
   const demoSiteMatch = pathname.match(/^\/demo\/([^/]+)$/);
   if (demoSiteMatch && method === 'GET') {
     return handleDemoSite(demoSiteMatch[1]);
+  }
+
+  // ── Crawl policy — robots.txt + sitemap.xml (lib/crawl-policy) ───────────
+  if (pathname === '/robots.txt' && (method === 'GET' || method === 'HEAD')) {
+    return handleRobotsTxt(request, env);
+  }
+  if (pathname === '/sitemap.xml' && (method === 'GET' || method === 'HEAD')) {
+    // Reads D1 (every published event id), so it takes the public-read default.
+    return publicReadLimited('sitemap', handleSitemapXml)(request, env);
   }
 
   if (pathname === '/health' || pathname === '/api/status') {

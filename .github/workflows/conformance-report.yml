@@ -32,7 +32,7 @@ on:
 jobs:
   generate:
     name: Generate conformance report
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read     # OSE-1031: report writes flow through a PR opened with
                          # OCR_PROPAGATE_TOKEN (a PAT), never a direct push to protected main —

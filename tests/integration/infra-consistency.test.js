@@ -61,16 +61,41 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     }
   });
 
-  test('staging and production deploy/smoke jobs use ubuntu-latest', () => {
+  // OSE-1408: `ubuntu-latest` re-points to Ubuntu 26 on 2026-10-19, five days
+  // before the Oct 24 launch. Every job pins the image so a runner-image change
+  // lands as a reviewed PR, never as a surprise mid-deploy-window. Un-pinning
+  // (or moving to ubuntu-26.04) is a deliberate post-launch change to this value.
+  const PINNED_RUNNER = 'ubuntu-24.04';
+
+  test('every workflow job pins the hosted runner image (no floating ubuntu-latest)', () => {
+    const yaml = require('js-yaml');
+    const { readdirSync } = require('fs');
+    const workflowsDir = join(ROOT, '.github', 'workflows');
+    const workflowFiles = readdirSync(workflowsDir).filter((file) => /\.(yml|yaml)$/.test(file));
+
+    let jobsChecked = 0;
+    for (const file of workflowFiles) {
+      const workflow = yaml.load(readFile(`.github/workflows/${file}`)) || {};
+      for (const [jobId, job] of Object.entries(workflow.jobs || {})) {
+        // Reusable-workflow callers (`uses:`) have no runs-on of their own.
+        if (!job || job.uses) continue;
+        jobsChecked += 1;
+        expect(job['runs-on'], `${file}:${jobId} must pin ${PINNED_RUNNER}`).toBe(PINNED_RUNNER);
+      }
+    }
+    expect(jobsChecked).toBeGreaterThan(0);
+  });
+
+  test('staging and production deploy/smoke jobs use the same pinned hosted runner', () => {
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
 
-    expect(workflow.jobs['deploy-staging']['runs-on']).toBe('ubuntu-latest');
-    expect(workflow.jobs['contract-staging-sub']['runs-on']).toBe('ubuntu-latest');
-    expect(workflow.jobs['smoke-staging-sub']['runs-on']).toBe('ubuntu-latest');
-    expect(workflow.jobs['functional-staging']['runs-on']).toBe('ubuntu-latest');
-    expect(workflow.jobs['deploy-production']['runs-on']).toBe('ubuntu-latest');
-    expect(workflow.jobs['smoke-production']['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs['deploy-staging']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['contract-staging-sub']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['smoke-staging-sub']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['functional-staging']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['deploy-production']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['smoke-production']['runs-on']).toBe(PINNED_RUNNER);
   });
 
   // ADR-008 Phase 0: the staging step stages the hub commit pinned in

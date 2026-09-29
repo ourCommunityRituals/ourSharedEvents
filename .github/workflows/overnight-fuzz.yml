@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   fuzz:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
       run:
@@ -62,11 +62,28 @@ jobs:
       - run: npm ci
 
       - name: Fuzz the wizard's input edges
+        shell: bash
         env:
           # A fresh seed each night: the point is to explore inputs the
           # gate's fixed-seed run never reaches.
           FC_RUNS: ${{ github.event.inputs.runs || '50000' }}
-        run: npx vitest run tests/fat-finger.property.spec.ts --reporter=verbose
+        # OSE-1409: this job was red for 10+ nights (2026-09-20 → 09-29) without
+        # ever running a property — vitest could not LOAD its config (js-yaml was
+        # undeclared in the worker, so a worker-only `npm ci` could not resolve
+        # it). An infra failure and a counterexample looked identical: a red run.
+        # Classify them so the log says which one a human is looking at.
+        run: |
+          set +e
+          npx vitest run tests/fat-finger.property.spec.ts --reporter=verbose 2>&1 | tee fuzz.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            if grep -qE 'Startup Error|failed to load config|Cannot find (package|module)|Failed to initialize projects' fuzz.log; then
+              echo "::error title=Fuzz infra failure::vitest could not start — no property ran. This is NOT a counterexample; fix the toolchain (see fuzz.log)."
+            else
+              echo "::error title=Fuzz counterexample::a property failed — reproduce from the seed printed in fuzz.log."
+            fi
+          fi
+          exit "$status"
 
       - name: Upload counterexamples
         if: failure()
