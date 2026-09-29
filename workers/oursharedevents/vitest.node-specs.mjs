@@ -146,6 +146,9 @@ export const NODE_SPECS = [
   // OSE-1363 date-only off-by-one on the public listing. renderEventList over
   // lib/event-list.ts (imports only html-escape + inject-marker); node-clean.
   'tests/event-list.spec.ts',
+  // OSE-1363 shared-report client-JS date formatters force UTC. Imports
+  // shared-report.html as Text (node loader) and asserts the template source.
+  'tests/shared-report-date-utc.spec.ts',
 
   // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
   // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.
