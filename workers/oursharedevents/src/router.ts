@@ -101,6 +101,16 @@
  */
 
 import { serveCss } from '@ocr/ui';
+
+let uiCssEtagMemo: { css: string; etag: string } | undefined;
+/** Strong ETag for the shared stylesheet, memoised per isolate. */
+async function uiCssEtag(css: string): Promise<string> {
+  if (uiCssEtagMemo?.css === css) return uiCssEtagMemo.etag;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(css));
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  uiCssEtagMemo = { css, etag: `"${hex.slice(0, 32)}"` };
+  return uiCssEtagMemo.etag;
+}
 import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleEventsMap } from './handlers/events-map.js';
@@ -418,11 +428,23 @@ export async function route(
     // here: add nosniff (DAST rule 10021) and the cross-cutting isolation
     // headers so the stylesheet loads under the pages' COEP require-corp and
     // the DAST can gate on 90004. CSP/content-type from @ocr/ui are preserved.
+    //
+    // Cache (OSE-1398): the href never changes, so @ocr/ui's 24h max-age would
+    // pair new HTML with stale CSS for a day after every .ocr-hub-ref bump.
+    // Revalidate instead: a strong ETag over the stylesheet bytes, 304 when
+    // the browser already holds them.
     const cssRes = serveCss();
+    const css = await cssRes.text();
+    const etag = await uiCssEtag(css);
     const cssHeaders = new Headers(cssRes.headers);
     cssHeaders.set('X-Content-Type-Options', 'nosniff');
+    cssHeaders.set('Cache-Control', 'public, max-age=0, must-revalidate');
+    cssHeaders.set('ETag', etag);
     for (const [k, v] of Object.entries(HARDENING_HEADERS)) cssHeaders.set(k, v);
-    return new Response(cssRes.body, { status: cssRes.status, headers: cssHeaders });
+    if (request.headers.get('If-None-Match') === etag) {
+      return new Response(null, { status: 304, headers: cssHeaders });
+    }
+    return new Response(css, { status: cssRes.status, headers: cssHeaders });
   }
 
   if (pathname === '/ui-preview') {

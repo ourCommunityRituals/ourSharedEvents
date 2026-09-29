@@ -50,6 +50,23 @@ describe('OSE-1186 G2: cross-cutting hardening headers on every public surface',
     }
   });
 
+  // OSE-1398: the href is fixed, so the stylesheet must revalidate rather than
+  // sit in caches for @ocr/ui's 24h after an .ocr-hub-ref bump.
+  test('/ui.css revalidates by ETag (no 24h stale window) and answers 304 when unchanged', async () => {
+    const res = await SELF.fetch('https://t.test/ui.css');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate');
+    const etag = res.headers.get('ETag');
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    expect((await res.text()).length).toBeGreaterThan(1000);
+
+    const again = await SELF.fetch('https://t.test/ui.css', { headers: { 'If-None-Match': etag! } });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    const stale = await SELF.fetch('https://t.test/ui.css', { headers: { 'If-None-Match': '"old"' } });
+    expect(stale.status).toBe(200);
+  });
+
   test('the hardening contract is the one DAST gates on (require-corp, deny device APIs)', () => {
     // Guards the values themselves so an accidental weakening (e.g. COEP back to
     // unsafe-none) fails here, not only in the nightly scan.

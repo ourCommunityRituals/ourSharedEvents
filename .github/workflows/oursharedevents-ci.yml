@@ -675,9 +675,23 @@ jobs:
       # own stylesheet over the inline budget, raw hex, or non-/ui.css stylesheet
       # link; existing debt is the baseline in .ocr-design-check.json and may only
       # shrink. Complements (does not replace) the token-adherence ratchet above.
+      # On PRs the baseline file itself is compared against the base branch's
+      # copy (--base-config, OSE-1397): a PR may lower it, never raise it or
+      # widen what the check scans.
       - name: 'Lint: no spoke-owned tokens or stylesheet (@ocr/ui check-spoke-styles, pinned)'
         if: matrix.shard == 'lint'
-        run: node ../packages/ui/scripts/check-spoke-styles.mjs --root .
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          ARGS=()
+          if [ -n "$BASE_REF" ]; then
+            git fetch -q --depth=1 origin "$BASE_REF"
+            if git cat-file -e FETCH_HEAD:.ocr-design-check.json 2>/dev/null; then
+              git show FETCH_HEAD:.ocr-design-check.json > "$RUNNER_TEMP/base-design-check.json"
+              ARGS=(--base-config "$RUNNER_TEMP/base-design-check.json")
+            fi
+          fi
+          node ../packages/ui/scripts/check-spoke-styles.mjs --root . "${ARGS[@]}"
 
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
