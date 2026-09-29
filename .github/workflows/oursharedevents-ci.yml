@@ -673,6 +673,15 @@ jobs:
           npm ci --prefer-offline || npm ci
           npx tsx scripts/verify-contrast.mjs
 
+      # @ocr/ui's own suite (tokens, brand designation, partials, styles and the
+      # rendered-pair light-contrast gate) was never run by any workflow, so a
+      # regression in the shared stylesheet could not turn a PR red. Same shard,
+      # same install as the contrast step above.
+      - name: 'Unit: @ocr/ui package tests'
+        if: matrix.shard == 'lint'
+        working-directory: packages/ui
+        run: npx vitest run tests/
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
