@@ -27,8 +27,8 @@
 /** Highest migration in migrations/ — currently 0079_poster_deployments_add_address.sql */
 export const REQUIRED_DB_MIGRATION = 79;
 
-/** Highest migration in migrations-forms/ — currently 0014_encrypt_attendee_name.sql */
-export const REQUIRED_FORMS_MIGRATION = 14;
+/** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
+export const REQUIRED_FORMS_MIGRATION = 15;
 
 export interface SchemaGuardEnv {
   DB?: D1Database;

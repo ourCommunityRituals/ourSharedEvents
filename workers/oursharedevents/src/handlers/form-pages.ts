@@ -188,6 +188,8 @@ const FORM_CSS = `
   .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
   .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
+  .walk-in-row { color: var(--text-muted); font-size: .9rem; }
+  .checkin-tap .walk-in-btn { width: auto; height: auto; min-height: 44px; margin: .5rem auto 0; padding: .6rem 1.1rem; border-radius: 8px; font-size: 1rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
   /* OSE-222: sponsor logo strip in form header. Renders hidden by
      default; gets .has-sponsors class via JS only if sponsor-bundle
@@ -453,13 +455,18 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
       <h2>Check In</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <button type="button" id="checkin-btn" data-testid="checkin-submit">Tap to<br/>Check In</button>
+      <p class="walk-in-row">Didn't register?
+        <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">Check in as a walk-in</button>
+      </p>
       <div class="count" id="count" data-testid="checkin-count"></div>
       ${privacyNotice('checkin', legalTier)}
     </div>
     <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       let tapping = false;
-      async function handleCheckin(e) {
+      // OSE-1373: the walk-in button declares its arrival path; the plain tap
+      // declares none. A category per check-in — never who checked in.
+      async function handleCheckin(e, walkIn) {
         if (e) e.preventDefault();
         if (tapping) return;
         tapping = true;
@@ -467,7 +474,10 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
         btn.style.transform = 'scale(0.93)';
         btn.style.opacity = '0.7';
         try {
-          const body = await submitForm('${eventId}', 'checkin', {
+          const body = await submitForm('${eventId}', 'checkin', walkIn ? {
+            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+            arrival_path: 'walk_in',
+          } : {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
           });
           document.getElementById('count').textContent = body.count + ' checked in';
@@ -481,6 +491,10 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
       const _checkinBtn = document.getElementById('checkin-btn');
       _checkinBtn.addEventListener('touchend', handleCheckin);
       _checkinBtn.addEventListener('click', handleCheckin);
+      const _walkInBtn = document.getElementById('walk-in-btn');
+      const _walkIn = function (e) { return handleCheckin(e, true); };
+      _walkInBtn.addEventListener('touchend', _walkIn);
+      _walkInBtn.addEventListener('click', _walkIn);
     </script>`;
 }
 

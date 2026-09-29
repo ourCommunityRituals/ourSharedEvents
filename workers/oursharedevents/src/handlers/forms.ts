@@ -352,6 +352,28 @@ export async function handleSelfDeleteRegistration(
 
 // ─── Public: Check-in ───────────────────────────────────────────────────────────
 
+/** The two arrival paths a check-in can declare (OSE-1373). */
+type ArrivalPath = 'walk_in' | 'registered';
+
+/**
+ * The check-in's declared arrival path — a categorical the door page sends
+ * (`{ arrival_path: 'walk_in' }` from its walk-in button). Optional and
+ * lenient: the tap has always been bodyless, so a missing, malformed, oversized
+ * or unknown body is simply "no path" and never blocks the check-in. Never-who:
+ * the path is taken from the request itself, never by matching anyone to a
+ * registration.
+ */
+async function readArrivalPath(request: Request): Promise<ArrivalPath | null> {
+  try {
+    const raw = await request.text();
+    if (!raw || raw.length > 1024) return null;
+    const v = (JSON.parse(raw) as { arrival_path?: unknown } | null)?.arrival_path;
+    return v === 'walk_in' || v === 'registered' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function handleFormCheckin(
   request: Request,
   env: FormsEnv,
@@ -366,15 +388,17 @@ export async function handleFormCheckin(
   if (turnstileDeny) return turnstileDeny;
 
   const { anonId, isNew } = getOrCreateAnonId(request);
+  // OSE-1373: which door this check-in came through, from the request alone.
+  const walkIn = (await readArrivalPath(request)) === 'walk_in' ? 1 : 0;
 
   try {
     const id = generateId();
     await env.FORMS_DB.prepare(
-      `INSERT INTO checkin_counts (id, event_id, total_count, updated_at, last_anonymous_id)
-       VALUES (?, ?, 1, datetime('now'), ?)
-       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now'), last_anonymous_id = ?`
+      `INSERT INTO checkin_counts (id, event_id, total_count, walk_in_count, updated_at, last_anonymous_id)
+       VALUES (?, ?, 1, ?, datetime('now'), ?)
+       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, walk_in_count = walk_in_count + excluded.walk_in_count, updated_at = datetime('now'), last_anonymous_id = ?`
     )
-      .bind(id, eventId, anonId, anonId)
+      .bind(id, eventId, walkIn, anonId, anonId)
       .run();
 
     const result = await env.FORMS_DB.prepare(

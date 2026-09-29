@@ -94,6 +94,8 @@ describe('counts are post-event only | attendee surfaces carry no tally', () => 
     'stat-checkins',
     'stat-registrations',
     'stat-showed-up-share',
+    'stat-walk-ins', // OSE-1373
+    'stat-walk-in-share', // OSE-1373
     'event-stats-card',
   ];
   const COUNT_COPY = [/checked in so far/i, /registered so far/i, /% of those registered/i];

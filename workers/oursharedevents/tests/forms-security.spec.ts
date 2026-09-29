@@ -441,17 +441,19 @@ describe('S10: Email hash non-reversibility', () => {
 });
 
 describe('S12: Check-in stores zero PII', () => {
-  test('checkin_counts table has exactly 5 columns: id, event_id, total_count, updated_at, last_anonymous_id', async () => {
+  test('checkin_counts table has exactly 6 columns: id, event_id, total_count, updated_at, last_anonymous_id, walk_in_count', async () => {
     const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(checkin_counts)').all();
     const cols = info.results.map((r: Record<string, unknown>) => r.name);
 
-    expect(cols).toHaveLength(5);
+    expect(cols).toHaveLength(6);
     expect(cols).toContain('id');
     expect(cols).toContain('event_id');
     expect(cols).toContain('total_count');
     expect(cols).toContain('updated_at');
     expect(cols).toContain('last_anonymous_id');
     // last_anonymous_id is NOT PII — it's a random UUID with no personal data
+    // OSE-1373 (forms migration 0015): a second running count, per arrival path.
+    expect(cols).toContain('walk_in_count');
   });
 
   test('check-in INSERT uses only id, event_id, total_count — no PII in SQL', () => {
