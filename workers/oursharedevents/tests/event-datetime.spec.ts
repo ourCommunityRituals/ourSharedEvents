@@ -11,6 +11,7 @@ import {
   zonedDateTimeToUtcIso,
   formatEventDateTime,
   formatEventTime,
+  formatDateOnly,
   zonedDatePart,
   zonedTimePart,
   phaseTimesFor,
@@ -224,6 +225,48 @@ describe('OSE-1313 spring-forward gap is refused, not silently shifted', () => {
 
   test('the fall-back overlap still resolves (it exists, twice)', () => {
     expect(zonedDateTimeToUtcIso('2026-11-01', '01:30', 'America/New_York')).not.toBeNull();
+  });
+});
+
+describe('OSE-1363 formatDateOnly — a calendar day, never a UTC-shifted instant', () => {
+  test('renders the given day with weekday/month/day/year opts', () => {
+    expect(
+      formatDateOnly('2026-10-24', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    ).toBe('Saturday, October 24, 2026');
+  });
+
+  test('forces UTC LAST — a caller-supplied timeZone cannot shift the day', () => {
+    // The whole bug: a negative-offset zone rolled UTC-midnight back a day.
+    expect(
+      formatDateOnly('2026-10-24', {
+        timeZone: 'America/Chicago',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    ).toBe('October 24, 2026');
+  });
+
+  test('with no opts, falls back to the en-US numeric default of the same day', () => {
+    expect(formatDateOnly('2026-10-24')).toBe('10/24/2026');
+  });
+
+  test('rejects anything that is not a bare YYYY-MM-DD → empty string', () => {
+    for (const bad of [
+      '2026-10-25T03:00:00Z',
+      'not-a-date',
+      '10/24/2026',
+      '2026-10',
+      '',
+      null,
+      undefined,
+    ])
+      expect(formatDateOnly(bad as string)).toBe('');
   });
 });
 

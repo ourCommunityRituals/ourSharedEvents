@@ -128,6 +128,29 @@ export function formatEventTime(utcIso: string | null | undefined, tz: string | 
   }).format(d);
 }
 
+/**
+ * Format a date-only value ("YYYY-MM-DD") for humans WITHOUT a timezone shift.
+ *
+ * A date-only value names a CALENDAR DAY, not an instant. `new Date("2026-10-24")`
+ * parses it as UTC midnight, and formatting that instant in a negative-offset zone
+ * rolls the day back a day ("Oct 23") — the OSE-1363 off-by-one. This anchors the
+ * value at UTC midnight and formats in UTC, so the rendered day always matches the
+ * value. `timeZone: 'UTC'` is spread LAST so it overrides any `timeZone` a caller
+ * left in `opts` — a date-only value has no zone to honour.
+ *
+ * Returns '' for anything that is not a bare `YYYY-MM-DD` (a full instant has a
+ * zone; render it with the zoned formatters above, not this one).
+ */
+export function formatDateOnly(
+  dateStr: string | null | undefined,
+  opts: Intl.DateTimeFormatOptions = {}
+): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'UTC' }).format(d);
+}
+
 /** The local calendar date ("YYYY-MM-DD") of a UTC instant in `tz`. */
 export function zonedDatePart(utcIso: string | null | undefined, tz: string | null): string {
   if (!utcIso) return '';
