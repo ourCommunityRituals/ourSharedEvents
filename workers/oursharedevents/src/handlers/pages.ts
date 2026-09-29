@@ -66,6 +66,7 @@ import {
   phaseTimesFor,
   zonedDatePart,
 } from '../lib/event-datetime.js';
+import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
