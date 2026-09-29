@@ -123,8 +123,16 @@ describe('A11Y-5: #155724 (8.69:1 on white, 7.59:1 on green bg) for success/badg
     expect(body).not.toContain('#155724');
   });
 
-  test('shared report badges use #155724', async () => {
-    expect(await reportHtml()).toContain('#155724');
+  // OSE-1395: the light pair was overridden by a later, unscoped
+  // `.badge.active{color:#4ade80}` overlay rule (~1.6:1 in light). One rule
+  // now, on the contrast-tested @ocr/ui pair --success on --surface-hover.
+  test('shared report active badge uses var(--success) on var(--surface-hover), once', async () => {
+    const body = await reportHtml();
+    const rules = body.match(/\.badge\.active\s*\{[^}]*\}/g) ?? [];
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatch(/color:\s*var\(--success\)/);
+    expect(rules[0]).toMatch(/background:\s*var\(--surface-hover\)/);
+    expect(body).not.toContain('#4ade80');
   });
 
   test('register form success uses var(--success)', async () => {
@@ -178,5 +186,15 @@ describe('A11Y-5: #64748b (4.76:1 on white) for poster/admin hint text', () => {
     const body = await adminHtml();
     expect(body).toMatch(/\.qr-hint\s*\{[^}]*color:\s*var\(--text-muted\)/);
     expect(body).not.toContain('#64748b');
+  });
+});
+
+describe('OSE-1395: admin uses only tokens @ocr/ui defines (no light-only fallbacks)', () => {
+  // --surface-alt / --success-bg were never defined in @ocr/ui, so their
+  // light fallbacks (#f1f3f5, #e6f4ea, #f8fafc) painted light panels in dark.
+  test('admin references no undefined --surface-alt / --success-bg', async () => {
+    const body = await adminHtml();
+    expect(body).not.toMatch(/var\(--surface-alt\b/);
+    expect(body).not.toMatch(/var\(--success-bg\b/);
   });
 });
