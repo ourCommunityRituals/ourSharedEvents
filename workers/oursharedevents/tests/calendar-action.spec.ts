@@ -52,12 +52,11 @@ function row(overrides: Partial<PublicEventRow> = {}): PublicEventRow {
 const SHARE = 'https://oursharedevents.com/events/evt_x';
 
 describe('OSE-1358 Add to calendar disclosure | every phase', () => {
-  // The menu currently renders on all three phases; whether it should be hidden
-  // post-event is OSE-1373's decision, not this story's. Cover what ships today.
+  // Pre + live offer the menu. Post-event does not: OSE-1373 decided a wrapped
+  // event has no future to add (asserted below and in never-who-disclosure.spec).
   for (const [phase, render] of [
     ['pre', (r: PublicEventRow) => renderPreEventHtml(r, SHARE)],
     ['live', (r: PublicEventRow) => renderEventLiveHtml(r, SHARE)],
-    ['post', (r: PublicEventRow) => renderPostEventHtml(r, SHARE, [])],
   ] as const) {
     it(`${phase}: renders a <details> menu beside Share with Google + .ics`, () => {
       const html = render(row());
@@ -81,6 +80,14 @@ describe('OSE-1358 Add to calendar disclosure | every phase', () => {
       expect(html).not.toContain('utm_');
     });
   }
+
+  it('post: Share only — no Add to calendar on a wrapped event (OSE-1373)', () => {
+    const html = renderPostEventHtml(row(), SHARE, []);
+    expect(html).toContain('data-testid="event-actions"');
+    expect(html).toContain('data-testid="share-btn"');
+    expect(html).not.toContain('data-testid="add-to-calendar"');
+    expect(html).not.toContain('calendar.google.com');
+  });
 
   it('a date-only event (no time) still offers an all-day Google link on its own day', () => {
     const html = renderPreEventHtml(row({ starts_at: null }), SHARE);

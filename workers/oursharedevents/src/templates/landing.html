@@ -264,27 +264,8 @@
         text-align: center;
         color: var(--muted);
       }
-      /* ── Never-who privacy panel ───────────────────────────────────────────── */
-      .privacy {
-        margin: 2.25rem 0 0;
-        padding: 1.15rem 1.25rem;
-        background: color-mix(in srgb, var(--accent) 7%, transparent);
-        border-left: 3px solid var(--accent);
-        border-radius: 8px;
-        font-size: 0.92rem;
-        color: var(--muted);
-      }
-      .privacy h2 {
-        margin: 0 0 0.4rem;
-        font-size: 1rem;
-        color: var(--text);
-      }
-      .privacy p {
-        margin: 0 0 0.5rem;
-      }
-      .privacy a {
-        color: var(--accent);
-      }
+      /* ── Never-who disclosure (OSE-1372) — one partial, lib/never-who.ts ── */
+      /*OCR_NEVER_WHO_CSS*/
       /* Page-level heading — the one <h1>. Visible text = accessible name (WCAG
          2.4.6 / 1.3.1 heading hierarchy: h1 → the section h2s below). */
       .lead {
@@ -341,21 +322,11 @@
         <!--OCR_LANDING_AREA-->
       </section>
 
-      <!-- Never-who statement. Shares the wrap page's tone; TRUE of this page:
-           no cookies, no analytics, no geolocation prompt run here. -->
-      <section class="privacy" data-testid="landing-privacy" aria-labelledby="privacy-heading">
-        <h2 id="privacy-heading">How this works</h2>
-        <p>
-          Attendance is measured <strong>without gathering who you are</strong>, by default. We
-          count that people came — where and when — never who they are. This page sets no cookies,
-          runs no analytics, and never asks for your location; it only shows you what&#x2019;s
-          around.
-        </p>
-        <p>
-          Choosing to be named is a feature, not the norm &mdash; nothing names you unless you pick
-          it. <a href="/events" data-testid="privacy-more">See what&#x2019;s happening &rarr;</a>
-        </p>
-      </section>
+      <!-- Never-who statement (Invariant #1 surface language). One line, the
+           paragraph behind a native disclosure; TRUE of this page: no cookies,
+           no analytics, no geolocation prompt run here. Rendered by
+           lib/never-who.ts so every anonymous surface carries the same partial. -->
+      <!--OCR_NEVER_WHO-->
     </main>
     <!--OCR_LEGAL_FOOTER-->
   </body>

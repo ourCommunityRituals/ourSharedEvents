@@ -160,10 +160,11 @@ describe('legal footer — per-surface composition', () => {
     }
   });
 
-  test('the standing subtitle rides the two public surfaces only', () => {
-    expect(renderLegalFooter('landing')).toContain('Never who, only how many.');
-    expect(renderLegalFooter('public')).toContain('Never who, only how many.');
-    for (const s of ['admin', 'shared-report', 'admin-signin'] as const) {
+  // OSE-1372: the subtitle moved into the body as the visible line of the
+  // never-who disclosure (tests/never-who-disclosure.spec.ts asserts it there).
+  // The footer must not repeat it — one line, not two.
+  test('no footer repeats the never-who subtitle', () => {
+    for (const s of ['landing', 'public', 'admin', 'shared-report', 'admin-signin'] as const) {
       expect(renderLegalFooter(s)).not.toContain('Never who');
     }
   });

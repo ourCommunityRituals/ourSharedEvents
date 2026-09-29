@@ -30,7 +30,15 @@ import { escapeHtml } from './html-escape';
 import { injectMarker } from './inject-marker';
 import type { EventListItem } from './event-list';
 
-export const WHEN_OPTIONS = ['all', 'today', 'weekend', 'week', 'month', 'past'] as const;
+export const WHEN_OPTIONS = [
+  'all',
+  'today',
+  'weekend',
+  'week',
+  'month',
+  'next-month',
+  'past',
+] as const;
 export type WhenOption = (typeof WHEN_OPTIONS)[number];
 export const Q_MAX_LEN = 60;
 const HOME_TZ = 'America/Chicago';
@@ -40,14 +48,45 @@ export interface DiscoveryFilters {
   q: string;
 }
 
-const WHEN_LABELS: Record<WhenOption, string> = {
-  all: 'Everything',
-  today: 'Today',
-  weekend: 'This weekend',
-  week: 'Next 7 days',
-  month: 'This month',
-  past: 'Recently wrapped',
+/**
+ * OSE-1372: ONE table per `when` value drives the chip, the count line and the
+ * empty state, so the three cannot disagree (staging showed the Everything chip
+ * beside "0 this month" and "Nothing else this month yet."). `span` is the
+ * phrase that finishes "N events …" and "Nothing … yet."; '' for the undated
+ * default.
+ */
+const WHEN_COPY: Record<WhenOption, { chip: string; span: string; empty: string }> = {
+  all: { chip: 'Everything', span: '', empty: 'Nothing scheduled right now. Check back soon.' },
+  today: {
+    chip: 'Today',
+    span: 'today',
+    empty: 'Nothing on today. Try this weekend or the next 7 days.',
+  },
+  weekend: { chip: 'This weekend', span: 'this weekend', empty: 'Nothing this weekend yet.' },
+  week: {
+    chip: 'Next 7 days',
+    span: 'in the next 7 days',
+    empty: 'Nothing in the next 7 days yet.',
+  },
+  month: { chip: 'This month', span: 'this month', empty: 'Nothing this month yet.' },
+  'next-month': { chip: 'Next month', span: 'next month', empty: 'Nothing next month yet.' },
+  past: {
+    chip: 'Recently wrapped',
+    span: 'recently wrapped',
+    empty: 'Nothing has wrapped recently.',
+  },
 };
+
+/** The count line for a `when` value: "3 events this month", "1 event", "0 events next month". */
+export function discoveryCountLabel(when: WhenOption, n: number): string {
+  const span = WHEN_COPY[when].span;
+  return `${n} ${n === 1 ? 'event' : 'events'}${span ? ` ${span}` : ''}`;
+}
+
+/** The chip label for a `when` value. */
+export function discoveryChipLabel(when: WhenOption): string {
+  return WHEN_COPY[when].chip;
+}
 
 /** Parse + sanitise the query string. Never throws; unknown → defaults. */
 export function parseDiscoveryFilters(url: URL): DiscoveryFilters {
@@ -98,6 +137,13 @@ function addDays(ymd: string, n: number): string {
   const d = new Date(`${ymd}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
+}
+
+/** YYYY-MM of the calendar month after `ymd`. */
+function nextMonth(ymd: string): string {
+  const y = Number(ymd.slice(0, 4));
+  const m = Number(ymd.slice(5, 7));
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
 }
 
 function dayOfWeek(ymd: string): number {
@@ -166,6 +212,9 @@ export function applyDiscoveryFilters(
       if (f.when === 'today' && ed !== today) return false;
       if (f.when === 'week' && (ed < today || ed > addDays(today, 7))) return false;
       if (f.when === 'month' && ed.slice(0, 7) !== today.slice(0, 7)) return false;
+      // Next calendar month in the event's zone (late-month browsing had no
+      // forward window at all — OSE-1362's "Next month" case).
+      if (f.when === 'next-month' && ed.slice(0, 7) !== nextMonth(today)) return false;
       if (f.when === 'weekend') {
         // Next Fri–Sun window that has not fully passed (today if it is the weekend).
         const dow = dayOfWeek(today);
@@ -203,7 +252,7 @@ export function renderDiscoveryFilters(f: DiscoveryFilters, resultCount: number)
   const qParam = f.q ? `&amp;q=${encodeURIComponent(f.q)}` : '';
   const chips = WHEN_OPTIONS.map((w) => {
     const active = w === f.when;
-    return `<a class="disc-chip${active ? ' active' : ''}" href="/events?when=${w}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${WHEN_LABELS[w]}</a>`;
+    return `<a class="disc-chip${active ? ' active' : ''}" href="/events?when=${w}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${WHEN_COPY[w].chip}</a>`;
   }).join('');
   const clear =
     f.q || f.when !== 'all'
@@ -211,7 +260,7 @@ export function renderDiscoveryFilters(f: DiscoveryFilters, resultCount: number)
       : '';
   const summary = f.q
     ? `${resultCount} match${resultCount === 1 ? '' : 'es'} for &ldquo;${qEsc}&rdquo;`
-    : `${resultCount} ${WHEN_LABELS[f.when].toLowerCase()}`;
+    : discoveryCountLabel(f.when, resultCount);
   return `
         <form class="disc-search" method="get" action="/events" role="search" data-testid="disc-search">
           <input type="hidden" name="when" value="${escapeHtml(f.when)}" />
@@ -227,20 +276,7 @@ export function renderDiscoveryFilters(f: DiscoveryFilters, resultCount: number)
 export function discoveryEmptyCopy(f: DiscoveryFilters): string {
   if (f.q)
     return `Nothing matches &ldquo;${escapeHtml(f.q)}&rdquo;. Try a shorter word, or clear the search.`;
-  switch (f.when) {
-    case 'today':
-      return 'Nothing on today. Try this weekend or the next 7 days.';
-    case 'weekend':
-      return 'Nothing on this weekend yet.';
-    case 'week':
-      return 'Nothing in the next 7 days yet.';
-    case 'month':
-      return 'Nothing else this month yet.';
-    case 'past':
-      return 'Nothing has wrapped recently.';
-    default:
-      return 'No events yet. Check back soon.';
-  }
+  return WHEN_COPY[f.when].empty;
 }
 
 export function injectDiscoveryFilters(html: string, bar: string): string {

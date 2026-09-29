@@ -100,13 +100,12 @@
         font-size: 1rem;
         cursor: pointer;
       }
+      /* OSE-1372: wrap, so the active chip is always in view. */
       .disc-chips {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.5rem;
-        overflow-x: auto;
-        padding-bottom: 0.25rem;
         margin-bottom: 0.5rem;
-        -webkit-overflow-scrolling: touch;
       }
       .disc-chip,
       .disc-clear {
@@ -128,6 +127,10 @@
         background: var(--accent);
         border-color: var(--accent);
         color: var(--on-accent);
+      }
+      .disc-chip.active::before {
+        content: '\2713';
+        margin-right: 0.35rem;
       }
       .disc-clear {
         color: var(--text);
@@ -287,24 +290,8 @@
       footer a:hover {
         text-decoration: underline;
       }
-      .ose-anonymity {
-        margin-top: 2rem;
-        padding: 1rem 1.25rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--accent);
-        border-radius: var(--radius-sm);
-        font-size: 0.9rem;
-        color: var(--text-muted);
-      }
-      .ose-anonymity h2 {
-        margin: 0 0 0.5rem;
-        font-size: 1rem;
-        color: var(--text);
-      }
-      .ose-anonymity p {
-        margin: 0;
-      }
+      /* Never-who disclosure (OSE-1372) — one partial, lib/never-who.ts. */
+      /*OCR_NEVER_WHO_CSS*/
     </style>
   </head>
   <body>
@@ -336,15 +323,7 @@
           <!--OCR_EVENT_LIST-->
         </div>
       </section>
-      <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
-        <h2 id="anon-heading">How this works</h2>
-        <p>
-          You're part of the group, anonymously. OurSharedEvents tracks when
-          groups gather &mdash; never who you are. Event hosts and sponsors see
-          corridors and venues, not people. Nothing about your device, location,
-          or identity was collected to display this page.
-        </p>
-      </section>
+      <!--OCR_NEVER_WHO-->
     </main>
     <!--OCR_LEGAL_FOOTER-->
     <script>
