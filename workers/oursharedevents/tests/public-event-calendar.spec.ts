@@ -92,6 +92,28 @@ describe('OSE-1358 public event calendar action', () => {
     expect(html).toContain('data-testid="add-to-calendar"');
     expect(html).toContain(`href="/events/${eventId}/calendar.ics"`);
   });
+
+  test('Add to calendar is a disclosure offering Google + .ics deep links', async () => {
+    const eventId = 'evt_ose1358_page_menu';
+    // Default seed: start 2026-12-02T02:00:00Z, end 04:00:00Z, America/Chicago.
+    await seedEvent({ id: eventId });
+
+    const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+
+    // CSP-safe <details> disclosure, no inline JS handler.
+    expect(html).toContain('class="ose-calendar-menu"');
+    // Google Calendar deep link on the event's own UTC instant.
+    expect(html).toContain('data-testid="add-to-calendar-google"');
+    expect(html).toContain('https://calendar.google.com/calendar/render');
+    expect(html).toContain('dates=20261202T020000Z/20261202T040000Z');
+    // .ics option preserved (Apple / Outlook desktop / everywhere).
+    expect(html).toContain('data-testid="add-to-calendar-ics"');
+    expect(html).toContain(`href="/events/${eventId}/calendar.ics"`);
+    // never-who: the calendar link carries no scan-ingest path or tracking params.
+    expect(html).not.toContain('utm_');
+  });
 });
 
 describe('OSE-1358 public event calendar download', () => {

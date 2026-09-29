@@ -66,6 +66,7 @@ import {
   phaseTimesFor,
   zonedDatePart,
 } from '../lib/event-datetime.js';
+import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
@@ -589,14 +590,29 @@ function renderEventActions(
   lang: 'en' | 'es'
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
+  const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
   const calendarHref = `/events/${esc(row.id)}/calendar.ics`;
+  // OSE-1358: one "Add to calendar" control offering the standard targets. A
+  // CSP-safe <details> disclosure (no JS) — Google Calendar (Android + web) via a
+  // server-built deep link, and a plain .ics download that lands Apple Calendar,
+  // the iOS native picker and Outlook desktop.
+  const googleUrl = row.start_date ? buildGoogleCalendarUrl(row, shareUrl) : null;
+  const menu = row.start_date
+    ? `<details class="ose-calendar-menu" data-testid="add-to-calendar">
+    <summary class="ose-calendar-link ose-calendar-summary" data-testid="add-to-calendar-summary">${calendarLabel}</summary>
+    <div class="ose-calendar-options" role="group" aria-label="${calendarLabel}">${
+      googleUrl
+        ? `
+      <a class="ose-calendar-option" data-testid="add-to-calendar-google" href="${esc(googleUrl)}" target="_blank" rel="noopener noreferrer">Google Calendar</a>`
+        : ''
+    }
+      <a class="ose-calendar-option" data-testid="add-to-calendar-ics" href="${calendarHref}" download>${icsLabel}</a>
+    </div>
+  </details>`
+    : '';
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareUrl, row.title, nonce, lang)}
-  ${
-    row.start_date
-      ? `<a class="ose-calendar-link" data-testid="add-to-calendar" href="${calendarHref}" download>${calendarLabel}</a>`
-      : ''
-  }
+  ${menu}
 </div>`;
 }
 
@@ -823,6 +839,13 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
     .ose-calendar-link:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
+    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-summary::-webkit-details-marker { display: none; }
+    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
+    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
+    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
@@ -1018,6 +1041,13 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
     .ose-calendar-link:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
+    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-summary::-webkit-details-marker { display: none; }
+    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
+    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
+    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
@@ -1299,6 +1329,13 @@ ${ogMeta}
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
     .ose-calendar-link:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
+    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-summary::-webkit-details-marker { display: none; }
+    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
+    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
+    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }

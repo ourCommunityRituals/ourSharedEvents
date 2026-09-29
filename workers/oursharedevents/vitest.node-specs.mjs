@@ -122,6 +122,10 @@ export const NODE_SPECS = [
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
   'tests/what-external-link.spec.ts',
+  // OSE-1358 Add to calendar — pure Google-link builder (lib/calendar-links.ts)
+  // and the <details> menu render over renderPre/LiveEventHtml. No cloudflare:test.
+  'tests/calendar-links.spec.ts',
+  'tests/calendar-action.spec.ts',
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',
