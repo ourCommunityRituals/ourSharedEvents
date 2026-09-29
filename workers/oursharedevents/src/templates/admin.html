@@ -34,7 +34,6 @@
       }
       header span {
         font-size: 0.8rem;
-        opacity: 0.6;
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
@@ -48,18 +47,6 @@
         letter-spacing: 0.06em;
         margin-left: 0.75rem;
       }
-      .tier-badge.free {
-        background: #d3f9d8;
-        color: #155724;
-      }
-      .tier-badge.mid {
-        background: #d0ebff;
-        color: #1971c2;
-      }
-      .tier-badge.enterprise {
-        background: #e8deee;
-        color: #7c3aed;
-      }
       .phase-badge {
         display: inline-block;
         padding: 0.2rem 0.6rem;
@@ -71,8 +58,8 @@
         margin-left: 0.5rem;
       }
       .phase-badge.phase-1 {
-        background: #f1f3f5;
-        color: var(--text-muted);
+        background: var(--surface-hover);
+        color: var(--text);
       }
       .phase-badge.phase-2 {
         background: #d0ebff;
@@ -133,7 +120,7 @@
       .events-filter-chip {
         min-height: 44px;
         padding: 0.4rem 0.9rem;
-        border: 1px solid var(--border);
+        border: 1px solid var(--border-strong);
         border-radius: 999px;
         background: var(--surface);
         color: var(--text-muted);
@@ -489,10 +476,10 @@
         border-bottom: none;
       }
       tbody tr:hover {
-        background: #f1f3f5;
+        background: var(--surface-hover);
       }
       tbody tr.selected {
-        background: #dbe4ff;
+        background: color-mix(in srgb, var(--accent) 18%, var(--surface));
       }
       .badge {
         display: inline-block;
@@ -502,11 +489,11 @@
         font-weight: 600;
       }
       .badge.active {
-        background: #d3f9d8;
-        color: #155724;
+        background: var(--surface-hover);
+        color: var(--success);
       }
       .badge.archived {
-        background: #f1f3f5;
+        background: var(--bg);
         color: var(--text-muted);
       }
       .loading {
@@ -663,7 +650,7 @@
         gap: 0.75rem;
       }
       .required-star {
-        color: var(--error);
+        color: color-mix(in srgb, var(--error) 80%, var(--text));
       }
       @keyframes shimmer {
         0% {
@@ -735,7 +722,7 @@
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-bottom: 2rem;
-        border-left: 3px solid #16a34a;
+        border-left: 3px solid var(--success);
       }
       .create-card h2 {
         font-size: 1.1rem;
@@ -774,7 +761,7 @@
         width: 100%;
         min-height: 44px;
         padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border);
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
         font-size: 16px;
         background: var(--surface);
@@ -813,14 +800,14 @@
       .create-form select:focus,
       .create-form textarea:focus {
         border-color: var(--accent);
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
+        outline: 2px solid var(--accent);
+        outline-offset: 0;
       }
       .create-btn {
         min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */
         padding: 0.6rem 1.5rem;
-        background: #16a34a;
-        color: #fff;
+        background: var(--success);
+        color: var(--bg);
         border: none;
         border-radius: 6px;
         font-size: 0.9rem;
@@ -829,10 +816,11 @@
         transition: background 0.2s;
       }
       .create-btn:hover {
-        background: #15803d;
+        background: color-mix(in srgb, var(--success) 85%, var(--text));
       }
       .create-btn:disabled {
-        background: #64748b;
+        background: var(--surface-hover);
+        color: var(--text-muted);
         cursor: not-allowed;
       }
       .create-msg {
@@ -841,7 +829,7 @@
         min-height: 1.25rem;
       }
       .create-msg.success {
-        color: #16a34a;
+        color: var(--success);
       }
       .create-msg.error {
         color: var(--error);
@@ -919,7 +907,7 @@
         display: none;
       }
       .admin-status.is-ok {
-        color: #16a34a;
+        color: var(--success);
       }
       .admin-status.is-error {
         color: var(--error);
@@ -947,13 +935,13 @@
         display: none;
       }
       .warning-banner {
-        background: #fef3c7;
-        border-left: 3px solid #d97706;
+        background: var(--surface);
+        border-left: 3px solid var(--warn);
         padding: 0.75rem 1rem;
         border-radius: 4px;
         margin-bottom: 0.5rem;
         font-size: 0.9rem;
-        color: #78350f;
+        color: var(--text);
       }
       .warning-banner strong {
         display: block;
@@ -961,25 +949,22 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 0.2rem;
-        color: #92400e;
+        color: var(--warn);
       }
       .warning-dismiss-btn {
         display: inline-block;
         margin-top: 0.5rem;
         padding: 0.5rem 1rem;
-        background: #d97706;
-        color: #fff;
+        background: var(--warn);
+        color: var(--bg);
         border: none;
         border-radius: 4px;
         cursor: pointer;
         font-weight: 500;
         font-size: 0.85rem;
       }
-      .warning-dismiss-btn:hover {
-        background: #b45309;
-      }
       .warning-dismiss-btn:focus {
-        outline: 3px solid #ffb800;
+        outline: 3px solid var(--warn);
         outline-offset: 2px;
       }
       .skip-link {
@@ -1015,7 +1000,7 @@
       .clickable-row:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: -2px;
-        background: #eef2ff;
+        background: var(--surface-hover);
       }
       @media (max-width: 600px) {
         .create-form {
@@ -1172,7 +1157,7 @@
         min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
         padding: 0.4rem 1rem;
         background: var(--accent);
-        color: #fff;
+        color: var(--on-accent);
         border: none;
         border-radius: 6px;
         font-size: 0.85rem;
@@ -1188,6 +1173,7 @@
         outline-offset: 2px;
       }
       .cancel-btn {
+        min-height: 44px;
         padding: 0.6rem 1rem;
         background: var(--surface);
         color: var(--text-muted);
@@ -1228,8 +1214,8 @@
         color: #856404;
       }
       .spon-tier-pill.silver {
-        background: #e9ecef;
-        color: var(--text-muted);
+        background: var(--surface-hover);
+        color: var(--text);
       }
       .spon-tier-pill.bronze {
         background: #fde8d8;
@@ -1255,7 +1241,7 @@
       }
       .pip.active {
         background: var(--accent);
-        color: #fff;
+        color: var(--on-accent);
       }
       .spon-action-btn {
         padding: 0.25rem 0.6rem;
@@ -1292,11 +1278,8 @@
         outline-offset: 2px;
       }
       .spon-action-btn.deactivate {
-        border-color: #ffc9c9;
-        color: #c92a2a;
-      }
-      .spon-action-btn.deactivate:hover {
-        background: #fff5f5;
+        border-color: var(--error);
+        color: var(--error);
       }
       .placements-group {
         display: flex;
@@ -1540,19 +1523,20 @@
       select,
       textarea {
         background: var(--surface);
-        border-color: var(--border);
+        border-color: var(--border-strong);
         color: var(--text);
       }
-      input:focus,
-      select:focus,
-      textarea:focus {
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible {
         border-color: var(--accent);
+        outline: 2px solid var(--accent);
       }
       /* buttons */
       .btn-primary,
       button.primary {
         background: var(--accent);
-        color: #000;
+        color: var(--on-accent);
         border-color: var(--accent);
       }
       .btn-primary:hover,
@@ -1570,18 +1554,19 @@
       button:focus-visible {
         outline-color: var(--accent);
       }
-      /* tier/phase badges — keep their color families but darken bg */
+      /* tier badges: outlined pill, colour from a status token in both themes */
+      .tier-badge {
+        background: var(--surface);
+        border: 1px solid currentColor;
+      }
       .tier-badge.free {
-        background: rgba(22, 163, 74, 0.15);
-        color: #4ade80;
+        color: var(--success);
       }
       .tier-badge.mid {
-        background: rgba(59, 130, 246, 0.15);
-        color: #60a5fa;
+        color: var(--info);
       }
       .tier-badge.enterprise {
-        background: rgba(124, 58, 237, 0.15);
-        color: #c084fc;
+        color: var(--text);
       }
       /* muted text */
       .section-title,
@@ -1599,8 +1584,8 @@
       }
       /* info banner on admin */
       .spon-row-info {
-        background: rgba(59, 130, 246, 0.1);
-        color: #60a5fa;
+        background: var(--surface);
+        color: var(--info);
       }
       /* modal overlay */
       .modal-overlay {
@@ -1742,7 +1727,7 @@
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-bottom: 2rem;
-        border-left: 3px solid #16a34a;
+        border-left: 3px solid var(--success);
       }
       .launch-wizard h2 {
         font-size: 1.1rem;
@@ -1773,6 +1758,7 @@
         align-items: center;
         gap: 0.3rem;
         flex: 1;
+        min-height: 44px;
         background: none;
         border: none;
         padding: 0;
@@ -1798,7 +1784,7 @@
       .wizard-progress-step.active .step-number {
         background: var(--accent);
         border-color: var(--accent);
-        color: #fff;
+        color: var(--on-accent);
       }
       .wizard-progress-step.active .step-label {
         color: var(--text);
@@ -1808,9 +1794,9 @@
         cursor: pointer;
       }
       .wizard-progress-step.completed .step-number {
-        background: #16a34a;
-        border-color: #16a34a;
-        color: #fff;
+        background: var(--success);
+        border-color: var(--success);
+        color: var(--bg);
       }
       .wizard-step {
         display: none;
@@ -1911,8 +1897,8 @@
         line-height: 1.4;
       }
       .create-slot-chip--typed {
-        border-color: #16a34a;
-        color: #166534;
+        border-color: var(--success);
+        color: var(--success);
         font-weight: 600;
       }
       .wizard-publish {
@@ -2438,8 +2424,8 @@
 
         <!-- Progress rail — completed steps are clickable to go back (only
              before the event is created; afterwards steps 1–3 are history). -->
-        <div class="wizard-progress" role="list" aria-label="Setup steps">
-          <button type="button" class="wizard-progress-step active" data-step="1" data-testid="wizard-progress-1">
+        <div class="wizard-progress" role="group" aria-label="Setup steps">
+          <button type="button" class="wizard-progress-step active" data-step="1" aria-current="step" data-testid="wizard-progress-1">
             <span class="step-number">1</span><span class="step-label">Basic Info</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="2" data-testid="wizard-progress-2">
@@ -2887,6 +2873,8 @@
             document.querySelectorAll('.wizard-progress-step').forEach(function (el) {
               var n = Number(el.getAttribute('data-step'));
               el.classList.toggle('active', n === wiz.step);
+              if (n === wiz.step) el.setAttribute('aria-current', 'step');
+              else el.removeAttribute('aria-current');
               // Completed = behind us AND still revisitable (pre-create only).
               el.classList.toggle('completed', n < wiz.step && !wiz.createdId);
             });

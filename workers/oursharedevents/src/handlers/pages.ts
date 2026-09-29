@@ -830,7 +830,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
-    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
     .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
     .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
@@ -860,7 +860,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
-  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
@@ -1025,14 +1025,14 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
     .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
-    .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: #fff; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+    .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: var(--ose-bg); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
     .ose-live-dot { width: 0.6rem; height: 0.6rem; background: #fff; border-radius: 50%; animation: ose-pulse 1.5s ease-in-out infinite; }
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
-    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
     .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
     .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
@@ -1062,7 +1062,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
-  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600">&larr; All events</a></nav>
+  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
@@ -1302,10 +1302,10 @@ ${ogMeta}
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-    .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: rgba(42,42,42,0.06); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
+    .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: var(--ose-card); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .ose-when { color: var(--ose-muted); margin: 0 0 1.25rem; }
-    .ose-card { background: var(--ose-card); border: 1px solid rgba(42,42,42,0.08); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-card h2 { font-size: 1rem; margin: 0 0 0.5rem; }
     .ose-card p { margin: 0 0 0.5rem; }
     .ose-recap-row { margin: 0 0 0.6rem; }
@@ -1314,7 +1314,7 @@ ${ogMeta}
        quiet margin — smaller type, muted, set off by a divider, never a card
        loud enough to compete with the keepsake above it. Palette-agnostic. */
     .ose-recap-primary { margin: 0 0 1.5rem; }
-    .ose-suggestions { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); opacity: 0.92; }
+    .ose-suggestions { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); }
     .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
     .ose-suggestions-note { font-size: 0.85rem; color: var(--ose-muted); margin: 0 0 0.5rem; }
     .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
@@ -2249,7 +2249,7 @@ export function handleUiPreview(): Response {
         <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" data-testid="input-demo" /></div>
         <div style="width:240px"><div class="preview-label">.search-bar</div><input class="search-bar" placeholder="Search…" data-testid="search-bar-demo" /></div>
         <div style="width:200px"><div class="preview-label">.sort-select</div>
-          <select class="sort-select" data-testid="sort-select-demo"><option>Most recent</option><option>Oldest first</option></select>
+          <select class="sort-select" data-testid="sort-select-demo" aria-label="Sort order"><option>Most recent</option><option>Oldest first</option></select>
         </div>
       </div>
     </div>
@@ -2315,8 +2315,8 @@ export function handleUiPreview(): Response {
       <div class="preview-row" style="align-items:center">
         <div><div class="preview-label">.toggle-row</div>
           <div class="toggle-row" data-testid="toggle-row-demo">
-            <span>Enable feature</span>
-            <label class="toggle"><input type="checkbox" checked /><span class="toggle-track"></span></label>
+            <span id="toggle-row-demo-label">Enable feature</span>
+            <label class="toggle"><input type="checkbox" checked aria-labelledby="toggle-row-demo-label" /><span class="toggle-track"></span></label>
           </div>
         </div>
         <div style="width:240px"><div class="preview-label">.progress-bar</div>

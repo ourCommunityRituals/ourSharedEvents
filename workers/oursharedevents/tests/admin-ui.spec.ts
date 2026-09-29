@@ -423,9 +423,11 @@ describe('OSE-262: create-event warnings banner', () => {
     expect(html).toContain('.create-warnings');
     expect(html).toContain('.warning-banner');
     expect(html).toContain('.warning-dismiss-btn');
-    // Banner uses a distinct color from success (green) / error (red) — yellow/amber palette
-    expect(html).toMatch(/\.warning-banner\s*\{[^}]*background:\s*#fef3c7/);
-    expect(html).toMatch(/\.warning-banner\s*\{[^}]*border-left:[^}]*#d97706/);
+    // Banner uses a distinct color from success (green) / error (red) — the amber
+    // --warn token. It was a light-only #fef3c7/#d97706 pair (white-on-amber dismiss
+    // button 3.2:1); theme parity (2026-09-29) routes it through the token.
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*background:\s*var\(--surface\)/);
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*border-left:[^}]*var\(--warn\)/);
   });
 
   test('submit handler reads data.warnings and renders per-code testids', async () => {

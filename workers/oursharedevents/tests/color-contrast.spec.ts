@@ -115,8 +115,12 @@ describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
 });
 
 describe('A11Y-5: #155724 (8.69:1 on white, 7.59:1 on green bg) for success/badge-active', () => {
-  test('admin page badges use #155724', async () => {
-    expect(await adminHtml()).toContain('#155724');
+  // Admin's active badge / copied state were a light-only #d3f9d8/#155724 pair;
+  // theme parity (2026-09-29) routes them through var(--success).
+  test('admin page active badge uses var(--success)', async () => {
+    const body = await adminHtml();
+    expect(body).toMatch(/\.badge\.active\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(body).not.toContain('#155724');
   });
 
   test('shared report badges use #155724', async () => {
@@ -168,9 +172,11 @@ describe('A11Y-5: #64748b (4.76:1 on white) for poster/admin hint text', () => {
     expect(body).not.toContain('#64748b');
   });
 
-  test('admin page qr-hint uses #64748b', async () => {
+  // Admin's #64748b only survived as dead var(--text-muted, #64748b) fallbacks;
+  // theme parity (2026-09-29) removed them. .qr-hint is var(--text-muted).
+  test('admin page qr-hint routes through var(--text-muted)', async () => {
     const body = await adminHtml();
-    expect(body).toContain('.qr-hint');
-    expect(body).toContain('#64748b');
+    expect(body).toMatch(/\.qr-hint\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#64748b');
   });
 });

@@ -38,26 +38,27 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
     expect(html).toMatch(/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{/);
   });
 
-  test('OSE-300 | API | GET /poster (mobile media query) | Print button in page-header meets 44px touch-target floor', async () => {
+  // The floor used to live only inside the 768px media block, so on a laptop
+  // the Print button rendered 45x15 and the picker 37px at 15.2px (rendered
+  // audit, 2026-09-29). It now lives in the BASE rules, for every viewport, and
+  // these assert it there — outside the media block.
+  test('OSE-300 | API | GET /poster (any viewport) | Print button meets 44px touch-target floor', async () => {
     const html = await fetchPosterHtml();
-    const mediaBlock = extractMediaBlock(html, 768);
+    const base = html.replace(extractMediaBlock(html, 768), '');
     // The page-header Print control (data-testid="poster-print") is the
     // primary CTA on this surface. As of OSE-286 it is a <button class="print-btn">
-    // (was a bare anchor) so it can be disabled while QR codes load — the
-    // mobile rule must still hit the 44px floor on the button.
-    expect(mediaBlock).toMatch(/\.page-header\s+\.print-btn\s*\{[^}]*min-height:\s*44px/);
-    expect(mediaBlock).toMatch(/\.page-header\s+\.print-btn\s*\{[^}]*display:\s*inline-flex/);
+    // (was a bare anchor) so it can be disabled while QR codes load.
+    expect(base).toMatch(/\.print-btn\s*\{[^}]*min-height:\s*44px/);
+    expect(base).toMatch(/\.print-btn\s*\{[^}]*display:\s*inline-flex/);
   });
 
-  test('OSE-300 | API | GET /poster (mobile media query) | event-select select hits the 16px iOS auto-zoom floor', async () => {
+  test('OSE-300 | API | GET /poster (any viewport) | event-select select hits the 16px iOS auto-zoom floor', async () => {
     const html = await fetchPosterHtml();
-    const mediaBlock = extractMediaBlock(html, 768);
-    // iOS Safari auto-zooms on any input/select whose font-size is
-    // below 16px. The event-picker <select> defaults to .95rem
-    // (~15.2px) — must be raised on mobile.
-    expect(mediaBlock).toMatch(/\.event-select\s+select\s*\{[^}]*font-size:\s*16px/);
+    const base = html.replace(extractMediaBlock(html, 768), '');
+    // iOS Safari auto-zooms on any input/select whose font-size is below 16px.
+    expect(base).toMatch(/\.event-select\s+select\s*\{[^}]*font-size:\s*16px/);
     // Same rule also enforces the 44px touch-target floor.
-    expect(mediaBlock).toMatch(/\.event-select\s+select\s*\{[^}]*min-height:\s*44px/);
+    expect(base).toMatch(/\.event-select\s+select\s*\{[^}]*min-height:\s*44px/);
   });
 
   test('OSE-300 | API | GET /poster (mobile media query) | QR codes shrink to 100px so two fit per row at 375px', async () => {

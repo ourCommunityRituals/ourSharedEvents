@@ -56,7 +56,16 @@ const BASELINE = {
   // these needs the STATUS/TIER TOKEN decision (add --success/--on-accent/tier +
   // warn/info tint tokens to @ocr/ui vs. treat as theme-invariant status hues) —
   // admin's rich palette is the strongest driver of that decision. Chrome done.
-  'admin.html': 90,
+  // Then the theme-parity pass (rendered audit 2026-09-29) routed the light-only
+  // fills that vanished in dark — wizard selected option (OSE-1340), tier/phase
+  // badges, .badge.active, copy/Generate-Link, card-error, warning banner,
+  // selected row, silver tier pill, #16a34a success family, white-on-accent text —
+  // through --success / --warn / --info / --on-accent / --surface*: 90 → 30. The
+  // 30 left are fixed light-fill/dark-ink pairs (phase 2-5 badges, sponsor tier
+  // pills, pips, lock overlay, spon-edit-ctx) that read in both themes, the
+  // decorative skeleton shimmer, two #fff overridden by the token block below
+  // (th, .skip-link:focus), and the print-window #555.
+  'admin.html': 30,
   // sponsor-home.html (Epic TRIANGLE, PR #567): born fully tokenised — status
   // pills route to --success / --warn / --info / --accent with var(--bg) inverse
   // text (all AA-verified by the hub @ocr/ui verify-contrast.mjs), messages to
