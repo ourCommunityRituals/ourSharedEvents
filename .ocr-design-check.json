@@ -1,0 +1,91 @@
+{
+  "include": ["workers/oursharedevents/src/**/*.html", "workers/oursharedevents/src/**/*.ts"],
+  "exclude": ["**/*.d.ts", "**/*.spec.ts", "**/*.test.ts"],
+  "inlineStyleBudget": 400,
+  "baseline": {
+    "workers/oursharedevents/src/handlers/briefing.ts": {
+      "own-tokens": 3,
+      "own-stylesheet": 3375,
+      "raw-hex": 12,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/handlers/demo.ts": {
+      "own-tokens": 0,
+      "own-stylesheet": 4437,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/handlers/form-pages.ts": {
+      "own-tokens": 0,
+      "own-stylesheet": 0,
+      "raw-hex": 1,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/handlers/pages.ts": {
+      "own-tokens": 0,
+      "own-stylesheet": 28576,
+      "raw-hex": 12,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/handlers/privacy.ts": {
+      "own-tokens": 0,
+      "own-stylesheet": 715,
+      "raw-hex": 9,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/lib/landing-area.ts": {
+      "own-tokens": 0,
+      "own-stylesheet": 1314,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/admin-signin.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 3910,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/admin.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 65714,
+      "raw-hex": 94,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/display.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 8496,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/landing.html": {
+      "own-tokens": 5,
+      "own-stylesheet": 7918,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/poster.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 19277,
+      "raw-hex": 8,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/public.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 7218,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/shared-report.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 19656,
+      "raw-hex": 11,
+      "foreign-stylesheet": 0
+    },
+    "workers/oursharedevents/src/templates/sponsor-home.html": {
+      "own-tokens": 0,
+      "own-stylesheet": 3390,
+      "raw-hex": 0,
+      "foreign-stylesheet": 0
+    }
+  }
+}

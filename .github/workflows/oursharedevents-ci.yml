@@ -117,6 +117,7 @@ on:
       - 'bruno/**'
       - 'packages/**'
       - '.ocr-hub-ref'
+      - '.ocr-design-check.json'
       - 'playwright.*.config.*'
       - '.github/workflows/**'
     tags:
@@ -667,6 +668,16 @@ jobs:
         run: node scripts/check-token-adherence.mjs
 
       # ADR-008 Phase 0: @ocr/ui's contrast gate and its own unit suite moved to the hub CI (pnpm ui:contrast, pnpm ui:test) with the package itself.
+
+      # ADR-008 Phase 0 — per-spoke gate against a forked design system. Runs the
+      # hub's check-spoke-styles.mjs at the PINNED hub commit (.ocr-hub-ref,
+      # staged to ../packages/ui above). Blocks any new/grown own-token layer,
+      # own stylesheet over the inline budget, raw hex, or non-/ui.css stylesheet
+      # link; existing debt is the baseline in .ocr-design-check.json and may only
+      # shrink. Complements (does not replace) the token-adherence ratchet above.
+      - name: 'Lint: no spoke-owned tokens or stylesheet (@ocr/ui check-spoke-styles, pinned)'
+        if: matrix.shard == 'lint'
+        run: node ../packages/ui/scripts/check-spoke-styles.mjs --root .
 
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
