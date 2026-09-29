@@ -35,7 +35,8 @@ const ROOT = join(__dir, '..');
 const TEMPLATES_DIR = join(ROOT, 'workers/oursharedevents/src/templates');
 
 // Inline import of checkAll logic — avoids needing to build @ocr/ui at
-// check time. Mirror of packages/ui/src/contract.ts so the script has
+// check time. Mirror of the hub @ocr/ui src/contract.ts (pinned by
+// .ocr-hub-ref, ADR-008) so the script has
 // no build-time dependency on the workspace package.
 const INLINE_STYLE_BUDGET = 400;
 

@@ -46,6 +46,19 @@ jobs:
           cache: npm
           cache-dependency-path: workers/oursharedevents/package-lock.json
 
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # ADR-008 Phase 0: this job installs/builds/tests the Worker, which
+        # bundles @ocr/ui from the hub commit pinned in .ocr-hub-ref. REQUIRED —
+        # never continue-on-error: npm ci would succeed with a dangling @ocr/ui
+        # link and the failure would surface later as an unresolvable import.
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
       - run: npm ci
 
       - name: Fuzz the wizard's input edges

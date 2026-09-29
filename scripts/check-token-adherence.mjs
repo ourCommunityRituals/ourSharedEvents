@@ -59,7 +59,7 @@ const BASELINE = {
   'admin.html': 90,
   // sponsor-home.html (Epic TRIANGLE, PR #567): born fully tokenised — status
   // pills route to --success / --warn / --info / --accent with var(--bg) inverse
-  // text (all AA-verified in packages/ui verify-contrast.mjs), messages to
+  // text (all AA-verified by the hub @ocr/ui verify-contrast.mjs), messages to
   // --success / --danger, left-border accents to --warn. Zero raw hex; keep at 0.
   'sponsor-home.html': 0,
 };

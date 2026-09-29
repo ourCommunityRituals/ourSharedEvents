@@ -73,6 +73,10 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     expect(workflow.jobs['smoke-production']['runs-on']).toBe('ubuntu-latest');
   });
 
+  // ADR-008 Phase 0: the staging step stages the hub commit pinned in
+  // .ocr-hub-ref and @ocr/ui is REQUIRED for any job that builds the Worker.
+  const STAGE_STEP = 'Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref';
+
   test('deploy-production mirrors the hosted staging deploy setup', () => {
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
@@ -81,7 +85,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     const findStep = (steps, name) => steps.find((step) => step.name === name);
     const checkoutStep = (steps) => steps.find((step) => step.uses === 'actions/checkout@v7');
     const deployPrereqs = [
-      'Stage adjacent @ocr/flags package',
+      STAGE_STEP,
       'Install worker dependencies',
       'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)',
       'Apply D1 migrations (main DB)',
@@ -103,9 +107,11 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
 
     expect(checkoutStep(stagingSteps).with).toMatchObject({ clean: true });
     expect(checkoutStep(productionSteps).with).toMatchObject({ clean: true });
-    expect(findStep(stagingSteps, 'Stage adjacent @ocr/flags package').run).toBe(
-      findStep(productionSteps, 'Stage adjacent @ocr/flags package').run
-    );
+    expect(findStep(stagingSteps, STAGE_STEP).run).toBe(findStep(productionSteps, STAGE_STEP).run);
+    // @ocr/ui is bundled into the Worker: a deploy must never proceed past a
+    // failed pinned-hub staging step.
+    expect(findStep(stagingSteps, STAGE_STEP)['continue-on-error']).toBeUndefined();
+    expect(findStep(productionSteps, STAGE_STEP)['continue-on-error']).toBeUndefined();
     expect(findStep(stagingSteps, 'Install worker dependencies').run).toBe(
       findStep(productionSteps, 'Install worker dependencies').run
     );
@@ -120,9 +126,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
 
     for (const [jobId, job] of Object.entries(workflow.jobs || {})) {
       const steps = job.steps || [];
-      const stagesAdjacentFlags = steps.some(
-        (step) => step.name === 'Stage adjacent @ocr/flags package'
-      );
+      const stagesAdjacentFlags = steps.some((step) => step.name === STAGE_STEP);
       if (!stagesAdjacentFlags) continue;
       const checkout = steps.find((step) => step.uses === 'actions/checkout@v7');
       expect(checkout?.with, `${jobId} must use hosted-runner clean:true checkout`).toMatchObject({
