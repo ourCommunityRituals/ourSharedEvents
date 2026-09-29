@@ -55,7 +55,7 @@
 | 9 | Tenant Isolation | partial | `tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts` |
 | 15 | CORS Allowlist Immutability | live | `tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts` |
 | 17 | OER Emission Boundary | live | `tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts` |
-| 22 | Cross-Repo Import Isolation | live | `ocr-docs-brain/scripts/check_cross_repo_imports.py (OCR-docs — live-read brain guard; enforcement_kind: brain_script)` |
+| 22 | Cross-Repo Import Isolation | live | `scripts/check-cross-repo-imports.sh (OSE repo)` |
 
 ---
 
