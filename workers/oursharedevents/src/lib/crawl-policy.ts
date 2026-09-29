@@ -86,6 +86,8 @@ export const AI_TRAINING_AGENTS: readonly string[] = [
 const SIGNAL_OPEN = 'Content-Signal: ai-train=no, search=yes, ai-input=yes';
 const SIGNAL_CLOSED = 'Content-Signal: ai-train=no, search=no, ai-input=no';
 const SITEMAP_MAX_EVENTS = 5000;
+/** The public site's brand — the same one `/events` lists (handlePublicPage). */
+const SITEMAP_BRAND = 'root';
 
 export function isIndexable(env: CrawlPolicyEnv): boolean {
   return env.WORKER_ENV === 'production';
@@ -156,10 +158,12 @@ async function listSitemapEvents(
   const { results } = await db
     .prepare(
       `SELECT id, updated_at FROM events
-       WHERE is_published = 1 AND brand_id = 'root' AND status = 'active'
+       WHERE is_published = 1 AND brand_id = ? AND status = 'active'
        ORDER BY updated_at DESC
        LIMIT ${SITEMAP_MAX_EVENTS}`
     )
+    // Bound, not inlined: the tenant-isolation gate (INV9) requires brand_id = ?.
+    .bind(SITEMAP_BRAND)
     .all<{ id: string; updated_at: string | null }>();
   return results ?? [];
 }
