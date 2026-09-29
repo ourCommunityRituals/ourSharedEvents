@@ -77,10 +77,13 @@ jobs:
       # @ocr/ui and @ocr/flags are file:-linked; wrangler dev cannot bundle the
       # Worker without them (OSE-1249). Same staging the mobile-workability and
       # T0 jobs use.
-      - name: Stage adjacent @ocr workspace packages
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # ADR-008 Phase 0: this job installs/builds/tests/deploys the Worker,
+        # which bundles @ocr/ui from the hub commit pinned in .ocr-hub-ref.
+        # REQUIRED — never continue-on-error: without the pinned @ocr/ui the
+        # Worker install/build is wrong, so fail here with a clear ::error::.
         shell: bash
-        continue-on-error: true
-        timeout-minutes: 2
+        timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
           OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
