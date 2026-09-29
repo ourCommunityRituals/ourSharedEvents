@@ -28,6 +28,7 @@
 
 import { escapeHtml } from './html-escape';
 import { injectMarker } from './inject-marker';
+import { zonedDatePart } from './event-datetime';
 import type { EventListItem } from './event-list';
 
 export const WHEN_OPTIONS = [
@@ -37,6 +38,7 @@ export const WHEN_OPTIONS = [
   'week',
   'month',
   'next-month',
+  'next-90',
   'past',
 ] as const;
 export type WhenOption = (typeof WHEN_OPTIONS)[number];
@@ -70,6 +72,11 @@ const WHEN_COPY: Record<WhenOption, { chip: string; span: string; empty: string 
   },
   month: { chip: 'This month', span: 'this month', empty: 'Nothing this month yet.' },
   'next-month': { chip: 'Next month', span: 'next month', empty: 'Nothing next month yet.' },
+  'next-90': {
+    chip: 'Next 90 days',
+    span: 'in the next 90 days',
+    empty: 'Nothing in the next 90 days yet.',
+  },
   past: {
     chip: 'Recently wrapped',
     span: 'recently wrapped',
@@ -124,13 +131,18 @@ function localDate(now: Date, tz: string | null): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Calendar date of the event as YYYY-MM-DD, or null when it has none. */
-function eventDate(item: EventListItem): string | null {
+/**
+ * Calendar date of the event as YYYY-MM-DD, or null when it has none. A
+ * date-only value IS the calendar day; a full instant is read in the event's
+ * own zone (UTC fallback) — the same day the card prints (event-list.ts), so a
+ * window never files an evening event under the next UTC day.
+ */
+function eventDate(item: WhenItem): string | null {
   const iso = typeof item.startDateISO === 'string' ? item.startDateISO : '';
   if (!iso) return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso.slice(0, 10);
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const tz = typeof item.timezone === 'string' && item.timezone ? item.timezone : null;
+  return zonedDatePart(iso, tz) || null;
 }
 
 function addDays(ymd: string, n: number): string {
@@ -182,6 +194,62 @@ function dateSearchTokens(item: EventListItem): string {
   }
 }
 
+/** The fields a `when` window reads. Both /events cards and landing cards carry them. */
+export interface WhenItem {
+  startDateISO?: unknown;
+  phase?: unknown;
+  timezone?: unknown;
+}
+
+/** Days in the `next-90` window: today through today+90, event-local (OSE-1362). */
+export const NEXT_90_DAYS = 90;
+
+/**
+ * THE definition of a `when` window (OSE-1362). /events chips AND the landing
+ * "Happening near you" list/map both call this, so a label means the same
+ * window on every surface. Pure; `now` is injectable.
+ *
+ * 'all' = everything listed, wrapped included (they link to their recap). A
+ * dated window is forward-looking, so wrapped events drop out; 'past' is only
+ * them. A LIVE event (phase 'event') that started before today is happening
+ * today, so it is dated today — a multi-day event does not vanish mid-run.
+ */
+export function inWhenWindow(e: WhenItem, when: WhenOption, now: Date = new Date()): boolean {
+  const wrapped = e.phase === 'post_event';
+  if (when === 'all') return true;
+  if (when === 'past') return wrapped;
+  if (wrapped) return false;
+
+  const tz = typeof e.timezone === 'string' && e.timezone ? e.timezone : null;
+  const today = localDate(now, tz);
+  let ed = eventDate(e);
+  // An undated event is "upcoming" but cannot answer a dated question.
+  if (!ed) return false;
+  if (e.phase === 'event' && ed < today) ed = today;
+  switch (when) {
+    case 'today':
+      return ed === today;
+    case 'week':
+      return ed >= today && ed <= addDays(today, 7);
+    case 'month':
+      return ed.slice(0, 7) === today.slice(0, 7);
+    case 'next-month':
+      // Next calendar month in the event's zone (late-month browsing had no
+      // forward window at all).
+      return ed.slice(0, 7) === nextMonth(today);
+    case 'next-90':
+      return ed >= today && ed <= addDays(today, NEXT_90_DAYS);
+    case 'weekend': {
+      // Next Fri–Sun window that has not fully passed (today if it is the weekend).
+      const dow = dayOfWeek(today);
+      const toFri = dow === 5 ? 0 : dow === 6 ? -1 : dow === 0 ? -2 : 5 - dow;
+      const fri = addDays(today, toFri);
+      const sun = addDays(fri, 2);
+      return ed >= (fri < today ? today : fri) && ed <= sun;
+    }
+  }
+}
+
 /**
  * Apply the filters. Pure over the enriched list; `now` is injectable so the
  * "today / weekend" boundaries are testable.
@@ -193,37 +261,7 @@ export function applyDiscoveryFilters(
 ): EventListItem[] {
   const needle = f.q.toLowerCase();
   return items.filter((e) => {
-    const wrapped = e.phase === 'post_event';
-    // 'all' is the page's existing contract: every event the API lists,
-    // wrapped ones included (they link to their recap). A dated window is
-    // forward-looking, so wrapped events drop out of it; 'past' is only them.
-    if (f.when === 'past') {
-      if (!wrapped) return false;
-    } else if (f.when !== 'all' && wrapped) {
-      return false;
-    }
-
-    if (f.when !== 'all' && f.when !== 'past') {
-      const tz = typeof e.timezone === 'string' && e.timezone ? e.timezone : null;
-      const today = localDate(now, tz);
-      const ed = eventDate(e);
-      // An undated event is "upcoming" but cannot answer a dated question.
-      if (!ed) return false;
-      if (f.when === 'today' && ed !== today) return false;
-      if (f.when === 'week' && (ed < today || ed > addDays(today, 7))) return false;
-      if (f.when === 'month' && ed.slice(0, 7) !== today.slice(0, 7)) return false;
-      // Next calendar month in the event's zone (late-month browsing had no
-      // forward window at all — OSE-1362's "Next month" case).
-      if (f.when === 'next-month' && ed.slice(0, 7) !== nextMonth(today)) return false;
-      if (f.when === 'weekend') {
-        // Next Fri–Sun window that has not fully passed (today if it is the weekend).
-        const dow = dayOfWeek(today);
-        const toFri = dow === 5 ? 0 : dow === 6 ? -1 : dow === 0 ? -2 : 5 - dow;
-        const fri = addDays(today, toFri);
-        const sun = addDays(fri, 2);
-        if (ed < (fri < today ? today : fri) || ed > sun) return false;
-      }
-    }
+    if (!inWhenWindow(e, f.when, now)) return false;
 
     if (needle) {
       const hay = [

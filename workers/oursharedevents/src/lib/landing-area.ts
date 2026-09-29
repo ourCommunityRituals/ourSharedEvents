@@ -8,7 +8,8 @@
 // happening nearby that a visitor can filter across five dimensions —
 //
 //   1. view     list | map            (default chosen by count; see LIST_MAX)
-//   2. window   7 | 30 | 90 days      (default DEFAULT_WINDOW, configured)
+//   2. window   LANDING_WINDOWS — the SAME `when` values + labels as the /events
+//               chips (lib/event-discovery, OSE-1362), default DEFAULT_WINDOW
 //   3. type     one pill per event-type present, plus "All"  (niche discovery)
 //   4. product  All | OSE | OSE+OW hybrid                    (anon / non-anon pole)
 //   5. modality All | online | in-person                    ("in reality")
@@ -27,7 +28,8 @@
 // order does not matter, and "All" simply contributes no rule.
 //
 // DATA BACKING (audited against the events table, 2026-09-13):
-//   - window   : derived from `startDateISO` (+ phase for live events).
+//   - window   : inWhenWindow() from lib/event-discovery — one definition for
+//                /events and here (event-local calendar day; live = today).
 //   - type     : `template_id` (readable slugs like `bar_night`), then
 //                `event_type_id`; untyped → "Other".
 //   - modality : DERIVED — in-person when the event has geo (`lat`/`lon`) or a
@@ -47,6 +49,7 @@
 
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
+import { inWhenWindow, discoveryChipLabel, type WhenOption } from './event-discovery.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -64,8 +67,19 @@ export interface LandingAreaItem {
 
 // ── Configured defaults (named, not hardcoded at the call site) ─────────────────
 
-/** Default time window when the page loads. One of 7 | 30 | 90. */
-export const DEFAULT_WINDOW: 7 | 30 | 90 = 90;
+/**
+ * The landing's window pills (OSE-1362): a subset of the /events `when` set, so
+ * "Next 7 days" here is exactly "Next 7 days" there. Widest LAST.
+ */
+export const LANDING_WINDOWS = [
+  'week',
+  'month',
+  'next-90',
+] as const satisfies readonly WhenOption[];
+export type LandingWindow = (typeof LANDING_WINDOWS)[number];
+
+/** Default window when the page loads — the widest. */
+export const DEFAULT_WINDOW: LandingWindow = 'next-90';
 
 /**
  * The list/map crossover. Fewer than this many events (at the widest window) →
@@ -76,8 +90,6 @@ export const LIST_MAX = 10;
 
 /** Where the whole area block goes. Template opts in by carrying it. */
 export const LANDING_AREA_MARKER = '<!--OCR_LANDING_AREA-->';
-
-const DAY_MS = 86_400_000;
 
 export interface RenderedLandingArea {
   /** Full inner markup for the area section (radios + toggles + cards). */
@@ -133,22 +145,12 @@ function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
 }
 
 /**
- * Nested window classes. A live event (phase 'event') is happening now, so it
- * sits in every window. A pre-event is placed by days-until-start; anything more
- * than 90 days out — or already past without being wrapped — carries no window
- * class and is hidden until the window it belongs to comes into range.
+ * Window classes (`when-<value>`), one per LANDING_WINDOWS value the event falls
+ * in — decided by the shared inWhenWindow, never by a landing-local rule. An
+ * event outside every window carries none and is hidden until it comes into range.
  */
-function windowClasses(phase: string, startISO: string, now: number): string[] {
-  if (phase === 'event') return ['within-7', 'within-30', 'within-90'];
-  const t = Date.parse(startISO);
-  if (Number.isNaN(t)) return [];
-  const days = (t - now) / DAY_MS;
-  if (days < 0) return [];
-  const cls: string[] = [];
-  if (days <= 7) cls.push('within-7');
-  if (days <= 30) cls.push('within-30');
-  if (days <= 90) cls.push('within-90');
-  return cls;
+function windowClasses(e: LandingAreaItem, now: Date): string[] {
+  return LANDING_WINDOWS.filter((w) => inWhenWindow(e, w, now)).map((w) => `when-${w}`);
 }
 
 // ── empty state ────────────────────────────────────────────────────────────────
@@ -181,7 +183,7 @@ export function renderLandingArea(
 ): RenderedLandingArea {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
 
-  const now = opts?.now ?? Date.now();
+  const now = new Date(opts?.now ?? Date.now());
 
   // Forward-looking: wrapped events belong on /events + the event page, not on
   // the "what's coming together" surface. phase is authoritative.
@@ -194,8 +196,8 @@ export function renderLandingArea(
   const cards = live
     .map((e) => {
       const phase = str(e.phase);
-      const windows = windowClasses(phase, str(e.startDateISO), now);
-      if (windows.includes('within-90')) windowCount += 1;
+      const windows = windowClasses(e, now);
+      if (windows.includes(`when-${DEFAULT_WINDOW}`)) windowCount += 1;
 
       const { slug: typeSlug, label: typeLabel } = typeOf(e);
       typeMap.set(typeSlug, typeLabel);
@@ -259,10 +261,9 @@ function buildAreaMarkup(args: {
   // ── radios (all groups, before .toggles / .area) ──
   const viewRadios =
     radio('view-list', 'view', listChecked) + radio('view-map', 'view', !listChecked);
-  const winRadios =
-    radio('win-7', 'win', DEFAULT_WINDOW === 7) +
-    radio('win-30', 'win', DEFAULT_WINDOW === 30) +
-    radio('win-90', 'win', DEFAULT_WINDOW === 90);
+  const winRadios = LANDING_WINDOWS.map((w) => radio(`win-${w}`, 'win', w === DEFAULT_WINDOW)).join(
+    ''
+  );
   const typeRadios =
     radio('type-all', 'type', true) + types.map((t) => radio(t.slug, 'type', false)).join('');
   const modRadios =
@@ -283,6 +284,13 @@ function buildAreaMarkup(args: {
     )
     .join('\n');
   const typeStyle = types.length ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
+  // Window pills come from LANDING_WINDOWS, so their selected + hide rules do too.
+  const winCss = LANDING_WINDOWS.map(
+    (w) =>
+      `#win-${w}:checked ~ .toggles label[for='win-${w}']{background:var(--accent);color:var(--on-accent);font-weight:600}` +
+      `#win-${w}:checked ~ .area .event-card:not(.when-${w}){display:none}`
+  ).join('\n');
+  const winStyle = `<style data-testid="area-window-css">\n${winCss}\n</style>`;
 
   // ── toggle bar (labels) ──
   const typePills = types.length
@@ -293,22 +301,24 @@ function buildAreaMarkup(args: {
 
   const toggles = `<div class="toggles" data-testid="area-toggles">
           <fieldset class="toggle-group" data-testid="toggle-view"><legend>View</legend>${pill('view-list', 'List')}${pill('view-map', 'Map')}</fieldset>
-          <fieldset class="toggle-group" data-testid="toggle-window"><legend>When</legend>${pill('win-7', '7 days')}${pill('win-30', '30 days')}${pill('win-90', '90 days')}</fieldset>
+          <fieldset class="toggle-group" data-testid="toggle-window"><legend>When</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w))).join('')}</fieldset>
           ${typePills}
           <fieldset class="toggle-group" data-testid="toggle-modality"><legend>Where</legend>${pill('mod-all', 'All')}${pill('mod-online', 'Online')}${pill('mod-inperson', 'In person')}</fieldset>
           <fieldset class="toggle-group" data-testid="toggle-product"><legend>Kind</legend>${pill('prod-all', 'All')}${pill('prod-ose', 'OSE')}${pill('prod-hybrid', 'Hybrid')}</fieldset>
         </div>`;
 
+  // OSE-1354: the map view never hides the cards. Until a real map exists it is a
+  // note ABOVE the same list, so every listed event stays one tap from its page.
   const area = `<div class="area" data-testid="area">
-          <div class="view-list" data-testid="area-list">${cards}
-          </div>
           <div class="view-map" data-testid="area-map">
-            <div class="map-placeholder">A neighborhood map lands here &mdash; for now, browse the list.</div>
+            <div class="map-placeholder">A neighborhood map lands here &mdash; every event is listed below.</div>
+          </div>
+          <div class="view-list" data-testid="area-list">${cards}
           </div>
         </div>`;
 
   return `${viewRadios}${winRadios}${typeRadios}${modRadios}${prodRadios}
-        ${typeStyle}
+        ${winStyle}${typeStyle}
         ${toggles}
         ${area}`;
 }
