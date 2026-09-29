@@ -756,6 +756,7 @@ jobs:
             tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
             tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
             tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts \
+            tests/e2e/0-architecture/csp-connect-src.invariant.spec.ts \
             tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
             tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
