@@ -6040,7 +6040,10 @@
           }
           btn = document.createElement('a');
           btn.className = 'btn ' + (hasLink ? 'btn-secondary' : 'btn-primary');
-          btn.href = d.poster_url;
+          // Built here from the id we already hold, never taken from the
+          // response: a server-supplied href is an XSS sink (javascript:) the
+          // client has no business trusting (CodeQL js/xss-more-sources).
+          btn.href = '/poster?event=' + encodeURIComponent(String(id));
           btn.target = '_blank';
           btn.rel = 'noopener';
           btn.setAttribute('data-testid', 'pre-event-poster');

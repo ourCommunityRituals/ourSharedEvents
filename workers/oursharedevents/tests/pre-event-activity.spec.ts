@@ -384,6 +384,10 @@ describe('never who — structural', () => {
     expect(fn).not.toContain('innerHTML');
     // The QR is only ever a data:image URI.
     expect(fn).toContain("d.link.qr.indexOf('data:image/') === 0");
+    // No response-supplied URL reaches an href (CodeQL js/xss-more-sources):
+    // the poster link is built from the id; the QR is only a data:image src.
+    expect(fn).not.toContain('d.poster_url');
+    expect(fn).toContain("btn.href = '/poster?event=' + encodeURIComponent(String(id));");
     // Draft → one Go live button, no hunting for the status panel.
     expect(fn).toContain("btn.setAttribute('data-to', 'active')");
     // Link first: live → "Copy link" is the primary action, the poster second;
