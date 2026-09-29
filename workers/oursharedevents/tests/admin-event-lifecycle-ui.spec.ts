@@ -105,9 +105,15 @@ describe('status panel — the only lifecycle driver', () => {
     expect(html).toMatch(/draft: \[ \{ to: 'ready'[^\]]*\{ to: 'active'[^\]]*\{ to: 'archived'/);
     // ready → active | draft | archived
     expect(html).toMatch(/ready: \[ \{ to: 'active'[^\]]*\{ to: 'draft'[^\]]*\{ to: 'archived'/);
-    // active → ready | archived — an active event can never jump straight to draft
-    expect(html).toMatch(/active: \[ \{ to: 'ready'[^\]]*\{ to: 'archived'[^\]]*\]/);
-    expect(html).not.toMatch(/active: \[[^\]]*to: 'draft'/);
+    // active → ready | archived, plus "Back to draft" as a ROUTED convenience
+    // (dogfooding 2026-09-29: an accidental Go live must be one click to undo).
+    // It is never a direct edge — moveEventTo walks active → ready (unverify-qr,
+    // so qr_verified drops first) → draft; the server still 409s a direct jump.
+    expect(html).toMatch(
+      /active: \[ \{ to: 'draft', label: 'Back to draft' \}[^\]]*\{ to: 'ready'[^\]]*\{ to: 'archived'[^\]]*\]/
+    );
+    const { VALID_TRANSITIONS } = await import('../src/domain/event-state');
+    expect(VALID_TRANSITIONS.active).not.toContain('draft');
     // archived → draft | active
     expect(html).toMatch(/archived: \[ \{ to: 'draft'[^\]]*\{ to: 'active'/);
   });
@@ -125,12 +131,13 @@ describe('status panel — the only lifecycle driver', () => {
 
   test('Go live from a draft is two honest hops (ready, then verify), shared by panel and wizard', async () => {
     const html = await adminHtml();
-    expect(html).toContain('window.goLiveFromDraft = async function (id)');
-    // A DRAFT is two honest hops: draft -> ready, then (from = ready) -> active.
-    // ARCHIVED reaches active directly via the same `transition(id, from, 'active')`
-    // (archived -> ready is INVALID; CCR-PR567 L1 revived the "Go live again" button).
+    // Go live routes through the one status planner (moveEventTo → statusRoute,
+    // a BFS over the VALID_TRANSITIONS mirror): a DRAFT is two honest hops
+    // (ready, then verify); ARCHIVED goes to active directly (CCR-PR567 L1).
+    // admin-golive-transitions.spec.ts runs the planner and asserts the routes.
+    expect(html).toContain('window.goLiveFromDraft = function (id, knownFrom)');
     expect(html).toMatch(
-      /goLiveFromDraft[\s\S]{0,600}transition\(id, 'draft', 'ready'\)[\s\S]{0,400}transition\(id, from, 'active'\)/
+      /goLiveFromDraft[\s\S]{0,80}window\.moveEventTo\(id, 'active', knownFrom\)/
     );
   });
 
@@ -153,7 +160,7 @@ describe('wizard Launch step — honest, and it actually launches', () => {
     expect(html).toContain('data-testid="wizard-go-live-btn"');
     expect(html).toContain("getElementById('wizard-go-live-btn').addEventListener('click'");
     expect(html).toMatch(
-      /wizard-go-live-btn'\)\.addEventListener[\s\S]{0,600}window\.goLiveFromDraft\(wiz\.createdId\)/
+      /wizard-go-live-btn'\)\.addEventListener[\s\S]{0,900}window\.goLiveFromDraft\(wiz\.createdId, wiz\.status \|\| 'draft'\)/
     );
   });
 
