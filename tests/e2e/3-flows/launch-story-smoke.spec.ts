@@ -166,9 +166,13 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     if (eventPageStatus === 200) {
       await expect(page.locator('[data-testid="event-actions"]')).toBeVisible();
       await expect(page.locator('[data-testid="share-btn"]')).toBeVisible();
+      // OSE-1358 made "Add to calendar" a <details> menu: open it, then the
+      // .ics download is the option that carries the calendar href.
+      await expect(page.locator('[data-testid="add-to-calendar"]')).toBeVisible();
+      await page.locator('[data-testid="add-to-calendar-summary"]').click();
       await expect(
         page.locator(
-          `[data-testid="add-to-calendar"][href="/events/${publicEventId}/calendar.ics"]`
+          `[data-testid="add-to-calendar-ics"][href="/events/${publicEventId}/calendar.ics"]`
         )
       ).toBeVisible();
     }
