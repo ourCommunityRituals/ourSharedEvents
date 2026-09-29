@@ -95,12 +95,18 @@ describe('A11Y-5: #6c757d (4.68:1 on white) used for muted text', () => {
     expect(body).not.toContain('#6c757d');
   });
 
-  test('register form has #6c757d for privacy notice', async () => {
-    expect(await formHtml('register')).toContain('#6c757d');
+  // Forms moved onto /ui.css tokens (theme parity, 2026-09-29): the fixed
+  // #6c757d was light-only — the forms never followed a dark theme.
+  test('register form routes the privacy notice through var(--text-muted)', async () => {
+    const body = await formHtml('register');
+    expect(body).toMatch(/\.privacy-notice\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#6c757d');
   });
 
-  test('email form has #6c757d for description text', async () => {
-    expect(await formHtml('email')).toContain('#6c757d');
+  test('email form routes its description text through var(--text-muted)', async () => {
+    const body = await formHtml('email');
+    expect(body).toMatch(/\.form-intro\s*\{[^}]*color:\s*var\(--text-muted\)/);
+    expect(body).not.toContain('#6c757d');
   });
 });
 
@@ -113,8 +119,10 @@ describe('A11Y-5: #155724 (8.69:1 on white, 7.59:1 on green bg) for success/badg
     expect(await reportHtml()).toContain('#155724');
   });
 
-  test('register form success uses #155724', async () => {
-    expect(await formHtml('register')).toContain('#155724');
+  test('register form success uses var(--success)', async () => {
+    const body = await formHtml('register');
+    expect(body).toMatch(/\.success h2\s*\{[^}]*color:\s*var\(--success\)/);
+    expect(body).not.toContain('#155724');
   });
 });
 

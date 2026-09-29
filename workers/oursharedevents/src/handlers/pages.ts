@@ -234,25 +234,25 @@ export function renderErrorPage(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${safeTitle} – OurSharedEvents</title>
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    [data-surface="ose-error"] { --err-bg: #f8f9fa; --err-text: #212529; --err-surface: #1a1a2e; --err-muted: #6c757d; --err-body: #495057; --err-surface-hover: #0f0f1a; --err-focus: #4361ee; }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--err-bg); color: var(--err-text); min-height: 100vh; display: flex; flex-direction: column; }
-    header { background: var(--err-surface); color: #fff; padding: 1.25rem 2rem; }
+    /* Colours are @ocr/ui tokens from /ui.css — the page follows the viewer's theme. */
+    body { display: flex; flex-direction: column; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.25rem 2rem; }
     /* OSE-308: both anchors are primary action targets on the
        error-page recovery flow. Per WCAG 2.5.5 Level AAA + invariant 14
        refined contract, they must meet the 44x44 floor. Using
        inline-flex + align-items: center vertically centers the text
        inside the 44px box without misaligning the visual baseline. */
-    header a { color: #fff; text-decoration: none; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
+    header a { color: var(--text); text-decoration: none; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center; }
-    .error-status { font-size: .8rem; color: var(--err-muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
-    .error-title { font-size: 1.75rem; font-weight: 700; color: var(--err-surface); margin-bottom: 1rem; max-width: 520px; }
-    .error-body { font-size: 1rem; color: var(--err-body); max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
-    .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: var(--err-surface); color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
-    .error-cta:hover { background: var(--err-surface-hover); }
-    .error-cta:focus-visible { outline: 2px solid var(--err-focus); outline-offset: 2px; }
-    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: var(--err-muted); }
+    .error-status { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
+    .error-title { font-size: 1.75rem; font-weight: 700; color: var(--text); margin-bottom: 1rem; max-width: 520px; }
+    .error-body { font-size: 1rem; color: var(--text); max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
+    .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: var(--accent); color: var(--on-accent); text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
+    .error-cta:hover { background: var(--accent-hover); }
+    header a:focus-visible, .error-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: var(--text-muted); }
   </style>
 </head>
 <body>

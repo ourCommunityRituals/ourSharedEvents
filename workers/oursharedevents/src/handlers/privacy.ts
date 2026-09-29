@@ -16,22 +16,23 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Privacy Policy – OurSharedEvents</title>
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; line-height: 1.65; }
-    header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; }
+    /* Colours are @ocr/ui tokens from /ui.css — the page follows the viewer's theme. */
+    body { line-height: 1.65; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.25rem 2rem; }
     header h1 { font-size: 1.3rem; font-weight: 600; }
-    header p { font-size: .85rem; opacity: .7; margin-top: .25rem; }
+    header p { font-size: .85rem; color: var(--text-muted); margin-top: .25rem; }
     main { max-width: 720px; margin: 2rem auto; padding: 0 1.5rem 3rem; }
-    h2 { font-size: 1.05rem; font-weight: 700; color: #1a1a2e; margin: 2rem 0 .6rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }
+    h2 { font-size: 1.05rem; font-weight: 700; margin: 2rem 0 .6rem; padding-top: 1rem; border-top: 1px solid var(--border); }
     h2:first-of-type { border-top: none; margin-top: 1rem; }
     p { margin-bottom: .75rem; font-size: .95rem; }
     ul { margin: .5rem 0 .75rem 1.5rem; font-size: .95rem; }
     li { margin-bottom: .35rem; }
-    a { color: #4361ee; }
-    .back { display: inline-block; margin-bottom: 1.5rem; font-size: .9rem; color: #4361ee; text-decoration: none; }
+    a { color: var(--accent); }
+    .back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 1rem; font-size: 1rem; text-decoration: none; }
     .back:hover { text-decoration: underline; }
-    .updated { font-size: .8rem; color: #868e96; margin-top: 2rem; }
+    .updated { font-size: .85rem; color: var(--text-muted); margin-top: 2rem; }
     .phase-anchor { scroll-margin-top: 1rem; }
   </style>
 </head>
