@@ -37,7 +37,16 @@
 
 import { html, renderErrorPage } from './pages';
 import { invalidateSponsorsCache } from '../lib/data-provider';
-import { parseEventState } from '../domain/event-state';
+import { parseEventState, canRender } from '../domain/event-state';
+import { computeEventPhase } from '../domain/event-phase';
+import {
+  readPreEventActivity,
+  floorPreEventActivity,
+  type FlooredPreEventActivity,
+} from '../lib/pre-event-activity';
+
+/** Most pre-event placements whose reach one /sponsor view reads (4 small queries each). */
+const PRE_EVENT_REACH_MAX = 20;
 import { renderSponsorHomePage, type PlacementRow } from '../lib/sponsor-home-render';
 import { corsHeaders } from '../lib/cors';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -164,7 +173,7 @@ export async function handleSponsorHomePage(
   const rows = await env.DB.prepare(
     `SELECT sp.id AS placement_id, sp.event_id, sp.tier, COALESCE(sp.locality_band, 0) AS locality_band,
             sp.organizer_accepted, sp.sponsor_accepted, sp.is_active AS placement_active,
-            e.title, e.status, e.start_date, e.end_date, e.location, e.is_published
+            e.title, e.status, e.start_date, e.end_date, e.location, e.is_published, e.timezone
        FROM sponsor_placement sp
        JOIN events e ON e.id = sp.event_id
       WHERE sp.sponsor_business_id = ? AND e.brand_id = ? AND sp.is_active = 1
@@ -195,11 +204,35 @@ export async function handleSponsorHomePage(
     }
   }
 
+  // Pre-event reach — only for placements the sponsor ACCEPTED, on listed
+  // events that haven't started. FLOORED here (K=5, per total and per day), so
+  // the render never holds a raw scan/tap count: an outside party never sees a
+  // sub-5 number. Capped so a long placement list can't fan out into hundreds
+  // of reads on one page view.
+  const reach = new Map<string, FlooredPreEventActivity>();
+  const now = new Date();
+  let reads = 0;
+  for (const p of placements) {
+    if (reads >= PRE_EVENT_REACH_MAX) break;
+    if (p.sponsor_accepted !== 1) continue;
+    const state = parseEventState(p.status);
+    if (!canRender(state, 'public')) continue;
+    if (
+      computeEventPhase({ status: p.status, start_date: p.start_date, end_date: p.end_date }) !==
+      'pre_event'
+    )
+      continue;
+    reads += 1;
+    const raw = await readPreEventActivity(env.DB, p.event_id, p.timezone ?? null, now);
+    reach.set(p.event_id, floorPreEventActivity(raw));
+  }
+
   const page = renderSponsorHomePage({
     sponsor: { id: sponsor.id, name: sponsor.name },
     placements,
     expiresIso: new Date(claim.exp * 1000).toISOString(),
     reportLinkFor: (eventId) => reportLinks.get(eventId) ?? null,
+    preEventReachFor: (eventId) => reach.get(eventId) ?? null,
   });
 
   const res = html(page);

@@ -21,6 +21,8 @@ import { injectMarker } from './inject-marker';
 import { escapeHtml as esc } from './html-escape';
 import { computeEventPhase } from '../domain/event-phase';
 import { parseEventState, canRender } from '../domain/event-state';
+import type { FlooredPreEventActivity } from './pre-event-activity';
+import type { FlooredCount } from './count-floor';
 
 export interface PlacementRow {
   placement_id: string;
@@ -36,6 +38,7 @@ export interface PlacementRow {
   end_date: string | null;
   location: string | null;
   is_published: number;
+  timezone?: string | null;
 }
 
 export function humanDate(iso: string | null): string {
@@ -62,11 +65,39 @@ export interface SponsorHomeRenderInput {
    * behaviour.
    */
   reportLinkFor?: (eventId: string) => string | null;
+  /**
+   * Poster reach during the pre-event window, already FLOORED (K=5) by the
+   * caller — this render never sees a raw scan or tap count. Consulted only for
+   * placements the sponsor accepted (their name is only on those posters).
+   */
+  preEventReachFor?: (eventId: string) => FlooredPreEventActivity | null;
+}
+
+/** "12" / "fewer than 5" — a floored count as words. */
+function floored(f: FlooredCount): string {
+  return f.suppressed || f.count == null ? `fewer than ${f.floor}` : String(f.count);
+}
+
+/**
+ * The sponsor's pre-event reach line: how many posters carry their name, in how
+ * many places, and how the posters are being used. Counts only — never who.
+ */
+export function renderPreEventReach(r: FlooredPreEventActivity): string {
+  // Link taps lead: the shared event link (friends and family → the event
+  // page, where this sponsor's name shows) is the big driver; posters come
+  // second and widen the reach into places.
+  const taps = `So far: ${floored(r.clicks)} link taps · ${floored(r.scans)} poster scans.`;
+  if (r.posters === 0) {
+    return `<p class="sh-why" data-testid="placement-reach">${taps} No posters up yet.</p>`;
+  }
+  const posters = `${r.posters} poster${r.posters === 1 ? '' : 's'}`;
+  const places = r.places > 0 ? ` in ${r.places} place${r.places === 1 ? '' : 's'}` : '';
+  return `<p class="sh-why" data-testid="placement-reach">${taps} Your name is on ${posters}${places}.</p>`;
 }
 
 /** Build the full /sponsor page HTML (populated or empty). Pure — no env/DB. */
 export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
-  const { sponsor, placements, expiresIso, reportLinkFor } = input;
+  const { sponsor, placements, expiresIso, reportLinkFor, preEventReachFor } = input;
 
   let live = 0;
   let upcoming = 0;
@@ -132,6 +163,14 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
         <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
         <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
         ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting shows your name on this event's page, poster, and live screen.</p>` : ''}
+        ${(() => {
+          // Pre-event window: an accepted, listed, not-yet-started placement
+          // shows how far the posters carrying this sponsor's name are reaching.
+          if (p.sponsor_accepted !== 1 || !publicOk || phase !== 'pre_event' || !preEventReachFor)
+            return '';
+          const reach = preEventReachFor(p.event_id);
+          return reach ? renderPreEventReach(reach) : '';
+        })()}
         <div class="sh-actions">${links.join('')}${respond}</div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
       </article>`
