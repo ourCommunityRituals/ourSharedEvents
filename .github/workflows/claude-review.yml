@@ -1,12 +1,27 @@
 # Claude Code Review — AI-Powered PR Analysis
 #
-# Purpose: Automated code review using Claude Code Action.
-# Provides intelligent feedback on PRs aligned with project conventions
-# defined in CLAUDE.md, and responds to @claude mentions in comments.
+# Two jobs, two modes of anthropics/claude-code-action@v1:
+#   • security-review — on every PR: a SECURITY review against OSE's invariants,
+#     driven by .github/claude-review/security-charter.md (OSE-1400).
+#   • respond — on a trusted `@claude` PR comment: interactive tag mode.
+#
+# WHY IT WAS SPLIT (OSE-1400, 2026-09-29). The single-job version never produced
+# a review, for three stacked reasons:
+#   1. ANTHROPIC_API_KEY was not provisioned, so every run hit the skip below and
+#      still reported SUCCESS — a green check that reviewed nothing.
+#   2. It passed no `prompt`. In v1, a pull_request event with no prompt does
+#      nothing; only tag mode (an @claude mention) acts.
+#   3. `model:` and `timeout_minutes:` are not v1 inputs — both were silently
+#      ignored. The model now goes through `claude_args`; the timeout is the
+#      job's `timeout-minutes`.
+# A `prompt` puts the action in agent mode for EVERY event, so the security
+# prompt must not ride on the @claude path — hence two jobs.
 #
 # Required Secrets:
-#   - ANTHROPIC_API_KEY: Anthropic API key for Claude access
+#   - ANTHROPIC_API_KEY: Anthropic API key for Claude access (owner-provisioned;
+#     until it exists both jobs skip with a ::warning:: rather than a silent pass)
 #
+# @see .github/claude-review/security-charter.md - the review charter
 # @see CLAUDE.md - Project conventions and architecture decisions
 
 name: Claude Code Review
@@ -29,25 +44,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  review:
-    name: "Claude PR Review"
-    runs-on: ubuntu-latest
-    continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
+  security-review:
+    name: 'Claude PR Security Review'
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true # Advisory until calibrated (OSE-1407) — API failures must not block PRs
     defaults:
       run:
         shell: bash
-    # Run on PR events, or on issue comments that mention @claude on a PR.
-    # The issue_comment path is TRUSTED-ACTOR-GATED (author_association ∈
-    # OWNER/MEMBER/COLLABORATOR) — comment bodies are fed to an LLM agent that runs
-    # with ANTHROPIC_API_KEY and pull-requests/issues write. Without the gate, any
-    # commenter could trigger it: prompt-injection + API-spend DoS. Mirrors the gate
-    # already in ourWKRP's claude.yml (best-of-both CI sync flowing WKRP→OSE).
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@claude') &&
-       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     permissions:
       contents: read
       pull-requests: write
@@ -58,29 +63,108 @@ jobs:
         id: check-key
         run: |
           if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "::notice::ANTHROPIC_API_KEY not configured — skipping Claude review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            # warning, not notice: a skipped reviewer must be visible on the PR,
+            # not read as a passed review (OSE-1400).
+            echo "::warning title=Claude security review NOT run::ANTHROPIC_API_KEY is not configured — this PR was not security-reviewed by Claude."
           else
-            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Sweep 9 #6 (2026-05-14): dropped `fetch-depth: 0`. The Claude review
-      # action only needs the PR diff (head..base), not the entire repo
-      # history. Default shallow checkout is faster on Bloodraven where
-      # the OSE repo has ~3 years of commits.
+      # Sweep 9 #6 (2026-05-14): shallow checkout — the review works from the PR
+      # diff (gh pr diff), not the repo history.
       - uses: actions/checkout@v7
         if: steps.check-key.outputs.skip != 'true'
+
+      # The charter is read from the BASE branch, never the PR head: a PR must
+      # not be able to rewrite its own reviewer's instructions.
+      - name: Load security charter from base branch
+        id: charter
+        if: steps.check-key.outputs.skip != 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          CHARTER: .github/claude-review/security-charter.md
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if ! git show "origin/${BASE_REF}:${CHARTER}" > "$RUNNER_TEMP/charter.md" 2>/dev/null; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Claude security review NOT run::${CHARTER} is not on ${BASE_REF} yet — no charter to review against."
+            exit 0
+          fi
+          delim="CHARTER_$(openssl rand -hex 16)"
+          {
+            echo "text<<${delim}"
+            cat "$RUNNER_TEMP/charter.md"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
       # attacker code with this job's ANTHROPIC_API_KEY + write scopes. Bump via Dependabot.
       - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
-        if: steps.check-key.outputs.skip != 'true'
-        continue-on-error: true  # Advisory — API failures must not block PRs
+        if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
+        continue-on-error: true # Advisory — API failures must not block PRs
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Current, non-dated alias. Was pinned to the dated "claude-sonnet-4-20250514",
-          # which retires 2026-06-15 — a dated id trades the rolling-default problem for a
-          # time-bomb that (with continue-on-error) would fail SILENTLY. Owner may bump to
-          # claude-opus-4-8 for higher review quality.
-          model: "claude-sonnet-4-6"
-          timeout_minutes: 10
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Read the change with `gh pr diff ${{ github.event.pull_request.number }}` and
+            `gh pr view ${{ github.event.pull_request.number }}`, then review it against the
+            charter below.
+
+            ${{ steps.charter.outputs.text }}
+          # Model via claude_args (v1 has no `model` input). Owner may raise to
+          # claude-opus-5-5 for depth; --max-turns bounds spend per PR.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 30
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+
+  respond:
+    name: 'Claude @mention'
+    # TRUSTED-ACTOR-GATED (author_association ∈ OWNER/MEMBER/COLLABORATOR) —
+    # comment bodies are fed to an LLM agent that runs with ANTHROPIC_API_KEY and
+    # pull-requests/issues write. Without the gate, any commenter could trigger
+    # it: prompt-injection + API-spend DoS. Mirrors the gate in ourWKRP's
+    # claude.yml (best-of-both CI sync flowing WKRP→OSE).
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true # Advisory — API failures must not block PRs
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Check for API key
+        id: check-key
+        run: |
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Claude not run::ANTHROPIC_API_KEY is not configured — @claude cannot respond."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.check-key.outputs.skip != 'true'
+
+      # No `prompt`: tag mode answers the @claude comment itself.
+      - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
+        if: steps.check-key.outputs.skip != 'true'
+        continue-on-error: true
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 20
