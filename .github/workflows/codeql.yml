@@ -82,6 +82,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # OSE-1410: the repo's config (suites, path scope, custom Cloudflare/D1
+          # queries) was never referenced by any workflow. Wire it in.
+          config-file: ./.github/codeql/codeql-config.yml
           # Cap heap + parallelism to prevent OS commit-limit exhaustion on
           # Bloodraven (32 GB / 32 threads). Without these, codeql-action
           # auto-calculates ram=(total-2048) and threads=cpu-count, claiming
@@ -105,7 +108,21 @@ jobs:
           # When OSE goes public OR GHAS is provisioned, remove these lines
           # and the upload-artifact step below.
           upload: 'never'
+          # The database upload hits the same Code Security wall and burned 4
+          # retries per run ("Maximum retry attempts exhausted"). Don't try.
+          upload-database: false
           output: '${{ runner.temp }}/codeql-sarif-${{ matrix.language }}'
+
+      # OSE-1410: with upload 'never', nothing read the SARIF — the job was green
+      # WITH findings (44 on 2026-09-29, 2 in live Worker src) and security-triage
+      # only fires on a red run. Gate here: any security-tagged result in
+      # production code fails the job; tests/scripts/CI/archive are summarised
+      # but do not gate. Self-test first so the gate can't silently pass.
+      - name: 'Gate: self-test the SARIF classifier'
+        run: node scripts/check-codeql-sarif.mjs --self-test
+
+      - name: 'Gate: no security findings in production code'
+        run: node scripts/check-codeql-sarif.mjs '${{ runner.temp }}/codeql-sarif-${{ matrix.language }}'
 
       - name: Upload CodeQL SARIF as workflow artifact
         if: always()

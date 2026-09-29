@@ -40,6 +40,7 @@ export const NODE_SPECS = [
 // `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
   'tests/admin-brand-scope.spec.ts',
   'tests/admin-servicetoken-fallthrough.spec.ts',
+  'tests/codeql-src-findings.spec.ts',
   'tests/corridor-map.spec.ts',
   'tests/demo-ci-gate.spec.ts',
   'tests/demo-registry.spec.ts',

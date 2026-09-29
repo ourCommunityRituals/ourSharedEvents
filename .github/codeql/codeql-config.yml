@@ -7,7 +7,10 @@
 #   HTML embedded JS, GitHub Actions CI/CD, Playwright, Postman/Newman,
 #   Wrangler configuration
 #
-# @see .github/workflows/security-scan.yml - Uses this config
+# @see .github/workflows/codeql.yml - Uses this config (OSE-1410). Until then NO
+#      workflow referenced it — the header claimed security-scan.yml did — so
+#      neither these filters nor the custom Cloudflare/D1 queries ever ran.
+# @see scripts/check-codeql-sarif.mjs - Gates security results in production paths
 # @see docs/SECURITY.md - Security process documentation
 
 name: "ourSharedEvents CodeQL Config"
@@ -22,6 +25,13 @@ queries:
   # JavaScript-specific deep analysis
   - uses: security-experimental
 
+  # OSE's own Cloudflare Workers / D1 / CI queries (custom-queries/*.ql) are
+  # NOT enabled yet: they had never been compiled, and on first compile
+  # (CodeQL 2.27.1) html-innerhtml-xss.ql fails ("could not resolve type
+  # PropWrite"), which aborts the whole analysis. Repair + re-enable with
+  #   - uses: ./.github/codeql/custom-queries
+  # is OSE-1414.
+
 query-filters:
   # Include ALL security queries regardless of precision
   - include:
@@ -33,14 +43,28 @@ query-filters:
   - include:
       tags contain: external/cwe
 
+  # ── Reviewed exclusions (each needs a reason; the OSE-1410 gate treats every
+  #    remaining security result in production code as a failure) ──
+  #
+  # js/untrusted-data-to-external-api-more-sources — security-experimental
+  # variant that treats EVERY fetch() response as untrusted. Its only hit
+  # (2026-09-29) was auth/admin.ts _fetchJwks: importKey() on the CF Access
+  # JWKS from https://${env.CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs — an
+  # operator-configured HTTPS origin (both callers pass env, never request
+  # data), and importing those public keys IS JWT verification. The standard
+  # js/untrusted-data-to-external-api query stays enabled.
+  - exclude:
+      id: js/untrusted-data-to-external-api-more-sources
+
 paths:
-  # ── Cloudflare Workers ──
-  - cloudflare-proxy
-  - worker
+  # ── Cloudflare Workers (the deployed bundle's source) ──
   - workers
 
-  # ── HTML surfaces with embedded JavaScript ──
-  - src/mvp
+  # ── Root front-end source + first-party packages bundled into the Worker ──
+  # (Replaces cloudflare-proxy/, worker/ and src/mvp/, none of which exist any
+  # more — the config was written for a tree this repo no longer has.)
+  - src
+  - packages
 
   # ── CI/CD workflows (GitHub Actions script injection) ──
   - .github/workflows
