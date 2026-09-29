@@ -24,6 +24,7 @@
  *   GET /api/v2/admin/event-types     → Category → Type catalog for the picker (auth, OSE-1344)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
+ *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in (public)
@@ -641,11 +642,19 @@ export async function route(
     return handlePortfolioRollup(request, env);
   }
 
-  // PUT/DELETE /api/v2/admin/events/:id — update, or hard-delete (OSE-982) one event
+  // GET /api/v2/admin/events/:id/preview — OSE-1355 draft preview (HTML).
+  // Under /api/v2/admin/* on purpose: Cloudflare Access fronts it at the edge,
+  // guardAdminObjectScope (above) 404s a cross-brand id, and requireAdmin owns
+  // the 401 here. A browser with no session gets the sign-in page, not JSON.
   const adminEventPreviewMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/preview$/);
   if (adminEventPreviewMatch && method === 'GET') {
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    if (deny) {
+      if ((request.headers.get('Accept') ?? '').includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
     return handleAdminEventPreviewPage(request, env, adminEventPreviewMatch[1]);
   }
 

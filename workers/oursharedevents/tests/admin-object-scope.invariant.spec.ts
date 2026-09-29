@@ -156,6 +156,7 @@ describe('OSE-1080 — which paths the object-scope wall covers', () => {
       '/api/v2/admin/events/evt-1/forms/registrations',
       '/api/v2/admin/events/evt-1/forms/export',
       '/api/v2/admin/events/evt-1/shared-report/mint-link',
+      '/api/v2/admin/events/evt-1/preview',
     ]) {
       expect(matchAdminObjectTarget(path), path).toEqual({ kind: 'event', id: 'evt-1' });
     }
@@ -209,6 +210,18 @@ describe('OSE-1080 / INVARIANT #9 — object-level admin READ is brand-scoped', 
     expect(body.ok).toBe(false);
     expect(body.code).toBe('NOT_FOUND');
     expect(body.stats).toBeUndefined();
+  });
+
+  test('OSE-1355 draft preview is brand-scoped: another brand id → 404, page never rendered', async () => {
+    const res = await call(
+      'GET',
+      '/api/v2/admin/events/evt-obj-B1/preview',
+      headersAsEmail(SCOPED)
+    );
+    expect(res.status).toBe(404);
+    const text = await res.text();
+    expect(text).not.toContain('Brand B Object Event');
+    expect(text).not.toContain('admin-draft-preview-toolbar');
   });
 
   test('a cross-tenant miss is byte-identical to a genuinely unknown id', async () => {

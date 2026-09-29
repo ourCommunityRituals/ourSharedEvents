@@ -5800,7 +5800,8 @@
             var iso = e.startDateISO ? String(e.startDateISO) : '';
             var when = iso ? esc(new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso).toLocaleDateString()) : '—';
             var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Live, but kept off the public map and list">(unlisted)</span>' : '';
-            var preview = e.status === 'draft' ? '<a class="event-preview-link" data-testid="event-preview-link" href="/api/v2/admin/events/' + safeId + '/preview" target="_blank" rel="noopener">Preview</a>' : '';
+            // OSE-1355: only not-yet-public events preview (draft/ready); a live one has its real page.
+            var preview = e.status === 'draft' || e.status === 'ready' ? '<a class="event-preview-link" data-testid="event-preview-link" href="/api/v2/admin/events/' + safeId + '/preview" target="_blank" rel="noopener">Preview</a>' : '';
             return `
           <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}" data-status="${st}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>

@@ -579,11 +579,20 @@ function renderShareBlock(
   shareUrl: string,
   title: string,
   nonce: string,
-  lang: 'en' | 'es'
+  lang: 'en' | 'es',
+  inert = false
 ): string {
   const shareLabel = lang === 'es' ? 'Compartir este evento' : 'Share this event';
   const copiedLabel = lang === 'es' ? 'Enlace copiado' : 'Link copied!';
-  return `<button class="ose-share-btn" data-testid="share-btn" type="button" data-share-url="${esc(shareUrl)}" data-share-title="${esc(title)}">${shareLabel}</button>
+  // OSE-1355: in an admin draft preview the button is shown (it is what the
+  // public will see) but switched off — no URL, no script. A draft's link is
+  // not public yet, so there is nothing to share.
+  const attrs = inert
+    ? 'disabled aria-disabled="true" data-preview-inert="true"'
+    : `data-share-url="${esc(shareUrl)}" data-share-title="${esc(title)}"`;
+  const button = `<button class="ose-share-btn" data-testid="share-btn" type="button" ${attrs}>${shareLabel}</button>`;
+  if (inert) return button;
+  return `${button}
 <script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
 }
 
@@ -592,7 +601,7 @@ function renderEventActions(
   shareUrl: string,
   nonce: string,
   lang: 'en' | 'es',
-  opts: { calendar?: boolean } = {}
+  opts: { calendar?: boolean; inert?: boolean } = {}
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
   const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
@@ -619,7 +628,7 @@ function renderEventActions(
   </details>`
       : '';
   return `<div class="ose-event-actions" data-testid="event-actions">
-  ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+  ${renderShareBlock(shareUrl, row.title, nonce, lang, opts.inert === true)}
   ${menu}
 </div>`;
 }
@@ -778,11 +787,18 @@ export function renderPreEventHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es'; formContext?: EventFormContext }
+  opts?: {
+    nonce?: string;
+    lang?: 'en' | 'es';
+    formContext?: EventFormContext;
+    /** OSE-1355 admin draft preview: noindex, and the RSVP + share are inert. */
+    preview?: boolean;
+  }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const formContext = opts?.formContext ?? { type: 'register' };
+  const preview = opts?.preview === true;
   const title = esc(row.title);
   // OSE: the What card leads with the host-authored short blurb (`what_short`),
   // falling back to the general `description` so the card is never empty when a
@@ -825,7 +841,7 @@ export function renderPreEventHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
+  <title>${title}</title>${preview ? '<meta name="robots" content="noindex, nofollow" />' : ''}
 ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
@@ -940,9 +956,9 @@ ${SPONSOR_LIST_CSS}
        the room for the host, sponsor and report — never to persuade the room.
        The post-event recap card keeps its counts (OSE-657 keepsake). -->
 
-    ${renderEventActions(row, shareUrl, nonce, lang)}
+    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview })}
 
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>
+    <a class="ose-rsvp-btn" data-testid="event-rsvp" ${preview ? 'data-preview-inert="true" aria-disabled="true"' : `href="${esc(eventFormHref(row.id, formContext))}"`}>${eventFormCtaLabel(formContext.type)}</a>
 
     ${
       whyPurpose
@@ -1728,57 +1744,83 @@ export async function handlePublicEventPage(
   });
 }
 
+const ADMIN_PREVIEW_CSS = `<style>
+  .admin-preview-toolbar { position: sticky; top: 0; z-index: 1000; margin: -1.5rem -1.25rem 1.25rem; padding: 0.75rem 1.25rem; background: var(--surface); border-bottom: 2px solid var(--accent); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+  .admin-preview-toolbar p { flex-basis: 100%; margin: 0; }
+</style>`;
+
+/**
+ * OSE-1355 — the "Preview — not live" banner an admin sees on top of the REAL
+ * pre-event render (renderPreEventHtml with `preview: true`; no second
+ * template). Its Go live walks the same state-machine doors the admin cockpit
+ * uses (transition()/goLiveFromDraft in admin.html): draft -> ready through
+ * PUT /api/v2/admin/events/:id {status}, then ready -> active through POST
+ * /verify-qr. It deliberately does NOT touch is_published — listing is the
+ * host's publication act (migration 0070), and a preview must never flip it.
+ * An unlisted event has no public page to land on, so it says so instead.
+ */
 function injectAdminPreviewToolbar(
   body: string,
-  eventId: string,
-  status: string,
+  row: { id: string; status: string; is_published: number | null },
   nonce: string
 ): string {
-  const safeId = esc(eventId);
-  const safeStatus = esc(status || 'draft');
-  const toolbar = `<div class="admin-preview-toolbar" data-testid="admin-draft-preview-toolbar">
-  <div>
-    <strong>Admin preview</strong>
-    <span data-testid="admin-draft-preview-status">${safeStatus}</span>
-  </div>
-  <div class="admin-preview-actions">
-    <a class="ose-calendar-link" data-testid="admin-preview-back" href="/admin">Back to admin</a>
-    <button id="adminPreviewGoLive" class="ose-share-btn" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}">Go live</button>
-  </div>
-  <p id="adminPreviewMsg" class="ose-meta" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
-</div>
-<script nonce="${nonce}">(function(){var btn=document.getElementById('adminPreviewGoLive');var msg=document.getElementById('adminPreviewMsg');if(!btn)return;function say(t){if(msg)msg.textContent=t;}function jsonFetch(url,method,body){return fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t||('HTTP '+r.status));});return r.json().catch(function(){return {};});});}btn.addEventListener('click',function(){var id=btn.dataset.eventId;btn.disabled=true;say('Going live...');jsonFetch('/api/v2/admin/events/'+encodeURIComponent(id),'PUT',{status:'ready',is_published:true}).then(function(){return fetch('/api/v2/admin/events/'+encodeURIComponent(id)+'/verify-qr',{method:'POST'});}).then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(t||('HTTP '+r.status));});say('Live. Opening the public page...');window.location.href='/events/'+encodeURIComponent(id);}).catch(function(e){btn.disabled=false;say('Could not go live: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
-  const style = `<style>
-    .admin-preview-toolbar { position: sticky; top: 0; z-index: 1000; margin: -1.5rem -1.25rem 1.25rem; padding: 0.75rem 1.25rem; background: var(--surface); border-bottom: 1px solid rgba(42,42,42,0.16); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .admin-preview-toolbar, .admin-preview-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-    .admin-preview-toolbar .ose-meta { flex-basis: 100%; margin: 0; }
-  </style>`;
-  return body.replace('</style>', `${style}</style>`).replace('<body>', `<body>${toolbar}`);
+  const safeId = esc(row.id);
+  const status = row.status === 'ready' ? 'ready' : 'draft';
+  const listed = row.is_published === 1 ? '1' : '0';
+  const toolbar = `<aside class="admin-preview-toolbar" aria-label="Preview" data-testid="admin-draft-preview-toolbar">
+  <strong data-testid="admin-preview-banner">Preview — not live</strong>
+  <span data-testid="admin-draft-preview-status">${status === 'ready' ? 'Ready' : 'Draft'}</span>
+  <a class="btn btn-secondary" data-testid="admin-preview-back" href="/admin">Back to admin</a>
+  <button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}">Go live</button>
+  <p data-testid="admin-preview-note">This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.</p>
+  <p id="adminPreviewMsg" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
+</aside>
+<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Going live…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.listed==='1'){say('Live. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}else{say('Live, but unlisted: it has no public page. Change that in admin.');}}).catch(function(e){b.disabled=false;say('Could not go live: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
+  return body
+    .replace('</head>', `${ADMIN_PREVIEW_CSS}\n</head>`)
+    .replace('<body>', `<body>\n${toolbar}`);
 }
 
+/** Headers every admin preview response carries: never cached, never indexed. */
+const PREVIEW_HEADERS = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
+
+function previewError(status: number, title: string, body: string): Response {
+  const res = renderErrorPage(status, title, body, '/admin', 'Back to admin');
+  for (const [k, v] of Object.entries(PREVIEW_HEADERS)) res.headers.set(k, v);
+  return res;
+}
+
+/**
+ * GET /api/v2/admin/events/:id/preview — OSE-1355 draft preview.
+ *
+ * Admin-only by construction: the router runs requireAdmin, the path sits under
+ * /api/v2/admin/* (Cloudflare Access at the edge on staging/prod), and
+ * guardAdminObjectScope 404s an id outside the caller's brands before this runs.
+ *
+ * - draft / ready  → the real pre-event page + preview banner (200).
+ * - active         → 303 to /events/:id: it is public, so the public page IS
+ *                    the preview (no second, admin-only copy of a live page).
+ * - archived       → 404: there is nothing to preview until it is reopened.
+ *
+ * Read-only: SELECTs only. No scan, click, impression, shortlink or audit row
+ * is written, and the rendered RSVP/share controls are inert (never-who: a
+ * preview is not a visit).
+ */
 export async function handleAdminEventPreviewPage(
   request: Request,
   env: PublicEventEnv,
   eventId: string
 ): Promise<Response> {
   if (!env.DB) {
-    return renderErrorPage(
+    return previewError(
       503,
       "We're having trouble loading this event",
-      'The admin event preview is briefly unavailable. Try again in a minute.',
-      '/admin',
-      'Back to admin'
+      'The admin event preview is briefly unavailable. Try again in a minute.'
     );
   }
 
   if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
-    return renderErrorPage(
-      404,
-      "We couldn't find that event",
-      'This admin preview link is invalid.',
-      '/admin',
-      'Back to admin'
-    );
+    return previewError(404, "We couldn't find that event", 'This admin preview link is invalid.');
   }
 
   let row: PublicEventRow | null;
@@ -1798,22 +1840,33 @@ export async function handleAdminEventPreviewPage(
       .bind(eventId)
       .first<PublicEventRow>();
   } catch {
-    return renderErrorPage(
+    return previewError(
       503,
       "We're having trouble loading this event",
-      'The admin event preview is briefly unavailable. Try again in a minute.',
-      '/admin',
-      'Back to admin'
+      'The admin event preview is briefly unavailable. Try again in a minute.'
     );
   }
 
   if (!row) {
-    return renderErrorPage(
+    return previewError(
       404,
       "We couldn't find that event",
-      'This admin preview link no longer points to an event.',
-      '/admin',
-      'Back to admin'
+      'This admin preview link no longer points to an event.'
+    );
+  }
+
+  const status = (row.status || 'draft').toLowerCase();
+  if (status === 'active') {
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `/events/${encodeURIComponent(row.id)}`, ...PREVIEW_HEADERS },
+    });
+  }
+  if (status !== 'draft' && status !== 'ready') {
+    return previewError(
+      404,
+      'Nothing to preview',
+      'This event is archived. Reopen it as a draft in admin to preview it again.'
     );
   }
 
@@ -1823,18 +1876,14 @@ export async function handleAdminEventPreviewPage(
   const shareUrl = `${url.origin}/events/${row.id}`;
   const social = await fetchEventPageSocialData(env, row.id);
   const body = injectAdminPreviewToolbar(
-    renderPreEventHtml(row, shareUrl, social, { nonce, lang }),
-    row.id,
-    row.status,
+    renderPreEventHtml(row, shareUrl, social, { nonce, lang, preview: true }),
+    { id: row.id, status, is_published: row.is_published ?? null },
     nonce
   );
 
   return new Response(body, {
     status: 200,
-    headers: {
-      ...securityHeaders(nonce),
-      'Cache-Control': 'no-store',
-    },
+    headers: { ...securityHeaders(nonce), ...PREVIEW_HEADERS },
   });
 }
 
