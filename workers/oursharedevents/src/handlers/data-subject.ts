@@ -73,7 +73,10 @@ export async function handleDataSubjectErase(
   }
 
   const rawEmail = typeof body.email === 'string' ? body.email.trim() : '';
-  if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) || rawEmail.length > 320) {
+  // Length is checked BEFORE the regex (OSE-1410, CodeQL js/polynomial-redos):
+  // the pattern is polynomial on inputs like '!@!.' + '!.'.repeat(n), so an
+  // unbounded string must never reach it. 320 = RFC 5321 max address length.
+  if (!rawEmail || rawEmail.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
     return Response.json(
       { ok: false, status: 400, code: 'INVALID_EMAIL', error: 'Valid email address is required' },
       { status: 400 }

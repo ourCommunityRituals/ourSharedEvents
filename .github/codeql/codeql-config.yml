@@ -7,7 +7,10 @@
 #   HTML embedded JS, GitHub Actions CI/CD, Playwright, Postman/Newman,
 #   Wrangler configuration
 #
-# @see .github/workflows/security-scan.yml - Uses this config
+# @see .github/workflows/codeql.yml - Uses this config (OSE-1410). Until then NO
+#      workflow referenced it — the header claimed security-scan.yml did — so
+#      neither these filters nor the custom Cloudflare/D1 queries ever ran.
+# @see scripts/check-codeql-sarif.mjs - Gates security results in production paths
 # @see docs/SECURITY.md - Security process documentation
 
 name: "ourSharedEvents CodeQL Config"
@@ -22,6 +25,10 @@ queries:
   # JavaScript-specific deep analysis
   - uses: security-experimental
 
+  # OSE's own Cloudflare Workers / D1 / CI queries (custom-queries/*.ql):
+  # D1 SQL injection, timing-safe compare, insecure random, CORS wildcard, …
+  - uses: ./.github/codeql/custom-queries
+
 query-filters:
   # Include ALL security queries regardless of precision
   - include:
@@ -34,13 +41,14 @@ query-filters:
       tags contain: external/cwe
 
 paths:
-  # ── Cloudflare Workers ──
-  - cloudflare-proxy
-  - worker
+  # ── Cloudflare Workers (the deployed bundle's source) ──
   - workers
 
-  # ── HTML surfaces with embedded JavaScript ──
-  - src/mvp
+  # ── Root front-end source + first-party packages bundled into the Worker ──
+  # (Replaces cloudflare-proxy/, worker/ and src/mvp/, none of which exist any
+  # more — the config was written for a tree this repo no longer has.)
+  - src
+  - packages
 
   # ── CI/CD workflows (GitHub Actions script injection) ──
   - .github/workflows

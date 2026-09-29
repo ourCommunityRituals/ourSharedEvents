@@ -12,12 +12,17 @@
 const COOKIE_NAME = 'ose_anon';
 const MAX_AGE_SECONDS = 365 * 24 * 60 * 60; // 1 year
 
-/** Generate a new anonymous ID. */
+/**
+ * Generate a new anonymous ID.
+ *
+ * Always crypto.randomUUID() (present in every Workers runtime). There is
+ * deliberately NO fallback: the old `Date.now()` + `Math.random()` branch was
+ * dead on Workers but would have minted predictable, time-ordered ids — the
+ * linkability the non-correlation tests forbid (OSE-1410, CodeQL
+ * js/insecure-randomness). If randomUUID is ever missing, fail loudly.
+ */
 export function generateAnonId(): string {
-  const uuid = crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `anon_${uuid}`;
+  return `anon_${crypto.randomUUID()}`;
 }
 
 /** Read existing anonymous ID from request cookie, or generate a new one. */
