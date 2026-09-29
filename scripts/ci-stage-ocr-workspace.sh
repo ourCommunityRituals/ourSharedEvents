@@ -102,6 +102,24 @@ HEAD_SHA="$(git -C "$WS_CACHE" rev-parse HEAD)"
 [ "$HEAD_SHA" = "$REF" ] || fail "pin mismatch" "hub cache HEAD is $HEAD_SHA, expected pinned $REF."
 echo "[stage] hub HEAD = $HEAD_SHA ($(git -C "$WS_CACHE" log -1 --format=%s 2>/dev/null || echo '?'))"
 
+# ── MERGED-ONLY (OSE-1394, CCR OSE-1393 H1) ─────────────────────────────────
+# `git fetch <sha>` also serves commits that exist only on unmerged hub
+# branches or refs/pull/*/head, so a 40-hex pin proves nothing about review.
+# (It happened: a39acc6 pinned 14f3ed71, a PR-branch commit never on hub
+# main.) Require the pin to be an ancestor of hub main. The main fetch is
+# blobless (commit graph only), so it stays cheap.
+HUB_MAIN="${OCR_HUB_MAIN_BRANCH:-main}"
+if git -C "$WS_CACHE" ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} fetch -q --filter=blob:none origin \
+     "+refs/heads/$HUB_MAIN:refs/remotes/origin/$HUB_MAIN"; then
+  git -C "$WS_CACHE" merge-base --is-ancestor "$REF" "refs/remotes/origin/$HUB_MAIN" || \
+    fail "pin not on hub $HUB_MAIN" "hub commit $REF (.ocr-hub-ref) is not reachable from hub $HUB_MAIN — pin only merged hub commits (an unmerged branch or PR commit is unreviewed and can be garbage-collected)."
+  echo "[stage] pin is on hub $HUB_MAIN"
+elif [ -z "${GITHUB_ACTIONS:-}" ]; then
+  echo "::warning title=pin ancestry unverified::could not fetch hub $HUB_MAIN (local run) — ancestry of $REF not checked."
+else
+  fail "could not fetch hub $HUB_MAIN" "could not fetch hub $HUB_MAIN from $SOURCE_REPO to verify $REF is merged."
+fi
+
 mkdir -p "$TARGET_PARENT"
 
 [ -f "$WS_CACHE/packages/ui/package.json" ] || fail "pinned hub has no @ocr/ui" "hub commit $REF has no packages/ui/package.json — bump .ocr-hub-ref to a hub commit that carries @ocr/ui."

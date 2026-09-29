@@ -150,9 +150,9 @@
         white-space: nowrap;
       }
       /* TOKEN-ADHERENCE NOTE: the remaining raw hex on this surface is the
-         STATUS/TIER BADGE palette — .badge.active (green), .tier-badge.mid
-         (blue), .tier-badge.enterprise (purple) below, plus .bar-fill.checkin
-         (green) and the overlay's .badge.active green. These are MEANING-CARRYING
+         STATUS/TIER BADGE palette — .tier-badge.mid (blue),
+         .tier-badge.enterprise (purple) below, plus .bar-fill.checkin (green).
+         These are MEANING-CARRYING
          hues (like UEC category colors), not chrome, and have no @ocr/ui semantic
          token today (--live is teal, there is no green/purple/tier token). Gated
          at BASELINE shared-report:11 (8 status + 3 @media-print paper colors).
@@ -167,8 +167,8 @@
         font-weight: 600;
       }
       .badge.active {
-        background: #d3f9d8;
-        color: #155724;
+        background: var(--surface-hover);
+        color: var(--success);
       }
       .badge.archived {
         background: var(--surface-hover);
@@ -760,10 +760,6 @@
       .cell-count-chip {
         background: var(--surface-hover);
         color: var(--text);
-      }
-      .badge.active {
-        background: rgba(22, 163, 74, 0.15);
-        color: #4ade80;
       }
       .badge.archived {
         background: var(--surface-hover);

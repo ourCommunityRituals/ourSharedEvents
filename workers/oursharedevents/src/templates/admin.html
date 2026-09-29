@@ -1035,7 +1035,7 @@
         /* OSE-668: brand-group nodes in the events tree. */
         tr.brand-group-header {
           cursor: pointer;
-          background: var(--surface-alt, #f1f3f5);
+          background: var(--surface-hover);
           font-weight: 600;
         }
         tr.brand-group-header td {
@@ -1300,7 +1300,7 @@
         font-size: 0.75rem;
         padding: 0.125rem 0.5rem;
         border-radius: 10px;
-        background: var(--success-bg, #e6f4ea);
+        background: var(--surface-hover);
         color: var(--success);
       }
       .is-local-pill[hidden] {
@@ -1375,19 +1375,18 @@
         border-left: 4px solid var(--dash-accent, var(--accent));
         border-radius: 8px;
       }
-      /* Per-tile accent hints — carried over from the GAS frame's colour-coding.
-         Token-first with hex fallback; swap to /ui.css tokens when they exist. */
+      /* Per-tile accent hints (GAS frame colour-coding) on @ocr/ui status roles. */
       .dash-stat.scans {
         --dash-accent: var(--accent);
       }
       .dash-stat.appearances {
-        --dash-accent: var(--dash-accent-appearances, #10b981);
+        --dash-accent: var(--success);
       }
       .dash-stat.registrations {
-        --dash-accent: var(--dash-accent-registrations, #8b5cf6);
+        --dash-accent: var(--info);
       }
       .dash-stat.checkins {
-        --dash-accent: var(--dash-accent-checkins, #f59e0b);
+        --dash-accent: var(--warn);
       }
       .dash-stat__num {
         font-size: 1.5rem;
@@ -1410,7 +1409,7 @@
       .dash-phase {
         padding: 0.85rem 1rem;
         margin-bottom: 0.6rem;
-        background: var(--surface-alt, #f8fafc);
+        background: var(--surface-hover);
         border: 1px solid var(--border);
         border-radius: 8px;
       }
