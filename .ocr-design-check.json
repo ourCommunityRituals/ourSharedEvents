@@ -17,7 +17,7 @@
     },
     "workers/oursharedevents/src/handlers/pages.ts": {
       "own-tokens": 0,
-      "own-stylesheet": 28422,
+      "own-stylesheet": 27254,
       "raw-hex": 1,
       "foreign-stylesheet": 0
     },
@@ -41,7 +41,7 @@
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 65059,
+      "own-stylesheet": 65049,
       "raw-hex": 30,
       "foreign-stylesheet": 0
     },
@@ -53,7 +53,7 @@
     },
     "workers/oursharedevents/src/templates/landing.html": {
       "own-tokens": 5,
-      "own-stylesheet": 7918,
+      "own-stylesheet": 7432,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -65,7 +65,7 @@
     },
     "workers/oursharedevents/src/templates/public.html": {
       "own-tokens": 0,
-      "own-stylesheet": 7203,
+      "own-stylesheet": 6916,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },

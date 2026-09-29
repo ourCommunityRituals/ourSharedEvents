@@ -89,10 +89,11 @@ export function renderLegalFooter(surface: FooterSurface, year?: number): string
     surface: prefixFor(surface),
     links: footerLinksFor(surface),
     year,
-    // The standing product subtitle (OSE-1230) rides the two public,
-    // first-impression surfaces only. On admin and shared-report the reader has
-    // already met the promise; repeating it there is noise, not reassurance.
-    subtitle: surface === 'landing' || surface === 'public',
+    // The standing product subtitle (OSE-1230) used to ride the landing and
+    // /events footers. OSE-1372 moved it into the body, as the always-visible
+    // line of the never-who disclosure (lib/never-who.ts) on every anonymous
+    // surface — so the footer no longer repeats it anywhere: one line, not two.
+    subtitle: false,
   });
 }
 

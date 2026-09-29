@@ -99,7 +99,9 @@ describe('A11Y-6: launch wizard is keyboard-escapable', () => {
   test('closeWizard returns focus to the control that opened the wizard', async () => {
     const body = await adminHtml();
     expect(body).toMatch(
-      /function closeWizard\(\)[\s\S]{0,400}admin-path-wizard[\s\S]{0,60}\.focus\(\)/
+      // OSE-1315: closeWizard(opts) also unwinds the wizard's history entries
+      // before hiding, so the focus return sits further into the body.
+      /function closeWizard\([^)]*\)[\s\S]{0,1800}admin-path-wizard[\s\S]{0,60}\.focus\(\)/
     );
   });
 

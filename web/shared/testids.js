@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 298 ids
+    // admin.html — 299 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -343,10 +343,10 @@
       'wizard-template-trivia',
       'wizard-type-picker',
       'wizard-type-picker-msg',
+      'wizard-undo-live-btn',
     ]),
-    // public.html — 18 ids
+    // public.html — 17 ids
     PUBLIC: Object.freeze([
-      'anonymity-affordance',
       'public-events',
       'public-events-count',
       'public-events-heading',

@@ -375,7 +375,11 @@ describe('never who — structural', () => {
     const start = ADMIN_HTML.indexOf('window.renderPreEventWindow = async function');
     expect(start).toBeGreaterThan(-1);
     // The function body only: up to its own closing `      };` line.
-    const fn = ADMIN_HTML.slice(start, ADMIN_HTML.indexOf('\n      };\n', start));
+    // Newline-agnostic: a CRLF checkout (Windows) must slice the same body.
+    const rest = ADMIN_HTML.slice(start);
+    const end = rest.search(/\r?\n {6}\};\r?\n/);
+    expect(end).toBeGreaterThan(-1);
+    const fn = rest.slice(0, end);
     expect(fn).toContain('card.hidden = false;');
     expect(fn).not.toContain('innerHTML');
     // The QR is only ever a data:image URI.

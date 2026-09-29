@@ -1804,7 +1804,6 @@
         color: var(--text-muted);
         margin-bottom: 1rem;
       }
-      .wizard-template-grid,
       .create-publish-label {
         display: flex;
         align-items: center;
@@ -1907,11 +1906,21 @@
         line-height: 1.5;
         color: var(--text-muted);
       }
-      .wizard-signup-grid {
+      /* OSE-1314: one card per row on phones; side by side from 640px. */
+      .wizard-template-grid,
+      .wizard-signup-grid,
+      .wizard-links-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        grid-template-columns: 1fr;
         gap: 0.75rem;
         margin-bottom: 1rem;
+      }
+      @media (min-width: 640px) {
+        .wizard-template-grid,
+        .wizard-signup-grid,
+        .wizard-links-grid {
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
       }
       .wizard-template-card,
       .wizard-signup-option,
@@ -1919,6 +1928,8 @@
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
+        min-width: 0;
+        min-height: 44px;
         text-align: left;
         padding: 0.9rem;
         background: var(--surface-hover);
@@ -1933,9 +1944,7 @@
       .wizard-publish-option:hover {
         border-color: var(--accent);
       }
-      /* OSE-1340: selected = emerald tint over the theme's own surface (deep
-         green in dark, pale in light), a bright edge, and a check glyph so the
-         state is not carried by colour alone (aria-pressed carries it for AT). */
+      /* OSE-1340: selected = tint + edge + check glyph (not colour alone). */
       .wizard-template-card.selected,
       .wizard-signup-option.selected,
       .wizard-publish-option.selected {
@@ -1955,7 +1964,7 @@
         color: var(--text);
       }
       .wizard-card-desc {
-        font-size: 0.78rem;
+        font-size: 0.875rem;
         color: var(--text-muted);
       }
       .wizard-nav {
@@ -1978,12 +1987,6 @@
       .wizard-back-btn:hover,
       .wizard-skip-btn:hover {
         background: var(--surface-hover);
-      }
-      .wizard-links-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
       }
       .wizard-link-card {
         background: var(--surface-hover);
@@ -2047,8 +2050,7 @@
         margin-bottom: 1rem;
       }
       @media (max-width: 480px) {
-        .path-chooser-options,
-        .wizard-links-grid {
+        .path-chooser-options {
           grid-template-columns: 1fr;
         }
         .form-row {
@@ -2686,6 +2688,15 @@
             >
               Go live now
             </button>
+            <button
+              type="button"
+              class="wizard-back-btn"
+              id="wizard-undo-live-btn"
+              data-testid="wizard-undo-live-btn"
+              hidden
+            >
+              Undo, back to draft
+            </button>
             <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
           </div>
           <p class="wizard-step-help">Once it's live:</p>
@@ -2831,7 +2842,60 @@
             // card and the value actually sent disagree, which on THIS question
             // means publishing an address the organizer believes they declined.
             published: true,
+            // OSE-1315 — wizard entries this page pushed onto the session
+            // history. Browser Back walks them (step 3 → 2 → 1 → front door)
+            // instead of skipping past the front door to the Cloudflare Access
+            // callback, which forced a re-auth.
+            historyDepth: 0,
           };
+
+          // ── history (OSE-1315) ──────────────────────────────────────────────
+          // The admin is one document, so the front door → wizard → step moves
+          // were DOM swaps with no history entries: the only entry behind the
+          // wizard was the Access login callback. Each pre-create move now
+          // pushes a same-document entry (#create-event, state = step); a
+          // save (step 3 → 4 and on) REPLACES, because you can't go back past a
+          // create. popstate is the one place that moves the wizard in response.
+          var WIZ_HASH = '#create-event';
+          // The step-5 banner says what the event IS right now — "as a draft"
+          // was left standing after Go live now, contradicting the Live ✓ below it.
+          function syncWizardSummary() {
+            var el = document.getElementById('wizardEventSummary');
+            if (!el || !wiz.summaryBase) return;
+            el.textContent = wiz.summaryBase + (wiz.status === 'active' ? ' and live.' : ' as a draft.');
+          }
+          // Each entry carries its own depth, so Back AND Forward both restore
+          // the right count from the entry itself (no counter to drift).
+          function pushWizardStep(step) {
+            try {
+              history.pushState(
+                { oseAdmin: 'wizard', step: step, depth: wiz.historyDepth + 1 },
+                '',
+                WIZ_HASH
+              );
+              wiz.historyDepth += 1;
+            } catch (e) {
+              /* history unavailable (sandboxed frame) — in-screen Back still works */
+            }
+          }
+          function replaceWizardStep(step) {
+            try {
+              history.replaceState(
+                { oseAdmin: 'wizard', step: step, depth: wiz.historyDepth },
+                '',
+                WIZ_HASH
+              );
+            } catch (e) {
+              /* see pushWizardStep */
+            }
+          }
+          // Walk back `n` entries this page pushed; false when there are none
+          // (the wizard was opened from a reloaded #create-event URL).
+          function historyBack(n) {
+            if (wiz.historyDepth < n) return false;
+            history.go(-n);
+            return true;
+          }
 
           // Template → plain-language starting description. These feed the SAME
           // optional 5W fields the dashboard form sends (what_short/why_purpose)
@@ -2877,8 +2941,11 @@
             var skip = document.getElementById('wizardSkipBtn');
             var next = document.getElementById('wizard-next-btn');
             var finish = document.getElementById('wizard-finish-btn');
-            // Back only while nothing is saved yet — you can't un-create.
-            back.hidden = !(wiz.step > 1 && wiz.step <= 3);
+            // Back only while nothing is saved yet — you can't un-create. On
+            // step 1 it returns to the front door (OSE-1315): same control, same
+            // place, on every pre-create step.
+            back.hidden = !(wiz.step <= 3 && !wiz.createdId);
+            back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';
             skip.hidden = wiz.step !== 3;
             next.hidden = wiz.step === 5;
             finish.hidden = wiz.step !== 5;
@@ -3072,12 +3139,16 @@
                       }).format(new Date(data.starts_at));
                     } catch (e) { whenTxt = ''; }
                   }
-                  summary.textContent =
+                  wiz.summaryBase =
                     '✅ "' + body.title + '" is saved' +
                     (venueVal ? ' at ' + venueVal : '') +
-                    (whenTxt ? ' for ' + whenTxt : '') + ' as a draft.';
+                    (whenTxt ? ' for ' + whenTxt : '');
+                  summary.textContent = wiz.summaryBase + ' as a draft.';
                 }
                 wiz.step = 4;
+                // Post-save transition: replace, never push — Back must not
+                // land on a create step for an event that already exists.
+                replaceWizardStep(4);
                 updateUI();
                 loadLinks();
               } else {
@@ -3101,7 +3172,12 @@
             }
           }
 
-          function startWizard() {
+          function startWizard(ev, opts) {
+            var fromHistory = !!(opts && opts.fromHistory);
+            if (!fromHistory) {
+              wiz.step = wiz.createdId ? wiz.step : 1;
+              pushWizardStep(wiz.step);
+            }
             document.getElementById('admin-path-chooser').hidden = true;
             // Hide the dashboard behind the wizard — see .wizard-active in CSS.
             document.body.classList.add('wizard-active');
@@ -3128,9 +3204,26 @@
           // The wizard takes over the surface but offers no keyboard way out
           // before step 2's Back button appears; Escape closes it back to the
           // front-door chooser and returns focus to the control that opened it.
-          function closeWizard() {
+          function closeWizard(opts) {
             var w = document.getElementById('launch-wizard');
             if (!w || w.hidden) return;
+            // Unwind our own entries so Back from the front door never lands
+            // on a hidden wizard; popstate calls back here with fromHistory.
+            if (!(opts && opts.fromHistory) && historyBack(wiz.historyDepth)) return;
+            if (!(opts && opts.fromHistory)) {
+              try {
+                history.replaceState({ oseAdmin: 'chooser' }, '', location.pathname + location.search);
+              } catch (e) {
+                /* see pushWizardStep */
+              }
+            }
+            // A SAVED wizard leaves the way Done does — a fresh front door with
+            // the new event remembered (SELECTED_EVENT_KEY) — so the next
+            // "Create an event" starts at step 1, not on this event's step 5.
+            if (wiz.createdId) {
+              location.reload();
+              return;
+            }
             document.body.classList.remove('wizard-active');
             w.hidden = true;
             var chooser = document.getElementById('admin-path-chooser');
@@ -3204,16 +3297,62 @@
             }
             if (wiz.step < 5) {
               wiz.step += 1;
+              // Pre-create steps are real history entries; after the save
+              // (4 → 5) the move replaces.
+              if (wiz.createdId) replaceWizardStep(wiz.step);
+              else pushWizardStep(wiz.step);
               updateUI();
             }
           }
 
           function goBack() {
-            if (wiz.step > 1 && !wiz.createdId) {
-              wiz.step -= 1;
-              updateUI();
+            if (wiz.createdId) return;
+            if (wiz.step === 1) {
+              closeWizard();
+              return;
             }
+            // Prefer the browser's own history so in-screen Back and browser
+            // Back are the same move; fall back to a direct step change.
+            if (historyBack(1)) return;
+            wiz.step -= 1;
+            replaceWizardStep(wiz.step);
+            updateUI();
           }
+
+          // Browser Back / Forward (OSE-1315).
+          window.addEventListener('popstate', function (ev) {
+            var st = ev.state;
+            wiz.historyDepth = st && st.oseAdmin === 'wizard' ? Number(st.depth) || 0 : 0;
+            var w = document.getElementById('launch-wizard');
+            if (st && st.oseAdmin === 'wizard') {
+              // Once saved, steps 1–3 are history: Back leaves for the front
+              // door in ONE press (the event is safe in Your events) instead of
+              // stepping through entries that can no longer do anything.
+              if (wiz.createdId) {
+                if (wiz.historyDepth > 0) history.go(-wiz.historyDepth);
+                else closeWizard({ fromHistory: true });
+                return;
+              }
+              wiz.step = Math.min(Math.max(Number(st.step) || 1, 1), 3);
+              if (w && w.hidden) startWizard(null, { fromHistory: true });
+              else updateUI();
+              return;
+            }
+            closeWizard({ fromHistory: true });
+          });
+
+          // The front door owns the URL on load (OSE-1315): no stray
+          // #create-event, and a state object so popstate can recognise it. A
+          // reloaded #create-event reopens the wizard at step 1.
+          (function initWizardHistory() {
+            var reopen = location.hash === WIZ_HASH;
+            try {
+              history.replaceState({ oseAdmin: 'chooser' }, '', location.pathname + location.search);
+            } catch (e) {
+              /* see pushWizardStep */
+            }
+            if (reopen) startWizard();
+          })();
 
           function skipSignup() {
             // Skipping = "no sign-ups" + straight to create. Still one POST.
@@ -3274,17 +3413,46 @@
             if (!wiz.createdId || typeof window.goLiveFromDraft !== 'function') return;
             btn.disabled = true;
             btn.textContent = 'Going live\u2026';
-            var r = await window.goLiveFromDraft(wiz.createdId);
+            // The wizard just created it, so it knows the origin (a draft,
+            // unless Undo already moved it back — tracked in wiz.status).
+            var r = await window.goLiveFromDraft(wiz.createdId, wiz.status || 'draft');
             if (r.ok) {
+              wiz.status = 'active';
+              syncWizardSummary();
               btn.textContent = 'Live \u2713';
               btn.classList.add('is-live');
               if (msgEl) { msgEl.textContent = 'Your event is live. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
+              document.getElementById('wizard-undo-live-btn').hidden = false;
             } else {
               btn.disabled = false;
               btn.textContent = 'Go live now';
               if (msgEl) { msgEl.textContent = r.error || 'Could not go live. Try again from Your events.'; msgEl.className = 'create-msg error'; }
+            }
+          });
+          // Went live by mistake? One click puts it back to a draft, right here.
+          document.getElementById('wizard-undo-live-btn').addEventListener('click', async function () {
+            var undo = this;
+            var btn = document.getElementById('wizard-go-live-btn');
+            var msgEl = document.getElementById('wizard-go-live-msg');
+            if (!wiz.createdId || typeof window.moveEventTo !== 'function') return;
+            undo.disabled = true;
+            var r = await window.moveEventTo(wiz.createdId, 'draft', wiz.status || 'active');
+            undo.disabled = false;
+            if (r.ok) {
+              wiz.status = 'draft';
+              syncWizardSummary();
+              undo.hidden = true;
+              btn.disabled = false;
+              btn.textContent = 'Go live now';
+              btn.classList.remove('is-live');
+              var help = document.getElementById('wizard-go-live-help');
+              if (help) help.hidden = false;
+              if (msgEl) { msgEl.textContent = 'Back to a draft. Nothing is public.'; msgEl.className = 'create-msg success'; }
+            } else if (msgEl) {
+              msgEl.textContent = r.error || 'Could not take it back. Use Your events.';
+              msgEl.className = 'create-msg error';
             }
           });
           // Progress-rail click: revisit a completed step (pre-create only).
@@ -3293,7 +3461,9 @@
               if (wiz.createdId) return; // steps 1–3 are history once saved
               var n = Number(el.getAttribute('data-step'));
               if (n < wiz.step) {
+                if (historyBack(wiz.step - n)) return; // popstate lands on n
                 wiz.step = n;
+                replaceWizardStep(n);
                 updateUI();
               }
             });
@@ -5776,7 +5946,9 @@
       var STATUS_ACTIONS = {
         draft: [ { to: 'ready', label: 'Mark ready' }, { to: 'active', label: 'Go live', primary: true }, { to: 'archived', label: 'Archive' } ],
         ready: [ { to: 'active', label: 'Go live', primary: true }, { to: 'draft', label: 'Back to draft' }, { to: 'archived', label: 'Archive' } ],
-        active: [ { to: 'ready', label: 'Take offline' }, { to: 'archived', label: 'Archive' } ],
+        // Went live by mistake? "Back to draft" is one click from Live;
+        // moveEventTo walks active -> ready -> draft for it.
+        active: [ { to: 'draft', label: 'Back to draft' }, { to: 'ready', label: 'Take offline' }, { to: 'archived', label: 'Archive' } ],
         archived: [ { to: 'draft', label: 'Reopen as draft', primary: true }, { to: 'active', label: 'Go live again' } ],
       };
       window.renderEventStatus = function (id) {
@@ -6013,23 +6185,62 @@
         if (to === 'ready' && from === 'active') return postJson('/api/v2/admin/events/' + encodeURIComponent(id) + '/unverify-qr', 'POST');
         return postJson('/api/v2/admin/events/' + encodeURIComponent(id), 'PUT', { status: to });
       }
-      /** draft/archived → active is two hops (ready, then verify). One call for the wizard + panel. */
-      window.goLiveFromDraft = async function (id) {
-        var current = window._oseList.byId[String(id)];
-        var from = current ? current.status : 'draft';
-        // Only draft lacks a direct edge to active (draft -> ready -> active).
-        // Every other origin that offers "go live" reaches active directly —
-        // archived -> active is a valid edge, and archived -> ready is INVALID
-        // (409), so the old two-hop-through-ready made "Go live again" dead.
-        if (from === 'draft') {
-          var r1 = await transition(id, 'draft', 'ready');
-          if (!r1.res.ok || !r1.data.ok) return { ok: false, error: (r1.data && (r1.data.error || r1.data.code)) || 'Could not mark ready (server said ' + r1.res.status + ')' };
-          from = 'ready';
+      // Client mirror of VALID_TRANSITIONS (src/domain/event-state.ts). The
+      // server still enforces every edge (409 INVALID_TRANSITION); this only
+      // plans the route. admin-status-undo.spec.ts asserts the two match.
+      var STATUS_EDGES = {"draft":["ready","archived"],"ready":["active","draft","archived"],"active":["archived","ready"],"archived":["active","draft"]};
+      /** Shortest path of valid edges from -> to (BFS); null when unreachable. */
+      function statusRoute(from, to) {
+        if (from === to) return [];
+        var seen = {}; seen[from] = true;
+        var queue = [[from]];
+        while (queue.length) {
+          var path = queue.shift();
+          var next = STATUS_EDGES[path[path.length - 1]] || [];
+          for (var i = 0; i < next.length; i++) {
+            if (seen[next[i]]) continue;
+            var p2 = path.concat(next[i]);
+            if (next[i] === to) return p2.slice(1);
+            // Never pass THROUGH archived on the way somewhere else: it is a
+            // real state with its own meaning, not a shortcut (Live -> draft
+            // must go via Ready, not via Archived).
+            if (next[i] === 'archived') continue;
+            seen[next[i]] = true;
+            queue.push(p2);
+          }
         }
-        var r2 = await transition(id, from, 'active');
-        if (!r2.res.ok || !r2.data.ok) return { ok: false, error: (r2.data && (r2.data.error || r2.data.code)) || 'Could not go live (server said ' + r2.res.status + ')' };
-        if (current) current.status = 'active';
-        return { ok: true };
+        return null;
+      }
+      /**
+       * Move an event to ANY status in one call, so every target is one click
+       * for the organizer however many valid edges it takes (draft -> active
+       * is ready + verify; active -> draft is unverify + draft). Each hop goes
+       * through the same endpoints the state machine owns.
+       */
+      window.moveEventTo = async function (id, to, knownFrom) {
+        var current = window._oseList.byId[String(id)];
+        // The caller's own knowledge wins (the wizard knows what it just did);
+        // otherwise the list row. Never GUESS: an unknown origin planned as
+        // "draft" once made Undo report success with zero calls made.
+        var from = knownFrom || (current && current.status);
+        if (!from) return { ok: false, error: 'Could not tell where this event stands. Reload and try again.' };
+        var route = statusRoute(from, to);
+        if (!route) return { ok: false, from: from, error: 'This event can not move from ' + window.friendlyStatus(from) + ' to ' + window.friendlyStatus(to) + '.' };
+        var at = from;
+        for (var i = 0; i < route.length; i++) {
+          var r = await transition(id, at, route[i]);
+          if (!r.res.ok || !r.data.ok) {
+            if (current) current.status = at;
+            return { ok: false, from: from, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
+          }
+          at = route[i];
+        }
+        if (current) current.status = to;
+        return { ok: true, from: from };
+      };
+      /** The wizard's Go live now: same router, one call. */
+      window.goLiveFromDraft = function (id, knownFrom) {
+        return window.moveEventTo(id, 'active', knownFrom);
       };
       window.changeEventStatus = async function (id, to, btn) {
         var e = window._oseList.byId[String(id)];
@@ -6039,15 +6250,7 @@
         var buttons = document.querySelectorAll('#event-status-actions button');
         buttons.forEach(function (b) { b.disabled = true; });
         if (btn) btn.textContent = 'Saving…';
-        var result;
-        if (to === 'active' && from !== 'ready') {
-          result = await window.goLiveFromDraft(id);
-        } else {
-          var r = await transition(id, from, to);
-          result = r.res.ok && r.data.ok
-            ? { ok: true }
-            : { ok: false, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
-        }
+        var result = await window.moveEventTo(id, to);
         if (result.ok) {
           e.status = to;
           // Re-render the row badge in place (no refetch: status is the only
@@ -6066,7 +6269,22 @@
           var nice = { active: 'Live — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
-          if (m2) { m2.textContent = nice; m2.className = 'create-msg success'; }
+          if (m2) {
+            m2.textContent = nice + ' ';
+            m2.className = 'create-msg success';
+            // One-click Undo for a fat-fingered status change: straight back to
+            // where it was, through the same router (Live -> Archived undoes to
+            // Live; Ready -> Archived undoes to Ready via draft).
+            var undo = document.createElement('button');
+            undo.type = 'button';
+            undo.className = 'event-status-btn';
+            undo.setAttribute('data-action', 'event-status');
+            undo.setAttribute('data-event-id', String(id));
+            undo.setAttribute('data-to', from);
+            undo.setAttribute('data-testid', 'event-status-undo');
+            undo.textContent = 'Undo';
+            m2.appendChild(undo);
+          }
           // If the list is filtered to the OLD status, the row no longer
           // belongs — refresh so what you see matches the filter.
           if (window._oseList.status !== 'all' && window._oseList.status !== to) window.renderEventsList({ reset: true });

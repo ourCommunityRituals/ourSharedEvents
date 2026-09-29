@@ -33,6 +33,7 @@ import {
   resolveAndSignalProvenance,
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
+import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
 import {
   parseDiscoveryFilters,
   applyDiscoveryFilters,
@@ -325,7 +326,10 @@ export async function handlePublicPage(
   } catch {
     list = renderEventListError();
   }
-  const shell = injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public');
+  const shell = injectNeverWho(
+    injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'),
+    'events'
+  );
   return html(
     injectEventList(injectDiscoveryFilters(shell, renderDiscoveryFilters(filters, shown)), list)
   );
@@ -587,7 +591,8 @@ function renderEventActions(
   row: PublicEventRow,
   shareUrl: string,
   nonce: string,
-  lang: 'en' | 'es'
+  lang: 'en' | 'es',
+  opts: { calendar?: boolean } = {}
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
   const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
@@ -597,8 +602,11 @@ function renderEventActions(
   // server-built deep link, and a plain .ics download that lands Apple Calendar,
   // the iOS native picker and Outlook desktop.
   const googleUrl = row.start_date ? buildGoogleCalendarUrl(row, shareUrl) : null;
-  const menu = row.start_date
-    ? `<details class="ose-calendar-menu" data-testid="add-to-calendar">
+  // OSE-1373: a wrapped event has no future to add — the recap passes
+  // `calendar: false`, so only Share remains in its actions row.
+  const menu =
+    opts.calendar !== false && row.start_date
+      ? `<details class="ose-calendar-menu" data-testid="add-to-calendar">
     <summary class="ose-calendar-link ose-calendar-summary" data-testid="add-to-calendar-summary">${calendarLabel}</summary>
     <div class="ose-calendar-options" role="group" aria-label="${calendarLabel}">${
       googleUrl
@@ -609,7 +617,7 @@ function renderEventActions(
       <a class="ose-calendar-option" data-testid="add-to-calendar-ics" href="${calendarHref}" download>${icsLabel}</a>
     </div>
   </details>`
-    : '';
+      : '';
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareUrl, row.title, nonce, lang)}
   ${menu}
@@ -682,12 +690,33 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   return `<span class="ose-sponsor-name">${name}</span>`;
 }
 
+/**
+ * OSE-1373: sponsors render as a real list, one per line. They were inline
+ * <a>/<span> siblings in a bare <div> with no styling, so the names ran into one
+ * another ("Covenant Local BronzeCovenant Local Platinum…") on every phase.
+ */
+function renderSponsorList(sponsors: SponsorBasicRow[]): string {
+  const items = sponsors
+    .map(
+      (s) => `<li class="ose-sponsor-item" data-testid="sponsor-item">${renderSponsorItem(s)}</li>`
+    )
+    .join('');
+  return `<ul class="ose-sponsor-list" data-testid="sponsor-list">${items}</ul>`;
+}
+
+const SPONSOR_LIST_CSS = `
+    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.25rem; }
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
+    .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
+    .ose-sponsor-item:last-child { border-bottom: none; }
+    .ose-sponsor-link { color: var(--accent); font-weight: 600; }
+    .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
+
 function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
   if (!sponsors.length) return '';
-  const items = sponsors.map(renderSponsorItem).join('');
   return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="Event sponsors">
     <p class="ose-sponsor-label">${heading}</p>
-    <div class="ose-sponsor-list">${items}</div>
+    ${renderSponsorList(sponsors)}
   </section>`;
 }
 
@@ -729,20 +758,10 @@ function formatHumanDate(iso: string | null): string {
  * separation principle. The platform's DB↔FORMS_DB split + anon_id + 15-min
  * tranches make this claim physically true; this paragraph makes it
  * user-readable. Lives at the bottom of every public event page so recipients
- * read it before any sign-up action they might take.
+ * read it before any sign-up action they might take. OSE-1372: one line
+ * visible, the paragraph behind a native disclosure (lib/never-who.ts).
  */
-const ANONYMITY_AFFORDANCE = `
-  <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
-    <h2 id="anon-heading">How this works</h2>
-    <p>
-      You're part of the group, anonymously. OurSharedEvents tracks when
-      groups gather &mdash; never who you are. Event hosts and sponsors see
-      corridors and venues, not people. The link you followed counted as a
-      single click; nothing about your device, location, or identity was
-      collected to display this page.
-    </p>
-  </section>
-`;
+const ANONYMITY_AFFORDANCE = renderNeverWho('event');
 
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
 // The current CSP policy (see `securityHeaders` below) allows
@@ -846,9 +865,8 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
-    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }
+${NEVER_WHO_CSS}
+${SPONSOR_LIST_CSS}
     .ose-section p { margin: 0; }
     /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
        link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
@@ -1048,9 +1066,8 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
-    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }
+${NEVER_WHO_CSS}
+${SPONSOR_LIST_CSS}
     .ose-section p { margin: 0; }
     /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
        link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
@@ -1168,9 +1185,7 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: var(--ose-text); background: var(--ose-bg); }
     h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
     .msg { color: var(--ose-muted); font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
-    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }
+${NEVER_WHO_CSS}
   </style>
 </head>
 <body>
@@ -1336,9 +1351,8 @@ ${ogMeta}
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
-    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }
+${NEVER_WHO_CSS}
+${SPONSOR_LIST_CSS}
     /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
     .ose-section p { margin: 0 0 0.5rem; }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
@@ -1411,8 +1425,12 @@ ${ogMeta}
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
+              ${
+                // OSE-1373: the promise first (how many said they'd come), then
+                // the turnout, then the ratio — the order a reader asks in.
+                regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''
+              }
               ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
-              ${regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''}
               ${
                 // Ratio only when BOTH operands clear the floor — a "% showed up"
                 // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
@@ -1429,7 +1447,7 @@ ${ogMeta}
         const sponsorThanks = sponsors.length
           ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
               <h2 id="thanks-heading">Thanks to our sponsors</h2>
-              <div class="ose-sponsor-list">${sponsors.map(renderSponsorItem).join('')}</div>
+              ${renderSponsorList(sponsors)}
             </section>`
           : '';
         return statsCard + sponsorThanks;
@@ -1440,7 +1458,7 @@ ${ogMeta}
        the return loop (share the recap, find the next one) — curated, bounded (an
        <aside>, visually demoted, always after the recap), never a full listing. -->
     <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
-      ${renderEventActions(row, shareUrl, nonce, lang)}
+      ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false })}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
@@ -2051,7 +2069,9 @@ export async function handleLandingPage(
   } catch {
     area = renderEmptyLandingArea();
   }
-  return html(injectLandingArea(injectLegalFooter(LANDING_HTML, 'landing'), area));
+  return html(
+    injectLandingArea(injectNeverWho(injectLegalFooter(LANDING_HTML, 'landing'), 'landing'), area)
+  );
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────
