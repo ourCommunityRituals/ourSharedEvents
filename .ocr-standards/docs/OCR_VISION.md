@@ -179,6 +179,14 @@ OER is the **BigQuery RAG layer**, set up at the org level. Every product databa
 
 **Query model.** Products do not query each other's databases directly. They emit qualifying data; OER ingests; OER answers cross-product questions.
 
+### 6.7 Shared design system
+
+The design system has one home: `@ocr/ui` in the hub monorepo (`ourCommunityRituals/ourCommunityRituals`, `packages/ui`), per ADR-008 (ratified 2026-09-29). It holds the tokens, the shared stylesheet served as `/ui.css`, and the HTML partials every surface uses.
+
+- **Spokes consume it pinned.** Each spoke records the hub commit it builds against in `.ocr-hub-ref`; no spoke keeps a copy.
+- **Spokes carry no design of their own.** A blocking check (`check-spoke-styles`) fails any spoke that adds its own tokens, stylesheet or raw colours.
+- **Products differ by brand, not by system.** Each product's look is a registered `[data-brand]` theme (OSE's CARTO blue is the base; OW is amber). Brands repaint chrome only: status colours and UEC never re-theme.
+
 ---
 
 ## 7. Product registry
