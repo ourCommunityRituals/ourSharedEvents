@@ -41,36 +41,45 @@ function ev(overrides: Partial<LandingAreaItem> = {}): LandingAreaItem {
 
 const render = (items: LandingAreaItem[]) => renderLandingArea(items, { now: NOW });
 
+// OSE-1362 changed these deliberately: the landing's private 7/30/90-day windows
+// (`within-*`, ms-since-now) were replaced by the SHARED /events `when` windows
+// (`when-week|month|next-90`, event-local calendar day, lib/event-discovery), so a
+// label means the same window on every surface. Same intent, shared definition.
+// Assert on the card's class attribute: the window <style> names every class.
+const cardClass = (html: string) => html.match(/class="(event-card[^"]*)"/)?.[1] ?? '';
+
 describe('OSE-1312 | window tagging', () => {
-  it('nests within-7 ⊂ within-30 ⊂ within-90 by days-until-start', () => {
-    const soon = render([ev({ id: 's', startDateISO: inDays(3) })]).html;
-    expect(soon).toContain('within-7');
-    expect(soon).toContain('within-30');
-    expect(soon).toContain('within-90');
+  it('tags each shared `when` window the event falls in', () => {
+    // NOW = Sep 13 00:00Z = Sep 12 in the home zone.
+    const soon = cardClass(render([ev({ id: 's', startDateISO: inDays(3) })]).html);
+    expect(soon).toContain('when-week');
+    expect(soon).toContain('when-month');
+    expect(soon).toContain('when-next-90');
 
-    const mid = render([ev({ id: 'm', startDateISO: inDays(20) })]).html;
-    expect(mid).not.toContain('within-7');
-    expect(mid).toContain('within-30');
-    expect(mid).toContain('within-90');
+    const mid = cardClass(render([ev({ id: 'm', startDateISO: inDays(20) })]).html);
+    expect(mid).not.toContain('when-week');
+    expect(mid).not.toContain('when-month'); // Oct 3 is next month
+    expect(mid).toContain('when-next-90');
 
-    const far = render([ev({ id: 'f', startDateISO: inDays(60) })]).html;
-    expect(far).not.toContain('within-7');
-    expect(far).not.toContain('within-30');
-    expect(far).toContain('within-90');
+    const far = cardClass(render([ev({ id: 'f', startDateISO: inDays(60) })]).html);
+    expect(far).not.toContain('when-week');
+    expect(far).toContain('when-next-90');
   });
 
   it('a live event (phase event) sits in every window', () => {
-    const html = render([ev({ id: 'live', phase: 'event', startDateISO: inDays(-1) })]).html;
-    expect(html).toContain('within-7');
-    expect(html).toContain('within-30');
-    expect(html).toContain('within-90');
+    const cls = cardClass(
+      render([ev({ id: 'live', phase: 'event', startDateISO: inDays(-1) })]).html
+    );
+    expect(cls).toContain('when-week');
+    expect(cls).toContain('when-month');
+    expect(cls).toContain('when-next-90');
   });
 
   it('an event >90 days out carries no window class (hidden until in range)', () => {
     const html = render([ev({ id: 'x', startDateISO: inDays(120) })]).html;
-    // still a card, but with no within-* tag
+    // still a card, but with no when-* tag
     expect(html).toContain('data-testid="area-card"');
-    expect(html).not.toContain('within-90');
+    expect(cardClass(html)).not.toContain('when-');
   });
 
   it('wrapped (post_event) events are excluded from the area', () => {
@@ -87,7 +96,9 @@ describe('OSE-1312 | type tagging', () => {
       ev({ id: 'b', template_id: 'trivia_night' }),
     ]);
     expect(out.types.map((t) => t.slug)).toEqual(['type-bar-night', 'type-trivia-night']);
-    expect(out.html).toContain('class="event-card within-7 within-30 within-90 type-bar-night');
+    expect(out.html).toContain(
+      'class="event-card when-week when-month when-next-90 type-bar-night'
+    );
     // dynamic hide rule for a type
     expect(out.html).toContain('#type-bar-night:checked ~ .area .event-card:not(.type-bar-night)');
     // readable label

@@ -80,8 +80,8 @@ describe('ADMIN-5: Form config toggles', () => {
   test('JS generates one form row for all 4 types', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically by loadForms() — verify the JS patterns
-    expect(html).toContain("form-row-' + t.key");
-    expect(html).toContain("form-count-' + t.key");
+    expect(html).toContain("form-row-' + key");
+    expect(html).toContain("form-count-' + key");
     expect(html).toContain("key: 'register'");
     expect(html).toContain("key: 'checkin'");
     expect(html).toContain("key: 'survey'");
@@ -106,8 +106,8 @@ describe('ADMIN-5: Form config toggles', () => {
   test('JS generates one row with toggle data-testid patterns', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically — verify the JS template patterns
-    expect(html).toContain("form-row-' + t.key");
-    expect(html).toContain("form-toggle-' + t.key");
+    expect(html).toContain("form-row-' + key");
+    expect(html).toContain("form-toggle-' + key");
   });
 
   test('upgrade prompt shown for tier-gated forms', async () => {
@@ -816,14 +816,16 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     // OSE-R-005: the lock overlay used to say "Requires Phase 2 regulatory
     // clearance" — internal compliance jargon. Replaced with the friendly
     // "Available for Commerce events" pattern keyed by PHASE_LABELS.
-    expect(html).toContain('Available for ');
-    expect(html).toContain('upgradePhaseLabel');
+    // OSE-1361: now one section line, lower-case mid-sentence ("Survey and
+    // Email List are available for Commerce events."), same friendly map.
+    expect(html).toContain("' available for ' + ph");
+    expect(html).toContain('o.phaseLabel(t.upgradePhase || 2)');
   });
 
   test('form row elements are keyed by form type via t.key', async () => {
     const html = await fetchAdminHtml();
-    // JS builds: data-testid="form-row-' + t.key + '"
-    expect(html).toContain("form-row-' + t.key");
+    // JS builds: data-testid="form-row-' + key + '" with key = esc(t.key) (CodeQL: every value through esc)
+    expect(html).toContain("form-row-' + key");
   });
 
   test('form types comment documents both axes (upgradeTier and upgradePhase)', async () => {
@@ -846,8 +848,9 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     // but rephrased to plain English. The tier axis says "Upgrade to <plan>"
     // (was "Upgrade to mid"), the phase axis says "Available for <event type>"
     // (was "Requires Phase N regulatory clearance").
+    // OSE-1361: both axes now feed the ONE section upsell line, still distinct.
     expect(html).toContain('Upgrade to');
-    expect(html).toContain('Available for ');
+    expect(html).toContain("' available for ' + ph");
   });
 });
 

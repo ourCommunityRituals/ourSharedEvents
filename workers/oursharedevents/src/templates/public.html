@@ -36,6 +36,7 @@
         gap: 1rem;
       }
       .event-card {
+        min-height: var(--tap-min);
         position: relative;
         background: var(--surface);
         border: 1px solid var(--border);
@@ -74,7 +75,6 @@
         margin-bottom: 0.35rem;
         color: var(--text);
       }
-      /* Discovery bar: phone-first, 44px targets. */
       .disc-search {
         display: flex;
         gap: 0.5rem;
@@ -101,7 +101,7 @@
         font-size: 1rem;
         cursor: pointer;
       }
-      /* OSE-1372: wrap, so the active chip is always in view. */
+      /* OSE-1372: wrap keeps the active chip visible. */
       .disc-chips {
         display: flex;
         flex-wrap: wrap;

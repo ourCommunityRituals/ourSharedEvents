@@ -349,7 +349,8 @@ describe('OSE-1355 — Go live from the preview uses the existing state-machine 
     await seed('evt_dp_unlisted', 'draft', { published: 0 });
     const html = await (await preview('evt_dp_unlisted')).text();
     expect(html).toMatch(/data-testid="admin-preview-go-live"[^>]*data-listed="0"/);
-    expect(html).toContain('Live, but unlisted');
+    // OSE-1360 vocabulary: status active is "Published" (Live now = happening).
+    expect(html).toContain('Published, but unlisted');
   });
 });
 
