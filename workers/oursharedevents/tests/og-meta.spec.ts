@@ -69,7 +69,9 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     const src = getPagesTs();
     expect(src).toContain('og:event:start_time');
     // Conditional: only when startTime is truthy
-    expect(src).toMatch(/opts\.startTime.*og:event:start_time|og:event:start_time.*opts\.startTime/s);
+    expect(src).toMatch(
+      /opts\.startTime.*og:event:start_time|og:event:start_time.*opts\.startTime/s
+    );
   });
 
   test('buildOgMeta conditionally emits og:event:end_time', () => {
@@ -90,10 +92,15 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     expect(src).toMatch(/renderEventLiveHtml[\s\S]{1,3000}buildOgMeta/);
   });
 
-  test('renderPostEventHtml calls buildOgMeta with summary card', () => {
+  test('renderPostEventHtml calls buildOgMeta; the card is small unless there is art', () => {
     const src = getPagesTs();
     expect(src).toMatch(/renderPostEventHtml[\s\S]{1,3000}buildOgMeta/);
-    expect(src).toContain("twitterCard: 'summary'");
+    // OSE-1370 (deliberate change): the recap now asks for the large card, and
+    // buildOgMeta DERIVES the size — no image → 'summary'. So a text-only recap
+    // is still the small card; one with poster art unfurls large.
+    expect(src).toMatch(
+      /const twitterCard = image \? \(opts\.twitterCard \?\? 'summary_large_image'\) : 'summary'/
+    );
   });
 
   test('all three render functions pass the event start to buildOgMeta', () => {

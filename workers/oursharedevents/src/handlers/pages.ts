@@ -68,6 +68,9 @@ import {
   zonedDatePart,
 } from '../lib/event-datetime.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
+import { posterArtPath, posterArtAbsoluteUrl } from '../lib/poster-art.js';
+import { buildShareText, shareMailtoHref } from '../lib/share-text.js';
+import { getPublicShortlinkForEvent, isValidCodeShape } from '../lib/shortlinks.js';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
@@ -401,6 +404,8 @@ export interface PublicEventRow {
   is_published: number | null;
   event_type_id: string | null;
   event_type_name: string | null;
+  /** OSE-1370 poster art. Only ever rendered through posterArtPath(). */
+  cover_image_url?: string | null;
 }
 
 function esc(s: string | null | undefined): string {
@@ -515,6 +520,8 @@ function buildOgMeta(opts: {
   type?: string;
   twitterCard?: 'summary' | 'summary_large_image';
   imageUrl?: string | null;
+  /** Pre-escaped alt text for the image (the event title). */
+  imageAlt?: string;
   startTime?: string | null;
   endTime?: string | null;
 }): string {
@@ -524,9 +531,8 @@ function buildOgMeta(opts: {
   // X/Twitter drops the preview or silently degrades it, and Slack renders a
   // thin text-only unfurl. The card size is therefore DERIVED from whether an
   // image actually exists — a caller may ask for the small card, but may not
-  // promise a large one we cannot fill. (OSE-1213: nothing currently supplies
-  // an image, because cover_image_url is not on PublicEventRow, so today this
-  // always resolves to `summary` — which is the honest card for what we emit.)
+  // promise a large one we cannot fill. OSE-1370: the image is the event's
+  // poster art (posterArtAbsoluteUrl — our origin only), when it has any.
   const twitterCard = image ? (opts.twitterCard ?? 'summary_large_image') : 'summary';
   const lines: string[] = [
     `  <meta property="og:title" content="${opts.title}" />`,
@@ -541,6 +547,7 @@ function buildOgMeta(opts: {
   ];
   if (image) {
     lines.push(`  <meta property="og:image" content="${image}" />`);
+    if (opts.imageAlt) lines.push(`  <meta property="og:image:alt" content="${opts.imageAlt}" />`);
     lines.push(`  <meta name="twitter:image" content="${image}" />`);
   }
   if (opts.startTime)
@@ -548,6 +555,51 @@ function buildOgMeta(opts: {
   if (opts.endTime)
     lines.push(`  <meta property="og:event:end_time" content="${esc(opts.endTime)}" />`);
   return lines.join('\n');
+}
+
+/**
+ * OSE-1370/1371 — the share card's own fields, computed once per render:
+ * og:description is the unfurl's second line, so it leads with the facts a
+ * recipient needs (date · venue) before the blurb; the image is the poster art
+ * as an absolute URL on OUR origin (posterArtPath), or none.
+ */
+function eventCardMeta(
+  row: PublicEventRow,
+  shareUrl: string
+): { description: string; imageUrl: string | null } {
+  const what = (row.what_short || row.description || '').replace(/\s+/g, ' ').trim();
+  const venue = (row.location || row.where_address || '').trim();
+  const facts = [formatEventWhen(row), venue].filter(Boolean).join(' · ');
+  const description = [facts, what].filter(Boolean).join(' — ').slice(0, 300);
+  let imageUrl: string | null = null;
+  try {
+    imageUrl = posterArtAbsoluteUrl(row.cover_image_url, new URL(shareUrl).origin);
+  } catch {
+    imageUrl = null;
+  }
+  return { description: esc(description), imageUrl };
+}
+
+/** OSE-1370 hero: fixed-height box (no layout shift), art letterboxed inside. */
+const POSTER_HERO_CSS = `
+    .ose-hero { margin: 0 0 1rem; height: min(45vh, 26rem); border-radius: 8px; overflow: hidden; background: var(--ose-card); }
+    .ose-hero img { display: block; width: 100%; height: 100%; object-fit: contain; }`;
+
+/**
+ * OSE-1370 — the event's poster art as a hero (pre/live: above the title; post:
+ * inside the recap card). '' when there is no usable art (posterArtPath: our
+ * own upload path only). alt = the event name. Eager: it is the first thing on
+ * the page. A failed load hides the figure via the capture-phase error listener
+ * (onerror attributes are CSP-blocked); the listener is registered BEFORE the
+ * <img> so an early failure is still caught.
+ */
+function renderPosterHero(row: PublicEventRow, nonce: string, testid: string): string {
+  const art = posterArtPath(row.cover_image_url);
+  if (!art) return '';
+  const hide = nonce
+    ? `<script nonce="${nonce}">document.addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='IMG'&&t.hasAttribute('data-hide-on-error')){var f=t.closest('figure');(f||t).hidden=true;}},true);</script>`
+    : '';
+  return `${hide}<figure class="ose-hero" data-testid="${testid}"><img src="${esc(art)}" alt="${esc(row.title)}" width="1200" height="1500" loading="eager" fetchpriority="high" decoding="async" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="${testid}-img" /></figure>`;
 }
 
 /** Detect preferred language from Accept-Language header. Returns 'es' when Spanish is first preference, 'en' otherwise. */
@@ -570,30 +622,49 @@ const DARK_MODE_CSS = '';
 // maps!=H3 wall-guarded. Imported above.
 
 /**
- * Share button — Web Share API with copy-link fallback.
- * URL and title are passed via HTML data attributes (XSS-safe).
- * Script tag requires a CSP nonce (passed from the request handler).
- * Bilingual: Spanish labels when lang='es'.
+ * OSE-1371 — sharing lands as a card. ONE body (lib/share-text buildShareText)
+ * rides on the button as data attributes and in the Email link's mailto:, so the
+ * share sheet, Email and Copy send the same invite, byte for byte.
+ *
+ * - Web Share available (phones): ONE Share button. The Email link is removed.
+ *   With poster art on our origin, the art is prefetched as a File at load (the
+ *   click must stay synchronous to keep user activation) and attached only when
+ *   navigator.canShare({files}) says yes; otherwise text + url.
+ * - No Web Share (most desktops): the same button becomes Copy (copies the
+ *   body), and the server-rendered Email link stays.
+ * - No JS: the Email link works on its own.
+ *
+ * `shareUrl` is the public /s/ short link when the event has one (read-only
+ * lookup), else the canonical /events/:id. Never a /q/ tracking path, a
+ * tracking param or a per-person token. Values reach the page as escaped
+ * attributes only; the script reads them from dataset (never into innerHTML).
  */
 function renderShareBlock(
   shareUrl: string,
-  title: string,
+  row: PublicEventRow,
   nonce: string,
   lang: 'en' | 'es',
   inert = false
 ): string {
   const shareLabel = lang === 'es' ? 'Compartir este evento' : 'Share this event';
-  const copiedLabel = lang === 'es' ? 'Enlace copiado' : 'Link copied!';
   // OSE-1355: in an admin draft preview the button is shown (it is what the
   // public will see) but switched off — no URL, no script. A draft's link is
   // not public yet, so there is nothing to share.
-  const attrs = inert
-    ? 'disabled aria-disabled="true" data-preview-inert="true"'
-    : `data-share-url="${esc(shareUrl)}" data-share-title="${esc(title)}"`;
-  const button = `<button class="ose-share-btn" data-testid="share-btn" type="button" ${attrs}>${shareLabel}</button>`;
-  if (inert) return button;
+  const open = '<button class="ose-share-btn" data-testid="share-btn" type="button"';
+  if (inert) {
+    return `${open} disabled aria-disabled="true" data-preview-inert="true">${shareLabel}</button>`;
+  }
+  const copyLabel = lang === 'es' ? 'Copiar invitación' : 'Copy invite';
+  const copiedLabel = lang === 'es' ? 'Invitación copiada' : 'Invite copied!';
+  const emailLabel = lang === 'es' ? 'Enviar por correo' : 'Email it';
+  const text = buildShareText(row, shareUrl, lang);
+  const art = posterArtPath(row.cover_image_url);
+  const artAttr = art ? ` data-share-art="${esc(art)}"` : '';
+  const button = `${open} data-share-url="${esc(shareUrl)}" data-share-title="${esc(text.subject)}" data-share-text="${esc(text.body)}"${artAttr}>${shareLabel}</button>`;
+  const email = `<a class="ose-share-btn" data-testid="share-email" href="${esc(shareMailtoHref(text))}">${emailLabel}</a>`;
   return `${button}
-<script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
+${email}
+<script nonce="${nonce}">(function(){var b=document.querySelector('button.ose-share-btn[data-share-text]');if(!b)return;var d=b.dataset,m=document.querySelector('a.ose-share-btn[href^="mailto:"]'),file=null;if(navigator.share){if(m)m.remove();var a=d.shareArt;if(a&&/^\\/api\\/v2\\/uploads\\//.test(a)&&navigator.canShare&&window.File){fetch(a,{credentials:'omit'}).then(function(r){return r.ok?r.blob():null;}).then(function(x){if(!x)return;var f=new File([x],'poster'+(a.match(/\\.[a-z]+$/i)||[''])[0],{type:x.type});if(navigator.canShare({files:[f]}))file=f;}).catch(function(){});}}else{b.textContent='${jsStr(copyLabel)}';}b.addEventListener('click',function(){if(navigator.share){var p={title:d.shareTitle,text:d.shareText,url:d.shareUrl};if(file)p.files=[file];navigator.share(p).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(d.shareText).then(function(){b.textContent='${jsStr(copiedLabel)}';setTimeout(function(){b.textContent='${jsStr(copyLabel)}';},2000);}).catch(function(){});}});})();</script>`;
 }
 
 function renderEventActions(
@@ -601,7 +672,7 @@ function renderEventActions(
   shareUrl: string,
   nonce: string,
   lang: 'en' | 'es',
-  opts: { calendar?: boolean; inert?: boolean } = {}
+  opts: { calendar?: boolean; inert?: boolean; shortUrl?: string | null } = {}
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
   const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
@@ -628,7 +699,7 @@ function renderEventActions(
   </details>`
       : '';
   return `<div class="ose-event-actions" data-testid="event-actions">
-  ${renderShareBlock(shareUrl, row.title, nonce, lang, opts.inert === true)}
+  ${renderShareBlock(opts.shortUrl || shareUrl, row, nonce, lang, opts.inert === true)}
   ${menu}
 </div>`;
 }
@@ -777,14 +848,12 @@ const ANONYMITY_AFFORDANCE = renderNeverWho('event');
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
 // The current CSP policy (see `securityHeaders` below) allows
 // `style-src 'self' 'unsafe-inline'`. With `'unsafe-inline'` present,
-// every browser IGNORES nonces on <style> tags — putting `nonce="..."`
-// on the <style> tag was decoration, not defense. The honest fix is
-// to NOT pretend to nonce the style. A follow-on story (CSP tightening
-// across ALL pages.ts handlers — every existing handler ships inline
-// <style>) needs to happen before <style nonce> means anything. Until
-// then the nonce parameter remains on the function signature because
-// it IS real for inline <script> (which this page does not have, but
-// might later).
+// every browser IGNORES nonces on style tags, so they are not nonced
+// (CSP tightening across every handler is a follow-on story; OSE-1391).
+// The nonce IS real for the inline scripts: share (OSE-1371) and the
+// poster-art error listener (OSE-1370).
+// (Comments here avoid the literal tag: the design gate's block regex
+// would otherwise count the code between a comment and the next close.)
 export function renderPreEventHtml(
   row: PublicEventRow,
   shareUrl: string,
@@ -795,6 +864,8 @@ export function renderPreEventHtml(
     formContext?: EventFormContext;
     /** OSE-1355 admin draft preview: noindex, and the RSVP + share are inert. */
     preview?: boolean;
+    /** OSE-1371 public /s/ short link for sharing (else the canonical URL). */
+    shortUrl?: string | null;
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -802,6 +873,7 @@ export function renderPreEventHtml(
   const formContext = opts?.formContext ?? { type: 'register' };
   const preview = opts?.preview === true;
   const title = esc(row.title);
+  const card = eventCardMeta(row, shareUrl);
   // OSE: the What card leads with the host-authored short blurb (`what_short`),
   // falling back to the general `description` so the card is never empty when a
   // real description exists. og:description inherits the same fallback below.
@@ -844,7 +916,7 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>${preview ? '<meta name="robots" content="noindex, nofollow" />' : ''}
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
+${buildOgMeta({ title, description: card.description, url: esc(shareUrl), twitterCard: 'summary_large_image', imageUrl: card.imageUrl, imageAlt: title, startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
@@ -852,12 +924,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
-    /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
-       public event page. overflow-x:hidden prevents any descendant
-       (long URLs in the 5W fields, sponsor links, future embeds)
-       from pushing the body wide at 375px. overflow-wrap:anywhere
-       breaks long unbreakable strings so they wrap inside the
-       max-width:720px column instead of forcing a scrollbar. */
+    /* OSE-298: no horizontal scroll at 375px; long strings wrap. */
     html, body { overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
@@ -884,7 +951,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
 ${NEVER_WHO_CSS}
-${SPONSOR_LIST_CSS}
+${SPONSOR_LIST_CSS}${POSTER_HERO_CSS}
     .ose-section p { margin: 0; }
     /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
        link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
@@ -900,6 +967,7 @@ ${SPONSOR_LIST_CSS}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
+      ${renderPosterHero(row, nonce, 'event-hero')}
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
@@ -958,7 +1026,7 @@ ${SPONSOR_LIST_CSS}
        the room for the host, sponsor and report — never to persuade the room.
        The post-event recap card keeps its counts (OSE-657 keepsake). -->
 
-    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview })}
+    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview, shortUrl: opts?.shortUrl })}
 
     <a class="ose-rsvp-btn" data-testid="event-rsvp" ${preview ? 'data-preview-inert="true" aria-disabled="true"' : `href="${esc(eventFormHref(row.id, formContext))}"`}>${eventFormCtaLabel(formContext.type)}</a>
 
@@ -1006,12 +1074,18 @@ export function renderEventLiveHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es'; formContext?: EventFormContext }
+  opts?: {
+    nonce?: string;
+    lang?: 'en' | 'es';
+    formContext?: EventFormContext;
+    shortUrl?: string | null;
+  }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const formContext = opts?.formContext ?? { type: 'checkin' };
   const title = esc(row.title);
+  const card = eventCardMeta(row, shareUrl);
   // OSE-1313 — keep the scheduled time visible once the page flips to live.
   const liveWhen = formatEventWhen(row);
   // Same What fallback as the pre-event render: host blurb, else description.
@@ -1047,7 +1121,7 @@ export function renderEventLiveHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
+${buildOgMeta({ title, description: card.description, url: esc(shareUrl), twitterCard: 'summary_large_image', imageUrl: card.imageUrl, imageAlt: title, startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
@@ -1085,7 +1159,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
 ${NEVER_WHO_CSS}
-${SPONSOR_LIST_CSS}
+${SPONSOR_LIST_CSS}${POSTER_HERO_CSS}
     .ose-section p { margin: 0; }
     /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
        link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
@@ -1101,6 +1175,7 @@ ${SPONSOR_LIST_CSS}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
+      ${renderPosterHero(row, nonce, 'event-hero-live')}
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
       </span>
@@ -1153,7 +1228,7 @@ ${SPONSOR_LIST_CSS}
          </section>`;
     })()}
 
-    ${renderEventActions(row, shareUrl, nonce, lang)}
+    ${renderEventActions(row, shareUrl, nonce, lang, { shortUrl: opts?.shortUrl })}
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>
 
@@ -1249,11 +1324,12 @@ export function renderPostEventHtml(
   shareUrl: string,
   nextEvents: NextEventRow[],
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es' }
+  opts?: { nonce?: string; lang?: 'en' | 'es'; shortUrl?: string | null }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
+  const card = eventCardMeta(row, shareUrl);
   // OSE-1136: the recap is the THIRD phase of the canonical 5W table, past-tense —
   // same fields + fallbacks as the pre-event render. WHAT falls back to description
   // so the lead card is never empty when a real description exists.
@@ -1272,9 +1348,13 @@ export function renderPostEventHtml(
   // keeps buildOgMeta near the top now that the recap has a fuller 5W setup below.
   const ogMeta = buildOgMeta({
     title,
-    description: whatShort,
+    description: card.description,
     url: esc(shareUrl),
-    twitterCard: 'summary',
+    // OSE-1370: large card when the recap has poster art (buildOgMeta downgrades
+    // to 'summary' without an image, so a text-only recap stays the small card).
+    twitterCard: 'summary_large_image',
+    imageUrl: card.imageUrl,
+    imageAlt: title,
     startTime: row.starts_at ?? row.start_date,
     // OSE-1313 — same normalized end as phase resolution, so a timed start
     // never pairs with a date-only end read as an earlier UTC midnight.
@@ -1370,7 +1450,7 @@ ${ogMeta}
     .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
 ${NEVER_WHO_CSS}
-${SPONSOR_LIST_CSS}
+${SPONSOR_LIST_CSS}${POSTER_HERO_CSS}
     /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
     .ose-section p { margin: 0 0 0.5rem; }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
@@ -1395,6 +1475,7 @@ ${SPONSOR_LIST_CSS}
       <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
         <h2 id="recap-heading">What this was</h2>
+        ${renderPosterHero(row, nonce, 'event-hero-post')}
         ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
         ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
         ${whatLink}
@@ -1485,7 +1566,7 @@ ${SPONSOR_LIST_CSS}
        the return loop (share the recap, find the next one) — curated, bounded (an
        <aside>, visually demoted, always after the recap), never a full listing. -->
     <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
-      ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false })}
+      ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false, shortUrl: opts?.shortUrl })}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
@@ -1640,6 +1721,7 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
+              e.cover_image_url,
               e.event_type_id, etr.name AS event_type_name
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
@@ -1689,12 +1771,9 @@ export async function handlePublicEventPage(
   const phaseTimes = phaseTimesFor(row);
   const phase = computeEventPhase({ status: row.status, ...phaseTimes });
 
-  // CSP nonce — generated for the response headers regardless of whether
-  // the body uses it. `securityHeaders(nonce)` writes the nonce into the
-  // CSP header so any future inline <script> on this page is enforceable
-  // immediately. The render functions don't take the nonce because the
-  // current CSP allows `style-src 'unsafe-inline'` (see CSP-tightening
-  // follow-on story) — nonce on <style> would be theater today.
+  // CSP nonce — `securityHeaders(nonce)` writes it into the CSP header and
+  // the renders stamp it on their inline scripts (share, poster-art error
+  // listener). Style tags are not nonced: 'unsafe-inline' makes that moot.
   const nonce = generateNonce();
   const lang = preferredLang(request);
   const url = new URL(request.url);
@@ -1705,18 +1784,31 @@ export async function handlePublicEventPage(
   // Fetch social data (sponsors + counts) in parallel; fail-open on any error.
   const social = await fetchEventPageSocialData(env, row.id);
 
+  // OSE-1371: share the event's public /s/ short link when it has one. A
+  // READ-ONLY lookup — a page render never mints a code — and fail-open to the
+  // canonical URL. Not /q/ (that is scan tracking), no params, no token.
+  let shortUrl: string | null = null;
+  try {
+    const code = await getPublicShortlinkForEvent(env, row.id);
+    if (code && isValidCodeShape(code)) shortUrl = `${url.origin}/s/${code}`;
+  } catch {
+    shortUrl = null;
+  }
+
   let body: string;
   if (phase === 'pre_event') {
     body = renderPreEventHtml(row, shareUrl, social, {
       nonce,
       lang,
       formContext: preEventFormContext,
+      shortUrl,
     });
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl, social, {
       nonce,
       lang,
       formContext: liveEventFormContext,
+      shortUrl,
     });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
@@ -1746,7 +1838,7 @@ export async function handlePublicEventPage(
     } catch {
       nextEvents = []; // recap must render even if the lookup fails
     }
-    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
+    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang, shortUrl });
   }
 
   // OSE-1012/1013: the /events/:id page is where the demo event actually renders
@@ -1854,6 +1946,7 @@ export async function handleAdminEventPreviewPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
+              e.cover_image_url,
               e.event_type_id, etr.name AS event_type_name
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id

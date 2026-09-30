@@ -167,10 +167,17 @@ describe('OSE-539 L2: pre-event phase', () => {
     expect(html).toContain('/ui.css');
   });
 
-  test('share button has data-share-url attribute with event URL', async () => {
+  test('share button has data-share-url attribute with the event link', async () => {
     const id = await createEventWithGeo('URL Attribute Test');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain(`data-share-url="https://t.test/events/${id}"`);
+    // OSE-1371 (deliberate change): the share carries the event's public /s/
+    // short link when it has one (created events get one), else the canonical
+    // /events/:id. Never a /q/ tracking path.
+    const url = html.match(/data-share-url="([^"]*)"/)?.[1] ?? '';
+    expect(
+      url === `https://t.test/events/${id}` || /^https:\/\/t\.test\/s\/[A-Za-z0-9]{6}$/.test(url)
+    ).toBe(true);
+    expect(url).not.toContain('/q/');
   });
 });

@@ -185,4 +185,10 @@ export const NODE_SPECS = [
   // tag OBSERVABILITY.md tells operators to consume must be emitted by src/.
   // Reads files via node:fs (like d1-canonical-shape); node-clean, no runtime.
   'tests/observability-runbook-tags.spec.ts',
+
+  // OSE-1370/1371 — poster art on public surfaces + share-as-card. Pure
+  // share-text / poster-art units, and the exported renderers parsed in jsdom
+  // (the share script run against stubbed navigator/fetch). No cloudflare:test.
+  'tests/share-text.spec.ts',
+  'tests/poster-art-public.spec.ts',
 ];

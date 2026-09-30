@@ -50,6 +50,7 @@
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
 import { inWhenWindow, discoveryChipLabel, type WhenOption } from './event-discovery.js';
+import { formatEventDate, renderCardThumb } from './event-list.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -63,6 +64,8 @@ export interface LandingAreaItem {
   lon?: unknown;
   template_id?: unknown;
   event_type_id?: unknown;
+  /** OSE-1370 poster art (re-validated by posterArtPath via renderCardThumb). */
+  cover_image_url?: unknown;
 }
 
 // ── Configured defaults (named, not hardcoded at the call site) ─────────────────
@@ -214,13 +217,30 @@ export function renderLandingArea(
       const safeId = escapeHtml(str(e.id));
       const safeName = escapeHtml(str(e.name)) || 'Untitled event';
       const venue = str(e.venue) || str(e.location);
-      const meta = venue ? escapeHtml(venue) : modality === 'online' ? 'Online' : '';
+      const place = venue ? escapeHtml(venue) : modality === 'online' ? 'Online' : '';
+      // OSE-1370: the date leads the meta line (it was missing), in the event's
+      // own zone — the same formatter /events uses, compact shape.
+      const iso = str(e.startDateISO);
+      const date = iso
+        ? escapeHtml(
+            formatEventDate(iso, str(e.timezone) || null, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+            })
+          )
+        : '';
+      const datePart = date ? `<span data-testid="area-card-date">${date}</span>` : '';
+      const meta = [datePart, place].filter(Boolean).join(' &middot; ');
       const metaPart = meta ? `<p class="event-meta" data-testid="area-card-meta">${meta}</p>` : '';
 
       return `
           <a class="${classes}" href="/events/${safeId}" data-testid="area-card" data-event-id="${safeId}" data-phase="${escapeHtml(phase)}">
+            ${renderCardThumb(e.cover_image_url, 'area-card')}
+            <div class="event-body">
             <p class="event-name" data-testid="area-card-name">${safeName}</p>
             ${metaPart}
+            </div>
           </a>`;
     })
     .join('');
@@ -309,6 +329,7 @@ function buildAreaMarkup(args: {
 
   // OSE-1354: the map view never hides the cards. Until a real map exists it is a
   // note ABOVE the same list, so every listed event stays one tap from its page.
+  // OSE-1370: a real map's pins would reuse the card thumbnail (renderCardThumb).
   const area = `<div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
             <div class="map-placeholder">A neighborhood map lands here &mdash; every event is listed below.</div>

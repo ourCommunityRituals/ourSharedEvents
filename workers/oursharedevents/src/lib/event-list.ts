@@ -24,6 +24,7 @@
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
+import { posterArtPath } from './poster-art.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -32,6 +33,23 @@ export interface EventListItem {
   venue?: unknown;
   phase?: unknown;
   timezone?: unknown;
+  /** OSE-1370 poster art — re-validated by posterArtPath before any `src`. */
+  cover_image_url?: unknown;
+}
+
+/**
+ * OSE-1370 — a card's leading-edge poster thumbnail, shared by /events and the
+ * landing area. Art only when it passes posterArtPath (our own upload path, an
+ * image extension); otherwise a neutral tile rendered server-side, so a card
+ * never shows a broken image and needs no onerror (CSP-blocked) or JS. alt=""
+ * because the event name is the text right beside it. The tile colour is the
+ * <img>'s own background, so art that fails to load still reads as the tile.
+ */
+export function renderCardThumb(raw: unknown, testid: string): string {
+  const art = posterArtPath(raw);
+  return art
+    ? `<img class="event-thumb" src="${escapeHtml(art)}" alt="" width="72" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-testid="${testid}-thumb" />`
+    : `<span class="event-thumb" data-testid="${testid}-thumb-fallback" aria-hidden="true"></span>`;
 }
 
 export interface RenderedEventList {
@@ -82,13 +100,17 @@ export function renderEventListError(): RenderedEventList {
  * back to UTC — the same answer the server would give anyway, and one that no
  * longer varies by who is looking.
  */
-function formatEventDate(iso: string, timezone: string | null): string {
-  const opts: Intl.DateTimeFormatOptions = {
+export function formatEventDate(
+  iso: string,
+  timezone: string | null,
+  // OSE-1370: the landing card passes a compact shape ("Sat, Oct 24").
+  opts: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  };
+  }
+): string {
   // A date-only value ("YYYY-MM-DD") is a calendar day, not an instant. Read as
   // UTC midnight and rendered in the event's zone it rolled back a day for any
   // negative-offset zone (OSE-1363). Anchor + format in UTC via formatDateOnly so
@@ -151,6 +173,7 @@ export function renderEventList(
       return `
           <article class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
+            ${renderCardThumb(e.cover_image_url, 'public-event')}
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="public-event-name">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>

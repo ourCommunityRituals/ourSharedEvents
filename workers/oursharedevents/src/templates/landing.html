@@ -23,7 +23,7 @@
         --surface: var(--surface, #fff);
         --text: var(--text, #1a1a1a);
         --muted: var(--text-muted, #5a5a5a);
-        /* Platform accent (OSE-221): one scan path, one accent. NOT Tailwind blue. */
+        /* OSE-221: one accent */
         --accent: var(--accent, #4361ee);
         --on-accent: var(--on-accent, #fff);
         --line: rgba(42, 42, 42, 0.12);
@@ -94,7 +94,7 @@
         margin: 0 auto;
         padding: 1.5rem 1.25rem 3rem;
       }
-      /* ── Two doors ─────────────────────────────────────────────────────────── */
+      /* Two doors */
       .doors {
         display: grid;
         grid-template-columns: 1fr;
@@ -136,7 +136,7 @@
         color: var(--muted);
         font-size: 0.95rem;
       }
-      /* ── Area view ─────────────────────────────────────────────────────────── */
+      /* Area view */
       .area-heading {
         font-size: 1.15rem;
         margin: 0 0 0.75rem;
@@ -153,7 +153,7 @@
         border: 1px solid var(--line);
         border-radius: 8px;
         overflow: hidden;
-        /* reset UA <fieldset> chrome so the pill row renders flush */
+        /* reset UA fieldset */
         margin: 0;
         padding: 0;
         min-inline-size: 0;
@@ -173,7 +173,7 @@
         position: absolute;
         left: -9999px;
       }
-      /* CSS-only toggles: hidden radios drive the view + window with no JS/cookies. */
+      /* CSS-only toggles (no JS/cookies) */
       .toggle-radio {
         position: absolute;
         opacity: 0;
@@ -183,7 +183,7 @@
         outline: 3px solid var(--accent);
         outline-offset: -3px;
       }
-      /* Selected pill. Type + window pills: rules emitted by the renderer. */
+      /* Selected pill (type/window: renderer) */
       #view-list:checked ~ .toggles label[for='view-list'],
       #view-map:checked ~ .toggles label[for='view-map'],
       #type-all:checked ~ .toggles label[for='type-all'],
@@ -212,7 +212,9 @@
         display: none;
       }
       .event-card {
-        display: block;
+        display: flex;
+        gap: 0.85rem;
+        align-items: center;
         min-height: 44px;
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -233,6 +235,15 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+      /* OSE-1370 art thumb / tile */
+      .event-thumb {
+        flex: none;
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: var(--line);
+      }
       .empty-state {
         border: 1px dashed var(--line);
         border-radius: 10px;
@@ -251,10 +262,9 @@
         text-align: center;
         color: var(--muted);
       }
-      /* ── Never-who disclosure (OSE-1372) — one partial, lib/never-who.ts ── */
+      /* Never-who (OSE-1372): lib/never-who.ts */
       /*OCR_NEVER_WHO_CSS*/
-      /* Page-level heading — the one <h1>. Visible text = accessible name (WCAG
-         2.4.6 / 1.3.1 heading hierarchy: h1 → the section h2s below). */
+      /* The one <h1> (WCAG 2.4.6 / 1.3.1). */
       .lead {
         font-size: clamp(1.5rem, 4vw, 2rem);
         font-weight: 800;
