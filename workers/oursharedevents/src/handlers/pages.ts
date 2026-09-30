@@ -23,6 +23,7 @@ import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import PUBLIC_HTML from '../templates/public.html';
 import ADMIN_HTML from '../templates/admin.html';
 import LANDING_HTML from '../templates/landing.html';
+import { readLatchedCorridors } from '../lib/corridor-latch';
 import ADMIN_SIGNIN_HTML from '../templates/admin-signin.html';
 import DISPLAY_HTML from '../templates/display.html';
 import POSTER_HTML from '../templates/poster.html';
@@ -2136,7 +2137,17 @@ export async function handleLandingPage(
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
-    area = renderLandingArea(items as LandingAreaItem[]);
+    // §6.2b latch: corridors that have ever reached the threshold stay on the
+    // map. Brand-bound read; a missing table (pre-0082) just means none yet.
+    let latched = new Set<string>();
+    if ((env as LandingEnv).DB) {
+      try {
+        latched = await readLatchedCorridors((env as LandingEnv).DB as D1Database, 'root');
+      } catch {
+        latched = new Set();
+      }
+    }
+    area = renderLandingArea(items as LandingAreaItem[], { latched });
   } catch {
     area = renderEmptyLandingArea();
   }

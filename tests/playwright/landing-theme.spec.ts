@@ -12,6 +12,9 @@
  * phone audit (playwright.mobile.config.ts).
  */
 import { test, expect, type Page } from '@playwright/test';
+import { createLiveEvent } from './helpers/sponsor-home-seed';
+
+const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 
 async function tokens(page: Page) {
   return page.evaluate(() => {
@@ -55,4 +58,34 @@ test('light and dark actually differ (dark mode is not a white page)', async ({ 
   await page.goto('/');
   const dark = (await tokens(page)).bodyBg;
   expect(dark).not.toBe(light);
+});
+
+// The map state in a real browser (CCR PR 700, QA M1): CI's other seeded
+// events have no coordinates, so nothing ever drew a hex. Five upcoming events
+// in ONE corridor (Blue Island, H3 res 7) meet the per-corridor gate.
+test('the attendee map draws coloured hexes with 44px legend links', async ({ page, request }) => {
+  test.skip(!ADMIN_BEARER, 'needs OSE_ADMIN_BEARER (set by playwright.mobile.config.ts)');
+  const stamp = Date.now();
+  for (let i = 0; i < 5; i++) {
+    await createLiveEvent(request, ADMIN_BEARER, `Map corridor ${stamp}-${i}`, 3 + i, {
+      lat: 41.657731,
+      lon: -87.680213,
+    });
+  }
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto('/');
+    await page.click('label[for="view-map"]');
+    const svg = page.getByTestId('amap-svg');
+    await expect(svg).toBeVisible();
+    const fill = await page
+      .locator('.amap-cell')
+      .first()
+      .evaluate((el) => getComputedStyle(el).fill);
+    expect(fill, `${scheme}: hex fill is black (token cycle?)`).not.toBe('rgb(0, 0, 0)');
+    const links = page.getByTestId('amap-event');
+    expect(await links.count()).toBeGreaterThanOrEqual(5);
+    const box = await links.first().boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
 });

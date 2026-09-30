@@ -44,14 +44,15 @@ export async function createLiveEvent(
   request: APIRequestContext,
   bearer: string,
   title: string,
-  daysOut = 30
+  daysOut = 30,
+  where?: { lat: number; lon: number }
 ): Promise<{ id: string }> {
   const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
   const start = new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10);
   const ev = await ok<{ id: string }>(
     await request.post('/api/v2/admin/events', {
       headers,
-      data: { title, start_date: start, location: 'Eagles Hall' },
+      data: { title, start_date: start, location: 'Eagles Hall', ...(where ?? {}) },
     }),
     'create event'
   );

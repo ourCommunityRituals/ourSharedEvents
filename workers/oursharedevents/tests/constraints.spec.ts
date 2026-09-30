@@ -87,7 +87,8 @@ describe('QA-1: Migration idempotency', () => {
     // + net 2 (migrations 0065–0067, OSE-799 A2: DROP sponsors, ADD
     //   sponsor_business + sponsor_asset + sponsor_placement → −1 +3) = 35.
     // + 1 (event_type_category_registry — migration 0076, OSE-1344) = 36.
-    expect(names).toHaveLength(36);
+    // + 1 (corridor_readiness_latch — migration 0082, VISION §6.2b latch) = 37.
+    expect(names).toHaveLength(37);
   });
 
   test('indexes remain at exactly 73 after idempotent re-run', async () => {

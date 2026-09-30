@@ -19,16 +19,22 @@
 // deciding whether to go out, so it is density-gated (corridor-map's own
 // header says do not wire this surface to it).
 //
-// THE GATE. The map draws only when it would show at least
-// CORRIDOR_READY_MIN_EVENTS events. Below that it says so, with the count, and
-// points at the list — a map with one lonely hex reads as abandoned, which is
-// the failure §6.2b exists to prevent. THE THING COUNTED IS THE THING SHOWN:
-// the count is taken over exactly the events that would become hexes (forward
-// window + a valid res-7 cell), never over the wider list.
+// THE GATE — PER CORRIDOR, LATCHED (§6.2b; CCR PR 700 corrected the first cut,
+// which counted across the whole brand). A corridor (H3 res 7 — the NCR
+// Corridor, not the res-9 Node) is drawn when it holds at least
+// CORRIDOR_READY_MIN_EVENTS events in the forward window RIGHT NOW, or when it
+// has latched (lib/corridor-latch: the nightly job records the first time it
+// did). Once open it stays open, so the front door does not flap as events
+// wrap up. Five events scattered over five corridors draw nothing: a map of
+// lonely hexes reads as abandoned, the failure §6.2b exists to prevent. A
+// latched corridor with no upcoming event is not drawn (there is nothing to
+// link to). Events in corridors that are not drawn are still in the card list.
+// THE THING COUNTED IS THE THING SHOWN: each corridor's count is exactly the
+// events its hex links.
 //
 // The landing's type / modality / product radios do not re-draw the map (it is
-// CSS-only, no JS), so the caption names what the map shows: the next
-// CORRIDOR_WINDOW_DAYS days, every type. The filtered list sits right below.
+// CSS-only, no JS), so the caption says what the map shows: every kind, the
+// next CORRIDOR_WINDOW_DAYS days. The filtered list sits right below.
 
 import { cellToBoundary, cellToLatLng, getResolution, isValidCell } from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging.js';
@@ -73,7 +79,7 @@ const H = 360;
 // Under the 400-char inline budget (ADR-008 design check); tokens only, no hex.
 // One literal <style> so the design check measures exactly what ships.
 const MAP_STYLE =
-  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 15px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px}</style>';
+  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px}</style>';
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
@@ -107,10 +113,10 @@ export function attendeeMapAreas(
   return { areas, count: areas.reduce((s, a) => s + a.events.length, 0) };
 }
 
-function thinHtml(count: number): string {
-  const sofar = count === 0 ? 'None yet' : `${count} so far`;
+function thinHtml(busiest: number): string {
+  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
-              <p><strong>The map opens at ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar} &mdash; every event is listed below.</p>
+              <p><strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar} &mdash; every event is listed below.</p>
             </div>`;
 }
 
@@ -174,21 +180,28 @@ function legendFor(areas: AttendeeMapArea[]): string {
  */
 export function renderAttendeeMap(
   items: readonly AttendeeMapItem[] | null | undefined,
-  opts?: { now?: number }
+  opts?: { now?: number; latched?: ReadonlySet<string> }
 ): RenderedAttendeeMap {
   const now = new Date(opts?.now ?? Date.now());
-  const { areas, count } = attendeeMapAreas(items, now);
+  const latched = opts?.latched ?? new Set<string>();
+  const all = attendeeMapAreas(items, now).areas;
+  // Per corridor: ready now, or latched (and with something to link).
+  const drawn = all
+    .filter((a) => a.events.length >= CORRIDOR_READY_MIN_EVENTS || latched.has(a.cell))
+    .map((a, i) => ({ ...a, n: i + 1 }));
+  const count = drawn.reduce((s, a) => s + a.events.length, 0);
 
-  if (count < CORRIDOR_READY_MIN_EVENTS) {
-    return { html: thinHtml(count), state: 'thin', count, areas };
+  if (drawn.length === 0) {
+    const busiest = all.reduce((m, a) => Math.max(m, a.events.length), 0);
+    return { html: thinHtml(busiest), state: 'thin', count: 0, areas: [] };
   }
 
-  const caption = `${count} events in ${areas.length} area${areas.length === 1 ? '' : 's'} over the next ${CORRIDOR_WINDOW_DAYS} days. Each hexagon is a few square kilometres, never a street address.`;
+  const caption = `${count} event${count === 1 ? '' : 's'} in ${drawn.length} neighborhood${drawn.length === 1 ? '' : 's'}, every kind, over the next ${CORRIDOR_WINDOW_DAYS} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.`;
   const html = `<figure class="amap" data-testid="amap">
               ${MAP_STYLE}
-              ${svgFor(areas)}
+              ${svgFor(drawn)}
+              ${legendFor(drawn)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>
-              ${legendFor(areas)}
             </figure>`;
-  return { html, state: 'map', count, areas };
+  return { html, state: 'map', count, areas: drawn };
 }

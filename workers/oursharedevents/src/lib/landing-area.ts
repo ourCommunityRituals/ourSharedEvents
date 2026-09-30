@@ -183,7 +183,7 @@ export function renderEmptyLandingArea(): RenderedLandingArea {
  */
 export function renderLandingArea(
   items: readonly LandingAreaItem[] | null | undefined,
-  opts?: { now?: number }
+  opts?: { now?: number; latched?: ReadonlySet<string> }
 ): RenderedLandingArea {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
 
@@ -242,7 +242,7 @@ export function renderLandingArea(
   // what the public sees narrows the map with it.
   const mapHtml = renderAttendeeMap(
     live.map((e) => toPublicEvent(e as Record<string, unknown>)),
-    { now: now.getTime() }
+    { now: now.getTime(), latched: opts?.latched }
   ).html;
 
   const html = buildAreaMarkup({ cards, types, defaultView, mapHtml });

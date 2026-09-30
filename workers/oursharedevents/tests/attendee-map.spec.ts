@@ -4,8 +4,9 @@
  * Node-clean: pure renderer, string assertions. Registered in vitest.node-specs.mjs.
  *
  * What these pin:
- *   - the gate: below CORRIDOR_READY_MIN_EVENTS drawable events there is no map,
- *     and the count shown is the count of what WOULD be drawn (not the list)
+ *   - the gate, per corridor (§6.2b): a res-7 corridor is drawn only with
+ *     ≥ CORRIDOR_READY_MIN_EVENTS events of its own, or once latched; scattered
+ *     events across corridors open nothing
  *   - precision: hexes are res-7 cells only; a res-9 cell is never drawn, and no
  *     event lat/lon reaches the markup (the map never reads them)
  *   - window: wrapped / beyond-horizon events are not on the map
@@ -50,45 +51,85 @@ function ev(i: number, over: Partial<AttendeeMapItem & { lat: number; lon: numbe
 const many = (n: number, over: Partial<AttendeeMapItem> = {}) =>
   Array.from({ length: n }, (_, i) => ev(i, over));
 
-describe('attendee map | density gate', () => {
-  it('below the gate: no SVG, an honest count, and a pointer to the list', () => {
+// A distinct res-7 cell per index, walking east (for "scattered" cases).
+const cellAt = (i: number) => latLngToCell(41.7, -87.9 + i * 0.05, 7);
+
+describe('attendee map | per-corridor gate (§6.2b)', () => {
+  it('below the gate in every corridor: no SVG, the busiest count, a pointer to the list', () => {
     const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
     expect(out.state).toBe('thin');
     expect(out.html).not.toContain('<svg');
     expect(out.html).toContain('data-testid="area-map-thin"');
-    expect(out.html).toContain(`${CORRIDOR_READY_MIN_EVENTS - 1} so far`);
+    expect(out.html).toContain(`The busiest has ${CORRIDOR_READY_MIN_EVENTS - 1} so far`);
     expect(out.html).toContain('every event is listed below');
   });
 
-  it('empty input says "None yet", not "0 so far"', () => {
+  it('empty input says "None yet"', () => {
     const out = renderAttendeeMap([], { now: NOW });
     expect(out.state).toBe('thin');
     expect(out.html).toContain('None yet');
   });
 
-  it('at the gate: draws the map', () => {
+  it('at the gate in one corridor: that corridor is drawn', () => {
     const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW });
     expect(out.state).toBe('map');
-    expect(out.html).toContain('data-testid="amap-svg"');
+    expect(out.areas.map((a) => a.cell)).toEqual([BLUE7]);
     expect(out.count).toBe(CORRIDOR_READY_MIN_EVENTS);
   });
 
-  it('counts only what it would draw: events without a cell do not open the map', () => {
-    const items = [
-      ...many(CORRIDOR_READY_MIN_EVENTS - 1),
-      ev(99, { h3_res7: null }), // online / un-geocoded — listed, not drawable
-    ];
+  it('five events scattered over five corridors open NOTHING (the brand-wide count is not the grain)', () => {
+    const items = Array.from({ length: CORRIDOR_READY_MIN_EVENTS }, (_, i) =>
+      ev(i, { h3_res7: cellAt(i) })
+    );
     const out = renderAttendeeMap(items, { now: NOW });
     expect(out.state).toBe('thin');
-    expect(out.count).toBe(CORRIDOR_READY_MIN_EVENTS - 1);
+    expect(out.html).not.toContain('<svg');
+    expect(out.html).toContain('The busiest has 1 so far');
+  });
+
+  it('only corridors at the gate are drawn; a quiet corridor beside a busy one is not', () => {
+    const items = [...many(CORRIDOR_READY_MIN_EVENTS), ev(40, { h3_res7: BEV7 })];
+    const out = renderAttendeeMap(items, { now: NOW });
+    expect(out.areas.map((a) => [a.n, a.cell, a.events.length])).toEqual([
+      [1, BLUE7, CORRIDOR_READY_MIN_EVENTS],
+    ]);
+    expect(out.html).not.toContain('href="/events/e40"');
+  });
+
+  it('a latched corridor stays drawn after it falls below the gate (no flapping)', () => {
+    const out = renderAttendeeMap([ev(0), ev(1, { h3_res7: BEV7 })], {
+      now: NOW,
+      latched: new Set([BLUE7]),
+    });
+    expect(out.state).toBe('map');
+    expect(out.areas.map((a) => [a.cell, a.events.length])).toEqual([[BLUE7, 1]]);
+  });
+
+  it('a latched corridor with nothing coming up draws no empty hex', () => {
+    const out = renderAttendeeMap([ev(0, { h3_res7: BEV7 })], {
+      now: NOW,
+      latched: new Set([BLUE7]),
+    });
+    expect(out.state).toBe('thin');
+  });
+
+  it('counts only what it would draw: events without a cell never count toward a corridor', () => {
+    const items = [...many(CORRIDOR_READY_MIN_EVENTS - 1), ev(99, { h3_res7: null })];
+    const out = renderAttendeeMap(items, { now: NOW });
+    expect(out.state).toBe('thin');
   });
 });
 
 describe('attendee map | precision (Invariant #1 by construction)', () => {
   it('never puts an event coordinate in the markup', () => {
-    const items = [...many(4), ev(10, { h3_res7: BEV7, lat: BEV.lat, lon: BEV.lon })];
+    const items = [
+      ...many(CORRIDOR_READY_MIN_EVENTS),
+      ...Array.from({ length: CORRIDOR_READY_MIN_EVENTS }, (_, i) =>
+        ev(10 + i, { h3_res7: BEV7, lat: BEV.lat, lon: BEV.lon })
+      ),
+    ];
     const out = renderAttendeeMap(items, { now: NOW });
-    expect(out.state).toBe('map');
+    expect(out.areas.length).toBe(2);
     for (const n of [BLUE.lat, BLUE.lon, BEV.lat, BEV.lon]) {
       expect(out.html).not.toContain(String(n));
       expect(out.html).not.toContain(n.toFixed(4));
@@ -119,23 +160,26 @@ describe('attendee map | forward window', () => {
 });
 
 describe('attendee map | shape', () => {
-  it('one hex per cell, busiest first, numbered, with a matching legend', () => {
-    const items = [...many(4), ev(20, { h3_res7: BEV7 })];
+  it('one hex per drawn corridor, busiest first, numbered, legend, caption last', () => {
+    const items = [
+      ...many(CORRIDOR_READY_MIN_EVENTS + 1),
+      ...Array.from({ length: CORRIDOR_READY_MIN_EVENTS }, (_, i) => ev(20 + i, { h3_res7: BEV7 })),
+    ];
     const out = renderAttendeeMap(items, { now: NOW });
     expect(out.areas.map((a) => [a.n, a.cell, a.events.length])).toEqual([
-      [1, BLUE7, 4],
-      [2, BEV7, 1],
+      [1, BLUE7, CORRIDOR_READY_MIN_EVENTS + 1],
+      [2, BEV7, CORRIDOR_READY_MIN_EVENTS],
     ]);
     expect(out.html.split('data-testid="amap-area"').length - 1).toBe(2);
     expect(out.html).toContain(
-      '<li value="1" data-testid="amap-legend-area"><strong>4 events:</strong>'
-    );
-    expect(out.html).toContain(
-      '<li value="2" data-testid="amap-legend-area"><strong>1 event:</strong>'
+      `<li value="1" data-testid="amap-legend-area"><strong>${CORRIDOR_READY_MIN_EVENTS + 1} events:</strong>`
     );
     expect(out.html).toContain('href="/events/e20"');
     expect(out.html).toContain('aria-labelledby="amap-caption"');
     expect(out.html).toContain('never a street address');
+    expect(out.html).toContain('the filters above change the list, not the map');
+    // <figcaption> is the figure's last child (HTML content model).
+    expect(out.html.trim()).toMatch(/<\/figcaption>\s*<\/figure>$/);
   });
 
   it('escapes event names and ids', () => {
@@ -149,11 +193,11 @@ describe('attendee map | shape', () => {
   });
 
   it(`caps the hex count at ${MAX_MAP_AREAS}`, () => {
-    // Walk distinct res-7 cells eastward.
-    const items = Array.from({ length: MAX_MAP_AREAS + 5 }, (_, i) =>
-      ev(i, { h3_res7: latLngToCell(41.7, -87.9 + i * 0.05, 7), startDateISO: inDays(5) })
+    const cells = Array.from({ length: MAX_MAP_AREAS + 5 }, (_, i) => cellAt(i));
+    const out = renderAttendeeMap(
+      cells.map((c, i) => ev(i, { h3_res7: c, startDateISO: inDays(5) })),
+      { now: NOW, latched: new Set(cells) }
     );
-    const out = renderAttendeeMap(items, { now: NOW });
     expect(out.areas.length).toBe(MAX_MAP_AREAS);
   });
 
