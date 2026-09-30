@@ -107,6 +107,11 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0082: poster_deployments.placement_type (OSE-1357 poster tiers). Additive
+-- categorical column (venue|community) + a backfill of rows whose address is
+-- the event's own. Reverse (safe to leave; nothing else depends on it):
+-- ALTER TABLE poster_deployments DROP COLUMN placement_type;   -- optional, additive
+
 -- 0077: node_hierarchy.legal_clearance_tier disambiguation (OSE-1221 — schema
 -- guard `check-column-type-collisions.mjs`, OSE-802). Pure RENAME COLUMN, no
 -- data change (dead column: not read/written by any src/ code; the growth-wave

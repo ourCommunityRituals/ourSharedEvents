@@ -145,6 +145,9 @@ export const NODE_SPECS = [
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
   'tests/poster-multi-code-ui.spec.ts',
+  // OSE-1357 poster tiers — REGISTER/SPONSOR codes, venue vs community
+  // placements and the pre-event Reach section, run in jsdom (stubbed fetch).
+  'tests/poster-tiers-ui.spec.ts',
   // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks
   // extracted from the admin.html template string; no DOM / cloudflare:test.
   'tests/admin-event-status-phase-consistency.spec.ts',

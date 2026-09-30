@@ -3,9 +3,12 @@
  *
  * Admin CRUD (auth-gated):
  *   POST   /api/v2/admin/events/:id/poster-deployments   – create deployment (with H3 tagging;
- *          optional `address`, OSE-1357 — the card geocodes it and sends the coordinates)
+ *          optional `address`, OSE-1357 — the card geocodes it and sends the coordinates;
+ *          optional `placement_type` 'venue' | 'community' (default), poster tiers —
+ *          a venue AREA defaults its address + coordinates to the event's own)
  *   GET    /api/v2/admin/events/:id/poster-deployments   – list for event (+ per-row
- *          target_url/target_label and the event's own `event_address`, OSE-1357)
+ *          target_url/target_label, placement_type, exact `scans` for that poster,
+ *          and the event's own `event_address`, OSE-1357)
  *   GET    /api/v2/admin/poster-deployments/:id          – get single
  *   PUT    /api/v2/admin/poster-deployments/:id          – update (re-tags H3 when lat/lon provided)
  *   DELETE /api/v2/admin/poster-deployments/:id          – soft-delete (is_active=0)
@@ -26,6 +29,7 @@ import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
 import { listSavedPosterCodes } from '../lib/poster-codes';
+import { parsePlacementType } from '../lib/poster-reach';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
 
@@ -154,11 +158,44 @@ export async function handleAdminCreatePosterDeployment(
   // OSE-1357: the admin card geocodes this address in the browser and sends the
   // coordinates it got back; when geocoding is unavailable it sends the address
   // alone. Either way the address is kept so the card can show where it hangs.
-  const address = addressFrom(body.address);
+  let address = addressFrom(body.address);
+
+  // Poster tiers: where it hangs — an AREA of the venue, or a community place.
+  const parsedType = parsePlacementType(body.placement_type);
+  if (parsedType === null) {
+    return errorResponse(
+      'INVALID_PLACEMENT_TYPE',
+      "placement_type must be 'venue' or 'community'",
+      400,
+      rid
+    );
+  }
+  const placementType = parsedType ?? 'community';
 
   const coordsResult = validateCoords(body.latitude, body.longitude, rid);
   if (!coordsResult.ok) return coordsResult.response;
-  const { lat, lon } = coordsResult;
+  let { lat, lon } = coordsResult;
+
+  // A venue area hangs at the event's own location: its address and map
+  // position default to the EVENT's (organizer-entered) — never a device's.
+  if (placementType === 'venue') {
+    const ev = await env.DB.prepare(
+      'SELECT where_address, location, lat, lon FROM events WHERE id = ?'
+    )
+      .bind(eventId)
+      .first<{
+        where_address: string | null;
+        location: string | null;
+        lat: number | null;
+        lon: number | null;
+      }>();
+    if (!ev) return errorResponse('NOT_FOUND', 'Event not found', 404, rid);
+    if (!address) address = addressFrom(ev.where_address) ?? addressFrom(ev.location);
+    if (lat === null && lon === null) {
+      const fallback = validateCoords(ev.lat, ev.lon, rid);
+      if (fallback.ok) ({ lat, lon } = fallback);
+    }
+  }
 
   const h3Tags = maybeTag(lat, lon);
   const h3Res9 = h3Tags?.h3_res9 ?? null;
@@ -171,8 +208,8 @@ export async function handleAdminCreatePosterDeployment(
   try {
     await env.DB.prepare(
       `INSERT INTO poster_deployments
-         (id, event_id, qr_token, placement_label, location_desc, address, latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+         (id, event_id, qr_token, placement_label, location_desc, address, placement_type, latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     )
       .bind(
         id,
@@ -181,6 +218,7 @@ export async function handleAdminCreatePosterDeployment(
         placementLabel,
         locationDesc,
         address,
+        placementType,
         lat,
         lon,
         h3Res9,
@@ -198,7 +236,16 @@ export async function handleAdminCreatePosterDeployment(
   }
 
   return Response.json(
-    { ok: true, status: 201, id, qr_token: qrToken, h3_res9: h3Res9, h3_res7: h3Res7 },
+    {
+      ok: true,
+      status: 201,
+      id,
+      qr_token: qrToken,
+      placement_type: placementType,
+      address,
+      h3_res9: h3Res9,
+      h3_res7: h3Res7,
+    },
     { status: 201, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }
@@ -213,14 +260,22 @@ export async function handleAdminListPosterDeployments(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
+  // Poster tiers: each row carries its own exact scan count (organizer-only,
+  // same rule as /stats) — scans resolve to the poster they came from, nothing else.
   const rows = await env.DB.prepare(
-    `SELECT id, event_id, qr_token, placement_label, location_desc, address,
-            latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at
-       FROM poster_deployments
-      WHERE event_id = ?
-      ORDER BY created_at DESC`
+    `SELECT pd.id, pd.event_id, pd.qr_token, pd.placement_label, pd.location_desc, pd.address,
+            pd.placement_type, pd.latitude, pd.longitude, pd.h3_res9, pd.h3_res7, pd.is_active,
+            pd.created_at, pd.updated_at, COALESCE(s.scans, 0) AS scans
+       FROM poster_deployments pd
+       LEFT JOIN (SELECT poster_deployment_id, COUNT(*) AS scans
+                    FROM scan_placement_events
+                   WHERE event_id = ?
+                   GROUP BY poster_deployment_id) s
+         ON s.poster_deployment_id = pd.id
+      WHERE pd.event_id = ?
+      ORDER BY pd.created_at DESC`
   )
-    .bind(eventId)
+    .bind(eventId, eventId)
     .all<{
       id: string;
       event_id: string;
@@ -228,6 +283,7 @@ export async function handleAdminListPosterDeployments(
       placement_label: string | null;
       location_desc: string | null;
       address: string | null;
+      placement_type: string;
       latitude: number | null;
       longitude: number | null;
       h3_res9: string | null;
@@ -235,6 +291,7 @@ export async function handleAdminListPosterDeployments(
       is_active: number;
       created_at: string;
       updated_at: string;
+      scans: number;
     }>();
 
   // Enrich each row with the physical scan URL and an in-bundle QR data-URI
@@ -295,7 +352,7 @@ export async function handleAdminGetPosterDeployment(
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
   const row = await env.DB.prepare(
-    `SELECT id, event_id, qr_token, placement_label, location_desc, address,
+    `SELECT id, event_id, qr_token, placement_label, location_desc, address, placement_type,
             latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at
        FROM poster_deployments WHERE id = ?`
   )
@@ -343,6 +400,19 @@ export async function handleAdminUpdatePosterDeployment(
   if ('address' in body) {
     sets.push('address = ?');
     values.push(addressFrom(body.address));
+  }
+  if ('placement_type' in body) {
+    const t = parsePlacementType(body.placement_type);
+    if (!t) {
+      return errorResponse(
+        'INVALID_PLACEMENT_TYPE',
+        "placement_type must be 'venue' or 'community'",
+        400,
+        rid
+      );
+    }
+    sets.push('placement_type = ?');
+    values.push(t);
   }
   if ('is_active' in body) {
     sets.push('is_active = ?');

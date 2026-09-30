@@ -4,13 +4,22 @@
 // The organizer's pre-event window: the poster's short link + its QR (link
 // first, code as its picture), and how the poster is doing — scans, taps,
 // posters out, places covered, scans per day. Counts only (lib/pre-event-activity).
+// Poster tiers (OSE-1357): + `reach` — scans per placement (venue areas vs
+// community places, most-scanned first) and taps per code (lib/poster-reach).
+// Organizer-only: physical scans exact, digital taps floored (K=5) at every
+// grain shown, the tap total included; the sponsor surface never reads it.
 //
 // READ-ONLY. It lists existing short links and never mints one; when none
 // exists yet the card points at the poster page, which mints on open.
 
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
-import { readPreEventActivity, localDay } from '../lib/pre-event-activity';
+import {
+  readPreEventActivity,
+  organizerPreEventActivity,
+  localDay,
+} from '../lib/pre-event-activity';
+import { readPosterReach } from '../lib/poster-reach';
 
 export interface PreEventActivityEnv {
   DB: D1Database;
@@ -61,6 +70,7 @@ export async function handleAdminPreEventActivity(
 
   const now = new Date();
   const activity = await readPreEventActivity(env.DB, eventId, row.timezone, now);
+  const reach = await readPosterReach(env.DB, eventId);
 
   // The event's public short link, if one exists — the "link first" of the
   // card; its QR is the same link drawn as a picture.
@@ -85,7 +95,8 @@ export async function handleAdminPreEventActivity(
   return Response.json({
     ok: true,
     event: { id: row.id, status: row.status ?? 'draft', days_to_go: daysToGo(row, now) },
-    activity,
+    activity: organizerPreEventActivity(activity),
+    reach,
     link,
     poster_url: `/poster?event=${encodeURIComponent(eventId)}`,
   });
