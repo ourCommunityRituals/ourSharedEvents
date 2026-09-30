@@ -16,53 +16,53 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-338 reality: same CF-Access shadowing as OSE-R-005#1. Worker assertions fire only\r
+      code: "// OSE-338 reality: same CF-Access shadowing as OSE-R-005#1. Worker assertions fire only
 
-        // when status === 200 + dashboard markup is present. Full vitest catch lives in\r
+        // when status === 200 + dashboard markup is present. Full vitest catch lives in
 
-        // admin-friendly-labels.spec.ts; this is contract smoke only.\r
+        // admin-friendly-labels.spec.ts; this is contract smoke only.
 
-        test('Reached admin dashboard OR blocked at edge', function() {\r
+        test('Reached admin dashboard OR blocked at edge', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {\r
+        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {
 
-        \    test('ID column header carries .col-internal-id class', function() {\r
+        \    test('ID column header carries .col-internal-id class', function() {
 
-        \        expect(body).to.include('<th class=\\\"col-internal-id\\\">ID</th>');\r
+        \        expect(body).to.include('<th class=\\\"col-internal-id\\\">ID</th>');
 
-        \    });\r
+        \    });
 
-        \    test('ID cell template carries .col-internal-id class', function() {\r
+        \    test('ID cell template carries .col-internal-id class', function() {
 
-        \        expect(body).to.include('<td class=\\\"col-internal-id\\\" data-testid=\\\"event-id\\\">');\r
+        \        expect(body).to.include('<td class=\\\"col-internal-id\\\" data-testid=\\\"event-id\\\">');
 
-        \    });\r
+        \    });
 
-        \    test('Show internal IDs toggle is rendered', function() {\r
+        \    test('Show internal IDs toggle is rendered', function() {
 
-        \        expect(body).to.include('data-testid=\\\"show-internal-ids-toggle\\\"');\r
+        \        expect(body).to.include('data-testid=\\\"show-internal-ids-toggle\\\"');
 
-        \    });\r
+        \    });
 
-        \    test('CSS hides .col-internal-id by default', function() {\r
+        \    test('CSS hides .col-internal-id by default', function() {
 
-        \        expect(body).to.include('table.events-table .col-internal-id { display: none; }');\r
+        \        expect(body).to.include('table.events-table .col-internal-id { display: none; }');
 
-        \    });\r
+        \    });
 
-        \    test('Events table header column reads \\\"Event type\\\" not \\\"Phase\\\"', function() {\r
+        \    test('Events table header column reads \\\"Event type\\\" not \\\"Phase\\\"', function() {
 
-        \        expect(body).to.include('<th>Event type</th>');\r
+        \        expect(body).to.include('<th>Event type</th>');
 
-        \        expect(body).to.not.include('<th>Phase</th>');\r
+        \        expect(body).to.not.include('<th>Phase</th>');
 
-        \    });\r
+        \    });
 
         }"
 

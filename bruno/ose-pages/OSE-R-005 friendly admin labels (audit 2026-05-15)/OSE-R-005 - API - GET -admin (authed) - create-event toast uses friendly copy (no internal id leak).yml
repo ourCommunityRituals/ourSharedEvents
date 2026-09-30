@@ -16,33 +16,33 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-338 reality: same CF-Access shadowing. Worker toast assertions fire only when\r
+      code: "// OSE-338 reality: same CF-Access shadowing. Worker toast assertions fire only when
 
-        // dashboard is actually rendered. Full vitest catch lives in admin-friendly-labels.spec.ts.\r
+        // dashboard is actually rendered. Full vitest catch lives in admin-friendly-labels.spec.ts.
 
-        test('Reached admin dashboard OR blocked at edge', function() {\r
+        test('Reached admin dashboard OR blocked at edge', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {\r
+        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {
 
-        \    test('Friendly toast wired', function() {\r
+        \    test('Friendly toast wired', function() {
 
-        \        expect(body).to.include(\"msg.textContent = 'Event created.'\");\r
+        \        expect(body).to.include(\"msg.textContent = 'Event created.'\");
 
-        \        expect(body).to.include('msg.dataset.eventId = String(data.id)');\r
+        \        expect(body).to.include('msg.dataset.eventId = String(data.id)');
 
-        \    });\r
+        \    });
 
-        \    test('Pre-fix toast pattern absent', function() {\r
+        \    test('Pre-fix toast pattern absent', function() {
 
-        \        expect(body).to.not.match(/msg\\.textContent\\s*=\\s*['\\\"]Event created\\s*\\\\u2014/);\r
+        \        expect(body).to.not.match(/msg\\.textContent\\s*=\\s*['\\\"]Event created\\s*\\\\u2014/);
 
-        \    });\r
+        \    });
 
         }"
 

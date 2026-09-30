@@ -11,19 +11,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Health endpoint returns 200', function () {\r
+      code: "test('Health endpoint returns 200', function () {
 
-        \  expect(res.getStatus()).to.equal(200);\r
+        \  expect(res.getStatus()).to.equal(200);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Health response has ok=true', function () {\r
+        test('Health response has ok=true', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.ok).to.eql(true);\r
+        \  expect(json.ok).to.eql(true);
 
         });"
 

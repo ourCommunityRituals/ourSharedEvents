@@ -16,41 +16,41 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 204', function() {\r
+      code: "test('Returns 204', function() {
 
-        \    expect(res.getStatus()).to.equal(204);\r
+        \    expect(res.getStatus()).to.equal(204);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has Access-Control-Allow-Methods', function() {\r
+        test('Has Access-Control-Allow-Methods', function() {
 
-        \    const methods = res.getHeader('Access-Control-Allow-Methods');\r
+        \    const methods = res.getHeader('Access-Control-Allow-Methods');
 
-        \    expect(methods).to.include('GET');\r
+        \    expect(methods).to.include('GET');
 
-        \    expect(methods).to.include('POST');\r
+        \    expect(methods).to.include('POST');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has Access-Control-Allow-Headers', function() {\r
+        test('Has Access-Control-Allow-Headers', function() {
 
-        \    const headers = res.getHeader('Access-Control-Allow-Headers');\r
+        \    const headers = res.getHeader('Access-Control-Allow-Headers');
 
-        \    expect(headers).to.include('Authorization');\r
+        \    expect(headers).to.include('Authorization');
 
-        \    expect(headers).to.include('Content-Type');\r
+        \    expect(headers).to.include('Content-Type');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Max-Age is set', function() {\r
+        test('Max-Age is set', function() {
 
-        \    expect(res.getHeader('Access-Control-Max-Age')).to.eql('86400');\r
+        \    expect(res.getHeader('Access-Control-Max-Age')).to.eql('86400');
 
         });"
 

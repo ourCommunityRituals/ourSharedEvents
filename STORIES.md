@@ -1391,7 +1391,7 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 
 - [x] Server-rendered search (name / venue) + **Everything / Today / This weekend / Next 7 days / This month / Recently wrapped** chips; `when` allowlisted, `q` capped + escaped once; URL is the state; no client fetch
 - [x] Default view unchanged (every listed event incl. wrapped) — API-parity contract holds
-- [ ] Map view over `GET /api/v2/events/map` via `renderCorridorMap` SVG (next slice)
+- [x] Map view — PR #700: the **landing** area's map view (`src/lib/attendee-map.ts`), inline-SVG H3 res-7 hexes + legend, drawn from `h3_res7` through the public projection, never lat/lon. **Per-corridor gate + latch** (VISION §6.2b, PO 2026-09-30): a corridor is drawn at ≥ 5 upcoming events of its own or once latched (`corridor_readiness_latch`, migration 0082, nightly `runCorridorLatch`). Deliberately NOT `renderCorridorMap` (that is retrospective proof, "honest at any density"; this surface is density-gated). QA: `attendee-map.spec.ts`, `corridor-latch.spec.ts`, `public-projection-routing.spec.ts`, browser `landing-theme.spec.ts`.
 
 **QA:** `tests/event-discovery.spec.ts` (16). **Lib:** `src/lib/event-discovery.ts`.
 
@@ -1401,16 +1401,41 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 **Prerequisite:** TRI-1
 
 - [x] Card hydrates from `ose:event-selected`; six steps (Set up → Live → Poster out → People scanning → Sponsors on → Report) from row + `/stats` (k-floored) + poster deployments + sponsors; **Next:** one link into the right card; stale-response guard
-- [ ] Surface pending sponsor drafts / declined placements here (organizer inbox)
+- [x] Organizer inbox — PR #700: "Needs your attention" on the checklist card (not answered / declined / asked to join) via `oseEventView().inbox`; QA `admin-organizer-inbox.spec.ts` + browser steps in `sponsor-home-flow.spec.ts`
 
 ### TRI-5: Reconciliation to the shared brain
 
 **Status:** 📋 BACKLOG
 
-- [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` audit actions, `DRAFT_EXPIRY_DAYS` env knob
-- [ ] Bruno collection: admin list filters, home-link mint, respond endpoint
-- [ ] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id`
-- [ ] `admin.html` split (now ~250 KB; sponsor page is deliberately its own template)
+- [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` + `SPONSOR_REQUEST_PLACEMENT` + `ANSWER_SPONSOR_REQUEST` audit actions, `DRAFT_EXPIRY_DAYS` env knob, `corridor_readiness_latch` table (0082)
+- [ ] Bruno collection: admin list filters incl. `?sort=upcoming`, home-link mint, respond endpoint, `POST /api/v2/sponsor/requests`, `POST /api/v2/admin/sponsor-requests/:id/respond` — request files added in PR #700; staging run pending (T2 runs only after deploy). Found while adding them: CRLF in the collection script made Bruno's comment-stripper eat most request assertions (13 scripts + the latency budget); all Bruno YAML normalized to LF, guarded in `tests/integration/infra-consistency.test.js`
+- [x] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id` — PR #700 `tests/playwright/sponsor-home-flow.spec.ts`, blocking phone audit on every PR
+- [x] ~~`admin.html` split~~ → **re-scoped (PR #700, remediation step 7a):** measured, admin's effect on startup CPU is not measurable; `h3-js` is ~85%. Lazy-load h3-js is the pending cold-start decision; the admin split is a size/maintainability item (`docs/ops/STARTUP-COST-2026-09-30.md`)
+
+### TRI-7: Sponsor discovery — a sponsor asks to back an event
+
+**Status:** 🔄 IN PROGRESS (PR #700)
+**Prerequisite:** TRI-2
+
+**PO Acceptance Criteria:**
+
+- [x] `/sponsor` lists **Events you could back** (the brand's published, active, upcoming events the sponsor is not linked to; "Near you" when in the sponsor's res-7 cell) and **Your requests** (waiting / the organizer said no)
+- [x] `POST /api/v2/sponsor/requests`: token in body, brand from the signed claim, ≤ 5 waiting per sponsor (live events only, atomic), route-rate-limited, audited `sponsor:<id>`; out-of-brand / unlisted / over → 404 (no oracle)
+- [x] Two-sided consent (ADR-019 amendment 2026-09-30): stored `is_active = 0, organizer_accepted = NULL`; public readers also require `organizer_accepted = 1` for `source = 'sponsor_request'`
+- [x] Organizer: inbox "asked to join", sponsors card **Approve / Decline / Approve after all**, attach approves a waiting request; `POST /api/v2/admin/sponsor-requests/:id/respond` (JSON-only, brand-scoped, audited)
+- [ ] Sponsor withdraw; request expiry; paging past 20 discoverable events
+
+**QA:** `tests/sponsor-discovery.spec.ts` (22), `sponsor-home-xss.spec.ts`, `red-team/sponsor-promotion.spec.ts` (writer enumeration), browser `sponsor-home-flow.spec.ts`.
+
+### TRI-8: Admin list "Soonest first"
+
+**Status:** 🔄 IN PROGRESS (PR #700)
+**Prerequisite:** TRI-1
+
+- [x] `GET /api/v2/admin/events?sort=upcoming` (upcoming soonest → undated → past most-recent; floor "today somewhere"; own opaque cursor carrying its floor; bad sort/cursor → 400); admin toggle; `filters.sort` echo
+- [x] List labels each page from a per-request query snapshot and drops stale responses (label race)
+
+**QA:** `admin-events-upcoming.spec.ts` (D1), `admin-events-upcoming-cursor.spec.ts`, browser tests in `admin-csp-controls.spec.ts`.
 
 ### TRI-6 / OSE-1344: Category → Type picker on Create Event ("Sports > Bocce")
 

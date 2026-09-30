@@ -187,3 +187,27 @@ Every finding below marked **VERIFIED** was re-checked against the code by the c
 11. ✅ The launch requirement: discovery and the map go through `toPublicEvent`. Done in review, with a test.
 12. **PO decision:** the attendee map gate (per-corridor plus latch, labelled interim global, or legend only).
 13. **PO decision:** split the PR or keep it whole.
+
+---
+
+## Hold resolution (2026-09-30, same PR)
+
+| #   | Hold                           | Resolution                                                                                                                                                    |
+| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | CSRF on the admin answer route | JSON content-type + 4096-byte cap; born-red test in `sponsor-discovery.spec.ts`                                                                               |
+| 2   | ADR-019 + strict resolver      | ADR amended; `COALESCE(organizer_accepted, CASE WHEN source='sponsor_request' THEN 0 ELSE 1 END) = 1` at every public reader; geo-resolution gate requires it |
+| 3   | Request lifecycle              | attach approves a waiting request; decline reversible; cap counts live events only, atomic insert                                                             |
+| 4   | Landing token cycle            | self-referencing tokens removed; `landing-theme.spec.ts` measures computed values in light + dark                                                             |
+| 5   | Approve/Decline UX             | both buttons disabled in flight, reload on 409, 44px                                                                                                          |
+| 6   | Admin list label race          | per-request snapshot + stale drop + `pendingReset` queue; browser race test                                                                                   |
+| 7   | Cap test + workflow paths      | exact status sequence asserted; mobile-audit workflow paths cover specs, helpers, worker src and migrations                                                   |
+| 8   | `measure-startup.mjs`          | async, detached child, SIGINT/SIGTERM/SIGHUP restore (verified), temp files gitignored; doc + CLAUDE.md §4 softened                                           |
+| 9   | Governance                     | STORIES TRI-3/4/5/7/8; PR title drops "admin split"; body carries `Part of OSE-1245`                                                                          |
+| 10  | Bruno cases                    | six new contract requests (sponsor request 401/400, organizer answer 404/400, sort upcoming 200 + unknown 400)                                                |
+| 11  | Launch requirement             | discovery + map through `toPublicEvent`                                                                                                                       |
+| 12  | Map gate (PO)                  | per-corridor (H3 res 7) ≥5 upcoming events + latch table (migration 0082, nightly `runCorridorLatch`)                                                         |
+| 13  | Split (PO)                     | kept as one PR                                                                                                                                                |
+
+**Recursive finding while closing hold 10 (Loop 3, applied).** The new Bruno assertions did not run. Bruno strips comments with `decomment`, which chooses one line ending for the whole merged script by majority vote. The ex-Newman conversion left the collection-level script CRLF, so it outvoted short LF request scripts and every `// comment` swallowed the rest of the request's script. Requests still reported PASS. Affected: 13 of 14 LF request scripts (11 TRIANGLE, 2 Sponsor Covenant), and the collection-wide latency budget, whose lines were separated only by lone `\r` and so folded into a comment. Fix: every Bruno YAML normalized to LF (109 files; values verified identical apart from blank lines), the collection scripts rewritten as literal blocks, and a born-red guard in `tests/integration/infra-consistency.test.js` (no `\r` in any Bruno script; latency budget is real code). Locally all 12 TRIANGLE requests now print their assertions and pass.
+
+**Verdict: PASS**, pending green CI on the pushed head. Open decision (not a hold): lazy-load `h3-js` (~85% of Worker startup CPU).

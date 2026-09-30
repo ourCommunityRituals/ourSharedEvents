@@ -16,61 +16,61 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-338 reality update: on CF-Access-gated environments (staging/prod), CF Access\r
+      code: "// OSE-338 reality update: on CF-Access-gated environments (staging/prod), CF Access
 
-        // intercepts /admin before the worker sees the Authorization: Bearer header. CF Access\r
+        // intercepts /admin before the worker sees the Authorization: Bearer header. CF Access
 
-        // only honors its own JWT cookies / service tokens. The full label-regression catch\r
+        // only honors its own JWT cookies / service tokens. The full label-regression catch
 
-        // for this audit gap lives in workers/oursharedevents/tests/admin-friendly-labels.spec.ts\r
+        // for this audit gap lives in workers/oursharedevents/tests/admin-friendly-labels.spec.ts
 
-        // (vitest, runs in the test pool with direct worker access). This Postman test is the\r
+        // (vitest, runs in the test pool with direct worker access). This Postman test is the
 
-        // contract smoke layer; on CF-Access environments without a service token, it accepts\r
+        // contract smoke layer; on CF-Access environments without a service token, it accepts
 
-        // 'blocked' as a passing state and only enforces the label contract when the worker is\r
+        // 'blocked' as a passing state and only enforces the label contract when the worker is
 
-        // actually reached (status === 200). Follow-on: OSE-339 configures CF Access service\r
+        // actually reached (status === 200). Follow-on: OSE-339 configures CF Access service
 
-        // tokens so staging contract testing recovers full rigor.\r
+        // tokens so staging contract testing recovers full rigor.
 
-        test('Reached admin dashboard OR blocked at edge', function() {\r
+        test('Reached admin dashboard OR blocked at edge', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {\r
+        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {
 
-        \    test('TIER_LABELS map embedded with Free / Pro / Enterprise plan strings', function() {\r
+        \    test('TIER_LABELS map embedded with Free / Pro / Enterprise plan strings', function() {
 
-        \        expect(body).to.match(/TIER_LABELS\\s*=\\s*\\{/);\r
+        \        expect(body).to.match(/TIER_LABELS\\s*=\\s*\\{/);
 
-        \        expect(body).to.match(/free\\s*:\\s*['\\\"]Free plan['\\\"]/);\r
+        \        expect(body).to.match(/free\\s*:\\s*['\\\"]Free plan['\\\"]/);
 
-        \        expect(body).to.match(/mid\\s*:\\s*['\\\"]Pro plan['\\\"]/);\r
+        \        expect(body).to.match(/mid\\s*:\\s*['\\\"]Pro plan['\\\"]/);
 
-        \        expect(body).to.match(/enterprise\\s*:\\s*['\\\"]Enterprise plan['\\\"]/);\r
+        \        expect(body).to.match(/enterprise\\s*:\\s*['\\\"]Enterprise plan['\\\"]/);
 
-        \    });\r
+        \    });
 
-        \    test('PHASE_LABELS map embedded for all 5 phases', function() {\r
+        \    test('PHASE_LABELS map embedded for all 5 phases', function() {
 
-        \        expect(body).to.match(/PHASE_LABELS\\s*=\\s*\\{/);\r
+        \        expect(body).to.match(/PHASE_LABELS\\s*=\\s*\\{/);
 
-        \        expect(body).to.include('Community events');\r
+        \        expect(body).to.include('Community events');
 
-        \        expect(body).to.include('Commerce events');\r
+        \        expect(body).to.include('Commerce events');
 
-        \        expect(body).to.include('Licensed activities');\r
+        \        expect(body).to.include('Licensed activities');
 
-        \        expect(body).to.include('Health events');\r
+        \        expect(body).to.include('Health events');
 
-        \        expect(body).to.include('Youth events');\r
+        \        expect(body).to.include('Youth events');
 
-        \    });\r
+        \    });
 
         }"
 

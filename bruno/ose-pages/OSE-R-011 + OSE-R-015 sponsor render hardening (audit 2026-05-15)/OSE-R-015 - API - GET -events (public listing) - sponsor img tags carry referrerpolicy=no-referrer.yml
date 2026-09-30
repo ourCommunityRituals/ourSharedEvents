@@ -14,19 +14,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        test('public listing HTML includes referrerpolicy=no-referrer', function() {\r
+        test('public listing HTML includes referrerpolicy=no-referrer', function() {
 
-        \    expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);\r
+        \    expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);
 
-        });\r
+        });
 
-        test('public listing HTML includes onerror handler', function() {\r
+        test('public listing HTML includes onerror handler', function() {
 
-        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=|data-hide-on-error=[\"']/);\r
+        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=|data-hide-on-error=[\"']/);
 
         });"
 

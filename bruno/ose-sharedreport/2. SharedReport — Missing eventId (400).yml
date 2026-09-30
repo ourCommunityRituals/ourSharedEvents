@@ -11,49 +11,49 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 400 for missing eventId', function () {\r
+      code: "test('Returns 400 for missing eventId', function () {
 
-        \  expect(res.getStatus()).to.equal(400);\r
+        \  expect(res.getStatus()).to.equal(400);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Error code is INVALID_EVENT_ID', function () {\r
+        test('Error code is INVALID_EVENT_ID', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.ok).to.eql(false);\r
+        \  expect(json.ok).to.eql(false);
 
-        \  expect(json.code).to.eql('INVALID_EVENT_ID');\r
+        \  expect(json.code).to.eql('INVALID_EVENT_ID');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Error response includes requestId', function () {\r
+        test('Error response includes requestId', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.requestId).to.be.a('string');\r
+        \  expect(json.requestId).to.be.a('string');
 
-        \  expect(json.requestId.length).to.be.greaterThan(0);\r
+        \  expect(json.requestId.length).to.be.greaterThan(0);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('X-Request-Id header present', function () {\r
+        test('X-Request-Id header present', function () {
 
-        \  expect(res.getHeaders()).to.have.property('X-Request-Id'.toLowerCase());\r
+        \  expect(res.getHeaders()).to.have.property('X-Request-Id'.toLowerCase());
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Cache-Control is no-cache for errors', function () {\r
+        test('Cache-Control is no-cache for errors', function () {
 
-        \  expect(res.getHeader('Cache-Control')).to.include('no-cache');\r
+        \  expect(res.getHeader('Cache-Control')).to.include('no-cache');
 
         });"
 

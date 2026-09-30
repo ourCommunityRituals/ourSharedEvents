@@ -1,0 +1,33 @@
+info:
+  name: TRIANGLE | organizer answer | 404 on unknown request
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsor-requests/spl_does_not_exist/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"approve":true}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: the organizer's approve/decline of a sponsor request is admin-gated
+        // and brand-scoped; unknown and out-of-brand are the same 404 (no oracle).
+        test('404 NOT_FOUND on unknown request', function () { expect(res.getStatus()).to.eql(404); });
+        test('ok is false', function () { expect(res.getBody().ok).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

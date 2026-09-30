@@ -11,59 +11,59 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        if (res.getStatus() === 200) {\r
+        if (res.getStatus() === 200) {
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('item is object with id', function() {\r
+        \    test('item is object with id', function() {
 
-        \        expect(json.item).to.be.an('object');\r
+        \        expect(json.item).to.be.an('object');
 
-        \        expect(json.item.id).to.be.a('string');\r
+        \        expect(json.item.id).to.be.a('string');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Has Cache-Control header', function() {\r
+        \    test('Has Cache-Control header', function() {
 
-        \        expect(res.getHeader('Cache-Control')).to.include('private');\r
+        \        expect(res.getHeader('Cache-Control')).to.include('private');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Has X-Request-Id header', function() {\r
+        \    test('Has X-Request-Id header', function() {
 
-        \        expect(res.getHeader('X-Request-Id')).to.be.a('string');\r
+        \        expect(res.getHeader('X-Request-Id')).to.be.a('string');
 
-        \    });\r
+        \    });
 
-        } else if (res.getStatus() === 404) {\r
+        } else if (res.getStatus() === 404) {
 
-        \    test('404 has NOT_FOUND code', function() {\r
+        \    test('404 has NOT_FOUND code', function() {
 
-        \        expect(json.code).to.eql('NOT_FOUND');\r
+        \        expect(json.code).to.eql('NOT_FOUND');
 
-        \    });\r
+        \    });
 
-        } else if (res.getStatus() === 503) {\r
+        } else if (res.getStatus() === 503) {
 
-        \    test('503 indicates DB issue', function() {\r
+        \    test('503 indicates DB issue', function() {
 
-        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);\r
+        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);
 
-        \    });\r
+        \    });
 
         }"
 

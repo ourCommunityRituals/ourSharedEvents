@@ -13,101 +13,101 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-001 (audit ship-stopper #1, 2026-05-15): pre-fix, this returned a raw JSON 401\r
+      code: "// OSE-R-001 (audit ship-stopper #1, 2026-05-15): pre-fix, this returned a raw JSON 401
 
-        // dump rendered as page text in the browser. After fix: browsers get HTML sign-in.\r
+        // dump rendered as page text in the browser. After fix: browsers get HTML sign-in.
 
-        //\r
+        //
 
-        // OSE-338 (2026-05-18) reality update: on Cloudflare-Access-gated environments\r
+        // OSE-338 (2026-05-18) reality update: on Cloudflare-Access-gated environments
 
-        // (staging + prod), CF Access intercepts /admin before reaching the worker. Newman\r
+        // (staging + prod), CF Access intercepts /admin before reaching the worker. Newman
 
-        // follows the 302 to the CF Access login page (200 HTML). On non-CF-Access environments\r
+        // follows the 302 to the CF Access login page (200 HTML). On non-CF-Access environments
 
-        // (local dev), the worker's 401 HTML sign-in fires. The CONTRACT is unified: an\r
+        // (local dev), the worker's 401 HTML sign-in fires. The CONTRACT is unified: an
 
-        // unauthenticated browser request never sees the admin dashboard, and never sees a\r
+        // unauthenticated browser request never sees the admin dashboard, and never sees a
 
-        // raw JSON error dump. Both 401-worker and 200-CF-Access satisfy this contract.\r
+        // raw JSON error dump. Both 401-worker and 200-CF-Access satisfy this contract.
 
-        // Worker-specific page assertions only fire when status === 401.\r
+        // Worker-specific page assertions only fire when status === 401.
 
-        test('Unauthenticated admin request is blocked (CF Access OR worker 401)', function() {\r
+        test('Unauthenticated admin request is blocked (CF Access OR worker 401)', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Content-Type is text/html (not JSON)', function() {\r
+        test('Content-Type is text/html (not JSON)', function() {
 
-        \    expect(res.getHeader('Content-Type')).to.include('text/html');\r
+        \    expect(res.getHeader('Content-Type')).to.include('text/html');
 
-        });\r
+        });
 
-        \r
+        
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        \r
+        
 
-        test('Does NOT serve the admin dashboard HTML', function() {\r
+        test('Does NOT serve the admin dashboard HTML', function() {
 
-        \    expect(body).to.not.include('data-testid=\"admin-header\"');\r
+        \    expect(body).to.not.include('data-testid=\"admin-header\"');
 
-        \    expect(body).to.not.include('data-testid=\"admin-main\"');\r
+        \    expect(body).to.not.include('data-testid=\"admin-main\"');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Body does NOT contain the raw JSON error dump', function() {\r
+        test('Body does NOT contain the raw JSON error dump', function() {
 
-        \    expect(body).to.not.match(/\"ok\":\\s*false/);\r
+        \    expect(body).to.not.match(/\"ok\":\\s*false/);
 
-        \    expect(body).to.not.match(/\"code\":\\s*\"UNAUTH\"/);\r
+        \    expect(body).to.not.match(/\"code\":\\s*\"UNAUTH\"/);
 
-        });\r
+        });
 
-        \r
+        
 
-        // Worker-401 contract details — only enforced on non-CF-Access environments.\r
+        // Worker-401 contract details — only enforced on non-CF-Access environments.
 
-        // When CF Access fronts /admin, the response is the CF Access login page (200),\r
+        // When CF Access fronts /admin, the response is the CF Access login page (200),
 
-        // not the worker's sign-in page. The non-leak assertions above cover the universal contract.\r
+        // not the worker's sign-in page. The non-leak assertions above cover the universal contract.
 
-        if (res.getStatus() === 401) {\r
+        if (res.getStatus() === 401) {
 
-        \    test('Renders the worker styled sign-in page', function() {\r
+        \    test('Renders the worker styled sign-in page', function() {
 
-        \        expect(body).to.include('<!DOCTYPE html>');\r
+        \        expect(body).to.include('<!DOCTYPE html>');
 
-        \        expect(body).to.include('Admin sign-in required');\r
+        \        expect(body).to.include('Admin sign-in required');
 
-        \        expect(body).to.include('data-testid=\"signin-cta\"');\r
+        \        expect(body).to.include('data-testid=\"signin-cta\"');
 
-        \        expect(body).to.include('data-testid=\"signin-request-access\"');\r
+        \        expect(body).to.include('data-testid=\"signin-request-access\"');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('CSP header set (defense in depth)', function() {\r
+        \    test('CSP header set (defense in depth)', function() {
 
-        \        expect(res.getHeader('Content-Security-Policy')).to.not.be.null;\r
+        \        expect(res.getHeader('Content-Security-Policy')).to.not.be.null;
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Robots noindex meta present (not crawler-facing)', function() {\r
+        \    test('Robots noindex meta present (not crawler-facing)', function() {
 
-        \        expect(body).to.match(/<meta name=\"robots\" content=\"noindex\"/);\r
+        \        expect(body).to.match(/<meta name=\"robots\" content=\"noindex\"/);
 
-        \    });\r
+        \    });
 
         }"
 

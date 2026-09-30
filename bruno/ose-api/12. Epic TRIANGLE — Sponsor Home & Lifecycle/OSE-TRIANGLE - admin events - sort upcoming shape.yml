@@ -1,0 +1,36 @@
+info:
+  name: TRIANGLE | admin events | ?sort=upcoming shape + filters echo
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events?sort=upcoming&limit=2"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: "Soonest first" keeps the paged envelope and echoes the sort it
+        // applied; its cursor (when present) is the opaque u1.* form.
+        test('200 ok', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+        test('filters.sort is upcoming', function () { expect(res.getBody().filters.sort).to.eql('upcoming'); });
+        test('pagination envelope', function () {
+          var p = res.getBody().pagination;
+          expect(p).to.have.property('limit');
+          expect(p).to.have.property('hasMore');
+          if (p.nextCursor) expect(p.nextCursor).to.match(/^u1\./);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

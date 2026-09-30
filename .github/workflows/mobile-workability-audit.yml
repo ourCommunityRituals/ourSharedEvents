@@ -62,7 +62,7 @@ on:
     paths:
       # ALL specs this job runs (playwright.mobile.config.ts testMatch:
       # mobile-workability | admin-wizard-isolation | admin-csp-controls |
-      # sponsor-home-flow), plus the global setup + helper that seed /sponsor. The
+      # sponsor-home-flow | landing-theme), plus the global setup + helpers. The
       # list previously named only mobile-workability.spec.ts, so a change to
       # either admin spec — two of the three specs the config actually executes
       # — did not trigger the job that runs it, and the change merged green
@@ -71,20 +71,18 @@ on:
       - 'tests/playwright/admin-wizard-isolation.spec.ts'
       - 'tests/playwright/admin-csp-controls.spec.ts'
       - 'tests/playwright/sponsor-home-flow.spec.ts'
+      - 'tests/playwright/landing-theme.spec.ts'
       - 'tests/playwright/mobile.global-setup.ts'
       - 'tests/playwright/helpers/**'
       - 'playwright.mobile.config.ts'
       - 'playwright.config.ts'
       - '.github/workflows/mobile-workability-audit.yml'
-      - 'workers/oursharedevents/src/handlers/**'
-      - 'workers/oursharedevents/src/templates/**'
-      - 'workers/oursharedevents/src/lib/legal-footer.ts'
-      # Surface renderers that live in lib/ rather than templates/: the sponsor
-      # page (render + token), and the landing area + its map.
-      - 'workers/oursharedevents/src/lib/sponsor-home-*.ts'
-      - 'workers/oursharedevents/src/lib/landing-area.ts'
-      - 'workers/oursharedevents/src/lib/attendee-map.ts'
-      - 'workers/oursharedevents/src/router.ts'
+      # The whole Worker source, not a hand-kept list: the browser specs above
+      # exercise logic in lib/ (sponsor discovery, the upcoming sort, the map
+      # gate, the public projection, …), and a hand-kept list missed those
+      # (CCR PR 700). Migrations too — the audit's worker applies them.
+      - 'workers/oursharedevents/src/**'
+      - 'workers/oursharedevents/migrations/**'
       - '.ocr-hub-ref'
   workflow_dispatch:
 

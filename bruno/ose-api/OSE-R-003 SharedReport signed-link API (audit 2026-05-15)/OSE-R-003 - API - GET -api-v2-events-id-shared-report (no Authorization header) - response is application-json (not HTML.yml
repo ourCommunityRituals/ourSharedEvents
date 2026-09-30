@@ -14,19 +14,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-003: the signed-link UI parses the response with .json(). If the API\r
+      code: "// OSE-R-003: the signed-link UI parses the response with .json(). If the API
 
-        // ever returns HTML on this code path (proxy 502 unwrap, gateway page, etc.)\r
+        // ever returns HTML on this code path (proxy 502 unwrap, gateway page, etc.)
 
-        // the UI shows the NON_JSON_RESPONSE friendly copy. The contract under test\r
+        // the UI shows the NON_JSON_RESPONSE friendly copy. The contract under test
 
-        // here is that the server itself never serves HTML for this endpoint.\r
+        // here is that the server itself never serves HTML for this endpoint.
 
-        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });
 
-        test('Content-Type is JSON', function() {\r
+        test('Content-Type is JSON', function() {
 
-        \    expect(res.getHeader('Content-Type') || '').to.include('application/json');\r
+        \    expect(res.getHeader('Content-Type') || '').to.include('application/json');
 
         });"
 

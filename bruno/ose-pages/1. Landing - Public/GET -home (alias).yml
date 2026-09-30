@@ -11,15 +11,15 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() {\r
+      code: "test('Returns 200', function() {
 
-        \    expect(res.getStatus()).to.equal(200);\r
+        \    expect(res.getStatus()).to.equal(200);
 
-        });\r
+        });
 
-        test('Is HTML', function() {\r
+        test('Is HTML', function() {
 
-        \    expect(res.getHeader('Content-Type')).to.include('text/html');\r
+        \    expect(res.getHeader('Content-Type')).to.include('text/html');
 
         });"
 

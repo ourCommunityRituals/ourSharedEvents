@@ -15,109 +15,109 @@ http:
 runtime:
   scripts:
     - type: before-request
-      code: "if (bru.getEnvVar('dbStatus') === 'not_configured') {\r
+      code: "if (bru.getEnvVar('dbStatus') === 'not_configured') {
 
-        \    console.warn('DB not configured — expecting 503');\r
+        \    console.warn('DB not configured — expecting 503');
 
         }"
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        if (res.getStatus() === 200) {\r
+        if (res.getStatus() === 200) {
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('items is array', function() {\r
+        \    test('items is array', function() {
 
-        \        expect(json.items).to.be.an('array');\r
+        \        expect(json.items).to.be.an('array');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('status is 200', function() {\r
+        \    test('status is 200', function() {
 
-        \        expect(json.status).to.eql(200);\r
+        \        expect(json.status).to.eql(200);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    if (json.items.length > 0) {\r
+        \    if (json.items.length > 0) {
 
-        \        const item = json.items[0];\r
+        \        const item = json.items[0];
 
-        \        test('Event has required fields', function() {\r
+        \        test('Event has required fields', function() {
 
-        \            expect(item).to.have.property('id');\r
+        \            expect(item).to.have.property('id');
 
-        \            expect(item).to.have.property('brand_id');\r
+        \            expect(item).to.have.property('brand_id');
 
-        \            expect(item).to.have.property('title');\r
+        \            expect(item).to.have.property('title');
 
-        \            expect(item).to.have.property('slug');\r
+        \            expect(item).to.have.property('slug');
 
-        \            expect(item).to.have.property('status');\r
+        \            expect(item).to.have.property('status');
 
-        \            expect(item).to.have.property('start_date');\r
+        \            expect(item).to.have.property('start_date');
 
-        \        });\r
+        \        });
 
-        \r
+        
 
-        \        // OSE-844 (X-10): the API emits the canonical field names the\r
+        \        // OSE-844 (X-10): the API emits the canonical field names the
 
-        \        // surface templates read (name/startDateISO/venue), mapped in\r
+        \        // surface templates read (name/startDateISO/venue), mapped in
 
-        \        // enrichWithPhase. This is the live-response T3 restoration of the\r
+        \        // enrichWithPhase. This is the live-response T3 restoration of the
 
-        \        // guard the archived events.spec.ts asserted before it was defanged.\r
+        \        // guard the archived events.spec.ts asserted before it was defanged.
 
-        \        test('OSE-844: emits canonical name/startDateISO/venue', function() {\r
+        \        test('OSE-844: emits canonical name/startDateISO/venue', function() {
 
-        \            expect(item).to.have.property('name');\r
+        \            expect(item).to.have.property('name');
 
-        \            expect(item.name, 'name must equal the title column').to.eql(item.title);\r
+        \            expect(item.name, 'name must equal the title column').to.eql(item.title);
 
-        \            expect(item).to.have.property('startDateISO');\r
+        \            expect(item).to.have.property('startDateISO');
 
-        \            if (item.start_date) { expect(item.startDateISO).to.match(/^\\d{4}-\\d{2}-\\d{2}/); }\r
+        \            if (item.start_date) { expect(item.startDateISO).to.match(/^\\d{4}-\\d{2}-\\d{2}/); }
 
-        \            expect(item).to.have.property('venue');\r
+        \            expect(item).to.have.property('venue');
 
-        \        });\r
+        \        });
 
-        \r
+        
 
-        \        // Capture first event ID for downstream tests\r
+        \        // Capture first event ID for downstream tests
 
-        \        bru.setEnvVar('testEventId', item.id);\r
+        \        bru.setEnvVar('testEventId', item.id);
 
-        \        console.log('Captured testEventId: ' + item.id);\r
+        \        console.log('Captured testEventId: ' + item.id);
 
-        \    }\r
+        \    }
 
-        } else if (res.getStatus() === 503) {\r
+        } else if (res.getStatus() === 503) {
 
-        \    test('503 has error code', function() {\r
+        \    test('503 has error code', function() {
 
-        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);\r
+        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);
 
-        \    });\r
+        \    });
 
-        \    test('503 has requestId', function() {\r
+        \    test('503 has requestId', function() {
 
-        \        expect(json.requestId).to.be.a('string');\r
+        \        expect(json.requestId).to.be.a('string');
 
-        \    });\r
+        \    });
 
         }"
 

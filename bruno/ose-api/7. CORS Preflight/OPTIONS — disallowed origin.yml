@@ -16,19 +16,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 204', function() {\r
+      code: "test('Returns 204', function() {
 
-        \    expect(res.getStatus()).to.equal(204);\r
+        \    expect(res.getStatus()).to.equal(204);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('No Access-Control-Allow-Origin for bad origin', function() {\r
+        test('No Access-Control-Allow-Origin for bad origin', function() {
 
-        \    const origin = res.getHeader('Access-Control-Allow-Origin');\r
+        \    const origin = res.getHeader('Access-Control-Allow-Origin');
 
-        \    expect(origin).to.be.oneOf([null, undefined]);\r
+        \    expect(origin).to.be.oneOf([null, undefined]);
 
         });"
 

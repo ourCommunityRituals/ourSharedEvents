@@ -14,35 +14,35 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-004: same branded shell for the input-validation branch.\r
+      code: "// OSE-R-004: same branded shell for the input-validation branch.
 
-        // OSE-348: same WAF-shadowing applies to malformed IDs (the URL-encoded\r
+        // OSE-348: same WAF-shadowing applies to malformed IDs (the URL-encoded
 
-        // spaces + `!!` will almost certainly trip a WAF rule). Branded-shell\r
+        // spaces + `!!` will almost certainly trip a WAF rule). Branded-shell
 
-        // assertions fire only when worker is reached (status === 404).\r
+        // assertions fire only when worker is reached (status === 404).
 
-        test('Malformed id blocked (404 worker OR 403 WAF)', function() {\r
+        test('Malformed id blocked (404 worker OR 403 WAF)', function() {
 
-        \    expect([404, 403]).to.include(res.getStatus());\r
+        \    expect([404, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        if (res.getStatus() === 404) {\r
+        if (res.getStatus() === 404) {
 
-        \    test('Brand header present', function() {\r
+        \    test('Brand header present', function() {
 
-        \        expect(body).to.include('data-testid=\"error-header\"');\r
+        \        expect(body).to.include('data-testid=\"error-header\"');
 
-        \    });\r
+        \    });
 
-        \    test('CTA back to /events present', function() {\r
+        \    test('CTA back to /events present', function() {
 
-        \        expect(body).to.include('href=\"/events\"');\r
+        \        expect(body).to.include('href=\"/events\"');
 
-        \    });\r
+        \    });
 
         }"
 

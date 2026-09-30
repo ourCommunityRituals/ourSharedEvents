@@ -11,11 +11,11 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// /briefing is an authenticated app page (like /dashboard, /create): 401 unauthenticated, 200 HTML when authed.\r
+      code: "// /briefing is an authenticated app page (like /dashboard, /create): 401 unauthenticated, 200 HTML when authed.
 
-        // NOT feature-flag/entitlement-gated (that cluster is /sharedReport /report /analytics /insights → 403). Verified live on staging 2026-08-21.\r
+        // NOT feature-flag/entitlement-gated (that cluster is /sharedReport /report /analytics /insights → 403). Verified live on staging 2026-08-21.
 
-        test('Returns 200 (authed) or 401 (auth-gated)', function() { expect(res.getStatus()).to.be.oneOf([200, 401]); });\r
+        test('Returns 200 (authed) or 401 (auth-gated)', function() { expect(res.getStatus()).to.be.oneOf([200, 401]); });
 
         if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }"
 

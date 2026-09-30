@@ -18,7 +18,7 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// A preview link for an unknown event is a branded 404, never a raw DB dump or a silent success, same unified contract as OSE-R-004's /events/:id error page. Also accepts CF Access edge blocking.\r\ntest('404 (unknown event) OR blocked at edge', function () { expect([302, 401, 403, 404]).to.include(res.getStatus()); });\r\nif (res.getStatus() === 404) {\r\n    const body = (typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody()));\r\n    test('branded 404 copy present (not a raw error dump)', function () { expect(body).to.include('find that event'); });\r\n}"
+      code: "// A preview link for an unknown event is a branded 404, never a raw DB dump or a silent success, same unified contract as OSE-R-004's /events/:id error page. Also accepts CF Access edge blocking.\ntest('404 (unknown event) OR blocked at edge', function () { expect([302, 401, 403, 404]).to.include(res.getStatus()); });\nif (res.getStatus() === 404) {\n    const body = (typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody()));\n    test('branded 404 copy present (not a raw error dump)', function () { expect(body).to.include('find that event'); });\n}"
 
 settings:
   encodeUrl: true

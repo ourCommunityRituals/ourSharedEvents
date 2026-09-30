@@ -23,7 +23,7 @@
 // Never commit the stubs: admin.html is restored in a finally block and on
 // SIGINT, and the h3 stub lives in a temp dir.
 
-import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import {
   mkdtempSync,
   readFileSync,
@@ -32,6 +32,7 @@ import {
   statSync,
   copyFileSync,
   rmSync,
+  existsSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,11 +67,26 @@ writeFileSync(H3_STUB, H3_NAMES.map((n) => `export const ${n} = () => null;`).jo
   );
 }
 
+// Async, so a signal is handled at once (a sync child blocks Node's event loop
+// and defers the handler until the child exits) and the child can be stopped.
+let child = null;
 function wrangler(args) {
-  return execFileSync('npx', ['wrangler', ...args], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+  return new Promise((resolve, reject) => {
+    child = spawn('npx', ['wrangler', ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+      detached: true, // own process group, so the whole npx → wrangler → workerd tree can be stopped
+    });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (err += d));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      child = null;
+      if (code === 0) resolve(out);
+      else reject(new Error(`wrangler ${args.join(' ')} exited ${code}\n${err.slice(-2000)}`));
+    });
   });
 }
 
@@ -89,9 +105,9 @@ function startupMs(profilePath) {
 }
 
 /** Build the variant once (`deploy --dry-run --outfile`), then profile it RUNS times. */
-function profile(label, buildArgs = []) {
+async function profile(label, buildArgs = []) {
   const bundle = join(work, `${label}.bundle`);
-  wrangler(['deploy', '--dry-run', '--outfile', bundle, ...buildArgs]);
+  await wrangler(['deploy', '--dry-run', '--outfile', bundle, ...buildArgs]);
   // Guard against a variant that silently did not apply (as --alias once did).
   const src = readFileSync(bundle, 'utf8');
   if (label === 'no-h3' && src.includes('INITIAL_TOTAL_MEMORY')) {
@@ -103,16 +119,16 @@ function profile(label, buildArgs = []) {
   const ms = [];
   for (let i = 0; i < RUNS; i++) {
     const out = join(work, `${label}-${i}.cpuprofile`);
-    wrangler(['check', 'startup', '--workerBundle', bundle, '--outfile', out]);
+    await wrangler(['check', 'startup', '--workerBundle', bundle, '--outfile', out]);
     ms.push(startupMs(out));
   }
   ms.sort((a, b) => a - b);
   return { label, median: ms[Math.floor(ms.length / 2)], min: ms[0], max: ms[ms.length - 1] };
 }
 
-function uploadSize() {
+async function uploadSize() {
   const dir = join(work, 'dry');
-  wrangler(['deploy', '--dry-run', '--outdir', dir]);
+  await wrangler(['deploy', '--dry-run', '--outdir', dir]);
   let raw = 0;
   let gz = 0;
   const files = {};
@@ -128,24 +144,48 @@ function uploadSize() {
 
 const backup = join(work, 'admin.html.bak');
 copyFileSync(ADMIN, backup);
+let restored = false;
 const restore = () => {
-  copyFileSync(backup, ADMIN);
+  if (restored) return;
+  restored = true;
+  if (existsSync(backup)) copyFileSync(backup, ADMIN);
   rmSync(H3_STUB, { force: true });
   rmSync(ALIAS_CONFIG, { force: true });
+  rmSync(work, { recursive: true, force: true });
 };
-process.on('SIGINT', () => {
+// Every catchable way out puts admin.html back (SIGKILL cannot be caught; the
+// temp files are gitignored, and `git checkout src/templates/admin.html` undoes
+// a stub left by a hard kill).
+for (const [sig, code] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+  ['SIGHUP', 129],
+]) {
+  process.on(sig, () => {
+    if (child?.pid) {
+      try {
+        process.kill(-child.pid, 'SIGTERM'); // the whole group: npx, wrangler, workerd
+      } catch {
+        // already gone
+      }
+    }
+    restore();
+    process.exit(code);
+  });
+}
+process.on('uncaughtException', (err) => {
   restore();
-  process.exit(130);
+  throw err;
 });
 
 const results = [];
 try {
-  const size = uploadSize();
-  results.push(profile('baseline'));
+  const size = await uploadSize();
+  results.push(await profile('baseline'));
   writeFileSync(ADMIN, '<!doctype html><title>stub</title>\n');
-  results.push(profile('no-admin'));
+  results.push(await profile('no-admin'));
   copyFileSync(backup, ADMIN);
-  results.push(profile('no-h3', ['-c', ALIAS_CONFIG]));
+  results.push(await profile('no-h3', ['-c', ALIAS_CONFIG]));
 
   const kb = (n) => (n / 1024).toFixed(1) + ' KB';
   console.log(`Upload (dry-run, no source maps): ${kb(size.raw)} raw, ${kb(size.gz)} gzip`);

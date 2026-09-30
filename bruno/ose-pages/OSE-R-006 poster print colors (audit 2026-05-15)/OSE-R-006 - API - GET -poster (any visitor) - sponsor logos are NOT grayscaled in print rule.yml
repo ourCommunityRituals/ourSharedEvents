@@ -14,31 +14,31 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-006 (2026-05-15): pre-fix the print block applied\r
+      code: "// OSE-R-006 (2026-05-15): pre-fix the print block applied
 
-        // filter: grayscale(1) to .poster-sponsor img. Sponsors paid for\r
+        // filter: grayscale(1) to .poster-sponsor img. Sponsors paid for
 
-        // full color; this lock holds the contract.\r
+        // full color; this lock holds the contract.
 
-        test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+        test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);
 
-        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+        test('Print block extractable', function() { expect(match).to.not.be.null; });
 
-        const printBlock = match[1];\r
+        const printBlock = match[1];
 
-        test('No filter: grayscale on sponsor img inside print block', function() {\r
+        test('No filter: grayscale on sponsor img inside print block', function() {
 
-        \    expect(printBlock).to.not.match(/\\.poster-sponsor\\s+img\\s*\\{[^}]*filter:\\s*grayscale/);\r
+        \    expect(printBlock).to.not.match(/\\.poster-sponsor\\s+img\\s*\\{[^}]*filter:\\s*grayscale/);
 
-        });\r
+        });
 
-        test('No bare grayscale filter anywhere in print block', function() {\r
+        test('No bare grayscale filter anywhere in print block', function() {
 
-        \    expect(printBlock).to.not.match(/filter:\\s*grayscale/);\r
+        \    expect(printBlock).to.not.match(/filter:\\s*grayscale/);
 
         });"
 

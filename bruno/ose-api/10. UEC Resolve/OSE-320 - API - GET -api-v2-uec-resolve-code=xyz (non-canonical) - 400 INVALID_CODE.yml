@@ -15,23 +15,23 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const json = res.getBody();\r
+      code: "const json = res.getBody();
 
-        test('Status is 400', () => expect(res.getStatus()).to.equal(400));\r
+        test('Status is 400', () => expect(res.getStatus()).to.equal(400));
 
-        test('error is INVALID_CODE', () => expect(json.error).to.eql('INVALID_CODE'));\r
+        test('error is INVALID_CODE', () => expect(json.error).to.eql('INVALID_CODE'));
 
-        test('invalid_code echoed back', () => expect(json.invalid_code).to.eql('xyz'));\r
+        test('invalid_code echoed back', () => expect(json.invalid_code).to.eql('xyz'));
 
-        test('valid_codes.ids present and complete', () => {\r
+        test('valid_codes.ids present and complete', () => {
 
-        \    expect(json.valid_codes.ids).to.eql(['ENTER','LIVE','SPONSOR','ARCHIVE','HELP','FEEDBACK','UTILITY','ALERT','STAFF','CHECK-IN','SHOP']);\r
+        \    expect(json.valid_codes.ids).to.eql(['ENTER','LIVE','SPONSOR','ARCHIVE','HELP','FEEDBACK','UTILITY','ALERT','STAFF','CHECK-IN','SHOP']);
 
-        });\r
+        });
 
-        test('message uses friendly voice', () => {\r
+        test('message uses friendly voice', () => {
 
-        \    expect(json.message).to.match(/canonical/i);\r
+        \    expect(json.message).to.match(/canonical/i);
 
         });"
 

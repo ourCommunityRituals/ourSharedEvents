@@ -17,33 +17,33 @@ http:
 runtime:
   scripts:
     - type: before-request
-      code: "// Generate a body larger than 16KB\r
+      code: "// Generate a body larger than 16KB
 
-        const bigString = 'x'.repeat(17000);\r
+        const bigString = 'x'.repeat(17000);
 
         bru.setEnvVar('oversizedBody', JSON.stringify({ name: bigString }));"
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        // OSE-204 (2026-05-14): oversized payloads return 413 PAYLOAD_TOO_LARGE,\r
+        // OSE-204 (2026-05-14): oversized payloads return 413 PAYLOAD_TOO_LARGE,
 
-        // not 400 INVALID_BODY. The form-validation container distinguishes the\r
+        // not 400 INVALID_BODY. The form-validation container distinguishes the
 
-        // two so clients can give users the right error class.\r
+        // two so clients can give users the right error class.
 
-        test('Returns 413 (PAYLOAD_TOO_LARGE)', function() {\r
+        test('Returns 413 (PAYLOAD_TOO_LARGE)', function() {
 
-        \    expect(res.getStatus()).to.equal(413);\r
+        \    expect(res.getStatus()).to.equal(413);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('PAYLOAD_TOO_LARGE code', function() {\r
+        test('PAYLOAD_TOO_LARGE code', function() {
 
-        \    expect(json.code).to.eql('PAYLOAD_TOO_LARGE');\r
+        \    expect(json.code).to.eql('PAYLOAD_TOO_LARGE');
 
         });"
 

@@ -14,31 +14,31 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);
 
-        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+        test('Print block extractable', function() { expect(match).to.not.be.null; });
 
-        const printBlock = match[1];\r
+        const printBlock = match[1];
 
-        test('.poster shell has page-break-inside: avoid', function() {\r
+        test('.poster shell has page-break-inside: avoid', function() {
 
-        \    expect(printBlock).to.match(/\\.poster\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+        \    expect(printBlock).to.match(/\\.poster\\s*\\{[^}]*page-break-inside:\\s*avoid/);
 
-        });\r
+        });
 
-        test('.qr-section has page-break-inside: avoid', function() {\r
+        test('.qr-section has page-break-inside: avoid', function() {
 
-        \    expect(printBlock).to.match(/\\.qr-section\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+        \    expect(printBlock).to.match(/\\.qr-section\\s*\\{[^}]*page-break-inside:\\s*avoid/);
 
-        });\r
+        });
 
-        test('.poster-sponsors retains page-break-inside: avoid', function() {\r
+        test('.poster-sponsors retains page-break-inside: avoid', function() {
 
-        \    expect(printBlock).to.match(/\\.poster-sponsors\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+        \    expect(printBlock).to.match(/\\.poster-sponsors\\s*\\{[^}]*page-break-inside:\\s*avoid/);
 
         });"
 
