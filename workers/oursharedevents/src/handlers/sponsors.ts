@@ -31,7 +31,7 @@ import {
   type Surface,
   type SponsorRow,
 } from '../lib/sponsor-resolver';
-import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { validateLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import {
   getDataProvider,
   invalidateSponsorsCache,
@@ -82,6 +82,92 @@ function generateId(prefix = 'sp'): string {
 const MAX_BODY = 16 * 1024;
 const VALID_TIERS = ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary'] as const;
 const VALID_SURFACES: Surface[] = ['poster', 'display', 'public', 'sharedReport'];
+
+const BRAND_PATTERN = /^[a-z0-9_-]{1,64}$/;
+
+/**
+ * OSE-1316/1317: tier is REQUIRED on create. Absent/blank → MISSING_TIER; any
+ * value outside VALID_TIERS → INVALID_TIER. (The six stored tiers map to the
+ * three share-of-voice tiers — premium / mid / base — via sovTierOf.)
+ */
+function checkTier(raw: unknown, rid: string): string | Response {
+  if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {
+    return errorResponse(
+      'MISSING_TIER',
+      `Choose a tier before saving: one of ${VALID_TIERS.join(', ')}`,
+      400,
+      rid
+    );
+  }
+  if (typeof raw !== 'string' || !(VALID_TIERS as readonly string[]).includes(raw)) {
+    return errorResponse(
+      'INVALID_TIER',
+      `tier must be one of: ${VALID_TIERS.join(', ')}`,
+      400,
+      rid
+    );
+  }
+  return raw;
+}
+
+/**
+ * OSE-1317: website is optional; when present it must be an https:// URL (the
+ * visitor's own browser follows it). Reuses validateHttpsUrl — the same rule as
+ * events.what_url. Returns the stored value (null when absent) or a 400.
+ */
+function checkWebsite(raw: unknown, rid: string): string | null | Response {
+  const v = typeof raw === 'string' ? raw.trim() : raw;
+  const check = validateHttpsUrl(v ?? null);
+  if (!check.valid) {
+    return errorResponse(
+      'INVALID_WEBSITE_URL',
+      'Website must be a full https:// address (for example https://example.com), under 500 characters',
+      400,
+      rid
+    );
+  }
+  return check.url;
+}
+
+/**
+ * The brand a POOL sponsor (no event) belongs to. Derived from the server-
+ * verified actor's scope (#9): a scoped operator gets their brand (or the
+ * requested one if they are a member of it), an unscopable operator is refused,
+ * and the automation 'all' scope may name any well-formed brand (default 'root',
+ * the same default event create uses).
+ */
+async function resolvePoolBrand(
+  request: Request,
+  env: SponsorsEnv,
+  rawBrand: unknown,
+  rid: string
+): Promise<string | Response> {
+  const requested = typeof rawBrand === 'string' ? rawBrand.trim() : '';
+  if (requested && !BRAND_PATTERN.test(requested)) {
+    return errorResponse(
+      'INVALID_BRAND',
+      'brand_id must be lowercase alphanumeric, hyphens, or underscores (1-64 chars)',
+      400,
+      rid
+    );
+  }
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') {
+    return errorResponse(
+      'BRAND_FORBIDDEN',
+      'Your admin account is not a member of any brand, so a sponsor cannot be created without an event',
+      403,
+      rid
+    );
+  }
+  if (scope.mode === 'scoped') {
+    if (requested && !scope.brandIds.includes(requested)) {
+      return errorResponse('BRAND_FORBIDDEN', `Not entitled to brand_id "${requested}"`, 403, rid);
+    }
+    return requested || scope.brandIds[0];
+  }
+  return requested || 'root';
+}
 
 function isValidContentType(request: Request): boolean {
   const ct = request.headers.get('content-type') || '';
@@ -152,16 +238,23 @@ export async function handleAdminListSponsors(
   // sponsor_business, logo from sponsor_asset(format='logo'), per-event economics
   // from sponsor_placement. `id` is the durable sponsor_business id (the caller's
   // handle for GET/PUT/DELETE); one row per placement (per sponsor × event).
+  // OSE-1316/1317: a sponsor can exist with NO placement (the brand pool), so the
+  // list starts from sponsor_business and LEFT JOINs placements — a pool sponsor
+  // is one row with event_id = null and its business tier. ?eventId= still keeps
+  // only that event's placements.
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
-                la.url AS logo_url, sb.website_url AS website_url, sp.tier AS tier,
+                la.url AS logo_url, lc.url AS sidebar_logo_url,
+                sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
                 '[]' AS placement_formats, sp.click_token AS click_token,
                 sp.display_token AS display_token, sb.is_active AS is_active,
                 sp.organizer_accepted AS organizer_accepted,
                 sp.sponsor_accepted AS sponsor_accepted,
-                sp.created_at AS created_at, sp.updated_at AS updated_at`;
-  const from = `sponsor_placement sp
-                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
-                LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'`;
+                COALESCE(sp.created_at, sb.created_at) AS created_at,
+                COALESCE(sp.updated_at, sb.updated_at) AS updated_at`;
+  const from = `sponsor_business sb
+                LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
+                LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+                LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'`;
   const where: string[] = [];
   const binds: string[] = [];
   if (eventId) {
@@ -184,7 +277,7 @@ export async function handleAdminListSponsors(
   const sql =
     `SELECT ${cols} FROM ${from}` +
     (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ` ORDER BY sp.updated_at DESC`;
+    ` ORDER BY COALESCE(sp.updated_at, sb.updated_at) DESC`;
 
   try {
     const result = await env.DB.prepare(sql)
@@ -297,15 +390,17 @@ export async function handleAdminGetSponsor(
   try {
     const row = await env.DB.prepare(
       `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
-              la.url AS logo_url, sb.website_url AS website_url, sp.tier AS tier,
+              la.url AS logo_url, lc.url AS sidebar_logo_url,
+              sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
               '[]' AS placement_formats, sp.click_token AS click_token,
-              sp.display_token AS display_token, sp.is_active AS is_active,
+              sp.display_token AS display_token, COALESCE(sp.is_active, sb.is_active) AS is_active,
               COALESCE(sp.locality_band, 0) AS is_local,
               sb.lat AS lat, sb.lon AS lon, sb.h3_res9 AS h3_res9, sb.h3_res7 AS h3_res7,
               sp.created_at AS created_at, sp.updated_at AS updated_at
          FROM sponsor_business sb
          LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+         LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
         WHERE sb.id = ?${clause.sql}
         ORDER BY sp.created_at ASC
         LIMIT 1`
@@ -346,25 +441,48 @@ export async function handleAdminCreateSponsor(
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';
   if (!name) return errorResponse('MISSING_FIELD', 'Missing required field: name', 400, rid);
 
-  const eventId = typeof body.event_id === 'string' ? body.event_id.slice(0, 128) : '';
-  if (!eventId) return errorResponse('MISSING_FIELD', 'Missing required field: event_id', 400, rid);
+  // OSE-1316/1317: tier is the ONE hard gate at creation. It used to default
+  // silently to 'primary', so a sponsor could be created with no tier chosen.
+  const tierCheck = checkTier(body.tier, rid);
+  if (tierCheck instanceof Response) return tierCheck;
+  const tier = tierCheck;
+
+  // OSE-1316/1317: the event is OPTIONAL. A sponsor can sit in the brand's pool
+  // with no event and be attached later; an event given here is a shortcut.
+  const eventId =
+    typeof body.event_id === 'string' && body.event_id.trim()
+      ? body.event_id.trim().slice(0, 128)
+      : null;
 
   const id = generateId('sp');
+  // Two logos, both optional: the header logo (wide) stays format 'logo' so every
+  // existing reader keeps working; the sidebar logo (square/compact) is its own
+  // format 'logo_compact' (migration 0081). No logo → surfaces render the name.
   const logoValidation = validateLogoUrl(body.logo_url ?? null);
   if (!logoValidation.valid) {
     return errorResponse(
       'INVALID_LOGO_URL',
-      'logo_url must be a valid http:// or https:// URL (max 500 chars)',
+      'Header logo must be a valid http:// or https:// URL (max 500 chars)',
       400,
       rid
     );
   }
   const logoUrl = logoValidation.url;
-  const websiteUrl = typeof body.website_url === 'string' ? body.website_url.slice(0, 500) : null;
-  const tier =
-    typeof body.tier === 'string' && (VALID_TIERS as readonly string[]).includes(body.tier)
-      ? body.tier
-      : 'primary';
+  const compactValidation = validateLogoUrl(body.sidebar_logo_url ?? null);
+  if (!compactValidation.valid) {
+    return errorResponse(
+      'INVALID_SIDEBAR_LOGO_URL',
+      'Sidebar logo must be a valid http:// or https:// URL (max 500 chars)',
+      400,
+      rid
+    );
+  }
+  const compactLogoUrl = compactValidation.url;
+  // Website is an OUTBOUND link the visitor's own browser follows → https only,
+  // the same rule as events.what_url. Empty/absent is fine (no link renders).
+  const siteCheck = checkWebsite(body.website_url, rid);
+  if (siteCheck instanceof Response) return siteCheck;
+  const websiteUrl = siteCheck;
   // OSE-670/OSE-799 (#25): placement is UNIFORM and non-purchasable. The client
   // CANNOT choose a named slot — that was the covenant violation. sponsor_placement
   // carries NO placement_formats column at all now (the split retired it); the
@@ -406,40 +524,55 @@ export async function handleAdminCreateSponsor(
   // h3_res7 (i.e. both geocoded); otherwise the sponsor is not local.
   // Event context: brand_id (sponsor_business tenant scope, #9) + corridor cell
   // (locality_band derivation). Both read server-side, never from the body.
-  let eventBrandId: string | null = null;
+  let brandId: string | null = null;
   let eventH3Res7: string | null = null;
-  try {
-    const eventRow = await env.DB.prepare('SELECT brand_id, h3_res7 FROM events WHERE id = ?')
-      .bind(eventId)
-      .first<{ brand_id: string | null; h3_res7: string | null }>();
-    eventBrandId = eventRow?.brand_id ?? null;
-    eventH3Res7 = eventRow?.h3_res7 ?? null;
-  } catch {
-    // Non-fatal for locality; brand_id is required below.
-  }
-  if (!eventBrandId) {
-    return errorResponse('EVENT_NOT_FOUND', 'event_id does not resolve to a brand', 400, rid);
+  if (eventId) {
+    let eventBrandId: string | null = null;
+    try {
+      const eventRow = await env.DB.prepare('SELECT brand_id, h3_res7 FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ brand_id: string | null; h3_res7: string | null }>();
+      eventBrandId = eventRow?.brand_id ?? null;
+      eventH3Res7 = eventRow?.h3_res7 ?? null;
+    } catch {
+      // Non-fatal for locality; brand_id is required below.
+    }
+    if (!eventBrandId) {
+      return errorResponse('EVENT_NOT_FOUND', 'event_id does not resolve to a brand', 400, rid);
+    }
+    brandId = eventBrandId;
+  } else {
+    // No event: the sponsor joins a brand's pool directly. The brand comes from
+    // the SERVER-VERIFIED actor's scope (#9), never widened by the body — a
+    // requested brand_id must be inside that scope.
+    const poolBrand = await resolvePoolBrand(request, env, body.brand_id, rid);
+    if (poolBrand instanceof Response) return poolBrand;
+    brandId = poolBrand;
   }
   const isLocal =
-    sponsorH3Res7 !== null && eventH3Res7 !== null && sponsorH3Res7 === eventH3Res7 ? 1 : 0;
+    eventId && sponsorH3Res7 !== null && eventH3Res7 !== null && sponsorH3Res7 === eventH3Res7
+      ? 1
+      : 0;
 
   // OSE-799 A2: write the split model in one atomic batch —
-  //   identity → sponsor_business, creative → sponsor_asset (logo), attachment →
-  //   sponsor_placement (locality_band replaces is_local; NO placement_formats).
+  //   identity → sponsor_business (+ tier, 0081), creative → sponsor_asset
+  //   (logo + logo_compact), attachment → sponsor_placement ONLY when an event
+  //   was given (locality_band replaces is_local; NO placement_formats).
   // `id` (sp_…) is the business identity id returned to the caller; the placement
   // gets its own id.
   const businessId = id;
-  const placementId = generateId('spl');
+  const placementId = eventId ? generateId('spl') : null;
   const stmts = [
     env.DB.prepare(
       `INSERT INTO sponsor_business
-         (id, brand_id, name, website_url, lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, brand_id, name, website_url, tier, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
-      eventBrandId,
+      brandId,
       name,
       websiteUrl,
+      tier,
       sponsorLat,
       sponsorLon,
       sponsorH3Res9,
@@ -447,13 +580,17 @@ export async function handleAdminCreateSponsor(
       now,
       now
     ),
-    env.DB.prepare(
-      `INSERT INTO sponsor_placement
-         (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
-          click_token, display_token, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'organizer', 1, ?, ?, ?, 1, ?, ?)`
-    ).bind(placementId, businessId, eventId, tier, isLocal, clickToken, displayToken, now, now),
   ];
+  if (eventId && placementId) {
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO sponsor_placement
+           (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
+            click_token, display_token, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'organizer', 1, ?, ?, ?, 1, ?, ?)`
+      ).bind(placementId, businessId, eventId, tier, isLocal, clickToken, displayToken, now, now)
+    );
+  }
   if (logoUrl) {
     stmts.push(
       env.DB.prepare(
@@ -461,6 +598,15 @@ export async function handleAdminCreateSponsor(
            (id, sponsor_business_id, format, url, created_at, updated_at)
          VALUES (?, ?, 'logo', ?, ?, ?)`
       ).bind(generateId('sa'), businessId, logoUrl, now, now)
+    );
+  }
+  if (compactLogoUrl) {
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO sponsor_asset
+           (id, sponsor_business_id, format, url, created_at, updated_at)
+         VALUES (?, ?, 'logo_compact', ?, ?, ?)`
+      ).bind(generateId('sa'), businessId, compactLogoUrl, now, now)
     );
   }
 
@@ -476,7 +622,7 @@ export async function handleAdminCreateSponsor(
 
   // OSE-1000: bust the cache-fronted public sponsors list so the just-created
   // sponsor is visible on the next read instead of racing the 30s TTL.
-  await invalidateSponsorsCache(eventId);
+  if (eventId) await invalidateSponsorsCache(eventId);
 
   // is_local is now authoritative (geo-derived). is_local_suggested is retained
   // for back-compat and equals is_local.
@@ -489,9 +635,11 @@ export async function handleAdminCreateSponsor(
     // Under strict consent an organizer-created placement is PENDING until the
     // sponsor accepts, so a test/flow that expects the sponsor to RENDER must
     // accept it first — and needs this id to do so (CCR-PR567 re-run, Stage-2).
+    // null when no event was attached (the sponsor is in the pool only).
     placement_id: placementId,
-    // Echo what was stored on the placement so callers (and the OSE-INV5 seed) can
-    // confirm the create landed with the intended tier + geo-derived locality.
+    event_id: eventId,
+    // Echo what was stored so callers (and the OSE-INV5 seed) can confirm the
+    // create landed with the intended tier + geo-derived locality.
     tier,
     is_local: isLocal === 1,
   };
@@ -564,8 +712,6 @@ export async function handleAdminUpdateSponsor(
   const fieldSpecs: Record<string, { max: number; table: 'business' | 'placement'; col: string }> =
     {
       name: { max: 200, table: 'business', col: 'name' },
-      website_url: { max: 500, table: 'business', col: 'website_url' },
-      tier: { max: 20, table: 'placement', col: 'tier' },
       click_token: { max: 256, table: 'placement', col: 'click_token' },
       display_token: { max: 256, table: 'placement', col: 'display_token' },
     };
@@ -575,6 +721,26 @@ export async function handleAdminUpdateSponsor(
   const placementSets: string[] = [];
   const placementVals: (string | number | null)[] = [];
 
+  // OSE-1316/1317: tier stays required (it cannot be cleared) and lives on the
+  // business (the pool) AND on every placement (per-event rotation weight).
+  let tierForAttach: string | null = null;
+  if ('tier' in body) {
+    const tierCheck = checkTier(body.tier, rid);
+    if (tierCheck instanceof Response) return tierCheck;
+    tierForAttach = tierCheck;
+    businessSets.push('tier = ?');
+    businessVals.push(tierCheck);
+    placementSets.push('tier = ?');
+    placementVals.push(tierCheck);
+  }
+  // OSE-1317: website is https-only when present; '' / null clears it.
+  if ('website_url' in body) {
+    const siteCheck = checkWebsite(body.website_url, rid);
+    if (siteCheck instanceof Response) return siteCheck;
+    businessSets.push('website_url = ?');
+    businessVals.push(siteCheck);
+  }
+
   for (const [field, spec] of Object.entries(fieldSpecs)) {
     if (!(field in body)) continue;
     const val = body[field];
@@ -582,14 +748,6 @@ export async function handleAdminUpdateSponsor(
     if (val === null) {
       stored = null;
     } else if (typeof val === 'string') {
-      if (field === 'tier' && !(VALID_TIERS as readonly string[]).includes(val)) {
-        return errorResponse(
-          'INVALID_TIER',
-          `tier must be one of: ${VALID_TIERS.join(', ')}`,
-          400,
-          rid
-        );
-      }
       stored = val.slice(0, spec.max);
     } else {
       continue; // ignore non-string, non-null values
@@ -603,24 +761,53 @@ export async function handleAdminUpdateSponsor(
     }
   }
 
-  // logo_url → sponsor_asset (upsert / clear); validated like the create path.
-  let logoUpdate: { set: boolean; url: string | null } = { set: false, url: null };
-  if ('logo_url' in body) {
-    const val = body.logo_url;
-    if (val === null) {
-      logoUpdate = { set: true, url: null };
+  // logo_url (header, format 'logo') and sidebar_logo_url (format
+  // 'logo_compact', 0081) → sponsor_asset (upsert / clear); validated like create.
+  const logoUpdates: { format: 'logo' | 'logo_compact'; url: string | null }[] = [];
+  for (const [field, format, label] of [
+    ['logo_url', 'logo', 'Header logo'],
+    ['sidebar_logo_url', 'logo_compact', 'Sidebar logo'],
+  ] as const) {
+    if (!(field in body)) continue;
+    const val = body[field];
+    if (val === null || val === '') {
+      logoUpdates.push({ format, url: null });
     } else if (typeof val === 'string') {
       const logoValidation = validateLogoUrl(val);
       if (!logoValidation.valid) {
         return errorResponse(
-          'INVALID_LOGO_URL',
-          'logo_url must be a valid http:// or https:// URL (max 500 chars)',
+          format === 'logo' ? 'INVALID_LOGO_URL' : 'INVALID_SIDEBAR_LOGO_URL',
+          `${label} must be a valid http:// or https:// URL (max 500 chars)`,
           400,
           rid
         );
       }
-      logoUpdate = { set: true, url: logoValidation.url ?? null };
+      logoUpdates.push({ format, url: logoValidation.url ?? null });
     }
+  }
+
+  // OSE-1316/1317: attach a POOL sponsor to an event later. event_id on update
+  // adds a placement (never moves or removes one). The event must belong to the
+  // sponsor's own brand (#9) — a cross-brand attach is refused, not widened.
+  let attach: { eventId: string; h3: string | null } | null = null;
+  if (typeof body.event_id === 'string' && body.event_id.trim()) {
+    const attachId = body.event_id.trim().slice(0, 128);
+    const ev = await env.DB.prepare(
+      `SELECT e.h3_res7 AS h3_res7 FROM events e
+         JOIN sponsor_business sb ON sb.id = ? AND sb.brand_id = e.brand_id
+        WHERE e.id = ?`
+    )
+      .bind(sponsorId, attachId)
+      .first<{ h3_res7: string | null }>();
+    if (!ev) {
+      return errorResponse(
+        'EVENT_NOT_FOUND',
+        "event_id does not resolve to an event in this sponsor's brand",
+        400,
+        rid
+      );
+    }
+    attach = { eventId: attachId, h3: ev.h3_res7 };
   }
 
   // ── H3 geo-tagging on update (re-tag when lat/lon provided) ──────────────
@@ -652,7 +839,12 @@ export async function handleAdminUpdateSponsor(
     updateH3Res7 = h3Tags?.h3_res7 ?? null;
   }
 
-  if (businessSets.length === 0 && placementSets.length === 0 && !logoUpdate.set) {
+  if (
+    businessSets.length === 0 &&
+    placementSets.length === 0 &&
+    logoUpdates.length === 0 &&
+    !attach
+  ) {
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
 
@@ -692,23 +884,41 @@ export async function handleAdminUpdateSponsor(
     );
   }
 
-  if (logoUpdate.set) {
-    if (logoUpdate.url === null) {
+  for (const lu of logoUpdates) {
+    if (lu.url === null) {
       stmts.push(
         env.DB.prepare(
-          `DELETE FROM sponsor_asset WHERE sponsor_business_id = ? AND format = 'logo'`
-        ).bind(sponsorId)
+          `DELETE FROM sponsor_asset WHERE sponsor_business_id = ? AND format = ?`
+        ).bind(sponsorId, lu.format)
       );
     } else {
       stmts.push(
         env.DB.prepare(
           `INSERT INTO sponsor_asset (id, sponsor_business_id, format, url, created_at, updated_at)
-           VALUES (?, ?, 'logo', ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(sponsor_business_id, format)
              DO UPDATE SET url = excluded.url, updated_at = excluded.updated_at`
-        ).bind(generateId('sa'), sponsorId, logoUpdate.url, now, now)
+        ).bind(generateId('sa'), sponsorId, lu.format, lu.url, now, now)
       );
     }
+  }
+
+  // Attach runs AFTER the business/placement updates in the same batch, so the
+  // new placement takes the business tier as it stands after this request.
+  // INSERT OR IGNORE: attaching an event the sponsor is already on is a no-op
+  // (UNIQUE(sponsor_business_id, event_id)).
+  if (attach) {
+    stmts.push(
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO sponsor_placement
+           (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
+            is_active, created_at, updated_at)
+         SELECT ?, sb.id, ?, COALESCE(?, sb.tier, 'primary'), 'organizer', 1,
+                CASE WHEN sb.h3_res7 IS NOT NULL AND sb.h3_res7 = ? THEN 1 ELSE 0 END,
+                1, ?, ?
+           FROM sponsor_business sb WHERE sb.id = ?`
+      ).bind(generateId('spl'), attach.eventId, tierForAttach, attach.h3, now, now, sponsorId)
+    );
   }
 
   try {

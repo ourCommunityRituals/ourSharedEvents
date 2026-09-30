@@ -145,6 +145,9 @@ export const NODE_SPECS = [
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
   'tests/poster-multi-code-ui.spec.ts',
+  // OSE-1316 / OSE-1317 — admin Create Sponsor form + /display side rail, run
+  // in jsdom from the template Text imports with a stubbed fetch.
+  'tests/sponsor-create-fields-ui.spec.ts',
   // SharedReport corridor map: mountCorridorSvg run in jsdom (CodeQL, PR #691).
   'tests/corridor-map-mount.spec.ts',
   // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks

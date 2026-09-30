@@ -3864,50 +3864,97 @@
                 aria-required="true"
               />
             </div>
+            <!-- OSE-1316/1317: tier is the only hard gate. The six stored tiers
+                 share out as Premium / Mid / Base (sovTierOf). -->
             <div>
-              <label for="spon-event"
-                >Event <span class="required-star" aria-hidden="true">*</span></label
+              <label for="spon-tier"
+                >Tier <span class="required-star" aria-hidden="true">*</span></label
               >
+              <select
+                id="spon-tier"
+                name="tier"
+                data-testid="spon-tier"
+                required
+                aria-required="true"
+                aria-describedby="spon-tier-hint"
+              >
+                <option value="" selected>Choose a tier</option>
+                <optgroup label="Premium">
+                  <option value="title">Title</option>
+                  <option value="platinum">Platinum</option>
+                </optgroup>
+                <optgroup label="Mid">
+                  <option value="gold">Gold</option>
+                  <option value="silver">Silver</option>
+                </optgroup>
+                <optgroup label="Base">
+                  <option value="bronze">Bronze</option>
+                  <option value="primary">Primary</option>
+                </optgroup>
+              </select>
+              <p class="spon-covenant-note" id="spon-tier-hint" data-testid="spon-tier-hint">
+                Required. Sets how often the sponsor rotates.
+              </p>
+            </div>
+            <div>
+              <label for="spon-event">Event (optional)</label>
               <select
                 id="spon-event"
                 name="event_id"
                 data-testid="spon-event"
-                required
-                aria-required="true"
+                aria-describedby="spon-event-hint"
               ></select>
+              <p class="spon-covenant-note" id="spon-event-hint" data-testid="spon-event-hint">
+                You can attach events later.
+              </p>
             </div>
             <div>
-              <label for="spon-tier">Tier</label>
-              <select id="spon-tier" name="tier" data-testid="spon-tier">
-                <option value="primary">Primary</option>
-                <option value="bronze">Bronze</option>
-                <option value="silver">Silver</option>
-                <option value="gold">Gold</option>
-                <option value="platinum">Platinum</option>
-                <option value="title">Title</option>
-              </select>
-            </div>
-            <div>
-              <label for="spon-logo">Logo URL</label>
+              <label for="spon-logo">Header logo URL (optional)</label>
               <input
                 type="text"
+                inputmode="url"
                 id="spon-logo"
                 name="logo_url"
                 data-testid="spon-logo"
-                placeholder="https://acme.com/logo.png"
+                placeholder="https://acme.com/logo-wide.png"
                 maxlength="500"
+                aria-describedby="spon-logo-hint"
               />
+              <p class="spon-covenant-note" id="spon-logo-hint" data-testid="spon-logo-hint">
+                Wide, about 3:1 (e.g. 600&times;200), for the top of the page.
+              </p>
             </div>
-            <div class="full-width">
-              <label for="spon-website">Website URL</label>
+            <div>
+              <label for="spon-sidebar-logo">Sidebar logo URL (optional)</label>
               <input
                 type="text"
+                inputmode="url"
+                id="spon-sidebar-logo"
+                name="sidebar_logo_url"
+                data-testid="spon-sidebar-logo"
+                placeholder="https://acme.com/logo-square.png"
+                maxlength="500"
+                aria-describedby="spon-sidebar-logo-hint"
+              />
+              <p class="spon-covenant-note" id="spon-sidebar-logo-hint" data-testid="spon-sidebar-logo-hint">
+                Square or compact (e.g. 300&times;300), for the side rail. No logo? The name shows instead.
+              </p>
+            </div>
+            <div class="full-width">
+              <label for="spon-website">Website URL (optional)</label>
+              <input
+                type="text"
+                inputmode="url"
                 id="spon-website"
                 name="website_url"
                 data-testid="spon-website"
                 placeholder="https://acme.com"
                 maxlength="500"
+                aria-describedby="spon-website-hint"
               />
+              <p class="spon-covenant-note" id="spon-website-hint" data-testid="spon-website-hint">
+                Must start with https://. Leave blank for no link.
+              </p>
             </div>
             <div class="full-width">
               <label id="spon-placement-label">Placement &amp; share</label>
@@ -3996,20 +4043,35 @@
           }).join('') + '</span>';
         }
 
+        // OSE-1316/1317: the event is optional, so "No event yet" is always the
+        // first, default choice. Built with createElement/textContent — no event
+        // id or name from the API ever passes through innerHTML.
+        function addEventOption(sel, value, label, selected) {
+          const o = document.createElement('option');
+          o.value = value;
+          o.textContent = label;
+          if (selected) o.selected = true;
+          sel.appendChild(o);
+        }
         async function loadEventOptions(selectedId) {
           const sel = document.getElementById('spon-event');
-          sel.innerHTML = '<option value="" disabled selected>Loading events…</option>';
+          sel.textContent = '';
+          addEventOption(sel, '', 'Loading events…', true);
+          let items = [];
+          let failed = false;
           try {
             const data = await window.OSE_events();
-            const items = (data.ok && data.items) ? data.items : [];
-            sel.innerHTML = items.length
-              ? items.map(function(e) {
-                  return '<option value="' + esc(e.id) + '"' + (e.id === selectedId ? ' selected' : '') + '>' + esc(e.name || e.id) + '</option>';
-                }).join('')
-              : '<option value="" disabled>No events found — create an event first</option>';
+            items = (data && data.ok && Array.isArray(data.items)) ? data.items : [];
           } catch (e) {
-            sel.innerHTML = '<option value="" disabled>Could not load events</option>';
+            failed = true;
           }
+          sel.textContent = '';
+          addEventOption(sel, '', failed ? 'No event yet (could not load events)' : 'No event yet', !selectedId);
+          items.forEach(function(e) {
+            if (!e || e.id == null) return;
+            const id = String(e.id);
+            addEventOption(sel, id, String(e.name || id), id === selectedId);
+          });
         }
 
         // OSE — Sponsor card is scoped to the currently-selected event so an
@@ -4104,6 +4166,7 @@
           document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
           document.getElementById('spon-edit-id').value = '';
           document.getElementById('spon-create-form').reset();
+          ['spon-name', 'spon-tier', 'spon-website'].forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
           const msg = document.getElementById('spon-form-msg');
           msg.textContent = '';
           msg.className = 'create-msg';
@@ -4165,8 +4228,9 @@
             document.getElementById('spon-edit-id').value = s.id;
             document.getElementById('spon-name').value = s.name || '';
             document.getElementById('spon-event').value = s.event_id || '';
-            document.getElementById('spon-tier').value = s.tier || 'primary';
+            document.getElementById('spon-tier').value = s.tier || '';
             document.getElementById('spon-logo').value = s.logo_url || '';
+            document.getElementById('spon-sidebar-logo').value = s.sidebar_logo_url || '';
             document.getElementById('spon-website').value = s.website_url || '';
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
@@ -4248,16 +4312,36 @@
           const name = document.getElementById('spon-name').value.trim();
           const event_id = document.getElementById('spon-event').value.trim();
 
-          if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
-          if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
+          const tierEl = document.getElementById('spon-tier');
+          const siteEl = document.getElementById('spon-website');
+          const tier = tierEl.value;
+          const siteVal = siteEl.value.trim();
+          tierEl.removeAttribute('aria-invalid');
+          siteEl.removeAttribute('aria-invalid');
+          // Inline, field-focused messages (fat-finger safe): the first problem
+          // wins, the field is marked invalid and focused, nothing is sent.
+          function blockSubmit(el, text) {
+            msg.textContent = text;
+            msg.className = 'create-msg error';
+            if (el) { el.setAttribute('aria-invalid', 'true'); el.focus(); }
+          }
+          if (!name) { blockSubmit(document.getElementById('spon-name'), 'Name is required.'); return; }
+          // OSE-1316/1317: tier is required; the event is not.
+          if (!tier) { blockSubmit(tierEl, 'Choose a tier before saving.'); return; }
+          if (siteVal && !/^https:\/\/[^\s/?#]+\.[^\s]+$/i.test(siteVal)) {
+            blockSubmit(siteEl, 'Website must be a full https:// address, for example https://acme.com — or leave it blank.');
+            return;
+          }
 
           // OSE-670 (#25): the form never sends placement_formats — placement is
           // uniform and non-purchasable; the server forces the uniform value and
           // ignores any client-supplied slot. Tier is what governs share.
-          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value };
+          const body = { name: name, tier: tier };
+          if (event_id) body.event_id = event_id;
           const logoVal = document.getElementById('spon-logo').value.trim();
           if (logoVal) body.logo_url = logoVal;
-          const siteVal = document.getElementById('spon-website').value.trim();
+          const sideLogoVal = document.getElementById('spon-sidebar-logo').value.trim();
+          if (sideLogoVal) body.sidebar_logo_url = sideLogoVal;
           if (siteVal) body.website_url = siteVal;
 
           btn.disabled = true;
@@ -4271,7 +4355,7 @@
             const data = await res.json();
             if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
             msg.className = 'create-msg success';
-            msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created — ' + esc(data.id)) +
+            msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) +
               ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
             loadSponsors();
           } catch (err) {

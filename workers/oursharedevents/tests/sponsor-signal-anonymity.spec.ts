@@ -71,7 +71,7 @@ async function createSponsor(eventId: string, name: string): Promise<string> {
   const res = await SELF.fetch('https://t.test/api/v2/admin/sponsors', {
     method: 'POST',
     headers: ADMIN_HEADERS,
-    body: JSON.stringify({ name, event_id: eventId }),
+    body: JSON.stringify({ name, event_id: eventId, tier: 'primary' }), // tier required (OSE-1316)
   });
   expect(res.status, 'sponsor create must succeed to give the signal a valid FK').toBe(201);
   const body = (await res.json()) as { id: string };
