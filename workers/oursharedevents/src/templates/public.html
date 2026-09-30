@@ -65,6 +65,7 @@
       .event-card .event-info {
         position: relative;
         z-index: 2;
+        pointer-events: none;
         flex: 1;
         min-width: 0;
       }
@@ -74,7 +75,6 @@
         margin-bottom: 0.35rem;
         color: var(--text);
       }
-      /* Discovery bar: 44px+ targets. */
       .disc-search {
         display: flex;
         gap: 0.5rem;
@@ -101,7 +101,7 @@
         font-size: 1rem;
         cursor: pointer;
       }
-      /* OSE-1372: wrap, so the active chip is always in view. */
+      /* OSE-1372: wrap keeps the active chip visible. */
       .disc-chips {
         display: flex;
         flex-wrap: wrap;
@@ -291,7 +291,7 @@
       footer a:hover {
         text-decoration: underline;
       }
-      /* Never-who disclosure (OSE-1372) — one partial, lib/never-who.ts. */
+      /* Never-who: lib/never-who.ts */
       /*OCR_NEVER_WHO_CSS*/
     </style>
   </head>

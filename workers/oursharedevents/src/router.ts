@@ -68,6 +68,9 @@
  *   PUT    /api/v2/admin/poster-deployments/:id         → update (re-tags H3 when coords change)
  *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
+ *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
+ *                                                         posters/places + scans per day
+ *                                                         (counts only, read-only)
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
@@ -231,6 +234,7 @@ import {
   type PosterDeploymentsEnv,
 } from './handlers/poster-deployments';
 import { handleAdminEventStats } from './handlers/event-stats';
+import { handleAdminPreEventActivity } from './handlers/pre-event-activity';
 import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
@@ -934,6 +938,18 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleAdminEventStats(request, env, adminEventStatsMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/pre-event-activity — the organizer's pre-event
+  // window: poster short link + QR, and scans/taps/posters/places (counts only)
+  const adminPreEventMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/pre-event-activity$/
+  );
+  if (adminPreEventMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminPreEventActivity(request, env, adminPreEventMatch[1]);
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
