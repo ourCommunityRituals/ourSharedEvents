@@ -429,7 +429,10 @@ export async function handleAdminMintSharedReportLink(
     // OSE-799 A2: "belongs to this event" = the sponsor_business has a placement
     // on it. sponsorId is the durable business id embedded in the token.
     const sponsorRow = await env.DB.prepare(
-      'SELECT id FROM sponsor_placement WHERE sponsor_business_id = ? AND event_id = ? LIMIT 1'
+      // A sponsor's own request the organizer has not approved (sponsor
+      // discovery, source='sponsor_request', is_active=0) is not membership.
+      `SELECT id FROM sponsor_placement WHERE sponsor_business_id = ? AND event_id = ?
+          AND NOT (source = 'sponsor_request' AND is_active = 0) LIMIT 1`
     )
       .bind(sponsorId, eventId)
       .first();

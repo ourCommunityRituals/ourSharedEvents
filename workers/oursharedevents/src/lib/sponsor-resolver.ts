@@ -21,7 +21,12 @@
  *     an event it did not opt into. (CCR-PR567 M4 replaced the old permissive
  *     COALESCE(sponsor_accepted, 1); there is no backfill — pending placements are
  *     dark until answered.)
- *   • ORGANIZER side is PERMISSIVE: `COALESCE(sp.organizer_accepted, 1) = 1` —
+ *   • ORGANIZER side is PERMISSIVE for placements the organizer CREATED:
+ *     `COALESCE(sp.organizer_accepted, <1, or 0 when source='sponsor_request'>) = 1`.
+ *     A sponsor-initiated request (sponsor discovery) is NOT organizer-created,
+ *     so its silence is not consent: it renders only with organizer_accepted = 1
+ *     (ADR-019 amendment 2026-09-30). Defence in depth beside its is_active = 0.
+ *     Original note —
  *     silence reads as OK; the organizer hides a sponsor only by rejecting (0).
  *
  * A rejection is durable: Path 2 skips any business the organizer already
@@ -217,7 +222,7 @@ export async function resolveSponsorsForEvent(
        LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
        WHERE sp.event_id = ? AND sp.is_active = 1
          AND sb.is_active = 1
-         AND COALESCE(sp.organizer_accepted, 1) = 1
+         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
          AND sp.sponsor_accepted = 1
        ORDER BY sb.id`
     )

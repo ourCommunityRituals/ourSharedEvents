@@ -200,7 +200,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // sponsor-resolver.ts above this query. 228→252 for OSE-1316/1317 (the
   // publicWebsiteUrl helper + sidebar_logo_url above it; the subselect now sits
   // inside COALESCE(..., sb.tier) so a pool sponsor with no placement keeps its tier).
-  'lib/sponsor-resolver.ts:252':
+  // 252→257 by the ADR-019 amendment comment (PR #700, sponsor-initiated
+  // placements) in the resolver header. Query unchanged.
+  'lib/sponsor-resolver.ts:257':
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
     '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
     'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +

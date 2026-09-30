@@ -426,9 +426,19 @@ export async function handleAdminAnswerSponsorRequest(
 ): Promise<Response> {
   const id = rid();
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
+  // JSON-only, like every other admin write (sponsors.ts parseBody). A
+  // cross-site <form enctype="text/plain"> can shape a JSON-looking body but
+  // cannot set this Content-Type without a CORS preflight — without the check,
+  // a sponsor could lure an organizer into approving the sponsor's own request
+  // (CCR PR #700, L1 #1). Body capped like the sponsor-side writes.
+  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+    return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
+  }
   let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    const text = await request.text();
+    if (text.length > 4096) return jsonError('PAYLOAD_TOO_LARGE', 'Body too large', 400, id);
+    body = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return jsonError('INVALID_BODY', 'Request body must be valid JSON', 400, id);
   }
@@ -451,9 +461,10 @@ export async function handleAdminAnswerSponsorRequest(
       ? jsonError('NOT_FOUND', `Request not found: ${placementId}`, 404, id)
       : jsonError('ALREADY_ANSWERED', 'This request has already been answered', 409, id);
   }
-  // Approval switches the placement on: bust the cache-fronted public sponsor
-  // list so poster / display / JSON agree with the event page immediately.
-  if (answer.approved) await invalidateSponsorsCache(answer.event_id);
+  // Bust the cache-fronted public sponsor list either way, so poster / display /
+  // JSON agree with the event page immediately (a decline also changes what the
+  // dark geo path would consider — see ADR-019 amendment).
+  await invalidateSponsorsCache(answer.event_id);
 
   await logAdminAction(env as { DB: D1Database }, {
     action: 'ANSWER_SPONSOR_REQUEST',

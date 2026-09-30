@@ -132,6 +132,7 @@ export async function readSponsorRequests(
          JOIN events e ON e.id = sp.event_id
         WHERE sp.sponsor_business_id = ? AND e.brand_id = ?
           AND sp.source = ? AND sp.is_active = 0
+          AND e.is_published = 1 AND e.status = 'active'
         ORDER BY sp.created_at DESC
         LIMIT 50`
     )
@@ -173,9 +174,13 @@ export async function createSponsorRequest(
     .prepare(
       `SELECT COUNT(*) AS n FROM sponsor_placement
         WHERE sponsor_business_id = ? AND source = ? AND is_active = 0
-          AND organizer_accepted IS NULL`
+          AND organizer_accepted IS NULL
+          AND EXISTS (
+              SELECT 1 FROM events le WHERE le.id = sponsor_placement.event_id
+                 AND le.brand_id = ? AND le.is_published = 1 AND le.status = 'active' AND le.start_date >= ?
+            )`
     )
-    .bind(sponsor.id, SPONSOR_REQUEST_SOURCE)
+    .bind(sponsor.id, SPONSOR_REQUEST_SOURCE, sponsor.brand_id, floorDate(now))
     .first<{ n: number }>();
   if ((open?.n ?? 0) >= MAX_OPEN_REQUESTS) return { ok: false, code: 'TOO_MANY_OPEN' };
 
@@ -193,25 +198,42 @@ export async function createSponsorRequest(
       : null;
   const local = sponsorCell !== null && sponsorCell === ev.h3_res7 ? 1 : 0;
   const stamp = now.toISOString();
+  let inserted = 0;
   try {
-    await db
+    // The cap is re-checked INSIDE the insert (INSERT … SELECT … WHERE count < cap)
+    // so two concurrent asks cannot both pass the pre-check above and exceed it.
+    const res = await db
       .prepare(
         `INSERT INTO sponsor_placement
            (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
             is_active, organizer_accepted, sponsor_accepted, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 1, ?, 0, NULL, 1, ?, ?)`
+         SELECT ?, ?, ?, ?, ?, 1, ?, 0, NULL, 1, ?, ?
+          WHERE (SELECT COUNT(*) FROM sponsor_placement
+                  WHERE sponsor_business_id = ? AND source = ? AND is_active = 0
+                    AND organizer_accepted IS NULL
+                    AND EXISTS (
+              SELECT 1 FROM events le WHERE le.id = sponsor_placement.event_id
+                 AND le.brand_id = ? AND le.is_published = 1 AND le.status = 'active' AND le.start_date >= ?
+            )) < ?`
       )
       .bind(
         placementId,
         sponsor.id,
         ev.id,
-        sponsor.tier || 'standard',
+        // Same fallback as the organizer's attach ('primary' is a VALID_TIERS value).
+        sponsor.tier || 'primary',
         SPONSOR_REQUEST_SOURCE,
         local,
         stamp,
-        stamp
+        stamp,
+        sponsor.id,
+        SPONSOR_REQUEST_SOURCE,
+        sponsor.brand_id,
+        floorDate(now),
+        MAX_OPEN_REQUESTS
       )
       .run();
+    inserted = res.meta?.changes ?? 0;
   } catch (err) {
     // UNIQUE(sponsor_business_id, event_id): a concurrent request won the race.
     if (err instanceof Error && /UNIQUE/i.test(err.message)) {
@@ -219,6 +241,7 @@ export async function createSponsorRequest(
     }
     throw err;
   }
+  if (inserted === 0) return { ok: false, code: 'TOO_MANY_OPEN' };
   return { ok: true, placement_id: placementId, event_id: ev.id };
 }
 
@@ -252,16 +275,20 @@ export async function answerSponsorRequest(
       organizer_accepted: number | null;
     }>();
   if (!row) return { ok: false, code: 'NOT_FOUND' };
-  if (row.organizer_accepted !== null || Number(row.is_active) !== 0) {
-    return { ok: false, code: 'ALREADY_ANSWERED' };
-  }
+  // Waiting → approve or decline. Declined → approve only (an organizer can
+  // change their mind; the sponsor's yes is still on record). Approved → it is
+  // an ordinary placement now; the sponsors card's Deactivate handles it.
+  const waiting = row.organizer_accepted === null && Number(row.is_active) === 0;
+  const declined = row.organizer_accepted === 0 && Number(row.is_active) === 0;
+  if (!(waiting || (declined && approve))) return { ok: false, code: 'ALREADY_ANSWERED' };
   const res = await db
     .prepare(
       `UPDATE sponsor_placement
           SET organizer_accepted = ?, is_active = ?, updated_at = datetime('now')
-        WHERE id = ? AND source = ? AND is_active = 0 AND organizer_accepted IS NULL`
+        WHERE id = ? AND source = ? AND is_active = 0
+          AND (organizer_accepted IS NULL OR (organizer_accepted = 0 AND ? = 1))`
     )
-    .bind(approve ? 1 : 0, approve ? 1 : 0, placementId, SPONSOR_REQUEST_SOURCE)
+    .bind(approve ? 1 : 0, approve ? 1 : 0, placementId, SPONSOR_REQUEST_SOURCE, approve ? 1 : 0)
     .run();
   if ((res.meta?.changes ?? 0) === 0) return { ok: false, code: 'ALREADY_ANSWERED' };
   return { ok: true, event_id: row.event_id, approved: approve };

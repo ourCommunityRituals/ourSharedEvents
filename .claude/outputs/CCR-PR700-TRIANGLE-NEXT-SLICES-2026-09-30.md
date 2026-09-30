@@ -120,6 +120,7 @@ Every finding below marked **VERIFIED** was re-checked against the code by the c
    - (c) hold the SVG and ship only the legend and the thin state.
 
    It also needs the landing token fix (#7) before it can mean anything.
+
 3. **Defer:**
    - Sponsor withdraw and request expiry, beyond scoping the cap count to live events.
    - An index-friendly UNION ALL ordering.

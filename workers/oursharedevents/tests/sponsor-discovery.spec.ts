@@ -307,13 +307,18 @@ describe('organizer decline', () => {
 
 describe('limits and refusals', () => {
   test(`at most ${MAX_OPEN_REQUESTS} waiting requests at once`, async () => {
-    // sd-cap-0 is already waiting (previous test). Fill to the cap, then one more.
+    // sd-cap-0 is already waiting (previous test), so exactly MAX-1 more succeed
+    // and the next is refused. Every status is asserted: an off-by-one in the
+    // cap (> instead of >=) turns the last 409 into a 201 and fails here.
     const statuses: number[] = [];
-    for (let i = 1; i <= MAX_OPEN_REQUESTS; i++) statuses.push((await ask(`sd-cap-${i}`)).status);
-    expect(statuses.slice(0, MAX_OPEN_REQUESTS - 1).every((s) => s === 201)).toBe(true);
-    const last = await ask(`sd-cap-${MAX_OPEN_REQUESTS}`);
-    expect(last.status).toBe(409);
-    expect(last.body.code).toBe('TOO_MANY_OPEN');
+    const codes: unknown[] = [];
+    for (let i = 1; i <= MAX_OPEN_REQUESTS; i++) {
+      const r = await ask(`sd-cap-${i}`);
+      statuses.push(r.status);
+      codes.push(r.body.code);
+    }
+    expect(statuses).toEqual([...Array(MAX_OPEN_REQUESTS - 1).fill(201), 409]);
+    expect(codes[MAX_OPEN_REQUESTS - 1]).toBe('TOO_MANY_OPEN');
   });
 
   test('another brand’s event is 404 even with a valid token', async () => {
@@ -337,5 +342,113 @@ describe('limits and refusals', () => {
       body: JSON.stringify({ approve: true }),
     });
     expect([401, 403]).toContain(res.status);
+  });
+});
+
+// ─── CCR PR #700 holds: request lifecycle, two locks, CSRF ────────────────────
+describe('request lifecycle (CCR holds)', () => {
+  let lifeToken = '';
+  const LIFE = ['sd-life-attach', 'sd-life-redo', 'sd-life-lock', 'sd-life-hide'];
+  const W = Array.from({ length: MAX_OPEN_REQUESTS + 1 }, (_, i) => `sd-life-w${i}`);
+
+  beforeAll(async () => {
+    await tenv.DB.prepare(
+      `DELETE FROM sponsor_placement WHERE sponsor_business_id = 'sd-life'`
+    ).run();
+    await tenv.DB.prepare(`DELETE FROM sponsor_business WHERE id = 'sd-life'`).run();
+    for (const id of [...LIFE, ...W]) await seedEvent(id, { start: day(20) });
+    await tenv.DB.prepare(
+      `INSERT INTO sponsor_business (id, brand_id, name, tier, is_active) VALUES ('sd-life', ?, 'Lifecycle Deli', 'gold', 1)`
+    )
+      .bind(BRAND)
+      .run();
+    lifeToken = (await mintSponsorHomeToken(tenv, 'sd-life', BRAND))!.token;
+  });
+
+  test('the organizer attaching the sponsor approves its waiting request (no silent no-op)', async () => {
+    const id = String((await ask('sd-life-attach', lifeToken)).body.id);
+    const res = await SELF.fetch('https://x/api/v2/admin/sponsors/sd-life', {
+      method: 'PUT',
+      headers: ADMIN_HEADERS,
+      body: JSON.stringify({ event_id: 'sd-life-attach' }),
+    });
+    expect(res.status).toBe(200);
+    expect(await placement(id)).toMatchObject({
+      is_active: 1,
+      organizer_accepted: 1,
+      sponsor_accepted: 1,
+    });
+    expect(await publicSponsorNames('sd-life-attach')).toContain('Lifecycle Deli');
+  });
+
+  test('an organizer can approve after declining; a decline cannot undo an approval', async () => {
+    const id = String((await ask('sd-life-redo', lifeToken)).body.id);
+    expect((await answer(id, false)).status).toBe(200);
+    expect((await answer(id, true)).status).toBe(200);
+    expect(await placement(id)).toMatchObject({ is_active: 1, organizer_accepted: 1 });
+    expect((await answer(id, false)).status).toBe(409);
+  });
+
+  test('second lock: a request switched on without the organizer’s yes still renders nowhere', async () => {
+    const id = String((await ask('sd-life-lock', lifeToken)).body.id);
+    // Simulate a future writer that flips is_active alone.
+    await tenv.DB.prepare('UPDATE sponsor_placement SET is_active = 1 WHERE id = ?').bind(id).run();
+    const names = await publicSponsorNames('sd-life-lock');
+    expect(names).not.toContain('Lifecycle Deli');
+    const page = await (await SELF.fetch('https://x/events/sd-life-lock')).text();
+    expect(page).not.toContain('Lifecycle Deli');
+    await tenv.DB.prepare('UPDATE sponsor_placement SET organizer_accepted = 1 WHERE id = ?')
+      .bind(id)
+      .run();
+    expect(await publicSponsorNames('sd-life-lock')).toContain('Lifecycle Deli');
+  });
+
+  test('a request on an event that is no longer listed disappears from the sponsor page', async () => {
+    await ask('sd-life-hide', lifeToken);
+    await tenv.DB.prepare('UPDATE events SET is_published = 0 WHERE id = ?')
+      .bind('sd-life-hide')
+      .run();
+    const html = await (
+      await SELF.fetch(`https://x/sponsor?t=${encodeURIComponent(lifeToken)}`)
+    ).text();
+    expect(html).not.toContain('data-event-id="sd-life-hide"');
+  });
+
+  test('stale requests never lock a sponsor out: only live events count toward the cap', async () => {
+    // sd-life-hide (unlisted) and sd-life-lock (switched on) do not count; fill the cap.
+    const statuses: number[] = [];
+    for (let i = 0; i < MAX_OPEN_REQUESTS; i++) statuses.push((await ask(W[i], lifeToken)).status);
+    expect(statuses).toEqual(Array(MAX_OPEN_REQUESTS).fill(201));
+    expect((await ask(W[MAX_OPEN_REQUESTS], lifeToken)).body.code).toBe('TOO_MANY_OPEN');
+    // One of the waiting events is archived: its request stops counting.
+    await tenv.DB.prepare(`UPDATE events SET status = 'archived' WHERE id = ?`).bind(W[0]).run();
+    expect((await ask(W[MAX_OPEN_REQUESTS], lifeToken)).status).toBe(201);
+  });
+
+  test('the organizer answer route refuses a non-JSON body (cross-site form)', async () => {
+    const res = await SELF.fetch('https://x/api/v2/admin/sponsor-requests/whatever/respond', {
+      method: 'POST',
+      headers: { Authorization: ADMIN_HEADERS.Authorization, 'Content-Type': 'text/plain' },
+      body: '{"approve":true,"a":"="}',
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe('BAD_CONTENT_TYPE');
+  });
+
+  test('a waiting request is not membership for a sponsor-role SharedReport link', async () => {
+    // The cap is full from the previous test; archiving one waiting event frees a slot.
+    await seedEvent('sd-life-report', { start: day(21) });
+    await tenv.DB.prepare(`UPDATE events SET status = 'archived' WHERE id = ?`).bind(W[2]).run();
+    const req = await ask('sd-life-report', lifeToken);
+    expect(req.status).toBe(201);
+    const res = await SELF.fetch(
+      'https://x/api/v2/admin/events/sd-life-report/shared-report/mint-link',
+      {
+        method: 'POST',
+        headers: ADMIN_HEADERS,
+        body: JSON.stringify({ role: 'sponsor', sponsor_id: 'sd-life' }),
+      }
+    );
+    expect(res.status).toBe(400);
   });
 });

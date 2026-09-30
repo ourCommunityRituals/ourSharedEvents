@@ -1533,7 +1533,7 @@ async function fetchEventPageSocialData(
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
-                AND COALESCE(sp.organizer_accepted, 1) = 1
+                AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                 AND sp.sponsor_accepted = 1
               ORDER BY sb.id ASC`
           )

@@ -921,6 +921,20 @@ export async function handleAdminUpdateSponsor(
            FROM sponsor_business sb WHERE sb.id = ?`
       ).bind(generateId('spl'), attach.eventId, tierForAttach, attach.h3, now, now, sponsorId)
     );
+    // Sponsor discovery (lib/sponsor-discovery): if the sponsor ASKED to join
+    // this event, that request already holds the UNIQUE(sponsor, event) slot
+    // and the INSERT above is a no-op. The organizer adding them IS the
+    // organizer's yes, and the sponsor's yes is already recorded
+    // (sponsor_accepted = 1) — so switch the request on rather than silently
+    // doing nothing. This also lets an organizer reverse an earlier decline.
+    stmts.push(
+      env.DB.prepare(
+        `UPDATE sponsor_placement
+            SET is_active = 1, organizer_accepted = 1, updated_at = ?
+          WHERE sponsor_business_id = ? AND event_id = ?
+            AND source = 'sponsor_request' AND is_active = 0`
+      ).bind(now, sponsorId, attach.eventId)
+    );
   }
 
   try {
@@ -1390,7 +1404,7 @@ async function resolvePlacementGeo(
        WHERE e.id = ?1 AND sb.id = ?2
          AND sp.is_active = 1 AND sb.is_active = 1
          AND sb.brand_id = e.brand_id
-         AND COALESCE(sp.organizer_accepted, 1) = 1
+         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
          AND sp.sponsor_accepted = 1
        LIMIT 1`
     )
