@@ -107,7 +107,12 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
   test('R4 | API | GET /poster (mobile media query) | art viewport height clamps on narrow viewports', async () => {
     const html = await fetchPosterHtml();
     const mediaBlock = extractMediaBlock(html, 768);
-    expect(mediaBlock).toMatch(/\.poster-art-img\s*\{[^}]*max-height:\s*200px/);
+    // Still clamped on phones — raised 200px → 360px when dogfooding asked for
+    // a larger art viewport; the clamp (a px cap, well under a phone screen)
+    // is the property, not the exact number.
+    const m = mediaBlock.match(/\.poster-art-img\s*\{[^}]*max-height:\s*(\d+)px/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeLessThanOrEqual(400);
   });
 
   test('R4 | API | GET /poster (any) | art viewport + empty-state render (no broken-image slot; failed art is hidden)', async () => {
