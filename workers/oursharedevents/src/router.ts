@@ -245,7 +245,7 @@ import { handleAdminEventStats } from './handlers/event-stats';
 import { handleAdminGetPosterCodes, handleAdminPutPosterCodes } from './handlers/poster-codes';
 import { handleAdminPreEventActivity } from './handlers/pre-event-activity';
 import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
-import { corsOrigin } from './lib/cors';
+import { bindCorsEnv, corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
 import {
@@ -344,6 +344,8 @@ export async function route(
 ): Promise<Response> {
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
+  // OSE-1417: the CORS allowlist depends on WORKER_ENV (staging origin only on staging).
+  bindCorsEnv(request, env);
 
   // ── Audit helpers (OSE-212) ───────────────────────────────────────────────────
   const _ip = request.headers.get('CF-Connecting-IP') ?? undefined;
