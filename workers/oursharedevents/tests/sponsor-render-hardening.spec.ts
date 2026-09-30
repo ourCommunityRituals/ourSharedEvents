@@ -108,7 +108,9 @@ describe('OSE-R-011 + OSE-R-015 sponsor render hardening — API layer', () => {
     // work alongside the new logo_url escape. Regression guard against
     // a future refactor that simplifies one and loses the other.
     const html = await fetchPage('/forms/evt_test_2026?type=register');
-    expect(html).toMatch(/name\s*=\s*escAttr\(s\.name\)/);
+    // 0082: the rendered name is the public title (display_name → name); it
+    // still goes through escAttr.
+    expect(html).toMatch(/name\s*=\s*escAttr\(s\.title \|\| s\.name\)/);
   });
 
   test('OSE-R-011 | API | GET /display (any) | sponsor rotation attaches an error-advance handler', async () => {

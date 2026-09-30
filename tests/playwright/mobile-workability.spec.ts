@@ -71,6 +71,14 @@ const SPONSOR_HOME_SKIP_REASON = SPONSOR_HOME_TOKEN
   ? undefined
   : 'Set OSE_SPONSOR_HOME_TOKEN to a minted sponsor-home bearer (POST /api/v2/admin/sponsors/:id/home-link on a seeded sponsor) — without it /sponsor?t= renders the invalid-link page, not the phone-first sponsor surface.';
 
+// 0082: /sponsors/:id is the public sponsor card (title, location, contact).
+// It renders only for a sponsor that is on show (active + accepted placement),
+// so it needs a seeded id; skip (documented) otherwise, like /sponsor above.
+const SPONSOR_CARD_ID = process.env.OSE_SPONSOR_CARD_ID || '';
+const SPONSOR_CARD_SKIP_REASON = SPONSOR_CARD_ID
+  ? undefined
+  : 'Set OSE_SPONSOR_CARD_ID to a seeded sponsor with an accepted placement — otherwise /sponsors/:id renders the 404 page, not the sponsor card.';
+
 // Mobile floor: iPhone 13 Mini / iPhone X. Smallest modern phone in
 // significant active use. Designing to this floor passes for every
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
@@ -200,6 +208,15 @@ const SURFACES: Surface[] = [
     primaryCtaSelector:
       '[data-testid="placement-accept"], [data-testid="sponsor-home-nav-events"], main a, main button',
     skipReason: SPONSOR_HOME_SKIP_REASON,
+  },
+  {
+    // 0082: the public sponsor card — where a tap on a sponsor with no website
+    // lands. Buttons are @ocr/ui .btn (44px+); documented-skip without a seed.
+    path: `/sponsors/${SPONSOR_CARD_ID || 'unseeded'}`,
+    name: 'sponsor card',
+    primaryCtaSelector:
+      '[data-testid="sponsor-card-phone"], [data-testid="sponsor-card-email"], [data-testid="sponsor-card-website"], [data-testid="sponsor-card-nav-events"]',
+    skipReason: SPONSOR_CARD_SKIP_REASON,
   },
   {
     path: '/poster',
