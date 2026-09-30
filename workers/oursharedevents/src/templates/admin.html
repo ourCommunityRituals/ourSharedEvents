@@ -6084,6 +6084,12 @@
         </div>
         <div class="mcard-body">
           <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
+          <!-- Organizer inbox: sponsors still to answer, and ones who declined,
+               surfaced here instead of only as badges in the sponsors table. -->
+          <section id="event-inbox" data-testid="event-inbox" aria-labelledby="event-inbox-title" hidden>
+            <h4 class="tl-label" id="event-inbox-title">Needs your attention</h4>
+            <ul class="pc-list" id="event-inbox-list" data-testid="event-inbox-list"></ul>
+          </section>
         </div>
       </div>
       <!-- Pre-event window: the poster is out and the event hasn't started. The
@@ -6499,6 +6505,13 @@
         }
         var active = st === 'active', over = st === 'archived';
         var stats = facts.stats || null, posters = facts.posters, sponsors = facts.sponsors;
+        // Organizer inbox: sponsors who have not answered their placement yet
+        // (sponsor_accepted null) and ones who declined (0). Names only — the
+        // organizer created these sponsors; nothing here is about attendees.
+        var answers = facts.answers || null;
+        var waiting = answers && answers.pending ? answers.pending : [];
+        var declined = answers && answers.declined ? answers.declined : [];
+        var plural = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
         // Counts: a missing or null count renders nothing and ticks nothing.
         var fmt = function (f) {
           if (f == null) return null;
@@ -6519,7 +6532,7 @@
             detail: active ? (Number(e.is_published) === 0 ? 'Published, but kept off the public map' : 'Public page, poster and display are on') + ' · ' + PHASE[phase]
               : over ? 'Archived' : st === 'ready' ? 'Marked ready. Press Publish above.' : 'Still a draft. Publish when the details are right.' },
           { key: 'get-word-out', label: 'Get the word out', state: posters == null || sponsors == null ? 'todo' : posters > 0 && sponsors > 0 ? 'done' : (active ? 'now' : 'todo'),
-            detail: (posters == null ? 'Poster placements could not load' : posters > 0 ? posters + ' poster placement' + (posters === 1 ? '' : 's') : 'No poster placements yet') + ' · ' + (sponsors == null ? 'sponsors could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'no sponsors on yet') },
+            detail: (posters == null ? 'Poster placements could not load' : posters > 0 ? posters + ' poster placement' + (posters === 1 ? '' : 's') : 'No poster placements yet') + ' · ' + (sponsors == null ? 'sponsors could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'no sponsors on yet') + (waiting.length ? ' · ' + waiting.length + ' waiting to answer' : '') },
           { key: 'scans', label: 'People scanning', state: anyScans ? 'done' : (active && posters > 0 ? 'now' : 'todo'),
             detail: stats ? (counts || 'No counts yet') : 'Could not load counts' },
           { key: 'report', label: 'Report', state: (active && anyScans) || over ? 'now' : 'todo',
@@ -6531,9 +6544,21 @@
         else if (st === 'ready') next = { label: 'Publish', href: '#event-status-card' };
         else if (over || (active && phase !== 'pre_event' && (anyScans || phase === 'post_event'))) next = { label: 'Share the report', href: '#report-card' };
         else if (active && !(posters > 0)) next = { label: 'Get the word out: print a poster', href: '#poster-deployments-card' };
+        else if (active && sponsors === 0 && waiting.length) next = { label: 'Waiting on sponsors: send their link', href: '#sponsors-card' };
         else if (active && sponsors === 0) next = { label: 'Get the word out: add a sponsor', href: '#sponsors-card' };
         else if (active) next = { label: 'Get the word out: share the link', href: '#surface-cards' };
-        return { status: st, statusLabel: STATUS[st] || st, phase: phase, phaseLabel: PHASE[phase], steps: steps, next: next };
+        // Inbox: what is waiting on the organizer, oldest-first as the list gave it.
+        // An archived event has nothing left to chase.
+        var inbox = [];
+        if (!over && waiting.length) inbox.push({ key: 'sponsors-waiting',
+          label: plural(waiting.length, 'sponsor has', 'sponsors have') + " not answered",
+          detail: waiting.join(', ') + '. Send each one their Sponsor link so they can accept.',
+          action: 'Open sponsors', href: '#sponsors-card' });
+        if (!over && declined.length) inbox.push({ key: 'sponsors-declined',
+          label: plural(declined.length, 'sponsor', 'sponsors') + ' declined',
+          detail: declined.join(', ') + '. They are not shown on the event. Ask again or add another sponsor.',
+          action: 'Open sponsors', href: '#sponsors-card' });
+        return { status: st, statusLabel: STATUS[st] || st, phase: phase, phaseLabel: PHASE[phase], steps: steps, next: next, inbox: inbox };
       }
       // @ose-event-view:end
       window.oseEventView = oseEventView;
@@ -6726,22 +6751,42 @@
         var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
         var eid = encodeURIComponent(id);
 
-        var stats = null, posters = null, sponsors = null;
+        var stats = null, posters = null, sponsors = null, answers = null;
         await Promise.all([
           fetch('/api/v2/admin/events/' + eid + '/stats').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) stats = d.stats; }).catch(function () {}),
           fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).length; }).catch(function () {}),
-          fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) sponsors = (d.items || []).filter(function (s) { return s.is_active && Number(s.sponsor_accepted) === 1; }).length; }).catch(function () {}),
+          fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) {
+            if (!d || !d.ok) return;
+            var live = (d.items || []).filter(function (s) { return s.is_active; });
+            sponsors = live.filter(function (s) { return Number(s.sponsor_accepted) === 1; }).length;
+            var named = function (s) { return s.name || 'Unnamed sponsor'; };
+            answers = {
+              pending: live.filter(function (s) { return s.sponsor_accepted == null; }).map(named),
+              declined: live.filter(function (s) { return s.sponsor_accepted != null && Number(s.sponsor_accepted) === 0; }).map(named),
+            };
+          }).catch(function () {}),
         ]);
         if (seq !== window._oseTimelineSeq) return; // a newer selection won
 
         // OSE-1360: steps + next come from the same {status, phase} as the
         // badge and the dashboard (oseEventView), never a second derivation.
-        var view = oseEventView(e, { stats: stats, posters: posters, sponsors: sponsors });
+        var view = oseEventView(e, { stats: stats, posters: posters, sponsors: sponsors, answers: answers });
         ol.innerHTML = view.steps.map(function (s, i) {
           return '<li class="tl-step ' + s.state + '" data-testid="tl-' + s.key + '" data-state="' + s.state + '">' +
             '<span class="tl-dot" aria-hidden="true">' + (s.state === 'done' ? '✓' : (i + 1)) + '</span>' +
             '<div><div class="tl-label">' + esc(s.label) + '</div><p class="tl-detail">' + esc(s.detail) + '</p></div></li>';
         }).join('');
+        var inboxEl = document.getElementById('event-inbox');
+        var inboxList = document.getElementById('event-inbox-list');
+        if (inboxEl && inboxList) {
+          inboxList.innerHTML = view.inbox.map(function (it) {
+            return '<li class="tl-step now" data-testid="inbox-' + it.key + '">' +
+              '<span class="tl-dot" aria-hidden="true">!</span>' +
+              '<div><div class="tl-label">' + esc(it.label) + '</div><p class="tl-detail">' + esc(it.detail) + '</p>' +
+              '<a class="copy-btn" href="' + it.href + '" data-testid="inbox-' + it.key + '-action">' + esc(it.action) + '</a></div></li>';
+          }).join('');
+          inboxEl.hidden = view.inbox.length === 0;
+        }
         var nextStep = view.next;
         if (next) {
           if (nextStep) { next.hidden = false; next.textContent = 'Next: ' + nextStep.label; next.setAttribute('href', nextStep.href); }

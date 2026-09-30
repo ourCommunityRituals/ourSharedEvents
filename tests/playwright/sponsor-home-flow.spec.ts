@@ -16,6 +16,8 @@
  *     declined removes it (ADR-019 consent; the respond handler busts the cache)
  *   - the controls are ≥ 44 px at 375×812
  *   - a tampered link shows the invalid-link page and leaks no sponsor data
+ *   - the organizer's Event checklist inbox follows the sponsor's answer
+ *     (waiting → declined), TRIANGLE slice #3
  *
  * Runs in the blocking PR phone audit (playwright.mobile.config.ts): a local
  * worker with migrations, a local admin key and a local signing secret. Seeds
@@ -60,6 +62,27 @@ async function publicPageShowsSponsor(page: Page): Promise<boolean> {
   return (await res.text()).includes(seeded.sponsorName);
 }
 
+/**
+ * The organizer's side of the same placement: open /admin as the local admin,
+ * show Published events, select the seeded one, and return its Event checklist
+ * card once it has rendered. The inbox on that card is TRIANGLE slice #3.
+ */
+async function openOrganizerChecklist(page: Page) {
+  await page.setViewportSize({ width: 393, height: 900 });
+  await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+  await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+  await page.click('[data-testid="admin-path-advanced"]');
+  await page.click('[data-testid="events-filter-active"]');
+  const row = page.locator(`[data-testid="event-row-${seeded.eventId}"]`);
+  await expect(row, 'seeded event never showed in the Published list').toBeVisible({
+    timeout: 15000,
+  });
+  await row.click();
+  const card = page.getByTestId('event-timeline-card');
+  await expect(card).toBeVisible({ timeout: 15000 });
+  return card;
+}
+
 test.beforeAll(async ({ request }) => {
   test.skip(
     !ADMIN_BEARER,
@@ -99,6 +122,22 @@ test('the minted link opens the sponsor page with one placement waiting for an a
     expect(box!.width, `${id} width`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
   }
 
+  expect(problems, problems.join('\n')).toEqual([]);
+});
+
+test('organizer inbox: the checklist says the sponsor has not answered yet', async ({ page }) => {
+  const problems = watchForBreakage(page);
+  const card = await openOrganizerChecklist(page);
+  const waiting = card.getByTestId('inbox-sponsors-waiting');
+  await expect(waiting).toBeVisible();
+  await expect(waiting).toContainText('1 sponsor has not answered');
+  await expect(waiting).toContainText(seeded.sponsorName);
+  await expect(card.getByTestId('inbox-sponsors-declined')).toHaveCount(0);
+  // Next stays in chain order (no poster yet → "print a poster" first); the
+  // inbox is what surfaces the sponsor, whatever Next says. The sponsor-specific
+  // Next is unit-tested in admin-organizer-inbox.spec.ts.
+  const action = await card.getByTestId('inbox-sponsors-waiting-action').boundingBox();
+  expect(action!.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
@@ -156,6 +195,17 @@ test('Decline (changing their mind): the card updates and the event page drops t
 
   expect(await publicPageShowsSponsor(page)).toBe(false);
   expect(problems, problems.join('\n')).toEqual([]);
+});
+
+test('organizer inbox: after the decline the checklist says so, and nothing is waiting', async ({
+  page,
+}) => {
+  const card = await openOrganizerChecklist(page);
+  const declined = card.getByTestId('inbox-sponsors-declined');
+  await expect(declined).toBeVisible();
+  await expect(declined).toContainText('1 sponsor declined');
+  await expect(declined).toContainText(seeded.sponsorName);
+  await expect(card.getByTestId('inbox-sponsors-waiting')).toHaveCount(0);
 });
 
 test('a tampered link shows the invalid-link page and no sponsor data', async ({ page }) => {
