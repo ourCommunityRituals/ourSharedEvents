@@ -180,11 +180,11 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   'lib/shared-report.ts:748':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
-  'lib/shared-report-builder.ts:292':
+  'lib/shared-report-builder.ts:322':
     'Corridor-neighbour COUNT keyed by `COALESCE(h3_res7, corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',
-  'lib/shared-report-builder.ts:692':
+  'lib/shared-report-builder.ts:729':
     'Series instances keyed by `series_id = ?` — the held series id of the ' +
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   'lib/shared-report-export.ts:263':
