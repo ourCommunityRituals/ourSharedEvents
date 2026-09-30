@@ -2138,7 +2138,7 @@ export async function handleLandingPage(
     const result = await dp.listEvents('root');
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
     // §6.2b latch: corridors that have ever reached the threshold stay on the
-    // map. Brand-bound read; a missing table (pre-0082) just means none yet.
+    // map. Brand-bound read; a missing table (pre-0083) just means none yet.
     let latched = new Set<string>();
     if ((env as LandingEnv).DB) {
       try {

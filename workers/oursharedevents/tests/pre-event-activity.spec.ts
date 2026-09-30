@@ -222,12 +222,15 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
     const body = (await res.json()) as {
       ok: boolean;
       event: { status: string; days_to_go: number | null };
-      activity: { posters: number; places: number; scans: number; clicks: number };
+      activity: { posters: number; places: number; scans: number; clicks: unknown };
       link: { url: string; code: string; qr: string } | null;
       poster_url: string;
     };
     expect(body.ok).toBe(true);
-    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: 12, clicks: 11 });
+    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: 12 });
+    // Poster tiers (PO 2026-09-30): digital taps are K=5-floored for the
+    // organizer too — the tap total arrives as a FlooredCount, scans stay exact.
+    expect(body.activity.clicks).toEqual({ count: 11, suppressed: false, floor: 5 });
     expect(body.link?.url).toBe('https://t.test/s/peBUS1'); // public before donation
     expect(body.link?.qr.startsWith('data:image/')).toBe(true);
     expect(body.poster_url).toBe('/poster?event=pe-busy');

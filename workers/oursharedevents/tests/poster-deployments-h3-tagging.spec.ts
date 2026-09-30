@@ -414,6 +414,8 @@ const SCAN_CLICK_PATH = [
   'src/lib/scan-buffer.ts',
   'src/handlers/shortlink-resolve.ts',
   'src/lib/shortlinks.ts',
+  // Poster tiers: /s/ builds internal targets (check-in, REGISTER) here.
+  'src/lib/poster-codes.ts',
   'src/handlers/uec-resolve.ts',
   'src/handlers/forms.ts',
   'src/handlers/form-pages.ts',

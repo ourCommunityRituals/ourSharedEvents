@@ -87,7 +87,7 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts:46':
+  'lib/corridor-latch.ts:43':
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
     'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
     'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +

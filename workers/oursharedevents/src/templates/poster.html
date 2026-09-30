@@ -972,7 +972,7 @@
           // allowlists here, the link is rebuilt from a validated code on this
           // origin, and a QR src must be a data:image — no response value
           // reaches an href or src unchecked.
-          const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
+          const ICON = Object.assign(Object.create(null), { public: '★', checkin: '✓', register: '✎', donation: '♥', sponsor: '◆', ow: '♪' });
           container.innerHTML = slots
             .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
             .map(function (s) {

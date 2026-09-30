@@ -172,6 +172,19 @@ export async function readPreEventActivity(
   };
 }
 
+/**
+ * The organizer-facing shape (poster tiers, PO 2026-09-30): physical poster
+ * scans stay exact (the organizer's own placements — same rule as /stats),
+ * but digital link TAPS are floored at K=5 like every other digital count, so
+ * the card's tap total can never show a small number nor un-floor the per-code
+ * breakdown by subtraction (lib/poster-reach.ts floorTaps).
+ */
+export function organizerPreEventActivity(
+  a: PreEventActivity
+): Omit<PreEventActivity, 'clicks'> & { clicks: FlooredCount } {
+  return { ...a, clicks: applyCountFloor(a.clicks) };
+}
+
 /** The sponsor-facing shape: every scan/click count floored (K=5), per day too. */
 export function floorPreEventActivity(a: PreEventActivity): FlooredPreEventActivity {
   return {

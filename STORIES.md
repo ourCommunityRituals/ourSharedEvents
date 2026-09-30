@@ -1391,7 +1391,7 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 
 - [x] Server-rendered search (name / venue) + **Everything / Today / This weekend / Next 7 days / This month / Recently wrapped** chips; `when` allowlisted, `q` capped + escaped once; URL is the state; no client fetch
 - [x] Default view unchanged (every listed event incl. wrapped) — API-parity contract holds
-- [x] Map view — PR #700: the **landing** area's map view (`src/lib/attendee-map.ts`), inline-SVG H3 res-7 hexes + legend, drawn from `h3_res7` through the public projection, never lat/lon. **Per-corridor gate + latch** (VISION §6.2b, PO 2026-09-30): a corridor is drawn at ≥ 5 upcoming events of its own or once latched (`corridor_readiness_latch`, migration 0082, nightly `runCorridorLatch`). Deliberately NOT `renderCorridorMap` (that is retrospective proof, "honest at any density"; this surface is density-gated). QA: `attendee-map.spec.ts`, `corridor-latch.spec.ts`, `public-projection-routing.spec.ts`, browser `landing-theme.spec.ts`.
+- [x] Map view — PR #700: the **landing** area's map view (`src/lib/attendee-map.ts`), inline-SVG H3 res-7 hexes + legend, drawn from `h3_res7` through the public projection, never lat/lon. **Per-corridor gate + latch** (VISION §6.2b, PO 2026-09-30): a corridor is drawn at ≥ 5 upcoming events of its own or once latched (`corridor_readiness_latch`, migration 0083, nightly `runCorridorLatch`). Deliberately NOT `renderCorridorMap` (that is retrospective proof, "honest at any density"; this surface is density-gated). QA: `attendee-map.spec.ts`, `corridor-latch.spec.ts`, `public-projection-routing.spec.ts`, browser `landing-theme.spec.ts`.
 
 **QA:** `tests/event-discovery.spec.ts` (16). **Lib:** `src/lib/event-discovery.ts`.
 
@@ -1407,7 +1407,7 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 
 **Status:** 📋 BACKLOG
 
-- [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` + `SPONSOR_REQUEST_PLACEMENT` + `ANSWER_SPONSOR_REQUEST` audit actions, `DRAFT_EXPIRY_DAYS` env knob, `corridor_readiness_latch` table (0082)
+- [ ] OCR-docs brain: `/sponsor` URL class (UEC), `events.created_by` column, `DRAFT_EXPIRY` + `SPONSOR_PLACEMENT_RESPOND` + `MINT_SPONSOR_HOME_LINK` + `SPONSOR_REQUEST_PLACEMENT` + `ANSWER_SPONSOR_REQUEST` audit actions, `DRAFT_EXPIRY_DAYS` env knob, `corridor_readiness_latch` table (0083)
 - [ ] Bruno collection: admin list filters incl. `?sort=upcoming`, home-link mint, respond endpoint, `POST /api/v2/sponsor/requests`, `POST /api/v2/admin/sponsor-requests/:id/respond` — request files added in PR #700; staging run pending (T2 runs only after deploy). Found while adding them: CRLF in the collection script made Bruno's comment-stripper eat most request assertions (13 scripts + the latency budget); all Bruno YAML normalized to LF, guarded in `tests/integration/infra-consistency.test.js`
 - [x] Playwright E2E: organizer → sponsor link → sponsor accepts → placement visible on `/events/:id` — PR #700 `tests/playwright/sponsor-home-flow.spec.ts`, blocking phone audit on every PR
 - [x] ~~`admin.html` split~~ → **re-scoped (PR #700, remediation step 7a):** measured, admin's effect on startup CPU is not measurable; `h3-js` is ~85%. Lazy-load h3-js is the pending cold-start decision; the admin split is a size/maintainability item (`docs/ops/STARTUP-COST-2026-09-30.md`)
