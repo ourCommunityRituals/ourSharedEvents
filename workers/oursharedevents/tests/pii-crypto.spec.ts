@@ -259,7 +259,7 @@ describe('derived AES key is reused, not re-derived per row', () => {
   }
 
   test('decrypting 25 rows under one key derives that key once', async () => {
-    const secret = `reuse-key-${Math.random()}`;
+    const secret = `reuse-key-${crypto.randomUUID()}`;
     const cipher = await Promise.all(
       Array.from({ length: 25 }, (_, i) => encryptText(`Attendee ${i}`, secret))
     );
@@ -274,7 +274,7 @@ describe('derived AES key is reused, not re-derived per row', () => {
   });
 
   test('a failed derivation is not cached: the next call derives again and succeeds', async () => {
-    const secret = `evict-${Math.random()}`;
+    const secret = `evict-${crypto.randomUUID()}`;
     const subtle = crypto.subtle;
     const original = subtle.deriveKey.bind(subtle);
     subtle.deriveKey = (() =>
@@ -291,8 +291,8 @@ describe('derived AES key is reused, not re-derived per row', () => {
   });
 
   test('different key material or version still derives its own key (no cross-talk)', async () => {
-    const a = `iso-a-${Math.random()}`;
-    const b = `iso-b-${Math.random()}`;
+    const a = `iso-a-${crypto.randomUUID()}`;
+    const b = `iso-b-${crypto.randomUUID()}`;
     const ca = await encryptText('from A', a);
     const cb = await encryptText('from B', b);
     expect(await decryptText(ca, a)).toBe('from A');
