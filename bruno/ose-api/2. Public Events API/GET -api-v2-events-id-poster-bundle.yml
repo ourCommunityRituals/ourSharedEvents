@@ -53,6 +53,11 @@ runtime:
             expect(json.slots[0].kind).to.eql('public');
           });
 
+          test('section switches are resolved booleans (OSE-869: absent means on)', function() {
+            expect(json.settings).to.be.an('object');
+            expect(json.settings.showQRSection).to.be.a('boolean');
+          });
+
           test('the printed poster fires no impression beacons', function() {
             json.sponsors.forEach(function(s) {
               expect(s).to.not.have.property('beacon_token');

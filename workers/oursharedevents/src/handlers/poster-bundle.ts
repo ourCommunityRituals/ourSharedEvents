@@ -35,6 +35,7 @@ import { enrichWithPhase } from '../lib/event-enrich.js';
 import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../lib/public-event-projection';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import { buildSponsorBundle, filterSponsorsForSurface } from '../lib/sponsor-resolver';
+import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 
 export interface PosterBundleEnv extends DataProviderEnv {
   DB: D1Database;
@@ -47,7 +48,7 @@ export interface PosterBundleEnv extends DataProviderEnv {
 const POSTER_EVENT_SELECT =
   'SELECT ' +
   PUBLIC_EVENT_COLUMNS.join(', ') +
-  ', what_url, what_url_type, what_url_enabled FROM events WHERE id = ?';
+  ', what_url, what_url_type, what_url_enabled, settings_json FROM events WHERE id = ?';
 
 // UEC ENTER (01) scan_hex — WCAG AA on white (6.59:1). Sourced via getCode() per OSE-322.
 const UEC_ENTER_HEX = getCode('ENTER')!.scan_hex;
@@ -181,6 +182,7 @@ export async function handleGetPosterBundle(
       what_url: string | null;
       what_url_type: string | null;
       what_url_enabled: number | null;
+      settings_json: string | null;
     }
   >();
 
@@ -310,5 +312,9 @@ export async function handleGetPosterBundle(
     uecEnterHex: UEC_ENTER_HEX,
     slots,
     sponsors,
+    // OSE-869: the organiser's section switches, resolved (absent → on). The
+    // poster drops its QR grid when showQRSection is false. The codes above are
+    // still minted and coloured as always — hiding them is a visibility choice.
+    settings: resolveEventSettings(parseEventSettings(row.settings_json)),
   });
 }

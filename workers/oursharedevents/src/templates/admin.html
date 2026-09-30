@@ -4668,6 +4668,15 @@
            first. Filled by loadPosterCodes() on ose:event-selected. -->
       <section class="pc-codes" data-testid="poster-codes" aria-labelledby="pc-title">
         <h3 class="pd-card-title" id="pc-title">Codes on the poster</h3>
+        <!-- OSE-869: a walk-up event has nothing to scan. Off → the poster prints
+             no QR grid at all (and leaves no gap); the codes below stay saved. -->
+        <label class="create-publish-label" for="poster-show-qr">
+          <input type="checkbox" id="poster-show-qr" data-testid="poster-show-qr" checked />
+          <span>Print QR codes on this poster</span>
+        </label>
+        <p class="create-publish-hint" id="poster-show-qr-hint" data-testid="poster-show-qr-hint">
+          Turn off for a walk-up event with nothing to scan. Your codes stay saved.
+        </p>
         <p class="pd-target" id="pc-plan" data-testid="poster-codes-plan"></p>
         <ol class="pc-list" id="pc-list" data-testid="poster-codes-list"></ol>
         <p class="pd-target" id="pc-upsell" data-testid="poster-codes-upsell" hidden></p>
@@ -5596,10 +5605,37 @@
             st.kinds = Array.isArray(data.kinds) ? data.kinds : [];
             st.rows = rowsFrom(data.codes);
             render();
+            // OSE-869: absent means on — only an explicit false unticks it.
+            const showQr = $('poster-show-qr');
+            if (showQr) showQr.checked = !(data.settings && data.settings.showQRSection === false);
           } catch (e) {
             msg('Could not load the poster’s codes.', 'error');
           }
         };
+
+        // OSE-869: the switch saves on change, through the event itself.
+        const showQrToggle = $('poster-show-qr');
+        if (showQrToggle) showQrToggle.addEventListener('change', async () => {
+          if (!st.eventId) return;
+          const want = showQrToggle.checked;
+          showQrToggle.disabled = true;
+          msg('Saving…');
+          try {
+            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(st.eventId), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: { showQRSection: want } }),
+            });
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data || !data.ok) throw new Error('save');
+            msg(want ? 'The poster prints its QR codes.' : 'The poster prints without QR codes.', 'success');
+          } catch (e) {
+            showQrToggle.checked = !want;
+            msg('Could not save — the poster is unchanged.', 'error');
+          } finally {
+            showQrToggle.disabled = false;
+          }
+        });
 
         const list = $('pc-list');
         if (list) list.addEventListener('click', (ev) => {

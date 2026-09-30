@@ -995,7 +995,15 @@
             syncChrome(data.event);
           }
           renderPosterSponsors(data.sponsors);
-          renderPosterSlots(data.slots);
+          // OSE-869: the organiser turned the QR grid off (a walk-up event has
+          // nothing to scan). Remove the whole section — absent, not empty, so
+          // the printed poster keeps no QR-shaped hole. Absent setting = on.
+          if (data.settings && data.settings.showQRSection === false) {
+            const qrSection = document.querySelector('[data-testid="poster-qr-section"]');
+            if (qrSection) qrSection.remove();
+          } else {
+            renderPosterSlots(data.slots);
+          }
           shown = true;
         } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {

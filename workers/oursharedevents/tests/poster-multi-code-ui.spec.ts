@@ -95,7 +95,13 @@ function codesScript(html: string): string {
 }
 
 async function mountAdmin(
-  opts: { limit?: number; codes?: unknown[]; put?: (b: unknown) => Reply } = {}
+  opts: {
+    limit?: number;
+    codes?: unknown[];
+    put?: (b: unknown) => Reply;
+    settings?: Record<string, unknown>;
+    putEvent?: (b: unknown) => Reply;
+  } = {}
 ) {
   const dom = new JSDOM(`<!doctype html><body>${cardMarkup(ADMIN_HTML)}</body>`, {
     runScripts: 'outside-only',
@@ -111,8 +117,20 @@ async function mountAdmin(
     }
     if (url.endsWith('/poster-codes')) {
       return {
-        body: { ok: true, limit: opts.limit ?? 4, kinds: KINDS, codes: opts.codes ?? SAVED },
+        body: {
+          ok: true,
+          limit: opts.limit ?? 4,
+          kinds: KINDS,
+          codes: opts.codes ?? SAVED,
+          ...(opts.settings ? { settings: opts.settings } : {}),
+        },
       };
+    }
+    // OSE-869: the QR switch saves through the event itself.
+    if (url === `/api/v2/admin/events/${EVT}` && init?.method === 'PUT') {
+      return opts.putEvent
+        ? opts.putEvent(JSON.parse(String(init.body)))
+        : { body: { ok: true, status: 200 } };
     }
     return { status: 404, body: { ok: false } };
   });
@@ -130,6 +148,48 @@ async function mountAdmin(
   };
   return { w, doc, calls, rows, click, writeText };
 }
+
+describe('admin | OSE-869 "Print QR codes on this poster" switch', () => {
+  const toggle = (doc: Document) =>
+    doc.querySelector('[data-testid="poster-show-qr"]') as HTMLInputElement;
+  const change = async (w: Window, el: HTMLInputElement) => {
+    el.checked = !el.checked;
+    el.dispatchEvent(new w.Event('change'));
+    await flush();
+  };
+
+  test('shows the stored value: absent → on, false → off', async () => {
+    expect(toggle((await mountAdmin()).doc).checked).toBe(true);
+    expect(toggle((await mountAdmin({ settings: { showQRSection: true } })).doc).checked).toBe(
+      true
+    );
+    expect(toggle((await mountAdmin({ settings: { showQRSection: false } })).doc).checked).toBe(
+      false
+    );
+  });
+
+  test('turning it off saves settings.showQRSection=false through PUT /admin/events/:id', async () => {
+    const { w, doc, calls } = await mountAdmin();
+    await change(w as unknown as Window, toggle(doc));
+    const put = calls.find((c) => c.method === 'PUT' && c.url === `/api/v2/admin/events/${EVT}`);
+    expect(put?.body).toEqual({ settings: { showQRSection: false } });
+    expect(toggle(doc).checked).toBe(false);
+    expect(doc.querySelector('[data-testid="poster-codes-msg"]')!.textContent).toMatch(
+      /without QR codes/
+    );
+  });
+
+  test('a failed save reverts the switch and says the poster is unchanged', async () => {
+    const { w, doc } = await mountAdmin({
+      putEvent: () => ({ status: 400, body: { ok: false, code: 'INVALID_SETTINGS' } }),
+    });
+    await change(w as unknown as Window, toggle(doc));
+    expect(toggle(doc).checked).toBe(true);
+    expect(doc.querySelector('[data-testid="poster-codes-msg"]')!.textContent).toMatch(
+      /poster is unchanged/
+    );
+  });
+});
 
 describe('admin | Codes on the poster', () => {
   test('loads the event’s codes in order; the event page is first and cannot be moved or removed', async () => {
@@ -326,7 +386,11 @@ function posterScript(html: string): string {
   return scriptContaining(html, 'async function loadPosterBundle');
 }
 
-async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
+async function mountPoster(
+  kind: 'print' | 'digital',
+  slots: unknown[],
+  settings?: Record<string, unknown>
+) {
   const dom = new JSDOM(`<!doctype html><body>${posterBody(POSTER_HTML)}</body>`, {
     runScripts: 'outside-only',
     url: `https://ose.test/poster?event=${EVT}&kind=${kind}`,
@@ -353,6 +417,7 @@ async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
           },
           sponsors: [{ id: 'sp1', name: 'Sawyer Hardware', tier: 'primary' }],
           slots,
+          ...(settings ? { settings } : {}),
         },
       };
     }
@@ -416,6 +481,36 @@ describe('/poster | OSE-867 one data call', () => {
     expect(doc.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
       'Sawyer Hardware'
     );
+  });
+});
+
+describe('/poster | OSE-869 showQRSection — both branches', () => {
+  test('off: no QR section at all (absent, not empty) and Print is ready', async () => {
+    const { doc } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: false });
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(0);
+    expect(doc.querySelectorAll('.qr-img')).toHaveLength(0);
+    expect(doc.querySelectorAll('.qr-loading')).toHaveLength(0);
+    // The rest of the poster is untouched.
+    expect(doc.querySelector('[data-testid="poster-title"]')!.textContent).toBe(
+      'Harbor County Bocce'
+    );
+    expect(doc.querySelector('[data-testid="poster-sponsor-name"]')).not.toBeNull();
+    expect(
+      (doc.querySelector('[data-testid="poster-print"]') as HTMLButtonElement | null)?.disabled ??
+        false
+    ).toBe(false);
+  });
+
+  test('on: the QR grid renders exactly as before', async () => {
+    const { doc } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: true });
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots .code-card')).toHaveLength(BUNDLE_SLOTS.length);
+  });
+
+  test('absent: the QR grid renders (existing posters do not change)', async () => {
+    const { doc } = await mountPoster('print', BUNDLE_SLOTS);
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots .code-card')).toHaveLength(BUNDLE_SLOTS.length);
   });
 });
 
