@@ -259,3 +259,18 @@ describe('OSE-1360: the event list map rejects hostile ids', () => {
     expect(ADMIN_HTML).not.toMatch(/L\.byId\[String\(e\.id\)\] = e/);
   });
 });
+
+// CodeQL js/xss-more-sources (second pass on #686): the SARIF flow ran from
+// the stats fetch → counts → renderCount → rowsHtml → panel.innerHTML. A count
+// renders only as a finite integer; anything else is a dash, never markup.
+describe('OSE-1361: counts from the response can never become markup', () => {
+  test('a non-number or hostile count renders as a dash; a number as its integer', () => {
+    const { rowsHtml } = build({
+      counts: [12, '<img src=x onerror=alert(1)>', { toString: () => '<b>x</b>' }, Infinity],
+    });
+    expect(rowsHtml).not.toMatch(/<img|<b>/i);
+    expect(rowsHtml).toContain('data-testid="form-count-register">12</span>');
+    expect(rowsHtml).toContain('data-testid="form-count-checkin">—</span>');
+    expect(rowsHtml).toContain('data-testid="form-count-email">—</span>');
+  });
+});

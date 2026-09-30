@@ -4429,7 +4429,10 @@
             + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
           if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
             + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
-          return typeof c === 'number' ? String(c) : '—';
+          // Counts come from the stats response: a finite number only, and
+          // escaped anyway so no response value reaches innerHTML raw (CodeQL
+          // js/xss-more-sources traced counts → rowsHtml → panel.innerHTML).
+          return typeof c === 'number' && isFinite(c) ? esc(String(Math.trunc(c))) : '—';
         };
         var planNeeds = {}, phaseNeeds = {};
         var rowsHtml = o.types.map(function (t, i) {
