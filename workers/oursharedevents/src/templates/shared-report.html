@@ -1099,6 +1099,27 @@
               '</tr>'
           )
           .join('');
+        // OSE-1376: first/last scan are UTC hour buckets. The server labels each
+        // in the EVENT's zone ("Sat, Oct 24 · 7 PM CDT") — the browser never
+        // re-zones them to the viewer. A payload without labels (older build)
+        // falls back to the UTC date.
+        const scanLabel = (label, iso) =>
+          typeof label === 'string' && label ? label : fmtDate(iso);
+        const reportZone =
+          report._meta &&
+          report._meta.timezone &&
+          typeof report._meta.timezone.zone === 'string'
+            ? report._meta.timezone
+            : null;
+        const zoneNote = reportZone
+          ? '<p class="report-note" data-testid="report-timezone-note">' +
+            (reportZone.source === 'event'
+              ? 'Times are the event’s local time (' + esc(reportZone.zone) + ').'
+              : 'This event has no time zone set, so times are shown in ' +
+                esc(reportZone.zone) +
+                ' (the platform default).') +
+            '</p>'
+          : '';
         const posterRows = (report.poster_attribution || [])
           .map(
             (p) =>
@@ -1107,13 +1128,13 @@
               esc(p.location) +
               '</td>' +
               '<td data-label="Scans">' +
-              fmtInt(p.scan_count) +
+              esc(fmtInt(p.scan_count)) +
               '</td>' +
-              '<td data-label="First">' +
-              esc(fmtDate(p.first_scan_at)) +
+              '<td data-label="First" data-testid="poster-row-first-scan">' +
+              esc(scanLabel(p.first_scan_label, p.first_scan_at)) +
               '</td>' +
-              '<td data-label="Last">' +
-              esc(fmtDate(p.last_scan_at)) +
+              '<td data-label="Last" data-testid="poster-row-last-scan">' +
+              esc(scanLabel(p.last_scan_label, p.last_scan_at)) +
               '</td>' +
               '<td data-label="Cell (res9)" data-testid="poster-row-h3-res9">' +
               (p.h3_res9 ? esc(p.h3_res9) : '—') +
@@ -1268,6 +1289,7 @@
               posterRows +
               '</tbody>' +
               '</table>' +
+              zoneNote +
               '</section>'
             : '') +
           (trendRows

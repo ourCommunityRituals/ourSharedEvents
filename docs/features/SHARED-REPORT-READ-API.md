@@ -135,8 +135,10 @@ interface SharedReport {
     poster_deployment_id: string;
     location: string; // venue label, not coords
     scan_count: number;
-    first_scan_at: string; // ISO
-    last_scan_at: string; // ISO
+    first_scan_at: string; // ISO, UTC hour bucket
+    last_scan_at: string; // ISO, UTC hour bucket
+    first_scan_label: string; // OSE-1376 — same bucket in the event's zone, e.g. "Sat, Oct 24 · 7 PM CDT"
+    last_scan_label: string;
   }>;
 
   // 6. Headcount trend — across confirmed event_series instances
@@ -158,9 +160,21 @@ interface SharedReport {
       reason: 'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
       detail?: string; // e.g., "3 of 10 required events at this corridor"
     }>;
+    // OSE-1376 — the zone every hour label is rendered in: the event's own IANA
+    // zone, or 'America/Chicago' (platform home zone) with source
+    // 'platform_default' when the event has none. Present at every depth.
+    timezone: { zone: string; source: 'event' | 'platform_default' };
   };
 }
 ```
+
+**Hour labels (OSE-1376):** stored hour buckets stay UTC (`first_scan_at` /
+`last_scan_at`, `corridor_density.bucket_hour` as a UTC lookup key). Human labels
+are computed server-side in the event's zone (`lib/event-datetime.ts`
+`formatHourBucketLabel`) — labels only, never a re-bucketing, so the 60-minute and
+K≥5 floors act on the same cells. Half-hour zones label a UTC hour at its real
+local start ("6:30 PM GMT+5:30"); the zone abbreviation keeps DST fall-back's
+repeated hour distinct and a spring-forward gap is never invented.
 
 ---
 
