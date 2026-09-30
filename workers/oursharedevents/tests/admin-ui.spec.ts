@@ -80,8 +80,8 @@ describe('ADMIN-5: Form config toggles', () => {
   test('JS generates one form row for all 4 types', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically by loadForms() — verify the JS patterns
-    expect(html).toContain("form-row-' + t.key");
-    expect(html).toContain("form-count-' + t.key");
+    expect(html).toContain("form-row-' + key");
+    expect(html).toContain("form-count-' + key");
     expect(html).toContain("key: 'register'");
     expect(html).toContain("key: 'checkin'");
     expect(html).toContain("key: 'survey'");
@@ -106,8 +106,8 @@ describe('ADMIN-5: Form config toggles', () => {
   test('JS generates one row with toggle data-testid patterns', async () => {
     const html = await fetchAdminHtml();
     // These are generated dynamically — verify the JS template patterns
-    expect(html).toContain("form-row-' + t.key");
-    expect(html).toContain("form-toggle-' + t.key");
+    expect(html).toContain("form-row-' + key");
+    expect(html).toContain("form-toggle-' + key");
   });
 
   test('upgrade prompt shown for tier-gated forms', async () => {
@@ -824,8 +824,8 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
 
   test('form row elements are keyed by form type via t.key', async () => {
     const html = await fetchAdminHtml();
-    // JS builds: data-testid="form-row-' + t.key + '"
-    expect(html).toContain("form-row-' + t.key");
+    // JS builds: data-testid="form-row-' + key + '" with key = esc(t.key) (CodeQL: every value through esc)
+    expect(html).toContain("form-row-' + key");
   });
 
   test('form types comment documents both axes (upgradeTier and upgradePhase)', async () => {

@@ -223,3 +223,39 @@ describe('OSE-1361: wired into loadForms; the tan banner is gone', () => {
     expect(ADMIN_HTML).not.toContain('.form-config');
   });
 });
+
+// CodeQL js/xss-more-sources (CI on #686): the event id/name reach the row
+// markup, and encodeURIComponent alone leaves ' unescaped. Every value that
+// lands in markup — the href included — must go through esc().
+describe('OSE-1361: hostile event values stay text', () => {
+  test("an event name/id with quotes and tags never breaks out of the row's attributes", () => {
+    const { rowsHtml } = build({
+      eventId: `evt-1"'><img src=x onerror=alert(1)>`,
+      eventName: `Bocce' onmouseover='alert(1)`,
+    });
+    // No markup escapes: no raw tag, no raw quote-break sequence.
+    expect(rowsHtml).not.toMatch(/<img/i);
+    expect(rowsHtml).not.toContain(`"'>`);
+    expect(rowsHtml).not.toContain(`' onmouseover='`);
+    // The payload only ever appears escaped, inside a single attribute value.
+    const dataEvents = rowsHtml.match(/data-event="[^"]*"/g) || [];
+    expect(dataEvents.length).toBe(4);
+    for (const d of dataEvents) expect(d).toContain('evt-1&quot;&#39;&gt;&lt;img');
+    // Each href is one attribute with no raw quote of either kind.
+    const hrefs = rowsHtml.match(/href="[^"]*"/g) || [];
+    expect(hrefs.length).toBe(4);
+    for (const h of hrefs) expect(h).not.toMatch(/'/);
+  });
+});
+
+// CodeQL js/remote-property-injection (CI on #686): ids from the list response
+// become keys on the client's event map. Only real event-id shapes are
+// accepted, and the map has no prototype.
+describe('OSE-1360: the event list map rejects hostile ids', () => {
+  test('ids are shape-checked and the map is prototype-less', () => {
+    expect(ADMIN_HTML).toContain('if (!/^[A-Za-z0-9_-]{1,128}$/.test(key)) return;');
+    expect(ADMIN_HTML).toContain('L.byId = Object.create(null);');
+    expect(ADMIN_HTML).toContain('byId: Object.create(null)');
+    expect(ADMIN_HTML).not.toMatch(/L\.byId\[String\(e\.id\)\] = e/);
+  });
+});

@@ -4442,17 +4442,21 @@
           if (planLocked) { why = o.tierLabel(t.upgradeTier || 'mid'); (planNeeds[why] = planNeeds[why] || []).push(t.label); }
           else if (!phaseEnabled) { why = o.phaseLabel(t.upgradePhase || 2); (phaseNeeds[why] = phaseNeeds[why] || []).push(t.label); }
           var aria = t.label + (planLocked ? ': locked, comes with the ' + why : !phaseEnabled ? ': available for ' + why : ' on for this event');
-          return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + t.key + '" data-enabled="' + enabled + '">' +
+          // Every value into markup goes through esc() — the href included, since
+          // encodeURIComponent leaves ' unescaped (CodeQL js/xss-more-sources).
+          var key = esc(t.key), flagKey = esc(t.flagKey);
+          var href = '/forms/' + encodeURIComponent(o.eventId) + '?type=' + encodeURIComponent(t.key) + '&event=' + encodeURIComponent(o.eventName == null ? '' : o.eventName);
+          return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + key + '" data-enabled="' + (enabled ? 'true' : 'false') + '">' +
             '<div class="form-row-main">' +
-              '<a class="form-link" href="/forms/' + encodeURIComponent(o.eventId) + '?type=' + t.key + '&event=' + encodeURIComponent(o.eventName == null ? '' : o.eventName) + '" target="_blank" data-testid="form-link-' + t.key + '">' +
+              '<a class="form-link" href="' + esc(href) + '" target="_blank" rel="noopener" data-testid="form-link-' + key + '">' +
                 '<div class="form-type">' + esc(t.label) + '</div>' +
-                '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + esc(t.desc) + '</div>' +
+                '<div class="form-desc" data-testid="form-desc-' + key + '">' + esc(t.desc) + '</div>' +
               '</a>' +
             '</div>' +
             '<div class="form-row-actions">' +
-              '<span class="form-row-count" data-testid="form-count-' + t.key + '">' + renderCount(o.counts[i]) + '</span>' +
+              '<span class="form-row-count" data-testid="form-count-' + key + '">' + renderCount(o.counts[i]) + '</span>' +
               '<label class="toggle" aria-label="' + esc(aria) + '">' +
-              '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + esc(o.eventId) + '"' +
+              '<input type="checkbox" data-testid="form-toggle-' + key + '" data-flag="' + flagKey + '" data-event="' + esc(o.eventId) + '"' +
               (tierEnabled && !locked ? ' checked' : '') + (locked ? ' disabled' : '') + ' data-change="form-flag" />' +
               '<span class="slider"></span>' +
               '</label>' +
@@ -5745,7 +5749,7 @@
       // wider set down (the list is brand-scoped per request, #9). Cursor
       // pagination replaces the old silent 50-row cap: the API always paged,
       // the UI just never asked for page two.
-      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: {}, loading: false };
+      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: Object.create(null), loading: false };
 
       window.setEventsFilter = function (status) {
         window._oseList.status = status || 'all';
@@ -5790,7 +5794,7 @@
         if (opts && opts.reset) {
           L.cursor = null;
           L.items = [];
-          L.byId = {};
+          L.byId = Object.create(null);
         }
         try {
           var qs = [];
@@ -5800,7 +5804,17 @@
           var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
           var data = await fetch(url).then(function (r) { return r.json(); });
           if (!data.ok) throw new Error(data.error || data.code || 'list failed');
-          data.items.forEach(function (e) { e.phaseStatus = e.status; L.items.push(e); L.byId[String(e.id)] = e; });
+          // Ids from the response become object keys, so only real event-id
+          // shapes are accepted and the map has no prototype (a "__proto__" id
+          // must never write onto Object.prototype — CodeQL
+          // js/remote-property-injection).
+          data.items.forEach(function (e) {
+            var key = String(e && e.id);
+            if (!/^[A-Za-z0-9_-]{1,128}$/.test(key)) return;
+            e.phaseStatus = e.status;
+            L.items.push(e);
+            L.byId[key] = e;
+          });
           var hasMore = !!(data.pagination && data.pagination.hasMore);
           L.cursor = hasMore ? data.pagination.nextCursor : null;
 
