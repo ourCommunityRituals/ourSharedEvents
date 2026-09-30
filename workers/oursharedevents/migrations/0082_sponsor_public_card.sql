@@ -14,6 +14,15 @@
 --   contact_phone  optional business phone, rendered as a tel: link.
 --   contact_email  optional business email, rendered as a mailto: link.
 --
+-- Invariant #8 (decided 2026-09-30, CCR PR #699): these are BUSINESS details a
+-- sponsor enters to be found, not attendee data — nothing here identifies an
+-- attendee, so the anonymous-DB boundary (Invariant #1) is unchanged. Their
+-- retention rule is "while on show": the card renders only for a sponsor on an
+-- active event, and deactivating a sponsor clears address_line, contact_phone
+-- and contact_email (handleAdminDeleteSponsor). display_name is identity and
+-- stays with the name. The form hint says "a neighbourhood is fine", so a
+-- home-based sponsor never has to publish a street address.
+--
 -- Nullable + additive; no backfill, no rebuild, no DROP.
 
 ALTER TABLE sponsor_business ADD COLUMN display_name TEXT;

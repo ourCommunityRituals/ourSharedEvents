@@ -22,6 +22,9 @@ import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import ADMIN_HTML from '../src/templates/admin.html';
 import PUBLIC_HTML from '../src/templates/public.html';
+import DISPLAY_HTML from '../src/templates/display.html';
+import POSTER_HTML from '../src/templates/poster.html';
+import CARD_HTML from '../src/templates/sponsor-card.html';
 
 type Reply = { status?: number; body?: unknown };
 type Call = { url: string; method: string; body: Record<string, unknown> | undefined };
@@ -301,5 +304,89 @@ describe('/events | sponsor banner', () => {
     const img = doc.querySelector('[data-testid="public-sponsor-logo"]')!;
     expect(img.hasAttribute('onload')).toBe(false);
     expect(img.getAttribute('alt')).toBe('" onload="alert(1)');
+  });
+});
+
+// ── CCR PR #699 holds: the error-swap loop guard, and the edit warning ─────
+
+/**
+ * Run a template's capture-phase `error` listener against a sponsor <img> and
+ * fire `error` twice: the first must swap to the OSE default, the second (the
+ * default itself failing) must hide the image and NOT swap again — otherwise a
+ * dead default is an endless error loop on an unattended TV.
+ */
+function exerciseErrorGuard(html: string, needle: string, attrs: string) {
+  const dom = new JSDOM('<!doctype html><body></body>', { runScripts: 'outside-only' });
+  const w = dom.window as unknown as {
+    eval(s: string): unknown;
+    document: Document;
+    Event: typeof Event;
+  };
+  w.eval(scriptContaining(html, needle));
+  w.document.body.innerHTML = `<img src="/api/v2/sponsors/sp_x/logo" ${attrs}>`;
+  const img = w.document.querySelector('img')!;
+  const fire = () => img.dispatchEvent(new w.Event('error'));
+  fire();
+  const afterFirst = img.getAttribute('src');
+  fire();
+  return { afterFirst, afterSecond: img.getAttribute('src'), hidden: img.style.display === 'none' };
+}
+
+describe('error-swap loop guard on every surface', () => {
+  const ATTRS = 'data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg"';
+  test.each([
+    ['public', PUBLIC_HTML, "hasAttribute('data-hide-on-error')"],
+    ['poster', POSTER_HTML, "hasAttribute('data-hide-on-error')"],
+    ['display', DISPLAY_HTML, "hasAttribute('data-hide-on-error')"],
+  ])(
+    '%s: first error → OSE default, second error → hidden, no further swap',
+    (_name, html, needle) => {
+      const r = exerciseErrorGuard(html, needle, ATTRS);
+      expect(r.afterFirst).toBe('/sponsor-default-logo.svg');
+      expect(r.afterSecond).toBe('/sponsor-default-logo.svg');
+      expect(r.hidden).toBe(true);
+    }
+  );
+
+  test('sponsor card: first error → OSE default; a failing default is left alone (no loop)', () => {
+    const r = exerciseErrorGuard(
+      CARD_HTML,
+      "'error'",
+      'data-default-src="/sponsor-default-logo.svg"'
+    );
+    expect(r.afterFirst).toBe('/sponsor-default-logo.svg');
+    expect(r.afterSecond).toBe('/sponsor-default-logo.svg');
+  });
+
+  test('the fallback path is fixed, never read from the element (CodeQL js/xss-through-dom)', () => {
+    const r = exerciseErrorGuard(
+      PUBLIC_HTML,
+      "hasAttribute('data-hide-on-error')",
+      'data-hide-on-error="1" data-default-src="javascript:alert(1)"'
+    );
+    expect(r.afterFirst).toBe('/sponsor-default-logo.svg');
+  });
+});
+
+describe('admin | switching an existing sponsor to the default warns first', () => {
+  test('the hint says the saved logos will be removed, and resets when switched back', async () => {
+    const { w, $, choose } = await mountCard();
+    await (w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(EXISTING.id);
+    await flush();
+    const hint = () => $('spon-image-choice-hint').textContent || '';
+    expect(hint()).not.toMatch(/remove/i);
+    choose('default');
+    expect(hint()).toMatch(/remove this sponsor.s saved logos/i);
+    choose('own');
+    expect(hint()).not.toMatch(/remove/i);
+  });
+
+  test('a brand-new sponsor choosing the default gets no warning (nothing to remove)', async () => {
+    const { $, choose, open } = await mountCard();
+    await open();
+    choose('own');
+    $('spon-logo').value = 'https://cdn.example.com/typed.png';
+    choose('default');
+    expect($('spon-image-choice-hint').textContent).not.toMatch(/remove/i);
   });
 });

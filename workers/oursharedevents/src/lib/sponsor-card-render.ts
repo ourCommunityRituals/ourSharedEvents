@@ -26,6 +26,13 @@ export interface SponsorCardRow {
   has_logo: boolean;
 }
 
+/** mailto: with each side of the @ URI-encoded, so no query can ride along. */
+function mailtoHref(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at < 1) return 'mailto:';
+  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`;
+}
+
 export function renderSponsorCardPage(row: SponsorCardRow): string {
   const title = sponsorTitle(row);
   const logoSrc = row.has_logo ? sponsorLogoPath(row.id) : SPONSOR_DEFAULT_LOGO_PATH;
@@ -55,7 +62,10 @@ export function renderSponsorCardPage(row: SponsorCardRow): string {
   }
   if (row.contact_email) {
     actions.push(
-      `<a class="btn btn-secondary btn-block" href="mailto:${esc(row.contact_email)}" ` +
+      // The address was allowlisted on write (no ? & = % …); encoding the
+      // local part and domain again here means a row stored some other way
+      // still cannot carry mailto: parameters.
+      `<a class="btn btn-secondary btn-block" href="${esc(mailtoHref(row.contact_email))}" ` +
         `data-testid="sponsor-card-email">Email ${esc(row.contact_email)}</a>`
     );
   }

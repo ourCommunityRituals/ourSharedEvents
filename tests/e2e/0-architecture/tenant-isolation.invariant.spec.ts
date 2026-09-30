@@ -136,6 +136,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
+  'handlers/sponsor-card.ts:64':
+    'Public sponsor card (0082). Correlated EXISTS on `events e` keyed by ' +
+    '`e.id = sp.event_id AND e.brand_id = sb.brand_id`, nested inside a lookup ' +
+    'whose outer `sponsor_business sb` is keyed by `sb.id = ?` (held sponsor id) ' +
+    'and whose placement sub-select is keyed by `sp.sponsor_business_id = ?`. It ' +
+    'asks "is this one sponsor on an active event of its own brand" — one row, ' +
+    'not enumeration. Line-sensitive: bump on any edit above it in that file.',
   // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand

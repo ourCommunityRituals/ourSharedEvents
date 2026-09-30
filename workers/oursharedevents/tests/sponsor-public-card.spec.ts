@@ -26,7 +26,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
 import { handleSponsorLogo, SPONSOR_LOGO_READ_MAX } from '../src/handlers/sponsors';
 import { handleSponsorCardPage } from '../src/handlers/sponsor-card';
 import { checkCardField, telHref, sponsorTitle } from '../src/lib/sponsor-card';
@@ -158,6 +158,12 @@ describe('0082 | card fields: all optional, validated, clearable', () => {
     ['contact_phone', '555-01', 'INVALID_CONTACT_PHONE'],
     ['contact_email', 'not-an-email', 'INVALID_CONTACT_EMAIL'],
     ['contact_email', 'a@b', 'INVALID_CONTACT_EMAIL'],
+    // CCR PR #699: mailto: parameter injection — a stored address must not be
+    // able to prefill a visitor's recipients, subject or body.
+    ['contact_email', 'a@b.co?bcc=x@y.example&body=wire', 'INVALID_CONTACT_EMAIL'],
+    ['contact_email', 'a@b.co&subject=hi', 'INVALID_CONTACT_EMAIL'],
+    ['contact_email', 'a%3Fb@c.example', 'INVALID_CONTACT_EMAIL'],
+    ['contact_email', 'a@b.example#x', 'INVALID_CONTACT_EMAIL'],
     ['display_name', 'x'.repeat(81), 'INVALID_DISPLAY_NAME'],
     ['address_line', 'x'.repeat(201), 'INVALID_ADDRESS_LINE'],
     ['display_name', 42, 'INVALID_DISPLAY_NAME'],
@@ -412,5 +418,207 @@ describe('0082 | pure helpers', () => {
 
   test('whitespace-only means "clear", not "a blank title"', () => {
     expect(checkCardField('display_name', '   ')).toEqual({ ok: true, value: null });
+  });
+});
+
+// ── CCR PR #699 holds ───────────────────────────────────────────────────────
+
+const DRAFT_EVENT = 'ose0082-draft-evt';
+
+async function auditRows(id: string) {
+  const r = await env.DB.prepare(
+    `SELECT action, details FROM admin_audit_log WHERE resource_type = 'sponsor' AND resource_id = ?
+      ORDER BY rowid`
+  )
+    .bind(id)
+    .all<{ action: string; details: string | null }>();
+  return r.results ?? [];
+}
+
+describe('CCR PR #699 | gates, audit, retention', () => {
+  beforeAll(async () => {
+    await env.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status)
+       VALUES (?, ?, 'Draft Night', ?, 'draft') ON CONFLICT(id) DO NOTHING`
+    )
+      .bind(DRAFT_EVENT, BRAND, DRAFT_EVENT)
+      .run();
+  });
+
+  test('a sponsor placed only on a draft event is not on show: its card 404s', async () => {
+    const { body } = await create({
+      name: 'Draft Only',
+      tier: 'gold',
+      event_id: DRAFT_EVENT,
+      contact_phone: '(773) 555-0142',
+    });
+    const id = String(body.id);
+    await env.DB.prepare(
+      'UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE sponsor_business_id = ?'
+    )
+      .bind(id)
+      .run();
+    expect((await SELF.fetch(`https://t.test/sponsors/${id}`)).status).toBe(404);
+  });
+
+  test('the logo proxy has the same consent gate: an unaccepted sponsor gets no logo', async () => {
+    const { body } = await create({
+      name: 'Not Accepted Logo',
+      tier: 'gold',
+      event_id: EVENT,
+      logo_url: 'https://logo.invalid/pending.png',
+    });
+    const id = String(body.id);
+    // Placement is active but the sponsor has not accepted → not served (404,
+    // not 502: the lookup never reaches the upstream).
+    expect((await SELF.fetch(`https://t.test/api/v2/sponsors/${id}/logo`)).status).toBe(404);
+    await env.DB.prepare(
+      'UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE sponsor_business_id = ?'
+    )
+      .bind(id)
+      .run();
+    expect((await SELF.fetch(`https://t.test/api/v2/sponsors/${id}/logo`)).status).toBe(502);
+  });
+
+  test('sponsor writes are audited (by the router) and the audit never copies contact values', async () => {
+    const { body } = await create({
+      name: 'Audited Co',
+      tier: 'gold',
+      contact_email: 'secret@audited.example',
+    });
+    const id = String(body.id);
+    await update(id, { contact_phone: '(773) 555-0177' });
+    await SELF.fetch(`https://t.test/api/v2/admin/sponsors/${id}`, {
+      method: 'DELETE',
+      headers: ADMIN,
+    });
+    const rows = await auditRows(id);
+    const actions = rows.map((r) => r.action);
+    expect(actions).toContain('UPDATE_SPONSOR');
+    expect(actions).toContain('DELETE_SPONSOR');
+    const all = JSON.stringify(rows);
+    expect(all).not.toContain('secret@audited.example');
+    expect(all).not.toContain('555-0177');
+  });
+
+  test('deactivating a sponsor clears its location and contact (Invariant #8)', async () => {
+    const { body } = await create({
+      name: 'Leaving Co',
+      tier: 'gold',
+      display_name: 'Leaving',
+      address_line: '1 Home St',
+      contact_phone: '(773) 555-0188',
+      contact_email: 'owner@leaving.example',
+    });
+    const id = String(body.id);
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/sponsors/${id}`, {
+      method: 'DELETE',
+      headers: ADMIN,
+    });
+    expect(res.status).toBe(200);
+    expect(await card(id)).toEqual({
+      display_name: 'Leaving',
+      address_line: null,
+      contact_phone: null,
+      contact_email: null,
+    });
+  });
+});
+
+describe('CCR PR #699 | logo proxy success path + edge cache', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const upstream = vi.fn(
+    async (url: string) =>
+      new Response(PNG, {
+        status: 200,
+        headers: { 'content-type': 'image/png', 'x-upstream': url },
+      })
+  );
+  const proxyEnv = (kv?: KVNamespace) =>
+    ({
+      ...(env as unknown as Record<string, unknown>),
+      ...(kv ? { RATE_LIMIT_KV: kv } : {}),
+    }) as never;
+  const get = (id: string, slot = '', kv?: KVNamespace) =>
+    handleSponsorLogo(
+      new Request(`https://t.test/api/v2/sponsors/${id}/logo${slot}`, {
+        headers: { 'CF-Connecting-IP': '203.0.113.40' },
+      }),
+      proxyEnv(kv),
+      id
+    );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    upstream.mockClear();
+  });
+
+  test('a successful proxy is served with the hardened headers', async () => {
+    vi.stubGlobal('fetch', upstream);
+    const u = `https://cdn.example.com/ok-${Date.now()}.png`;
+    const id = await onShow({ name: 'Proxy OK', logo_url: u });
+    const res = await get(id);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('content-security-policy')).toBe("default-src 'none'");
+    expect(upstream).toHaveBeenCalledWith(u, expect.anything());
+  });
+
+  test('?slot=sidebar prefers the compact logo and falls back to the header logo', async () => {
+    vi.stubGlobal('fetch', upstream);
+    const t = Date.now();
+    const both = await onShow({
+      name: 'Both Logos',
+      logo_url: `https://cdn.example.com/wide-${t}.png`,
+      sidebar_logo_url: `https://cdn.example.com/square-${t}.png`,
+    });
+    const headerOnly = await onShow({
+      name: 'Header Only',
+      logo_url: `https://cdn.example.com/w2-${t}.png`,
+    });
+    expect((await get(both, '?slot=sidebar')).status).toBe(200);
+    expect(upstream).toHaveBeenLastCalledWith(
+      `https://cdn.example.com/square-${t}.png`,
+      expect.anything()
+    );
+    expect((await get(both)).status).toBe(200);
+    expect(upstream).toHaveBeenLastCalledWith(
+      `https://cdn.example.com/wide-${t}.png`,
+      expect.anything()
+    );
+    expect((await get(headerOnly, '?slot=sidebar')).status).toBe(200);
+    expect(upstream).toHaveBeenLastCalledWith(
+      `https://cdn.example.com/w2-${t}.png`,
+      expect.anything()
+    );
+  });
+
+  test('a cache hit makes no upstream fetch and does not spend the rate limit', async () => {
+    vi.stubGlobal('fetch', upstream);
+    const id = await onShow({
+      name: 'Cached',
+      logo_url: `https://cdn.example.com/c-${Date.now()}.png`,
+    });
+    expect((await get(id)).status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    // Second view, even for a caller far over the limit: served from the edge
+    // cache, no outbound fetch, no 429.
+    const again = await get(id, '', OVER_LIMIT_KV);
+    expect(again.status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(await again.arrayBuffer())).toEqual(PNG);
+  });
+
+  test('a failed upstream is not cached: the next view tries again', async () => {
+    const failing = vi.fn(async () => new Response('nope', { status: 500 }));
+    vi.stubGlobal('fetch', failing);
+    const id = await onShow({
+      name: 'Flaky Host',
+      logo_url: `https://cdn.example.com/f-${Date.now()}.png`,
+    });
+    expect((await get(id)).status).toBe(502);
+    expect((await get(id)).status).toBe(502);
+    expect(failing).toHaveBeenCalledTimes(2);
   });
 });

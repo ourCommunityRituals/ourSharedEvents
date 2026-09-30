@@ -3,10 +3,11 @@
  *
  * Where a tap on a sponsor lands when it has no https website: its title,
  * location and contact, each optional and each entered by the sponsor to be
- * found. Only a sponsor that is actually on show is reachable — the same gate
- * the public surfaces use (active business, an active placement both sides
- * accepted). A pool sponsor that nobody has placed yet 404s, so the card cannot
- * be used to enumerate a brand's pool.
+ * found. Only a sponsor that is actually on show is reachable: an active
+ * business with an active placement, accepted by both sides, on an event whose
+ * public page renders. A pool sponsor nobody has placed yet, or one placed only
+ * on a draft, 404s — so the card cannot enumerate a brand's pool or publish a
+ * sponsor's contact details before its event is public.
  */
 
 import { html, renderErrorPage } from './pages';
@@ -55,6 +56,13 @@ export async function handleSponsorCardPage(
                AND sp.sponsor_business_id = sb.id AND sp.is_active = 1
                AND COALESCE(sp.organizer_accepted, 1) = 1
                AND sp.sponsor_accepted = 1
+               -- On show = on an event whose public page renders (RENDERABLE
+               -- 'public' is 'active' only). A sponsor placed only on a draft,
+               -- ready or archived event is not on show, so its card 404s.
+               -- Deliberately NOT is_published: an unlisted-but-active event
+               -- page still shows its sponsors, and their card links must work.
+               AND EXISTS (SELECT 1 FROM events e WHERE e.id = sp.event_id
+                           AND e.brand_id = sb.brand_id AND e.status = 'active')
           )
         LIMIT 1`
     )

@@ -242,8 +242,9 @@ const FORM_JS_SUBMIT = `
     if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
       // 0082: swap a failing sponsor logo to the OSE default; hide only if
       // the default itself fails.
-      var d = el.getAttribute('data-default-src');
-      if (d && el.getAttribute('src') !== d) el.setAttribute('src', d);
+      // Fixed same-origin fallback; never read back from the DOM.
+      var d = '/sponsor-default-logo.svg';
+      if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
       else el.style.display = 'none';
     }
   }, true);

@@ -1033,7 +1033,16 @@ export async function handleAdminDeleteSponsor(
     // event — it joins sponsor_business and had no business-level flag to
     // check — and any new placement resurrected it on Path 1. One flag on one
     // row, read at join time by both resolver paths.
-    await env.DB.prepare(`UPDATE sponsor_business SET is_active = 0, updated_at = ? WHERE id = ?`)
+    // 0082 / Invariant #8: the public card's location and contact are
+    // business details the sponsor chose to show — while it is on show. A
+    // deactivated sponsor is not on show, so they are cleared here rather than
+    // kept indefinitely (the title and legal name stay: they are identity).
+    await env.DB.prepare(
+      `UPDATE sponsor_business
+          SET is_active = 0, address_line = NULL, contact_phone = NULL, contact_email = NULL,
+              updated_at = ?
+        WHERE id = ?`
+    )
       .bind(new Date().toISOString(), sponsorId)
       .run();
 
@@ -1566,20 +1575,24 @@ export async function handleSponsorLogo(
 
   let row: Record<string, unknown> | null;
   try {
-    // OSE-799 A2: the logo lives in sponsor_asset(format='logo') on the durable
-    // business; "active" is a placement fact — serve the logo iff the business
-    // holds at least one active placement (mirrors the old is_active=1 gate).
+    // OSE-799 A2: the logo lives in sponsor_asset on the durable business;
+    // serve it only for a sponsor that is on show (see the gate below).
     row = await env.DB.prepare(
       `SELECT ${sidebar ? 'COALESCE(lc.url, la.url)' : 'la.url'} AS logo_url
          FROM sponsor_business sb
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
-        WHERE sb.id = ?
+        WHERE sb.id = ? AND sb.is_active = 1
           AND EXISTS (
             SELECT 1 FROM sponsor_placement sp
              WHERE sp.sponsor_business_id = ?
                AND sp.sponsor_business_id = sb.id
                AND sp.is_active = 1
+               -- CCR PR #699: the same consent gate as the card, the bundle and
+               -- the public page — a logo is not served for a sponsor that has
+               -- not accepted, or that the organizer has not accepted.
+               AND COALESCE(sp.organizer_accepted, 1) = 1
+               AND sp.sponsor_accepted = 1
           )`
     )
       .bind(sponsorId, sponsorId)
@@ -1611,6 +1624,7 @@ export async function handleSponsorLogo(
   if (cache) {
     const hit = await cache.match(cacheKey).catch(() => undefined);
     if (hit) {
+      logLogoOutcome('hit', sidebar);
       const res = new Response(hit.body, hit);
       res.headers.set('X-Request-Id', rid);
       return res;
@@ -1621,6 +1635,7 @@ export async function handleSponsorLogo(
   // per caller (OSE-1247 posture) — this route is public and each miss is an
   // outbound fetch. Generous: one page shows several logos.
   if (await isPublicReadLimited(request, env, 'sponsor-logo', SPONSOR_LOGO_READ_MAX)) {
+    logLogoOutcome('limited', sidebar);
     return new Response(null, {
       status: 429,
       headers: { 'X-Request-Id': rid, 'Retry-After': '60', 'Cache-Control': 'no-store' },
@@ -1629,15 +1644,31 @@ export async function handleSponsorLogo(
 
   const result = await fetchAndProxyLogo(validation.url);
   if (!result.ok || !result.response) {
+    logLogoOutcome('upstream_error', sidebar);
     return new Response(null, {
       status: 502,
       headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
     });
   }
 
+  logLogoOutcome('miss', sidebar);
   if (cache) await cache.put(cacheKey, result.response.clone()).catch(() => undefined);
   result.response.headers.set('X-Request-Id', rid);
   return result.response;
+}
+
+/**
+ * One structured line per proxied logo outcome, for hit ratio / dead-host /
+ * limiter visibility. Aggregate-only by construction: the outcome and the slot,
+ * never the sponsor id, the URL, or anything about the caller (never-who).
+ */
+function logLogoOutcome(
+  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error',
+  sidebar: boolean
+): void {
+  console.log(
+    JSON.stringify({ type: 'SPONSOR_LOGO', outcome, slot: sidebar ? 'sidebar' : 'header' })
+  );
 }
 
 /** Logo-proxy cache misses per caller per minute (a page shows several logos). */

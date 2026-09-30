@@ -37,8 +37,11 @@
         'error',
         function (ev) {
           var el = ev.target;
-          var d = el && el.getAttribute && el.getAttribute('data-default-src');
-          if (el && el.tagName === 'IMG' && d && el.getAttribute('src') !== d) el.setAttribute('src', d);
+          // Fixed same-origin fallback; never read back from the DOM.
+          var d = '/sponsor-default-logo.svg';
+          if (el && el.tagName === 'IMG' && el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) {
+            el.setAttribute('src', d);
+          }
         },
         true
       );

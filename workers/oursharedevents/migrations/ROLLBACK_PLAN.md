@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0067; append-only 0001–0067)
+- `DB` — main / anonymous public surface (highest migration: 0082; append-only 0001–0082)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -107,6 +107,34 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0082: sponsor public card (OSE-1316/1317 follow-up). Additive: four nullable
+-- columns on sponsor_business (display_name, address_line, contact_phone,
+-- contact_email). Rollback-forward. If the columns must go, first null them
+-- (they are public business details, cleared on sponsor deactivation anyway):
+-- UPDATE sponsor_business SET display_name = NULL, address_line = NULL,
+--        contact_phone = NULL, contact_email = NULL;
+-- ALTER TABLE sponsor_business DROP COLUMN contact_email;   -- optional, additive
+-- ALTER TABLE sponsor_business DROP COLUMN contact_phone;   -- optional, additive
+-- ALTER TABLE sponsor_business DROP COLUMN address_line;    -- optional, additive
+-- ALTER TABLE sponsor_business DROP COLUMN display_name;    -- optional, additive
+-- NB: reverting the Worker below this migration is safe (older code never reads
+-- these columns); dropping them while this Worker is deployed is not.
+
+-- 0081: sponsor_business.tier + sponsor_asset rebuild (CHECK += logo_compact).
+-- tier is additive (rollback-forward). The rebuild copied every row; to undo it,
+-- rebuild again with the 0080-era CHECK after deleting 'logo_compact' rows.
+-- ALTER TABLE sponsor_business DROP COLUMN tier;             -- optional, additive
+
+-- 0080: shortlinks.poster_position. Additive, rollback-forward.
+-- ALTER TABLE shortlinks DROP COLUMN poster_position;        -- optional, additive
+
+-- 0079: poster_deployments.address. Additive, rollback-forward.
+-- ALTER TABLE poster_deployments DROP COLUMN address;        -- optional, additive
+
+-- 0078: events.starts_at (OSE-1313). Additive, rollback-forward; start_date
+-- remains the date-only fallback every reader already handles.
+-- ALTER TABLE events DROP COLUMN starts_at;                  -- optional, additive
+
 -- 0077: node_hierarchy.legal_clearance_tier disambiguation (OSE-1221 — schema
 -- guard `check-column-type-collisions.mjs`, OSE-802). Pure RENAME COLUMN, no
 -- data change (dead column: not read/written by any src/ code; the growth-wave

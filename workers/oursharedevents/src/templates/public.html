@@ -417,8 +417,10 @@
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
             // 0082: a sponsor logo that fails becomes the OSE default instead of
             // vanishing; only if the default itself fails is the image hidden.
-            var d = el.getAttribute('data-default-src');
-            if (d && el.getAttribute('src') !== d) el.setAttribute('src', d);
+            // The fallback is a fixed same-origin path, never read back from
+            // the DOM — data-default-src only marks which images may fall back.
+            var d = '/sponsor-default-logo.svg';
+            if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
             else el.style.display = 'none';
           }
         },

@@ -29,9 +29,12 @@ export type CardFieldResult =
 // Digits plus the punctuation people actually type in a phone number, and an
 // optional extension. At least 7 digits, so "call us" is not a phone number.
 const PHONE_RE = /^\+?[0-9 ().\-]{7,}(?:\s*(?:x|ext\.?)\s*[0-9]{1,6})?$/i;
-// Deliberately plain: one @, no spaces, a dot in the domain. Deliverability is
-// the sponsor's business; this only keeps obvious non-addresses out of mailto:.
-const EMAIL_RE = /^[^\s@<>"'()]+@[^\s@<>"'()]+\.[^\s@<>"'()]+$/;
+// An allowlist, not a denylist: letters, digits and . _ + - before the @, and
+// dot-separated labels after it. Anything else — notably ? & = % # / , ; —
+// is refused, because the value becomes a public mailto: link and those
+// characters would let a stored address prefill a visitor's subject, body or
+// extra recipients (CCR PR #699). Deliverability is the sponsor's business.
+const EMAIL_RE = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 /**
  * Validate one optional card field from a request body. Absent is handled by
@@ -125,19 +128,23 @@ export const SPONSOR_DEFAULT_LOGO_PATH = '/sponsor-default-logo.svg';
  * Sponsors and Customers at the base) on a neutral tile. Square, so it sits in
  * the compact side rail and letterboxes cleanly in a wide header slot. Static,
  * no script, no external reference; colours are fixed because an <img> cannot
- * read the page's design tokens.
+ * read the page's design tokens. The same mark shows for every sponsor that
+ * has no logo — it says "a sponsor, shown the OSE way", and the sponsor's own
+ * title always sits beside it.
  */
 export const SPONSOR_DEFAULT_LOGO_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" ' +
-  'role="img" aria-label="OurSharedEvents sponsor">' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">' +
   '<title>OurSharedEvents sponsor</title>' +
-  '<rect width="240" height="240" rx="36" fill="hsl(222 22% 20%)"/>' +
-  '<path d="M120 58 L182 166 L58 166 Z" fill="none" stroke="hsl(38 85% 62%)" ' +
+  // A LIGHT tile, so it reads on dark TV and dark pages alike and prints as
+  // a light mark rather than a block of ink on the poster.
+  '<rect x="4" y="4" width="232" height="232" rx="36" fill="hsl(40 30% 97%)" ' +
+  'stroke="hsl(222 15% 80%)" stroke-width="4"/>' +
+  '<path d="M120 58 L182 166 L58 166 Z" fill="none" stroke="hsl(222 25% 35%)" ' +
   'stroke-width="10" stroke-linejoin="round"/>' +
-  '<circle cx="120" cy="58" r="14" fill="hsl(38 85% 62%)"/>' +
-  '<circle cx="58" cy="166" r="14" fill="hsl(200 70% 62%)"/>' +
-  '<circle cx="182" cy="166" r="14" fill="hsl(150 45% 58%)"/>' +
-  '<circle cx="120" cy="130" r="9" fill="hsl(0 0% 96%)"/>' +
+  '<circle cx="120" cy="58" r="14" fill="hsl(32 80% 50%)"/>' +
+  '<circle cx="58" cy="166" r="14" fill="hsl(205 65% 45%)"/>' +
+  '<circle cx="182" cy="166" r="14" fill="hsl(150 45% 38%)"/>' +
+  '<circle cx="120" cy="130" r="9" fill="hsl(222 25% 35%)"/>' +
   '</svg>';
 
 /** Serve the default image. Same-origin, cached a day, locked down like /ui.css. */

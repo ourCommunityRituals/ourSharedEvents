@@ -4226,10 +4226,20 @@
         // 0082: the image choice reveals the two logo fields only for "own".
         // "default" is not stored — it is simply "no logo", so choosing it on
         // an edit clears both logos (see the submit handler).
+        const SPON_IMAGE_HINT = 'Every sponsor shows an image. No logo? The OSE default is used, at every tier.';
         function syncImageChoice() {
           const own = document.getElementById('spon-image-choice').value === 'own';
           document.getElementById('spon-logo-field').hidden = !own;
           document.getElementById('spon-sidebar-logo-field').hidden = !own;
+          // Editing a sponsor that HAS logos and switching to the default clears
+          // them on save — say so before it happens, not after (CCR PR #699).
+          const editing = !!document.getElementById('spon-edit-id').value.trim();
+          const hasLogo = !!(document.getElementById('spon-logo').value.trim() ||
+                             document.getElementById('spon-sidebar-logo').value.trim());
+          document.getElementById('spon-image-choice-hint').textContent =
+            !own && editing && hasLogo
+              ? 'Saving will remove this sponsor’s saved logos and show the OSE default image.'
+              : SPON_IMAGE_HINT;
         }
         document.getElementById('spon-image-choice').addEventListener('change', syncImageChoice);
         const SPON_CARD_FIELDS = ['spon-display-name', 'spon-address', 'spon-phone', 'spon-email'];
