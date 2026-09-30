@@ -141,9 +141,17 @@ describe('status panel — the only lifecycle driver', () => {
     );
   });
 
-  test('plain-language status labels: Live, not "active"', async () => {
+  test('plain-language status labels: Published, not "active" (and not "Live")', async () => {
     const html = await adminHtml();
-    expect(html).toContain("draft: 'Draft', ready: 'Ready', active: 'Live', archived: 'Archived'");
+    // OSE-1360 (2026-09-29): status `active` was "Live" while phase `event` was
+    // ALSO "Live" on the same page, so an active event dated next month read
+    // "Live". One word, one meaning: status active = "Published", phase event =
+    // "Live now" (the public page's word). admin-event-status-phase-consistency
+    // .spec.ts runs the label map; this pins the source shape.
+    expect(html).toContain(
+      "var STATUS = { draft: 'Draft', ready: 'Ready', active: 'Published', archived: 'Archived' };"
+    );
+    expect(html).not.toContain("active: 'Live'");
   });
 });
 
@@ -215,29 +223,33 @@ describe('event timeline — the chain at a glance', () => {
     );
   });
 
-  test('live checklist copy never tells an already-live event to press Go live', async () => {
+  test('published checklist copy never tells an already-published event to publish', async () => {
     const html = await adminHtml();
-    expect(html).toContain('live ? (Number(e.is_published) === 0');
+    // OSE-1360: copy moved into oseEventView and the verb is "Publish" (was
+    // "Go live"); the behaviour is RUN in admin-event-status-phase-consistency.
+    expect(html).toContain('active ? (Number(e.is_published) === 0');
     expect(html).toContain("'Public page, poster and display are on'");
-    expect(html).toContain("st === 'ready' ? 'Marked ready. Press Go live above.'");
+    expect(html).toContain("st === 'ready' ? 'Marked ready. Press Publish above.'");
   });
 
   test('the next step is one link into the right card, in chain order', async () => {
     const html = await adminHtml();
     expect(html).toContain('data-testid="event-timeline-next"');
-    expect(html).toMatch(/if \(!live && !over\) nextStep = [\s\S]{0,120}#event-status-card/);
+    // OSE-1360: the next step lives in oseEventView (same {status, phase} as
+    // the badge). Order is RUN in admin-event-status-phase-consistency.spec.ts.
+    expect(html).toMatch(/if \(st === 'draft'\) next = [\s\S]{0,80}#event-status-card/);
+    expect(html).toMatch(/else if \(st === 'ready'\) next = [\s\S]{0,80}#event-status-card/);
     expect(html).toMatch(
-      /else if \(live && !\(posters > 0\)\) nextStep = [\s\S]{0,80}#poster-deployments-card/
+      /else if \(active && !\(posters > 0\)\) next = [\s\S]{0,100}#poster-deployments-card/
     );
-    expect(html).toMatch(
-      /else if \(live && sponsors === 0\) nextStep = [\s\S]{0,80}#sponsors-card/
-    );
-    expect(html).toMatch(/nextStep = \{ label: 'Share the report', href: '#report-card' \}/);
+    expect(html).toMatch(/else if \(active && sponsors === 0\) next = [\s\S]{0,100}#sponsors-card/);
+    expect(html).toMatch(/next = \{ label: 'Share the report', href: '#report-card' \}/);
     for (const id of [
       'event-status-card',
       'poster-deployments-card',
       'sponsors-card',
       'report-card',
+      'surface-cards',
     ]) {
       expect(html, id).toContain(`id="${id}"`);
     }

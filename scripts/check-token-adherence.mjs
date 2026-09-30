@@ -64,8 +64,10 @@ const BASELINE = {
   // 30 left are fixed light-fill/dark-ink pairs (phase 2-5 badges, sponsor tier
   // pills, pips, lock overlay, spon-edit-ctx) that read in both themes, the
   // decorative skeleton shimmer, two #fff overridden by the token block below
-  // (th, .skip-link:focus), and the print-window #555.
-  'admin.html': 30,
+  // (th, .skip-link:focus), and the print-window #555. OSE-1361 moved the
+  // forms upsell (was the tan per-row lock overlay) onto --surface-hover /
+  // --border: 30 -> 28.
+  'admin.html': 28,
   // sponsor-home.html (Epic TRIANGLE, PR #567): born fully tokenised — status
   // pills route to --success / --warn / --info / --accent with var(--bg) inverse
   // text (all AA-verified by the hub @ocr/ui verify-contrast.mjs), messages to

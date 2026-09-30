@@ -14,7 +14,7 @@
       sponsoring). A scanner never lands here — a poster scan resolves straight to the
       event page. Two doors + what's already happening nearby + a plain never-who
       statement. NO cookies, NO analytics, NO geolocation prompt: the list/map and
-      7/30/90 toggles are CSS-only (hidden radios + :checked), so nothing about the
+      window toggles are CSS-only (hidden radios + :checked), so nothing about the
       viewer is stored or sent. The page must live up to the statement it prints.
     -->
     <style>
@@ -183,13 +183,9 @@
         outline: 3px solid var(--accent);
         outline-offset: -3px;
       }
-      /* Selected pill. Type pills are dynamic — their selected rule is emitted
-         inline by the renderer (one per type present). */
+      /* Selected pill. Type + window pills: rules emitted by the renderer. */
       #view-list:checked ~ .toggles label[for='view-list'],
       #view-map:checked ~ .toggles label[for='view-map'],
-      #win-7:checked ~ .toggles label[for='win-7'],
-      #win-30:checked ~ .toggles label[for='win-30'],
-      #win-90:checked ~ .toggles label[for='win-90'],
       #type-all:checked ~ .toggles label[for='type-all'],
       #mod-all:checked ~ .toggles label[for='mod-all'],
       #mod-online:checked ~ .toggles label[for='mod-online'],
@@ -201,24 +197,14 @@
         color: var(--on-accent);
         font-weight: 600;
       }
-      /* View switch: show list OR map */
-      .view-list,
+      /* Map view = a note above the SAME list; cards never hide (OSE-1354). */
       .view-map {
         display: none;
-      }
-      #view-list:checked ~ .area .view-list {
-        display: block;
       }
       #view-map:checked ~ .area .view-map {
         display: block;
       }
-      /* Filters compose: each group contributes display:none for cards it
-         excludes, so a card is visible iff it survives EVERY active group.
-         "All" contributes no rule. Cards are server-tagged with
-         within-{7,30,90} · type-<slug> · product-ose · modality-{online,inperson}. */
-      #win-7:checked ~ .area .event-card:not(.within-7),
-      #win-30:checked ~ .area .event-card:not(.within-30),
-      #win-90:checked ~ .area .event-card:not(.within-90),
+      /* Filters compose: a card shows iff it survives EVERY group. */
       #mod-online:checked ~ .area .event-card:not(.modality-online),
       #mod-inperson:checked ~ .area .event-card:not(.modality-inperson),
       #prod-ose:checked ~ .area .event-card:not(.product-ose),
@@ -227,6 +213,7 @@
       }
       .event-card {
         display: block;
+        min-height: 44px;
         border: 1px solid var(--line);
         border-radius: 10px;
         background: var(--surface);
@@ -310,11 +297,11 @@
            `:checked ~` sibling rules give FIVE CSS-only filter dimensions with
            NO JS and NO cookies —
              1. view     — list | map (default by count: list < 10, else map)
-             2. window   — 7 | 30 | 90 days (default 90, configured in the renderer)
+             2. window   — Next 7 days / This month / Next 90 days (the /events `when` set)
              3. type     — one pill per event-type present, plus "All" (niche discovery)
              4. product  — All | OSE | OSE+OW hybrid (anon / non-anon invariant pole)
              5. modality — All | online | in-person ("in reality")
-           Each card is server-tagged within-{7,30,90} + type-<slug> +
+           Each card is server-tagged when-{week,month,next-90} + type-<slug> +
            product-{ose} + modality-{online,inperson}. The radios are emitted as
            siblings before .toggles / .area so the head rules below resolve. -->
       <section aria-label="What's happening nearby" data-testid="landing-area">

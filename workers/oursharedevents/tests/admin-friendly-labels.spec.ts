@@ -139,12 +139,16 @@ describe('OSE-R-005 admin friendly labels — API layer', () => {
 
   test('OSE-R-005 | API | GET /admin (any visitor) | upgrade lock overlay uses friendly plan + event-type labels', async () => {
     const html = await fetchAdminHtml();
+    // OSE-1361 (2026-09-29): the per-row overlays became ONE section upsell
+    // line built by oseFormsSection, still through the friendly label maps
+    // (admin-forms-single-row.spec.ts runs it and asserts no tier code leaks).
     // Tier-axis lock: "Upgrade to Pro plan to unlock" (was: "Upgrade to mid to unlock").
-    expect(html).toContain('Upgrade to');
-    expect(html).toContain('upgradeTierLabel');
-    // Phase-axis lock: "Available for Commerce events" (was: "Requires Phase 2 regulatory clearance").
-    expect(html).toContain('Available for ');
-    expect(html).toContain('upgradePhaseLabel');
+    expect(html).toContain("'. Upgrade to ' + plan + ' to unlock.'");
+    expect(html).toContain("o.tierLabel(t.upgradeTier || 'mid')");
+    // Phase-axis lock: "available for Commerce events" (was: "Requires Phase 2 regulatory clearance").
+    expect(html).toContain("' available for ' + ph");
+    expect(html).toContain('o.phaseLabel(t.upgradePhase || 2)');
+    expect(html).toContain('tierLabel: window.friendlyTier, phaseLabel: window.friendlyPhase');
     // Forbidden raw strings.
     expect(html).not.toContain('Requires Phase ');
     expect(html).not.toContain("'Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock'");
