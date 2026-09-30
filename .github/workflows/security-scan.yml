@@ -125,7 +125,11 @@ jobs:
         echo "CI/CD SCRIPT INJECTION CHECK"
         echo "=================================================="
         echo ""
-        echo "Checking GitHub Actions workflows for unsafe \${{ }} expressions in run: blocks..."
+        # GitHub parses any dollar-double-brace in a workflow file as an expression,
+        # even escaped for the shell, so an empty one made the whole file invalid
+        # (every run failed with 0 jobs from 2026-04). Build the text at runtime.
+        O='$''{{'
+        echo "Checking GitHub Actions workflows for unsafe ${O} }} expressions in run: blocks..."
         echo ""
 
         FOUND_INJECTION=false
@@ -145,9 +149,9 @@ jobs:
 
         for pattern in "${DANGEROUS_PATTERNS[@]}"; do
           # Search for the pattern inside run: blocks in workflow files
-          MATCHES=$(grep -rn "\${{.*${pattern}.*}}" .github/workflows/*.yml 2>/dev/null | grep -v "env:" | grep -v "#" || true)
+          MATCHES=$(grep -rn "${O}.*${pattern}.*}}" .github/workflows/*.yml 2>/dev/null | grep -v "env:" | grep -v "#" || true)
           if [ -n "$MATCHES" ]; then
-            echo "❌ Potential script injection: \${{ $pattern }}"
+            echo "❌ Potential script injection: ${O} $pattern }}"
             echo "$MATCHES"
             echo ""
             FOUND_INJECTION=true
@@ -160,9 +164,9 @@ jobs:
           echo "=================================================="
           echo "Move dangerous expressions to env: blocks instead of using them in run: directly."
           echo ""
-          echo "UNSAFE:  run: echo \"\${{ github.event.pull_request.title }}\""
+          echo "UNSAFE:  run: echo \"${O} github.event.pull_request.title }}\""
           echo "SAFE:    env:"
-          echo "           PR_TITLE: \${{ github.event.pull_request.title }}"
+          echo "           PR_TITLE: ${O} github.event.pull_request.title }}"
           echo "         run: echo \"\$PR_TITLE\""
           # Warning only — not blocking since some uses may be safe
         else
@@ -211,11 +215,12 @@ jobs:
     - name: Create analysis summary
       if: always()
       run: |
+        O='$''{{' # see the script-injection step: no literal expression opener here
         echo "## 🔒 Security Config Audit" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Bespoke scanners in this workflow:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- **CI/CD script-injection** — GitHub Actions \${{ }} expressions in \`run:\` blocks" >> $GITHUB_STEP_SUMMARY
+        echo "- **CI/CD script-injection** — GitHub Actions ${O} }} expressions in \`run:\` blocks" >> $GITHUB_STEP_SUMMARY
         echo "- **wrangler.toml misconfig** — debug endpoints in prod, hardcoded secrets, risky compat flags" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### CodeQL (SARIF)" >> $GITHUB_STEP_SUMMARY
@@ -249,7 +254,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '20'
+        node-version: '22'
 
     - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
       # Root-only job: nothing here imports @ocr/ui, so staging stays

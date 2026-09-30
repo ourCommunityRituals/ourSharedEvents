@@ -34,7 +34,7 @@ jobs:
           clean: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
         # Root-only job: nothing here imports @ocr/ui, so staging stays
         # best-effort (it now exits 1 if the pinned hub cannot be fetched);

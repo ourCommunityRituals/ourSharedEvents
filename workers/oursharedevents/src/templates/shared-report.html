@@ -1044,13 +1044,13 @@
         window.__reportBundle.signedLinkReport = report;
 
         // ── Render the SharedReport object ──────────────────────────────────
-        const suppressionByField = {};
+        const suppressionByField = new Map();
         const reasons = (report._meta && report._meta.suppression_reasons) || [];
         for (const r of reasons) {
-          if (r && r.field) suppressionByField[r.field] = r;
+          if (r && typeof r.field === 'string') suppressionByField.set(r.field, r);
         }
         const suppressionNote = (field) => {
-          const r = suppressionByField[field];
+          const r = suppressionByField.get(field);
           if (!r) return '';
           // Single sentence per S5-Q5 ratified UX. No raw reason codes leak.
           const why =
@@ -1231,7 +1231,7 @@
                   '</section>'
                 );
               })()
-            : suppressionByField['corridor_map']
+            : suppressionByField.has('corridor_map')
               ? '<section id="corridor-map-container" class="funnel-card corridor-map" data-testid="corridor-map-section" aria-labelledby="section-corridor-map">' +
                 '<h3 id="section-corridor-map">Corridor Scan Map</h3>' +
                 suppressionNote('corridor_map') +

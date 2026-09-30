@@ -42,7 +42,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # Level 1 drift-catch: the guard proves ITSELF before it judges the PR.
       - name: Self-test the guard logic (born-red cases incl. #466)

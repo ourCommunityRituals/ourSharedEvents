@@ -31,8 +31,8 @@
     "h3-js": "^4.5.0"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.14.2",
-    "@cloudflare/workers-types": "^4.0.0",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260930.2",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/jsdom": "^28.0.1",
@@ -43,11 +43,15 @@
     "jsdom": "^29.0.2",
     "typescript": "^5.0.0",
     "vitest": "^4.1.3",
-    "wrangler": "^4.81.1"
+    "wrangler": "^4.145.0"
   },
   "overrides": {
-    "undici": "7.29.0",
+    "undici": "7.30.0",
     "ws": "8.21.0",
-    "sharp": "0.35.0"
+    "sharp": "0.35.5",
+    "@cloudflare/vitest-pool-workers": {
+      "wrangler": "$wrangler",
+      "miniflare": "^5.20260930.0-alpha"
+    }
   }
 }

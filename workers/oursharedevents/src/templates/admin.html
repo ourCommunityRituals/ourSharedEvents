@@ -2984,13 +2984,18 @@
                 if (slot) slot.replaceChildren(img);
               }
               if (wiz.signup === 'create' && data.qr && data.qr.register) {
-                var img2 = document.createElement('img');
-                img2.src = data.qr.register; // PNG data URI from the worker
-                img2.alt = 'Sign-up code — a phone scan opens the sign-up page';
-                img2.width = 110;
-                img2.height = 110;
-                var slot2 = document.getElementById('wizardQrSignup');
-                if (slot2) slot2.replaceChildren(img2);
+                // Only a PNG data URI from the worker is shown; anything else
+                // (a URL, markup) is dropped rather than put in the page.
+                var regQr = String(data.qr.register);
+                if (/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(regQr)) {
+                  var img2 = document.createElement('img');
+                  img2.src = regQr;
+                  img2.alt = 'Sign-up code — a phone scan opens the sign-up page';
+                  img2.width = 110;
+                  img2.height = 110;
+                  var slot2 = document.getElementById('wizardQrSignup');
+                  if (slot2) slot2.replaceChildren(img2);
+                }
                 if (data.links && data.links.register) {
                   setCardUrl('wizard-link-signup', data.links.register);
                 }
@@ -4820,11 +4825,13 @@
           if (!data.ok) throw new Error(data.error || 'Failed');
           if (typeof window._adminAnnounce === 'function')
             window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
-        } catch (err) {
+        } catch {
           el.checked = !enabled; // revert on failure
           if (typeof window._adminAnnounce === 'function')
             window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
-          console.error('Flag toggle failed:', err);
+          // The error can carry server-supplied text, so it is not logged; the
+          // announcement above already tells the organizer which flag failed.
+          console.error('Flag toggle failed.');
         } finally {
           el.disabled = false;
         }
@@ -5037,9 +5044,13 @@
           el.textContent = text || '';
           el.className = 'create-msg' + (kind ? ' ' + kind : '');
         }
-        function paShowPreview(url) {
+        // cover_image_url is stored as free text (events.ts only caps its
+        // length), so only a path this Worker serves from R2 is previewed.
+        var UPLOAD_PATH = /^\/api\/v2\/uploads\/[A-Za-z0-9._/-]+$/;
+        function paShowPreview(raw) {
           var img = document.getElementById('pa-preview');
           var none = document.getElementById('pa-preview-none');
+          var url = typeof raw === 'string' && UPLOAD_PATH.test(raw) ? raw : null;
           if (url) {
             if (img) {
               img.src = url;
@@ -5259,7 +5270,7 @@
           d.textContent = String(s ?? '');
           return d.innerHTML;
         };
-        window._pdItems = window._pdItems || {};
+        window._pdItems = window._pdItems instanceof Map ? window._pdItems : new Map();
 
         // OSE-1357: a row is a STATIC skeleton (no server data — its testids stay
         // literal for the registry) cloned from a <template>, then filled with
@@ -5432,14 +5443,14 @@
               panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
               return;
             }
-            window._pdItems = {};
+            window._pdItems = new Map();
             const grid = fromTemplate('<div class="pd-qr-grid" data-testid="poster-deployments-table"></div>');
             items.forEach((pd) => {
-              window._pdItems[pd.id] = {
+              window._pdItems.set(pd.id, {
                 qr_data_uri: dataImage(pd.qr_data_uri),
                 scan_url: text(pd.scan_url),
                 label: text(pd.placement_label),
-              };
+              });
               grid.appendChild(renderPdCard(pd));
             });
             // Mobile (<=640px, see CSS) hides every .qr-card except the one
@@ -5526,7 +5537,7 @@
         // organizer can drop it into a physical poster. No canvas/redraw — the
         // server already produced the image (poster-deployments.ts / lib/qr).
         window.downloadPosterQr = function (pdId) {
-          const item = window._pdItems[pdId];
+          const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
             window._adminAnnounce('QR not available for download.', 'error');
             return;
@@ -5544,7 +5555,7 @@
         // Open a minimal print window for a single deployment QR. Mirrors the
         // GAS QRRegenerator printQR frame, stripped of banned-lexicon copy.
         window.printPosterQr = function (pdId) {
-          const item = window._pdItems[pdId];
+          const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
             window._adminAnnounce('QR not available to print.', 'error');
             return;
