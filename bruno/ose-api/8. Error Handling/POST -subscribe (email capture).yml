@@ -20,9 +20,9 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns a response', function() {\r
+      code: "test('Returns a response', function() {
 
-        \    expect(res.getStatus()).to.be.oneOf([200, 400, 405, 500, 503]);\r
+        \    expect(res.getStatus()).to.be.oneOf([200, 400, 405, 500, 503]);
 
         });"
 

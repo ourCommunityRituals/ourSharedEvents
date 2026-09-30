@@ -17,17 +17,17 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-002: locks INVALID_EMAIL as a client-mappable code. The friendly-copy\r
+      code: "// OSE-R-002: locks INVALID_EMAIL as a client-mappable code. The friendly-copy
 
-        // map renders: 'That email doesn't look right. Please check and try again.'\r
+        // map renders: 'That email doesn't look right. Please check and try again.'
 
-        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });\r
+        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });
 
-        const json = res.getBody();\r
+        const json = res.getBody();
 
-        test('body.code is INVALID_EMAIL (client-mappable)', function() {\r
+        test('body.code is INVALID_EMAIL (client-mappable)', function() {
 
-        \    expect(json.code).to.equal('INVALID_EMAIL');\r
+        \    expect(json.code).to.equal('INVALID_EMAIL');
 
         });"
 

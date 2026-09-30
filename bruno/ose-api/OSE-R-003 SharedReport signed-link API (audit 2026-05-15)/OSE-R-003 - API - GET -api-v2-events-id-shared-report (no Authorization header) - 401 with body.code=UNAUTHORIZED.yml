@@ -14,31 +14,31 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-003 (2026-05-15): the /sharedReport page's signed-link mode reads\r
+      code: "// OSE-R-003 (2026-05-15): the /sharedReport page's signed-link mode reads
 
-        // body.code to choose friendly copy. This locks the wire contract for the\r
+        // body.code to choose friendly copy. This locks the wire contract for the
 
-        // no-auth path: 401 + code=UNAUTHORIZED. If the server stops emitting `code`\r
+        // no-auth path: 401 + code=UNAUTHORIZED. If the server stops emitting `code`
 
-        // the UI falls through to the HTTP-status map — degraded but not broken —\r
+        // the UI falls through to the HTTP-status map — degraded but not broken —
 
-        // and this test flags the regression.\r
+        // and this test flags the regression.
 
-        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });
 
-        const json = res.getBody();\r
+        const json = res.getBody();
 
-        test('body.ok is false', function() { expect(json.ok).to.equal(false); });\r
+        test('body.ok is false', function() { expect(json.ok).to.equal(false); });
 
-        test('body.code is UNAUTHORIZED (client-mappable)', function() {\r
+        test('body.code is UNAUTHORIZED (client-mappable)', function() {
 
-        \    expect(json.code).to.equal('UNAUTHORIZED');\r
+        \    expect(json.code).to.equal('UNAUTHORIZED');
 
-        });\r
+        });
 
-        test('WWW-Authenticate header advertises bearer realm', function() {\r
+        test('WWW-Authenticate header advertises bearer realm', function() {
 
-        \    expect(res.getHeader('WWW-Authenticate') || '').to.include('Bearer');\r
+        \    expect(res.getHeader('WWW-Authenticate') || '').to.include('Bearer');
 
         });"
 

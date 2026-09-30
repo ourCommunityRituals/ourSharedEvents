@@ -87,3 +87,23 @@ has not yet answered.
   - Until that consent model is designed (alongside the broader matching-network /
     QR-funnel work), Path 2 stays off. The `brand_id` fence and strict gate it
     carries are defense-in-depth for that future, not a sign it is ready.
+
+## Amendment — 2026-09-30: sponsor-initiated placements (sponsor discovery, PR #700)
+
+**Context.** The Decision above makes the organizer side permissive _because the organizer created the placement_. Sponsor discovery (`src/lib/sponsor-discovery.ts`) adds the first placement the organizer did **not** create: a sponsor, from its `/sponsor` page, asks to back one of its brand's published, upcoming events.
+
+**Decision.** A sponsor-initiated placement is `source = 'sponsor_request'` and needs **both** sides' explicit yes before it renders anywhere:
+
+| State                   | `sponsor_accepted` | `organizer_accepted` | `is_active` | Renders publicly |
+| ----------------------- | ------------------ | -------------------- | ----------- | ---------------- |
+| Sponsor asked (waiting) | 1                  | NULL                 | 0           | no               |
+| Organizer approved      | 1                  | 1                    | 1           | yes              |
+| Organizer declined      | 1                  | 0                    | 0           | no               |
+
+- **Two independent locks.** A request is born `is_active = 0`, and the public resolvers read `COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1`. For organizer-created placements that is exactly the original permissive rule; for requests, NULL means **no**. A future writer that flips `is_active` alone still cannot publish a request. Applied at the same public readers as the original decision (`sponsor-resolver.ts` Path 1, `pages.ts` sponsor strip, `sponsors.ts` impression/click gate, `sponsor-asset-route.ts`). Writers of `sponsor_placement.is_active` are enumerated and reviewed by `tests/red-team/sponsor-promotion.spec.ts`.
+- **Only the organizer approves.** `POST /api/v2/admin/sponsor-requests/:id/respond` (admin-gated, brand-scoped, JSON-only, audited). The organizer attaching that sponsor to that event through the sponsors card is also an approval, since it is the organizer's explicit act and the sponsor's yes is already recorded. An organizer may approve after an earlier decline; a decline cannot be applied to an approved placement (use Deactivate).
+- **Scope.** The brand comes from the signed sponsor-home claim; a sponsor can only ask about its own brand's listed, active, upcoming events, which `/events` already lists publicly. Event fields reach the sponsor through the public event projection (`toPublicEvent`), so a location-precision policy (OSE-1245) applies there too.
+- **Limits.** At most 5 waiting requests per sponsor, counted only on events still listed and upcoming (a stale request never locks a sponsor out), enforced inside the insert. The route is rate-limited at the router.
+- **Path 2 (geo auto-match, still DEFERRED).** Its `NOT EXISTS (… organizer_accepted = 0 OR sponsor_accepted = 0 …)` means a **declined** request also suppresses template-matched rendering of that sponsor on that event, which is the intended reading. A **waiting** request does not; that is part of Path 2's existing event-side consent gap and must be closed with it before Path 2 is ever enabled.
+
+**Consequences.** Organizers see requests in the Event checklist inbox ("N sponsors asked to join") and on the sponsors card (Approve / Decline). Sponsors see them under "Your requests" (waiting / the organizer said no). Coverage: `tests/sponsor-discovery.spec.ts` (including "not on any public surface until approved", verified red by making requests born switched on), `tests/playwright/sponsor-home-flow.spec.ts` (ask → approve → public, in a browser).

@@ -11,33 +11,33 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        test('Returns 404 or 503', function() {\r
+        test('Returns 404 or 503', function() {
 
-        \    expect(res.getStatus()).to.be.oneOf([404, 503]);\r
+        \    expect(res.getStatus()).to.be.oneOf([404, 503]);
 
-        });\r
+        });
 
-        \r
+        
 
-        if (res.getStatus() === 404) {\r
+        if (res.getStatus() === 404) {
 
-        \    test('NOT_FOUND code', function() {\r
+        \    test('NOT_FOUND code', function() {
 
-        \        expect(json.code).to.eql('NOT_FOUND');\r
+        \        expect(json.code).to.eql('NOT_FOUND');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('ok is false', function() {\r
+        \    test('ok is false', function() {
 
-        \        expect(json.ok).to.eql(false);\r
+        \        expect(json.ok).to.eql(false);
 
-        \    });\r
+        \    });
 
         }"
 

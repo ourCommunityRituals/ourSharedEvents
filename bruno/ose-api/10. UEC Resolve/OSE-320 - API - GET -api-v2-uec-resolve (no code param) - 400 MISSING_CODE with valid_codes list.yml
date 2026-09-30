@@ -11,35 +11,35 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const json = res.getBody();\r
+      code: "const json = res.getBody();
 
-        test('Status is 400', () => expect(res.getStatus()).to.equal(400));\r
+        test('Status is 400', () => expect(res.getStatus()).to.equal(400));
 
-        test('ok is false', () => expect(json.ok).to.be.false);\r
+        test('ok is false', () => expect(json.ok).to.be.false);
 
-        test('error is MISSING_CODE', () => expect(json.error).to.eql('MISSING_CODE'));\r
+        test('error is MISSING_CODE', () => expect(json.error).to.eql('MISSING_CODE'));
 
-        test('valid_codes.ids includes all 11 canonical', () => {\r
+        test('valid_codes.ids includes all 11 canonical', () => {
 
-        \    expect(json.valid_codes.ids).to.have.lengthOf(11);\r
+        \    expect(json.valid_codes.ids).to.have.lengthOf(11);
 
-        \    expect(json.valid_codes.ids).to.include('ENTER');\r
+        \    expect(json.valid_codes.ids).to.include('ENTER');
 
-        \    expect(json.valid_codes.ids).to.include('SHOP');\r
+        \    expect(json.valid_codes.ids).to.include('SHOP');
 
-        });\r
+        });
 
-        test('valid_codes.labels includes all 11', () => {\r
+        test('valid_codes.labels includes all 11', () => {
 
-        \    expect(json.valid_codes.labels).to.have.lengthOf(11);\r
+        \    expect(json.valid_codes.labels).to.have.lengthOf(11);
 
-        });\r
+        });
 
-        test('message uses friendly voice (no raw stack trace)', () => {\r
+        test('message uses friendly voice (no raw stack trace)', () => {
 
-        \    expect(json.message).to.not.match(/TypeError|undefined|at .*\\.ts:/);\r
+        \    expect(json.message).to.not.match(/TypeError|undefined|at .*\\.ts:/);
 
-        \    expect(json.message.toLowerCase()).to.match(/required|canonical|provide/);\r
+        \    expect(json.message.toLowerCase()).to.match(/required|canonical|provide/);
 
         });"
 

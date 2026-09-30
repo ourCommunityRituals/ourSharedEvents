@@ -28,6 +28,7 @@ interface TestEnv {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const EXPECTED_TABLES = [
+  'corridor_readiness_latch', // 0082 (VISION §6.2b — a corridor's map, once open, stays open)
   'corridor_regulatory_status',
   'corridors',
   'event_templates',
@@ -139,6 +140,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
   //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
   sponsor_asset: 11, // 0081 rebuilds it (CHECK += logo_compact), same 11 columns
+  corridor_readiness_latch: 3, // 0082: brand_id, h3_res7, latched_at
   // sponsor_placement: id, sponsor_business_id, event_id, tier, campaign_id, source,
   //   polarity, locality_band, click_token, display_token, is_active, created_at,
   //   updated_at = 13.

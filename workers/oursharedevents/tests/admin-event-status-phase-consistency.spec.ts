@@ -210,7 +210,7 @@ describe('OSE-1360: every display is wired to the one view', () => {
 
   test('the checklist renders view.steps and view.next — no second derivation', () => {
     expect(ADMIN_HTML).toContain(
-      'var view = oseEventView(e, { stats: stats, posters: posters, sponsors: sponsors });'
+      'var view = oseEventView(e, { stats: stats, posters: posters, sponsors: sponsors, answers: answers });'
     );
     expect(ADMIN_HTML).toContain('ol.innerHTML = view.steps.map(');
     expect(ADMIN_HTML).toContain('var nextStep = view.next;');

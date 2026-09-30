@@ -14,37 +14,37 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-004: defensive — error pages must not leak D1 errors, stack\r
+      code: "// OSE-R-004: defensive — error pages must not leak D1 errors, stack
 
-        // traces, or 'undefined' to customers.\r
+        // traces, or 'undefined' to customers.
 
-        //\r
+        //
 
-        // OSE-348: this no-leak assertion is the most important one because it's\r
+        // OSE-348: this no-leak assertion is the most important one because it's
 
-        // the UNIVERSAL contract — true regardless of whether the response comes\r
+        // the UNIVERSAL contract — true regardless of whether the response comes
 
-        // from worker (404) or WAF (403). A WAF block page would never contain\r
+        // from worker (404) or WAF (403). A WAF block page would never contain
 
-        // D1 error messages (different infrastructure entirely), but checking it\r
+        // D1 error messages (different infrastructure entirely), but checking it
 
-        // here ensures the contract holds end-to-end.\r
+        // here ensures the contract holds end-to-end.
 
-        test('Response is blocked (404 worker OR 403 WAF)', function() {\r
+        test('Response is blocked (404 worker OR 403 WAF)', function() {
 
-        \    expect([404, 403]).to.include(res.getStatus());\r
+        \    expect([404, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        ['no such table', 'no such column', 'D1_ERROR', 'stack:', 'at async'].forEach(function(phrase) {\r
+        ['no such table', 'no such column', 'D1_ERROR', 'stack:', 'at async'].forEach(function(phrase) {
 
-        \    test('No dev jargon: ' + phrase, function() {\r
+        \    test('No dev jargon: ' + phrase, function() {
 
-        \        expect(body).to.not.include(phrase);\r
+        \        expect(body).to.not.include(phrase);
 
-        \    });\r
+        \    });
 
         });"
 

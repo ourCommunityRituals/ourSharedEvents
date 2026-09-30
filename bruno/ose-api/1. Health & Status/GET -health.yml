@@ -11,93 +11,93 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        test('Status is 200 or 503', function() {\r
+        test('Status is 200 or 503', function() {
 
-        \    expect(res.getStatus()).to.be.oneOf([200, 503]);\r
+        \    expect(res.getStatus()).to.be.oneOf([200, 503]);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('ok matches db state', function() {\r
+        test('ok matches db state', function() {
 
-        \    if (json.db === 'error') {\r
+        \    if (json.db === 'error') {
 
-        \        expect(json.ok).to.eql(false);\r
+        \        expect(json.ok).to.eql(false);
 
-        \    } else {\r
+        \    } else {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    }\r
+        \    }
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has env field', function() {\r
+        test('Has env field', function() {
 
-        \    expect(json.env).to.be.a('string');\r
+        \    expect(json.env).to.be.a('string');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has version field', function() {\r
+        test('Has version field', function() {
 
-        \    expect(json.version).to.be.a('string');\r
+        \    expect(json.version).to.be.a('string');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has db field', function() {\r
+        test('Has db field', function() {
 
-        \    expect(json.db).to.be.oneOf(['ok', 'not_configured', 'error']);\r
+        \    expect(json.db).to.be.oneOf(['ok', 'not_configured', 'error']);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has timestamp (ISO 8601)', function() {\r
+        test('Has timestamp (ISO 8601)', function() {
 
-        \    expect(json.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);\r
+        \    expect(json.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);
 
-        });\r
+        });
 
-        \r
+        
 
-        // Capture environment info for other requests\r
+        // Capture environment info for other requests
 
-        bru.setEnvVar('dbStatus', json.db);\r
+        bru.setEnvVar('dbStatus', json.db);
 
-        bru.setEnvVar('workerEnv', json.env);\r
+        bru.setEnvVar('workerEnv', json.env);
 
-        bru.setEnvVar('workerVersion', json.version);\r
+        bru.setEnvVar('workerVersion', json.version);
 
-        \r
+        
 
-        // Flag if DB is not connected — abort Collection Runner to avoid cascade failures\r
+        // Flag if DB is not connected — abort Collection Runner to avoid cascade failures
 
-        // Set env var abortOnDbFailure=false to disable abort for manual exploration\r
+        // Set env var abortOnDbFailure=false to disable abort for manual exploration
 
-        if (json.db !== 'ok') {\r
+        if (json.db !== 'ok') {
 
-        \    console.warn('WARNING: D1 database status is \"' + json.db + '\" — events and forms endpoints will return 503');\r
+        \    console.warn('WARNING: D1 database status is \"' + json.db + '\" — events and forms endpoints will return 503');
 
-        \    const shouldAbort = bru.getEnvVar('abortOnDbFailure') !== 'false';\r
+        \    const shouldAbort = bru.getEnvVar('abortOnDbFailure') !== 'false';
 
-        \    if (shouldAbort) {\r
+        \    if (shouldAbort) {
 
-        \        console.warn('ABORTING collection run — set abortOnDbFailure=false to override');\r
+        \        console.warn('ABORTING collection run — set abortOnDbFailure=false to override');
 
-        \        bru.runner.stopExecution();\r
+        \        bru.runner.stopExecution();
 
-        \    }\r
+        \    }
 
         }"
 

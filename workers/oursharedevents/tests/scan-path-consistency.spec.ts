@@ -57,9 +57,16 @@ describe('scan-path consistency | walkthrough 2026-09-03', () => {
     }
   });
 
-  test('landing: platform accent #4361ee, no Tailwind-blue drift', async () => {
+  // The accent is the design system's, not the page's (ADR-008). The landing
+  // used to write `--accent: var(--accent, #4361ee)`, a self-referencing cycle
+  // that computed to nothing, so the #4361ee this test matched was never
+  // rendered (CCR PR 700). One scan path, one accent: the page takes its
+  // colour tokens from /ui.css and declares none of its own. The rendered
+  // value is measured in a real browser by tests/playwright/landing-theme.spec.ts.
+  test('landing: design-system accent from /ui.css, no own accent, no Tailwind-blue drift', async () => {
     const html = await (await SELF.fetch('https://t.test/')).text();
-    expect(html).toMatch(/#4361ee/i);
+    expect(html).toContain('href="/ui.css"');
+    expect(html).not.toMatch(/--accent\s*:/);
     expect(html).not.toMatch(/#2563eb|#1d4ed8/i);
   });
 

@@ -20,17 +20,17 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        if (res.getStatus() === 200) {\r
+        if (res.getStatus() === 200) {
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
         }"
 

@@ -11,17 +11,17 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 405', function() {\r
+      code: "test('Returns 405', function() {
 
-        \    expect(res.getStatus()).to.equal(405);\r
+        \    expect(res.getStatus()).to.equal(405);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has Allow header', function() {\r
+        test('Has Allow header', function() {
 
-        \    expect(res.getHeader('Allow')).to.eql('POST');\r
+        \    expect(res.getHeader('Allow')).to.eql('POST');
 
         });"
 

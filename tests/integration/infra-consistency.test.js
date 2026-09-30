@@ -283,6 +283,43 @@ describe('Bruno contract latency budgets', () => {
     expect(collection).toContain('Response time < 6000ms');
     expect(collection).toContain('expect(elapsed).to.be.below(6000)');
   });
+
+  // Bruno strips comments with `decomment`, which picks ONE line ending for the
+  // whole merged script by majority vote. The ex-Newman conversion left the
+  // collection-level script CRLF, so it outvoted every short LF request script
+  // and each `// comment` swallowed everything up to the next CRLF — request
+  // assertions (and the latency budget above) silently never ran while the
+  // requests still reported PASS. Found in CCR PR 700. One ending everywhere.
+  test('no Bruno script carries a carriage return (decomment would eat assertions)', () => {
+    const yaml = require('js-yaml');
+    const { readdirSync, statSync } = require('fs');
+    const walk = (dir) =>
+      readdirSync(join(ROOT, dir)).flatMap((name) => {
+        const rel = `${dir}/${name}`;
+        if (statSync(join(ROOT, rel)).isDirectory()) return walk(rel);
+        return rel.endsWith('.yml') ? [rel] : [];
+      });
+    const offenders = [];
+    const collect = (node, file) => {
+      if (Array.isArray(node)) node.forEach((n) => collect(n, file));
+      else if (node && typeof node === 'object') {
+        if (typeof node.code === 'string' && node.code.includes('\r')) offenders.push(file);
+        Object.values(node).forEach((n) => collect(n, file));
+      }
+    };
+    const files = walk('bruno');
+    expect(files.length).toBeGreaterThan(100);
+    for (const f of files) collect(yaml.load(readFile(f)), f);
+    expect(offenders).toEqual([]);
+  });
+
+  test('the latency budget is real code, not folded into a comment line', () => {
+    const yaml = require('js-yaml');
+    const doc = yaml.load(readFile('bruno/ose-api/opencollection.yml'));
+    const post = doc.request.scripts.find((s) => s.type === 'after-response').code;
+    const lines = post.split('\n').map((l) => l.trim());
+    expect(lines).toContain('if (isAdminRegistrationsRead) {');
+  });
 });
 
 // ─── Token Naming Consistency ────────────────────────────────────────

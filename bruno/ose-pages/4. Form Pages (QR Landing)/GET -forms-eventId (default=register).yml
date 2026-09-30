@@ -11,11 +11,11 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });\r
+      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });
 
-        if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }\r
+        if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }
 
-        test('Has form element', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('<form'); });\r
+        test('Has form element', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('<form'); });
 
         test('Has data-testid attributes', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('data-testid'); });"
 

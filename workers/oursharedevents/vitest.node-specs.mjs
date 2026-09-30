@@ -119,6 +119,7 @@ export const NODE_SPECS = [
   // event shape; asserts the CSS-filter tags (window/type/product/modality) and
   // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
   'tests/landing-area.spec.ts',
+  'tests/attendee-map.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
@@ -159,6 +160,9 @@ export const NODE_SPECS = [
   // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks
   // extracted from the admin.html template string; no DOM / cloudflare:test.
   'tests/admin-event-status-phase-consistency.spec.ts',
+  'tests/admin-organizer-inbox.spec.ts',
+  'tests/admin-events-upcoming-cursor.spec.ts',
+  'tests/public-projection-routing.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +

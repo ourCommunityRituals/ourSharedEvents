@@ -11,7 +11,7 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });\r
+      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });
 
         if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }"
 

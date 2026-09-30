@@ -11,6 +11,12 @@
  *   POST /api/v2/sponsor/placements/:id/respond      (public, token in body, read-limited)
  *        → sets sponsor_placement.sponsor_accepted for a placement the token's
  *          sponsor owns; audited under actor `sponsor:<id>`
+ *   POST /api/v2/sponsor/requests                     (public, token in body, rate-limited)
+ *        → the sponsor asks to back one of its brand's published, upcoming
+ *          events; stored switched OFF until the organizer approves
+ *          (lib/sponsor-discovery — ADR-019 two-sided consent)
+ *   POST /api/v2/admin/sponsor-requests/:id/respond   (admin, brand-scoped, audited)
+ *        → the organizer approves (switches the placement on) or declines
  *
  * WHY THIS EXISTS. The organizer already controls which sponsors appear
  * (admin sponsors card) and the report already gives each side its own view.
@@ -60,6 +66,12 @@ import {
   type SponsorHomeAuthEnv,
 } from '../lib/sponsor-home-auth';
 import { mintSignedLinkToken, type SharedReportAuthEnv } from '../lib/shared-report-auth';
+import {
+  readDiscoverableEvents,
+  readSponsorRequests,
+  createSponsorRequest,
+  answerSponsorRequest,
+} from '../lib/sponsor-discovery';
 
 export interface SponsorHomeEnv
   extends
@@ -164,10 +176,10 @@ export async function handleSponsorHomePage(
   if (!claim || !env.DB) return invalidLinkPage();
 
   const sponsor = await env.DB.prepare(
-    'SELECT id, name, is_active FROM sponsor_business WHERE id = ? AND brand_id = ? LIMIT 1'
+    'SELECT id, name, is_active, h3_res7 FROM sponsor_business WHERE id = ? AND brand_id = ? LIMIT 1'
   )
     .bind(claim.sponsor_id, claim.brand_id)
-    .first<{ id: string; name: string; is_active: number }>();
+    .first<{ id: string; name: string; is_active: number; h3_res7: string | null }>();
   if (!sponsor || Number(sponsor.is_active) === 0) return invalidLinkPage();
 
   const rows = await env.DB.prepare(
@@ -227,9 +239,20 @@ export async function handleSponsorHomePage(
     reach.set(p.event_id, floorPreEventActivity(raw));
   }
 
+  // Sponsor discovery (lib/sponsor-discovery): the brand's published, upcoming
+  // events this sponsor is not on yet, and the requests it has already sent.
+  // Both keyed to the SIGNED claim's brand, like every other read on this page.
+  const scoped = { id: sponsor.id, brand_id: claim.brand_id, h3_res7: sponsor.h3_res7 };
+  const [discoverable, requests] = await Promise.all([
+    readDiscoverableEvents(env.DB, scoped),
+    readSponsorRequests(env.DB, scoped),
+  ]);
+
   const page = renderSponsorHomePage({
     sponsor: { id: sponsor.id, name: sponsor.name },
     placements,
+    discoverable,
+    requests,
     expiresIso: new Date(claim.exp * 1000).toISOString(),
     reportLinkFor: (eventId) => reportLinks.get(eventId) ?? null,
     preEventReachFor: (eventId) => reach.get(eventId) ?? null,
@@ -311,6 +334,150 @@ export async function handleSponsorPlacementRespond(
 
   return Response.json(
     { ok: true, status: 200, id: placementId, sponsor_accepted: body.accepted ? 1 : 0 },
+    { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': id } }
+  );
+}
+
+// ─── Public: a sponsor asks to back an event ─────────────────────────────────
+
+export async function handleSponsorRequestCreate(
+  request: Request,
+  env: SponsorHomeEnv
+): Promise<Response> {
+  // Rate limit lives at the router (publicReadLimited('sponsor-request', …)).
+  const id = rid();
+  if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
+  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+    return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
+  }
+  let body: Record<string, unknown>;
+  try {
+    const text = await request.text();
+    if (text.length > 4096) return jsonError('PAYLOAD_TOO_LARGE', 'Body too large', 400, id);
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return jsonError('INVALID_BODY', 'Request body must be valid JSON', 400, id);
+  }
+  const claim = await verifySponsorHomeToken(
+    env,
+    typeof body.token === 'string' ? body.token : null
+  );
+  if (!claim) return jsonError('UNAUTHORIZED', 'Sponsor link is not valid', 401, id);
+  const eventId = typeof body.event_id === 'string' ? body.event_id.trim().slice(0, 128) : '';
+  if (!eventId) return jsonError('MISSING_FIELD', 'event_id is required', 400, id);
+
+  const sponsor = await env.DB.prepare(
+    `SELECT id, brand_id, tier, lat, lon, is_active FROM sponsor_business
+      WHERE id = ? AND brand_id = ? LIMIT 1`
+  )
+    .bind(claim.sponsor_id, claim.brand_id)
+    .first<{
+      id: string;
+      brand_id: string;
+      tier: string | null;
+      lat: number | null;
+      lon: number | null;
+      is_active: number;
+    }>();
+  if (!sponsor || Number(sponsor.is_active) === 0) {
+    return jsonError('UNAUTHORIZED', 'Sponsor link is not valid', 401, id);
+  }
+
+  const outcome = await createSponsorRequest(env.DB, sponsor, eventId, `spl_${rid()}`);
+  if (!outcome.ok) {
+    const map = {
+      // Out of brand, unpublished, over, or missing all read the same (no oracle).
+      NOT_DISCOVERABLE: [404, 'That event is not open for sponsor requests.'],
+      ALREADY_LINKED: [409, 'You are already linked to this event.'],
+      TOO_MANY_OPEN: [
+        409,
+        'You have several requests waiting. Once an organizer answers one, you can ask again.',
+      ],
+    } as const;
+    const [status, message] = map[outcome.code];
+    return jsonError(outcome.code, message, status, id);
+  }
+
+  await logAdminAction(env as { DB: D1Database }, {
+    action: 'SPONSOR_REQUEST_PLACEMENT',
+    actor: `sponsor:${claim.sponsor_id}`,
+    resource_type: 'sponsor_placement',
+    resource_id: outcome.placement_id,
+    request_id: id,
+    outcome: 'success',
+    details: { event_id: outcome.event_id },
+  });
+
+  return Response.json(
+    { ok: true, status: 201, id: outcome.placement_id, event_id: outcome.event_id },
+    {
+      status: 201,
+      headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': id },
+    }
+  );
+}
+
+// ─── Admin: the organizer answers a sponsor's request ────────────────────────
+
+export async function handleAdminAnswerSponsorRequest(
+  request: Request,
+  env: SponsorHomeEnv,
+  placementId: string
+): Promise<Response> {
+  const id = rid();
+  if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
+  // JSON-only, like every other admin write (sponsors.ts parseBody). A
+  // cross-site <form enctype="text/plain"> can shape a JSON-looking body but
+  // cannot set this Content-Type without a CORS preflight — without the check,
+  // a sponsor could lure an organizer into approving the sponsor's own request
+  // (CCR PR #700, L1 #1). Body capped like the sponsor-side writes.
+  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+    return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
+  }
+  let body: Record<string, unknown>;
+  try {
+    const text = await request.text();
+    if (text.length > 4096) return jsonError('PAYLOAD_TOO_LARGE', 'Body too large', 400, id);
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return jsonError('INVALID_BODY', 'Request body must be valid JSON', 400, id);
+  }
+  if (typeof body.approve !== 'boolean') {
+    return jsonError('MISSING_FIELD', 'approve must be true or false', 400, id);
+  }
+  const actor = extractAdminActor(request, env);
+  const scope = await resolveAdminBrandScopeAsync(actor, env);
+  if (scope.mode === 'deny') {
+    return jsonError('NOT_FOUND', `Request not found: ${placementId}`, 404, id);
+  }
+  const answer = await answerSponsorRequest(
+    env.DB,
+    placementId,
+    body.approve,
+    scope.mode === 'scoped' ? scope.brandIds : null
+  );
+  if (!answer.ok) {
+    return answer.code === 'NOT_FOUND'
+      ? jsonError('NOT_FOUND', `Request not found: ${placementId}`, 404, id)
+      : jsonError('ALREADY_ANSWERED', 'This request has already been answered', 409, id);
+  }
+  // Bust the cache-fronted public sponsor list either way, so poster / display /
+  // JSON agree with the event page immediately (a decline also changes what the
+  // dark geo path would consider — see ADR-019 amendment).
+  await invalidateSponsorsCache(answer.event_id);
+
+  await logAdminAction(env as { DB: D1Database }, {
+    action: 'ANSWER_SPONSOR_REQUEST',
+    actor,
+    resource_type: 'sponsor_placement',
+    resource_id: placementId,
+    request_id: id,
+    outcome: 'success',
+    details: { approved: answer.approved, event_id: answer.event_id },
+  });
+
+  return Response.json(
+    { ok: true, status: 200, id: placementId, approved: answer.approved },
     { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': id } }
   );
 }

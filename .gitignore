@@ -105,3 +105,7 @@ postman/postman/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# measure-startup.mjs temp files (workers/oursharedevents/scripts/measure-startup.mjs)
+.h3-stub.measure-startup.tmp.mjs
+.wrangler.measure-startup.tmp.toml

@@ -11,29 +11,29 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "if (res.getStatus() === 200) {\r
+      code: "if (res.getStatus() === 200) {
 
-        \    test('Returns HTML', function() {\r
+        \    test('Returns HTML', function() {
 
-        \        expect(res.getHeader('Content-Type')).to.include('text/html');\r
+        \        expect(res.getHeader('Content-Type')).to.include('text/html');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Has admin content', function() {\r
+        \    test('Has admin content', function() {
 
-        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('admin');\r
+        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('admin');
 
-        \    });\r
+        \    });
 
-        } else {\r
+        } else {
 
-        \    test('Returns 401 without valid token', function() {\r
+        \    test('Returns 401 without valid token', function() {
 
-        \        expect(res.getStatus()).to.equal(401);\r
+        \        expect(res.getStatus()).to.equal(401);
 
-        \    });\r
+        \    });
 
         }"
 

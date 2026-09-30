@@ -11,19 +11,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 400 for eventId exceeding 64 chars', function () {\r
+      code: "test('Returns 400 for eventId exceeding 64 chars', function () {
 
-        \  expect(res.getStatus()).to.equal(400);\r
+        \  expect(res.getStatus()).to.equal(400);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Error code is INVALID_EVENT_ID', function () {\r
+        test('Error code is INVALID_EVENT_ID', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.code).to.eql('INVALID_EVENT_ID');\r
+        \  expect(json.code).to.eql('INVALID_EVENT_ID');
 
         });"
 

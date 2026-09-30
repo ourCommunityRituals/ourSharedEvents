@@ -20,25 +20,25 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        test('Returns 400 or 403', function() {\r
+        test('Returns 400 or 403', function() {
 
-        \    expect(res.getStatus()).to.be.oneOf([400, 403]);\r
+        \    expect(res.getStatus()).to.be.oneOf([400, 403]);
 
-        });\r
+        });
 
-        \r
+        
 
-        if (res.getStatus() === 400) {\r
+        if (res.getStatus() === 400) {
 
-        \    test('MISSING_FIELD code', function() {\r
+        \    test('MISSING_FIELD code', function() {
 
-        \        expect(json.code).to.eql('MISSING_FIELD');\r
+        \        expect(json.code).to.eql('MISSING_FIELD');
 
-        \    });\r
+        \    });
 
         }"
 

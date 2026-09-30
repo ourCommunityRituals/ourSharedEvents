@@ -50,6 +50,8 @@
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
 import { inWhenWindow, discoveryChipLabel, type WhenOption } from './event-discovery.js';
+import { renderAttendeeMap } from './attendee-map.js';
+import { toPublicEvent } from './public-event-projection.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -63,6 +65,8 @@ export interface LandingAreaItem {
   lon?: unknown;
   template_id?: unknown;
   event_type_id?: unknown;
+  h3_res7?: unknown;
+  endDateISO?: unknown;
 }
 
 // ── Configured defaults (named, not hardcoded at the call site) ─────────────────
@@ -179,7 +183,7 @@ export function renderEmptyLandingArea(): RenderedLandingArea {
  */
 export function renderLandingArea(
   items: readonly LandingAreaItem[] | null | undefined,
-  opts?: { now?: number }
+  opts?: { now?: number; latched?: ReadonlySet<string> }
 ): RenderedLandingArea {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
 
@@ -231,7 +235,17 @@ export function renderLandingArea(
 
   const defaultView: 'list' | 'map' = windowCount >= LIST_MAX ? 'map' : 'list';
 
-  const html = buildAreaMarkup({ cards, types, defaultView });
+  // The map is drawn from the same `live` set as the cards, at corridor (res-7)
+  // precision only, and gated on how many events it would actually show.
+  // Fed through the public event projection (the allowlist behind
+  // GET /api/v2/events), so a location-precision policy (OSE-1245) that narrows
+  // what the public sees narrows the map with it.
+  const mapHtml = renderAttendeeMap(
+    live.map((e) => toPublicEvent(e as Record<string, unknown>)),
+    { now: now.getTime(), latched: opts?.latched }
+  ).html;
+
+  const html = buildAreaMarkup({ cards, types, defaultView, mapHtml });
   return { html, types, windowCount, defaultView };
 }
 
@@ -240,7 +254,7 @@ export function renderLandingArea(
 // All radios are emitted as siblings that PRECEDE `.toggles` and `.area`, so the
 // head stylesheet's `#id:checked ~ .toggles label` / `~ .area .event-card` rules
 // resolve. Type radios are dynamic, so their selected-pill + hide rules are
-// emitted here as an inline <style> (CSP allows style-src 'unsafe-inline').
+// emitted here as an inline style element (CSP allows style-src 'unsafe-inline').
 
 function radio(id: string, group: string, checked: boolean): string {
   return `<input type="radio" name="${group}" id="${id}" class="toggle-radio"${checked ? ' checked' : ''} />`;
@@ -254,8 +268,9 @@ function buildAreaMarkup(args: {
   cards: string;
   types: { slug: string; label: string }[];
   defaultView: 'list' | 'map';
+  mapHtml: string;
 }): string {
-  const { cards, types, defaultView } = args;
+  const { cards, types, defaultView, mapHtml } = args;
   const listChecked = defaultView === 'list';
 
   // ── radios (all groups, before .toggles / .area) ──
@@ -307,11 +322,11 @@ function buildAreaMarkup(args: {
           <fieldset class="toggle-group" data-testid="toggle-product"><legend>Kind</legend>${pill('prod-all', 'All')}${pill('prod-ose', 'OSE')}${pill('prod-hybrid', 'Hybrid')}</fieldset>
         </div>`;
 
-  // OSE-1354: the map view never hides the cards. Until a real map exists it is a
-  // note ABOVE the same list, so every listed event stays one tap from its page.
+  // OSE-1354: the map view never hides the cards. The map (lib/attendee-map) sits
+  // ABOVE the same list, so every listed event stays one tap from its page.
   const area = `<div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
-            <div class="map-placeholder">A neighborhood map lands here &mdash; every event is listed below.</div>
+            ${mapHtml}
           </div>
           <div class="view-list" data-testid="area-list">${cards}
           </div>
