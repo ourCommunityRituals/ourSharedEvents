@@ -493,7 +493,10 @@
               // onerror — when the sponsor host 404s, the broken-image
               // listener attached below advances the rotation immediately
               // instead of leaving a broken <img> on the venue TV.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-testid="display-sponsor-sidebar-logo">' : '';
+              // OSE-1317: the side rail is the compact slot, so it prefers the
+              // sidebar logo and falls back to the header logo, then the name.
+              const sideSrc = [s.sidebar_logo_url, s.logo_url].find(function(u) { return typeof u === 'string' && /^https?:\/\//i.test(u); });
+              const logo = sideSrc ? '<img src="' + esc(sideSrc).replace(/"/g, '&quot;') + '" alt="' + esc(s.name).replace(/"/g, '&quot;') + '" referrerpolicy="no-referrer" data-testid="display-sponsor-sidebar-logo">' : '';
               return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(s.name) + '</span></div>' +
                 (total > 1 ? '<div class="sponsor-counter" data-testid="display-sponsor-counter">' + num + '/' + total + '</div>' : '');
             }

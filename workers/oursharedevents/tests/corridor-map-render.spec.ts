@@ -6,7 +6,8 @@
  *
  *   1. Section is the AC-named container: id="corridor-map-container",
  *      data-testid="corridor-map-section", aria-labelledby="section-corridor-map"
- *   2. SVG is injected directly (report.corridor_map.svg — not escaped)
+ *   2. SVG is not escaped: it is rebuilt node by node by mountCorridorSvg
+ *      (never assigned as HTML; behaviour tested in corridor-map-mount.spec.ts)
  *   3. Source distinction: 'fallback' → "Neighborhood Preview" heading,
  *      'live' → "Corridor Scan Map" heading
  *   4. Source note is rendered only for fallback maps
@@ -46,7 +47,7 @@ describe('OSE-628 | INT-01 | corridor_map SVG render gate', () => {
     expect(src).toContain('id="section-corridor-map"');
   });
 
-  test('template injects corridor_map.svg directly (not escaped)', () => {
+  test('template mounts corridor_map.svg without escaping it', () => {
     const src = getTemplate();
     expect(src).toContain('cm.svg');
     // Ensure it is NOT passed through esc() — direct innerHTML injection is

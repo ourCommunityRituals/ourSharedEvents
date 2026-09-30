@@ -24,8 +24,7 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0082_poster_deployments_add_placement_type.sql
- *  (0081 is taken by the in-flight sponsor-fields branch; ordering resolved at merge). */
+/** Highest migration in migrations/ — currently 0082_poster_deployments_add_placement_type.sql */
 export const REQUIRED_DB_MIGRATION = 82;
 
 /** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */

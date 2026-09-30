@@ -57,6 +57,12 @@ export interface SponsorRow {
   event_id: string;
   name: string;
   logo_url: string | null;
+  /**
+   * OSE-1317: the sidebar (square/compact) logo, sponsor_asset format
+   * 'logo_compact' (migration 0081). Optional — a surface with a compact slot
+   * prefers it and falls back to logo_url, then to the sponsor's name.
+   */
+  sidebar_logo_url?: string | null;
   website_url: string | null;
   tier: string;
   placement_formats: string;
@@ -129,6 +135,20 @@ function haversineDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * OSE-1317: the website a public surface may link to — https:// only, else null
+ * (the surface then renders the name without a link). Never javascript:, data:,
+ * http:, or an unparseable string.
+ */
+export function publicWebsiteUrl(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string' || raw.length > 500) return null;
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Core Resolution ────────────────────────────────────────────────────────────
 
 /**
@@ -174,6 +194,7 @@ export async function resolveSponsorsForEvent(
     sp.event_id AS event_id,
     sb.name AS name,
     la.url AS logo_url,
+    lc.url AS sidebar_logo_url,
     sb.website_url AS website_url,
     sp.tier AS tier,
     '[]' AS placement_formats,
@@ -193,6 +214,7 @@ export async function resolveSponsorsForEvent(
        FROM sponsor_placement sp
        JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+       LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
        WHERE sp.event_id = ? AND sp.is_active = 1
          AND sb.is_active = 1
          AND COALESCE(sp.organizer_accepted, 1) = 1
@@ -225,9 +247,11 @@ export async function resolveSponsorsForEvent(
       .prepare(
         `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
                 sb.h3_res7 AS h3_res7, la.url AS logo_url,
-                (SELECT sp2.tier FROM sponsor_placement sp2
+                (SELECT lc.url FROM sponsor_asset lc WHERE lc.sponsor_business_id = sb.id
+                  AND lc.format = 'logo_compact') AS sidebar_logo_url,
+                COALESCE((SELECT sp2.tier FROM sponsor_placement sp2
                   WHERE sp2.sponsor_business_id = sb.id
-                  ORDER BY sp2.created_at DESC, sp2.id DESC LIMIT 1) AS tier
+                  ORDER BY sp2.created_at DESC, sp2.id DESC LIMIT 1), sb.tier) AS tier
          FROM sponsor_business sb
          JOIN sponsor_event_types st ON st.sponsor_id = sb.id
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
@@ -249,6 +273,7 @@ export async function resolveSponsorsForEvent(
         website_url: string | null;
         h3_res7: string | null;
         logo_url: string | null;
+        sidebar_logo_url: string | null;
         tier: string | null;
       }>();
 
@@ -258,6 +283,7 @@ export async function resolveSponsorsForEvent(
       event_id: eventId,
       name: b.name,
       logo_url: b.logo_url,
+      sidebar_logo_url: b.sidebar_logo_url,
       website_url: b.website_url,
       tier: b.tier ?? 'standard',
       placement_formats: '[]',
@@ -323,7 +349,10 @@ export async function resolveSponsorsForEvent(
   for (const s of [...directSponsors, ...templateGeoSponsors]) {
     if (!seen.has(s.id)) {
       seen.add(s.id);
-      all.push(s);
+      // OSE-1317: an outbound link renders only for an https:// website. Writes
+      // are validated, but a row stored before that rule (or seeded directly)
+      // is normalised here, at the one seam every public surface reads through.
+      all.push({ ...s, website_url: publicWebsiteUrl(s.website_url) });
     }
   }
 
