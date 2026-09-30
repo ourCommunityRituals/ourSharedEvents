@@ -153,15 +153,24 @@ export function phaseToPool(phase: number | null | undefined): RegulatoryPool {
  * Resolve the target BigQuery dataset for a given regulatory pool.
  * Throws if the pool is not in this product's allowed set — callers are
  * expected to have already validated the pool belongs to the product.
+ *
+ * OSE-1416: the names in `BIGQUERY_DATASETS` are PRODUCTION datasets, and OER
+ * reads them. Staging and production share one GCP project, so a staging run
+ * writing the same name would put test events beside real community data.
+ * Only `WORKER_ENV === 'production'` gets the bare name; staging gets `_stg`
+ * and every other value (development, test, unset) gets `_dev`. Fail closed:
+ * an env that is not explicitly production can never resolve a production name.
+ * `workerEnv` is required so every caller has to pass it.
  */
-export function datasetForPool(pool: RegulatoryPool): string {
+export function datasetForPool(pool: RegulatoryPool, workerEnv: string | undefined): string {
   const dataset = BIGQUERY_DATASETS[pool];
   if (!dataset) {
     throw new Error(
       `[pool-contract] unknown regulatory_pool "${pool}" for product_id "${PRODUCT_ID}"`
     );
   }
-  return dataset;
+  if (workerEnv === 'production') return dataset;
+  return `${dataset}${workerEnv === 'staging' ? '_stg' : '_dev'}`;
 }
 
 /**

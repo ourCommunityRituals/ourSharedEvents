@@ -62,6 +62,9 @@ const BQ_ENV_CONFIGURED = {
   WIF_PROVIDER_ID: 'test-provider',
   GCP_PROJECT_ID: 'ose-test',
   BIGQUERY_DATASET_ID: 'oureventring_general',
+  // OSE-1416: these cases assert PRODUCTION routing (bare pool names). Staging
+  // routing is asserted separately below.
+  WORKER_ENV: 'production',
 };
 
 function makeEnv(): SharedReportExportEnv {
@@ -330,6 +333,21 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
     expect(bqCalls).toHaveLength(1);
     expect(bqCalls[0].dataset).toBe('oureventring_general');
     expect(bqCalls[0].tableId).toBe('anon_id_returns_export');
+  });
+
+  test('OSE-1416: on staging the same export lands in oureventring_general_stg, never production', async () => {
+    await seedEventTypeRegistry('et-trivia', 'UEC-TRIVIA', 1);
+    await seedEvent({ id: 'test-evt-exp-1', phase: 1, event_type_id: 'et-trivia' });
+    await seedAnonIdReturn({
+      hash: 'c'.repeat(32),
+      venueId: 'test-evt-exp-1',
+      computedAt: '2026-05-10T12:00:00.000Z',
+    });
+
+    const r = await exportAnonIdReturns({ ...makeEnv(), WORKER_ENV: 'staging' });
+    expect(r.errors).toBe(0);
+    expect(bqCalls.length).toBeGreaterThan(0);
+    expect(bqCalls.every((c) => c.dataset === 'oureventring_general_stg')).toBe(true);
   });
 
   test('phase 4 (HIPAA) row is QUARANTINED — never routed to hipaa OR leaked to general (OSE-1220)', async () => {

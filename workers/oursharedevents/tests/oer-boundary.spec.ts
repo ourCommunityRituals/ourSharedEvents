@@ -281,6 +281,8 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
     WIF_PROVIDER_ID: 'test-provider',
     GCP_PROJECT_ID: 'ose-test',
     BIGQUERY_DATASET_ID: 'oursharedevents_backup',
+    // OSE-1416: pool routing is per env; these cases assert the production names.
+    WORKER_ENV: 'production',
   };
 
   interface InsertAllCall {
@@ -410,6 +412,25 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
 
     // ...and NEVER the flat default the bug leaked to.
     expect(datasetsUsed).not.toContain('oursharedevents_backup');
+  });
+
+  test('OSE-1416: on staging the backup lands in the _stg pool dataset, never a production one', async () => {
+    const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+    await seedEvent('ose1416-evt-stg', 1);
+
+    await runBigQueryBackup({
+      DB: tenvDb().DB,
+      ...BQ_ENV_CONFIGURED,
+      WORKER_ENV: 'staging',
+      BIGQUERY_DATASET_ID: 'oursharedevents_backup_stg',
+    } as never);
+
+    const datasetsUsed = [...new Set(bqCalls.map((c) => c.dataset))];
+    expect(datasetsUsed.length, 'at least one insertAll must have run').toBeGreaterThan(0);
+    expect(datasetsUsed).toEqual([`${BIGQUERY_DATASETS.general}_stg`]);
+    for (const prodName of [...Object.values(BIGQUERY_DATASETS), 'oursharedevents_backup']) {
+      expect(datasetsUsed, `staging wrote production dataset ${prodName}`).not.toContain(prodName);
+    }
   });
 
   test('exported rows carry the required regulatory tags (assertRequiredTags contract)', async () => {

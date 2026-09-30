@@ -29,14 +29,47 @@ export interface CloudEnv {
   WIF_ISSUER?: string;
   /** GCP project ID (for BigQuery API URLs) */
   GCP_PROJECT_ID?: string;
-  /** BigQuery dataset ID, defaults to oursharedevents_backup */
+  /** BigQuery flat backup dataset. Only production may use (or default to) oursharedevents_backup. */
   BIGQUERY_DATASET_ID?: string;
+  /** Deployment env ('production' | 'staging' | 'development' | 'test'). OSE-1416. */
+  WORKER_ENV?: string;
+}
+
+/** Production's flat backup dataset. Non-production envs may never resolve it (OSE-1416). */
+export const PRODUCTION_BACKUP_DATASET = 'oursharedevents_backup';
+
+/** A BigQuery target that would cross environments. Callers treat it as NOT_CONFIGURED. */
+export class CloudConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CloudConfigError';
+  }
 }
 
 export function getProjectId(env: CloudEnv): string {
   return env.GCP_PROJECT_ID?.trim() ?? '';
 }
 
+/**
+ * Resolve the flat backup dataset. Fail closed (OSE-1416): the production
+ * default applies only when WORKER_ENV === 'production'; any other env must
+ * name its own dataset, and may never name production's.
+ */
 export function getDatasetId(env: CloudEnv): string {
-  return env.BIGQUERY_DATASET_ID?.trim() ?? 'oursharedevents_backup';
+  const isProduction = env.WORKER_ENV === 'production';
+  const configured = env.BIGQUERY_DATASET_ID?.trim();
+  const datasetId = configured || (isProduction ? PRODUCTION_BACKUP_DATASET : '');
+  if (!datasetId) {
+    throw new CloudConfigError(
+      `BIGQUERY_DATASET_ID is not set for WORKER_ENV=${env.WORKER_ENV ?? 'unset'}; ` +
+        'refusing to fall back to the production dataset'
+    );
+  }
+  if (!isProduction && datasetId === PRODUCTION_BACKUP_DATASET) {
+    throw new CloudConfigError(
+      `WORKER_ENV=${env.WORKER_ENV ?? 'unset'} may not write to the production dataset ` +
+        PRODUCTION_BACKUP_DATASET
+    );
+  }
+  return datasetId;
 }

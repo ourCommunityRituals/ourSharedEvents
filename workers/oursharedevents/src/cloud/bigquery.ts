@@ -6,7 +6,13 @@
  */
 
 import { getGoogleAccessToken, type GoogleAuthEnv } from '../google/auth';
-import { GCP_API_URLS, getProjectId, getDatasetId, type CloudEnv } from './config';
+import {
+  GCP_API_URLS,
+  getProjectId,
+  getDatasetId,
+  CloudConfigError,
+  type CloudEnv,
+} from './config';
 
 export class BigQueryError extends Error {
   constructor(
@@ -61,9 +67,15 @@ export async function bigQueryInsertRows(
   }
   if (rows.length === 0) return { rowCount: 0 };
 
+  let datasetId: string;
+  try {
+    datasetId = getDatasetId(env);
+  } catch (err) {
+    if (err instanceof CloudConfigError) throw new BigQueryError('NOT_CONFIGURED', err.message);
+    throw err;
+  }
   const { token } = await getGoogleAccessToken(env);
   const projectId = getProjectId(env);
-  const datasetId = getDatasetId(env);
   const url = GCP_API_URLS.bigqueryInsert(projectId, datasetId, tableId);
 
   const body = {

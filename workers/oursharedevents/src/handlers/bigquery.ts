@@ -162,7 +162,7 @@ async function backupEventsPooled(
   for (const pool of REGULATORY_POOLS) {
     const batch = byPool[pool];
     if (batch.length === 0) continue;
-    const dataset = datasetForPool(pool);
+    const dataset = datasetForPool(pool, env.WORKER_ENV);
     const insertIdFn = (row: Record<string, unknown>): string =>
       `evt-backup-${String(row.id)}-${String(row.updated_at)}`;
     const res = await bigQueryInsertRowsToDataset(

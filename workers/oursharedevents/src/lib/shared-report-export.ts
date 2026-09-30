@@ -318,7 +318,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         `air-${String(row.computed_at)}-${String(row.anon_id_hash)}-${String(row.venue_id)}`;
       const res = await bigQueryInsertRowsToDataset(
         env,
-        datasetForPool(pool),
+        datasetForPool(pool, env.WORKER_ENV),
         BQ_TABLE_ANON_ID_RETURNS,
         batch,
         insertIdFn
@@ -402,7 +402,7 @@ export async function exportCorridorDensityBaseline(
     // to any individual event's regulatory phase. Documented for revisit
     // if a HIPAA/COPPA corridor surfaces a routing issue.
     const pool: RegulatoryPool = 'general';
-    const dataset = datasetForPool(pool);
+    const dataset = datasetForPool(pool, env.WORKER_ENV);
 
     let maxComputedAt = watermark;
     const batch: Record<string, unknown>[] = [];
@@ -567,7 +567,7 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
         `es-${String(row.updated_at)}-${String(row.id)}`;
       const res = await bigQueryInsertRowsToDataset(
         env,
-        datasetForPool(pool),
+        datasetForPool(pool, env.WORKER_ENV),
         BQ_TABLE_EVENT_SERIES,
         batch,
         insertIdFn
