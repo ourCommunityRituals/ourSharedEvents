@@ -1337,12 +1337,7 @@
       .deact-confirm-lbl {
         font-size: 0.8rem;
       }
-      /* OSE-669 portfolio rollup strip. Design-system adoption (OSE-897 / Claude
-         Design port): the visual language now comes from the shared @ocr/ui
-         component vocabulary served at /ui.css — `.stats-row` (the scroll row),
-         `.stat-card` (each tile), `.stat-value` + `.stat-label`. No bespoke
-         palette or box CSS here anymore; test-ids + the set() JS are unchanged.
-         Only the top margin (not part of the shared component) is kept local. */
+      /* OSE-669 rollup: @ocr/ui .stats-row/.stat-card/.stat-value/.stat-label; only the margin is local. */
       .portfolio-rollup {
         margin: 0 0 1rem;
       }
@@ -1444,6 +1439,7 @@
         font-size: 0.8rem;
         color: var(--text-muted);
       }
+      .pre-spark { color: var(--accent); margin-top: 0.75rem; }
       .dash-progress {
         height: 8px;
         margin-top: 0.6rem;
@@ -5570,6 +5566,35 @@
           <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
         </div>
       </div>
+      <!-- Pre-event window: the poster is out and the event hasn't started. The
+           organizer sees the poster's link (and its QR, the same link as a
+           picture) and whether the poster is working — scans, link taps,
+           posters out, places covered, scans per day. Counts only, never who.
+           Hidden outside the pre-event phase. -->
+      <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Before the event</h3>
+          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
+        </div>
+        <div class="mcard-body">
+          <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
+          <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
+          <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
+            <span class="wizard-card-title">Your poster link</span>
+            <span class="wizard-card-url" id="pre-event-link" data-testid="pre-event-link"></span>
+            <img id="pre-event-qr" data-testid="pre-event-qr" alt="" hidden />
+          </div>
+          <!-- The admin's wrapping stat grid (2-up on a phone), not @ocr/ui's
+               .stats-row: that one scrolls sideways and hid "Places" at 375px. -->
+          <div class="dashboard-stats" role="group" aria-label="Poster activity" data-testid="pre-event-stats">
+            <div class="dash-stat scans"><span class="dash-stat__num" id="pre-event-clicks" data-testid="pre-event-clicks">—</span><span class="dash-stat__label">Link taps</span></div>
+            <div class="dash-stat registrations"><span class="dash-stat__num" id="pre-event-scans" data-testid="pre-event-scans">—</span><span class="dash-stat__label">Poster scans</span></div>
+            <div class="dash-stat appearances"><span class="dash-stat__num" id="pre-event-posters" data-testid="pre-event-posters">—</span><span class="dash-stat__label">Posters out</span></div>
+            <div class="dash-stat checkins"><span class="dash-stat__num" id="pre-event-places" data-testid="pre-event-places">—</span><span class="dash-stat__label">Places</span></div>
+          </div>
+          <div class="pre-spark" id="pre-event-spark" data-testid="pre-event-spark"></div>
+        </div>
+      </div>
       <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
@@ -5949,7 +5974,137 @@
         var d = ev.detail || {};
         window.renderEventStatus(d.id);
         window.renderEventTimeline(d.id);
+        window.renderPreEventWindow(d.id);
       });
+
+      // ── Pre-event window: is the poster working? ──
+      // One fetch (GET /admin/events/:id/pre-event-activity, counts only). Built
+      // with createElement/textContent — nothing from the server reaches
+      // innerHTML. A draft/ready event gets ONE button to go live (the poster
+      // link only works once it is), so the organizer never has to go looking.
+      window._osePreSeq = 0;
+      window.renderPreEventWindow = async function (id) {
+        var card = document.getElementById('pre-event-card');
+        var e = window._oseList.byId[String(id)];
+        if (!card) return;
+        if (!e || e.phase !== 'pre_event' || e.status === 'archived') { card.hidden = true; return; }
+        var seq = ++window._osePreSeq;
+        var d = null;
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/pre-event-activity');
+          d = await res.json();
+        } catch (err) { d = null; }
+        if (seq !== window._osePreSeq) return; // a newer selection won
+        if (!d || !d.ok) { card.hidden = true; return; }
+        var a = d.activity || {};
+        var live = (e.status || 'draft') === 'active';
+        var set = function (elId, text) { var el = document.getElementById(elId); if (el) el.textContent = text; };
+
+        var dtg = d.event ? d.event.days_to_go : null;
+        set('pre-event-countdown', dtg == null ? 'Coming up' : dtg <= 0 ? 'Today' : dtg === 1 ? 'Tomorrow' : dtg + ' days to go');
+
+        var lede;
+        // The link is the big driver: shared with friends and family, it opens
+        // the event page (the 5Ws) — that's where the pre-event marketing
+        // happens. Physical posters widen the reach after that.
+        var hasLink = !!(d.link && d.link.url);
+        if (!live) lede = 'Your event link, poster and QR code switch on when you go live.';
+        else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
+        else if (!(a.clicks > 0) && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page and shows up here. Posters widen the reach.';
+        else lede = 'People are finding it: ' + a.clicks + ' link tap' + (a.clicks === 1 ? '' : 's') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
+        set('pre-event-lede', lede);
+
+        // The one thing to do now.
+        var actions = document.getElementById('pre-event-actions');
+        actions.textContent = '';
+        var btn;
+        if (!live) {
+          btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'event-status-btn primary';
+          btn.setAttribute('data-action', 'event-status');
+          btn.setAttribute('data-event-id', String(id));
+          btn.setAttribute('data-to', 'active');
+          btn.setAttribute('data-testid', 'pre-event-go-live');
+          btn.textContent = 'Go live';
+        } else {
+          // Live: Copy link first (the driver), the poster second.
+          if (hasLink) {
+            var copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'btn btn-primary';
+            copyBtn.setAttribute('data-action', 'mint-copy');
+            copyBtn.setAttribute('data-url', d.link.url);
+            copyBtn.setAttribute('data-testid', 'pre-event-copy');
+            copyBtn.textContent = 'Copy link';
+            actions.appendChild(copyBtn);
+          }
+          btn = document.createElement('a');
+          btn.className = 'btn ' + (hasLink ? 'btn-secondary' : 'btn-primary');
+          // Built here from the id we already hold, never taken from the
+          // response: a server-supplied href is an XSS sink (javascript:) the
+          // client has no business trusting (CodeQL js/xss-more-sources).
+          btn.href = '/poster?event=' + encodeURIComponent(String(id));
+          btn.target = '_blank';
+          btn.rel = 'noopener';
+          btn.setAttribute('data-testid', 'pre-event-poster');
+          btn.textContent = a.posters > 0 ? 'Print another poster' : 'Print a poster';
+        }
+        actions.appendChild(btn);
+
+        // Link first, the code as its picture.
+        var linkCard = document.getElementById('pre-event-link-card');
+        var link = document.getElementById('pre-event-link');
+        var qr = document.getElementById('pre-event-qr');
+        if (live && hasLink) {
+          link.textContent = d.link.url;
+          if (d.link.qr && d.link.qr.indexOf('data:image/') === 0) {
+            qr.src = d.link.qr;
+            qr.alt = 'QR code for ' + d.link.url;
+            qr.hidden = false;
+          } else qr.hidden = true;
+          linkCard.hidden = false;
+        } else linkCard.hidden = true;
+
+        set('pre-event-scans', String(a.scans || 0));
+        set('pre-event-clicks', String(a.clicks || 0));
+        set('pre-event-posters', String(a.posters || 0));
+        set('pre-event-places', String(a.places || 0));
+
+        // Scans per day, last 14 days — bars drawn as SVG (no chart library).
+        var spark = document.getElementById('pre-event-spark');
+        spark.textContent = '';
+        var days = Array.isArray(a.scansByDay) ? a.scansByDay : [];
+        if (days.length) {
+          var NS = 'http://www.w3.org/2000/svg';
+          var max = Math.max.apply(null, days.map(function (x) { return x.count || 0; }).concat([1]));
+          var svg = document.createElementNS(NS, 'svg');
+          svg.setAttribute('viewBox', '0 0 ' + days.length * 10 + ' 40');
+          svg.setAttribute('width', '100%');
+          svg.setAttribute('height', '48');
+          svg.setAttribute('preserveAspectRatio', 'none');
+          svg.setAttribute('role', 'img');
+          var total = days.reduce(function (t, x) { return t + (x.count || 0); }, 0);
+          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' in total, ' + (days[days.length - 1].count || 0) + ' today.');
+          days.forEach(function (x, i) {
+            var h = x.count > 0 ? Math.max(3, Math.round((x.count / max) * 38)) : 1;
+            var r = document.createElementNS(NS, 'rect');
+            r.setAttribute('x', String(i * 10 + 1));
+            r.setAttribute('y', String(40 - h));
+            r.setAttribute('width', '8');
+            r.setAttribute('height', String(h));
+            r.setAttribute('rx', '1.5');
+            r.setAttribute('fill', 'currentColor');
+            r.setAttribute('opacity', x.count > 0 ? '1' : '0.3');
+            var t = document.createElementNS(NS, 'title');
+            t.textContent = x.day + ': ' + (x.count || 0) + ' scan' + (x.count === 1 ? '' : 's');
+            r.appendChild(t);
+            svg.appendChild(r);
+          });
+          spark.appendChild(svg);
+        }
+        card.hidden = false;
+      };
 
       // ── Event timeline: the chain at a glance + the next step ──
       // Steps: 1 Set up · 2 Live · 3 Poster out · 4 People scanning ·
@@ -6111,6 +6266,10 @@
             if (b) { b.className = 'badge ' + to; b.textContent = window.friendlyStatus(to); }
           }
           window.renderEventStatus(id);
+          // The checklist and the pre-event window both read status: going
+          // live switches the poster link + QR on in the same click.
+          if (window.renderEventTimeline) window.renderEventTimeline(id);
+          if (window.renderPreEventWindow) window.renderPreEventWindow(id);
           var nice = { active: 'Live — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');

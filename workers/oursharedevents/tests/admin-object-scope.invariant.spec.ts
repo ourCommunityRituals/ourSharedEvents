@@ -147,6 +147,7 @@ describe('OSE-1080 — which paths the object-scope wall covers', () => {
     for (const path of [
       '/api/v2/admin/events/evt-1',
       '/api/v2/admin/events/evt-1/stats',
+      '/api/v2/admin/events/evt-1/pre-event-activity',
       '/api/v2/admin/events/evt-1/verify-qr',
       '/api/v2/admin/events/evt-1/unverify-qr',
       '/api/v2/admin/events/evt-1/backup',
@@ -222,6 +223,24 @@ describe('OSE-1080 / INVARIANT #9 — object-level admin READ is brand-scoped', 
     const text = await res.text();
     expect(text).not.toContain('Brand B Object Event');
     expect(text).not.toContain('admin-draft-preview-toolbar');
+  });
+
+  test('pre-event activity (poster link + counts) is brand-scoped the same way', async () => {
+    const own = await call(
+      'GET',
+      '/api/v2/admin/events/evt-obj-A1/pre-event-activity',
+      headersAsEmail(SCOPED)
+    );
+    expect(own.status).toBe(200);
+    const cross = await call(
+      'GET',
+      '/api/v2/admin/events/evt-obj-B1/pre-event-activity',
+      headersAsEmail(SCOPED)
+    );
+    expect(cross.status).toBe(404);
+    const body = (await cross.json()) as { ok: boolean; code: string; activity?: unknown };
+    expect(body.code).toBe('NOT_FOUND');
+    expect(body.activity).toBeUndefined();
   });
 
   test('a cross-tenant miss is byte-identical to a genuinely unknown id', async () => {
