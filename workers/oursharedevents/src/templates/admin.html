@@ -1128,11 +1128,7 @@
           padding-top: 0.75rem;
         }
       }
-      /* OSE-1328 card 3 (cluster): sponsors-card, poster-art-card and
-         poster-deployments-card all adopt the uniform token-driven .card +
-         .mcard-* anatomy (padding:0 so the header row + body own their spacing).
-         The .sponsors-card god-class no longer supplies chrome, and the old
-         shared card-header rule is RETIRED — every management card uses .mcard-head. */
+      /* OSE-1328 card 3: uniform .card + .mcard-* anatomy (header/body own spacing). */
       .sponsors-card,
       .poster-deployments-card,
       .poster-art-card {
@@ -1323,7 +1319,7 @@
       .deact-confirm-lbl {
         font-size: 0.8rem;
       }
-      /* OSE-669 rollup: @ocr/ui .stats-row/.stat-card/.stat-value/.stat-label; only the margin is local. */
+      /* OSE-669 rollup strip: @ocr/ui .stats-row/.stat-card; only the margin is local. */
       .portfolio-rollup {
         margin: 0 0 1rem;
       }
@@ -4583,6 +4579,21 @@
       </div>
 
       <div class="mcard-body">
+      <!-- OSE-1357 part 2: the codes printed on the poster, in order. Each is its
+           own /s/ short link (Copy first, then its QR); the event page is always
+           first. Filled by loadPosterCodes() on ose:event-selected. -->
+      <section class="pc-codes" data-testid="poster-codes" aria-labelledby="pc-title">
+        <h3 class="pd-card-title" id="pc-title">Codes on the poster</h3>
+        <p class="pd-target" id="pc-plan" data-testid="poster-codes-plan"></p>
+        <ol class="pc-list" id="pc-list" data-testid="poster-codes-list"></ol>
+        <p class="pd-target" id="pc-upsell" data-testid="poster-codes-upsell" hidden></p>
+        <div class="form-actions">
+          <button type="button" class="copy-btn" id="pc-add" data-testid="poster-codes-add">+ Add a code</button>
+          <button type="button" class="copy-btn" id="pc-save" data-testid="poster-codes-save">Save codes</button>
+          <span class="create-msg" id="pc-msg" data-testid="poster-codes-msg" role="status"></span>
+          <button type="button" class="copy-btn" id="pc-undo" data-testid="poster-codes-undo" hidden>Undo</button>
+        </div>
+      </section>
       <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
         <form id="pd-create-form" data-testid="poster-deployment-create-form" novalidate>
           <div class="create-form">
@@ -4842,6 +4853,12 @@
     <style>
       /* OSE-895: .qr-card frame (poster.html geometry, OSE-887) per deployment. */
       .pd-advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+      .pc-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 12px; }
+      .pc-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 6px solid var(--border); border-radius: 8px; }
+      .pc-row.tone-checkin { border-left-color: var(--success); }
+      .pc-row.tone-donate { border-left-color: var(--info); }
+      .pc-word { font-weight: 800; letter-spacing: 0.06em; font-size: 18px; }
+      .pc-qr { image-rendering: pixelated; background: white; padding: 4px; }
       .pd-link { display: flex; align-items: center; gap: 8px; width: 100%; }
       .pd-link code { flex: 1; word-break: break-all; }
       .pd-target { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all; }
@@ -4922,11 +4939,7 @@
         .poster-deployments-card .qr-card { break-inside: avoid; }
         .poster-deployments-card .qr-card-footer { display: none; }
       }
-      /* Mobile: every deployment's full QR card (image + metadata + actions) is
-         tall. auto-fill already collapses the grid to one column under ~480px,
-         but that still stacks every card in one long scroll — busy and easy to
-         lose your place in with more than a couple of locations. Below 640px,
-         show one card at a time (paged via Prev/Next) instead of the grid. */
+      /* Below 640px: one deployment card at a time, paged via Prev/Next. */
       @media (max-width: 640px) {
         .pd-qr-grid { display: block; }
         .pd-qr-grid .qr-card { display: none; }
@@ -5321,6 +5334,294 @@
             }
           });
         }
+      })();
+    </script>
+    <script>
+      // OSE-1357 part 2 — "Codes on the poster". The organizer picks what each
+      // code opens (event page first, always), orders them, and saves; the
+      // server enforces the plan's allotment and the https rule — this card
+      // only mirrors them. Every row is a static template filled with
+      // textContent / setAttribute; the short link shown and copied is rebuilt
+      // here from a validated 6-char code, and a QR src must be a data:image.
+      (function () {
+        const PC_ROW =
+          '<li class="pc-row" data-testid="poster-code-row">' +
+            '<span class="pc-word" data-testid="poster-code-word"><span class="pc-icon" aria-hidden="true"></span> <span class="pc-word-text"></span></span>' +
+            '<span class="pd-target" data-testid="poster-code-points-to"></span>' +
+            '<div class="pd-link" data-testid="poster-code-link-block">' +
+              '<code data-testid="poster-code-link"></code>' +
+              '<button type="button" class="copy-btn" data-act="copy" data-testid="poster-code-copy">Copy</button>' +
+            '</div>' +
+            '<img class="pc-qr" data-testid="poster-code-qr" width="96" height="96" alt="" />' +
+            '<div class="create-form" data-role="fields">' +
+              '<div><label data-for="kind">What it opens</label><select data-testid="poster-code-kind"></select></div>' +
+              '<div data-role="target"><label data-for="target">Link</label><input type="url" inputmode="url" autocomplete="off" maxlength="2048" placeholder="https://" data-testid="poster-code-target" /></div>' +
+            '</div>' +
+            '<p class="create-msg error" data-testid="poster-code-error" role="alert" hidden></p>' +
+            '<div class="form-actions" data-role="actions">' +
+              '<button type="button" class="copy-btn" data-act="up" data-testid="poster-code-up">Move up</button>' +
+              '<button type="button" class="copy-btn" data-act="down" data-testid="poster-code-down">Move down</button>' +
+              '<button type="button" class="copy-btn" data-act="remove" data-testid="poster-code-remove">Remove</button>' +
+            '</div>' +
+          '</li>';
+        const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
+        const toneOf = (k) => (k === 'checkin' ? 'checkin' : k === 'donation' ? 'donate' : 'neutral');
+        const text = (v) => (v === null || v === undefined ? '' : String(v));
+        const shortLink = (code) => (/^[A-Za-z0-9]{6}$/.test(text(code)) ? location.origin + '/s/' + code : '');
+        const dataImage = (uri) => (/^data:image\/(png|gif);base64,/.test(text(uri)) ? uri : '');
+        const validHttps = (v) => {
+          if (!v || v.length > 2048) return false;
+          try { return new URL(v).protocol === 'https:'; } catch (e) { return false; }
+        };
+        const $ = (id) => document.getElementById(id);
+        const st = { eventId: null, limit: 0, kinds: [], rows: [], removed: null };
+        const kindSpec = (k) => st.kinds.find((x) => x.kind === k) || null;
+        const msg = (t, kind) => {
+          const el = $('pc-msg');
+          if (el) { el.textContent = t || ''; el.className = 'create-msg' + (kind ? ' ' + kind : ''); }
+        };
+        const fromTemplate = (markup) => {
+          const t = document.createElement('template');
+          t.innerHTML = markup; // static constant only
+          return t.content.firstElementChild;
+        };
+        const rowsFrom = (codes) => (Array.isArray(codes) ? codes : []).map((c) => ({
+          kind: text(c.kind), word: text(c.word), code: text(c.code), qr: text(c.qr),
+          target_url: text(c.target_url), points_to: text(c.points_to),
+        }));
+
+        function renderRow(row, i) {
+          const li = fromTemplate(PC_ROW);
+          const at = (id) => li.querySelector('[data-testid="' + id + '"]');
+          const isPublic = row.kind === 'public';
+          const spec = kindSpec(row.kind);
+          const word = row.word || (spec ? spec.word : '') || (isPublic ? 'EVENT' : 'MORE');
+          li.classList.add('tone-' + toneOf(row.kind));
+          li.setAttribute('data-kind', row.kind);
+          li.querySelector('.pc-icon').textContent = ICON[row.kind] || '→';
+          li.querySelector('.pc-word-text').textContent = word;
+          at('poster-code-points-to').textContent = row.points_to ? 'Opens: ' + row.points_to : '';
+
+          // 1. The short link + Copy lead; 2. then the QR (a picture of that link).
+          const link = shortLink(row.code);
+          const copy = at('poster-code-copy');
+          if (link) {
+            at('poster-code-link').textContent = link;
+            copy.setAttribute('aria-label', 'Copy the ' + word + ' short link');
+          } else {
+            at('poster-code-link').textContent = 'Short link appears after you save.';
+            copy.remove();
+          }
+          const qr = dataImage(row.qr);
+          const img = at('poster-code-qr');
+          if (qr && link) { img.src = qr; img.alt = word + ' code, QR of ' + link; } else img.remove();
+
+          const fields = li.querySelector('[data-role="fields"]');
+          const actions = li.querySelector('[data-role="actions"]');
+          if (isPublic) {
+            // The event page is always on the poster, always first.
+            fields.remove();
+            actions.remove();
+            return li;
+          }
+          const sel = at('poster-code-kind');
+          const input = at('poster-code-target');
+          sel.id = 'pc-kind-' + i;
+          input.id = 'pc-target-' + i;
+          li.querySelector('[data-for="kind"]').setAttribute('for', sel.id);
+          li.querySelector('[data-for="target"]').setAttribute('for', input.id);
+          const used = st.rows.filter((r, j) => j !== i).map((r) => r.kind);
+          st.kinds.forEach((k) => {
+            const o = document.createElement('option');
+            o.value = text(k.kind);
+            o.textContent = text(k.choice) + ' (' + text(k.word) + ')';
+            o.disabled = used.indexOf(k.kind) >= 0;
+            sel.appendChild(o);
+          });
+          sel.value = row.kind;
+          const needsUrl = !!(spec && spec.needs_url);
+          li.querySelector('[data-role="target"]').hidden = !needsUrl;
+          input.value = row.target_url;
+          sel.addEventListener('change', () => {
+            row.kind = sel.value;
+            row.code = ''; row.qr = ''; row.word = ''; row.points_to = '';
+            render();
+            const again = document.getElementById('pc-kind-' + i);
+            if (again) again.focus();
+          });
+          input.addEventListener('input', () => {
+            row.target_url = input.value.trim();
+            at('poster-code-error').hidden = true;
+            input.removeAttribute('aria-invalid');
+          });
+          at('poster-code-up').disabled = i <= 1;
+          at('poster-code-down').disabled = i >= st.rows.length - 1;
+          at('poster-code-remove').setAttribute('aria-label', 'Remove the ' + word + ' code');
+          return li;
+        }
+
+        function render() {
+          const list = $('pc-list');
+          if (!list) return;
+          list.textContent = '';
+          st.rows.forEach((row, i) => list.appendChild(renderRow(row, i)));
+          const n = st.rows.length;
+          const plan = $('pc-plan');
+          if (plan) {
+            plan.textContent = st.limit
+              ? 'Your plan fits ' + st.limit + ' codes on a poster, including the event page. Using ' + n + '.'
+              : '';
+          }
+          const full = st.limit > 0 && n >= st.limit;
+          const add = $('pc-add');
+          if (add) add.disabled = !st.eventId || !st.limit || full || n - 1 >= st.kinds.length;
+          const upsell = $('pc-upsell');
+          if (upsell) {
+            upsell.hidden = !full;
+            upsell.textContent = full
+              ? 'That is every code your plan fits. Need more on one poster? Upgrade your plan to add more codes.'
+              : '';
+          }
+        }
+
+        function showRowError(i, t) {
+          const li = $('pc-list') && $('pc-list').children[i];
+          if (!li) return;
+          const err = li.querySelector('[data-testid="poster-code-error"]');
+          if (!err) return;
+          err.textContent = t;
+          err.hidden = false;
+          const input = li.querySelector('[data-testid="poster-code-target"]');
+          if (input && !input.closest('[hidden]')) { input.setAttribute('aria-invalid', 'true'); input.focus(); }
+        }
+
+        function hideUndo() { const u = $('pc-undo'); if (u) u.hidden = true; st.removed = null; }
+
+        window.loadPosterCodes = async function (eventId) {
+          st.eventId = eventId;
+          st.rows = [];
+          hideUndo();
+          msg('');
+          render();
+          try {
+            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-codes');
+            const data = await res.json();
+            if (!res.ok || !data || !data.ok) throw new Error('load');
+            if (st.eventId !== eventId) return; // a newer selection won
+            st.limit = Number(data.limit) || 0;
+            st.kinds = Array.isArray(data.kinds) ? data.kinds : [];
+            st.rows = rowsFrom(data.codes);
+            render();
+          } catch (e) {
+            msg('Could not load the poster’s codes.', 'error');
+          }
+        };
+
+        const list = $('pc-list');
+        if (list) list.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('button[data-act]');
+          if (!btn || btn.disabled) return;
+          const i = Array.prototype.indexOf.call(list.children, btn.closest('li'));
+          const row = st.rows[i];
+          if (!row) return;
+          const act = btn.getAttribute('data-act');
+          if (act === 'copy') {
+            const link = shortLink(row.code);
+            if (!link || !navigator.clipboard) return;
+            navigator.clipboard.writeText(link).then(() => {
+              btn.textContent = 'Copied!';
+              setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+            }).catch(() => {});
+            return;
+          }
+          if (act === 'up' || act === 'down') {
+            const j = act === 'up' ? i - 1 : i + 1;
+            if (j < 1 || j >= st.rows.length) return;
+            st.rows.splice(j, 0, st.rows.splice(i, 1)[0]);
+            render();
+            const li = list.children[j];
+            const same = li && li.querySelector('[data-act="' + act + '"]');
+            if (same) (same.disabled ? li.querySelector('select') : same).focus();
+            msg('Moved. Save to update the poster.');
+            return;
+          }
+          if (act === 'remove') {
+            const spec = kindSpec(row.kind);
+            st.removed = { row: row, index: i };
+            st.rows.splice(i, 1);
+            render();
+            msg('Removed ' + (row.word || (spec && spec.word) || 'the code') + '. Save to update the poster.');
+            const u = $('pc-undo');
+            if (u) { u.hidden = false; u.focus(); }
+          }
+        });
+
+        const undo = $('pc-undo');
+        if (undo) undo.addEventListener('click', () => {
+          const r = st.removed;
+          if (!r) return;
+          st.rows.splice(Math.min(r.index, st.rows.length), 0, r.row);
+          hideUndo();
+          render();
+          msg('Put back.');
+        });
+
+        const add = $('pc-add');
+        if (add) add.addEventListener('click', () => {
+          if (add.disabled) return;
+          const used = st.rows.map((r) => r.kind);
+          const next = st.kinds.find((k) => used.indexOf(k.kind) < 0);
+          if (!next) return;
+          st.rows.push({ kind: next.kind, word: '', code: '', qr: '', target_url: '', points_to: '' });
+          render();
+          const sel = document.getElementById('pc-kind-' + (st.rows.length - 1));
+          if (sel) sel.focus();
+        });
+
+        const save = $('pc-save');
+        if (save) save.addEventListener('click', async () => {
+          if (!st.eventId) return;
+          // Fat-finger guard before the round trip; the server re-checks.
+          for (let i = 0; i < st.rows.length; i++) {
+            const r = st.rows[i];
+            const spec = kindSpec(r.kind);
+            if (r.kind !== 'public' && spec && spec.needs_url && !validHttps(r.target_url)) {
+              showRowError(i, 'Use a full https:// address, like https://example.org/give');
+              msg('Fix the highlighted link, then save.', 'error');
+              return;
+            }
+          }
+          const codes = st.rows.filter((r) => r.kind !== 'public').map((r) => {
+            const spec = kindSpec(r.kind);
+            return spec && spec.needs_url ? { kind: r.kind, target_url: r.target_url } : { kind: r.kind };
+          });
+          save.disabled = true;
+          msg('Saving…');
+          try {
+            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(st.eventId) + '/poster-codes', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ codes: codes }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data || !data.ok) {
+              const t = text(data && data.error) || 'Could not save the codes.';
+              if (data && typeof data.index === 'number') showRowError(data.index + 1, t);
+              msg(t, 'error');
+              return;
+            }
+            st.limit = Number(data.limit) || st.limit;
+            st.rows = rowsFrom(data.codes);
+            hideUndo();
+            render();
+            msg('Saved. The poster shows ' + st.rows.length + ' codes.', 'success');
+          } catch (e) {
+            msg('Network error — the codes were not saved.', 'error');
+          } finally {
+            save.disabled = false;
+          }
+        });
+        render();
       })();
     </script>
     <!-- Surface links — step 5, the payoff: every page this event now has. -->
@@ -5806,6 +6107,7 @@
         var d = ev.detail || {};
         if (typeof window.loadForms === 'function') window.loadForms(d.id, d.name, d.phase);
         if (typeof window.loadPosterDeployments === 'function') window.loadPosterDeployments(d.id);
+        if (typeof window.loadPosterCodes === 'function') window.loadPosterCodes(d.id);
         if (typeof window._loadSponsorsForEvent === 'function') window._loadSponsorsForEvent(d.id);
         if (typeof window.scopeSurfaceCards === 'function') window.scopeSurfaceCards(d.id, d.name);
         if (typeof window.loadPosterArt === 'function') window.loadPosterArt(d.id);

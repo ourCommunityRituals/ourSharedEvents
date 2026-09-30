@@ -25,6 +25,7 @@ import { corsHeaders } from '../lib/cors';
 import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
+import { listSavedPosterCodes } from '../lib/poster-codes';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
 
@@ -242,7 +243,10 @@ export async function handleAdminListPosterDeployments(
   // failure (e.g. token too long) degrades to empty string rather than 500-ing
   // the whole list — the admin card falls back to showing the token text.
   const origin = new URL(request.url).origin;
-  const slotRows = await listShortlinksForEvent(env, eventId);
+  // OSE-1357 p2: the codes the organizer saved for the poster, in order; until
+  // any are saved, every existing short link (nothing is minted here).
+  const slotRows =
+    (await listSavedPosterCodes(env, eventId)) ?? (await listShortlinksForEvent(env, eventId));
   const slots = slotRows.map((slot) => {
     const url = `${origin}/s/${slot.code}`;
     return {

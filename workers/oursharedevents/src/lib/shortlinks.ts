@@ -260,6 +260,8 @@ export interface ResolvedShortlink {
   event_id: string;
   /** Admin-set external destination (https) or null → route to the event page. */
   target_url: string | null;
+  /** Destination kind (null on legacy rows = the event page). */
+  kind: string | null;
 }
 
 /**
@@ -276,7 +278,7 @@ export async function resolveCode(
   if (!env.DB) return null;
   if (!isValidCodeShape(code)) return null;
   const row = await env.DB.prepare(
-    `SELECT code, event_id, target_url FROM shortlinks WHERE code = ?`
+    `SELECT code, event_id, target_url, kind FROM shortlinks WHERE code = ?`
   )
     .bind(code)
     .first<ResolvedShortlink>();

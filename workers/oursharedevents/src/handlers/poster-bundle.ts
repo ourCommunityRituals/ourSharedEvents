@@ -22,6 +22,7 @@
 
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
 import { ensureSlotShortlinks } from '../lib/shortlinks';
+import { listSavedPosterCodes, posterCodeKind } from '../lib/poster-codes';
 import { assertRenderable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
 
@@ -134,6 +135,8 @@ function scanUrl(origin: string, qrToken: string, type: FormType): string {
 // canonical WHAT_URL_TYPES allowlist.
 export const POSTER_SLOT_LABELS: Record<string, string> = {
   public: 'Event page',
+  checkin: 'Check in',
+  ow: 'Listen on ourWKRP',
   donation: 'Donate',
   signup: 'Sign up',
   league: 'View the league',
@@ -233,15 +236,25 @@ export async function handleGetPosterBundle(
   // event page), then the typed outbound link (donate/signup/…) when enabled.
   // Each slot carries its /s/ shortlink (printed + anonymously click-counted)
   // and a QR encoding it. Tracking (/q/) is composed separately.
-  const slotDefs = await ensureSlotShortlinks(env, row.id, {
-    whatUrl: row.what_url,
-    whatUrlType: row.what_url_type,
-    whatUrlEnabled: row.what_url_enabled,
-  });
+  // OSE-1357 part 2: once the organizer has SAVED the poster's codes, those
+  // are the slots, in their order (event page first); until then, the
+  // original event page + typed link.
+  const slotDefs =
+    (await listSavedPosterCodes(env, row.id)) ??
+    (await ensureSlotShortlinks(env, row.id, {
+      whatUrl: row.what_url,
+      whatUrlType: row.what_url_type,
+      whatUrlEnabled: row.what_url_enabled,
+    }));
   const slots = slotDefs.map((s) => {
     const shortUrl = `${origin}/s/${s.code}`;
+    const spec = posterCodeKind(s.kind);
     return {
       kind: s.kind,
+      // The big word printed with the code, and its colour family (green =
+      // anonymous check-in only, blue = donate only). Never colour alone.
+      word: spec.word,
+      tone: spec.tone,
       label: posterSlotLabel(s.kind),
       code: s.code,
       url: shortUrl,

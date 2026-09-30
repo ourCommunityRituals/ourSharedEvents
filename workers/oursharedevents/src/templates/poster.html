@@ -161,8 +161,7 @@
         color: var(--text-muted);
         opacity: 0.5;
       }
-      /* Typed-slot layout. #poster-qr-slots is the single flex child of
-         .qr-section; the slot cards lay out inside it. */
+      /* #poster-qr-slots: the one flex child of .qr-section. */
       .qr-slots {
         display: flex;
         justify-content: center;
@@ -170,9 +169,7 @@
         flex-wrap: wrap;
         width: 100%;
       }
-      /* Printed /s shortlink under each slot's QR — a NEW class (not
-         .qr-link-url), so it deliberately escapes the print display:none below:
-         the poster is meant to carry the human-typeable shortlink on paper. */
+      /* Printed /s link under each QR (not .qr-link-url, so print keeps it). */
       .qr-slot-code {
         display: block;
         margin: 0.35rem auto 0;
@@ -182,6 +179,21 @@
         color: var(--text-muted);
         word-break: break-all;
         text-align: center;
+      }
+      /* OSE-1357: one word per code; same size for every kind. */
+      .code-card {
+        border-top: 6px solid var(--border);
+      }
+      .tone-checkin {
+        border-top-color: var(--success);
+      }
+      .tone-donate {
+        border-top-color: var(--info);
+      }
+      .code-word {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text);
       }
       .qr-section {
         display: flex;
@@ -482,14 +494,9 @@
           size: 11in 14in;
           margin: 0.35in;
         }
-        /* TOKEN-ADHERENCE NOTE: the raw hex in THIS @media print block is
-           deliberate and gated at BASELINE poster:6. Print is PAPER — white
-           bg + dark ink, theme-invariant — which no semantic token expresses
-           (they flip with theme; #000/#ccc aren't primitives). The follow-up
-           closes these to 0 by teaching @ocr/ui /ui.css a print :root of light
-           tokens, so print is paper by construction; until then these stay
-           explicit. Do NOT tokenise them to var(--bg)/(--surface): that would
-           print dark-on-dark in dark mode. */
+        /* Raw hex here is deliberate + baseline-gated: print is PAPER (white,
+           dark ink, theme-invariant). A theme token would print dark-on-dark.
+           Goes to 0 when /ui.css gains a print :root of light tokens. */
         .page-header,
         .event-select,
         .no-print {
@@ -512,7 +519,8 @@
         .poster-header,
         .poster-sponsors,
         .poster-sponsor,
-        .poster-sponsor img {
+        .poster-sponsor img,
+        .code-card {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
           color-adjust: exact;
@@ -958,20 +966,32 @@
           // .qr-loading placeholder stays and the print gate keeps Print disabled.
           const slots = Array.isArray(data.slots) ? data.slots : [];
           if (!slots.length) return;
+          // OSE-1357 part 2: every code the organizer chose, in their order —
+          // one big WORD + icon per code (never colour alone; green = anonymous
+          // check-in only, blue = donate only). Kind, tone and icon come from
+          // allowlists here, the link is rebuilt from a validated code on this
+          // origin, and a QR src must be a data:image — no response value
+          // reaches an href or src unchecked.
+          const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
           container.innerHTML = slots
+            .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
             .map(function (s) {
-              const kind = esc(s.kind || 'slot');
-              const label = esc(s.label || s.kind || '');
-              const url = esc(s.url || '#');
-              const shortText = esc(s.url || '');
+              const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
+              const tone = kind === 'checkin' ? 'checkin' : kind === 'donation' ? 'donate' : 'neutral';
+              const word = esc(s.word || s.label || kind);
+              const label = esc(s.label || s.word || kind);
+              const link = location.origin + '/s/' + s.code;
+              const url = esc(link);
+              const shortText = esc(link);
+              const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
               return (
-                '<div class="qr-card qr-item" data-testid="poster-qr-slot-' + kind + '">' +
-                '<div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-slot-label-' + kind + '">' + label + '</span></div>' +
+                '<div class="qr-card qr-item code-card tone-' + tone + '" data-tone="' + tone + '" data-testid="poster-qr-slot-' + kind + '">' +
+                '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + '</span></div>' +
                 '<div class="qr-card-body">' +
                 (KIND === 'digital'
-                  ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
+                  ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
                   : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
-                    '<img src="' + esc(s.qr || '') + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
+                    '<img src="' + qr + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
                     '</a>' +
                     '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
                 '</div>' +
