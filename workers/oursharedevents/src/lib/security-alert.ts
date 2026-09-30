@@ -56,9 +56,9 @@ export interface SecurityAlertEnv {
 
 const SEVERITY_TO_LINEAR_PRIORITY: Record<AlertSeverity, number> = {
   CRITICAL: 1, // Urgent
-  HIGH: 2,     // High
-  MEDIUM: 3,   // Medium
-  LOW: 4,      // Low
+  HIGH: 2, // High
+  MEDIUM: 3, // Medium
+  LOW: 4, // Low
 };
 
 // ─── D1 persistence ───────────────────────────────────────────────────────────
@@ -111,14 +111,46 @@ function buildLinearTitle(payload: SecurityAlertPayload): string {
   return `${prefix}[Security] ${payload.message} — ${date}`;
 }
 
-function buildLinearDescription(payload: SecurityAlertPayload, alertId: string | null): string {
+/**
+ * The deployment an alert's runbook should point at (OSE-1418). Before this,
+ * every runbook said to curl staging, so a production alert sent the on-call
+ * to the wrong Worker. Unknown envs name no host rather than guess one.
+ */
+export function alertTarget(workerEnv: string | undefined): {
+  label: string;
+  baseUrl: string | null;
+  wranglerEnv: string | null;
+} {
+  if (workerEnv === 'production') {
+    return {
+      label: 'production',
+      baseUrl: 'https://oursharedevents.com',
+      wranglerEnv: 'production',
+    };
+  }
+  if (workerEnv === 'staging') {
+    return { label: 'staging', baseUrl: 'https://stg.oursharedevents.com', wranglerEnv: 'staging' };
+  }
+  return {
+    label: `unknown (WORKER_ENV=${workerEnv ?? 'unset'})`,
+    baseUrl: null,
+    wranglerEnv: null,
+  };
+}
+
+export function buildLinearDescription(
+  payload: SecurityAlertPayload,
+  alertId: string | null,
+  workerEnv?: string
+): string {
   const detectedAt = payload.detectedAt ?? new Date().toISOString();
   const detailsJson = JSON.stringify(payload.details, null, 2);
 
-  const investigationSteps = buildInvestigationSteps(payload);
+  const investigationSteps = buildInvestigationSteps(payload, workerEnv);
 
   return `## Security Alert — ${payload.type}
 
+**Environment:** ${alertTarget(workerEnv).label}
 **Severity:** ${payload.severity}
 **Detected:** ${detectedAt}
 **Alert ID:** ${alertId ?? 'not persisted'}
@@ -154,7 +186,12 @@ ${investigationSteps}
 `;
 }
 
-function buildInvestigationSteps(payload: SecurityAlertPayload): string {
+export function buildInvestigationSteps(payload: SecurityAlertPayload, workerEnv?: string): string {
+  const target = alertTarget(workerEnv);
+  const wranglerEnv = target.wranglerEnv ?? '<env that raised this alert>';
+  const healthUrl = target.baseUrl
+    ? `${target.baseUrl}/health`
+    : '<base URL of the env that raised this alert>/health';
   switch (payload.type) {
     case 'auth_failures':
       return `1. Query D1: \`SELECT actor, ip, COUNT(*) FROM admin_audit_log WHERE outcome = 'denied' AND created_at > datetime('now', '-24 hours') GROUP BY actor, ip ORDER BY 3 DESC LIMIT 20\`
@@ -175,10 +212,10 @@ function buildInvestigationSteps(payload: SecurityAlertPayload): string {
     case 'error_rate_5xx':
       return `1. Pull recent Worker logs from Cloudflare Dashboard → Workers → Logs
 2. Filter for \`"type":"UNHANDLED_ERROR"\` structured log entries
-3. Check D1 health: run a simple query against the staging database via Wrangler CLI
-4. Verify D1 migrations are up to date: \`wrangler d1 migrations list --env staging\`
+3. Check D1 health: run a simple query against the ${target.label} database via Wrangler CLI
+4. Verify D1 migrations are up to date: \`wrangler d1 migrations list DB --env ${wranglerEnv} --remote\`
 5. Check if a recent deploy introduced a regression — compare with previous version
-6. Roll back if needed: \`wrangler rollback --env staging\``;
+6. Roll back if needed: \`wrangler rollback --env ${wranglerEnv}\``;
 
     case 'error_rate_4xx':
       return `1. A spike in 4xx is often a bot scanning for vulnerabilities or a broken client
@@ -204,7 +241,7 @@ function buildInvestigationSteps(payload: SecurityAlertPayload): string {
 6. Re-run CI to verify the fix`;
 
     case 'health_check_failure':
-      return `1. Check the staging Worker is deployed: \`curl https://stg.oursharedevents.com/health\`
+      return `1. Check the ${target.label} Worker is deployed: \`curl ${healthUrl}\`
 2. Review Cloudflare Access for \`/api/v2/admin/*\` — ensure CF Access policy is active
 3. Verify security headers in CF Zone → SSL/TLS → Edge Certificates and Cache → Configuration
 4. Check Worker error logs for CSP/header injection issues
@@ -250,7 +287,7 @@ async function createLinearIssue(
   }
 
   const title = buildLinearTitle(payload);
-  const description = buildLinearDescription(payload, alertId);
+  const description = buildLinearDescription(payload, alertId, env.WORKER_ENV);
   const priority = SEVERITY_TO_LINEAR_PRIORITY[payload.severity];
 
   const mutation = `
@@ -300,7 +337,7 @@ async function createLinearIssue(
     };
 
     if (data.errors?.length) {
-      throw new Error(`Linear GraphQL errors: ${data.errors.map(e => e.message).join(', ')}`);
+      throw new Error(`Linear GraphQL errors: ${data.errors.map((e) => e.message).join(', ')}`);
     }
 
     const result = data.data?.issueCreate;
@@ -384,7 +421,9 @@ export async function raiseSecurityAlert(
 export async function resolveSecurityAlert(db: D1Database, alertId: string): Promise<void> {
   try {
     await db
-      .prepare(`UPDATE security_alerts SET resolved_at = datetime('now') WHERE id = ? AND resolved_at IS NULL`)
+      .prepare(
+        `UPDATE security_alerts SET resolved_at = datetime('now') WHERE id = ? AND resolved_at IS NULL`
+      )
       .bind(alertId)
       .run();
   } catch (err) {

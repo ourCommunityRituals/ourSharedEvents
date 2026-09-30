@@ -52,7 +52,9 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: 'Adversarial: red-team suite against the deployed env'
         env:
-          BASE_URL: https://stg.oursharedevents.com
+          # OSE-1418: target is a repo variable, not hardcoded. It must be the env
+          # whose CF Access + ADMIN_KEY secrets are below (staging today).
+          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}

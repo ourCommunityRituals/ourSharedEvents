@@ -121,6 +121,9 @@ jobs:
         # and the production URL responds, set the repo variable
         # `PRODUCTION_LIVE=true` (Settings → Variables → Actions) to flip
         # main-push and nightly back to PRODUCTION_URL.
+        # OSE-1418: that flip is a launch-day step — OSE-1251 checklist and
+        # docs/runbooks/RUNBOOK-DEPLOYMENT.md "First Production Launch". The same
+        # variable also adds production to security-monitoring.yml's daily check.
         PRODUCTION_LIVE="${{ vars.PRODUCTION_LIVE || 'false' }}"
 
         if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_url }}" ]; then

@@ -52,3 +52,34 @@ jobs:
         run: |
           chmod +x scripts/ci/cf-access-probe.sh
           scripts/ci/cf-access-probe.sh --gate
+
+  # OSE-1418: WHICH Access app answers each host. No credentials — an
+  # unauthenticated request to an admin path must be challenged by the Access
+  # app that belongs to that host. Production is red while OSE-1353 is open
+  # (prod host challenged by the staging app, or reaching the Worker directly)
+  # and turns green once the production Access app protects it.
+  access-app-routing:
+    name: 'Access app routing — ${{ matrix.target }}'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: staging
+            base: https://stg.oursharedevents.com
+          - target: production
+            base: ${{ vars.PRODUCTION_URL || 'https://oursharedevents.com' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unauthenticated admin paths are challenged by this host's own Access app
+        env:
+          BASE: ${{ matrix.base }}
+        run: |
+          chmod +x scripts/ci/cf-access-probe.sh
+          rc=0
+          for path in /admin /api/v2/admin/sponsors; do
+            scripts/ci/cf-access-probe.sh --expect-challenge --gate --url="${BASE}${path}" || rc=1
+          done
+          exit $rc

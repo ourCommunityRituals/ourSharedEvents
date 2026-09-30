@@ -246,6 +246,21 @@ After OSE-1353, sign in to `https://oursharedevents.com/admin` through the **pro
 
 **Never:** add a wildcard brand, add a second identity without its own ticket, or set `ADMIN_SCOPE_ALL` on production.
 
+### Turn on production monitoring (OSE-1418)
+
+**When:** launch day, right after the first production deploy passes its smoke checks.
+
+**Step:** set the repo variable `PRODUCTION_LIVE=true` (GitHub → Settings → Secrets and variables → Actions → Variables). Set `PRODUCTION_URL` too if production is not `https://oursharedevents.com`.
+
+**What it turns on:**
+
+- `security-monitoring.yml`: the daily health and security-header check runs against production as well. A production failure opens an urgent Linear issue and fails the digest.
+- `security-regression.yml`: main-push and nightly runs target production instead of staging.
+
+**Already on, no variable needed:** `cf-access-canary.yml` checks every 6 hours that `/admin` and `/api/v2/admin/sponsors` on each host are challenged by that host's own Access app. The production row stays red until OSE-1353 is fixed.
+
+**Verify:** dispatch `Security Monitoring — Daily` with `dry_run=true`. The job summary should show a "Health check (production)" row that is not `SKIPPED`.
+
 ---
 
 ## Manual Deployment (Emergency Only)
