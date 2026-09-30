@@ -329,6 +329,12 @@ describe('OSE-1355 — Go live from the preview uses the existing state-machine 
   test('those two calls take a draft live, and the preview then hands off to the public page', async () => {
     const id = 'evt_dp_golive';
     await seed(id, 'draft');
+    // OSE-1420: go-live needs a QR that resolves — the shortlink OSE-240 mints.
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO shortlinks (code, event_id, created_at) VALUES ('dpgolv', ?, datetime('now'))`
+    )
+      .bind(id)
+      .run();
     const put = await call('PUT', `/api/v2/admin/events/${id}`, asAdmin(), { status: 'ready' });
     expect(put.status).toBe(200);
     const verify = await call('POST', `/api/v2/admin/events/${id}/verify-qr`, asAdmin());

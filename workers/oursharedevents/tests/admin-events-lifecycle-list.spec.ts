@@ -269,12 +269,26 @@ describe('PUT status goes through the state machine', () => {
     expect(await statusOf('lc-put-1')).toBe('draft');
   });
 
-  test('draft → ready → active (the honest path) succeeds', async () => {
+  test('draft → ready → active (the honest path) succeeds once a QR resolves to it', async () => {
     await seed('lc-put-2', 'draft', ME);
+    // OSE-1420: the auto-minted shortlink is the QR evidence go-live requires.
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO shortlinks (code, event_id, created_at) VALUES ('lcput2a', 'lc-put-2', datetime('now'))`
+    ).run();
     expect((await put('lc-put-2', 'ready')).res.status).toBe(200);
     expect(await statusOf('lc-put-2')).toBe('ready');
     expect((await put('lc-put-2', 'active')).res.status).toBe(200);
     expect(await statusOf('lc-put-2')).toBe('active');
+  });
+
+  test('ready → active with no shortlink and no poster is refused (409 NO_QR_EVIDENCE)', async () => {
+    await seed('lc-put-6', 'ready', ME);
+    const { res, body } = await put('lc-put-6', 'active');
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('NO_QR_EVIDENCE');
+    expect(body.from).toBe('ready');
+    expect(body.to).toBe('active');
+    expect(await statusOf('lc-put-6')).toBe('ready');
   });
 
   test('draft → archived and archived → draft (the expiry round-trip) both succeed', async () => {

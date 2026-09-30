@@ -1,0 +1,43 @@
+info:
+  name: OSE-1420 | go-live evidence 1 | create a draft (auto-mints the shortlink)
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"title":"OSE-1420 go-live evidence check","brand_id":"root","status":"draft","data_class":"synthetic"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Admin routes sit behind CF Access on staging; a non-JSON reply means the
+        // edge answered, not the worker. Mirrors folder 13's tolerance.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        const json = res.getBody();
+        test('draft created (201)', function () { expect(res.getStatus()).to.eql(201); expect(json.ok).to.eql(true); });
+        const id = json.id;
+        test('event id captured for the sequence', function () { expect(id).to.be.a('string'); });
+        test('OSE-240 minted the shortlink at creation (the digital poster QR)', function () { expect(json.shortcode).to.be.a('string'); });
+        bru.setVar('goLiveEventId', id);
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

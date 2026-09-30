@@ -2,7 +2,11 @@
  * OSE-213 / BE-18 — QR verify/unverify admin handlers
  *
  * POST /api/v2/admin/events/:id/verify-qr
- *   Transitions event from 'ready' → 'active' and sets qr_verified = 1.
+ *   Transitions event from 'ready' → 'active' and sets qr_verified = 1 —
+ *   ONLY when the event has a QR that resolves to it (OSE-1420: a shortlink
+ *   or an active poster deployment; see lib/go-live-evidence.ts). This is one
+ *   of TWO doors into `active`; PUT status is the other, and both ask for the
+ *   same evidence. The success body carries the evidence as a receipt.
  *
  * POST /api/v2/admin/events/:id/unverify-qr
  *   Transitions event from 'active' → 'ready' and sets qr_verified = 0.
@@ -12,6 +16,7 @@
  */
 
 import { isValidTransition } from '../domain/event-state';
+import { collectGoLiveEvidence, goLiveDenial, hasGoLiveEvidence } from '../lib/go-live-evidence';
 
 export interface QrVerifyEnv {
   DB: D1Database;
@@ -42,6 +47,14 @@ export async function handleV2AdminVerifyQr(
     );
   }
 
+  // OSE-1420: "QR verified" means a QR resolves to this event. Refuse with
+  // the evidence counts so the organiser sees what is missing, not just that
+  // something is.
+  const evidence = await collectGoLiveEvidence(env.DB, eventId);
+  if (!hasGoLiveEvidence(evidence)) {
+    return Response.json(goLiveDenial(row.status, evidence), { status: 409 });
+  }
+
   await env.DB.prepare(
     "UPDATE events SET status = 'active', qr_verified = 1, updated_at = datetime('now') WHERE id = ?"
   )
@@ -49,7 +62,7 @@ export async function handleV2AdminVerifyQr(
     .run();
 
   return Response.json(
-    { ok: true, event: { id: eventId, status: 'active', qrVerified: true } },
+    { ok: true, event: { id: eventId, status: 'active', qrVerified: true }, evidence },
     { status: 200 }
   );
 }

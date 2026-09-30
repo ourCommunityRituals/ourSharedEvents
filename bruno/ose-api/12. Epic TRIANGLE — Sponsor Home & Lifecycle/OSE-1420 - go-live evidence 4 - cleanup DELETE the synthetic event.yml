@@ -1,0 +1,35 @@
+info:
+  name: OSE-1420 | go-live evidence 4 | cleanup DELETE the synthetic event
+  type: http
+  seq: 9
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Admin routes sit behind CF Access on staging; a non-JSON reply means the
+        // edge answered, not the worker. Mirrors folder 13's tolerance.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        // Scan-guarded delete (OSE-982): zero scans landed, so it goes.
+        test('synthetic event removed', function () { expect([200, 204]).to.include(res.getStatus()); });
+        bru.setVar('goLiveEventId', '');
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -58,7 +58,7 @@ These are the non-negotiable security principles. Every change must preserve the
 | **NS-2** | **COMPLIANT** | OAuth implemented (SEC-IAC-03), signed mutations (SEC-IAC-05), admin guards active |
 | **NS-3** | **COMPLIANT** | Worker-only architecture since Story 5.2, no origin server to bypass               |
 | **NS-4** | **PARTIAL**   | Single Worker router, but 3 route wildcards exist (apex, www, api)                 |
-| **QR-0** | **COMPLIANT** | `verify-qr` endpoint enforced, unverified QRs blocked from display                 |
+| **QR-0** | **COMPLIANT** | `verify-qr` endpoint enforced, unverified QRs blocked from display; go-live requires a resolving QR (shortlink or active poster deployment) on both doors into `active` — 409 `NO_QR_EVIDENCE` otherwise (OSE-1420) |
 
 ---
 

@@ -1,0 +1,45 @@
+info:
+  name: OSE-1420 | go-live evidence 3 | verify-qr 200 with an evidence receipt
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}/verify-qr"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Admin routes sit behind CF Access on staging; a non-JSON reply means the
+        // edge answered, not the worker. Mirrors folder 13's tolerance.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        // Contract (OSE-1420): "QR verified" is a proof. The receipt names the
+        // evidence; an event created through the API carries the shortlink
+        // OSE-240 minted, so this door opens and says why.
+        const json = res.getBody();
+        test('ready → active (200)', function () { expect(res.getStatus()).to.eql(200); expect(json.ok).to.eql(true); });
+        test('status active, qrVerified true', function () { expect(json.event.status).to.eql('active'); expect(json.event.qrVerified).to.eql(true); });
+        test('receipt carries evidence counts', function () {
+          expect(json.evidence).to.be.an('object');
+          expect(json.evidence.shortlinks).to.be.a('number');
+          expect(json.evidence.active_deployments).to.be.a('number');
+          expect(json.evidence.scans).to.be.a('number');
+        });
+        test('at least one QR resolves to the event', function () { expect(json.evidence.shortlinks + json.evidence.active_deployments).to.be.above(0); });
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

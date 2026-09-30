@@ -2661,6 +2661,8 @@
             <p class="wizard-step-help" id="wizard-go-live-help">
               Right now this is a <strong>draft</strong>: your links won't work until you publish.
               Publish when the details are right — you can take it back offline any time.
+              Publishing checks that a QR resolves to this event (your share link from the
+              previous step, or a placed poster) before it goes live.
             </p>
             <button
               type="button"
@@ -6381,7 +6383,11 @@
       // PUT status. verify-qr is NOT the single door into `active`: PUT status
       // enforces the same transition table AND couples qr_verified to the target
       // state server-side (events.ts), so `active ⟺ qr_verified=1` holds no matter
-      // which door is used.
+      // which door is used. Both doors also require QR EVIDENCE (OSE-1420,
+      // lib/go-live-evidence.ts: a shortlink or an active poster deployment) and
+      // refuse with 409 NO_QR_EVIDENCE + an organiser-readable `error`, which
+      // moveEventTo surfaces verbatim. The Bruno contract in
+      // bruno/ose-api/12 says the same thing.
       // @ose-event-view:begin
       // OSE-1360: ONE {status, phase} -> every display of the selected event
       // (list badge, status panel, checklist, Next link, dashboard lifecycle).

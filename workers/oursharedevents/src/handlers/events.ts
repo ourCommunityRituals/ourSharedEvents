@@ -24,6 +24,7 @@ import {
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
+import { collectGoLiveEvidence, goLiveDenial, hasGoLiveEvidence } from '../lib/go-live-evidence';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
@@ -1108,6 +1109,19 @@ export async function handleUpdateEvent(
           },
           { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
         );
+      }
+      // OSE-1420: PUT status is the SECOND door into `active` (archived →
+      // active, "Go live again"). It asks for the same QR evidence verify-qr
+      // asks for, so `active ⟺ qr_verified=1 ⟺ a QR resolves to this event`
+      // holds whichever door is used.
+      if (to === 'active' && from !== 'active') {
+        const evidence = await collectGoLiveEvidence(env.DB, eventId);
+        if (!hasGoLiveEvidence(evidence)) {
+          return Response.json(
+            { ...goLiveDenial(from, evidence), status: 409, requestId: rid },
+            { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+          );
+        }
       }
     }
 

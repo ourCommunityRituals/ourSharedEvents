@@ -51,6 +51,26 @@ async function insertEvent(id: string, status: string): Promise<void> {
     .run();
 }
 
+/** OSE-1420: the QR evidence both doors into `active` require — a shortlink
+ *  (digital poster QR) or an active poster deployment (physical scan token). */
+async function seedShortlink(eventId: string): Promise<void> {
+  await db()
+    .prepare(
+      `INSERT OR REPLACE INTO shortlinks (code, event_id, created_at) VALUES (?, ?, datetime('now'))`
+    )
+    .bind(`sl${eventId.slice(-6)}${Date.now().toString(36).slice(-4)}`, eventId)
+    .run();
+}
+async function seedPosterDeployment(eventId: string, isActive = 1): Promise<void> {
+  await db()
+    .prepare(
+      `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_active)
+       VALUES (?, ?, ?, 'front door', ?)`
+    )
+    .bind(`pd_${eventId}`, eventId, `qrt_${eventId}`, isActive)
+    .run();
+}
+
 async function json<T = Record<string, unknown>>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
@@ -92,9 +112,70 @@ describe('QR Verify — POST /api/v2/admin/events/:id/verify-qr', () => {
     expect(body.to).toBe('active');
   });
 
+  // OSE-1420 — "QR verified" is a proof, not an assertion. verify-qr refuses
+  // an event no QR resolves to, and says which evidence is missing.
+  test('event in ready with NO shortlink and NO poster → 409 NO_QR_EVIDENCE with counts', async () => {
+    const id = `qr-test-noevidence-${Date.now()}`;
+    await insertEvent(id, 'ready');
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+    });
+    expect(res.status).toBe(409);
+    const body = await json<{
+      ok: boolean;
+      code: string;
+      from: string;
+      to: string;
+      evidence: { shortlinks: number; active_deployments: number; scans: number };
+      error: string;
+    }>(res);
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe('NO_QR_EVIDENCE');
+    expect(body.from).toBe('ready');
+    expect(body.to).toBe('active');
+    expect(body.evidence).toEqual({ shortlinks: 0, active_deployments: 0, scans: 0 });
+    expect(body.error).toMatch(/share link|poster/);
+    const row = await db()
+      .prepare('SELECT status, qr_verified FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string; qr_verified: number }>();
+    expect(row).toEqual({ status: 'ready', qr_verified: 0 });
+  });
+
+  test('event in ready with only an INACTIVE poster deployment → 409 NO_QR_EVIDENCE', async () => {
+    const id = `qr-test-inactive-pd-${Date.now()}`;
+    await insertEvent(id, 'ready');
+    await seedPosterDeployment(id, 0);
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+    });
+    expect(res.status).toBe(409);
+    expect((await json<{ code: string }>(res)).code).toBe('NO_QR_EVIDENCE');
+  });
+
+  test('event in ready with only an active poster deployment → 200, receipt counts it', async () => {
+    const id = `qr-test-poster-only-${Date.now()}`;
+    await insertEvent(id, 'ready');
+    await seedPosterDeployment(id, 1);
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
+      method: 'POST',
+      headers: ADMIN_HEADERS,
+    });
+    expect(res.status).toBe(200);
+    const body = await json<{
+      ok: boolean;
+      evidence: { shortlinks: number; active_deployments: number; scans: number };
+    }>(res);
+    expect(body.ok).toBe(true);
+    expect(body.evidence).toEqual({ shortlinks: 0, active_deployments: 1, scans: 0 });
+  });
+
   test('event in ready → 200, status active, qrVerified true', async () => {
     const id = `qr-test-ready-${Date.now()}`;
     await insertEvent(id, 'ready');
+    await seedShortlink(id); // OSE-1420: the auto-minted shortlink is the QR evidence
     const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
       method: 'POST',
       headers: ADMIN_HEADERS,
@@ -103,11 +184,13 @@ describe('QR Verify — POST /api/v2/admin/events/:id/verify-qr', () => {
     const body = await json<{
       ok: boolean;
       event: { id: string; status: string; qrVerified: boolean };
+      evidence: { shortlinks: number; active_deployments: number; scans: number };
     }>(res);
     expect(body.ok).toBe(true);
     expect(body.event.id).toBe(id);
     expect(body.event.status).toBe('active');
     expect(body.event.qrVerified).toBe(true);
+    expect(body.evidence.shortlinks).toBe(1);
   });
 
   test('event in active (already active) → 409 INVALID_TRANSITION', async () => {
@@ -214,10 +297,31 @@ describe('PUT status couples qr_verified to the target state (item 2)', () => {
   test('archived -> active via PUT sets qr_verified = 1 (the "Go live again" edge)', async () => {
     const id = `qr-put-archived-active-${Date.now()}`;
     await insertEvent(id, 'archived');
+    await seedShortlink(id); // OSE-1420: the second door asks for the same evidence
     await setQr(id, 0); // archived while never QR-verified
     const res = await putStatus(id, { status: 'active' });
     expect(res.status).toBe(200);
     expect(await readQr(id)).toBe(1);
+  });
+
+  // OSE-1420 — the second door cannot be the one that forgot to ask.
+  test('archived -> active via PUT with NO QR evidence → 409 NO_QR_EVIDENCE, nothing written', async () => {
+    const id = `qr-put-archived-noevidence-${Date.now()}`;
+    await insertEvent(id, 'archived');
+    await setQr(id, 0);
+    const res = await putStatus(id, { status: 'active' });
+    expect(res.status).toBe(409);
+    const body = await json<{ code: string; from: string; to: string; requestId: string }>(res);
+    expect(body.code).toBe('NO_QR_EVIDENCE');
+    expect(body.from).toBe('archived');
+    expect(body.to).toBe('active');
+    expect(typeof body.requestId).toBe('string');
+    expect(await readQr(id)).toBe(0);
+    const row = await db()
+      .prepare('SELECT status FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string }>();
+    expect(row?.status).toBe('archived');
   });
 
   test('active -> ready via PUT resets qr_verified = 0', async () => {
