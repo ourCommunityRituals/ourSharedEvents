@@ -291,19 +291,14 @@
         pointer-events: none;
       }
       .lock-overlay {
-        display: none;
         padding: 0.5rem 0.75rem;
-        background: #fff3bf;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
         border-radius: 6px;
-        font-size: 0.8rem;
-        color: #664d03;
-        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        margin: 0.5rem 0 0;
       }
-      .feature-locked .lock-overlay {
-        display: block;
-      }
-      .form-row,
-      .form-config {
+      .form-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -311,8 +306,7 @@
         padding: 0.75rem 0;
         border-bottom: 1px solid var(--border);
       }
-      .form-row:last-child,
-      .form-config:last-child {
+      .form-row:last-child {
         border-bottom: none;
       }
       .form-row-main {
@@ -330,14 +324,6 @@
         min-width: 44px;
         text-align: center;
         font-weight: 700;
-      }
-      .form-config-label {
-        font-size: 0.9rem;
-        font-weight: 500;
-      }
-      .form-config-desc {
-        font-size: 0.75rem;
-        color: var(--text-muted);
       }
       .toggle {
         position: relative;
@@ -2397,7 +2383,7 @@
             data-testid="admin-path-events"
           >
             <span class="path-option-title">Your events</span>
-            <span class="path-option-desc">Come back to what you've made — finish a draft, go live, or archive.</span>
+            <span class="path-option-desc">Come back to what you've made — finish a draft, publish, or archive.</span>
           </button>
         </div>
         <button
@@ -2629,7 +2615,7 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. Heads up — they won't work yet; they start working when you go live in the next step.</p>
+          <p class="wizard-step-help">Here are your event's links to share and print. Heads up — they won't work yet; they start working when you publish in the next step.</p>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
@@ -2677,8 +2663,8 @@
                404'd; the state machine had no driver from the UI. -->
           <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
             <p class="wizard-step-help" id="wizard-go-live-help">
-              Right now this is a <strong>draft</strong>: your links won't work until you go live.
-              Go live when the details are right — you can take it back offline any time.
+              Right now this is a <strong>draft</strong>: your links won't work until you publish.
+              Publish when the details are right — you can take it back offline any time.
             </p>
             <button
               type="button"
@@ -2686,7 +2672,7 @@
               id="wizard-go-live-btn"
               data-testid="wizard-go-live-btn"
             >
-              Go live now
+              Publish now
             </button>
             <button
               type="button"
@@ -2862,7 +2848,7 @@
           function syncWizardSummary() {
             var el = document.getElementById('wizardEventSummary');
             if (!el || !wiz.summaryBase) return;
-            el.textContent = wiz.summaryBase + (wiz.status === 'active' ? ' and live.' : ' as a draft.');
+            el.textContent = wiz.summaryBase + (wiz.status === 'active' ? ' and published.' : ' as a draft.');
           }
           // Each entry carries its own depth, so Back AND Forward both restore
           // the right count from the entry itself (no counter to drift).
@@ -3412,23 +3398,23 @@
             var msgEl = document.getElementById('wizard-go-live-msg');
             if (!wiz.createdId || typeof window.goLiveFromDraft !== 'function') return;
             btn.disabled = true;
-            btn.textContent = 'Going live\u2026';
+            btn.textContent = 'Publishing\u2026';
             // The wizard just created it, so it knows the origin (a draft,
             // unless Undo already moved it back — tracked in wiz.status).
             var r = await window.goLiveFromDraft(wiz.createdId, wiz.status || 'draft');
             if (r.ok) {
               wiz.status = 'active';
               syncWizardSummary();
-              btn.textContent = 'Live \u2713';
+              btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is live. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
             } else {
               btn.disabled = false;
-              btn.textContent = 'Go live now';
-              if (msgEl) { msgEl.textContent = r.error || 'Could not go live. Try again from Your events.'; msgEl.className = 'create-msg error'; }
+              btn.textContent = 'Publish now';
+              if (msgEl) { msgEl.textContent = r.error || 'Could not publish. Try again from Your events.'; msgEl.className = 'create-msg error'; }
             }
           });
           // Went live by mistake? One click puts it back to a draft, right here.
@@ -3445,7 +3431,7 @@
               syncWizardSummary();
               undo.hidden = true;
               btn.disabled = false;
-              btn.textContent = 'Go live now';
+              btn.textContent = 'Publish now';
               btn.classList.remove('is-live');
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = false;
@@ -4344,7 +4330,6 @@
           { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
           { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
         ];
-        const encodedName = encodeURIComponent(eventName);
 
         // OSE-675: resolve flags + all four counts in ONE Promise.all so the
         // card hydrates in a single round-trip generation instead of serial
@@ -4375,55 +4360,22 @@
         window.reloadForms = function () {
           if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
         };
-        const renderCount = (c) => {
-          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
-            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
-            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
-          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
-            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
-          return String(c);
-        };
-
-        // Form rows — one row per form. Link, purpose, count and lock/toggle
-        // state live together so each form appears exactly once.
+        // OSE-1361: one row per form + ONE upsell line for the section, built
+        // by the pure oseFormsSection (defined after loadForms). Plan lock =
+        // the plan-level flag (window._resolvedFlags); an organizer turning a
+        // form off for this event is "off", not "locked".
         const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-        const formRowsHtml = types.map((t, i) => {
-          const tierEnabled = flags[t.flagKey] !== false;
-          const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
-          const enabled = tierEnabled && phaseEnabled;
-          const lockedClass = enabled ? '' : ' feature-locked';
-          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
-          const disabled = !globalEnabled ? ' disabled' : '';
-          const checked = tierEnabled ? ' checked' : '';
-          // OSE-R-005: friendly plan + event-type names in the lock overlay.
-          const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
-          const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
-          const lockMsg = enabled ? '' : !tierEnabled
-            ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
-            : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
-          return '<div class="form-row' + lockedClass + '" data-testid="form-row-' + t.key + '">' +
-            '<div class="form-row-main">' +
-              '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
-                '<div class="form-type">' + t.label + '</div>' +
-                '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
-              '</a>' +
-              lockMsg +
-            '</div>' +
-            '<div class="form-row-actions">' +
-              '<span class="form-row-count" data-testid="form-count-' + t.key + '">' + renderCount(counts[i]) + '</span>' +
-              '<label class="toggle" aria-label="' + t.label + ' enabled">' +
-              '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
-              ' data-change="form-flag" />' +
-              '<span class="slider"></span>' +
-              '</label>' +
-            '</div>' +
-          '</div>';
-        }).join('');
+        const section = oseFormsSection({
+          types: types, counts: counts, eventFlags: flags, planFlags: window._resolvedFlags || {},
+          eventPhase: eventPhase, eventId: eventId, eventName: eventName,
+          tierLabel: window.friendlyTier, phaseLabel: window.friendlyPhase,
+        });
+        const formRowsHtml = section.rowsHtml;
 
         window._mintEventId = eventId;
 
         panel.innerHTML =
-          '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' +
+          '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' + section.upsellHtml +
           '<div class="report-links-section" data-testid="report-links-section">' +
             '<h3>Shared Report Links</h3>' +
             '<p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
@@ -4463,6 +4415,67 @@
           panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
         }
       };
+
+      // @ose-forms-section:begin
+      // OSE-1361: each form exactly once (name, one-line purpose, count, toggle
+      // carrying its own lock state) and ONE upsell line for the whole section
+      // in organizer language (plan names via tierLabel, never tier codes).
+      // Pure: admin-forms-single-row.spec.ts extracts and runs it.
+      function oseFormsSection(o) {
+        var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        var renderCount = function (c) {
+          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
+            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
+            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
+          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
+            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
+          // Counts come from the stats response: a finite number only, and
+          // escaped anyway so no response value reaches innerHTML raw (CodeQL
+          // js/xss-more-sources traced counts → rowsHtml → panel.innerHTML).
+          return typeof c === 'number' && isFinite(c) ? esc(String(Math.trunc(c))) : '—';
+        };
+        var planNeeds = {}, phaseNeeds = {};
+        var rowsHtml = o.types.map(function (t, i) {
+          var tierEnabled = o.eventFlags[t.flagKey] !== false;
+          var phaseEnabled = o.eventPhase >= (t.upgradePhase || 1);
+          var enabled = tierEnabled && phaseEnabled;
+          var planLocked = o.planFlags[t.flagKey] === false;
+          var locked = planLocked || !phaseEnabled;
+          var why = '';
+          if (planLocked) { why = o.tierLabel(t.upgradeTier || 'mid'); (planNeeds[why] = planNeeds[why] || []).push(t.label); }
+          else if (!phaseEnabled) { why = o.phaseLabel(t.upgradePhase || 2); (phaseNeeds[why] = phaseNeeds[why] || []).push(t.label); }
+          var aria = t.label + (planLocked ? ': locked, comes with the ' + why : !phaseEnabled ? ': available for ' + why : ' on for this event');
+          // Every value into markup goes through esc() — the href included, since
+          // encodeURIComponent leaves ' unescaped (CodeQL js/xss-more-sources).
+          var key = esc(t.key), flagKey = esc(t.flagKey);
+          var href = '/forms/' + encodeURIComponent(o.eventId) + '?type=' + encodeURIComponent(t.key) + '&event=' + encodeURIComponent(o.eventName == null ? '' : o.eventName);
+          return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + key + '" data-enabled="' + (enabled ? 'true' : 'false') + '">' +
+            '<div class="form-row-main">' +
+              '<a class="form-link" href="' + esc(href) + '" target="_blank" rel="noopener" data-testid="form-link-' + key + '">' +
+                '<div class="form-type">' + esc(t.label) + '</div>' +
+                '<div class="form-desc" data-testid="form-desc-' + key + '">' + esc(t.desc) + '</div>' +
+              '</a>' +
+            '</div>' +
+            '<div class="form-row-actions">' +
+              '<span class="form-row-count" data-testid="form-count-' + key + '">' + renderCount(o.counts[i]) + '</span>' +
+              '<label class="toggle" aria-label="' + esc(aria) + '">' +
+              '<input type="checkbox" data-testid="form-toggle-' + key + '" data-flag="' + flagKey + '" data-event="' + esc(o.eventId) + '"' +
+              (tierEnabled && !locked ? ' checked' : '') + (locked ? ' disabled' : '') + ' data-change="form-flag" />' +
+              '<span class="slider"></span>' +
+              '</label>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+        var list = function (names) { return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]; };
+        var lines = [];
+        Object.keys(planNeeds).forEach(function (plan) { lines.push(list(planNeeds[plan]) + ' come' + (planNeeds[plan].length > 1 ? '' : 's') + ' with the ' + plan + '. Upgrade to ' + plan + ' to unlock.'); });
+        Object.keys(phaseNeeds).forEach(function (ph) { lines.push(list(phaseNeeds[ph]) + (phaseNeeds[ph].length > 1 ? ' are' : ' is') + ' available for ' + ph + '.'); });
+        return {
+          rowsHtml: rowsHtml,
+          upsellHtml: lines.length ? '<p class="lock-overlay" data-testid="forms-upsell">' + esc(lines.join(' ')) + '</p>' : '',
+        };
+      }
+      // @ose-forms-section:end
 
       // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
       window._onMintRoleChange = function() {
@@ -5190,7 +5203,7 @@
     <!-- Selecting an event row upgrades these cards to that event's scoped
          surface (data-surface drives window.scopeSurfaceCards). Unscoped they
          open the event-agnostic shell, so the cards are always functional. -->
-    <div class="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
+    <div class="surface-cards" id="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
       <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
         <p>Print-ready event poster with QR codes</p>
@@ -5345,7 +5358,7 @@
         <div class="dash-phase" data-testid="admin-phase-day" data-phase="event-day">
           <div class="dash-phase__header">
             <span class="dash-phase__title">Event Day</span>
-            <span class="dash-phase__badge" data-testid="admin-phase-day-badge">Live</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-day-badge">Live now</span>
           </div>
           <p class="dash-phase__desc">Displays at the entrance, check-in at the door, sponsor rotation on screens.</p>
           <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Event day progress">
@@ -5371,15 +5384,13 @@
         // stay "—" until EventDashboard.init(data) is wired to D1/forms counts.
         (function () {
           'use strict';
-          function phaseFor(dateISO) {
-            if (!dateISO) return 'pre-event';
-            var day = new Date(dateISO);
-            if (isNaN(day.getTime())) return 'pre-event';
-            day.setHours(0, 0, 0, 0);
-            var today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (day.getTime() === today.getTime()) return 'event-day';
-            return day.getTime() < today.getTime() ? 'post-event' : 'pre-event';
+          // OSE-1360: the lifecycle reads the same {status, phase} as the badge
+          // and checklist (window.oseEventView over the list row). The old
+          // date-only guess ignored status and was never even handed a date.
+          var PHASE_CARD = { pre_event: 'pre-event', event: 'event-day', post_event: 'post-event' };
+          function phaseFor(id) {
+            var e = window._oseList && window._oseList.byId[String(id)];
+            return e && window.oseEventView ? PHASE_CARD[window.oseEventView(e).phase] : 'pre-event';
           }
           function setProgress(testid, pct) {
             var fill = document.querySelector('[data-testid="' + testid + '"]');
@@ -5407,7 +5418,7 @@
               detail = detail || {};
               var card = document.getElementById('dashboard-card');
               if (!card) return;
-              var phase = phaseFor(detail.dateISO || detail.date);
+              var phase = phaseFor(detail.id);
               [
                 ['pre', 'pre-event'],
                 ['day', 'event-day'],
@@ -5599,7 +5610,7 @@
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Live</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
         <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
       </div>
@@ -5741,7 +5752,7 @@
       // wider set down (the list is brand-scoped per request, #9). Cursor
       // pagination replaces the old silent 50-row cap: the API always paged,
       // the UI just never asked for page two.
-      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: {}, loading: false };
+      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: Object.create(null), loading: false };
 
       window.setEventsFilter = function (status) {
         window._oseList.status = status || 'all';
@@ -5786,7 +5797,7 @@
         if (opts && opts.reset) {
           L.cursor = null;
           L.items = [];
-          L.byId = {};
+          L.byId = Object.create(null);
         }
         try {
           var qs = [];
@@ -5796,16 +5807,26 @@
           var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
           var data = await fetch(url).then(function (r) { return r.json(); });
           if (!data.ok) throw new Error(data.error || data.code || 'list failed');
-          data.items.forEach(function (e) { L.items.push(e); L.byId[String(e.id)] = e; });
+          // Ids from the response become object keys, so only real event-id
+          // shapes are accepted and the map has no prototype (a "__proto__" id
+          // must never write onto Object.prototype — CodeQL
+          // js/remote-property-injection).
+          data.items.forEach(function (e) {
+            var key = String(e && e.id);
+            if (!/^[A-Za-z0-9_-]{1,128}$/.test(key)) return;
+            e.phaseStatus = e.status;
+            L.items.push(e);
+            L.byId[key] = e;
+          });
           var hasMore = !!(data.pagination && data.pagination.hasMore);
           L.cursor = hasMore ? data.pagination.nextCursor : null;
 
           if (!L.items.length) {
             var empty =
               L.status === 'draft' ? 'No drafts — everything you started is live or archived.' :
-              L.status === 'active' ? 'Nothing is live right now. Pick a draft and press Go live.' :
+              L.status === 'active' ? 'Nothing is published right now. Pick a draft and press Publish.' :
               L.status === 'archived' ? 'Nothing archived.' :
-              L.status === 'ready' ? 'Nothing waiting to go live.' :
+              L.status === 'ready' ? 'Nothing waiting to be published.' :
               L.mine ? 'You haven’t created any events yet.' : 'No events found.';
             container.innerHTML = '<p class="loading" data-testid="events-empty">' + esc(empty) + '</p>';
             return;
@@ -5824,7 +5845,7 @@
             // day in every US timezone; pin it to local noon.
             var iso = e.startDateISO ? String(e.startDateISO) : '';
             var when = iso ? esc(new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00' : iso).toLocaleDateString()) : '—';
-            var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Live, but kept off the public map and list">(unlisted)</span>' : '';
+            var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Published, but kept off the public map and list">(unlisted)</span>' : '';
             var preview = e.status === 'draft' ? '<a class="event-preview-link" data-testid="event-preview-link" href="/api/v2/admin/events/' + safeId + '/preview" target="_blank" rel="noopener">Preview</a>' : '';
             return `
           <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}" data-status="${st}">
@@ -5934,22 +5955,93 @@
       // enforces the same transition table AND couples qr_verified to the target
       // state server-side (events.ts), so `active ⟺ qr_verified=1` holds no matter
       // which door is used.
+      // @ose-event-view:begin
+      // OSE-1360: ONE {status, phase} -> every display of the selected event
+      // (list badge, status panel, checklist, Next link, dashboard lifecycle).
+      // Pure (no DOM, no window): admin-event-status-phase-consistency.spec.ts
+      // extracts and runs it. Status (domain/event-state.ts) and phase
+      // (domain/event-phase.ts) are orthogonal, so they get different words:
+      // status active = "Published", phase event = "Live now" (the public
+      // page's word). An active event before its date is Published but not
+      // Live now, and its next step is getting the word out, never "publish".
+      function oseEventView(e, facts, now) {
+        e = e || {}; facts = facts || {};
+        var STATUS = { draft: 'Draft', ready: 'Ready', active: 'Published', archived: 'Archived' };
+        var PHASE = { pre_event: 'Before the event', event: 'Live now', post_event: 'After the event' };
+        var st = e.status || 'draft';
+        // Status gates, time refines (event-phase.ts Decision 1). The server's
+        // row.phase is trusted only while the status it was computed for still
+        // holds; after an in-page status change, fall back to the dates.
+        var phase;
+        if (st === 'draft' || st === 'ready') phase = 'pre_event';
+        else if (st === 'archived') phase = 'post_event';
+        else if (PHASE[e.phase] && e.phaseStatus === st) phase = e.phase;
+        else {
+          now = now || new Date();
+          var iso = e.starts_at || e.startDateISO;
+          var day = /^\d{4}-\d{2}-\d{2}$/;
+          var start = iso ? new Date(day.test(iso) ? iso + 'T00:00:00' : iso) : null;
+          var end = e.end_date ? new Date(day.test(e.end_date) ? e.end_date + 'T23:59:59' : e.end_date) : null;
+          if (!start || isNaN(start.getTime())) phase = 'event';
+          else if (now < start) phase = 'pre_event';
+          else phase = end && !isNaN(end.getTime()) && now > end ? 'post_event' : 'event';
+        }
+        var active = st === 'active', over = st === 'archived';
+        var stats = facts.stats || null, posters = facts.posters, sponsors = facts.sponsors;
+        // Counts: a missing or null count renders nothing and ticks nothing.
+        var fmt = function (f) {
+          if (f == null) return null;
+          if (typeof f === 'number') return String(f);
+          if (f.suppressed) return 'fewer than ' + (f.floor || 5);
+          return f.count != null ? String(f.count) : null;
+        };
+        // Only exact scans prove people are scanning; a floored "fewer than 5"
+        // registration count may be zero, so it never ticks this step.
+        var scanN = stats && stats.scans != null ? (typeof stats.scans === 'number' ? stats.scans : stats.scans.count) : null;
+        var anyScans = typeof scanN === 'number' && scanN > 0;
+        var counts = stats ? [['Scans', fmt(stats.scans)], ['registered', fmt(stats.registrations)], ['checked in', fmt(stats.checkins)]]
+          .filter(function (c) { return c[1] != null; }).map(function (c) { return c[0] + ' ' + c[1]; }).join(' · ') : '';
+        var steps = [
+          { key: 'setup', label: 'Set up', state: 'done',
+            detail: (e.name || 'Untitled') + (e.startDateISO ? ' · ' + e.startDateISO : ' · no date yet') },
+          { key: 'live', label: over ? 'Was published' : 'Published', state: active || over ? 'done' : st === 'ready' ? 'now' : 'todo',
+            detail: active ? (Number(e.is_published) === 0 ? 'Published, but kept off the public map' : 'Public page, poster and display are on') + ' · ' + PHASE[phase]
+              : over ? 'Archived' : st === 'ready' ? 'Marked ready. Press Publish above.' : 'Still a draft. Publish when the details are right.' },
+          { key: 'get-word-out', label: 'Get the word out', state: posters == null || sponsors == null ? 'todo' : posters > 0 && sponsors > 0 ? 'done' : (active ? 'now' : 'todo'),
+            detail: (posters == null ? 'Poster placements could not load' : posters > 0 ? posters + ' poster placement' + (posters === 1 ? '' : 's') : 'No poster placements yet') + ' · ' + (sponsors == null ? 'sponsors could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'no sponsors on yet') },
+          { key: 'scans', label: 'People scanning', state: anyScans ? 'done' : (active && posters > 0 ? 'now' : 'todo'),
+            detail: stats ? (counts || 'No counts yet') : 'Could not load counts' },
+          { key: 'report', label: 'Report', state: (active && anyScans) || over ? 'now' : 'todo',
+            detail: over || (active && anyScans) ? 'Ready to share with the venue and sponsors' : 'Fills in once people start scanning' },
+        ];
+        // The one next step, in chain order. Published never asks to publish.
+        var next = null;
+        if (st === 'draft') next = { label: 'Mark ready or publish', href: '#event-status-card' };
+        else if (st === 'ready') next = { label: 'Publish', href: '#event-status-card' };
+        else if (over || (active && phase !== 'pre_event' && (anyScans || phase === 'post_event'))) next = { label: 'Share the report', href: '#report-card' };
+        else if (active && !(posters > 0)) next = { label: 'Get the word out: print a poster', href: '#poster-deployments-card' };
+        else if (active && sponsors === 0) next = { label: 'Get the word out: add a sponsor', href: '#sponsors-card' };
+        else if (active) next = { label: 'Get the word out: share the link', href: '#surface-cards' };
+        return { status: st, statusLabel: STATUS[st] || st, phase: phase, phaseLabel: PHASE[phase], steps: steps, next: next };
+      }
+      // @ose-event-view:end
+      window.oseEventView = oseEventView;
       window.friendlyStatus = function (s) {
-        return { draft: 'Draft', ready: 'Ready', active: 'Live', archived: 'Archived' }[s] || s || 'Draft';
+        return oseEventView({ status: s || 'draft' }).statusLabel;
       };
       var STATUS_EXPLAIN = {
-        draft: 'Only you can see this. Mark it ready when the details are right, then go live to turn on the public page, poster and display.',
-        ready: 'Details are locked in. Go live to turn on the public page, poster and display.',
-        active: 'Live. The public page, poster QR codes and the big-screen display all work.',
+        draft: 'Only you can see this. Mark it ready when the details are right, then publish to turn on the public page, poster and display.',
+        ready: 'Details are locked in. Publish to turn on the public page, poster and display.',
+        active: 'Published. The public page, poster QR codes and the big-screen display all work.',
         archived: 'Hidden everywhere except here. Reopen it as a draft to bring it back.',
       };
       var STATUS_ACTIONS = {
-        draft: [ { to: 'ready', label: 'Mark ready' }, { to: 'active', label: 'Go live', primary: true }, { to: 'archived', label: 'Archive' } ],
-        ready: [ { to: 'active', label: 'Go live', primary: true }, { to: 'draft', label: 'Back to draft' }, { to: 'archived', label: 'Archive' } ],
-        // Went live by mistake? "Back to draft" is one click from Live;
+        draft: [ { to: 'ready', label: 'Mark ready' }, { to: 'active', label: 'Publish', primary: true }, { to: 'archived', label: 'Archive' } ],
+        ready: [ { to: 'active', label: 'Publish', primary: true }, { to: 'draft', label: 'Back to draft' }, { to: 'archived', label: 'Archive' } ],
+        // Published by mistake? "Back to draft" is one click;
         // moveEventTo walks active -> ready -> draft for it.
         active: [ { to: 'draft', label: 'Back to draft' }, { to: 'ready', label: 'Take offline' }, { to: 'archived', label: 'Archive' } ],
-        archived: [ { to: 'draft', label: 'Reopen as draft', primary: true }, { to: 'active', label: 'Go live again' } ],
+        archived: [ { to: 'draft', label: 'Reopen as draft', primary: true }, { to: 'active', label: 'Publish again' } ],
       };
       window.renderEventStatus = function (id) {
         var card = document.getElementById('event-status-card');
@@ -6007,7 +6099,7 @@
         // the event page (the 5Ws) — that's where the pre-event marketing
         // happens. Physical posters widen the reach after that.
         var hasLink = !!(d.link && d.link.url);
-        if (!live) lede = 'Your event link, poster and QR code switch on when you go live.';
+        if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
         else if (!(a.clicks > 0) && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page and shows up here. Posters widen the reach.';
         else lede = 'People are finding it: ' + a.clicks + ' link tap' + (a.clicks === 1 ? '' : 's') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
@@ -6025,7 +6117,7 @@
           btn.setAttribute('data-event-id', String(id));
           btn.setAttribute('data-to', 'active');
           btn.setAttribute('data-testid', 'pre-event-go-live');
-          btn.textContent = 'Go live';
+          btn.textContent = 'Publish';
         } else {
           // Live: Copy link first (the driver), the poster second.
           if (hasLink) {
@@ -6106,8 +6198,8 @@
       };
 
       // ── Event timeline: the chain at a glance + the next step ──
-      // Steps: 1 Set up · 2 Live · 3 Poster out · 4 People scanning ·
-      //        5 Sponsors on · 6 Report. Facts come from the row (status,
+      // Steps: 1 Set up · 2 Published · 3 Get the word out · 4 People
+      //        scanning · 5 Report. Facts come from the row (status,
       //        is_published), /stats (k-floored counts — never a sub-5 number),
       //        /poster-deployments (count) and the sponsors list (accepted count).
       //        Each fetch is independent; a failure leaves that step "unknown"
@@ -6121,9 +6213,6 @@
         if (!card || !ol || !e) { if (card) card.hidden = true; return; }
         var seq = ++window._oseTimelineSeq;
         var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
-        var st = e.status || 'draft';
-        var live = st === 'active';
-        var over = st === 'archived';
         var eid = encodeURIComponent(id);
 
         var stats = null, posters = null, sponsors = null;
@@ -6134,41 +6223,15 @@
         ]);
         if (seq !== window._oseTimelineSeq) return; // a newer selection won
 
-        var fmt = function (f) {
-          if (!f) return null;
-          if (typeof f === 'number') return String(f);
-          if (f.suppressed) return 'fewer than ' + (f.floor || 5);
-          return String(f.count != null ? f.count : 0);
-        };
-        var scans = stats ? fmt(stats.scans) : null;
-        var regs = stats ? fmt(stats.registrations) : null;
-        var checkins = stats ? fmt(stats.checkins) : null;
-        var anyScans = !!(stats && ((typeof stats.scans === 'number' && stats.scans > 0) || (stats.scans && stats.scans.count > 0) || (stats.registrations && (stats.registrations.count > 0 || stats.registrations.suppressed))));
-
-        var steps = [
-          { key: 'setup', label: 'Set up', state: 'done',
-            detail: (e.name || 'Untitled') + (e.startDateISO ? ' · ' + esc(e.startDateISO) : ' · no date yet') },
-          { key: 'live', label: over ? 'Was live' : 'Live', state: live || over ? 'done' : st === 'ready' ? 'now' : 'todo',
-            detail: live ? (Number(e.is_published) === 0 ? 'Live, but kept off the public map' : 'Public page, poster and display are on') : over ? 'Archived' : st === 'ready' ? 'Marked ready. Press Go live above.' : 'Still a draft. Go live when the details are right.' },
-          { key: 'get-word-out', label: 'Get the word out', state: posters == null || sponsors == null ? 'todo' : posters > 0 && sponsors > 0 ? 'done' : (live ? 'now' : 'todo'),
-            detail: (posters == null ? 'Poster placements could not load' : posters > 0 ? posters + ' poster placement' + (posters === 1 ? '' : 's') : 'No poster placements yet') + ' · ' + (sponsors == null ? 'sponsors could not load' : sponsors > 0 ? sponsors + ' active sponsor' + (sponsors === 1 ? '' : 's') : 'no sponsors on yet') },
-          { key: 'scans', label: 'People scanning', state: anyScans ? 'done' : (live && posters > 0 ? 'now' : 'todo'),
-            detail: stats ? 'Scans ' + scans + ' · registered ' + regs + ' · checked in ' + checkins : 'Could not load counts' },
-          { key: 'report', label: 'Report', state: (live && anyScans) || over ? 'now' : 'todo',
-            detail: over || (live && anyScans) ? 'Ready to share with the venue and sponsors' : 'Fills in once people start scanning' },
-        ];
-        ol.innerHTML = steps.map(function (s, i) {
+        // OSE-1360: steps + next come from the same {status, phase} as the
+        // badge and the dashboard (oseEventView), never a second derivation.
+        var view = oseEventView(e, { stats: stats, posters: posters, sponsors: sponsors });
+        ol.innerHTML = view.steps.map(function (s, i) {
           return '<li class="tl-step ' + s.state + '" data-testid="tl-' + s.key + '" data-state="' + s.state + '">' +
             '<span class="tl-dot" aria-hidden="true">' + (s.state === 'done' ? '✓' : (i + 1)) + '</span>' +
             '<div><div class="tl-label">' + esc(s.label) + '</div><p class="tl-detail">' + esc(s.detail) + '</p></div></li>';
         }).join('');
-
-        // The one next step. Order of the chain decides it.
-        var nextStep = null;
-        if (!live && !over) nextStep = { label: st === 'ready' ? 'Go live' : 'Mark ready or go live', href: '#event-status-card' };
-        else if (live && !(posters > 0)) nextStep = { label: 'Print a poster', href: '#poster-deployments-card' };
-        else if (live && sponsors === 0) nextStep = { label: 'Add a sponsor', href: '#sponsors-card' };
-        else if ((live && anyScans) || over) nextStep = { label: 'Share the report', href: '#report-card' };
+        var nextStep = view.next;
         if (next) {
           if (nextStep) { next.hidden = false; next.textContent = 'Next: ' + nextStep.label; next.setAttribute('href', nextStep.href); }
           else next.hidden = true;
@@ -6265,11 +6328,13 @@
             if (b) { b.className = 'badge ' + to; b.textContent = window.friendlyStatus(to); }
           }
           window.renderEventStatus(id);
-          // The checklist and the pre-event window both read status: going
-          // live switches the poster link + QR on in the same click.
-          if (window.renderEventTimeline) window.renderEventTimeline(id);
+          // OSE-1360: the checklist and dashboard re-derive from the NEW status
+          // (a stale "ready" step on a published event was the bug), and the
+          // pre-event window switches its link + QR on in the same click.
+          window.renderEventTimeline(id);
+          if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
-          var nice = { active: 'Live — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
+          var nice = { active: 'Published — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
           if (m2) {
