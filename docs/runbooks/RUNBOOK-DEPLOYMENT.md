@@ -199,6 +199,55 @@ npm run test:prod:smoke
 
 ---
 
+## First Production Launch — One-Time Data Steps
+
+These run once, against the production database, before the first launch. They are data steps, not migrations, so no test brand or fixture ever ships in `migrations/`.
+
+### Founder admin brand membership (OSE-1415)
+
+**Why:** production has no `ADMIN_SCOPE_ALL` escape hatch. That setting exists only on staging, and `tests/prod-admin-scope-config.spec.ts` fails if it is ever added to `[env.production.vars]`. So an admin sees events only through a row in `admin_brand_memberships` (`src/lib/admin-brand-scope.ts`, `resolveAdminBrandScopeAsync`). With 0 rows, the founder's `/admin` list is empty ("deny" scope) on launch day.
+
+**Order:**
+
+1. After the production Cloudflare Access app protects `oursharedevents.com/admin` (OSE-1353).
+2. Before the first authenticated admin smoke on production.
+
+**The row:** one row, matching staging's shape exactly. Staging holds `mzdano@gmail.com | root | brand_owner`. The email must match the CF Access identity character for character, because the lookup is an exact `WHERE email = ?`.
+
+**Apply** (idempotent: re-running changes nothing):
+
+```bash
+cd workers/oursharedevents
+npx wrangler d1 execute DB --env production --remote --command "
+INSERT OR IGNORE INTO admin_brand_memberships (email, brand_id, role)
+  VALUES ('mzdano@gmail.com', 'root', 'brand_owner');
+INSERT OR IGNORE INTO admin_audit_log
+  (id, action, actor, resource_type, resource_id, request_id, outcome, details)
+  VALUES ('ose-1415-founder-membership', 'GRANT_BRAND_MEMBERSHIP', 'mzdano@gmail.com',
+          'admin_brand_membership', 'mzdano@gmail.com:root', 'runbook:OSE-1415', 'success',
+          '{\"role\":\"brand_owner\",\"source\":\"RUNBOOK-DEPLOYMENT first-launch step\"}');"
+```
+
+The audit row gives the first admin grant on production a trace in `admin_audit_log`. It uses a fixed id so a re-run stays idempotent.
+
+**Verify:**
+
+```bash
+npx wrangler d1 execute DB --env production --remote --command "
+SELECT email, brand_id, role FROM admin_brand_memberships;
+SELECT action, resource_id, outcome FROM admin_audit_log WHERE id = 'ose-1415-founder-membership';"
+# Expected: exactly one membership row (mzdano@gmail.com | root | brand_owner) and one audit row.
+```
+
+After OSE-1353, sign in to `https://oursharedevents.com/admin` through the **production** Access app:
+
+- `GET /api/v2/admin/events` must return `ok: true` with `filters` echoed back, not an empty deny-scoped list.
+- A non-member identity must still get an empty list. `tests/admin-brand-membership.spec.ts` covers this fail-closed case.
+
+**Never:** add a wildcard brand, add a second identity without its own ticket, or set `ADMIN_SCOPE_ALL` on production.
+
+---
+
 ## Manual Deployment (Emergency Only)
 
 Use only when CI/CD is broken and immediate deployment is critical.
