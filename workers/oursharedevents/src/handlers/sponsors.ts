@@ -249,6 +249,8 @@ export async function handleAdminListSponsors(
                 sp.display_token AS display_token, sb.is_active AS is_active,
                 sp.organizer_accepted AS organizer_accepted,
                 sp.sponsor_accepted AS sponsor_accepted,
+                sp.id AS placement_id, sp.is_active AS placement_active,
+                sp.source AS placement_source,
                 COALESCE(sp.created_at, sb.created_at) AS created_at,
                 COALESCE(sp.updated_at, sb.updated_at) AS updated_at`;
   const from = `sponsor_business sb

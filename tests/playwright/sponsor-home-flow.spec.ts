@@ -18,13 +18,20 @@
  *   - a tampered link shows the invalid-link page and leaks no sponsor data
  *   - the organizer's Event checklist inbox follows the sponsor's answer
  *     (waiting → declined), TRIANGLE slice #3
+ *   - sponsor discovery: the sponsor asks to back another published event, the
+ *     organizer sees "asked to join" and approves, and only THEN is the sponsor
+ *     on that event's public page (ADR-019 two-sided consent)
  *
  * Runs in the blocking PR phone audit (playwright.mobile.config.ts): a local
  * worker with migrations, a local admin key and a local signing secret. Seeds
  * its own sponsor, so it never depends on (or disturbs) the audit's one.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { seedSponsorHome, type SeededSponsorHome } from './helpers/sponsor-home-seed';
+import {
+  createLiveEvent,
+  seedSponsorHome,
+  type SeededSponsorHome,
+} from './helpers/sponsor-home-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const MIN_TOUCH_TARGET_PX = 44;
@@ -67,13 +74,13 @@ async function publicPageShowsSponsor(page: Page): Promise<boolean> {
  * show Published events, select the seeded one, and return its Event checklist
  * card once it has rendered. The inbox on that card is TRIANGLE slice #3.
  */
-async function openOrganizerChecklist(page: Page) {
+async function openOrganizerChecklist(page: Page, eventId = seeded.eventId) {
   await page.setViewportSize({ width: 393, height: 900 });
   await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
   await page.goto('/admin', { waitUntil: 'domcontentloaded' });
   await page.click('[data-testid="admin-path-advanced"]');
   await page.click('[data-testid="events-filter-active"]');
-  const row = page.locator(`[data-testid="event-row-${seeded.eventId}"]`);
+  const row = page.locator(`[data-testid="event-row-${eventId}"]`);
   await expect(row, 'seeded event never showed in the Published list').toBeVisible({
     timeout: 15000,
   });
@@ -218,4 +225,61 @@ test('a tampered link shows the invalid-link page and no sponsor data', async ({
   expect(body).not.toContain(seeded.sponsorName);
   expect(body).not.toContain(seeded.eventTitle);
   await expect(page.getByTestId('placement-card')).toHaveCount(0);
+});
+
+test.describe('sponsor discovery: ask to join → organizer approves', () => {
+  let otherEventId = '';
+  test.beforeAll(async ({ request }) => {
+    // Dated today: "Events you could back" lists the soonest MAX_DISCOVERABLE
+    // (20), and the shared local worker holds every other spec's events too.
+    otherEventId = (await createLiveEvent(request, ADMIN_BEARER, `Discover ${Date.now()}`, 0)).id;
+  });
+
+  test('the sponsor asks from their page; the event page still does not show them', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const problems = watchForBreakage(page);
+    await page.goto(sponsorPath());
+    const card = page.locator(`[data-testid="discover-card"][data-event-id="${otherEventId}"]`);
+    await expect(card).toBeVisible();
+    const askBtn = card.getByTestId('discover-ask');
+    const box = await askBtn.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
+    await askBtn.click();
+    await expect(card).toHaveAttribute('data-requested', '1');
+    await expect(askBtn).toBeHidden();
+
+    await page.reload();
+    await expect(
+      page.locator(`[data-testid="request-card"][data-event-id="${otherEventId}"]`)
+    ).toContainText('Waiting for the organizer');
+
+    const pub = await page.request.get(`/events/${encodeURIComponent(otherEventId)}`);
+    expect(await pub.text()).not.toContain(seeded.sponsorName);
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
+
+  test('the organizer sees the request, approves it, and the sponsor goes public', async ({
+    page,
+  }) => {
+    const problems = watchForBreakage(page);
+    const card = await openOrganizerChecklist(page, otherEventId);
+    const asked = card.getByTestId('inbox-sponsors-asked');
+    await expect(asked).toBeVisible();
+    await expect(asked).toContainText('1 sponsor asked to join');
+    await expect(asked).toContainText(seeded.sponsorName);
+
+    const approve = page.getByTestId(`request-approve-${seeded.sponsorId}`);
+    await expect(approve).toBeVisible({ timeout: 15000 });
+    await approve.click();
+    await expect(page.getByTestId(`spon-status-${seeded.sponsorId}`)).toHaveText('Active', {
+      timeout: 15000,
+    });
+    await expect(card.getByTestId('inbox-sponsors-asked')).toHaveCount(0);
+
+    const pub = await page.request.get(`/events/${encodeURIComponent(otherEventId)}`);
+    expect(await pub.text()).toContain(seeded.sponsorName);
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
 });

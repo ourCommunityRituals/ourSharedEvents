@@ -2120,6 +2120,9 @@
           'sponsor-home-link': function (el) {
             if (window._mintSponsorHomeLink) window._mintSponsorHomeLink(argOf(el, 'id'), el);
           },
+          'sponsor-request-answer': function (el) {
+            if (window._answerSponsorRequest) window._answerSponsorRequest(argOf(el, 'placement-id'), argOf(el, 'approve') === '1', el);
+          },
           'sponsor-confirm-deactivate': function (el) {
             if (window._confirmDeactivate) window._confirmDeactivate(argOf(el, 'id'));
           },
@@ -4114,14 +4117,27 @@
               // accepted (ADR-019: pending sponsors do NOT render publicly until
               // they accept via the home-link). CCR-PR567 re-run item 6.
               const acc = s.sponsor_accepted;
-              const statusBadge = !s.is_active
+              // Sponsor discovery: a request the SPONSOR sent is switched off
+              // until the organizer answers (lib/sponsor-discovery, ADR-019).
+              const isRequest = s.placement_source === 'sponsor_request' && Number(s.placement_active) === 0;
+              const requestWaiting = isRequest && (s.organizer_accepted === null || s.organizer_accepted === undefined);
+              const statusBadge = isRequest
+                ? (requestWaiting
+                  ? '<span class="badge pending" data-testid="spon-status-' + esc(s.id) + '">Asked to join</span>'
+                  : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">You said no</span>')
+                : !s.is_active
                 ? '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>'
                 : acc === 0
                 ? '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Declined</span>'
                 : acc === null || acc === undefined
                 ? '<span class="badge pending" data-testid="spon-status-' + esc(s.id) + '">Pending accept</span>'
                 : '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>';
-              const actions = s.is_active
+              const actions = requestWaiting && s.is_active
+                ? '<button class="spon-action-btn" data-testid="request-approve-' + esc(s.id) + '" data-action="sponsor-request-answer" data-placement-id="' + esc(s.placement_id) + '" data-approve="1" aria-label="Approve ' + escAttr(s.name || s.id) + ' as a sponsor">Approve</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="request-decline-' + esc(s.id) + '" data-action="sponsor-request-answer" data-placement-id="' + esc(s.placement_id) + '" data-approve="0" aria-label="Decline ' + escAttr(s.name || s.id) + '">Decline</button>'
+                : isRequest
+                ? '<span class="muted-sm">Declined request</span>'
+                : s.is_active
                 ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
                   // Sponsor corner of the triangle: mint the sponsor's own page
                   // link (their placements, accept/decline, their report). The
@@ -4277,6 +4293,29 @@
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not create sponsor link.', 'error');
           } finally {
             if (btn) { btn.disabled = false; btn.textContent = 'Sponsor link'; }
+          }
+        };
+
+        // Sponsor discovery: the organizer's answer to a sponsor's request.
+        // Approve switches the placement on (both sides have now said yes);
+        // Decline leaves it off. Then the sponsors table and checklist refresh.
+        window._answerSponsorRequest = async function(placementId, approve, btn) {
+          if (btn) btn.disabled = true;
+          try {
+            const res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ approve: approve }),
+            });
+            let data = null;
+            try { data = await res.json(); } catch (e) { data = null; }
+            if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ')');
+            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(approve ? 'Approved. The sponsor is now on this event.' : 'Declined. The sponsor will see your answer on their page.', 'ok');
+            if (window._loadSponsors) await window._loadSponsors();
+            if (window.OSE_selection && window.OSE_selection.id && window.renderEventTimeline) window.renderEventTimeline(window.OSE_selection.id);
+          } catch (err) {
+            if (btn) btn.disabled = false;
+            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not answer the request.', 'error');
           }
         };
 
@@ -6524,6 +6563,7 @@
         var answers = facts.answers || null;
         var waiting = answers && answers.pending ? answers.pending : [];
         var declined = answers && answers.declined ? answers.declined : [];
+        var requested = answers && answers.requested ? answers.requested : [];
         var plural = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
         // Counts: a missing or null count renders nothing and ticks nothing.
         var fmt = function (f) {
@@ -6557,12 +6597,17 @@
         else if (st === 'ready') next = { label: 'Publish', href: '#event-status-card' };
         else if (over || (active && phase !== 'pre_event' && (anyScans || phase === 'post_event'))) next = { label: 'Share the report', href: '#report-card' };
         else if (active && !(posters > 0)) next = { label: 'Get the word out: print a poster', href: '#poster-deployments-card' };
+        else if (active && sponsors === 0 && requested.length) next = { label: 'Sponsors asked to join: answer them', href: '#sponsors-card' };
         else if (active && sponsors === 0 && waiting.length) next = { label: 'Waiting on sponsors: send their link', href: '#sponsors-card' };
         else if (active && sponsors === 0) next = { label: 'Get the word out: add a sponsor', href: '#sponsors-card' };
         else if (active) next = { label: 'Get the word out: share the link', href: '#surface-cards' };
         // Inbox: what is waiting on the organizer, oldest-first as the list gave it.
         // An archived event has nothing left to chase.
         var inbox = [];
+        if (!over && requested.length) inbox.push({ key: 'sponsors-asked',
+          label: plural(requested.length, 'sponsor asked', 'sponsors asked') + ' to join',
+          detail: requested.join(', ') + '. Approve or decline on the sponsors card; they appear only if you approve.',
+          action: 'Answer on the sponsors card', href: '#sponsors-card' });
         if (!over && waiting.length) inbox.push({ key: 'sponsors-waiting',
           label: plural(waiting.length, 'sponsor has', 'sponsors have') + " not answered",
           detail: waiting.join(', ') + '. Send each one their Sponsor link so they can accept.',
@@ -6770,12 +6815,16 @@
           fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).length; }).catch(function () {}),
           fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) {
             if (!d || !d.ok) return;
-            var live = (d.items || []).filter(function (s) { return s.is_active; });
+            // A sponsor's request (sponsor discovery) is switched off until the
+            // organizer approves: it is neither "on" nor "not answered yet".
+            var isRequest = function (s) { return s.placement_source === 'sponsor_request' && Number(s.placement_active) === 0; };
+            var live = (d.items || []).filter(function (s) { return s.is_active && !isRequest(s); });
             sponsors = live.filter(function (s) { return Number(s.sponsor_accepted) === 1; }).length;
             var named = function (s) { return s.name || 'Unnamed sponsor'; };
             answers = {
               pending: live.filter(function (s) { return s.sponsor_accepted == null; }).map(named),
               declined: live.filter(function (s) { return s.sponsor_accepted != null && Number(s.sponsor_accepted) === 0; }).map(named),
+              requested: (d.items || []).filter(function (s) { return s.is_active && isRequest(s) && s.organizer_accepted == null; }).map(named),
             };
           }).catch(function () {}),
         ]);

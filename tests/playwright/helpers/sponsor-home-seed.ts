@@ -35,24 +35,23 @@ async function ok<T>(
   return (await res.json()) as T;
 }
 
-export async function seedSponsorHome(
+/**
+ * Create an event and walk it draft → ready → active through the admin API.
+ * The default start (a month out) keeps it in pre_event: "Coming up" on the
+ * sponsor page, sponsor strip on the public page, and discoverable by sponsors.
+ */
+export async function createLiveEvent(
   request: APIRequestContext,
   bearer: string,
-  label = 'E2E'
-): Promise<SeededSponsorHome> {
+  title: string,
+  daysOut = 30
+): Promise<{ id: string }> {
   const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
-  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  const eventTitle = `${label} sponsor night ${suffix}`;
-  const sponsorName = `${label} Corner Bakery ${suffix}`;
-
-  // A start date a month out keeps the event in pre_event, so the page shows it
-  // as "Coming up" and the public page renders its sponsor strip.
-  const start = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
-
+  const start = new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10);
   const ev = await ok<{ id: string }>(
     await request.post('/api/v2/admin/events', {
       headers,
-      data: { title: eventTitle, start_date: start, location: 'Eagles Hall' },
+      data: { title, start_date: start, location: 'Eagles Hall' },
     }),
     'create event'
   );
@@ -65,6 +64,20 @@ export async function seedSponsorHome(
       `event -> ${status}`
     );
   }
+  return ev;
+}
+
+export async function seedSponsorHome(
+  request: APIRequestContext,
+  bearer: string,
+  label = 'E2E'
+): Promise<SeededSponsorHome> {
+  const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const eventTitle = `${label} sponsor night ${suffix}`;
+  const sponsorName = `${label} Corner Bakery ${suffix}`;
+
+  const ev = await createLiveEvent(request, bearer, eventTitle);
 
   const sp = await ok<{ id: string; placement_id: string | null }>(
     await request.post('/api/v2/admin/sponsors', {

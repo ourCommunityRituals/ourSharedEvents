@@ -46,6 +46,7 @@
  *
  *   Sponsor Admin (auth required):
  *   GET    /api/v2/admin/sponsors              → list all sponsors
+ *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
  *   POST   /api/v2/admin/sponsors              → create sponsor
  *   PUT    /api/v2/admin/sponsors/:id          → update sponsor
@@ -60,6 +61,7 @@
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
+ *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *
  *   Poster Deployments Admin (auth required):
@@ -161,6 +163,8 @@ import {
   handleSponsorHomePage,
   handleSponsorPlacementRespond,
   type SponsorHomeEnv,
+  handleSponsorRequestCreate,
+  handleAdminAnswerSponsorRequest,
 } from './handlers/sponsor-home';
 import {
   logAdminAction,
@@ -888,6 +892,22 @@ export async function route(
     return handleAdminMintSponsorHomeLink(request, env, sponsorHomeLinkMatch[1]);
   }
 
+  // POST /api/v2/admin/sponsor-requests/:placementId/respond — the organizer
+  // approves (switches the placement on) or declines a sponsor's request.
+  // Admin + brand-scoped inside the handler (out of scope = 404), audited.
+  const sponsorRequestAnswerMatch = pathname.match(
+    /^\/api\/v2\/admin\/sponsor-requests\/([^/]+)\/respond$/
+  );
+  if (sponsorRequestAnswerMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'ANSWER_SPONSOR_REQUEST', 'denied', 'sponsor', sponsorRequestAnswerMatch[1]);
+      return deny;
+    }
+    return handleAdminAnswerSponsorRequest(request, env, sponsorRequestAnswerMatch[1]);
+  }
+
   // PUT/GET /api/v2/admin/sponsors/:id/areas
   const adminSponsorAreasMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/areas$/);
   if (adminSponsorAreasMatch) {
@@ -1355,6 +1375,14 @@ export async function route(
       (req, e: typeof env) => handleSponsorPlacementRespond(req, e, placementRespondMatch[1]),
       60
     )(request, env);
+  }
+
+  // POST /api/v2/sponsor/requests — a sponsor asks to back an event from their
+  // own page (sponsor discovery, lib/sponsor-discovery). Token in the body, the
+  // brand from the signed claim; stored switched OFF until the organizer
+  // approves (ADR-019). Rate-limited here, at the route, like respond above.
+  if (pathname === '/api/v2/sponsor/requests' && method === 'POST') {
+    return publicReadLimited('sponsor-request', handleSponsorRequestCreate, 30)(request, env);
   }
 
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).

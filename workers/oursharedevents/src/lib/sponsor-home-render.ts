@@ -23,6 +23,7 @@ import { computeEventPhase } from '../domain/event-phase';
 import { parseEventState, canRender } from '../domain/event-state';
 import type { FlooredPreEventActivity } from './pre-event-activity';
 import type { FlooredCount } from './count-floor';
+import type { DiscoverableEvent, SponsorRequestRow } from './sponsor-discovery';
 
 export interface PlacementRow {
   placement_id: string;
@@ -71,6 +72,44 @@ export interface SponsorHomeRenderInput {
    * placements the sponsor accepted (their name is only on those posters).
    */
   preEventReachFor?: (eventId: string) => FlooredPreEventActivity | null;
+  /** Sponsor discovery: published, upcoming events this sponsor is not on yet. */
+  discoverable?: DiscoverableEvent[];
+  /** Requests this sponsor has sent that are not switched on (waiting / declined). */
+  requests?: SponsorRequestRow[];
+}
+
+/** "Your requests" + "Events you could back" (lib/sponsor-discovery). */
+function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorRequestRow[]): string {
+  const parts: string[] = [];
+  if (requests.length) {
+    const cards = requests.map((r) => {
+      const waiting = r.organizer_accepted == null;
+      return `<article class="sh-card${waiting ? '' : ' declined'}" data-testid="request-card" data-placement-id="${esc(r.placement_id)}" data-event-id="${esc(r.event_id)}">
+        <h2 data-testid="request-title">${esc(r.title)}</h2>
+        <p class="sh-when">${esc(humanDate(r.start_date))}</p>
+        <p class="sh-meta"><span class="sh-state ${waiting ? 'pending' : 'declined'}" data-testid="request-state">${waiting ? 'Waiting for the organizer' : 'The organizer said no'}</span></p>
+      </article>`;
+    });
+    parts.push(
+      `<p class="sh-section-title">Your requests</p><div class="sh-list" data-testid="sponsor-home-requests">${cards.join('')}</div>`
+    );
+  }
+  const cards = discoverable.map(
+    (e) => `<article class="sh-card" data-testid="discover-card" data-event-id="${esc(e.id)}">
+        <h2 data-testid="discover-title">${esc(e.title)}</h2>
+        <p class="sh-when">${esc(humanDate(e.start_date))}</p>
+        <p class="sh-meta">${e.location ? esc(e.location) : ''}${Number(e.near) === 1 ? `${e.location ? ' · ' : ''}<span class="sh-state live" data-testid="discover-near">Near you</span>` : ''}</p>
+        <p class="sh-why">Asking tells the organizer you would like to back this event. Your name appears only if they say yes.</p>
+        <div class="sh-actions"><button type="button" class="btn btn-primary" data-action="sponsor-request" data-event-id="${esc(e.id)}" data-testid="discover-ask">Ask to join</button></div>
+        <p class="sh-msg" role="status" aria-live="polite"></p>
+      </article>`
+  );
+  parts.push(
+    cards.length
+      ? `<p class="sh-section-title">Events you could back</p><div class="sh-list" data-testid="sponsor-home-discover">${cards.join('')}</div>`
+      : `<p class="sh-section-title">Events you could back</p><div class="sh-empty" data-testid="sponsor-home-discover-empty">Nothing new to ask about right now. When an organizer publishes an upcoming event, it shows up here.</div>`
+  );
+  return parts.join('');
 }
 
 /** "12" / "fewer than 5" — a floored count as words. */
@@ -98,6 +137,7 @@ export function renderPreEventReach(r: FlooredPreEventActivity): string {
 /** Build the full /sponsor page HTML (populated or empty). Pure — no env/DB. */
 export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   const { sponsor, placements, expiresIso, reportLinkFor, preEventReachFor } = input;
+  const discovery = renderDiscovery(input.discoverable ?? [], input.requests ?? []);
 
   let live = 0;
   let upcoming = 0;
@@ -189,7 +229,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   page = injectMarker(page, '<!--OCR_COUNT_LIVE-->', String(live));
   page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
   page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
-  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list);
+  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list + discovery);
   page = injectMarker(page, '<!--OCR_EXPIRES-->', esc(humanDate(expiresIso)));
 
   return injectLegalFooter(page, 'public');
