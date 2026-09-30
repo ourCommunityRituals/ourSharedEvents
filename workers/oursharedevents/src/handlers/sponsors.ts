@@ -32,6 +32,8 @@ import {
   type SponsorRow,
 } from '../lib/sponsor-resolver';
 import { validateLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { CARD_FIELDS, checkCardField, type CardField } from '../lib/sponsor-card';
+import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import {
   getDataProvider,
   invalidateSponsorsCache,
@@ -243,6 +245,8 @@ export async function handleAdminListSponsors(
   // is one row with event_id = null and its business tier. ?eventId= still keeps
   // only that event's placements.
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
+                sb.display_name AS display_name, sb.address_line AS address_line,
+                sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
                 la.url AS logo_url, lc.url AS sidebar_logo_url,
                 sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
                 '[]' AS placement_formats, sp.click_token AS click_token,
@@ -390,6 +394,8 @@ export async function handleAdminGetSponsor(
   try {
     const row = await env.DB.prepare(
       `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
+              sb.display_name AS display_name, sb.address_line AS address_line,
+              sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
               la.url AS logo_url, lc.url AS sidebar_logo_url,
               sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
               '[]' AS placement_formats, sp.click_token AS click_token,
@@ -483,6 +489,19 @@ export async function handleAdminCreateSponsor(
   const siteCheck = checkWebsite(body.website_url, rid);
   if (siteCheck instanceof Response) return siteCheck;
   const websiteUrl = siteCheck;
+  // 0083: the public card — display name, location, phone, email. All optional;
+  // a sponsor with only a business name is complete.
+  const card: Record<CardField, string | null> = {
+    display_name: null,
+    address_line: null,
+    contact_phone: null,
+    contact_email: null,
+  };
+  for (const field of CARD_FIELDS) {
+    const r = checkCardField(field, body[field]);
+    if (!r.ok) return errorResponse(r.code, r.message, 400, rid);
+    card[field] = r.value;
+  }
   // OSE-670/OSE-799 (#25): placement is UNIFORM and non-purchasable. The client
   // CANNOT choose a named slot — that was the covenant violation. sponsor_placement
   // carries NO placement_formats column at all now (the split retired it); the
@@ -565,14 +584,19 @@ export async function handleAdminCreateSponsor(
   const stmts = [
     env.DB.prepare(
       `INSERT INTO sponsor_business
-         (id, brand_id, name, website_url, tier, lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, brand_id, name, website_url, tier, display_name, address_line,
+          contact_phone, contact_email, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
       brandId,
       name,
       websiteUrl,
       tier,
+      card.display_name,
+      card.address_line,
+      card.contact_phone,
+      card.contact_email,
       sponsorLat,
       sponsorLon,
       sponsorH3Res9,
@@ -739,6 +763,14 @@ export async function handleAdminUpdateSponsor(
     if (siteCheck instanceof Response) return siteCheck;
     businessSets.push('website_url = ?');
     businessVals.push(siteCheck);
+  }
+  // 0083: public card fields; '' / null clears one.
+  for (const field of CARD_FIELDS) {
+    if (!(field in body)) continue;
+    const r = checkCardField(field, body[field]);
+    if (!r.ok) return errorResponse(r.code, r.message, 400, rid);
+    businessSets.push(`${field} = ?`);
+    businessVals.push(r.value);
   }
 
   for (const [field, spec] of Object.entries(fieldSpecs)) {
@@ -1001,7 +1033,16 @@ export async function handleAdminDeleteSponsor(
     // event — it joins sponsor_business and had no business-level flag to
     // check — and any new placement resurrected it on Path 1. One flag on one
     // row, read at join time by both resolver paths.
-    await env.DB.prepare(`UPDATE sponsor_business SET is_active = 0, updated_at = ? WHERE id = ?`)
+    // 0083 / Invariant #8: the public card's location and contact are
+    // business details the sponsor chose to show — while it is on show. A
+    // deactivated sponsor is not on show, so they are cleared here rather than
+    // kept indefinitely (the title and legal name stay: they are identity).
+    await env.DB.prepare(
+      `UPDATE sponsor_business
+          SET is_active = 0, address_line = NULL, contact_phone = NULL, contact_email = NULL,
+              updated_at = ?
+        WHERE id = ?`
+    )
       .bind(new Date().toISOString(), sponsorId)
       .run();
 
@@ -1518,7 +1559,7 @@ export async function handleLogImpression(
 
 export async function handleSponsorLogo(
   request: Request,
-  env: SponsorsEnv,
+  env: SponsorsEnv & PublicReadLimitEnv,
   sponsorId: string
 ): Promise<Response> {
   const rid = requestId();
@@ -1527,21 +1568,31 @@ export async function handleSponsorLogo(
     return new Response(null, { status: 404, headers: { 'X-Request-Id': rid } });
   }
 
+  // OSE-1317: ?slot=sidebar serves the compact (side-rail) logo, falling back to
+  // the header logo — the same preference the display side rail applies. Any
+  // other value (or none) is the header logo, so the OSE-288 contract holds.
+  const sidebar = new URL(request.url).searchParams.get('slot') === 'sidebar';
+
   let row: Record<string, unknown> | null;
   try {
-    // OSE-799 A2: the logo lives in sponsor_asset(format='logo') on the durable
-    // business; "active" is a placement fact — serve the logo iff the business
-    // holds at least one active placement (mirrors the old is_active=1 gate).
+    // OSE-799 A2: the logo lives in sponsor_asset on the durable business;
+    // serve it only for a sponsor that is on show (see the gate below).
     row = await env.DB.prepare(
-      `SELECT la.url AS logo_url
+      `SELECT ${sidebar ? 'COALESCE(lc.url, la.url)' : 'la.url'} AS logo_url
          FROM sponsor_business sb
-         JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
-        WHERE sb.id = ?
+         LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+         LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
+        WHERE sb.id = ? AND sb.is_active = 1
           AND EXISTS (
             SELECT 1 FROM sponsor_placement sp
              WHERE sp.sponsor_business_id = ?
                AND sp.sponsor_business_id = sb.id
                AND sp.is_active = 1
+               -- CCR PR #699: the same consent gate as the card, the bundle and
+               -- the public page — a logo is not served for a sponsor that has
+               -- not accepted, or that the organizer has not accepted.
+               AND COALESCE(sp.organizer_accepted, 1) = 1
+               AND sp.sponsor_accepted = 1
           )`
     )
       .bind(sponsorId, sponsorId)
@@ -1550,6 +1601,8 @@ export async function handleSponsorLogo(
     return new Response(null, { status: 503, headers: { 'X-Request-Id': rid } });
   }
 
+  // No logo is not an error the page shows: surfaces render the OSE default
+  // (lib/sponsor-card.ts) and never request this path for a logo-less sponsor.
   if (!row || !row.logo_url) {
     return new Response(null, { status: 404, headers: { 'X-Request-Id': rid } });
   }
@@ -1560,17 +1613,66 @@ export async function handleSponsorLogo(
     return new Response(null, { status: 422, headers: { 'X-Request-Id': rid } });
   }
 
+  // Edge cache, keyed by the UPSTREAM url — every public surface now loads logos
+  // through here, so a page view must not mean a fetch to the sponsor's host.
+  // Keying by the stored URL means an admin changing the logo is a cache miss,
+  // not a day of the old image. Only a successful proxy is cached.
+  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  const cacheKey = new Request(
+    `https://sponsor-logo-cache.invalid/?u=${encodeURIComponent(validation.url)}`
+  );
+  if (cache) {
+    const hit = await cache.match(cacheKey).catch(() => undefined);
+    if (hit) {
+      logLogoOutcome('hit', sidebar);
+      const res = new Response(hit.body, hit);
+      res.headers.set('X-Request-Id', rid);
+      return res;
+    }
+  }
+
+  // Only a cache MISS reaches the sponsor's host, and misses are rate-limited
+  // per caller (OSE-1247 posture) — this route is public and each miss is an
+  // outbound fetch. Generous: one page shows several logos.
+  if (await isPublicReadLimited(request, env, 'sponsor-logo', SPONSOR_LOGO_READ_MAX)) {
+    logLogoOutcome('limited', sidebar);
+    return new Response(null, {
+      status: 429,
+      headers: { 'X-Request-Id': rid, 'Retry-After': '60', 'Cache-Control': 'no-store' },
+    });
+  }
+
   const result = await fetchAndProxyLogo(validation.url);
   if (!result.ok || !result.response) {
+    logLogoOutcome('upstream_error', sidebar);
     return new Response(null, {
       status: 502,
       headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
     });
   }
 
+  logLogoOutcome('miss', sidebar);
+  if (cache) await cache.put(cacheKey, result.response.clone()).catch(() => undefined);
   result.response.headers.set('X-Request-Id', rid);
   return result.response;
 }
+
+/**
+ * One structured line per proxied logo outcome, for hit ratio / dead-host /
+ * limiter visibility. Aggregate-only by construction: the outcome and the slot,
+ * never the sponsor id, the URL, or anything about the caller (never-who).
+ */
+function logLogoOutcome(
+  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error',
+  sidebar: boolean
+): void {
+  console.log(
+    JSON.stringify({ type: 'SPONSOR_LOGO', outcome, slot: sidebar ? 'sidebar' : 'header' })
+  );
+}
+
+/** Logo-proxy cache misses per caller per minute (a page shows several logos). */
+export const SPONSOR_LOGO_READ_MAX = 300;
 
 /**
  * POST /api/v2/events/:id/sponsors/:sid/click

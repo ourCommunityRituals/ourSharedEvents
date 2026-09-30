@@ -135,7 +135,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
-  sponsor_business: 13, // +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316)
+  sponsor_business: 17, // +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316); +display_name/address_line/contact_phone/contact_email (0083 — public card)
   // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
   //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
   sponsor_asset: 11, // 0081 rebuilds it (CHECK += logo_compact), same 11 columns

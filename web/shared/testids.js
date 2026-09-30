@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-30 — 511 ids.
+ * Generated 2026-09-30 — 523 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 346 ids
+    // admin.html — 356 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -304,15 +304,25 @@
       'skeleton-forms',
       'skeleton-poster-deployments',
       'skeleton-sponsors',
+      'spon-address',
+      'spon-address-hint',
       'spon-covenant-note',
+      'spon-display-name',
+      'spon-display-name-hint',
       'spon-edit-id',
+      'spon-email',
       'spon-event',
       'spon-event-hint',
+      'spon-image-choice',
+      'spon-image-choice-hint',
       'spon-is-local-pill',
       'spon-logo',
+      'spon-logo-field',
       'spon-logo-hint',
       'spon-name',
+      'spon-phone',
       'spon-sidebar-logo',
+      'spon-sidebar-logo-field',
       'spon-sidebar-logo-hint',
       'spon-tier',
       'spon-tier-hint',
@@ -392,7 +402,7 @@
       'wizard-type-picker-msg',
       'wizard-undo-live-btn',
     ]),
-    // public.html — 17 ids
+    // public.html — 18 ids
     PUBLIC: Object.freeze([
       'public-events',
       'public-events-count',
@@ -401,18 +411,19 @@
       'public-header',
       'public-main',
       'public-skip-link',
+      'public-sponsor-address',
       'public-sponsor-banner',
       'public-sponsor-card',
+      'public-sponsor-card-link',
       'public-sponsor-empty',
       'public-sponsor-error',
-      'public-sponsor-fallback',
       'public-sponsor-link',
       'public-sponsor-logo',
       'public-sponsor-name',
       'public-sponsor-section',
       'public-title',
     ]),
-    // display.html — 30 ids
+    // display.html — 31 ids
     DISPLAY: Object.freeze([
       'display-clock',
       'display-consent',
@@ -429,6 +440,7 @@
       'display-skip-link',
       'display-sponsor-banner',
       'display-sponsor-counter',
+      'display-sponsor-error',
       'display-sponsor-item',
       'display-sponsor-logo',
       'display-sponsor-name',
