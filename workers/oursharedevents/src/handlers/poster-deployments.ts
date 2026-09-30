@@ -2,8 +2,10 @@
  * Poster Deployments admin API.
  *
  * Admin CRUD (auth-gated):
- *   POST   /api/v2/admin/events/:id/poster-deployments   – create deployment (with H3 tagging)
- *   GET    /api/v2/admin/events/:id/poster-deployments   – list for event
+ *   POST   /api/v2/admin/events/:id/poster-deployments   – create deployment (with H3 tagging;
+ *          optional `address`, OSE-1357 — the card geocodes it and sends the coordinates)
+ *   GET    /api/v2/admin/events/:id/poster-deployments   – list for event (+ per-row
+ *          target_url/target_label and the event's own `event_address`, OSE-1357)
  *   GET    /api/v2/admin/poster-deployments/:id          – get single
  *   PUT    /api/v2/admin/poster-deployments/:id          – update (re-tags H3 when lat/lon provided)
  *   DELETE /api/v2/admin/poster-deployments/:id          – soft-delete (is_active=0)
@@ -24,6 +26,17 @@ import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
 import { posterSlotLabel } from './poster-bundle';
+import { qrScanTarget } from './qr-scan';
+
+/** Longest address kept (OSE-1357). A geocoder's formatted_address is well under. */
+const ADDRESS_MAX = 300;
+
+/** The address of the place a poster hangs — a trimmed string, or null. */
+function addressFrom(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim().slice(0, ADDRESS_MAX);
+  return v || null;
+}
 
 /**
  * Physical scan URL a poster QR encodes: `{origin}/q/{qr_token}`.
@@ -137,6 +150,10 @@ export async function handleAdminCreatePosterDeployment(
 
   const locationDesc =
     typeof body.location_desc === 'string' ? body.location_desc.trim().slice(0, 500) : null;
+  // OSE-1357: the admin card geocodes this address in the browser and sends the
+  // coordinates it got back; when geocoding is unavailable it sends the address
+  // alone. Either way the address is kept so the card can show where it hangs.
+  const address = addressFrom(body.address);
 
   const coordsResult = validateCoords(body.latitude, body.longitude, rid);
   if (!coordsResult.ok) return coordsResult.response;
@@ -153,10 +170,23 @@ export async function handleAdminCreatePosterDeployment(
   try {
     await env.DB.prepare(
       `INSERT INTO poster_deployments
-         (id, event_id, qr_token, placement_label, location_desc, latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+         (id, event_id, qr_token, placement_label, location_desc, address, latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     )
-      .bind(id, eventId, qrToken, placementLabel, locationDesc, lat, lon, h3Res9, h3Res7, now, now)
+      .bind(
+        id,
+        eventId,
+        qrToken,
+        placementLabel,
+        locationDesc,
+        address,
+        lat,
+        lon,
+        h3Res9,
+        h3Res7,
+        now,
+        now
+      )
       .run();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -183,7 +213,7 @@ export async function handleAdminListPosterDeployments(
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
   const rows = await env.DB.prepare(
-    `SELECT id, event_id, qr_token, placement_label, location_desc,
+    `SELECT id, event_id, qr_token, placement_label, location_desc, address,
             latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at
        FROM poster_deployments
       WHERE event_id = ?
@@ -196,6 +226,7 @@ export async function handleAdminListPosterDeployments(
       qr_token: string;
       placement_label: string | null;
       location_desc: string | null;
+      address: string | null;
       latitude: number | null;
       longitude: number | null;
       h3_res9: string | null;
@@ -230,11 +261,21 @@ export async function handleAdminListPosterDeployments(
     } catch {
       qr_data_uri = '';
     }
-    return { ...row, scan_url, qr_data_uri, slots };
+    // OSE-1357: which target this poster's code points at, from the same
+    // function /q/ redirects with — the card shows it, never re-derives it.
+    const target_url = qrScanTarget(origin, eventId, row.id);
+    return { ...row, scan_url, qr_data_uri, target_url, target_label: 'Event page', slots };
   });
 
+  // OSE-1357: the event's own venue/address seeds the card's address
+  // placeholder (a poster usually hangs at or near the venue).
+  const eventRow = await env.DB.prepare('SELECT where_address, location FROM events WHERE id = ?')
+    .bind(eventId)
+    .first<{ where_address: string | null; location: string | null }>();
+  const event_address = eventRow?.where_address || eventRow?.location || null;
+
   return Response.json(
-    { ok: true, items },
+    { ok: true, items, event_address },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }
@@ -250,7 +291,7 @@ export async function handleAdminGetPosterDeployment(
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
   const row = await env.DB.prepare(
-    `SELECT id, event_id, qr_token, placement_label, location_desc,
+    `SELECT id, event_id, qr_token, placement_label, location_desc, address,
             latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at
        FROM poster_deployments WHERE id = ?`
   )
@@ -294,6 +335,10 @@ export async function handleAdminUpdatePosterDeployment(
       typeof body.location_desc === 'string' ? body.location_desc.trim().slice(0, 500) : null;
     sets.push('location_desc = ?');
     values.push(val);
+  }
+  if ('address' in body) {
+    sets.push('address = ?');
+    values.push(addressFrom(body.address));
   }
   if ('is_active' in body) {
     sets.push('is_active = ?');

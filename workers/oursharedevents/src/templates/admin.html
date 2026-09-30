@@ -4610,33 +4610,35 @@
                 maxlength="500"
               />
             </div>
+            <!-- OSE-1357: where it hangs, as an address. Saving geocodes it once
+                 (admin-only) — never the device's location. -->
             <div>
-              <label for="pd-latitude">Latitude</label>
+              <label for="pd-address">Address</label>
               <input
-                type="number"
-                id="pd-latitude"
-                name="latitude"
-                data-testid="pd-latitude"
-                placeholder="41.8781"
-                step="any"
-                min="-90"
-                max="90"
-              />
-            </div>
-            <div>
-              <label for="pd-longitude">Longitude</label>
-              <input
-                type="number"
-                id="pd-longitude"
-                name="longitude"
-                data-testid="pd-longitude"
-                placeholder="-87.6298"
-                step="any"
-                min="-180"
-                max="180"
+                type="text"
+                id="pd-address"
+                name="address"
+                data-testid="pd-address"
+                placeholder="Street address where the poster hangs"
+                maxlength="300"
+                autocomplete="off"
               />
             </div>
           </div>
+          <details class="pd-advanced" data-testid="pd-advanced">
+            <summary>Advanced: exact coordinates</summary>
+            <div class="create-form">
+              <div>
+                <label for="pd-latitude">Latitude</label>
+                <input type="number" id="pd-latitude" name="latitude" data-testid="pd-latitude" step="any" min="-90" max="90" />
+              </div>
+              <div>
+                <label for="pd-longitude">Longitude</label>
+                <input type="number" id="pd-longitude" name="longitude" data-testid="pd-longitude" step="any" min="-180" max="180" />
+              </div>
+            </div>
+          </details>
+          <p class="create-msg" id="pd-geo-msg" data-testid="pd-geo-msg" role="status"></p>
           <div class="form-actions">
             <button type="submit" data-testid="pd-create-btn" class="copy-btn">Create Deployment</button>
             <span class="create-msg" id="pd-create-msg" data-testid="pd-create-msg"></span>
@@ -4838,13 +4840,11 @@
       })();
     </script>
     <style>
-      /* OSE-895: GAS QRRegenerator .qr-card frame
-         (archive/v2-code/components/QRRegenerator.html) ported onto the admin
-         Poster Deployments card. Reuses the canonical .qr-card geometry
-         established for poster.html in OSE-887, dressed in admin baseline
-         tokens. Each deployment becomes a card carrying its scannable
-         /q/<qr_token> QR so an organizer can download or print a physical
-         poster — the artifact First Scan needs. */
+      /* OSE-895: .qr-card frame (poster.html geometry, OSE-887) per deployment. */
+      .pd-advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+      .pd-link { display: flex; align-items: center; gap: 8px; width: 100%; }
+      .pd-link code { flex: 1; word-break: break-all; }
+      .pd-target { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all; }
       .pd-qr-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -4965,6 +4965,124 @@
         };
         window._pdItems = window._pdItems || {};
 
+        // OSE-1357: a row is a STATIC skeleton (no server data — its testids stay
+        // literal for the registry) cloned from a <template>, then filled with
+        // textContent / setAttribute only. No API string reaches innerHTML or an
+        // href, and a QR src is set only when it is a data:image URI.
+        const PD_CARD =
+          '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row">' +
+            '<div class="qr-card-header">' +
+              '<div class="pd-card-title" data-testid="pd-label"></div>' +
+              '<div class="pd-card-sub" data-testid="pd-address"></div>' +
+              '<div class="pd-card-sub" data-testid="pd-location"></div>' +
+            '</div>' +
+            '<div class="qr-card-body">' +
+              '<div class="pd-link" data-testid="pd-short-link-block">' +
+                '<code data-testid="pd-short-link"></code>' +
+                '<button type="button" class="copy-btn" data-testid="pd-copy-link">Copy</button>' +
+              '</div>' +
+              '<img class="qr-img" data-testid="pd-qr-img" width="160" height="160" alt="" />' +
+              '<code data-testid="pd-qr-fallback"></code>' +
+              '<p class="pd-target" data-testid="pd-target">Points to: <span data-testid="pd-target-label"></span> <code data-testid="pd-target-url"></code></p>' +
+              '<dl class="pd-meta">' +
+                '<div class="pd-meta-row"><span>Cell (res9)</span><span data-testid="pd-h3-res9"></span></div>' +
+                '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active"></span></div>' +
+                '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token"></code></div>' +
+              '</dl>' +
+              '<div class="pd-slot-list" data-testid="pd-shortlink-slots"></div>' +
+            '</div>' +
+            '<div class="qr-card-footer">' +
+              '<button type="button" class="copy-btn" data-testid="pd-download-btn" data-action="pd-download" aria-label="Download poster QR">Download</button>' +
+              '<button type="button" class="copy-btn" data-testid="pd-print-btn" data-action="pd-print" aria-label="Print poster QR">Print</button>' +
+              '<button type="button" class="copy-btn" data-testid="pd-delete-btn" data-action="pd-delete" aria-label="Delete poster QR">Delete</button>' +
+            '</div>' +
+          '</div>';
+        const PD_SLOT =
+          '<div class="pd-slot" data-testid="pd-shortlink-slot">' +
+            '<img data-testid="pd-shortlink-qr" alt="" />' +
+            '<div><div class="pd-card-title"></div><code data-testid="pd-shortlink-url"></code></div>' +
+          '</div>';
+        const fromTemplate = (markup) => {
+          const t = document.createElement('template');
+          t.innerHTML = markup; // static constants only
+          return t.content.firstElementChild;
+        };
+        const dataImage = (uri) => (typeof uri === 'string' && uri.indexOf('data:image/') === 0 ? uri : '');
+        const text = (v) => (v === null || v === undefined ? '' : String(v));
+
+        // The address placeholder is the event's own venue/address (from the
+        // list response), never a hardcoded city.
+        const setAddressHint = (eventAddress) => {
+          const input = document.getElementById('pd-address');
+          if (!input) return;
+          input.placeholder = eventAddress
+            ? 'e.g. ' + text(eventAddress)
+            : 'Street address where the poster hangs';
+        };
+
+        const renderPdCard = (pd) => {
+          const card = fromTemplate(PD_CARD);
+          const at = (id) => card.querySelector('[data-testid="' + id + '"]');
+          const label = text(pd.placement_label) || 'Poster deployment';
+          const scanUrl = text(pd.scan_url);
+          const qr = dataImage(pd.qr_data_uri);
+          card.setAttribute('data-id', text(pd.id));
+
+          at('pd-label').textContent = text(pd.placement_label) || '—';
+          at('pd-address').textContent = text(pd.address) || 'No address';
+          if (pd.location_desc) at('pd-location').textContent = text(pd.location_desc);
+          else at('pd-location').remove();
+
+          // 1. The short link + Copy lead the card.
+          at('pd-short-link').textContent = scanUrl;
+          const copy = at('pd-copy-link');
+          copy.setAttribute('aria-label', 'Copy short link for ' + label);
+          copy.addEventListener('click', () => {
+            if (!navigator.clipboard) return;
+            navigator.clipboard.writeText(scanUrl).then(() => {
+              copy.textContent = 'Copied!';
+              setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+            }).catch(() => {});
+          });
+          // 2. Then the QR — or the raw token when the server had no image.
+          if (qr) {
+            const img = at('pd-qr-img');
+            img.src = qr;
+            img.alt = 'Scan QR for ' + label;
+            at('pd-qr-fallback').remove();
+          } else {
+            at('pd-qr-img').remove();
+            at('pd-qr-fallback').textContent = text(pd.qr_token);
+          }
+          // 3. Then which target the code points at.
+          at('pd-target-label').textContent = text(pd.target_label);
+          at('pd-target-url').textContent = text(pd.target_url);
+
+          at('pd-h3-res9').textContent = text(pd.h3_res9) || '—';
+          at('pd-is-active').textContent = pd.is_active ? 'Yes' : 'No';
+          at('pd-qr-token').textContent = text(pd.qr_token);
+
+          const slots = Array.isArray(pd.slots) ? pd.slots : [];
+          const slotList = at('pd-shortlink-slots');
+          if (!slots.length) slotList.remove();
+          slots.forEach((s) => {
+            const slot = fromTemplate(PD_SLOT);
+            const name = text(s.label || s.kind) || 'Short link';
+            const sq = dataImage(s.qr);
+            const img = slot.querySelector('img');
+            if (sq) {
+              img.src = sq;
+              img.alt = name + ' short link QR';
+            } else img.remove();
+            slot.querySelector('.pd-card-title').textContent = name;
+            slot.querySelector('code').textContent = text(s.url);
+            slotList.appendChild(slot);
+          });
+
+          card.querySelectorAll('.qr-card-footer [data-action]').forEach((b) => b.setAttribute('data-pd-id', text(pd.id)));
+          return card;
+        };
+
         window.loadPosterDeployments = async function (eventId) {
           window._pdEventId = eventId;
           const panel = document.getElementById('pd-panel');
@@ -4972,56 +5090,22 @@
           try {
             const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments');
             const data = await res.json();
+            setAddressHint(data && data.ok ? data.event_address : null);
             const items = (data.ok && data.items) ? data.items : [];
             if (!items.length) {
               panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
               return;
             }
             window._pdItems = {};
-            const cards = items.map((pd) => {
+            const grid = fromTemplate('<div class="pd-qr-grid" data-testid="poster-deployments-table"></div>');
+            items.forEach((pd) => {
               window._pdItems[pd.id] = {
-                qr_data_uri: pd.qr_data_uri || '',
-                scan_url: pd.scan_url || '',
-                label: pd.placement_label || '',
+                qr_data_uri: dataImage(pd.qr_data_uri),
+                scan_url: text(pd.scan_url),
+                label: text(pd.placement_label),
               };
-              // Prefer the scannable QR; degrade to the raw token if the
-              // server could not generate a data-URI (see poster-deployments.ts).
-              const qrCell = pd.qr_data_uri
-                ? '<img class="qr-img" src="' + esc(pd.qr_data_uri) + '" alt="Scan QR for ' + esc(pd.placement_label || 'poster deployment') + '" data-testid="pd-qr-img" width="160" height="160" />'
-                : '<code data-testid="pd-qr-fallback">' + esc(pd.qr_token) + '</code>';
-              const slots = Array.isArray(pd.slots) ? pd.slots : [];
-              const slotHtml = slots.length
-                ? '<div class="pd-slot-list" data-testid="pd-shortlink-slots">' + slots.map(function (s) {
-                    return '<div class="pd-slot" data-testid="pd-shortlink-slot">' +
-                      (s.qr ? '<img src="' + esc(s.qr) + '" alt="' + esc(s.label || s.kind || 'Short link') + ' short link QR" data-testid="pd-shortlink-qr" />' : '') +
-                      '<div><div class="pd-card-title">' + esc(s.label || s.kind || 'Short link') + '</div>' +
-                      '<code data-testid="pd-shortlink-url">' + esc(s.url || '') + '</code></div>' +
-                    '</div>';
-                  }).join('') + '</div>'
-                : '';
-              return (
-                '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
-                  '<div class="qr-card-header">' +
-                    '<div class="pd-card-title" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</div>' +
-                    '<div class="pd-card-sub" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</div>' +
-                  '</div>' +
-                  '<div class="qr-card-body">' +
-                    qrCell +
-                    '<dl class="pd-meta">' +
-                      '<div class="pd-meta-row"><span>Cell (res9)</span><span data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</span></div>' +
-                      '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</span></div>' +
-                      '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token">' + esc(pd.qr_token) + '</code></div>' +
-                    '</dl>' +
-                    slotHtml +
-                  '</div>' +
-                  '<div class="qr-card-footer">' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" data-action="pd-download" data-pd-id="' + esc(pd.id) + '" aria-label="Download poster QR">Download</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" data-action="pd-print" data-pd-id="' + esc(pd.id) + '" aria-label="Print poster QR">Print</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" data-action="pd-delete" aria-label="Delete poster QR">Delete</button>' +
-                  '</div>' +
-                '</div>'
-              );
-            }).join('');
+              grid.appendChild(renderPdCard(pd));
+            });
             // Mobile (<=640px, see CSS) hides every .qr-card except the one
             // tagged .pd-active and steps through them one at a time via this
             // Prev/Next bar — a deliberate separate-screen experience, not a
@@ -5034,7 +5118,9 @@
                   '<button type="button" class="copy-btn" data-action="pd-mobile-next" data-testid="pd-mobile-next" aria-label="Next poster deployment">Next &rarr;</button>' +
                 '</div>'
               : '';
-            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>' + nav;
+            panel.textContent = '';
+            panel.appendChild(grid);
+            panel.insertAdjacentHTML('beforeend', nav);
             window._pdMobileIndex = 0;
             window._updatePdMobileView();
           } catch (err) {
@@ -5161,17 +5247,51 @@
             const label = document.getElementById('pd-placement-label').value.trim();
             if (!label) { msg.textContent = 'Label is required.'; msg.className = 'create-msg error'; return; }
             const locationDesc = document.getElementById('pd-location-desc').value.trim() || undefined;
+            const address = document.getElementById('pd-address').value.trim();
             const latRaw = document.getElementById('pd-latitude').value;
             const lonRaw = document.getElementById('pd-longitude').value;
+            const geoMsg = document.getElementById('pd-geo-msg');
             const body = { placement_label: label };
             if (locationDesc) body.location_desc = locationDesc;
-            if (latRaw !== '' && lonRaw !== '') {
-              body.latitude = parseFloat(latRaw);
-              body.longitude = parseFloat(lonRaw);
-            }
+            if (address) body.address = address;
             btn.disabled = true;
             btn.textContent = 'Creating…';
             msg.textContent = '';
+            geoMsg.textContent = '';
+            let geoNote = '';
+            if (latRaw !== '' && lonRaw !== '') {
+              // Advanced: exact coordinates the organizer typed win.
+              body.latitude = parseFloat(latRaw);
+              body.longitude = parseFloat(lonRaw);
+            } else if (address) {
+              // OSE-1357: geocode the address once, then create with the
+              // coordinates it returns (the server tags the H3 cells). A
+              // lookup that is unavailable or fails never blocks the save.
+              let geo = null;
+              let notSetUp = false;
+              try {
+                const gres = await fetch('/api/v2/admin/geocode', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ address: address }),
+                });
+                const gdata = await gres.json();
+                if (gdata && gdata.ok && Number.isFinite(gdata.lat) && Number.isFinite(gdata.lng)) geo = gdata;
+                else notSetUp = !!gdata && gdata.code === 'GEO_NOT_CONFIGURED';
+              } catch (err) {
+                geo = null;
+              }
+              if (geo) {
+                body.latitude = geo.lat;
+                body.longitude = geo.lng;
+                if (typeof geo.formatted_address === 'string' && geo.formatted_address) body.address = geo.formatted_address;
+              } else {
+                geoNote = (notSetUp
+                  ? "Address lookup isn't set up yet"
+                  : "We couldn't look up that address") +
+                  ', so this poster was saved without a map location. Add exact coordinates under Advanced if you have them.';
+              }
+            }
             try {
               const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments', {
                 method: 'POST',
@@ -5182,6 +5302,10 @@
               if (data.ok) {
                 msg.textContent = 'Deployment created.';
                 msg.className = 'create-msg success';
+                if (geoNote) {
+                  geoMsg.textContent = geoNote;
+                  geoMsg.className = 'create-msg error';
+                }
                 form.reset();
                 window.loadPosterDeployments(eventId);
               } else {

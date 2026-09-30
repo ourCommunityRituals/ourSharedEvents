@@ -207,19 +207,22 @@ describe('Scenario 2: Check-in lifecycle', () => {
     const adminBody = await json(adminRes);
     expect(adminBody.count).toBe(5);
 
-    // ── DB verification: 1 row, 5 columns, zero PII ──────────────────────
+    // ── DB verification: 1 row, 6 columns, zero PII ──────────────────────
     const rows = await formsDb()
       .prepare('SELECT * FROM checkin_counts WHERE event_id = ?')
       .bind(EVENT)
       .all();
     expect(rows.results).toHaveLength(1);
     expect(rows.results[0].total_count).toBe(5);
+    // OSE-1373: plain taps declare no arrival path, so none count as walk-ins.
+    expect(rows.results[0].walk_in_count).toBe(0);
     expect(Object.keys(rows.results[0]).sort()).toEqual([
       'event_id',
       'id',
       'last_anonymous_id',
       'total_count',
       'updated_at',
+      'walk_in_count',
     ]);
   });
 });

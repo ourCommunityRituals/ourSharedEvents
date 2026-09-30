@@ -686,6 +686,8 @@ interface EventPageSocialData {
   sponsors: SponsorBasicRow[];
   regCount: number;
   checkinCount: number;
+  /** OSE-1373: check-ins through the walk-in path — a per-path count, never a match. */
+  walkInCount?: number;
   surveyCount: number;
   emailCount: number;
 }
@@ -1437,16 +1439,25 @@ ${SPONSOR_LIST_CSS}
         // platform counts signals). The ratio is labelled by what was measured —
         // check-ins over registrations — never by a word that implies bodies.
         const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
+        const walkInCount = social.walkInCount ?? 0;
         const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
               ${
                 // OSE-1373: the promise first (how many said they'd come), then
-                // the turnout, then the ratio — the order a reader asks in.
+                // the turnout, then how many walked in, then the ratio — the
+                // order a reader asks in.
                 regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''
               }
               ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
+              ${walkInCount > 0 ? statLine(walkInCount, 'Walked in', 'stat-walk-ins') : ''}
+              ${
+                // The walk-in share needs BOTH operands over the floor, like the ratio.
+                clearsFloor(walkInCount) && clearsFloor(checkinCount)
+                  ? `<p data-testid="stat-walk-in-share">${Math.round((walkInCount / checkinCount) * 100)}% of check-ins were walk-ins</p>`
+                  : ''
+              }
               ${
                 // Ratio only when BOTH operands clear the floor — a "% showed up"
                 // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
@@ -1511,7 +1522,7 @@ async function fetchEventPageSocialData(
     emailCount: 0,
   };
 
-  const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult] =
+  const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult, walkInResult] =
     await Promise.allSettled([
       env.DB
         ? env.DB.prepare(
@@ -1555,6 +1566,16 @@ async function fetchEventPageSocialData(
             .bind(eventId)
             .first<{ cnt: number }>()
         : Promise.resolve(null),
+
+      // OSE-1373: the walk-in path's own running count, recorded at check-in.
+      // Its own query so a FORMS_DB behind migration 0015 loses only this line.
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(
+            `SELECT walk_in_count FROM checkin_counts WHERE event_id = ? LIMIT 1`
+          )
+            .bind(eventId)
+            .first<{ walk_in_count: number }>()
+        : Promise.resolve(null),
     ]);
 
   return {
@@ -1565,6 +1586,7 @@ async function fetchEventPageSocialData(
     regCount: regResult.status === 'fulfilled' ? (regResult.value?.cnt ?? 0) : 0,
     checkinCount:
       checkinResult.status === 'fulfilled' ? (checkinResult.value?.total_count ?? 0) : 0,
+    walkInCount: walkInResult.status === 'fulfilled' ? (walkInResult.value?.walk_in_count ?? 0) : 0,
     surveyCount: surveyResult.status === 'fulfilled' ? (surveyResult.value?.cnt ?? 0) : 0,
     emailCount: emailResult.status === 'fulfilled' ? (emailResult.value?.cnt ?? 0) : 0,
   };

@@ -62,6 +62,25 @@ async function hashUserAgent(ua: string): Promise<string | null> {
   }
 }
 
+const SCAN_FORM_TYPES = new Set(['register', 'checkin', 'survey', 'email-signup']);
+
+/**
+ * Where a poster scan lands: the event page, carrying the form type and the
+ * deployment id so the page's CTA keeps sourcePlacementId attribution.
+ * Exported as the ONE definition — the admin poster card shows this target
+ * (via the poster-deployments list response, OSE-1357) and must never drift
+ * from what /q/ actually does.
+ */
+export function qrScanTarget(
+  origin: string,
+  eventId: string,
+  deploymentId: string,
+  formType?: string | null
+): string {
+  const safeType = formType && SCAN_FORM_TYPES.has(formType) ? formType : 'register';
+  return `${origin}/events/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
+}
+
 /** qr_token must start with 'qrt_' and be <= 128 chars to be a valid poster token. */
 function isValidQrTokenShape(token: string): boolean {
   return token.startsWith('qrt_') && token.length <= 128;
@@ -174,12 +193,12 @@ export async function handleQrScan(
   // Also embed `?deployment=` so the event-page CTA can continue to the form
   // without losing sourcePlacementId attribution.
   const url = new URL(request.url);
-  const formType = url.searchParams.get('type') ?? 'register';
-  const ALLOWED_TYPES = new Set(['register', 'checkin', 'survey', 'email-signup']);
-  const safeType = ALLOWED_TYPES.has(formType) ? formType : 'register';
-
-  const origin = url.origin;
-  const redirectTarget = `${origin}/events/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
+  const redirectTarget = qrScanTarget(
+    url.origin,
+    eventId,
+    deploymentId,
+    url.searchParams.get('type')
+  );
 
   const redirectResponse = new Response(null, {
     status: 302,
