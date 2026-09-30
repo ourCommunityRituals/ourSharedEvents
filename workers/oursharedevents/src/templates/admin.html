@@ -5593,6 +5593,10 @@
         window.loadPosterCodes = async function (eventId) {
           st.eventId = eventId;
           st.rows = [];
+          // CCR PR701 F3: never show (or let anyone toggle) the previous
+          // event's value while this one loads; re-enabled only on a good load.
+          const qrSwitch = $('poster-show-qr');
+          if (qrSwitch) qrSwitch.disabled = true;
           hideUndo();
           msg('');
           render();
@@ -5607,7 +5611,10 @@
             render();
             // OSE-869: absent means on — only an explicit false unticks it.
             const showQr = $('poster-show-qr');
-            if (showQr) showQr.checked = !(data.settings && data.settings.showQRSection === false);
+            if (showQr) {
+              showQr.checked = !(data.settings && data.settings.showQRSection === false);
+              showQr.disabled = false;
+            }
           } catch (e) {
             msg('Could not load the poster’s codes.', 'error');
           }

@@ -168,6 +168,26 @@ describe('OSE-867 L2: poster-bundle carries the three facts a poster prints', ()
   });
 });
 
+describe('CCR PR701 F1: a sponsor failure never takes the poster down', () => {
+  test('sponsor lookup error → 200 with the QR codes and an empty sponsor strip', async () => {
+    // Before OSE-867 the strip was its own call, so a sponsor error only
+    // emptied the strip. Folding it into the bundle must not turn that into a
+    // poster with no codes: the QR codes are the poster's job, sponsors are not.
+    const db = tenv().DB;
+    await db.prepare('ALTER TABLE sponsor_placement RENAME TO sponsor_placement_ccr_off').run();
+    try {
+      const res = await SELF.fetch(`https://t.test/api/v2/events/${EVENT_ID}/poster-bundle`);
+      expect(res.status).toBe(200);
+      const b = (await res.json()) as Record<string, unknown>;
+      expect(b.sponsors).toEqual([]);
+      expect((b.slots as unknown[]).length).toBeGreaterThan(0);
+      expect((b.event as Record<string, unknown>).name).toBe('Bocce at Eagles');
+    } finally {
+      await db.prepare('ALTER TABLE sponsor_placement_ccr_off RENAME TO sponsor_placement').run();
+    }
+  });
+});
+
 describe('OSE-867 L1: poster.html reads the bundle, not a waterfall', () => {
   test('poster.html never calls sponsor-bundle — sponsors come from poster-bundle', () => {
     const html = sourceFile('src/templates/poster.html');

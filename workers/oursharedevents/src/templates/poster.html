@@ -998,7 +998,9 @@
           // OSE-869: the organiser turned the QR grid off (a walk-up event has
           // nothing to scan). Remove the whole section — absent, not empty, so
           // the printed poster keeps no QR-shaped hole. Absent setting = on.
-          if (data.settings && data.settings.showQRSection === false) {
+          // PRINT only: the digital poster's codes are tappable links, not QR
+          // images, and stay (CCR PR701 F2 — the switch says "Print QR codes").
+          if (KIND === 'print' && data.settings && data.settings.showQRSection === false) {
             const qrSection = document.querySelector('[data-testid="poster-qr-section"]');
             if (qrSection) qrSection.remove();
           } else {

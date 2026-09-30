@@ -19,7 +19,6 @@ import {
   parseEventSettings,
   showQRSection,
   validateSettingsPatch,
-  mergeEventSettings,
 } from '../src/lib/event-settings';
 
 interface TestEnv {
@@ -102,13 +101,6 @@ describe('OSE-869 lib: absent means on; only an explicit false turns the grid of
     expect(validateSettingsPatch({ showMystery: true }).ok).toBe(false);
     expect(validateSettingsPatch(['showQRSection']).ok).toBe(false);
     expect(validateSettingsPatch(null).ok).toBe(false);
-  });
-
-  test('merge: a partial patch keeps what it does not name', () => {
-    expect(mergeEventSettings({ showQRSection: false }, {})).toEqual({ showQRSection: false });
-    expect(mergeEventSettings({ showQRSection: false }, { showQRSection: true })).toEqual({
-      showQRSection: true,
-    });
   });
 });
 

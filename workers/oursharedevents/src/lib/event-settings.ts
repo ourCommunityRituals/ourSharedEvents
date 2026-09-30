@@ -84,8 +84,3 @@ export function validateSettingsPatch(
   }
   return { ok: true, value: out };
 }
-
-/** Merge a validated patch over the stored settings (partial update). */
-export function mergeEventSettings(stored: EventSettings, patch: EventSettings): EventSettings {
-  return { ...stored, ...patch };
-}

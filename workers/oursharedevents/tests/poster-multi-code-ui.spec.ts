@@ -179,6 +179,20 @@ describe('admin | OSE-869 "Print QR codes on this poster" switch', () => {
     );
   });
 
+  test('CCR PR701 F3: while another event loads, the switch is disabled and never shows the previous event', async () => {
+    const { w, doc } = await mountAdmin({ settings: { showQRSection: false } });
+    expect(toggle(doc).checked).toBe(false);
+    // Select a second event whose codes never arrive (load fails).
+    (w as unknown as { fetch: unknown }).fetch = async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ ok: false }),
+    });
+    await (w.loadPosterCodes as (id: string) => Promise<void>)('evt_other');
+    await flush();
+    expect(toggle(doc).disabled).toBe(true);
+  });
+
   test('a failed save reverts the switch and says the poster is unchanged', async () => {
     const { w, doc } = await mountAdmin({
       putEvent: () => ({ status: 400, body: { ok: false, code: 'INVALID_SETTINGS' } }),
@@ -511,6 +525,16 @@ describe('/poster | OSE-869 showQRSection — both branches', () => {
     const { doc } = await mountPoster('print', BUNDLE_SLOTS);
     expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
     expect(doc.querySelectorAll('#poster-qr-slots .code-card')).toHaveLength(BUNDLE_SLOTS.length);
+  });
+});
+
+describe('/poster | CCR PR701 F2: the switch governs PRINTED QR codes only', () => {
+  test('digital poster keeps its tappable links when showQRSection is false', async () => {
+    const { doc } = await mountPoster('digital', BUNDLE_SLOTS, { showQRSection: false });
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots a.qr-slot-code')).toHaveLength(
+      BUNDLE_SLOTS.length
+    );
   });
 });
 

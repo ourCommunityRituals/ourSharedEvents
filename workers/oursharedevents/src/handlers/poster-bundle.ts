@@ -34,7 +34,11 @@ import { getCode } from '../lib/uec';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../lib/public-event-projection';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
-import { buildSponsorBundle, filterSponsorsForSurface } from '../lib/sponsor-resolver';
+import {
+  buildSponsorBundle,
+  filterSponsorsForSurface,
+  type SponsorRow,
+} from '../lib/sponsor-resolver';
 import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 
 export interface PosterBundleEnv extends DataProviderEnv {
@@ -284,11 +288,23 @@ export async function handleGetPosterBundle(
   // sponsor-bundle?surface=poster uses, so the two can never disagree. No
   // beacon tokens: a printed poster fires no impressions (the tokens exist for
   // the live surfaces that do).
-  const sponsorResult = await getDataProvider(env).getSponsors(row.id, { bypassCache: true });
-  const sponsors = buildSponsorBundle(
-    filterSponsorsForSurface(sponsorResult.data, 'poster'),
-    row.id
-  ).surface_sponsors.posterTop;
+  // A sponsor failure empties the strip; it never takes the poster (and its QR
+  // codes) down with it — before OSE-867 the strip was its own call and failed
+  // alone (CCR PR701 F1).
+  let sponsors: SponsorRow[] = [];
+  try {
+    const sponsorResult = await getDataProvider(env).getSponsors(row.id, { bypassCache: true });
+    sponsors = buildSponsorBundle(filterSponsorsForSurface(sponsorResult.data, 'poster'), row.id)
+      .surface_sponsors.posterTop;
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleGetPosterBundle.sponsors',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
 
   return Response.json({
     ok: true,

@@ -22,11 +22,7 @@ import {
   type EventState,
 } from '../domain/event-state';
 import { enrichWithPhase } from '../lib/event-enrich.js';
-import {
-  mergeEventSettings,
-  parseEventSettings,
-  validateSettingsPatch,
-} from '../lib/event-settings';
+import { validateSettingsPatch } from '../lib/event-settings';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
@@ -899,13 +895,10 @@ export async function handleUpdateEvent(
   if ('settings' in body) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
-    const current = await env.DB.prepare('SELECT settings_json FROM events WHERE id = ?')
-      .bind(eventId)
-      .first<{ settings_json: string | null }>();
-    sets.push('settings_json = ?');
-    values.push(
-      JSON.stringify(mergeEventSettings(parseEventSettings(current?.settings_json), v.value))
-    );
+    // Merged in SQL (json_patch, RFC 7396) so two concurrent toggles cannot
+    // lose each other's write the way a read-modify-write would (CCR PR701 F6).
+    sets.push("settings_json = json_patch(COALESCE(settings_json, '{}'), ?)");
+    values.push(JSON.stringify(v.value));
   }
 
   if ('is_published' in body) {
