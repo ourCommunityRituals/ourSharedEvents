@@ -252,6 +252,36 @@ describe('GET /api/v2/admin/events/:id/code-ledger', () => {
     expect((body.evidence as { shortlinks: number }).shortlinks).toBe(1);
   });
 
+  test('never who: the ledger carries codes, counts and reasons — nothing about a person', async () => {
+    // Owner's standing rule: the privacy claim is the basis structure and is
+    // perpetuated through every surface, the admin card included. A ledger
+    // payload names codes and why they are (not) live; it never names anyone.
+    const id = 'ledger-neverwho';
+    await seedEvent(id, 'active', 1);
+    await seedShortlink(id, 'ldr009');
+    await seedDeployment(id, 'pd-ldr-nw', 1, 'front door');
+    const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events/${id}/code-ledger`, {
+      headers: ADMIN,
+    });
+    const raw = await res.text();
+    for (const banned of [
+      'anonymous_id',
+      'anon_id',
+      'anon_id_hash',
+      'ua_hash',
+      'user_agent',
+      'ip',
+      'country',
+      'email',
+      'attendee_name',
+      'lat',
+      'lon',
+      'h3_res9',
+    ]) {
+      expect(raw, banned).not.toMatch(new RegExp(`"${banned}"`));
+    }
+  });
+
   test('published-but-unlisted event: nothing is live and the log warns', async () => {
     const id = 'ledger-unlisted';
     await seedEvent(id, 'active', 0);
