@@ -107,6 +107,11 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0086: remove 0013's test-event-001 where nothing references it (OSE-1419).
+-- Data-only, no schema change. Rollback is not needed and not wanted: the row
+-- is a test fixture, and production should not hold it. To put it back on a
+-- non-production database, apply tests/ui/smoke/fixtures/test-event-001.sql.
+
 -- 0083: sponsor public card (OSE-1316/1317 follow-up). Additive: four nullable
 -- columns on sponsor_business (display_name, address_line, contact_phone,
 -- contact_email). Rollback-forward. If the columns must go, first null them
@@ -357,8 +362,8 @@ DELETE FROM event_templates;
 DROP INDEX IF EXISTS idx_event_templates_category;
 DROP TABLE IF EXISTS event_templates;
 
--- 0013: seed test event — data-only (DELETE from events WHERE id = 'test-event' or similar)
--- See 0013 for the exact seed row.
+-- 0013: seed test event — data-only. 0086 already deletes test-event-001 wherever
+-- nothing references it (OSE-1419); nothing further to reverse.
 
 -- 0012: ring emergence support — index-only ADDs on corridors and node_hierarchy
 DROP INDEX IF EXISTS idx_node_hierarchy_ring_role;

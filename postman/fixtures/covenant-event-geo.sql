@@ -5,11 +5,12 @@
 --   npx wrangler d1 execute DB --env staging --remote --file ../../postman/fixtures/covenant-event-geo.sql
 --
 -- WHY THIS IS A FIXTURE, NOT A MIGRATION
--- test-event-001 (seeded by migration 0013) carries NO coordinates, so
--- events.h3_res7 is NULL. The Local Sponsor Covenant derives is_local server-side
--- by matching a sponsor's h3_res7 CORRIDOR cell to the EVENT's (handlers/
--- sponsors.ts handleAdminCreateSponsor); with a null event cell EVERY sponsor
--- resolves is_local=0 and the covenant's locality dimension is untestable at L3.
+-- test-event-001 (seeded by tests/ui/smoke/fixtures/test-event-001.sql, OSE-1419)
+-- carries NO coordinates, so events.h3_res7 is NULL. The Local Sponsor Covenant
+-- derives is_local server-side by matching a sponsor's h3_res7 CORRIDOR cell to
+-- the EVENT's (handlers/sponsors.ts handleAdminCreateSponsor); with a null event
+-- cell EVERY sponsor resolves is_local=0 and the covenant's locality dimension
+-- is untestable at L3.
 --
 -- This is deliberately a standalone fixture rather than a numbered migration:
 -- a new migrations/NNNN file would force REQUIRED_DB_MIGRATION (schema-guard.ts,
@@ -19,7 +20,7 @@
 -- the data layer, applied per-env like tests/ui/smoke/fixtures/smoke-events.sql.
 --
 -- Coordinates: Beverly Arts Center, 2407 W 111th St, Chicago IL 60655 (matches the
--- 0013 seed's "Beverly Arts Center, Chicago IL" location). NCR cells computed via
+-- seed's "Beverly Arts Center, Chicago IL" location). NCR cells computed via
 -- h3-js — the same lib + resolutions the worker uses in lib/h3-tagging.ts:
 --   res9 (NODE) = 89266457533ffff    res7 (CORRIDOR) = 872664575ffffff
 --

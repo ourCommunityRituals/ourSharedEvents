@@ -235,3 +235,72 @@ describe('OSE-209 smoke: structured summary log', () => {
     expect(formsTables.length).toBeGreaterThan(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OSE-1419 — a fresh database starts with zero events
+//
+// 0013 seeds test-event-001 into every database, production included. 0086
+// removes it wherever nothing references it. A rebuilt production D1 must not
+// list a test event on /events or in /sitemap.xml.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SEED_ID = 'test-event-001';
+
+function removalStatement(): string {
+  const main: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
+  const stmt = main.find((s) => /DELETE\s+FROM\s+events/i.test(s) && s.includes(SEED_ID));
+  if (!stmt) throw new Error('0086 DELETE of test-event-001 not found in the migration set');
+  return stmt;
+}
+
+async function seedTestEvent(): Promise<void> {
+  await tenv()
+    .DB.prepare(
+      `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status, start_date, end_date)
+       VALUES (?, 'root', 'Community Game Night', 'community-game-night', 'active',
+               '2026-05-01', '2026-05-01')`
+    )
+    .bind(SEED_ID)
+    .run();
+}
+
+async function eventCount(): Promise<number> {
+  const row = await tenv().DB.prepare('SELECT COUNT(*) AS n FROM events').first<{ n: number }>();
+  return row?.n ?? -1;
+}
+
+describe('OSE-1419 | migrations leave a fresh database with zero events', () => {
+  test('all migrations applied to an empty DB -> SELECT COUNT(*) FROM events = 0', async () => {
+    expect(await eventCount()).toBe(0);
+  });
+
+  test('0086 keeps test-event-001 while another row references it (staging)', async () => {
+    const db = tenv().DB;
+    await seedTestEvent();
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO shortlinks (code, event_id, kind, clicks, created_at)
+         VALUES ('Ose1419', ?, 'public', 0, datetime('now'))`
+      )
+      .bind(SEED_ID)
+      .run();
+    try {
+      await db.prepare(removalStatement()).run();
+      const kept = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
+      expect(kept).not.toBeNull();
+    } finally {
+      await db.prepare(`DELETE FROM shortlinks WHERE code = 'Ose1419'`).run();
+      await db.prepare('DELETE FROM events WHERE id = ?').bind(SEED_ID).run();
+    }
+  });
+
+  test('0086 removes an unreferenced test-event-001 and is idempotent', async () => {
+    const db = tenv().DB;
+    await seedTestEvent();
+    await db.prepare(removalStatement()).run();
+    await db.prepare(removalStatement()).run(); // a second run finds nothing to delete
+    const gone = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
+    expect(gone).toBeNull();
+    expect(await eventCount()).toBe(0);
+  });
+});
