@@ -78,11 +78,20 @@ function cardMarkup(html: string): string {
   expect(start).toBeGreaterThan(-1);
   return html.slice(start, end);
 }
+// Scripts are found as parsed elements (jsdom parses without running them),
+// never by slicing raw text around a script tag — that pattern is what
+// Semgrep's unknown-value-with-script-tag rule flags, and a parser is the
+// more honest extraction anyway.
+function scriptContaining(html: string, needle: string): string {
+  const doc = new JSDOM(html).window.document;
+  const el = Array.from(doc.querySelectorAll('script')).find((s) =>
+    (s.textContent || '').includes(needle)
+  );
+  expect(el, needle).toBeDefined();
+  return el!.textContent || '';
+}
 function codesScript(html: string): string {
-  const anchor = html.indexOf('window.loadPosterCodes = async function');
-  expect(anchor, 'poster codes script').toBeGreaterThan(-1);
-  const open = html.lastIndexOf('<script>', anchor);
-  return html.slice(open + '<script>'.length, html.indexOf('</script>', anchor));
+  return scriptContaining(html, 'window.loadPosterCodes = async function');
 }
 
 async function mountAdmin(
@@ -309,14 +318,12 @@ describe('admin | Codes on the poster', () => {
 // ── /poster ─────────────────────────────────────────────────────────────────
 
 function posterBody(html: string): string {
-  const start = html.indexOf('<body>');
-  const firstScript = html.indexOf('<script', start);
-  return html.slice(start + '<body>'.length, firstScript);
+  const doc = new JSDOM(html).window.document;
+  doc.querySelectorAll('script').forEach((s) => s.remove());
+  return doc.body.innerHTML;
 }
 function posterScript(html: string): string {
-  const anchor = html.indexOf('async function loadPosterQR');
-  const open = html.lastIndexOf('<script', anchor);
-  return html.slice(html.indexOf('>', open) + 1, html.indexOf('</script>', anchor));
+  return scriptContaining(html, 'async function loadPosterQR');
 }
 
 async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
