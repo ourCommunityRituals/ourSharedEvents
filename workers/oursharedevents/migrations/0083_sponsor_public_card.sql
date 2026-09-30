@@ -1,4 +1,4 @@
--- Migration 0082: the sponsor's public card (OSE-1316 / OSE-1317 follow-up)
+-- Migration 0083: the sponsor's public card (OSE-1316 / OSE-1317 follow-up)
 --
 -- A sponsor is valid with only a business name. Some sponsors deliberately show
 -- a simple card instead of a logo and website: a title, where to find them, and

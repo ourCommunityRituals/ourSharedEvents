@@ -157,7 +157,7 @@ describe('admin | Create Sponsor form', () => {
     expect($('spon-sidebar-logo').hasAttribute('required')).toBe(false);
     $('spon-name').value = 'Two Logos';
     $('spon-tier').value = 'gold';
-    // 0082: the logo fields belong to the "Our own logo" image choice.
+    // 0083: the logo fields belong to the "Our own logo" image choice.
     $('spon-image-choice').value = 'own';
     $('spon-image-choice').dispatchEvent(
       new (w as unknown as { Event: typeof Event }).Event('change')
@@ -274,7 +274,7 @@ describe('/display | header logo vs sidebar logo', () => {
       '[data-testid="display-sponsor-sidebar-logo"]'
     ) as HTMLImageElement;
     expect(side).not.toBeNull();
-    // 0082: logos load through the same-origin proxy — the page CSP (img-src
+    // 0083: logos load through the same-origin proxy — the page CSP (img-src
     // 'self' data:) and COEP both block an external URL in <img src>. The side
     // rail asks the proxy for the compact slot; the top banner for the header.
     expect(side.getAttribute('src')).toBe('/api/v2/sponsors/sp_1/logo?slot=sidebar');
@@ -299,7 +299,7 @@ describe('/display | header logo vs sidebar logo', () => {
   test('no logo at all → the OSE default image and the name render', async () => {
     const { doc, close } = await mountDisplay({ id: 'sp_3', name: 'Name Only Co', tier: 'gold' });
     const sidebar = doc.querySelector('[data-testid="display-sponsor-sidebar"]')!;
-    // 0082 (decided 2026-09-30): a sponsor with no image gets the OSE default.
+    // 0083 (decided 2026-09-30): a sponsor with no image gets the OSE default.
     expect(sidebar.querySelector('img')!.getAttribute('src')).toBe('/sponsor-default-logo.svg');
     expect(doc.querySelector('[data-testid="display-sponsor-sidebar-name"]')!.textContent).toBe(
       'Name Only Co'

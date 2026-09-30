@@ -1,123 +1,88 @@
-# QR Code Form Routing
+# QR Code Form Routing (`/forms/` links only)
 
-> How attendees get from a physical QR code to the right digital form.
-
----
-
-## How It Works
-
-Every event can generate QR codes that link to form pages. A single URL pattern routes to all 4 form types:
-
-```
-https://oursharedevents.com/forms/{eventId}?type={formType}&event={eventName}
-```
-
-### URL Parameters
-
-| Parameter | Values                                   | Default    | Description                              |
-| --------- | ---------------------------------------- | ---------- | ---------------------------------------- |
-| `type`    | `register`, `checkin`, `survey`, `email` | `register` | Which form to show                       |
-| `event`   | Any text                                 | "Event"    | Event name shown in header (URL-encoded) |
-
-### Examples
-
-| QR Code Purpose        | URL                                                              |
-| ---------------------- | ---------------------------------------------------------------- |
-| Pre-event registration | `/forms/bocce-night-spring-2026?type=register&event=Bocce+Night` |
-| Door check-in counter  | `/forms/bocce-night-spring-2026?type=checkin&event=Bocce+Night`  |
-| Post-event survey      | `/forms/bocce-night-spring-2026?type=survey&event=Bocce+Night`   |
-| Email list signup      | `/forms/bocce-night-spring-2026?type=email&event=Bocce+Night`    |
+> **Scope note (2026-09-30).** This page covers only the **`/forms/` link**: the
+> URL that opens a form page (register, check-in, survey, email signup). For how
+> QR codes and short links work, read
+> **[QR-AND-SHORTLINKS.md](QR-AND-SHORTLINKS.md)**. That page covers `/q/` scan
+> tracking, `/s/` short-link routing, poster codes and placements, resolution,
+> time buckets, the K=5 floor, and who sees what.
+>
+> An earlier version of this page presented `/forms/` routing as "the" QR
+> system. It is not: printed poster codes today are `/s/` short links, and a
+> placement code is a `/q/` scan link. Both are covered in the new doc.
+>
+> Paths below are relative to `workers/oursharedevents/`. Verified against
+> `src/handlers/form-pages.ts` and `src/router.ts` at `edb9406`.
 
 ---
 
-## The QR-to-Form Flow
+## `/forms/` link routing
+
+### URL
 
 ```
-Physical QR Code (poster, table tent, display)
-    │
-    ▼
-Phone camera scans → opens browser
-    │
-    ▼
-GET /forms/:eventId?type=register
-    │
-    ▼
-Worker serves mobile-first HTML form page
-    │
-    ▼
-User fills form → JS fetch() to POST /api/v2/events/:id/forms/:type
-    │
-    ▼
-Success state shown inline (no page reload)
+/forms/{eventId}?type={formType}[&deployment={posterDeploymentId}]
 ```
 
-## Page Design
+| Parameter    | Values                                                                  | Default    | Notes                                                                                                                                                                                                         |
+| ------------ | ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`       | `register`, `checkin`, `survey`, `email-signup` (`email` also accepted) | `register` | An unknown value renders the registration form                                                                                                                                                                |
+| `deployment` | a `poster_deployments.id`                                               | none       | Carried into the form as a hidden `deploymentId` and written to `form_registrations.source_placement_id` (OSE-627)                                                                                            |
+| `event`      | **ignored**                                                             | —          | Since OSE-R-007 the page title comes from the event row in D1, never from the URL. An unknown event id falls back to the label "Event". The old `?event=` examples on this page were removed for that reason. |
 
-Every form page follows the same layout:
+### How a visitor reaches a form
+
+- **Anonymous check-in poster code.** A `/s/<code>` of kind `checkin` redirects
+  to `/forms/<id>?type=checkin`, built server-side from the event id alone
+  (`internalTarget` in `src/lib/poster-codes.ts`).
+- **Event page CTA.** A `/q/` placement scan lands on
+  `/events/<id>?type=<form>&deployment=<pd_id>`, and the page's CTA continues to
+  the form while keeping the `deployment` attribution (`qrScanTarget` in
+  `src/handlers/qr-scan.ts`).
+- **Direct form links.** The generic poster bundle (`src/handlers/poster-bundle.ts`,
+  `formUrl`) emits `/forms/<id>?type=<form>` for all four types, with no scan
+  recorded. The `/poster` page does not render these; it renders `/s/` codes.
+
+### Flow
 
 ```
-┌─────────────────────────┐
-│   OurSharedEvents       │  ← Dark header with branding
-│   [Event Name]          │  ← Event name, prominent
-├─────────────────────────┤
-│                         │
-│   ┌───────────────────┐ │
-│   │  Form Card        │ │  ← White card, rounded corners
-│   │  [Title]          │ │
-│   │  [Fields]         │ │  ← Mobile-optimized inputs
-│   │  [Submit Button]  │ │  ← Full-width, 44px+ touch target
-│   └───────────────────┘ │
-│                         │
-└─────────────────────────┘
+GET /forms/:eventId?type=...
+  │
+  ├─ Event exists but is not publicly renderable (archived / draft / ready)
+  │     → 302 to the /events listing (OSE-291 "a poster must never rot")
+  │
+  └─ Otherwise → mobile-first HTML form page (nonce CSP)
+        │
+        ▼
+     fetch() POST /api/v2/events/:id/forms/:type   (success shown inline, no reload)
+        ├─ event not active                → 410 EVENT_NOT_ACTIVE
+        ├─ flag forms.<type> off           → 403 FORM_DISABLED
+        └─ survey / email-signup on an event below
+           Phase 2, or on a missing event  → 403 PHASE_REQUIRED (fail-closed, OSE-1270)
 ```
 
-**Design principles:**
+- **Feature flags.** Gating uses the `forms.<type>` flag through
+  `isFeatureEnabled` (`src/router.ts`). The per-tier presets live in
+  `@ocr/flags` (`SHARED_TIER_PRESETS`, consumed by `src/lib/feature-flags.ts`).
+  See [TIERS.md](TIERS.md) and [FORMS.md](FORMS.md). The per-tier ON/OFF matrix
+  that used to be here was not re-verified and has been removed.
+- **Privacy.** Form submissions go to `FORMS_DB`, never `DB`
+  ([ADR-001](../adr/ADR-001-anonymous-identity-architecture.md)). Check-in
+  records a count only. See [PRIVACY.md](PRIVACY.md).
 
-- 10-second comprehension: user sees event name, one action, done
-- Mobile-first: max-width 480px, system fonts, no external dependencies
-- No page reload: form submits via `fetch()`, success shown inline
-- Touch-optimized: 44px+ touch targets, no double-tap zoom
+### Test IDs
 
-## Test IDs for Automation
+Every interactive element carries a `data-testid` (`src/handlers/form-pages.ts`):
 
-Every interactive element has a `data-testid` attribute for stable Playwright selectors:
-
-| Element                  | Test ID                                                      |
-| ------------------------ | ------------------------------------------------------------ |
-| Form container           | `form-register`, `form-checkin`, `form-survey`, `form-email` |
-| Error message            | `form-error`                                                 |
-| Success state            | `form-success`                                               |
-| Header                   | `form-header`                                                |
-| Event name               | `form-event-name`                                            |
-| Registration name input  | `register-name-input`                                        |
-| Registration email input | `register-email-input`                                       |
-| Registration submit      | `register-submit`                                            |
-| Check-in button          | `checkin-submit`                                             |
-| Check-in counter         | `checkin-count`                                              |
-| Survey rating row        | `survey-rating-overall`                                      |
-| Survey rating buttons    | `survey-rating-1` through `survey-rating-5`                  |
-| Survey comments          | `survey-comments-input`                                      |
-| Survey submit            | `survey-submit`                                              |
-| Email input              | `email-email-input`                                          |
-| Email submit             | `email-submit`                                               |
-
-## Feature Flag Gating
-
-Before serving a form submission, the router checks the feature flag for that form type:
-
-| Form Type    | Flag Key             | Free | Mid | Enterprise |
-| ------------ | -------------------- | :--: | :-: | :--------: |
-| Register     | `forms.register`     |  ON  | ON  |     ON     |
-| Check-in     | `forms.checkin`      |  ON  | ON  |     ON     |
-| Survey       | `forms.survey`       | OFF  | ON  |     ON     |
-| Email Signup | `forms.email-signup` | OFF  | ON  |     ON     |
-
-If a form type is disabled, the API returns `403 FORM_DISABLED`. The form page itself still renders (for now) — the gate is at the API level.
-
-## Admin: Managing QR Links
-
-In the admin dashboard, selecting an event shows Card 2 (Forms Management):
-
-- Links to each form page for the selected event
-- Current counts for registrations, check-ins, surveys, and emails
-- Links open in new tab — ready to generate QR codes from the URL
+| Element                  | Test ID                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Form container           | `form-register`, `form-checkin`, `form-survey`, `form-email`                                             |
+| Error message            | `form-error`                                                                                             |
+| Success state            | `form-success`                                                                                           |
+| Header / event name      | `form-header`, `form-event-name`                                                                         |
+| Poster attribution field | `form-deployment-id`                                                                                     |
+| Registration             | `register-name-input`, `register-email-input`, `register-submit`                                         |
+| Check-in                 | `checkin-submit`, `checkin-walk-in-submit`, `checkin-count`                                              |
+| Survey                   | `survey-rating-overall`, `survey-rating-1` … `survey-rating-5`, `survey-comments-input`, `survey-submit` |
+| Email signup             | `email-email-input`, `email-submit`                                                                      |
+| Privacy notice           | `privacy-notice`, `privacy-summary`, `privacy-details`                                                   |

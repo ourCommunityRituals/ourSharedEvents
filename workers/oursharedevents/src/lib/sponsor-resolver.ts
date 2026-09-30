@@ -65,7 +65,7 @@ export interface SponsorRow {
    */
   sidebar_logo_url?: string | null;
   /**
-   * 0082 public card. display_name is the optional public title (the resolver's
+   * 0083 public card. display_name is the optional public title (the resolver's
    * public seam folds it into `title`); address_line is the sponsor-entered
    * public location. Contact lives on the card page only, not in the bundle.
    */
@@ -371,7 +371,7 @@ export async function resolveSponsorsForEvent(
       // OSE-1317: an outbound link renders only for an https:// website. Writes
       // are validated, but a row stored before that rule (or seeded directly)
       // is normalised here, at the one seam every public surface reads through.
-      // 0082: the public title and the no-website tap target are decided here
+      // 0083: the public title and the no-website tap target are decided here
       // too, once, so no surface re-derives them.
       all.push({
         ...s,

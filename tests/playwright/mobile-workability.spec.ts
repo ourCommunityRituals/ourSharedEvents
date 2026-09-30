@@ -71,7 +71,7 @@ const SPONSOR_HOME_SKIP_REASON = SPONSOR_HOME_TOKEN
   ? undefined
   : 'Set OSE_SPONSOR_HOME_TOKEN to a minted sponsor-home bearer (POST /api/v2/admin/sponsors/:id/home-link on a seeded sponsor) — without it /sponsor?t= renders the invalid-link page, not the phone-first sponsor surface.';
 
-// 0082: /sponsors/:id is the public sponsor card (title, location, contact).
+// 0083: /sponsors/:id is the public sponsor card (title, location, contact).
 // It renders only for a sponsor that is on show (active + accepted placement),
 // so it needs a seeded id; skip (documented) otherwise, like /sponsor above.
 const SPONSOR_CARD_ID = process.env.OSE_SPONSOR_CARD_ID || '';
@@ -210,7 +210,7 @@ const SURFACES: Surface[] = [
     skipReason: SPONSOR_HOME_SKIP_REASON,
   },
   {
-    // 0082: the public sponsor card — where a tap on a sponsor with no website
+    // 0083: the public sponsor card — where a tap on a sponsor with no website
     // lands. Buttons are @ocr/ui .btn (44px+); documented-skip without a seed.
     path: `/sponsors/${SPONSOR_CARD_ID || 'unseeded'}`,
     name: 'sponsor card',

@@ -108,7 +108,7 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
     );
   });
 
-  // 0082: the public sponsor card — full (logo, location, all three actions)
+  // 0083: the public sponsor card — full (logo, location, all three actions)
   // and minimal (a name only), so both the richest and the barest card are
   // scanned for landmarks, one <h1>, and named controls.
   test('sponsor card (full + name-only)', async () => {

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0082; append-only 0001–0082)
+- `DB` — main / anonymous public surface (highest migration: 0083; append-only 0001–0083)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -107,7 +107,7 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0082: sponsor public card (OSE-1316/1317 follow-up). Additive: four nullable
+-- 0083: sponsor public card (OSE-1316/1317 follow-up). Additive: four nullable
 -- columns on sponsor_business (display_name, address_line, contact_phone,
 -- contact_email). Rollback-forward. If the columns must go, first null them
 -- (they are public business details, cleared on sponsor deactivation anyway):
@@ -119,6 +119,11 @@ the relevant sections from the bottom up.
 -- ALTER TABLE sponsor_business DROP COLUMN display_name;    -- optional, additive
 -- NB: reverting the Worker below this migration is safe (older code never reads
 -- these columns); dropping them while this Worker is deployed is not.
+
+-- 0082: poster_deployments.placement_type (OSE-1357 poster tiers). Additive
+-- categorical column (venue|community) + a backfill of rows whose address is
+-- the event's own. Reverse (safe to leave; nothing else depends on it):
+-- ALTER TABLE poster_deployments DROP COLUMN placement_type;   -- optional, additive
 
 -- 0081: sponsor_business.tier + sponsor_asset rebuild (CHECK += logo_compact).
 -- tier is additive (rollback-forward). The rebuild copied every row; to undo it,

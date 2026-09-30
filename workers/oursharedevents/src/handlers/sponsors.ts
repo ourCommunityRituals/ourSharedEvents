@@ -489,7 +489,7 @@ export async function handleAdminCreateSponsor(
   const siteCheck = checkWebsite(body.website_url, rid);
   if (siteCheck instanceof Response) return siteCheck;
   const websiteUrl = siteCheck;
-  // 0082: the public card — display name, location, phone, email. All optional;
+  // 0083: the public card — display name, location, phone, email. All optional;
   // a sponsor with only a business name is complete.
   const card: Record<CardField, string | null> = {
     display_name: null,
@@ -764,7 +764,7 @@ export async function handleAdminUpdateSponsor(
     businessSets.push('website_url = ?');
     businessVals.push(siteCheck);
   }
-  // 0082: public card fields; '' / null clears one.
+  // 0083: public card fields; '' / null clears one.
   for (const field of CARD_FIELDS) {
     if (!(field in body)) continue;
     const r = checkCardField(field, body[field]);
@@ -1033,7 +1033,7 @@ export async function handleAdminDeleteSponsor(
     // event — it joins sponsor_business and had no business-level flag to
     // check — and any new placement resurrected it on Path 1. One flag on one
     // row, read at join time by both resolver paths.
-    // 0082 / Invariant #8: the public card's location and contact are
+    // 0083 / Invariant #8: the public card's location and contact are
     // business details the sponsor chose to show — while it is on show. A
     // deactivated sponsor is not on show, so they are cleared here rather than
     // kept indefinitely (the title and legal name stay: they are identity).

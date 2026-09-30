@@ -768,7 +768,7 @@
       // Resolve once every rendered QR <img> has loaded or errored. Data-URI
       // codes settle almost immediately; a slow venue link is exactly the case
       // this waits out. No images (all failed / none injected) → resolve now.
-      // 0082: sponsor logos are part of the printed page too (they load through
+      // 0083: sponsor logos are part of the printed page too (they load through
       // the same-origin proxy, or swap to the OSE default), so Print also waits
       // for the sponsor strip to render and its images to settle.
       let posterSponsorsReady = Promise.resolve();
@@ -946,7 +946,7 @@
               // (\'). Unescaped, they terminate this single-quoted JS string
               // early ("Unexpected identifier 'none'") and kill the ENTIRE
               // poster inline script — no picker, no QR, no sponsors render.
-              // 0082: logo via the same-origin proxy (external URLs are CSP-
+              // 0083: logo via the same-origin proxy (external URLs are CSP-
               // blocked here), or the OSE default; title = display_name → name.
               // attr() also escapes quotes — these values sit in attributes.
               const attr = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -982,7 +982,7 @@
           // allowlists here, the link is rebuilt from a validated code on this
           // origin, and a QR src must be a data:image — no response value
           // reaches an href or src unchecked.
-          const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
+          const ICON = Object.assign(Object.create(null), { public: '★', checkin: '✓', register: '✎', donation: '♥', sponsor: '◆', ow: '♪' });
           container.innerHTML = slots
             .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
             .map(function (s) {
@@ -1043,7 +1043,7 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            // 0082: a sponsor logo that fails becomes the OSE default instead of
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
             // vanishing; only if the default itself fails is the image hidden.
             // The fallback is a fixed same-origin path, never read back from
             // the DOM — data-default-src only marks which images may fall back.

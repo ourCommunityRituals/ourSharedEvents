@@ -350,7 +350,7 @@
             String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
           banner.innerHTML = sponsors
             .map((s) => {
-              // 0082: every sponsor shows an image — its logo through the
+              // 0083: every sponsor shows an image — its logo through the
               // same-origin proxy (the page CSP is img-src 'self' data:, so an
               // external URL here was always blocked), or the OSE default. The
               // title is display_name → name. attr() escapes quotes too: these
@@ -415,7 +415,7 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            // 0082: a sponsor logo that fails becomes the OSE default instead of
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
             // vanishing; only if the default itself fails is the image hidden.
             // The fallback is a fixed same-origin path, never read back from
             // the DOM — data-default-src only marks which images may fall back.

@@ -681,7 +681,7 @@ interface SponsorBasicRow {
   id: string;
   name: string;
   website_url: string | null;
-  /** 0082: optional public title and location (sponsor-entered, public). */
+  /** 0083: optional public title and location (sponsor-entered, public). */
   display_name?: string | null;
   address_line?: string | null;
 }
@@ -699,7 +699,7 @@ interface EventPageSocialData {
 function renderSponsorItem(s: SponsorBasicRow): string {
   const name = esc(sponsorTitle(s));
   const url = s.website_url ?? '';
-  // 0082: the location the sponsor chose to show, after the name.
+  // 0083: the location the sponsor chose to show, after the name.
   const place = s.address_line
     ? ` <small data-testid="sponsor-item-address">${esc(s.address_line)}</small>`
     : '';

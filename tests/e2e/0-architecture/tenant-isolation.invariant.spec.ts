@@ -137,7 +137,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
   'handlers/sponsor-card.ts:64':
-    'Public sponsor card (0082). Correlated EXISTS on `events e` keyed by ' +
+    'Public sponsor card (0083). Correlated EXISTS on `events e` keyed by ' +
     '`e.id = sp.event_id AND e.brand_id = sb.brand_id`, nested inside a lookup ' +
     'whose outer `sponsor_business sb` is keyed by `sb.id = ?` (held sponsor id) ' +
     'and whose placement sub-select is keyed by `sp.sponsor_business_id = ?`. It ' +
@@ -211,7 +211,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
     'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +
     '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration. ' +
-    '(Line shifted 252→267 by 0082, which added display_name / address_line to ' +
+    '(Line shifted 252→267 by 0083, which added display_name / address_line to ' +
     'the Path-1 SELECT and SponsorRow above it. Scope unchanged.)',
 };
 

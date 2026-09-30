@@ -1,6 +1,6 @@
 /**
  * sponsor-card.ts — the sponsor's public presentation (OSE-1316 / OSE-1317
- * follow-up, migration 0082).
+ * follow-up, migration 0083).
  *
  * A sponsor is valid with only a business name. On every surface it shows:
  *   - an image: its own logo, or the OSE default mark when it has none (or its

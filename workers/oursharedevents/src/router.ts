@@ -59,8 +59,8 @@
  *   GET    /api/v2/events/:id/sponsors         → resolved sponsors for event
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
  *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
- *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0082)
- *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0082)
+ *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
+ *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
@@ -439,7 +439,7 @@ export async function route(
     return handleShortlinkResolve(request, env, code);
   }
 
-  // OSE default sponsor image (0082) — static, same-origin, locked down.
+  // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();
   }
@@ -1575,7 +1575,7 @@ export async function route(
     return handleSponsorHomePage(request, env);
   }
 
-  // Public sponsor card (0082): where a tap on a sponsor with no website lands.
+  // Public sponsor card (0083): where a tap on a sponsor with no website lands.
   // Rate-limited inside the handler (it renders an HTML 429, not JSON).
   const sponsorCardMatch = pathname.match(/^\/sponsors\/([^/]+)$/);
   if (sponsorCardMatch && method === 'GET') {

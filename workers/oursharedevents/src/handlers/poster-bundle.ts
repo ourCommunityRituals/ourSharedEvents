@@ -136,6 +136,8 @@ function scanUrl(origin: string, qrToken: string, type: FormType): string {
 export const POSTER_SLOT_LABELS: Record<string, string> = {
   public: 'Event page',
   checkin: 'Check in',
+  register: 'Register',
+  sponsor: 'Sponsor us',
   ow: 'Listen on ourWKRP',
   donation: 'Donate',
   signup: 'Sign up',

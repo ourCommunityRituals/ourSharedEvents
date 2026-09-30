@@ -1,5 +1,5 @@
 /**
- * Sponsor public card + OSE default image (migration 0082) — UI half. The admin
+ * Sponsor public card + OSE default image (migration 0083) — UI half. The admin
  * sponsors card and the /events sponsor banner are RUN (their real scripts,
  * from the served templates) in jsdom against a stubbed fetch.
  * API / page half: sponsor-public-card.spec.ts.
@@ -12,7 +12,7 @@
  *   - the banner shows the OSE default for a logo-less sponsor, the proxy for
  *     one with a logo, the title, and links to the card when there is no website
  *
- * @born-red 0082 | method: spec written against the pre-change tree (no image
+ * @born-red 0083 | method: spec written against the pre-change tree (no image
  *   choice, no card fields, the banner rendered no image for a logo-less sponsor
  *   and an unlinked name when there was no website) — red; green with the change
  *   | date: 2026-09-30

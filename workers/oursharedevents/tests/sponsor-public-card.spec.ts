@@ -1,5 +1,5 @@
 /**
- * Sponsor public card + OSE default image (migration 0082) — API / page half.
+ * Sponsor public card + OSE default image (migration 0083) — API / page half.
  *
  * Decided 2026-09-30: a sponsor is valid with only a business name. Logos are
  * optional; a sponsor with no logo gets the OSE default image. A sponsor may
@@ -18,7 +18,7 @@
  *
  * UI half (form image choice, surfaces, run in jsdom): sponsor-public-card-ui.spec.ts.
  *
- * @born-red 0082 | method: src + migration 0082 stashed, tests kept, run against
+ * @born-red 0083 | method: src + migration 0083 stashed, tests kept, run against
  *   origin/main. This file cannot load there (it imports the new sponsor-card
  *   modules), so its red is a load failure, not per-assertion; the jsdom half
  *   (sponsor-public-card-ui.spec.ts) is behaviourally red 9/9 on the same tree.
@@ -52,8 +52,8 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-const BRAND = 'ose0082';
-const EVENT = 'ose0082-evt';
+const BRAND = 'ose0083';
+const EVENT = 'ose0083-evt';
 
 beforeAll(async () => {
   await applyMigrations();
@@ -118,7 +118,7 @@ const OVER_LIMIT_KV = {
   put: async () => {},
 } as unknown as KVNamespace;
 
-describe('0082 | card fields: all optional, validated, clearable', () => {
+describe('0083 | card fields: all optional, validated, clearable', () => {
   test('a sponsor with only a business name (and tier) is complete', async () => {
     const { status, body } = await create({ name: 'Name Only', tier: 'primary' });
     expect(status).toBe(201);
@@ -243,7 +243,7 @@ describe('0082 | card fields: all optional, validated, clearable', () => {
   });
 });
 
-describe('0082 | the public bundle: title, card_url, location — never contact or geo', () => {
+describe('0083 | the public bundle: title, card_url, location — never contact or geo', () => {
   test('title is the display name; card_url is the card; contact + geo stay out', async () => {
     const id = await onShow({
       name: 'Legal Name LLC',
@@ -271,7 +271,7 @@ describe('0082 | the public bundle: title, card_url, location — never contact 
   });
 });
 
-describe('0082 | GET /sponsors/:id — the public card', () => {
+describe('0083 | GET /sponsors/:id — the public card', () => {
   test('renders title, business name, location, tel: and mailto:, with the OSE default image', async () => {
     const id = await onShow({
       name: 'Card Co LLC',
@@ -360,7 +360,7 @@ describe('0082 | GET /sponsors/:id — the public card', () => {
   });
 });
 
-describe('0082 | the OSE default image and the logo proxy', () => {
+describe('0083 | the OSE default image and the logo proxy', () => {
   test('GET /sponsor-default-logo.svg is a static, locked-down SVG', async () => {
     const res = await SELF.fetch('https://t.test/sponsor-default-logo.svg');
     expect(res.status).toBe(200);
@@ -404,7 +404,7 @@ describe('0082 | the OSE default image and the logo proxy', () => {
   });
 });
 
-describe('0082 | pure helpers', () => {
+describe('0083 | pure helpers', () => {
   test('title falls back to the name; blank display names do not win', () => {
     expect(sponsorTitle({ name: 'A', display_name: null })).toBe('A');
     expect(sponsorTitle({ name: 'A', display_name: '   ' })).toBe('A');
@@ -423,7 +423,7 @@ describe('0082 | pure helpers', () => {
 
 // ── CCR PR #699 holds ───────────────────────────────────────────────────────
 
-const DRAFT_EVENT = 'ose0082-draft-evt';
+const DRAFT_EVENT = 'ose0083-draft-evt';
 
 async function auditRows(id: string) {
   const r = await env.DB.prepare(

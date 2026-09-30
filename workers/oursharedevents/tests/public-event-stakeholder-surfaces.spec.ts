@@ -248,7 +248,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('Malicious Sponsor');
     expect(html).not.toContain('href="javascript:');
     expect(html).not.toContain('javascript:alert');
-    // 0082: a sponsor with no usable website links to its own public card.
+    // 0083: a sponsor with no usable website links to its own public card.
     expect(html).toMatch(
       /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link"/
     );
@@ -262,7 +262,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('No Link Sponsor');
-    // 0082 (decided 2026-09-30): tap → the sponsor's card, never nowhere.
+    // 0083 (decided 2026-09-30): tap → the sponsor's card, never nowhere.
     expect(html).toMatch(
       /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link">No Link Sponsor</
     );

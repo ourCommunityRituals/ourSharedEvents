@@ -240,7 +240,7 @@ const FORM_JS_SUBMIT = `
   document.addEventListener('error', function (ev) {
     var el = ev.target;
     if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-      // 0082: swap a failing sponsor logo to the OSE default; hide only if
+      // 0083: swap a failing sponsor logo to the OSE default; hide only if
       // the default itself fails.
       // Fixed same-origin fallback; never read back from the DOM.
       var d = '/sponsor-default-logo.svg';
@@ -356,7 +356,7 @@ const FORM_JS_SUBMIT = `
       };
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.title || s.name);
-        // 0082: no logo → the OSE default; a failing logo swaps to it too.
+        // 0083: no logo → the OSE default; a failing logo swaps to it too.
         var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');

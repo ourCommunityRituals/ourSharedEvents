@@ -1,5 +1,5 @@
 /**
- * Pure render for the public sponsor card (GET /sponsors/:id, migration 0082).
+ * Pure render for the public sponsor card (GET /sponsors/:id, migration 0083).
  *
  * No env, no DB: the handler reads the row and hands it here, so the page is
  * a11y- and XSS-testable on its own (same split as sponsor-home-render.ts).

@@ -47,7 +47,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
@@ -311,6 +311,69 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
             'identities and violates aggregate-only invariant'
         )
         .not.toMatch(/GROUP\s+BY\s+[^;]*\banon_id_hash\b/i);
+    }
+  });
+});
+
+// ── Digital tap counts are K-floored wherever they are aggregated ─────────────
+// PO, 2026-09-30 (OSE-1357 poster tiers): the K=5 floor on digital reach is an
+// INVARIANT, not a per-screen choice — so it is asserted as a PROPERTY over
+// every src module that aggregates short-link taps (SUM(clicks)), derived by
+// walking the tree (see this directory's README: property-asserting gates).
+// A new module that sums taps is covered the day it is written. Each subject
+// must route the counts through the one shared floor (applyCountFloor,
+// lib/count-floor.ts) and must not carry its own numeric threshold.
+// Physical placement scans are out of scope here: they are the organizer's
+// own posters and stay exact for the organizer (event-stats.ts, OSE-896).
+
+const WORKER_SRC = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
+const SUMS_TAPS = /SUM\(\s*(?:\w+\.)?clicks\s*\)/i;
+const LOCAL_THRESHOLD = /[<>]=?\s*5\b(?!\d)/;
+
+function walkTs(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) out.push(...walkTs(p));
+    else if (name.endsWith('.ts')) out.push(p);
+  }
+  return out;
+}
+const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+test.describe('Invariant 7: digital tap counts are floored through applyCountFloor (property)', () => {
+  test('OSE-INV7 | privacy | taps | negative control: the parser sees a tap aggregate', () => {
+    expect(SUMS_TAPS.test('SELECT COALESCE(SUM(clicks), 0) AS cnt FROM shortlinks')).toBe(true);
+    expect(SUMS_TAPS.test('SELECT SUM(s.clicks) FROM shortlinks s')).toBe(true);
+    expect(SUMS_TAPS.test('UPDATE shortlinks SET clicks = clicks + 1')).toBe(false);
+    expect(LOCAL_THRESHOLD.test('if (n < 5) return')).toBe(true);
+    expect(LOCAL_THRESHOLD.test('if (n < 50) return')).toBe(false);
+  });
+
+  test('OSE-INV7 | privacy | taps | every module that sums taps floors them (derived subjects)', () => {
+    const subjects = walkTs(WORKER_SRC)
+      .map((p) => [p, stripComments(readFileSync(p, 'utf8'))] as const)
+      .filter(([, src]) => SUMS_TAPS.test(src));
+    // A derived gate that finds nothing is indistinguishable from one that
+    // looks at nothing: the tree has at least the pre-event card, the poster
+    // reach picture and the SharedReport sponsor clicks today.
+    expect(subjects.length, 'no tap aggregates found — the parser is blind').toBeGreaterThanOrEqual(
+      3
+    );
+    for (const [p, src] of subjects) {
+      const rel = p
+        .slice(REPO_ROOT.length + 1)
+        .split('\\')
+        .join('/');
+      expect(
+        src,
+        `${rel} aggregates short-link taps but never calls applyCountFloor — ` +
+          'a digital count must pass the shared K=5 floor before it leaves the module'
+      ).toMatch(/applyCountFloor\s*\(/);
+      expect(
+        src.match(LOCAL_THRESHOLD)?.[0] ?? null,
+        `${rel} carries its own numeric floor — use applyCountFloor (one K, one place)`
+      ).toBeNull();
     }
   });
 });

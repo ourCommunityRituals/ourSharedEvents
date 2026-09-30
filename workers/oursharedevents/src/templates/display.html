@@ -475,10 +475,10 @@
           const data = await res.json();
           if (!data.ok) return;
           const bundle = data.bundle || {};
-          // Escapes quotes as well: these values land inside attributes (0082).
+          // Escapes quotes as well: these values land inside attributes (0083).
           const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
           const SPONSOR_DEFAULT_LOGO = '/sponsor-default-logo.svg';
-          // 0082: logos load through the same-origin proxy (the page CSP and
+          // 0083: logos load through the same-origin proxy (the page CSP and
           // COEP both block an external <img src>), and a sponsor with no logo
           // shows the OSE default. slot=sidebar prefers the compact logo.
           const logoSrc = (s, slot) => s.logo_url || s.sidebar_logo_url
@@ -504,7 +504,7 @@
               // instead of leaving a broken <img> on the venue TV.
               // OSE-1317: the side rail is the compact slot, so it prefers the
               // sidebar logo and falls back to the header logo (the proxy's
-              // slot=sidebar does both), then — 0082 — to the OSE default.
+              // slot=sidebar does both), then — 0083 — to the OSE default.
               const title = s.title || s.name;
               const logo = '<img src="' + esc(logoSrc(s, 'sidebar')) + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="display-sponsor-sidebar-logo">';
               return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(title) + '</span></div>' +
@@ -528,7 +528,7 @@
                   sentinel.hidden = true;
                   sidebar.appendChild(sentinel);
                 }
-                // 0082: the sponsor keeps its slot on the OSE default rather
+                // 0083: the sponsor keeps its slot on the OSE default rather
                 // than losing its rotation time to a broken host (#25 share).
                 if (img.getAttribute('src') !== SPONSOR_DEFAULT_LOGO) {
                   img.setAttribute('src', SPONSOR_DEFAULT_LOGO);
@@ -596,7 +596,7 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            // 0082: a sponsor logo that fails becomes the OSE default instead of
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
             // vanishing; only if the default itself fails is the image hidden.
             // The fallback is a fixed same-origin path, never read back from
             // the DOM — data-default-src only marks which images may fall back.

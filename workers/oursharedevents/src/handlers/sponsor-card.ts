@@ -1,5 +1,5 @@
 /**
- * GET /sponsors/:id — the public sponsor card (migration 0082).
+ * GET /sponsors/:id — the public sponsor card (migration 0083).
  *
  * Where a tap on a sponsor lands when it has no https website: its title,
  * location and contact, each optional and each entered by the sponsor to be
