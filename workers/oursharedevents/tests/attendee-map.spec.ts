@@ -127,8 +127,12 @@ describe('attendee map | shape', () => {
       [2, BEV7, 1],
     ]);
     expect(out.html.split('data-testid="amap-area"').length - 1).toBe(2);
-    expect(out.html).toContain('<li value="1" data-testid="amap-legend-area"><strong>4 events:</strong>');
-    expect(out.html).toContain('<li value="2" data-testid="amap-legend-area"><strong>1 event:</strong>');
+    expect(out.html).toContain(
+      '<li value="1" data-testid="amap-legend-area"><strong>4 events:</strong>'
+    );
+    expect(out.html).toContain(
+      '<li value="2" data-testid="amap-legend-area"><strong>1 event:</strong>'
+    );
     expect(out.html).toContain('href="/events/e20"');
     expect(out.html).toContain('aria-labelledby="amap-caption"');
     expect(out.html).toContain('never a street address');

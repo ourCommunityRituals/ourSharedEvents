@@ -1,0 +1,97 @@
+/**
+ * Seed a sponsor with one placement on a LIVE event, and mint that sponsor's
+ * home link — through the admin API only, the same doors an organizer uses:
+ *
+ *   POST /api/v2/admin/events                      → draft event
+ *   PUT  /api/v2/admin/events/:id {status:ready}   → the state machine's edges,
+ *   PUT  /api/v2/admin/events/:id {status:active}    never a jump (409 otherwise)
+ *   POST /api/v2/admin/sponsors {event_id,tier}    → sponsor + organizer placement
+ *   POST /api/v2/admin/sponsors/:id/home-link      → /sponsor?t=… (signed, 30d)
+ *
+ * No SQL, no fixtures: the local worker behind playwright.mobile.config.ts has
+ * migrations applied and nothing else, so anything a spec needs it creates here.
+ * Every name carries a run-unique suffix, so two seeds never collide and a
+ * spec can assert on its own sponsor by name.
+ */
+import type { APIRequestContext } from '@playwright/test';
+
+export interface SeededSponsorHome {
+  eventId: string;
+  eventTitle: string;
+  sponsorId: string;
+  sponsorName: string;
+  placementId: string;
+  /** Absolute URL as minted (origin of the request). */
+  url: string;
+  /** The `t` value alone. */
+  token: string;
+}
+
+async function ok<T>(
+  res: Awaited<ReturnType<APIRequestContext['post']>>,
+  what: string
+): Promise<T> {
+  if (!res.ok()) throw new Error(`${what} failed: ${res.status()} ${await res.text()}`);
+  return (await res.json()) as T;
+}
+
+export async function seedSponsorHome(
+  request: APIRequestContext,
+  bearer: string,
+  label = 'E2E'
+): Promise<SeededSponsorHome> {
+  const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const eventTitle = `${label} sponsor night ${suffix}`;
+  const sponsorName = `${label} Corner Bakery ${suffix}`;
+
+  // A start date a month out keeps the event in pre_event, so the page shows it
+  // as "Coming up" and the public page renders its sponsor strip.
+  const start = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+
+  const ev = await ok<{ id: string }>(
+    await request.post('/api/v2/admin/events', {
+      headers,
+      data: { title: eventTitle, start_date: start, location: 'Eagles Hall' },
+    }),
+    'create event'
+  );
+  for (const status of ['ready', 'active']) {
+    await ok(
+      await request.put(`/api/v2/admin/events/${encodeURIComponent(ev.id)}`, {
+        headers,
+        data: { status },
+      }),
+      `event -> ${status}`
+    );
+  }
+
+  const sp = await ok<{ id: string; placement_id: string | null }>(
+    await request.post('/api/v2/admin/sponsors', {
+      headers,
+      data: { name: sponsorName, tier: 'gold', event_id: ev.id },
+    }),
+    'create sponsor'
+  );
+  if (!sp.placement_id) throw new Error('create sponsor returned no placement_id');
+
+  const link = await ok<{ url: string }>(
+    await request.post(`/api/v2/admin/sponsors/${encodeURIComponent(sp.id)}/home-link`, {
+      headers,
+      data: {},
+    }),
+    'mint sponsor home link'
+  );
+  const token = new URL(link.url).searchParams.get('t') ?? '';
+  if (!token) throw new Error(`minted link carried no token: ${link.url}`);
+
+  return {
+    eventId: ev.id,
+    eventTitle,
+    sponsorId: sp.id,
+    sponsorName,
+    placementId: sp.placement_id,
+    url: link.url,
+    token,
+  };
+}

@@ -360,9 +360,16 @@ async function getInputLocators(page: Page): Promise<Locator[]> {
 
 // ─── The audit ────────────────────────────────────────────────────────────
 
+// Test titles show bearer-token params elided: `/sponsor?t=…` rather than a
+// run-specific token, so titles are stable across runs and a token never lands
+// in a report. Only `t` / `token` — `?type=register` etc. must stay distinct.
+// Navigation still uses the full path.
+const titlePath = (p: string) => p.replace(/([?&](?:t|token)=)[^&]+/g, '$1…');
+
 for (const surface of SURFACES) {
-  test.describe(`OSE-292 mobile workability — ${surface.name} (${surface.path})`, () => {
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | no horizontal scroll`, async ({
+  const shown = titlePath(surface.path);
+  test.describe(`OSE-292 mobile workability — ${surface.name} (${shown})`, () => {
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no horizontal scroll`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -378,7 +385,7 @@ for (const surface of SURFACES) {
       ).toBeLessThanOrEqual(clientWidth + 1);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | all touch targets ≥ 44×44 px`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all touch targets ≥ 44×44 px`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -408,7 +415,7 @@ for (const surface of SURFACES) {
       ).toEqual([]);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | all input font-size ≥ 16 px`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all input font-size ≥ 16 px`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -432,7 +439,7 @@ for (const surface of SURFACES) {
       ).toEqual([]);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | primary CTA above the fold`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | primary CTA above the fold`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -497,7 +504,7 @@ for (const surface of SURFACES) {
       ).toBeLessThan(MOBILE_VIEWPORT.height);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
