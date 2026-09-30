@@ -4132,11 +4132,17 @@
                 : acc === null || acc === undefined
                 ? '<span class="badge pending" data-testid="spon-status-' + esc(s.id) + '">Pending accept</span>'
                 : '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>';
+              // Consent decisions use the @ocr/ui .btn (44px min tap target).
+              const reqBtn = function (approve, label, cls, testid, aria) {
+                return '<button type="button" class="btn ' + cls + '" data-testid="' + testid + esc(s.id) + '" data-action="sponsor-request-answer" data-placement-id="' + escAttr(s.placement_id) + '" data-approve="' + approve + '" aria-label="' + aria + escAttr(s.name || s.id) + '">' + label + '</button>';
+              };
               const actions = requestWaiting && s.is_active
-                ? '<button class="spon-action-btn" data-testid="request-approve-' + esc(s.id) + '" data-action="sponsor-request-answer" data-placement-id="' + esc(s.placement_id) + '" data-approve="1" aria-label="Approve ' + escAttr(s.name || s.id) + ' as a sponsor">Approve</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="request-decline-' + esc(s.id) + '" data-action="sponsor-request-answer" data-placement-id="' + esc(s.placement_id) + '" data-approve="0" aria-label="Decline ' + escAttr(s.name || s.id) + '">Decline</button>'
+                ? reqBtn('1', 'Approve', 'btn-primary', 'request-approve-', 'Approve as a sponsor: ') + ' ' +
+                  reqBtn('0', 'Decline', 'btn-secondary', 'request-decline-', 'Decline sponsor request: ')
+                : isRequest && s.is_active
+                ? reqBtn('1', 'Approve after all', 'btn-secondary', 'request-approve-', 'Approve after declining: ')
                 : isRequest
-                ? '<span class="muted-sm">Declined request</span>'
+                ? '<span class="muted-sm">Sponsor deactivated</span>'
                 : s.is_active
                 ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
                   // Sponsor corner of the triangle: mint the sponsor's own page
@@ -4300,7 +4306,18 @@
         // Approve switches the placement on (both sides have now said yes);
         // Decline leaves it off. Then the sponsors table and checklist refresh.
         window._answerSponsorRequest = async function(placementId, approve, btn) {
-          if (btn) btn.disabled = true;
+          // Both buttons in the row go quiet while one answer is in flight, so a
+          // double tap cannot send Approve and Decline back to back.
+          const row = btn && btn.closest('tr');
+          const rowButtons = row ? row.querySelectorAll('[data-action="sponsor-request-answer"]') : [];
+          rowButtons.forEach(function (b) { b.disabled = true; });
+          const focusAfter = function () {
+            // Keyboard users keep their place: the next waiting request, else the table.
+            const next = document.querySelector('[data-action="sponsor-request-answer"][data-approve="1"]');
+            const table = document.querySelector('[data-testid="sponsors-table"]');
+            const target = next || table;
+            if (target) { if (!next) target.setAttribute('tabindex', '-1'); target.focus(); }
+          };
           try {
             const res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
               method: 'POST',
@@ -4309,12 +4326,20 @@
             });
             let data = null;
             try { data = await res.json(); } catch (e) { data = null; }
+            if (res.status === 409) {
+              // Already answered (another tab or organizer): show the real state.
+              if (typeof window._adminAnnounce === 'function') window._adminAnnounce('Someone already answered this request. Showing the current state.', 'info');
+              if (window._loadSponsors) await window._loadSponsors();
+              focusAfter();
+              return;
+            }
             if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ')');
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce(approve ? 'Approved. The sponsor is now on this event.' : 'Declined. The sponsor will see your answer on their page.', 'ok');
             if (window._loadSponsors) await window._loadSponsors();
             if (window.OSE_selection && window.OSE_selection.id && window.renderEventTimeline) window.renderEventTimeline(window.OSE_selection.id);
+            focusAfter();
           } catch (err) {
-            if (btn) btn.disabled = false;
+            rowButtons.forEach(function (b) { b.disabled = false; });
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not answer the request.', 'error');
           }
         };
@@ -6371,12 +6396,21 @@
         if (reset) L.cursor = null;
         try {
           var qs = [];
-          if (L.status && L.status !== 'all') qs.push('status=' + encodeURIComponent(L.status));
-          if (L.mine) qs.push('mine=1');
-          if (L.sort === 'upcoming') qs.push('sort=upcoming');
+          // The query this request is FOR. The render below labels rows with Q,
+          // never with the live L.* (which a tap mid-flight may already have
+          // changed), and a response whose query is no longer current is dropped
+          // — the queued reset in `finally` fetches the right one.
+          var Q = { status: L.status, mine: L.mine, sort: L.sort };
+          if (Q.status && Q.status !== 'all') qs.push('status=' + encodeURIComponent(Q.status));
+          if (Q.mine) qs.push('mine=1');
+          if (Q.sort === 'upcoming') qs.push('sort=upcoming');
           if (L.cursor) qs.push('cursor=' + encodeURIComponent(L.cursor));
           var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
           var data = await fetch(url).then(function (r) { return r.json(); });
+          if (L.pendingReset || Q.status !== L.status || Q.mine !== L.mine || Q.sort !== L.sort) {
+            L.pendingReset = true; // dropped, so the current query is always fetched next
+            return;
+          }
           if (!data.ok) throw new Error(data.error || data.code || 'list failed');
           if (reset) {
             L.items = [];
@@ -6398,11 +6432,11 @@
 
           if (!L.items.length) {
             var empty =
-              L.status === 'draft' ? 'No drafts — everything you started is live or archived.' :
-              L.status === 'active' ? 'Nothing is published right now. Pick a draft and press Publish.' :
-              L.status === 'archived' ? 'Nothing archived.' :
-              L.status === 'ready' ? 'Nothing waiting to be published.' :
-              L.mine ? 'You haven’t created any events yet.' : 'No events found.';
+              Q.status === 'draft' ? 'No drafts — everything you started is live or archived.' :
+              Q.status === 'active' ? 'Nothing is published right now. Pick a draft and press Publish.' :
+              Q.status === 'archived' ? 'Nothing archived.' :
+              Q.status === 'ready' ? 'Nothing waiting to be published.' :
+              Q.mine ? 'You haven’t created any events yet.' : 'No events found.';
             container.innerHTML = '<p class="loading" data-testid="events-empty">' + esc(empty) + '</p>';
             return;
           }
@@ -6459,9 +6493,9 @@
             })
             .join('');
           var countLine = L.items.length + (hasMore ? '+' : '') + ' event' + (L.items.length === 1 && !hasMore ? '' : 's') +
-            (L.status !== 'all' ? ' · ' + esc(window.friendlyStatus ? window.friendlyStatus(L.status) : L.status) : '') +
-            (L.mine ? ' · only mine' : '') +
-            (L.sort === 'upcoming' ? ' · soonest first' : '');
+            (Q.status !== 'all' ? ' · ' + esc(window.friendlyStatus ? window.friendlyStatus(Q.status) : Q.status) : '') +
+            (Q.mine ? ' · only mine' : '') +
+            (Q.sort === 'upcoming' ? ' · soonest first' : '');
           container.innerHTML =
           '<div class="events-toolbar">' +
             '<label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>' +
@@ -6509,7 +6543,7 @@
                 savedRow.scrollIntoView({ block: 'center' });
                 var ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
                 window.selectEvent(savedId, saved.name || 'Untitled', ph);
-              } else if (!L.cursor && L.status === 'all' && !L.mine) {
+              } else if (!L.cursor && Q.status === 'all' && !Q.mine) {
                 // The saved event no longer exists (deleted) — only conclude
                 // that on an unfiltered, fully-paged list.
                 sessionStorage.removeItem(window.SELECTED_EVENT_KEY);

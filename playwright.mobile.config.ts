@@ -116,7 +116,7 @@ export default defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|sponsor-home-flow)\.spec\.ts/,
+    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|sponsor-home-flow|landing-theme)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the

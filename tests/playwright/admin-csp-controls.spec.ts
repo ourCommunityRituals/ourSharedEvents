@@ -238,7 +238,69 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     const iNear = order.indexOf(near);
     const iFar = order.indexOf(far);
     expect(iNear, 'near event not in the list').toBeGreaterThan(-1);
+    // On CI's fresh D1 both are on page one; a locally reused worker may have
+    // pushed the 300-days-out event past the first page, which still proves it
+    // sorts after the near one.
+    if (process.env.CI) expect(iFar, 'far event not on page one').toBeGreaterThan(-1);
     if (iFar > -1) expect(iNear).toBeLessThan(iFar);
+    expect(csp).toEqual([]);
+  });
+
+  // CCR PR 700 (QA H2): a filter tapped while the list is still loading. The
+  // in-flight response must not render under the new label, and the final rows
+  // must be the new filter's. The unfiltered first page is held for 4 s and the
+  // chip is tapped immediately, so the tap lands mid-flight by construction
+  // (openAdvanced's 2 s settle wait is deliberately not used here).
+  test('a filter tapped mid-load: final rows and label match the filter', async ({ page }) => {
+    const csp = watchCsp(page);
+    const id = await seedEvent(page);
+    await waitForEventInAdminList(page, id);
+    // Hold only the unfiltered LIST request (not /admin/events/:id/... calls).
+    let holding = false;
+    await page.route(
+      (u) => u.pathname === '/api/v2/admin/events' && !u.searchParams.has('status'),
+      async (route) => {
+        holding = true;
+        await new Promise((r) => setTimeout(r, 4000));
+        holding = false;
+        await route.continue();
+      }
+    );
+    // Record every moment the list is labelled "Draft" while showing a non-draft
+    // row: the stale-render window this test exists to close, not just the end state.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __mislabelled: number };
+      w.__mislabelled = 0;
+      new MutationObserver(() => {
+        const count = document.querySelector('[data-testid="events-count"]');
+        if (!count || !/Draft/.test(count.textContent || '')) return;
+        const rows = document.querySelectorAll('[data-testid="events-tbody"] tr[data-status]');
+        rows.forEach((r) => {
+          if (r.getAttribute('data-status') !== 'draft') w.__mislabelled += 1;
+        });
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
+    await page.setViewportSize({ width: 393, height: 900 });
+    await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.click('[data-testid="admin-path-advanced"]');
+    await expect.poll(() => holding, { timeout: 5000 }).toBe(true);
+    await page.click('[data-testid="events-filter-draft"]');
+    expect(holding, 'the tap must land while the first page is held').toBe(true);
+    await expect(page.getByTestId('events-count')).toContainText('Draft', { timeout: 15000 });
+    // Wait until the held response has had its chance to (wrongly) render.
+    await page.waitForTimeout(4500);
+    const statuses = await page.$$eval(
+      '[data-testid="events-tbody"] tr[data-action="event-select"]',
+      (rows) => rows.map((r) => r.getAttribute('data-status'))
+    );
+    expect(statuses.length).toBeGreaterThan(0);
+    expect(new Set(statuses)).toEqual(new Set(['draft']));
+    await expect(page.getByTestId('events-count')).toContainText('Draft');
+    const mislabelled = await page.evaluate(
+      () => (window as unknown as { __mislabelled: number }).__mislabelled
+    );
+    expect(mislabelled, 'a non-draft row was shown under the "Draft" label').toBe(0);
     expect(csp).toEqual([]);
   });
 });
