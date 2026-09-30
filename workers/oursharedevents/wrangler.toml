@@ -115,7 +115,8 @@ GCP_PROJECT_NUMBER = "295230478705"
 WIF_POOL_ID        = "cf-workers-pool"
 WIF_PROVIDER_ID    = "cf-workers-oidc"
 WIF_ISSUER         = "http://localhost:8787"
-BIGQUERY_DATASET_ID = "oursharedevents_backup"
+# OSE-1416: only production may use oursharedevents_backup (getDatasetId fails closed).
+BIGQUERY_DATASET_ID = "oursharedevents_backup_dev"
 VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
 GCP_REGION         = "us-central1"
 
@@ -221,7 +222,8 @@ GCP_PROJECT_NUMBER = "295230478705"
 WIF_POOL_ID        = "cf-workers-pool"
 WIF_PROVIDER_ID    = "cf-workers-oidc-stg"
 WIF_ISSUER         = "https://stg.oursharedevents.com"
-BIGQUERY_DATASET_ID = "oursharedevents_backup"
+# OSE-1416: staging has its own dataset; it may never write production's.
+BIGQUERY_DATASET_ID = "oursharedevents_backup_stg"
 VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
 GCP_REGION         = "us-central1"
 
