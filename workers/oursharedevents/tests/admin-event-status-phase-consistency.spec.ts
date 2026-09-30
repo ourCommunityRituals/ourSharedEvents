@@ -218,7 +218,7 @@ describe('OSE-1360: every display is wired to the one view', () => {
 
   test('a status change re-renders the checklist and dashboard, not just the badge', () => {
     expect(ADMIN_HTML).toMatch(
-      /window\.renderEventStatus\(id\);\s*\/\/ OSE-1360[\s\S]{0,200}window\.renderEventTimeline\(id\);\s*if \(window\.EventDashboard\) window\.EventDashboard\.render\(\{ id: id \}\);/
+      /window\.renderEventStatus\(id\);\s*\/\/ OSE-1360[\s\S]{0,400}window\.renderEventTimeline\(id\);\s*if \(window\.EventDashboard\) window\.EventDashboard\.render\(\{ id: id \}\);\s*if \(window\.renderPreEventWindow\) window\.renderPreEventWindow\(id\);/
     );
   });
 
