@@ -500,7 +500,14 @@ describe('/poster | OSE-867 one data call', () => {
 
 describe('/poster | OSE-869 showQRSection — both branches', () => {
   test('off: no QR section at all (absent, not empty) and Print is ready', async () => {
-    const { doc } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: false });
+    const { doc, w } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: false });
+    // #699: Print also waits for sponsor logos to settle, and every sponsor now
+    // renders a logo <img> (the OSE default when it has none). JSDOM never
+    // loads images, so settle them here the way a browser would.
+    doc
+      .querySelectorAll('[data-testid="poster-sponsor-logo"]')
+      .forEach((img) => img.dispatchEvent(new (w as unknown as Window).Event('load')));
+    await flush();
     expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(0);
     expect(doc.querySelectorAll('.qr-img')).toHaveLength(0);
     expect(doc.querySelectorAll('.qr-loading')).toHaveLength(0);
