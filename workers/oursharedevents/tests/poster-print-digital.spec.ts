@@ -25,7 +25,9 @@ let html = '';
 beforeAll(async () => {
   const res = await SELF.fetch('https://t.test/poster');
   expect(res.status).toBe(200);
-  html = await res.text();
+  // Normalize line endings: a CRLF (Windows) checkout bundles the template
+  // with \r\n, and multi-line selector matches below are written with \n.
+  html = (await res.text()).replace(/\r\n/g, '\n');
 });
 
 function rule(selector: string): string {
