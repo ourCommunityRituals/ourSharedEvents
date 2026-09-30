@@ -119,6 +119,7 @@ export const NODE_SPECS = [
   // event shape; asserts the CSS-filter tags (window/type/product/modality) and
   // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
   'tests/landing-area.spec.ts',
+  'tests/attendee-map.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
