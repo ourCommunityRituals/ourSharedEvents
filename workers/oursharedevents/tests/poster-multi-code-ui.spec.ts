@@ -35,6 +35,8 @@ const code = (kind: string, c: string, extra: Record<string, unknown> = {}) => (
   code: c,
   url: `https://ose.test/s/${c}`,
   qr: QR,
+  live: true, // OSE-1420: the server marks a code live; the card shows a link only then
+  reasons: [],
   target_url: null,
   points_to: kind === 'public' ? `https://ose.test/events/${EVT}` : '',
   ...extra,

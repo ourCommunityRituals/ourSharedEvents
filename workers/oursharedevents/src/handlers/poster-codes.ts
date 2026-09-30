@@ -18,6 +18,7 @@ import { corsHeaders } from '../lib/cors';
 import { detectCurrentTier } from '../lib/feature-flags';
 import { generateQrCode } from '../lib/qr';
 import { ensureSlotShortlinks, type SlotShortlink } from '../lib/shortlinks';
+import { decideEventLive, type LedgerEventRow, type LedgerReason } from '../lib/code-ledger';
 import {
   POSTER_CODE_KINDS,
   internalTarget,
@@ -46,9 +47,32 @@ async function planLimit(env: PosterCodesEnv): Promise<number> {
   }
 }
 
-/** One code as the admin card shows it. */
-export function describeCode(origin: string, eventId: string, s: SlotShortlink) {
+/**
+ * One code as the admin card shows it. OSE-1420: `url` and `qr` are present
+ * ONLY when the event is live (active + listed); otherwise `reasons` says why,
+ * and the card prints that instead of a link that would 404.
+ */
+export function describeCode(
+  origin: string,
+  eventId: string,
+  s: SlotShortlink,
+  eventLive: { live: boolean; reasons: LedgerReason[] } = { live: true, reasons: [] }
+) {
   const spec = posterCodeKind(s.kind);
+  const base = {
+    kind: s.kind,
+    word: spec.word,
+    choice: spec.choice,
+    tone: spec.tone,
+    code: s.code,
+    target_url: spec.target === 'https' ? s.target_url : null,
+    // Where a scan lands, for the card to SHOW (text only).
+    points_to:
+      spec.target === 'https' ? (s.target_url ?? '') : internalTarget(origin, eventId, s.kind),
+    live: eventLive.live,
+    reasons: eventLive.reasons,
+  };
+  if (!eventLive.live) return base;
   const url = `${origin}/s/${s.code}`;
   let qr = '';
   try {
@@ -56,19 +80,7 @@ export function describeCode(origin: string, eventId: string, s: SlotShortlink) 
   } catch {
     qr = '';
   }
-  return {
-    kind: s.kind,
-    word: spec.word,
-    choice: spec.choice,
-    tone: spec.tone,
-    code: s.code,
-    url,
-    target_url: spec.target === 'https' ? s.target_url : null,
-    // Where a scan lands, for the card to SHOW (text only).
-    points_to:
-      spec.target === 'https' ? (s.target_url ?? '') : internalTarget(origin, eventId, s.kind),
-    qr,
-  };
+  return { ...base, url, qr };
 }
 
 async function currentCodes(env: PosterCodesEnv, eventId: string): Promise<SlotShortlink[]> {
@@ -88,11 +100,20 @@ async function currentCodes(env: PosterCodesEnv, eventId: string): Promise<SlotS
 
 async function respond(request: Request, env: PosterCodesEnv, eventId: string, status = 200) {
   const origin = new URL(request.url).origin;
-  const codes = (await currentCodes(env, eventId)).map((s) => describeCode(origin, eventId, s));
+  const evRow = await env
+    .DB!.prepare('SELECT id, status, is_published FROM events WHERE id = ?')
+    .bind(eventId)
+    .first<LedgerEventRow>();
+  const eventLive = decideEventLive(evRow ?? { id: eventId, status: 'draft', is_published: 0 });
+  const codes = (await currentCodes(env, eventId)).map((s) =>
+    describeCode(origin, eventId, s, eventLive)
+  );
   return json(
     request,
     {
       ok: true,
+      event_live: eventLive.live,
+      event_reasons: eventLive.reasons,
       limit: await planLimit(env),
       kinds: POSTER_CODE_KINDS.filter((k) => k.kind !== 'public').map((k) => ({
         kind: k.kind,

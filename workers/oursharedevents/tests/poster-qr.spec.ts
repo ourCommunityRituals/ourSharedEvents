@@ -148,7 +148,9 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(handler).toContain('listShortlinksForEvent');
     expect(handler).toContain('posterSlotLabel');
     expect(handler).toContain('/s/${slot.code}');
-    expect(handler).toContain('slots }');
+    // Every row carries the shared `slots` array (OSE-1420: alongside
+    // live / valid / reasons — a slot's url/qr is present only when live).
+    expect(handler).toMatch(/slots,\s*\n\s*valid,\s*\n\s*live,/);
     expect(handler).not.toContain('ensureSlotShortlinks');
   });
 

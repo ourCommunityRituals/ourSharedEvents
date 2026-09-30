@@ -364,17 +364,39 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
     expect(listRes.status).toBe(200);
     const body = (await listRes.json()) as {
       ok: boolean;
-      items: Array<{ qr_token: string; scan_url: string; qr_data_uri: string }>;
+      items: Array<{
+        qr_token: string;
+        is_active: number;
+        live: boolean;
+        scan_url: string | null;
+        qr_data_uri: string;
+        reasons: Array<{ code: string }>;
+      }>;
     };
     expect(body.items.length).toBeGreaterThan(0);
-    for (const item of body.items) {
+    // OSE-1420: the list is a truth surface. An ACTIVE row on this (active,
+    // listed) event carries the /q/<token> scan URL + an in-bundle PNG QR; the
+    // row test 6 soft-deleted carries neither — only the reason a scan of it
+    // would go to the home page. No row ever shows a link that goes nowhere.
+    const live = body.items.filter((i) => i.is_active === 1);
+    const off = body.items.filter((i) => i.is_active !== 1);
+    expect(live.length).toBeGreaterThan(0);
+    expect(off.length).toBeGreaterThan(0); // test 6's soft-delete
+    for (const item of live) {
+      expect(item.live).toBe(true);
       // scan_url encodes the /q/<qr_token> ingestion path — the URL the poster
       // QR must carry so a scan writes a `scans` row (handlers/qr-scan.ts).
       expect(item.scan_url).toContain('/q/' + item.qr_token);
       // QR generated in-bundle (native lib/qr) — a real PNG data-URI, never an
       // external QR service. This keeps the runtime LLM-free / dependency-free.
-      expect(item.qr_data_uri.startsWith('data:image/png;base64,')).toBe(true);
-      expect(item.qr_data_uri.length).toBeGreaterThan(100);
+      expect(item.qr_data_uri.startsWith('data:image/')).toBe(true);
+      expect(item.qr_data_uri).not.toContain('chart.googleapis.com');
+    }
+    for (const item of off) {
+      expect(item.live).toBe(false);
+      expect(item.scan_url).toBeNull();
+      expect(item.qr_data_uri).toBe('');
+      expect(item.reasons[0].code).toBe('DEPLOYMENT_INACTIVE');
     }
   });
 

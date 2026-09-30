@@ -1,21 +1,16 @@
 info:
-  name: OSE-1420 | go-live evidence 2 | PUT status ready
+  name: OSE-1420 | go-live evidence 6 | cleanup DELETE the synthetic event
   type: http
-  seq: 7
+  seq: 11
 
 http:
-  method: PUT
+  method: DELETE
   url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
     - name: CF-Access-Client-Secret
       value: "{{cfAccessClientSecret}}"
-    - name: Content-Type
-      value: application/json
-  body:
-    type: json
-    data: '{"status":"ready"}'
   auth: inherit
 
 runtime:
@@ -29,7 +24,9 @@ runtime:
           test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
           return;
         }
-        test('draft → ready (200)', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+        // Scan-guarded delete (OSE-982): zero scans landed, so it goes.
+        test('synthetic event removed', function () { expect([200, 204]).to.include(res.getStatus()); });
+        bru.setVar('goLiveEventId', '');
 settings:
   encodeUrl: true
   timeout: 0

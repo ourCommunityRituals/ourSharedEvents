@@ -1970,6 +1970,12 @@
       .wizard-skip-btn:hover {
         background: var(--surface-hover);
       }
+      /* OSE-1420 — code ledger: log lines + per-code reason text */
+      .code-log { list-style: none; margin: 0 0 0.75rem; padding: 0; grid-column: 1 / -1; }
+      .code-log-line { padding: 0.35rem 0.6rem; border-left: 3px solid var(--border); margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--text-muted); }
+      .code-log-line.level-warn { border-left-color: var(--warn, var(--text-muted)); color: var(--text); }
+      .code-reason { font-size: 0.9rem; color: var(--text-muted); }
+      .code-card[data-live="0"] { opacity: 0.85; }
       .wizard-link-card {
         background: var(--surface-hover);
         border: 1px solid var(--border);
@@ -2611,44 +2617,14 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. Heads up — they won't work yet; they start working when you publish in the next step.</p>
-          <div class="wizard-links-grid">
-            <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
-              <span class="wizard-card-title">Event page</span>
-              <span class="wizard-card-desc">Share this link — it's what your guests see on their phones.</span>
-              <span class="wizard-card-url" data-role="url"></span>
-              <span id="wizardQrPublic"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public">Copy link</button>
-            </div>
-            <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
-              <span class="wizard-card-title">Sign-up page</span>
-              <span class="wizard-card-desc">Put this code on flyers — a phone scan opens the sign-up.</span>
-              <span class="wizard-card-url" data-role="url"></span>
-              <span id="wizardQrSignup"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-signup">Copy link</button>
-            </div>
-            <div class="wizard-link-card" id="wizard-link-poster" data-testid="wizard-link-poster">
-              <span class="wizard-card-title">Printable poster</span>
-              <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
-              <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster">Copy link</button>
-            </div>
-            <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
-              <span class="wizard-card-title">Big-screen display</span>
-              <span class="wizard-card-desc">Open this on a TV at the venue for a live view.</span>
-              <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-display">Copy link</button>
-            </div>
-            <div class="wizard-link-card" id="wizard-link-report" data-testid="wizard-link-report">
-              <span class="wizard-card-title">Results report</span>
-              <span class="wizard-card-desc">After the event, make a share link from the dashboard's report tool.</span>
-              <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
-            </div>
-          </div>
+          <!-- OSE-1420: this step is a TRUTH surface. A link or QR appears here
+               only when the server says it works right now; until you publish,
+               each line says exactly why not (e.g. "not created"). The list is
+               the server's code ledger, never URLs built on the client. -->
+          <p class="wizard-step-help">Here's where your event's codes stand. A link or QR code shows here only when it works. Until you publish, each line says why it doesn't yet.</p>
+          <div class="wizard-links-grid" id="wizard-codes" data-testid="wizard-codes" aria-live="polite"></div>
         </div>
 
-        <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
         <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
           <div class="wizard-summary" id="wizardEventSummary"></div>
           <!-- Every event is created as a DRAFT (handleCreateEvent). The public
@@ -2682,6 +2658,7 @@
               Undo, back to draft
             </button>
             <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
+          <div class="wizard-links-grid" id="wizard-live-codes" data-testid="wizard-live-codes" aria-live="polite" hidden></div>
           </div>
           <p class="wizard-step-help">Once it's live:</p>
           <ul class="wizard-checklist">
@@ -2950,53 +2927,93 @@
             }
           }
 
-          function setCardUrl(cardId, url) {
-            var card = document.getElementById(cardId);
-            if (!card) return;
-            var slot = card.querySelector('[data-role="url"]');
-            if (slot) slot.textContent = url; // textContent — never innerHTML (#1)
-          }
-
-          // QR data URIs come from the existing poster-bundle endpoint:
-          // uecQr = SVG for the event public page, qr.register = PNG for the
-          // built-in sign-up form. Non-critical — links work without them.
-          async function loadLinks() {
-            var origin = window.location.origin;
-            var id = encodeURIComponent(wiz.createdId);
-            setCardUrl('wizard-link-public', origin + '/events/' + id);
-            setCardUrl('wizard-link-poster', origin + '/poster');
-            setCardUrl('wizard-link-display', origin + '/display');
-            setCardUrl('wizard-link-report', origin + '/admin');
-            var signupCard = document.getElementById('wizard-link-signup');
-            if (signupCard) signupCard.hidden = wiz.signup !== 'create';
+          // OSE-1420 — the code ledger renderer, shared by the wizard (steps 4
+          // and 5) and re-usable by any card. Renders the server's log lines,
+          // then one card per code. A URL / QR / Copy appears ONLY when the
+          // server marked the code live; otherwise the card prints the reasons.
+          // Everything is textContent — never innerHTML of server strings (#1).
+          window.loadCodeLedger = async function (eventId) {
             try {
-              var res = await fetch('/api/v2/events/' + id + '/poster-bundle');
+              var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/code-ledger');
               var data = await res.json();
-              if (!data.ok) return;
-              if (data.uecQr) {
-                var img = document.createElement('img');
-                img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(data.uecQr);
-                img.alt = 'Event page code — a phone scan opens your event page';
-                img.width = 110;
-                img.height = 110;
-                var slot = document.getElementById('wizardQrPublic');
-                if (slot) slot.replaceChildren(img);
-              }
-              if (wiz.signup === 'create' && data.qr && data.qr.register) {
-                var img2 = document.createElement('img');
-                img2.src = data.qr.register; // PNG data URI from the worker
-                img2.alt = 'Sign-up code — a phone scan opens the sign-up page';
-                img2.width = 110;
-                img2.height = 110;
-                var slot2 = document.getElementById('wizardQrSignup');
-                if (slot2) slot2.replaceChildren(img2);
-                if (data.links && data.links.register) {
-                  setCardUrl('wizard-link-signup', data.links.register);
-                }
-              }
-            } catch (e) {
-              /* QR loading is non-critical — the links above still work */
+              return (res.ok && data && data.ok) ? data : null;
+            } catch (e) { return null; }
+          };
+          window.renderCodeLedger = function (container, ledger) {
+            if (!container) return;
+            container.textContent = '';
+            if (!ledger) {
+              var err = document.createElement('p');
+              err.className = 'create-msg error';
+              err.setAttribute('data-testid', 'code-ledger-error');
+              err.textContent = 'Could not read this event’s codes. Reload and try again.';
+              container.appendChild(err);
+              return;
             }
+            var log = document.createElement('ul');
+            log.className = 'code-log';
+            log.setAttribute('data-testid', 'code-log');
+            (ledger.log || []).forEach(function (line) {
+              var li = document.createElement('li');
+              li.className = 'code-log-line level-' + (line.level === 'warn' ? 'warn' : 'info');
+              li.setAttribute('data-testid', 'code-log-line');
+              li.setAttribute('data-code', String(line.code || ''));
+              li.textContent = String(line.message || '');
+              log.appendChild(li);
+            });
+            container.appendChild(log);
+            (ledger.codes || []).forEach(function (c) {
+              var card = document.createElement('div');
+              card.className = 'wizard-link-card code-card';
+              card.setAttribute('data-testid', 'code-card');
+              card.setAttribute('data-kind', String(c.kind || ''));
+              card.setAttribute('data-live', c.live === true ? '1' : '0');
+              var title = document.createElement('span');
+              title.className = 'wizard-card-title';
+              title.textContent = String(c.label || 'Code');
+              card.appendChild(title);
+              var isDataImage = typeof c.qr === 'string' && c.qr.indexOf('data:image/') === 0;
+              if (c.live === true && typeof c.url === 'string' && c.url) {
+                var url = document.createElement('span');
+                url.className = 'wizard-card-url';
+                url.setAttribute('data-testid', 'code-url');
+                url.textContent = c.url;
+                card.appendChild(url);
+                if (isDataImage) {
+                  var img = document.createElement('img');
+                  img.src = c.qr;
+                  img.alt = String(c.label || 'Code') + ' — a phone scan opens it';
+                  img.width = 110; img.height = 110;
+                  img.setAttribute('data-testid', 'code-qr');
+                  card.appendChild(img);
+                }
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'wizard-copy-btn';
+                btn.setAttribute('data-testid', 'code-copy');
+                btn.textContent = 'Copy link';
+                btn.addEventListener('click', function () {
+                  if (!navigator.clipboard) return;
+                  navigator.clipboard.writeText(c.url).then(function () {
+                    btn.textContent = 'Copied!';
+                    setTimeout(function () { btn.textContent = 'Copy link'; }, 1500);
+                  }).catch(function () {});
+                });
+                card.appendChild(btn);
+              } else {
+                var why = document.createElement('span');
+                why.className = 'code-reason';
+                why.setAttribute('data-testid', 'code-reason');
+                why.textContent = (c.reasons || []).map(function (r) { return String(r.message || ''); }).join(' ') || 'Not live.';
+                card.appendChild(why);
+              }
+              container.appendChild(card);
+            });
+          };
+          async function loadWizardCodes(targetId) {
+            var container = document.getElementById(targetId || 'wizard-codes');
+            if (!container || !wiz.createdId) return;
+            window.renderCodeLedger(container, await window.loadCodeLedger(wiz.createdId));
           }
 
           // Step 3 → 4 is the moment of truth: one POST to the same endpoint
@@ -3134,7 +3151,7 @@
                 // land on a create step for an event that already exists.
                 replaceWizardStep(4);
                 updateUI();
-                loadLinks();
+                loadWizardCodes();
               } else {
                 // Always name the status. requireAdmin's 401 envelope has no
                 // `error` field — only `code` — so without this an auth failure
@@ -3405,7 +3422,11 @@
               syncWizardSummary();
               btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. Your codes are live \u2014 they are listed below.'; msgEl.className = 'create-msg success'; }
+              // OSE-1420: step 4 cannot be revisited, so the live codes render
+              // HERE, from the server's ledger, the moment they are true.
+              var liveBox = document.getElementById('wizard-live-codes');
+              if (liveBox) { liveBox.hidden = false; loadWizardCodes('wizard-live-codes'); }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
@@ -3428,6 +3449,9 @@
               wiz.status = 'draft';
               syncWizardSummary();
               undo.hidden = true;
+              var liveBox2 = document.getElementById('wizard-live-codes');
+              if (liveBox2) { liveBox2.hidden = true; liveBox2.textContent = ''; }
+              loadWizardCodes();
               btn.disabled = false;
               btn.textContent = 'Publish now';
               btn.classList.remove('is-live');
@@ -5048,26 +5072,44 @@
           if (pd.location_desc) at('pd-location').textContent = text(pd.location_desc);
           else at('pd-location').remove();
 
-          // 1. The short link + Copy lead the card.
-          at('pd-short-link').textContent = scanUrl;
+          // OSE-1420: the card is a truth surface. The server sends scan_url /
+          // qr_data_uri ONLY when this code is live (event active + listed, and
+          // this deployment active); otherwise it sends `reasons`, printed here
+          // in place of a link that would go nowhere. Fail-closed: no `live`
+          // flag reads as not live.
+          const live = pd.live === true && !!scanUrl;
+          const reasons = (Array.isArray(pd.reasons) ? pd.reasons : []).map((r) => text(r && r.message)).filter(Boolean);
+          card.setAttribute('data-live', live ? '1' : '0');
           const copy = at('pd-copy-link');
-          copy.setAttribute('aria-label', 'Copy short link for ' + label);
-          copy.addEventListener('click', () => {
-            if (!navigator.clipboard) return;
-            navigator.clipboard.writeText(scanUrl).then(() => {
-              copy.textContent = 'Copied!';
-              setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
-            }).catch(() => {});
-          });
-          // 2. Then the QR — or the raw token when the server had no image.
-          if (qr) {
-            const img = at('pd-qr-img');
-            img.src = qr;
-            img.alt = 'Scan QR for ' + label;
-            at('pd-qr-fallback').remove();
+          if (live) {
+            // 1. The short link + Copy lead the card.
+            at('pd-short-link').textContent = scanUrl;
+            copy.setAttribute('aria-label', 'Copy short link for ' + label);
+            copy.addEventListener('click', () => {
+              if (!navigator.clipboard) return;
+              navigator.clipboard.writeText(scanUrl).then(() => {
+                copy.textContent = 'Copied!';
+                setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+              }).catch(() => {});
+            });
+            // 2. Then the QR — or the raw token when the server had no image.
+            if (qr) {
+              const img = at('pd-qr-img');
+              img.src = qr;
+              img.alt = 'Scan QR for ' + label;
+              at('pd-qr-fallback').remove();
+            } else {
+              at('pd-qr-img').remove();
+              at('pd-qr-fallback').textContent = text(pd.qr_token);
+            }
           } else {
+            const why = at('pd-short-link');
+            why.textContent = reasons.join(' ') || 'Not live.';
+            why.setAttribute('data-testid', 'pd-reason');
+            copy.remove();
             at('pd-qr-img').remove();
-            at('pd-qr-fallback').textContent = text(pd.qr_token);
+            at('pd-qr-fallback').remove();
+            card.querySelectorAll('[data-action="pd-download"], [data-action="pd-print"]').forEach((b) => b.remove());
           }
           // 3. Then which target the code points at.
           at('pd-target-label').textContent = text(pd.target_label);
@@ -5083,14 +5125,18 @@
           slots.forEach((s) => {
             const slot = fromTemplate(PD_SLOT);
             const name = text(s.label || s.kind) || 'Short link';
-            const sq = dataImage(s.qr);
+            const slotLive = s.live === true && !!text(s.url);
+            const sq = slotLive ? dataImage(s.qr) : '';
             const img = slot.querySelector('img');
             if (sq) {
               img.src = sq;
               img.alt = name + ' short link QR';
             } else img.remove();
+            slot.setAttribute('data-live', slotLive ? '1' : '0');
             slot.querySelector('.pd-card-title').textContent = name;
-            slot.querySelector('code').textContent = text(s.url);
+            slot.querySelector('code').textContent = slotLive
+              ? text(s.url)
+              : ((Array.isArray(s.reasons) ? s.reasons : []).map((r) => text(r && r.message)).filter(Boolean).join(' ') || 'Not live.');
             slotList.appendChild(slot);
           });
 
@@ -5107,8 +5153,20 @@
             const data = await res.json();
             setAddressHint(data && data.ok ? data.event_address : null);
             const items = (data.ok && data.items) ? data.items : [];
+            // OSE-1420: when the event itself is not live, say so once at the
+            // top of the card — every deployment below repeats the reason.
+            const eventNote = (data.ok && data.event_live === false && Array.isArray(data.event_reasons))
+              ? data.event_reasons.map((r) => text(r && r.message)).filter(Boolean).join(' ')
+              : '';
             if (!items.length) {
               panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
+              if (eventNote) {
+                const note0 = document.createElement('p');
+                note0.className = 'create-msg';
+                note0.setAttribute('data-testid', 'pd-event-note');
+                note0.textContent = eventNote;
+                panel.insertBefore(note0, panel.firstChild);
+              }
               return;
             }
             window._pdItems = {};
@@ -5134,6 +5192,13 @@
                 '</div>'
               : '';
             panel.textContent = '';
+            if (eventNote) {
+              const note = document.createElement('p');
+              note.className = 'create-msg';
+              note.setAttribute('data-testid', 'pd-event-note');
+              note.textContent = eventNote;
+              panel.appendChild(note);
+            }
             panel.appendChild(grid);
             panel.insertAdjacentHTML('beforeend', nav);
             window._pdMobileIndex = 0;
@@ -5390,6 +5455,9 @@
         const rowsFrom = (codes) => (Array.isArray(codes) ? codes : []).map((c) => ({
           kind: text(c.kind), word: text(c.word), code: text(c.code), qr: text(c.qr),
           target_url: text(c.target_url), points_to: text(c.points_to),
+          // OSE-1420: the server says whether this code is live; absent = not.
+          live: c.live === true,
+          reasons: (Array.isArray(c.reasons) ? c.reasons : []).map((r) => text(r && r.message)).filter(Boolean),
         }));
 
         function renderRow(row, i) {
@@ -5405,11 +5473,19 @@
           at('poster-code-points-to').textContent = row.points_to ? 'Opens: ' + row.points_to : '';
 
           // 1. The short link + Copy lead; 2. then the QR (a picture of that link).
-          const link = shortLink(row.code);
+          // OSE-1420: a saved code that is NOT live shows its reason instead of
+          // a link that would 404 — the card is a truth surface.
+          const link = row.live ? shortLink(row.code) : '';
+          li.setAttribute('data-live', link ? '1' : '0');
           const copy = at('poster-code-copy');
           if (link) {
             at('poster-code-link').textContent = link;
             copy.setAttribute('aria-label', 'Copy the ' + word + ' short link');
+          } else if (row.code && !row.live) {
+            const why = at('poster-code-link');
+            why.textContent = row.reasons.join(' ') || 'Not live.';
+            why.setAttribute('data-testid', 'poster-code-reason');
+            copy.remove();
           } else {
             at('poster-code-link').textContent = 'Short link appears after you save.';
             copy.remove();
@@ -5692,16 +5768,27 @@
       }
       // Upgrade all four surface cards to the selected event's scoped surface.
       window.scopeSurfaceCards = function (eventId, eventName) {
+        // OSE-1420: poster / display / public are ACTIVE-only surfaces (the
+        // poster bundle 403s and the event page 404s otherwise). A scoped URL
+        // is shown only when the selected event is live; otherwise the card
+        // says so instead of handing out a link that goes nowhere.
+        var sel = (window._oseList && window._oseList.byId) ? window._oseList.byId[String(eventId)] : null;
+        var live = !sel || (sel.status === 'active' && Number(sel.is_published === undefined ? 1 : sel.is_published) === 1);
         document.querySelectorAll('.surface-card').forEach(function (card) {
           const url = scopedSurfaceUrl(card.dataset.surface, eventId);
           if (!url) return;
           const a = card.querySelector('a');
           const copyBtn = card.querySelector('.copy-btn');
           const hint = card.querySelector('.qr-hint');
-          if (a) a.setAttribute('href', url);
-          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
-          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
+          const gated = card.dataset.surface !== 'report' && !live;
+          if (a) {
+            if (gated) { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); }
+            else { a.setAttribute('href', url); a.removeAttribute('aria-disabled'); }
+          }
+          if (copyBtn) { copyBtn.dataset.copyPath = gated ? '' : url; copyBtn.disabled = gated; } // copyUrl prefers this
+          if (hint) hint.textContent = gated ? 'Switches on when you publish.' : 'QR-ready: ' + url; // textContent — safe
           card.setAttribute('data-scoped', '1');
+          card.setAttribute('data-live', gated ? '0' : '1');
           card.setAttribute('data-event-id', eventId);
         });
         const wrap = document.querySelector('.surface-cards');
@@ -6651,7 +6738,7 @@
         var stats = null, posters = null, sponsors = null;
         await Promise.all([
           fetch('/api/v2/admin/events/' + eid + '/stats').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) stats = d.stats; }).catch(function () {}),
-          fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).length; }).catch(function () {}),
+          fetch('/api/v2/admin/events/' + eid + '/poster-deployments').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) posters = (d.items || d.deployments || []).filter(function (i) { return !i || i.valid !== false; }).length; }).catch(function () {}),
           fetch('/api/v2/admin/sponsors?eventId=' + eid).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) sponsors = (d.items || []).filter(function (s) { return s.is_active && Number(s.sponsor_accepted) === 1; }).length; }).catch(function () {}),
         ]);
         if (seq !== window._oseTimelineSeq) return; // a newer selection won
@@ -6767,6 +6854,11 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
+          // OSE-1420: every code card is a truth surface — re-read them from the
+          // server so links/QRs appear on publish and disappear on unpublish.
+          if (window.loadPosterDeployments) window.loadPosterDeployments(id);
+          if (window.loadPosterCodes) window.loadPosterCodes(id);
+          if (window.scopeSurfaceCards) window.scopeSurfaceCards(id, e.name || e.title);
           var nice = { active: 'Published — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');

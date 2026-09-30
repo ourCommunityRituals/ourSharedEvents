@@ -28,6 +28,7 @@ import { listShortlinksForEvent } from '../lib/shortlinks';
 import { listSavedPosterCodes } from '../lib/poster-codes';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
+import { decideEventLive, type LedgerEventRow } from '../lib/code-ledger';
 
 /** Longest address kept (OSE-1357). A geocoder's formatted_address is well under. */
 const ADDRESS_MAX = 300;
@@ -243,21 +244,58 @@ export async function handleAdminListPosterDeployments(
   // failure (e.g. token too long) degrades to empty string rather than 500-ing
   // the whole list — the admin card falls back to showing the token text.
   const origin = new URL(request.url).origin;
+  // OSE-1420: the card is a truth surface. A scan URL / QR / slot link is
+  // emitted ONLY when the code is live (event active + listed, deployment
+  // active); otherwise the row carries `reasons` and the card prints them.
+  // Same decision as GET /code-ledger, so the two can never disagree.
+  const evRow = await env.DB.prepare('SELECT id, status, is_published FROM events WHERE id = ?')
+    .bind(eventId)
+    .first<LedgerEventRow>();
+  const eventLive = decideEventLive(evRow ?? { id: eventId, status: 'draft', is_published: 0 });
   // OSE-1357 p2: the codes the organizer saved for the poster, in order; until
   // any are saved, every existing short link (nothing is minted here).
   const slotRows =
     (await listSavedPosterCodes(env, eventId)) ?? (await listShortlinksForEvent(env, eventId));
   const slots = slotRows.map((slot) => {
+    const base = { kind: slot.kind, label: posterSlotLabel(slot.kind), code: slot.code };
+    if (!eventLive.live) return { ...base, live: false, reasons: eventLive.reasons };
     const url = `${origin}/s/${slot.code}`;
-    return {
-      kind: slot.kind,
-      label: posterSlotLabel(slot.kind),
-      code: slot.code,
-      url,
-      qr: generateQrCode(url, { errorCorrection: 'M', scale: 4 }),
-    };
+    let qr = '';
+    try {
+      qr = generateQrCode(url, { errorCorrection: 'M', scale: 4 });
+    } catch {
+      qr = '';
+    }
+    return { ...base, live: true, reasons: [], url, qr };
   });
   const items = (rows.results ?? []).map((row) => {
+    const valid = row.is_active === 1;
+    const live = valid && eventLive.live;
+    const reasons = !valid
+      ? [
+          {
+            level: 'info',
+            code: 'DEPLOYMENT_INACTIVE',
+            message: 'Switched off — a scan of this poster goes to the home page, not the event.',
+          },
+        ]
+      : eventLive.reasons;
+    // OSE-1357: which target this poster's code points at, from the same
+    // function /q/ redirects with — the card shows it, never re-derives it.
+    const target_url = qrScanTarget(origin, eventId, row.id);
+    if (!live) {
+      return {
+        ...row,
+        scan_url: null,
+        qr_data_uri: '',
+        target_url,
+        target_label: 'Event page',
+        slots,
+        valid,
+        live,
+        reasons,
+      };
+    }
     const scan_url = scanUrlFor(origin, row.qr_token);
     let qr_data_uri = '';
     try {
@@ -265,10 +303,17 @@ export async function handleAdminListPosterDeployments(
     } catch {
       qr_data_uri = '';
     }
-    // OSE-1357: which target this poster's code points at, from the same
-    // function /q/ redirects with — the card shows it, never re-derives it.
-    const target_url = qrScanTarget(origin, eventId, row.id);
-    return { ...row, scan_url, qr_data_uri, target_url, target_label: 'Event page', slots };
+    return {
+      ...row,
+      scan_url,
+      qr_data_uri,
+      target_url,
+      target_label: 'Event page',
+      slots,
+      valid,
+      live,
+      reasons: [],
+    };
   });
 
   // OSE-1357: the event's own venue/address seeds the card's address
@@ -279,7 +324,13 @@ export async function handleAdminListPosterDeployments(
   const event_address = eventRow?.where_address || eventRow?.location || null;
 
   return Response.json(
-    { ok: true, items, event_address },
+    {
+      ok: true,
+      items,
+      event_address,
+      event_live: eventLive.live,
+      event_reasons: eventLive.reasons,
+    },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }

@@ -1,0 +1,39 @@
+info:
+  name: OSE-1420 | go-live evidence 5 | code ledger while LIVE carries the url and qr
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}/code-ledger"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        // Contract (OSE-1420): once published, the same ledger marks the OSE-240
+        // short link live and hands the card a url + a QR picture of it.
+        const json = res.getBody();
+        test('200 ok', function () { expect(res.getStatus()).to.eql(200); expect(json.ok).to.eql(true); });
+        test('event is live', function () { expect(json.event_live).to.eql(true); });
+        test('log opens with EVENT_LIVE', function () { expect(json.log[0].code).to.eql('EVENT_LIVE'); });
+        const link = json.codes.find(function (c) { return c.kind === 'shortlink'; });
+        test('the short link is live with a url', function () { expect(link).to.be.an('object'); expect(link.live).to.eql(true); expect(link.url).to.match(/\/s\/[A-Za-z0-9]{6}$/); });
+        test('and a QR picture of it', function () { expect(link.qr).to.match(/^data:image\//); });
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

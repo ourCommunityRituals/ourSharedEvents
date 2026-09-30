@@ -81,6 +81,10 @@ const ITEM = {
   address: '12 Red Arrow Hwy, Sawyer, MI 49125, USA',
   h3_res9: '89266454447ffff',
   is_active: 1,
+  // OSE-1420: the server marks a row live; the card shows a link only then.
+  live: true,
+  valid: true,
+  reasons: [],
   scan_url: 'https://oursharedevents.com/q/qrt_abc',
   qr_data_uri: 'data:image/png;base64,iVBORw0KGgo=',
   target_url: 'https://oursharedevents.com/events/evt_x?type=register&deployment=pd_1',

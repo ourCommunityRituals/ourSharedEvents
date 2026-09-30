@@ -1,11 +1,11 @@
 info:
-  name: OSE-1420 | go-live evidence 4 | cleanup DELETE the synthetic event
+  name: OSE-1420 | code ledger | 404 on unknown event
   type: http
-  seq: 9
+  seq: 12
 
 http:
-  method: DELETE
-  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}"
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/evt_does_not_exist/code-ledger"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -17,16 +17,13 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // Admin routes sit behind CF Access on staging; a non-JSON reply means the
-        // edge answered, not the worker. Mirrors folder 13's tolerance.
         const ct = (res.getHeader('Content-Type') || '');
         if (!ct.includes('application/json')) {
           test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
           return;
         }
-        // Scan-guarded delete (OSE-982): zero scans landed, so it goes.
-        test('synthetic event removed', function () { expect([200, 204]).to.include(res.getStatus()); });
-        bru.setVar('goLiveEventId', '');
+        test('404 on unknown event', function () { expect(res.getStatus()).to.eql(404); });
+        test('code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });
 settings:
   encodeUrl: true
   timeout: 0

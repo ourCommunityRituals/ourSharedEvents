@@ -1,0 +1,38 @@
+info:
+  name: OSE-1420 | go-live evidence 3 | PUT status ready
+  type: http
+  seq: 8
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"status":"ready"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Admin routes sit behind CF Access on staging; a non-JSON reply means the
+        // edge answered, not the worker. Mirrors folder 13's tolerance.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        test('draft → ready (200)', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

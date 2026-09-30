@@ -9,6 +9,7 @@
 // exists yet the card points at the poster page, which mints on open.
 
 import { generateQrCode } from '../lib/qr';
+import { decideEventLive } from '../lib/code-ledger';
 import { listShortlinksForEvent } from '../lib/shortlinks';
 import { readPreEventActivity, localDay } from '../lib/pre-event-activity';
 
@@ -19,6 +20,7 @@ export interface PreEventActivityEnv {
 interface EventRow {
   id: string;
   status: string | null;
+  is_published: number | null;
   start_date: string | null;
   starts_at: string | null;
   timezone: string | null;
@@ -45,7 +47,7 @@ export async function handleAdminPreEventActivity(
   let row: EventRow | null = null;
   try {
     row = await env.DB.prepare(
-      'SELECT id, status, start_date, starts_at, timezone FROM events WHERE id = ? LIMIT 1'
+      'SELECT id, status, is_published, start_date, starts_at, timezone FROM events WHERE id = ? LIMIT 1'
     )
       .bind(eventId)
       .first<EventRow>();
@@ -64,9 +66,16 @@ export async function handleAdminPreEventActivity(
 
   // The event's public short link, if one exists — the "link first" of the
   // card; its QR is the same link drawn as a picture.
+  // OSE-1420: the link is emitted ONLY when the event is live (active +
+  // listed) — the card already hid it client-side; now the server agrees.
+  const eventLive = decideEventLive({
+    id: row.id,
+    status: row.status ?? 'draft',
+    is_published: row.is_published ?? 0,
+  });
   let link: { url: string; code: string; qr: string } | null = null;
   try {
-    const slots = await listShortlinksForEvent(env, eventId);
+    const slots = eventLive.live ? await listShortlinksForEvent(env, eventId) : [];
     const pub = slots.find((s) => s.kind === 'public') ?? slots[0];
     if (pub) {
       const url = `${new URL(request.url).origin}/s/${pub.code}`;
@@ -85,6 +94,8 @@ export async function handleAdminPreEventActivity(
   return Response.json({
     ok: true,
     event: { id: row.id, status: row.status ?? 'draft', days_to_go: daysToGo(row, now) },
+    event_live: eventLive.live,
+    event_reasons: eventLive.reasons,
     activity,
     link,
     poster_url: `/poster?event=${encodeURIComponent(eventId)}`,

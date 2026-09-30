@@ -1,7 +1,7 @@
 info:
-  name: OSE-1420 | go-live evidence 3 | verify-qr 200 with an evidence receipt
+  name: OSE-1420 | go-live evidence 4 | verify-qr 200 with an evidence receipt
   type: http
-  seq: 8
+  seq: 9
 
 http:
   method: POST

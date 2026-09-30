@@ -1,0 +1,40 @@
+info:
+  name: OSE-1420 | go-live evidence 2 | code ledger while DRAFT shows reasons, never a url
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEventId}}/code-ledger"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function () { expect([200, 302, 403]).to.include(res.getStatus()); });
+          return;
+        }
+        // Contract (OSE-1420): the admin cards are a truth surface. While the
+        // event is a draft, NO code carries a url or qr — each carries the reason.
+        const json = res.getBody();
+        test('200 ok', function () { expect(res.getStatus()).to.eql(200); expect(json.ok).to.eql(true); });
+        test('event is not live', function () { expect(json.event_live).to.eql(false); });
+        test('log opens with EVENT_DRAFT', function () { expect(json.log[0].code).to.eql('EVENT_DRAFT'); });
+        test('no code carries a url or qr', function () {
+          json.codes.forEach(function (c) { expect(c.live).to.eql(false); expect(c).to.not.have.property('url'); expect(c).to.not.have.property('qr'); expect(c.reasons.length).to.be.above(0); });
+        });
+        test('the response never contains an /s/ or /q/ link', function () { expect(JSON.stringify(json)).to.not.match(/\/s\/[A-Za-z0-9]{6}|\/q\/qrt_/); });
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
