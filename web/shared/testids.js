@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-30 — 492 ids.
+ * Generated 2026-09-30 — 498 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 330 ids
+    // admin.html — 336 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -297,11 +297,17 @@
       'spon-covenant-note',
       'spon-edit-id',
       'spon-event',
+      'spon-event-hint',
       'spon-is-local-pill',
       'spon-logo',
+      'spon-logo-hint',
       'spon-name',
+      'spon-sidebar-logo',
+      'spon-sidebar-logo-hint',
       'spon-tier',
+      'spon-tier-hint',
       'spon-website',
+      'spon-website-hint',
       'sponsor-cancel',
       'sponsor-create-form',
       'sponsor-edit-ctx',

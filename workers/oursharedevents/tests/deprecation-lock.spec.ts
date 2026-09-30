@@ -31,6 +31,10 @@
  *     recreate it without the plaintext `email` column (SQLite cannot drop a UNIQUE column in
  *     place), replacing it with email_encrypted (AES-GCM) + email_hash (peppered, UNIQUE/dedup).
  *     0 rows in every environment (pre-deploy), so no data loss.
+ *   0081_sponsor_tier_and_compact_logo.sql — OSE-1316/1317: DROP TABLE sponsor_asset as the last
+ *     step of a table REBUILD that widens its format CHECK with 'logo_compact' (the sidebar logo —
+ *     SQLite cannot alter a CHECK in place). Every row is copied into sponsor_asset_new first, then
+ *     the new table is renamed back, so no data is lost. Nothing references sponsor_asset by FK.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -56,6 +60,7 @@ const APPROVED_DROP_MIGRATIONS = [
   '0062_split_scan_path', // OSE-798 A1: DROP TABLE scans (0 rows) — doctrine rule 6 uncoupling
   '0067_split_sponsor_placement', // OSE-799 A2: DROP TABLE sponsors + recreate sponsor_event_types/areas/impressions (FK repoint to sponsor_business); all 0 rows — doctrine rule 7
   '0071_subscribers_encrypt_email', // A-5: DROP TABLE subscribers to drop plaintext email (0 rows) — encrypt+hash rebuild
+  '0081_sponsor_tier_and_compact_logo', // OSE-1316/1317: sponsor_asset rebuild (rows copied first) to widen the format CHECK with logo_compact
 ] as const;
 
 function normalizePath(p: string): string {
@@ -147,7 +152,7 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       date: '2026-08-03',
     };
     console.log(`[OSE-584-EVIDENCE] ${JSON.stringify(report)}`);
-    expect(report.approved_drops).toBe(7);
+    expect(report.approved_drops).toBe(8);
   });
 });
 

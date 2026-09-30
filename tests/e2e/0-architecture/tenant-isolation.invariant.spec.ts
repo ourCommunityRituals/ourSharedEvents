@@ -196,8 +196,10 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
-  // sponsor-resolver.ts above this query.
-  'lib/sponsor-resolver.ts:228':
+  // sponsor-resolver.ts above this query. 228→252 for OSE-1316/1317 (the
+  // publicWebsiteUrl helper + sidebar_logo_url above it; the subselect now sits
+  // inside COALESCE(..., sb.tier) so a pool sponsor with no placement keeps its tier).
+  'lib/sponsor-resolver.ts:252':
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
     '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
     'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +

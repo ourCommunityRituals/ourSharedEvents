@@ -84,7 +84,8 @@ async function createSponsor(body: Record<string, unknown>): Promise<Response> {
   return SELF.fetch('https://t.test/api/v2/admin/sponsors', {
     method: 'POST',
     headers: ADMIN_HEADERS,
-    body: JSON.stringify(body),
+    // OSE-1316/1317: tier is required on create.
+    body: JSON.stringify({ tier: 'primary', ...body }),
   });
 }
 
