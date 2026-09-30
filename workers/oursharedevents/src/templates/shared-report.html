@@ -1215,7 +1215,7 @@
                 const bodyHtml =
                   cm.source === 'suppressed'
                     ? '<p class="report-note" data-testid="corridor-map-suppressed-note">Map hidden to keep things anonymous — not enough scan density yet.</p>'
-                    : cm.svg +
+                    : '<div class="corridor-map-svg" data-corridor-svg></div>' +
                       (cm.source === 'fallback'
                         ? '<p class="report-note" data-testid="corridor-map-source-note">Neighborhood estimate — scan density fills in as events accumulate.</p>'
                         : '');
@@ -1348,7 +1348,55 @@
               '</section>'
             : '') +
           '</article>';
+
+        // The corridor map arrives as SVG markup from renderCorridorMap(). It is
+        // never assigned as HTML: it is rebuilt node by node with createElementNS,
+        // keeping only the elements and attributes that renderer emits, and text
+        // goes in through textContent. Anything else in the payload is dropped.
+        const slot = content.querySelector('[data-corridor-svg]');
+        const cm = report.corridor_map;
+        if (slot && cm && typeof cm.svg === 'string') mountCorridorSvg(slot, cm.svg);
       })();
+
+      function mountCorridorSvg(slot, markup) {
+        const NS = 'http://www.w3.org/2000/svg';
+        const TAGS = { svg: 1, polygon: 1, text: 1, title: 1 };
+        const ATTRS = {
+          viewBox: 1, role: 1, 'aria-label': 1, points: 1, fill: 1, 'fill-opacity': 1,
+          stroke: 1, 'stroke-width': 1, 'stroke-dasharray': 1, x: 1, y: 1,
+          'text-anchor': 1, 'font-family': 1, 'font-size': 1,
+          'data-testid': 1, 'data-cell': 1, 'data-count': 1,
+        };
+        const decode = (s) =>
+          s.replace(/&(amp|lt|gt|quot|#39);/g, (m, e) =>
+            ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[e]
+          );
+        const tokens = /<(\/?)([a-z]+)((?:\s+[a-zA-Z:-]+="[^"]*")*)\s*(\/?)>|([^<]+)/g;
+        const attrRe = /([a-zA-Z:-]+)="([^"]*)"/g;
+        const stack = [];
+        let root = null;
+        let m;
+        while ((m = tokens.exec(markup))) {
+          if (m[5] !== undefined) {
+            if (stack.length) stack[stack.length - 1].appendChild(document.createTextNode(decode(m[5])));
+            continue;
+          }
+          const tag = m[2];
+          if (!TAGS[tag]) return; // unknown element: render nothing rather than guess
+          if (m[1]) {
+            stack.pop();
+            continue;
+          }
+          const el = document.createElementNS(NS, tag);
+          let a;
+          attrRe.lastIndex = 0;
+          while ((a = attrRe.exec(m[3]))) if (ATTRS[a[1]]) el.setAttribute(a[1], decode(a[2]));
+          if (stack.length) stack[stack.length - 1].appendChild(el);
+          else if (!root) root = el;
+          if (!m[4]) stack.push(el);
+        }
+        if (root) slot.appendChild(root);
+      }
     </script>
     <script>
       (async () => {
