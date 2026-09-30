@@ -230,3 +230,79 @@ describe('OSE-1273 — mutation-kill hardening for pii.ts', () => {
     expect(await decryptEmail(unversioned, KEY)).toBe('user@example.com');
   });
 });
+
+// ─── Derived-key reuse (staging T2 latency, 2026-09-30) ─────────────────────
+//
+// decryptText used to run PBKDF2 (100,000 iterations) for EVERY row it
+// decrypted. The admin registrations list decrypts every attendee name for an
+// event, so its cost grew with each registration — on staging it reached
+// 16.3 s (T2 Contract, "GET Registrations", budget 9 s). The derived AES key is
+// a pure function of (key material, version) and is non-extractable, so one
+// derivation per isolate is enough.
+describe('derived AES key is reused, not re-derived per row', () => {
+  function countDerivations() {
+    const subtle = crypto.subtle;
+    const original = subtle.deriveKey.bind(subtle);
+    let calls = 0;
+    subtle.deriveKey = ((...args: Parameters<SubtleCrypto['deriveKey']>) => {
+      calls++;
+      return original(...args);
+    }) as SubtleCrypto['deriveKey'];
+    return {
+      get calls() {
+        return calls;
+      },
+      restore() {
+        subtle.deriveKey = original;
+      },
+    };
+  }
+
+  test('decrypting 25 rows under one key derives that key once', async () => {
+    const secret = `reuse-key-${Math.random()}`;
+    const cipher = await Promise.all(
+      Array.from({ length: 25 }, (_, i) => encryptText(`Attendee ${i}`, secret))
+    );
+    const spy = countDerivations();
+    try {
+      const plain = await Promise.all(cipher.map((c) => decryptText(c, secret)));
+      expect(plain[24]).toBe('Attendee 24');
+      expect(spy.calls, 'PBKDF2 ran once per row').toBeLessThanOrEqual(1);
+    } finally {
+      spy.restore();
+    }
+  });
+
+  test('a failed derivation is not cached: the next call derives again and succeeds', async () => {
+    const secret = `evict-${Math.random()}`;
+    const subtle = crypto.subtle;
+    const original = subtle.deriveKey.bind(subtle);
+    subtle.deriveKey = (() =>
+      Promise.reject(new Error('transient derive failure'))) as SubtleCrypto['deriveKey'];
+    try {
+      await expect(encryptText('x', secret)).rejects.toThrow('transient derive failure');
+    } finally {
+      subtle.deriveKey = original;
+    }
+    // Let the eviction handler run before the retry.
+    await new Promise((r) => setTimeout(r, 0));
+    const c = await encryptText('after failure', secret);
+    expect(await decryptText(c, secret)).toBe('after failure');
+  });
+
+  test('different key material or version still derives its own key (no cross-talk)', async () => {
+    const a = `iso-a-${Math.random()}`;
+    const b = `iso-b-${Math.random()}`;
+    const ca = await encryptText('from A', a);
+    const cb = await encryptText('from B', b);
+    expect(await decryptText(ca, a)).toBe('from A');
+    expect(await decryptText(cb, b)).toBe('from B');
+    await expect(decryptText(ca, b)).rejects.toThrow();
+
+    const rotated = JSON.stringify({ v1: a, v2: b });
+    const c2 = await encryptText('rotated', rotated);
+    expect(c2.startsWith('v2:')).toBe(true);
+    expect(await decryptText(c2, rotated)).toBe('rotated');
+    expect(await decryptText(ca, rotated)).toBe('from A');
+  });
+});

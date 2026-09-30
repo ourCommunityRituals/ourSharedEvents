@@ -145,7 +145,27 @@ export async function hashEmail(
 
 // ─── AES-GCM Encryption ────────────────────────────────────────────────────────
 
-async function deriveKey(secret: string, version: string): Promise<CryptoKey> {
+// PBKDF2 at 100,000 iterations is deliberately expensive, and the result depends
+// only on (key material, version). Deriving it per call made every decrypt cost a
+// full PBKDF2 run, so the admin registrations list — which decrypts every name
+// for an event — grew linearly with registrations (16.3 s on staging, 2026-09-30).
+// One derivation per isolate per key version is enough. The cached CryptoKey is
+// non-extractable (below), so holding it adds no exposure beyond the env secret
+// the isolate already has. A failed derivation is evicted, never cached.
+const derivedKeys = new Map<string, Promise<CryptoKey>>();
+
+function deriveKey(secret: string, version: string): Promise<CryptoKey> {
+  const cacheKey = `${version}\u0000${secret}`;
+  let key = derivedKeys.get(cacheKey);
+  if (!key) {
+    key = deriveKeyUncached(secret, version);
+    derivedKeys.set(cacheKey, key);
+    key.catch(() => derivedKeys.delete(cacheKey));
+  }
+  return key;
+}
+
+async function deriveKeyUncached(secret: string, version: string): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
