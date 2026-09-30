@@ -31,6 +31,7 @@ import {
   isValidCodeShape,
   type ShortlinksEnv,
 } from '../lib/shortlinks';
+import { internalTarget } from '../lib/poster-codes';
 
 export type ShortlinkResolveEnv = ShortlinksEnv;
 
@@ -79,10 +80,12 @@ export async function handleShortlinkResolve(
   // was validated https:// at creation; re-check the scheme here defensively so
   // a bad row can never turn the resolver into an open redirect. Anything that
   // fails the check falls back to the event's own public page.
+  // OSE-1357 part 2: an internal kind (anonymous check-in) is built here from
+  // the event id alone — the check-in form, carrying no identity.
   const target =
     row.target_url && row.target_url.startsWith('https://')
       ? row.target_url
-      : `${url.origin}/events/${encodeURIComponent(row.event_id)}`;
+      : internalTarget(url.origin, row.event_id, row.kind ?? 'public');
 
   return new Response(null, {
     status: 302,

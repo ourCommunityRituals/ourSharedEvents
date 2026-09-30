@@ -41,7 +41,7 @@
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 65311,
+      "own-stylesheet": 64822,
       "raw-hex": 30,
       "foreign-stylesheet": 0
     },
@@ -59,8 +59,8 @@
     },
     "workers/oursharedevents/src/templates/poster.html": {
       "own-tokens": 0,
-      "own-stylesheet": 18652,
-      "raw-hex": 8,
+      "own-stylesheet": 18482,
+      "raw-hex": 6,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/public.html": {

@@ -204,10 +204,14 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //                      tiles. Floored server-side via applyCountFloor (K-anon);
   //                      never reads raw form rows or PII columns; requireAdmin-
   //                      gated. Authorized: OSE-896 dashboard counts.
+  //   poster-codes.ts  — reads ONLY the global flag set, via detectCurrentTier, to
+  //                      size the plan's poster-code allotment (a number). No form
+  //                      rows, no PII; requireAdmin-gated. Authorized: OSE-1357 p2.
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
     const AUTHORISED_SUFFIXES = [
+      'src/handlers/poster-codes.ts',
       'src/handlers/forms.ts',
       'src/handlers/feature-flags.ts',
       'src/handlers/data-subject.ts',

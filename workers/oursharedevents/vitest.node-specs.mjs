@@ -141,6 +141,10 @@ export const NODE_SPECS = [
   // order). Runs the card's script from the admin.html Text import in a jsdom
   // window with a stubbed fetch; no cloudflare:test / D1.
   'tests/poster-deployment-address-ui.spec.ts',
+  // OSE-1357 part 2 — poster codes: pure rules (lib/poster-codes.ts) and the
+  // admin card + /poster scripts run in jsdom with a stubbed fetch.
+  'tests/poster-codes-parse.spec.ts',
+  'tests/poster-multi-code-ui.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.

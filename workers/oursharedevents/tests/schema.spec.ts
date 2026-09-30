@@ -170,7 +170,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   corridor_regulatory_status: 5,
   // OSE-240 (migration 0030): code TEXT PK, event_id TEXT FK, created_at TEXT,
   // clicks INTEGER, last_clicked_at TEXT = 5; +target_url +kind (migration 0073, Rb) = 7.
-  shortlinks: 7,
+  shortlinks: 8, // +poster_position (0080, OSE-1357 part 2)
 };
 // sponsors (32 cols) retired by OSE-799 A2 (0065-0067): identity → sponsor_business,
 // creative → sponsor_asset, per-event attachment → sponsor_placement (counts above).

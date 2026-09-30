@@ -405,6 +405,8 @@ describe('OSE-240: anonymity-principle compliance', () => {
       // can carry identity — the forbidden-PII check below still guards that.
       'target_url',
       'kind',
+      // OSE-1357 p2 (0080): the code's place on the poster — an order, not a person.
+      'poster_position',
     ]);
 
     // Sanity: every forbidden PII-bearing column name from the
