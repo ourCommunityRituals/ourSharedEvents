@@ -183,8 +183,9 @@ OER is the **BigQuery RAG layer**, set up at the org level. Every product databa
 
 The design system has one home: `@ocr/ui` in the hub monorepo (`ourCommunityRituals/ourCommunityRituals`, `packages/ui`), per ADR-008 (ratified 2026-09-29). It holds the tokens, the shared stylesheet served as `/ui.css`, and the HTML partials every surface uses.
 
-- **Spokes consume it pinned.** Each spoke records the hub commit it builds against in `.ocr-hub-ref`; no spoke keeps a copy.
-- **Spokes carry no design of their own.** A blocking check (`check-spoke-styles`) fails any spoke that adds its own tokens, stylesheet or raw colours.
+- **Spokes consume it pinned.** Each spoke records the hub commit it builds against in `.ocr-hub-ref`. It must be a merged hub commit, and no spoke keeps a copy.
+- **Spoke design debt only shrinks.** A blocking check (`check-spoke-styles`) records each spoke's existing own tokens, stylesheet and raw hex as a baseline, and fails any PR that grows them or raises the baseline. It is a ratchet, not a proof of zero: some colour forms (`rgb()`, CSS in script constants) are not yet measured.
+- **Contrast is guaranteed for the token pairs.** Every text role clears AA on every ground in both themes and every brand, and the hub stylesheet holds a 13px text floor. Spoke-authored CSS is held to these only as far as the check above measures it.
 - **Products differ by brand, not by system.** Each product's look is a registered `[data-brand]` theme (OSE's CARTO blue is the base; OW is amber). Brands repaint chrome only: status colours and UEC never re-theme.
 
 ---
