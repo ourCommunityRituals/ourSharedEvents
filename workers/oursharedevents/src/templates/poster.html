@@ -28,9 +28,22 @@
         align-items: center;
         justify-content: space-between;
       }
-      .page-header h1 {
-        font-size: 1.2rem;
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .poster-kind {
+        display: flex;
+        gap: 0.25rem;
+      }
+      .page-header .poster-kind a[aria-current] {
+        color: var(--text);
         font-weight: 700;
+        text-decoration: underline;
       }
       .page-header a,
       .page-header .print-btn {
@@ -50,6 +63,10 @@
         display: inline-flex;
         align-items: center;
         gap: 0.6rem;
+      }
+      /* display:inline-flex beats the UA's [hidden]; Digital hides Print. */
+      .print-controls[hidden] {
+        display: none;
       }
       .print-btn {
         display: inline-flex;
@@ -87,13 +104,6 @@
         color: var(--text);
         padding: 2.5rem 2rem 2rem;
         text-align: center;
-      }
-      .poster-header .org {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--text-muted);
-        margin-bottom: 0.75rem;
       }
       .poster-header h2 {
         font-size: clamp(1.75rem, 5.6vw, 2.75rem);
@@ -136,7 +146,7 @@
       .poster-art-img {
         display: block;
         width: 100%;
-        max-height: min(46vh, 520px);
+        max-height: min(64vh, 720px);
         object-fit: cover;
       }
       .poster-art--empty {
@@ -279,6 +289,24 @@
         color: var(--text-muted);
         max-width: 16rem;
       }
+      .poster--digital .poster-art-img {
+        max-height: min(80vh, 960px);
+      }
+      .poster--digital .qr-img,
+      .poster--digital .qr-loading {
+        display: none;
+      }
+      .poster--digital .qr-slot-code {
+        max-width: none;
+        font-size: 0.85rem;
+      }
+      .meta-text a,
+      .poster--digital .qr-slot-code {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        color: var(--accent);
+      }
       .poster-footer {
         text-align: center;
         padding: 1rem;
@@ -371,11 +399,7 @@
         width: 100%;
         margin-bottom: 0.15rem;
       }
-      /* OSE-864/#25: the six per-tier logo-height + name-typography rules
-         (40/34/28/22px; title>...>primary) are DELETED. Every sponsor renders at
-         the one .poster-sponsor img box and the one .poster-sponsor-name style
-         above, regardless of tier. `data-tier` remains on the element for
-         frequency-share/rotation identity, but NO CSS keys off it (WALL-3b). */
+      /* OSE-864/#25: no tier-keyed sponsor CSS (WALL-3b). */
       .page-header a:focus-visible,
       .page-header .print-btn:focus-visible {
         outline: 2px solid var(--text);
@@ -408,25 +432,10 @@
         text-decoration: none;
         border-bottom: 2px solid var(--accent);
       }
-      /* OSE-300 DRAIN 7/7: mobile workability for /poster preview.
-       At 375px the default 4-up QR row at 120px each plus 2rem gaps
-       overflows; the .page-header Print anchor is below the 44px
-       touch-target floor; the .event-select picker renders below
-       16px font-size so iOS auto-zooms on tap. This block:
-         - tightens .page-header / .container / .poster-body padding
-         - bumps the Print anchor to 44px min-height
-         - raises the event-picker to 16px / 44px so it meets both
-           the iOS auto-zoom guard and the touch-target floor
-         - shrinks .qr-img / .qr-loading to 100px and looses the
-           gap so two QR codes fit per row with breathing room
-         - releases .qr-link-url word-break so the long URL wraps
-           inside the QR column */
+      /* OSE-300: phone layout (tighter padding, 100px QR, 44px/16px controls). */
       @media (max-width: 768px) {
         .page-header {
           padding: 0.75rem 1rem;
-        }
-        .page-header h1 {
-          font-size: 1.05rem;
         }
         .page-header a {
           padding: 0 0.5rem;
@@ -454,7 +463,10 @@
           height: 100px;
         }
         .poster-art-img {
-          max-height: 200px;
+          max-height: 360px;
+        }
+        .poster--digital .poster-art-img {
+          max-height: 70vh;
         }
         .qr-link-url {
           max-width: 100px;
@@ -566,7 +578,7 @@
           margin: 0.12in 0 0.2in;
         }
         .poster-art-img {
-          max-height: 6.2in;
+          max-height: 7in;
           object-fit: cover;
         }
         /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
@@ -671,8 +683,6 @@
       .poster-sponsor-tier-label {
         color: var(--text-muted);
       }
-      /* OSE-864/#25: the per-tier name-colour override (title/platinum/gold →
-         brighter --text) is removed — every sponsor name is uniform --text-muted. */
       .skip-link:focus {
         background: var(--surface);
         color: var(--text);
@@ -683,19 +693,29 @@
   <body>
     <a href="#main-content" class="skip-link" data-testid="poster-skip-link">Skip to content</a>
     <div class="page-header no-print" data-testid="poster-header">
-      <h1><a href="/" style="color:inherit;text-decoration:none" data-testid="poster-home-link">OurSharedEvents</a> — Poster</h1>
+      <!-- The title is the EVENT's (poster-page-title is filled with its name);
+           the OurSharedEvents name lives at the bottom of the poster only. -->
+      <h1 class="sr-only" id="poster-page-title" data-testid="poster-page-title">Event poster</h1>
+      <!-- Print keeps the QR codes and a large art area; Digital drops the
+           codes (it's already on a screen — the short links are tappable),
+           gives the art the room, and turns the date/venue into taps. The URL
+           is the state (?kind=), so Back and a shared link keep the choice. -->
+      <nav class="poster-kind" aria-label="Poster type" data-testid="poster-kind">
+        <a href="?kind=print" data-kind="print" data-testid="poster-kind-print">Print</a>
+        <a href="?kind=digital" data-kind="digital" data-testid="poster-kind-digital">Digital</a>
+      </nav>
       <!-- OSE-286 / OSE-R-020: Print is a real <button> that STARTS disabled and
            is re-enabled by the gate script only once all QR codes settle, so a
            poster is never printed with empty QR boxes. (It replaced a
            `javascript:window.print()` anchor, which the nonce CSP blocks and
            which cannot be disabled.) -->
-      <div class="print-controls">
+      <div class="print-controls" id="poster-print-controls">
         <span id="poster-print-status" class="print-status" data-testid="poster-print-status" role="status" aria-live="polite">QR codes loading&hellip;</span>
         <button type="button" id="poster-print-btn" class="print-btn" data-testid="poster-print" disabled aria-disabled="true" aria-label="Print poster"><span aria-hidden="true">&#x1F5A8;</span> Print</button>
       </div>
     </div>
     <main id="main-content" class="container" data-testid="poster-container">
-      <div class="event-select no-print" data-testid="poster-event-select">
+      <div class="event-select no-print" id="poster-event-select" data-testid="poster-event-select">
         <label for="event-picker">Select Event</label>
         <select id="event-picker" data-testid="poster-event-picker">
           <option value="">Loading events&hellip;</option>
@@ -752,6 +772,29 @@
         }));
       }
 
+      // Print (default) or Digital, from ?kind= — the URL is the state.
+      const KIND = new URLSearchParams(location.search).get('kind') === 'digital' ? 'digital' : 'print';
+
+      // Keep the URL, the Print|Digital links, the page title and the print
+      // controls in step with the event on show.
+      function syncChrome(event) {
+        const params = new URLSearchParams(location.search);
+        if (event && event.id) params.set('event', event.id);
+        params.set('kind', KIND);
+        try { history.replaceState(null, '', '?' + params.toString()); } catch (e) { /* sandboxed */ }
+        document.querySelectorAll('[data-kind]').forEach(function (a) {
+          const p = new URLSearchParams(params);
+          p.set('kind', a.getAttribute('data-kind'));
+          a.setAttribute('href', '?' + p.toString());
+          if (a.getAttribute('data-kind') === KIND) a.setAttribute('aria-current', 'page');
+          else a.removeAttribute('aria-current');
+        });
+        const title = document.getElementById('poster-page-title');
+        if (title && event && event.name) title.textContent = event.name + (KIND === 'digital' ? ' — digital poster' : ' — poster');
+        const controls = document.getElementById('poster-print-controls');
+        if (controls) controls.hidden = KIND === 'digital';
+      }
+
       function renderPoster(event) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
         // directly (mapped in enrichWithPhase). The old `const data = event.data
@@ -768,15 +811,27 @@
         // so it works whether or not enrichWithPhase renames the field.
         const art = event.cover_image_url || event.coverImageUrl || '';
 
-        return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
+        // Digital: the date adds itself to a calendar, the venue opens a map.
+        // Print has nothing to tap, so it stays plain text.
+        const digital = KIND === 'digital';
+        const id = encodeURIComponent(event.id || '');
+        const whenText = esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '');
+        const whenHtml = digital && id
+          ? '<a href="/events/' + id + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
+          : whenText;
+        const mapHref = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(venue);
+        const venueHtml = digital
+          ? '<a href="' + esc(mapHref) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">' + esc(venue) + ' &middot; Map</a>'
+          : esc(venue);
+
+        return '<div class="poster' + (digital ? ' poster--digital' : '') + '" data-testid="poster-card" data-kind="' + KIND + '" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
-            '<div class="org" data-testid="poster-org">OurSharedEvents</div>' +
             '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
           '</div>' +
           '<div class="poster-body" data-testid="poster-body">' +
             '<div class="poster-meta" data-testid="poster-meta">' +
-            (startDate ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '') + '</div></div>' : '') +
-            (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+            (startDate ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + whenHtml + '</div></div>' : '') +
+            (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + venueHtml + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
             '</div>' +
             '<div class="poster-art' + (art ? '' : ' poster-art--empty') + '" data-testid="poster-art-viewport">' +
               (art
@@ -793,7 +848,7 @@
             '</div>' +
           '</div>' +
           '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
-          '<div class="poster-footer" data-testid="poster-footer">oursharedevents.com</div>' +
+          '<div class="poster-footer" data-testid="poster-footer"><span data-testid="poster-org">OurSharedEvents</span> &middot; oursharedevents.com</div>' +
         '</div>';
       }
 
@@ -819,12 +874,18 @@
         try {
           const res = await fetch('/api/v2/events');
           const data = await res.json();
-          const items = (data.ok && data.items) ? data.items : [];
+          let items = (data.ok && data.items) ? data.items : [];
           if (!items.length) {
             picker.innerHTML = '<option>No events available</option>';
             area.innerHTML = '<p class="loading" data-testid="poster-empty" role="status">No events scheduled.</p>';
             return;
           }
+          // Opened for a specific event (the admin's poster link carries
+          // ?event=), the picker offers only that event — never every event
+          // on the platform. Hidden when there is nothing to choose.
+          const scoped = requestedEventIndex(items);
+          if (scoped >= 0) items = [items[scoped]];
+          document.getElementById('poster-event-select').hidden = scoped >= 0;
           picker.innerHTML = items.map((e, i) =>
             // OSE-844: read the single canonical `name`; fall back to the event
             // id (always present) so options stay distinguishable without the
@@ -838,12 +899,14 @@
           const startIdx = Math.max(requestedEventIndex(items), 0);
           picker.value = String(startIdx);
           area.innerHTML = renderPoster(items[startIdx]);
+          syncChrome(items[startIdx]);
           loadPosterSponsors(items[startIdx].id);
           loadPosterQR(items[startIdx].id);
           picker.addEventListener('change', () => {
             const idx = parseInt(picker.value, 10);
             if (!isNaN(idx) && items[idx]) {
               area.innerHTML = renderPoster(items[idx]);
+              syncChrome(items[idx]);
               loadPosterSponsors(items[idx].id);
               loadPosterQR(items[idx].id);
             }
@@ -905,10 +968,12 @@
                 '<div class="qr-card qr-item" data-testid="poster-qr-slot-' + kind + '">' +
                 '<div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-slot-label-' + kind + '">' + label + '</span></div>' +
                 '<div class="qr-card-body">' +
-                '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
-                '<img src="' + esc(s.qr || '') + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
-                '</a>' +
-                '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>' +
+                (KIND === 'digital'
+                  ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
+                  : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
+                    '<img src="' + esc(s.qr || '') + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
+                    '</a>' +
+                    '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
                 '</div>' +
                 '</div>'
               );
