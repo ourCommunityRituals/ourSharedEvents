@@ -141,6 +141,10 @@ export const NODE_SPECS = [
   // order). Runs the card's script from the admin.html Text import in a jsdom
   // window with a stubbed fetch; no cloudflare:test / D1.
   'tests/poster-deployment-address-ui.spec.ts',
+  // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks
+  // extracted from the admin.html template string; no DOM / cloudflare:test.
+  'tests/admin-event-status-phase-consistency.spec.ts',
+  'tests/admin-forms-single-row.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
