@@ -860,154 +860,156 @@
         '</div>';
       }
 
-      // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
-      // scopedSurfaceUrl() emits /poster?event=<id>, but this page used to ignore
-      // location.search entirely and always render items[0] — so every scoped
-      // poster link an organizer copied out of the dashboard showed some OTHER
-      // event. Returns the index of the requested event, or -1 when the param is
-      // absent or names an event this page did not fetch (then the historical
-      // first-event behaviour stands).
-      function requestedEventIndex(items) {
-        const wanted = new URLSearchParams(location.search).get('event');
-        if (!wanted) return -1;
-        for (let i = 0; i < items.length; i++) {
-          if (items[i] && items[i].id === wanted) return i;
-        }
-        return -1;
-      }
-
+      // OSE-1081: `event` is the CANONICAL surface deep-link param —
+      // admin.html's scopedSurfaceUrl() emits /poster?event=<id>.
+      // OSE-867: a scoped poster is ONE network call. poster-bundle carries the
+      // event (title / start / venue under the public projection's names), the
+      // sponsor strip and the QR slots, so nothing else is fetched: no events
+      // list, no sponsor-bundle. An event the bundle refuses (unknown, draft,
+      // archived) says so — it never silently falls back to some other event.
       async function init() {
         const picker = document.getElementById('event-picker');
         const area = document.getElementById('poster-area');
+        const wanted = new URLSearchParams(location.search).get('event');
+        if (wanted) {
+          document.getElementById('poster-event-select').hidden = true;
+          const shown = await loadPosterBundle(wanted, true);
+          if (!shown) {
+            area.innerHTML = '<p class="error" data-testid="poster-error" role="alert">This poster is not available. The event may not be live yet.</p>';
+          }
+          return;
+        }
+        // No event named: offer the picker. The list is navigation; each
+        // chosen poster still loads through its single bundle call.
         try {
           const res = await fetch('/api/v2/events');
           const data = await res.json();
-          let items = (data.ok && data.items) ? data.items : [];
+          const items = (data.ok && data.items) ? data.items : [];
           if (!items.length) {
             picker.innerHTML = '<option>No events available</option>';
             area.innerHTML = '<p class="loading" data-testid="poster-empty" role="status">No events scheduled.</p>';
             return;
           }
-          // Opened for a specific event (the admin's poster link carries
-          // ?event=), the picker offers only that event — never every event
-          // on the platform. Hidden when there is nothing to choose.
-          const scoped = requestedEventIndex(items);
-          if (scoped >= 0) items = [items[scoped]];
-          document.getElementById('poster-event-select').hidden = scoped >= 0;
           picker.innerHTML = items.map((e, i) =>
             // OSE-844: read the single canonical `name`; fall back to the event
             // id (always present) so options stay distinguishable without the
             // banned Untitled-Event literal that made every option identical.
             '<option value="' + i + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
-          // OSE-1081: honour ?event=<id>. The <select> is the page's source of
-          // truth for "which event is showing", so it is moved in step with the
-          // rendered poster — otherwise the picker would read event #1 while the
-          // deep-linked poster below it showed another.
-          const startIdx = Math.max(requestedEventIndex(items), 0);
-          picker.value = String(startIdx);
-          area.innerHTML = renderPoster(items[startIdx]);
-          syncChrome(items[startIdx]);
-          loadPosterSponsors(items[startIdx].id);
-          loadPosterQR(items[startIdx].id);
+          const show = (item) => {
+            area.innerHTML = renderPoster(item);
+            syncChrome(item);
+            loadPosterBundle(item.id, false);
+          };
+          picker.value = '0';
+          show(items[0]);
           picker.addEventListener('change', () => {
             const idx = parseInt(picker.value, 10);
-            if (!isNaN(idx) && items[idx]) {
-              area.innerHTML = renderPoster(items[idx]);
-              syncChrome(items[idx]);
-              loadPosterSponsors(items[idx].id);
-              loadPosterQR(items[idx].id);
-            }
+            if (!isNaN(idx) && items[idx]) show(items[idx]);
           });
         } catch {
           area.innerHTML = '<p class="error" data-testid="poster-error" role="alert">Could not load events.</p>';
         }
       }
-      async function loadPosterSponsors(eventId) {
+      // The sponsor strip, rendered from the bundle's `sponsors` (OSE-867 —
+      // the same set sponsor-bundle?surface=poster serves). Print-safe: no
+      // links; logos hide themselves on error (see the capture listener below).
+      function renderPosterSponsors(sponsors) {
         const strip = document.getElementById('poster-sponsor-strip');
-        if (!strip || !eventId) return;
-        strip.setAttribute('aria-busy', 'true');
-        strip.innerHTML = '<span class="sr-only" data-testid="poster-sponsors-loading">Loading sponsors…</span>';
-        try {
-          const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=poster');
-          const data = await res.json();
-          strip.setAttribute('aria-busy', 'false');
-          if (!data.ok) { strip.innerHTML = ''; return; }
-          const sponsors = data.bundle?.surface_sponsors?.posterTop || [];
-          if (!sponsors.length) { strip.innerHTML = ''; return; }
-          strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
-            sponsors.map(function(s) {
-              // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
-              // NOTE: the inner single quotes around 'none' MUST stay escaped
-              // (\'). Unescaped, they terminate this single-quoted JS string
-              // early ("Unexpected identifier 'none'") and kill the ENTIRE
-              // poster inline script — no picker, no QR, no sponsors render.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-sponsor-logo">' : '';
-              const validTiers = ['title','platinum','gold','silver','bronze','primary'];
-              // data-tier retained for rotation/frequency-share identity only; NO
-              // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
-              const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-              return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
-            }).join('');
-        } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
+        if (!strip) return;
+        strip.setAttribute('aria-busy', 'false');
+        if (!Array.isArray(sponsors) || !sponsors.length) { strip.innerHTML = ''; return; }
+        strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+          sponsors.map(function(s) {
+            // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-sponsor-logo">' : '';
+            const validTiers = ['title','platinum','gold','silver','bronze','primary'];
+            // data-tier retained for rotation/frequency-share identity only; NO
+            // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
+            const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
+            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+          }).join('');
       }
-      async function loadPosterQR(eventId) {
-        if (!eventId) return;
+      // Typed destination slots (Public / Donate / Sign Up) from the bundle:
+      // each is a /s routing shortlink (printed AND scannable) — the anonymous
+      // routing layer, never a form. If the bundle has no slots, the
+      // .qr-loading placeholder stays and the print gate keeps Print disabled.
+      function renderPosterSlots(slots) {
+        const container = document.getElementById('poster-qr-slots');
+        if (!container || !Array.isArray(slots) || !slots.length) return;
+        // OSE-1357 part 2: every code the organizer chose, in their order —
+        // one big WORD + icon per code (never colour alone; green = anonymous
+        // check-in only, blue = donate only). Kind, tone and icon come from
+        // allowlists here, the link is rebuilt from a validated code on this
+        // origin, and a QR src must be a data:image — no response value
+        // reaches an href or src unchecked.
+        const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
+        container.innerHTML = slots
+          .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
+          .map(function (s) {
+            const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
+            const tone = kind === 'checkin' ? 'checkin' : kind === 'donation' ? 'donate' : 'neutral';
+            const word = esc(s.word || s.label || kind);
+            const label = esc(s.label || s.word || kind);
+            const link = location.origin + '/s/' + s.code;
+            const url = esc(link);
+            const shortText = esc(link);
+            const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
+            return (
+              '<div class="qr-card qr-item code-card tone-' + tone + '" data-tone="' + tone + '" data-testid="poster-qr-slot-' + kind + '">' +
+              '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + '</span></div>' +
+              '<div class="qr-card-body">' +
+              (KIND === 'digital'
+                ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
+                : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
+                  '<img src="' + qr + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
+                  '</a>' +
+                  '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+      // OSE-867: the poster's ONE data call. With renderEvent, the poster card
+      // itself is drawn from data.event (the scoped path); otherwise the card
+      // is already on screen from the picker list and only the sponsors and
+      // codes are filled. Resolves true when the bundle was usable.
+      async function loadPosterBundle(eventId, renderEvent) {
+        if (!eventId) return false;
         // Gate Print for this render cycle until the codes below settle.
         setPrintReady(false);
-        const container = document.getElementById('poster-qr-slots');
+        const strip = document.getElementById('poster-sponsor-strip');
+        if (strip) {
+          strip.setAttribute('aria-busy', 'true');
+          strip.innerHTML = '<span class="sr-only" data-testid="poster-sponsors-loading">Loading sponsors…</span>';
+        }
+        let shown = false;
         try {
           const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle');
           const data = await res.json();
-          if (!data.ok || !container) return;
-          // Typed destination slots (Public / Donate / Sign Up) from the bundle:
-          // each is a /s routing shortlink (printed AND scannable) — the anonymous
-          // routing layer, never a form. If the bundle has no slots, the
-          // .qr-loading placeholder stays and the print gate keeps Print disabled.
-          const slots = Array.isArray(data.slots) ? data.slots : [];
-          if (!slots.length) return;
-          // OSE-1357 part 2: every code the organizer chose, in their order —
-          // one big WORD + icon per code (never colour alone; green = anonymous
-          // check-in only, blue = donate only). Kind, tone and icon come from
-          // allowlists here, the link is rebuilt from a validated code on this
-          // origin, and a QR src must be a data:image — no response value
-          // reaches an href or src unchecked.
-          const ICON = { public: '★', checkin: '✓', donation: '♥', ow: '♪' };
-          container.innerHTML = slots
-            .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
-            .map(function (s) {
-              const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
-              const tone = kind === 'checkin' ? 'checkin' : kind === 'donation' ? 'donate' : 'neutral';
-              const word = esc(s.word || s.label || kind);
-              const label = esc(s.label || s.word || kind);
-              const link = location.origin + '/s/' + s.code;
-              const url = esc(link);
-              const shortText = esc(link);
-              const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
-              return (
-                '<div class="qr-card qr-item code-card tone-' + tone + '" data-tone="' + tone + '" data-testid="poster-qr-slot-' + kind + '">' +
-                '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + '</span></div>' +
-                '<div class="qr-card-body">' +
-                (KIND === 'digital'
-                  ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
-                  : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
-                    '<img src="' + qr + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
-                    '</a>' +
-                    '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
-                '</div>' +
-                '</div>'
-              );
-            })
-            .join('');
-        } catch { /* QR loading is non-critical */ }
+          if (!data.ok) return false;
+          if (renderEvent) {
+            if (!data.event || !data.event.id) return false;
+            document.getElementById('poster-area').innerHTML = renderPoster(data.event);
+            syncChrome(data.event);
+          }
+          renderPosterSponsors(data.sponsors);
+          renderPosterSlots(data.slots);
+          shown = true;
+        } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {
+          const s = document.getElementById('poster-sponsor-strip');
+          if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
           // AC (OSE-286): re-enable Print only after all QR images finish
           // loading OR error-out. If any code failed, its .qr-loading
           // placeholder stays and the @media print rule hides the whole
           // section — so an incomplete poster still never prints empty boxes.
           await awaitQrImages();
-          setPrintReady(true);
+          // A scoped poster that never rendered has nothing to print.
+          setPrintReady(shown || !renderEvent);
         }
+        return shown;
       }
       // OSE-286 / OSE-R-020: Print via a nonced listener — the button carries
       // no javascript: URI (which the nonce CSP blocks). The disabled attribute

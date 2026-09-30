@@ -127,14 +127,17 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(pages).toContain('background: #fff');
   });
 
-  test('poster page calls loadPosterQR in both init() and picker change handler', () => {
+  test('poster page loads the bundle on the scoped path AND for every picked event', () => {
     const pages = sourceFile('templates/poster.html');
-    // Count occurrences — must appear at least twice (init + picker listener)
-    const count = (pages.match(/loadPosterQR/g) ?? []).length;
+    // OSE-867: loadPosterQR became loadPosterBundle — one call carries event,
+    // sponsors and codes. Def + scoped call + the picker's show() helper.
+    const count = (pages.match(/loadPosterBundle\(/g) ?? []).length;
     expect(
       count,
-      'loadPosterQR should appear ≥3 times (def + 2 call sites)'
+      'loadPosterBundle should appear ≥3 times (def + 2 call sites)'
     ).toBeGreaterThanOrEqual(3);
+    expect(pages).toContain('loadPosterBundle(wanted, true)');
+    expect(pages).toContain('loadPosterBundle(item.id, false)');
   });
 
   test('router has poster-bundle route wired to handleGetPosterBundle', () => {
@@ -242,7 +245,7 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     expect(body.ok).toBe(false);
   });
 
-  test('active event → 200 with ok:true, eventId, eventName, numeric status, eventStatus, qr, links, labels', async () => {
+  test('active event → 200 with ok:true, eventId, event.name, numeric status, eventStatus, qr, links, labels', async () => {
     const eventId = await createEvent('Poster QR Test Event');
 
     const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
@@ -251,7 +254,10 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
 
     expect(bundle.ok).toBe(true);
     expect(bundle.eventId).toBe(eventId);
-    expect(bundle.eventName).toBe('Poster QR Test Event');
+    // OSE-867: one name per value — the title is `event.name` (the public
+    // projection), the old `eventName` duplicate is retired.
+    expect((bundle.event as Record<string, unknown>).name).toBe('Poster QR Test Event');
+    expect(bundle).not.toHaveProperty('eventName');
     // OSE-842: `status` is the numeric HTTP status (matching the error paths);
     // the event-state string moved to `eventStatus`.
     expect(bundle.status).toBe(200);

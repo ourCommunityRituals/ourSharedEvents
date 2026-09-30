@@ -70,34 +70,32 @@ describe('OSE-1081 — poster.html honours ?event=', () => {
     expect(sourceFile('templates/poster.html')).toContain(CANONICAL_READ);
   });
 
-  test('matches the param against a FETCHED event id (not a blind index)', () => {
+  // OSE-867 superseded the list-and-match shape: a scoped poster no longer
+  // fetches the events list at all. The id goes (encoded) into ONE
+  // poster-bundle call and the poster renders what that bundle returns, so it
+  // can only ever show the event named — or say the poster is unavailable.
+  test('fetches the named event directly, encoded into the poster-bundle path', () => {
     const poster = sourceFile('templates/poster.html');
-    expect(poster).toMatch(/items\[i\]\.id === wanted/);
-  });
-
-  test('moves the <select> in step with the rendered poster', () => {
-    // The picker is the page's source of truth for "which event is showing";
-    // leaving it on option 0 while the poster below shows another event is the
-    // half-fixed state this assertion forbids.
-    expect(sourceFile('templates/poster.html')).toContain('picker.value = String(startIdx)');
-  });
-
-  test('renders the resolved index — items[0] is no longer hard-coded in init()', () => {
-    const poster = sourceFile('templates/poster.html');
-    const init = poster.slice(poster.indexOf('async function init()'));
-    const body = init.slice(0, init.indexOf('async function loadPosterSponsors'));
-    expect(body).toContain('renderPoster(items[startIdx])');
-    expect(body, 'init() still renders the hard-coded first event').not.toContain(
-      'renderPoster(items[0])'
+    expect(poster).toContain('loadPosterBundle(wanted, true)');
+    expect(poster).toContain(
+      "fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle')"
     );
   });
 
-  test('falls back to the first event when the param is absent or unknown', () => {
-    // Math.max(-1, 0) === 0 — an absent/unknown `event` keeps the historical
-    // first-event behaviour rather than rendering nothing.
-    expect(sourceFile('templates/poster.html')).toContain(
-      'Math.max(requestedEventIndex(items), 0)'
+  test('never falls back to some other event when the named one cannot be shown', () => {
+    const poster = sourceFile('templates/poster.html');
+    const scoped = poster.slice(
+      poster.indexOf('if (wanted) {'),
+      poster.indexOf('// No event named')
     );
+    expect(scoped).toContain('data-testid="poster-error"');
+    expect(scoped).toContain('return;');
+    expect(scoped, 'scoped path must not fetch the list').not.toContain("fetch('/api/v2/events')");
+  });
+
+  test('renders the poster from the bundle event, not from a list index', () => {
+    const poster = sourceFile('templates/poster.html');
+    expect(poster).toContain('renderPoster(data.event)');
   });
 
   test('the SERVED poster page carries the param read (not just the file on disk)', async () => {
@@ -105,7 +103,7 @@ describe('OSE-1081 — poster.html honours ?event=', () => {
       await handlePosterPage(pagesEnv(), new Request('https://t.test/poster?event=evt-1'))
     ).text();
     expect(served).toContain(CANONICAL_READ);
-    expect(served).toContain('picker.value = String(startIdx)');
+    expect(served).toContain('loadPosterBundle(wanted, true)');
   });
 });
 
@@ -200,11 +198,11 @@ describe('OSE-1081 — the event deep-link param is never reflected (XSS-inert)'
   const reflectsIntoMarkup = (src: string, paramVar: string): boolean =>
     new RegExp(`innerHTML[^\\n;]*\\b${paramVar}\\b|\\b${paramVar}\\b[^\\n;]*innerHTML`).test(src);
 
-  test('poster.html uses the `event` param only as an id-match selector, never in innerHTML', () => {
+  test('poster.html uses the `event` param only as an encoded fetch path, never in innerHTML', () => {
     const poster = sourceFile('templates/poster.html');
-    // The param is read and compared to a fetched id — the selector contract.
+    // The param is read and only ever sent, encoded, as a path segment (OSE-867).
     expect(poster).toContain(CANONICAL_READ);
-    expect(poster).toMatch(/items\[i\]\.id === wanted/);
+    expect(poster).toContain('encodeURIComponent(eventId)');
     // …and the raw param value never reaches a markup sink.
     expect(reflectsIntoMarkup(poster, 'wanted'), 'raw event param reaches innerHTML').toBe(false);
   });

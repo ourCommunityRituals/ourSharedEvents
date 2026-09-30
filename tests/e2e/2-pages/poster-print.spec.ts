@@ -375,6 +375,101 @@ test.describe('Poster Page — Print Gate (OSE-286)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 6c. ONE CALL  (OSE-867 — the poster-bundle IS the poster's data)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Poster Page — One Data Call (OSE-867)', () => {
+  const TINY_PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+  const BUNDLE = {
+    ok: true,
+    status: 200,
+    eventId: 'evt_one',
+    eventStatus: 'active',
+    event: {
+      id: 'evt_one',
+      name: 'Bocce Night',
+      start_date: '2026-10-24',
+      startDateISO: '2026-10-24',
+      starts_at: null,
+      timezone: 'America/Chicago',
+      venue: 'Eagles Hall',
+      cover_image_url: null,
+    },
+    sponsors: [{ id: 'sp_1', name: 'Corner Bakery', logo_url: null, tier: 'primary' }],
+    slots: [
+      {
+        kind: 'public',
+        word: 'EVENT',
+        tone: 'neutral',
+        label: 'Event page',
+        code: 'Abc123',
+        url: 'https://x/s/Abc123',
+        qr: TINY_PNG,
+      },
+    ],
+  };
+
+  test('a scoped poster (?event=) issues exactly one data request and prints date + venue from it', async ({
+    page,
+  }) => {
+    const dataCalls: string[] = [];
+    page.on('request', (req) => {
+      const u = new URL(req.url());
+      if (u.pathname.startsWith('/api/')) dataCalls.push(u.pathname);
+    });
+    // Any list / sponsor-bundle call is a waterfall regression: answer it so a
+    // regressed page still renders, and let the count below catch it.
+    await page.route('**/api/v2/events', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, status: 200, items: [BUNDLE.event] }),
+      })
+    );
+    await page.route('**/sponsor-bundle*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, status: 200, bundle: {} }),
+      })
+    );
+    await page.route('**/poster-bundle', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(BUNDLE) })
+    );
+
+    await page.goto('/poster?event=evt_one', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+
+    await expect(page.locator('[data-testid="poster-title"]')).toHaveText('Bocce Night');
+    await expect(page.locator('[data-testid="poster-meta-venue"]')).toContainText('Eagles Hall');
+    await expect(page.locator('[data-testid="poster-meta-date"]')).toContainText('2026');
+    await expect(page.locator('[data-testid="poster-sponsor-name"]')).toHaveText('Corner Bakery');
+    await expect(page.locator('[data-testid="qr-img-slot-public"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="poster-print"]')).toBeEnabled();
+
+    expect(dataCalls).toEqual(['/api/v2/events/evt_one/poster-bundle']);
+  });
+
+  test('a scoped poster for an event that cannot be shown says so (no silent fallback to another event)', async ({
+    page,
+  }) => {
+    await page.route('**/poster-bundle', (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, status: 404, error: 'Event not found' }),
+      })
+    );
+    await page.goto('/poster?event=evt_missing', {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    });
+    await expect(page.locator('[data-testid="poster-error"]')).toBeVisible();
+    await expect(page.locator('[data-testid="poster-card"]')).toHaveCount(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 7. RESPONSE TIME
 // ═══════════════════════════════════════════════════════════════════════════════
 

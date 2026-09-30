@@ -56,20 +56,28 @@ describe('SPON-4: Poster sponsor JS rendering', () => {
     expect(body).toContain('Sponsored By');
   });
 
-  test('poster sponsor JS fetches from sponsor-bundle?surface=poster', async () => {
-    expect(await posterHtml()).toContain('sponsor-bundle?surface=poster');
+  test('poster sponsors come from the poster-bundle (OSE-867 — no separate sponsor-bundle call)', async () => {
+    const body = await posterHtml();
+    expect(body).toContain('renderPosterSponsors(data.sponsors)');
+    expect(body).not.toContain("'/sponsor-bundle");
   });
 });
 
 // ─── SPON-4: Print safety ─────────────────────────────────────────────────────
 
 describe('SPON-4: Poster sponsor section is print-safe (no clickable links)', () => {
-  test('loadPosterSponsors does not inject <a href> tags', async () => {
+  test('renderPosterSponsors does not inject <a href> tags', async () => {
     const body = await posterHtml();
-    // Extract JS body of loadPosterSponsors
-    const fnStart = body.indexOf('async function loadPosterSponsors');
-    const fnEnd = body.indexOf('init();', fnStart);
-    const fnBody = fnStart >= 0 && fnEnd > fnStart ? body.slice(fnStart, fnEnd) : '';
+    // Extract JS body of renderPosterSponsors (up to the next function).
+    const fnStart = body.indexOf('function renderPosterSponsors');
+    const fnEnd = body.indexOf('function renderPosterSlots', fnStart);
+    expect(
+      fnStart,
+      'renderPosterSponsors must exist — an empty slice would pass vacuously'
+    ).toBeGreaterThanOrEqual(0);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const fnBody = body.slice(fnStart, fnEnd);
+    expect(fnBody).toContain('poster-sponsor-item');
     expect(fnBody).not.toMatch(/<a\s+href/);
   });
 });

@@ -323,7 +323,7 @@ function posterBody(html: string): string {
   return doc.body.innerHTML;
 }
 function posterScript(html: string): string {
-  return scriptContaining(html, 'async function loadPosterQR');
+  return scriptContaining(html, 'async function loadPosterBundle');
 }
 
 async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
@@ -333,18 +333,34 @@ async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
   });
   const w = dom.window as unknown as Window &
     Record<string, unknown> & { eval(s: string): unknown };
-  stubFetch(w, (url) => {
+  const calls = stubFetch(w, (url) => {
     if (url === '/api/v2/events') {
       return {
         body: { ok: true, items: [{ id: EVT, name: 'Harbor County Bocce', venue: 'Sawyer' }] },
       };
     }
-    if (url.includes('/poster-bundle')) return { body: { ok: true, slots } };
+    if (url.includes('/poster-bundle')) {
+      // OSE-867: the bundle is the poster's whole payload.
+      return {
+        body: {
+          ok: true,
+          status: 200,
+          event: {
+            id: EVT,
+            name: 'Harbor County Bocce',
+            venue: 'Sawyer',
+            startDateISO: '2026-10-24',
+          },
+          sponsors: [{ id: 'sp1', name: 'Sawyer Hardware', tier: 'primary' }],
+          slots,
+        },
+      };
+    }
     return { body: { ok: false } };
   });
   w.eval(posterScript(POSTER_HTML));
   await flush();
-  return { doc: w.document, w };
+  return { doc: w.document, w, calls };
 }
 
 const BUNDLE_SLOTS = [
@@ -385,6 +401,23 @@ const BUNDLE_SLOTS = [
     qr: QR,
   },
 ];
+
+describe('/poster | OSE-867 one data call', () => {
+  test('a scoped poster makes exactly one request — the poster-bundle — and renders event, venue and sponsors from it', async () => {
+    const { doc, calls } = await mountPoster('print', BUNDLE_SLOTS);
+    expect(calls.map((c) => c.url)).toEqual([
+      `/api/v2/events/${encodeURIComponent(EVT)}/poster-bundle`,
+    ]);
+    expect(doc.querySelector('[data-testid="poster-title"]')!.textContent).toBe(
+      'Harbor County Bocce'
+    );
+    expect(doc.querySelector('[data-testid="poster-meta-venue"]')!.textContent).toContain('Sawyer');
+    expect(doc.querySelector('[data-testid="poster-meta-date"]')!.textContent).toContain('2026');
+    expect(doc.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
+      'Sawyer Hardware'
+    );
+  });
+});
 
 describe('/poster | every code, in order, word + colour', () => {
   test('print: each code renders its word, tone class, QR and the printed short link, in the saved order', async () => {
