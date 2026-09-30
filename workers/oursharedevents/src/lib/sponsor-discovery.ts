@@ -29,6 +29,7 @@
 // rate-limited at the router like the other public sponsor writes.
 
 import { maybeTag } from './h3-tagging';
+import { toPublicEvent } from './public-event-projection';
 
 /** Waiting (organizer has not answered) requests one sponsor may hold at once. */
 export const MAX_OPEN_REQUESTS = 5;
@@ -77,6 +78,31 @@ const DISCOVERABLE_REST = `e.is_published = 1
              WHERE px.event_id = e.id AND px.sponsor_business_id = ?
           )`;
 
+/**
+ * Every event field this module shows a sponsor passes through the public event
+ * projection (lib/public-event-projection) first — the same allowlist as
+ * `GET /api/v2/events` and the public event page. So a location-precision
+ * policy that narrows what the public sees (OSE-1245, e.g. hiding a home
+ * address) narrows the sponsor page with it, with no second place to change.
+ * "Near you" is computed from the PROJECTED h3_res7: if the public projection
+ * ever stops carrying the cell, the chip disappears rather than leaking it.
+ */
+export function toDiscoverable(
+  row: Record<string, unknown>,
+  sponsorCell: string | null
+): DiscoverableEvent {
+  const pub = toPublicEvent(row);
+  const str = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null);
+  const cell = str(pub.h3_res7);
+  return {
+    id: String(pub.id ?? ''),
+    title: str(pub.title) ?? 'Untitled event',
+    start_date: str(pub.start_date),
+    location: str(pub.location),
+    near: sponsorCell !== null && cell !== null && cell === sponsorCell ? 1 : 0,
+  };
+}
+
 export async function readDiscoverableEvents(
   db: D1Database,
   sponsor: { id: string; brand_id: string; h3_res7: string | null },
@@ -84,23 +110,15 @@ export async function readDiscoverableEvents(
 ): Promise<DiscoverableEvent[]> {
   const { results } = await db
     .prepare(
-      `SELECT e.id, e.title, e.start_date, e.location,
-              CASE WHEN ? IS NOT NULL AND e.h3_res7 = ? THEN 1 ELSE 0 END AS near
+      `SELECT e.id, e.title, e.start_date, e.location, e.h3_res7
          FROM events e
         WHERE e.brand_id = ? AND ${DISCOVERABLE_REST}
         ORDER BY e.start_date ASC, e.id ASC
         LIMIT ?`
     )
-    .bind(
-      sponsor.h3_res7,
-      sponsor.h3_res7,
-      sponsor.brand_id,
-      floorDate(now),
-      sponsor.id,
-      MAX_DISCOVERABLE
-    )
-    .all<DiscoverableEvent>();
-  return results ?? [];
+    .bind(sponsor.brand_id, floorDate(now), sponsor.id, MAX_DISCOVERABLE)
+    .all<Record<string, unknown>>();
+  return (results ?? []).map((r) => toDiscoverable(r, sponsor.h3_res7));
 }
 
 export async function readSponsorRequests(
@@ -119,7 +137,15 @@ export async function readSponsorRequests(
     )
     .bind(sponsor.id, sponsor.brand_id, SPONSOR_REQUEST_SOURCE)
     .all<SponsorRequestRow>();
-  return results ?? [];
+  // The event half of each row goes through the public projection too.
+  return (results ?? []).map((r) => {
+    const pub = toPublicEvent({ title: r.title, start_date: r.start_date });
+    return {
+      ...r,
+      title: typeof pub.title === 'string' ? pub.title : 'Untitled event',
+      start_date: typeof pub.start_date === 'string' ? pub.start_date : null,
+    };
+  });
 }
 
 export type RequestOutcome =

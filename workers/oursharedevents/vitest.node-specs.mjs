@@ -156,6 +156,7 @@ export const NODE_SPECS = [
   'tests/admin-event-status-phase-consistency.spec.ts',
   'tests/admin-organizer-inbox.spec.ts',
   'tests/admin-events-upcoming-cursor.spec.ts',
+  'tests/public-projection-routing.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +

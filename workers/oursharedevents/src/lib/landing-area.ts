@@ -51,6 +51,7 @@ import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
 import { inWhenWindow, discoveryChipLabel, type WhenOption } from './event-discovery.js';
 import { renderAttendeeMap } from './attendee-map.js';
+import { toPublicEvent } from './public-event-projection.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -236,7 +237,13 @@ export function renderLandingArea(
 
   // The map is drawn from the same `live` set as the cards, at corridor (res-7)
   // precision only, and gated on how many events it would actually show.
-  const mapHtml = renderAttendeeMap(live, { now: now.getTime() }).html;
+  // Fed through the public event projection (the allowlist behind
+  // GET /api/v2/events), so a location-precision policy (OSE-1245) that narrows
+  // what the public sees narrows the map with it.
+  const mapHtml = renderAttendeeMap(
+    live.map((e) => toPublicEvent(e as Record<string, unknown>)),
+    { now: now.getTime() }
+  ).html;
 
   const html = buildAreaMarkup({ cards, types, defaultView, mapHtml });
   return { html, types, windowCount, defaultView };
