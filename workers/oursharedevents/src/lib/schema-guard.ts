@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0081_sponsor_tier_and_compact_logo.sql */
-export const REQUIRED_DB_MIGRATION = 81;
+/** Highest migration in migrations/ — currently 0082_poster_deployments_add_placement_type.sql */
+export const REQUIRED_DB_MIGRATION = 82;
 
 /** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
 export const REQUIRED_FORMS_MIGRATION = 15;

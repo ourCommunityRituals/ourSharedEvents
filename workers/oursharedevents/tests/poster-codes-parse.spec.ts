@@ -41,10 +41,11 @@ describe('the kind catalog', () => {
     ]);
   });
 
-  test('only the event page and check-in are built server-side; every other kind is an https link', () => {
+  test('only the event page, check-in and the event registration form are built server-side; every other kind is an https link', () => {
     for (const k of POSTER_CODE_KINDS) {
       if (k.kind === 'public') expect(k.target).toBe('event');
       else if (k.kind === 'checkin') expect(k.target).toBe('checkin');
+      else if (k.kind === 'register') expect(k.target).toBe('register');
       else expect(k.target).toBe('https');
     }
   });

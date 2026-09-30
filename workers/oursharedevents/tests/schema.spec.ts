@@ -146,7 +146,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   // + 1 (migration 0079, OSE-1357: address — the place the poster hangs) = 13.
-  poster_deployments: 13,
+  // + 1 (migration 0082, OSE-1357 tiers: placement_type venue|community) = 14.
+  poster_deployments: 14,
   // Split scan path (migration 0062 — OSE-798 A1): scans (10) retired →
   // scan_placement_events (id, event_id, poster_deployment_id, scan_bucket,
   // created_at = 5) + scan_node_returns (id, event_id, anonymous_id,

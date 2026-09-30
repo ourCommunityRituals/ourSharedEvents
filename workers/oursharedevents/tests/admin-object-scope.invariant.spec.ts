@@ -232,15 +232,23 @@ describe('OSE-1080 / INVARIANT #9 — object-level admin READ is brand-scoped', 
       headersAsEmail(SCOPED)
     );
     expect(own.status).toBe(200);
+    // Poster tiers: the organizer's reach picture rides on the same response.
+    expect(((await own.json()) as { reach?: unknown }).reach).toBeDefined();
     const cross = await call(
       'GET',
       '/api/v2/admin/events/evt-obj-B1/pre-event-activity',
       headersAsEmail(SCOPED)
     );
     expect(cross.status).toBe(404);
-    const body = (await cross.json()) as { ok: boolean; code: string; activity?: unknown };
+    const body = (await cross.json()) as {
+      ok: boolean;
+      code: string;
+      activity?: unknown;
+      reach?: unknown;
+    };
     expect(body.code).toBe('NOT_FOUND');
     expect(body.activity).toBeUndefined();
+    expect(body.reach).toBeUndefined();
   });
 
   test('a cross-tenant miss is byte-identical to a genuinely unknown id', async () => {

@@ -10,9 +10,11 @@
  * the two layers are composed, never merged — no code here is a /q path.
  *
  * Targets:
- *   - INTERNAL kinds (event page, anonymous check-in) are built server-side at
- *     redirect time from the event id alone; a client-sent target is ignored.
- *   - EXTERNAL kinds (donate, sign-up, tickets, other link, ourWKRP) must be a
+ *   - INTERNAL kinds (event page, anonymous check-in, the event's own
+ *     registration form) are built server-side at redirect time from the event
+ *     id alone; a client-sent target is ignored.
+ *   - EXTERNAL kinds (donate, sponsorship, sign-up, tickets, other link,
+ *     ourWKRP) must be a
  *     valid https:// URL (isValidHttpsTarget) — javascript:, data:, http: are
  *     refused with a 400 at save time, never at resolve time.
  *
@@ -32,7 +34,7 @@ import {
 import type { Tier } from './feature-flags';
 
 /** How a code's target is produced. */
-export type PosterCodeTarget = 'event' | 'checkin' | 'https';
+export type PosterCodeTarget = 'event' | 'checkin' | 'register' | 'https';
 
 /** Colour family. Green is ONLY anonymous check-in; blue is ONLY donate. */
 export type PosterCodeTone = 'checkin' | 'donate' | 'neutral';
@@ -61,12 +63,35 @@ export const POSTER_CODE_KINDS: readonly PosterCodeKind[] = [
     target: 'checkin',
     tone: 'checkin',
   },
+  // Tier 1 (2026-09-30): the event's OWN registration form, built server-side
+  // like check-in — distinct from the external `workshop` link below.
+  {
+    kind: 'register',
+    word: 'REGISTER',
+    choice: 'Registration form',
+    target: 'register',
+    tone: 'neutral',
+  },
   { kind: 'donation', word: 'DONATE', choice: 'Donation link', target: 'https', tone: 'donate' },
+  // The organizer's sponsorship page/form — https only, neutral tone.
+  {
+    kind: 'sponsor',
+    word: 'SPONSOR',
+    choice: 'Sponsorship link',
+    target: 'https',
+    tone: 'neutral',
+  },
   { kind: 'signup', word: 'SIGN UP', choice: 'Sign-up link', target: 'https', tone: 'neutral' },
   { kind: 'tickets', word: 'TICKETS', choice: 'Tickets link', target: 'https', tone: 'neutral' },
   { kind: 'ow', word: 'MUSIC', choice: 'ourWKRP link', target: 'https', tone: 'neutral' },
   { kind: 'league', word: 'LEAGUE', choice: 'League link', target: 'https', tone: 'neutral' },
-  { kind: 'workshop', word: 'REGISTER', choice: 'Workshop link', target: 'https', tone: 'neutral' },
+  {
+    kind: 'workshop',
+    word: 'REGISTER',
+    choice: 'External registration link',
+    target: 'https',
+    tone: 'neutral',
+  },
   {
     kind: 'substack',
     word: 'SUBSCRIBE',
@@ -114,9 +139,9 @@ export function posterCodeLimit(tier: Tier): number {
 /** Where an INTERNAL kind routes — built from the event id only, no identity. */
 export function internalTarget(origin: string, eventId: string, kind: string): string {
   const id = encodeURIComponent(eventId);
-  return posterCodeKind(kind).target === 'checkin'
-    ? `${origin}/forms/${id}?type=checkin`
-    : `${origin}/events/${id}`;
+  const target = posterCodeKind(kind).target;
+  if (target === 'checkin' || target === 'register') return `${origin}/forms/${id}?type=${target}`;
+  return `${origin}/events/${id}`;
 }
 
 export interface PosterCodeInput {
