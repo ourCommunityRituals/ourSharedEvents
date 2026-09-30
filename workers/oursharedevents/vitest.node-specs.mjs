@@ -145,6 +145,9 @@ export const NODE_SPECS = [
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
   'tests/poster-multi-code-ui.spec.ts',
+  // OSE-1357 poster tiers — REGISTER/SPONSOR codes, venue vs community
+  // placements and the pre-event Reach section, run in jsdom (stubbed fetch).
+  'tests/poster-tiers-ui.spec.ts',
   // OSE-1316 / OSE-1317 — admin Create Sponsor form + /display side rail, run
   // in jsdom from the template Text imports with a stubbed fetch.
   'tests/sponsor-create-fields-ui.spec.ts',

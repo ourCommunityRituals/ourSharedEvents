@@ -4,7 +4,7 @@
  * GAS let an organiser print a walk-up event poster with no QR grid. The port
  * kept the poster and dropped the switch: `grep showQRSection src/` was 0 hits.
  * PO decision (2026-09-30): a per-event setting in `events.settings_json`
- * (migration 0082), read only through `lib/event-settings.ts` — the first slice
+ * (migration 0083), read only through `lib/event-settings.ts` — the first slice
  * of OSE-851 (X-14), which extends that module rather than adding a second home.
  *
  * Both branches are asserted (a one-branch test only proves the grid still

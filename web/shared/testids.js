@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-30 — 503 ids.
+ * Generated 2026-09-30 — 513 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 338 ids
+    // admin.html — 348 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -208,11 +208,14 @@
       'pd-mobile-nav',
       'pd-mobile-next',
       'pd-mobile-prev',
+      'pd-placement-kind',
       'pd-placement-label',
+      'pd-placement-type',
       'pd-print-btn',
       'pd-qr-fallback',
       'pd-qr-img',
       'pd-qr-token',
+      'pd-scans',
       'pd-short-link',
       'pd-short-link-block',
       'pd-shortlink-qr',
@@ -222,6 +225,9 @@
       'pd-target',
       'pd-target-label',
       'pd-target-url',
+      'pd-type-community',
+      'pd-type-venue',
+      'pd-venue-hint',
       'phase-badge',
       'portfolio-rollup',
       'poster-art-card',
@@ -275,6 +281,10 @@
       'pre-event-places',
       'pre-event-posters',
       'pre-event-qr',
+      'pre-event-reach',
+      'pre-event-reach-community',
+      'pre-event-reach-taps',
+      'pre-event-reach-venue',
       'pre-event-scans',
       'pre-event-spark',
       'pre-event-stats',

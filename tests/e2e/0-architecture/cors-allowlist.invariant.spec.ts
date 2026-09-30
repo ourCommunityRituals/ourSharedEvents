@@ -122,4 +122,27 @@ test.describe('Invariant 15: CORS Allowlist Immutability — structural code-sha
       0
     );
   });
+
+  test('OSE-INV15 | security | cors | production set excludes the staging origin (OSE-1417)', () => {
+    const src = readFileSync(CORS_LIB, 'utf8');
+    // The production Worker must not trust stg.oursharedevents.com: staging runs
+    // looser admin fallbacks. The staging origin may appear only in the
+    // staging-only set, and that set may only be consulted when
+    // WORKER_ENV === 'staging'.
+    const prodBlock = src.match(
+      /const\s+ALLOWED_ORIGINS\s*=\s*new\s+Set\s*\(\s*\[([\s\S]*?)\]\s*\)/
+    );
+    expect(prodBlock, 'ALLOWED_ORIGINS must be declared as new Set([...])').not.toBeNull();
+    expect(
+      prodBlock![1],
+      'stg.oursharedevents.com must not be in ALLOWED_ORIGINS (the production set) — ' +
+        'put it in STAGING_ONLY_ORIGINS, gated on WORKER_ENV === staging'
+    ).not.toMatch(/stg\.oursharedevents\.com/);
+    expect(src, 'STAGING_ONLY_ORIGINS may only be consulted behind a staging-env check').toMatch(
+      /isStaging\([^)]*\)\s*&&\s*STAGING_ONLY_ORIGINS\.has\s*\(/
+    );
+    expect(src, "isStaging must compare WORKER_ENV to 'staging'").toMatch(
+      /WORKER_ENV\s*===\s*'staging'/
+    );
+  });
 });

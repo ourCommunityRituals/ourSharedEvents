@@ -1,4 +1,4 @@
--- Migration 0082: events.settings_json — per-event section switches (OSE-869 / OSE-851)
+-- Migration 0083: events.settings_json — per-event section switches (OSE-869 / OSE-851)
 --
 -- GAS let an organiser turn sections of an event's surfaces on and off. The
 -- Worker port dropped every one of those switches. PO decision (2026-09-30):

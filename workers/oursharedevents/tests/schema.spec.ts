@@ -131,7 +131,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 46, // 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0082 settings_json (OSE-869)
+  events: 46, // 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0083 settings_json (OSE-869)
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
@@ -146,7 +146,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   // + 1 (migration 0079, OSE-1357: address — the place the poster hangs) = 13.
-  poster_deployments: 13,
+  // + 1 (migration 0082, OSE-1357 tiers: placement_type venue|community) = 14.
+  poster_deployments: 14,
   // Split scan path (migration 0062 — OSE-798 A1): scans (10) retired →
   // scan_placement_events (id, event_id, poster_deployment_id, scan_bucket,
   // created_at = 5) + scan_node_returns (id, event_id, anonymous_id,
