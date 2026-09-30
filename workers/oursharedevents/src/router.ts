@@ -59,6 +59,9 @@
  *   Sponsor Public (no auth):
  *   GET    /api/v2/events/:id/sponsors         → resolved sponsors for event
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
+ *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
+ *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
+ *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
@@ -126,6 +129,8 @@ import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
 import { publicReadLimited } from './lib/public-read-limit.js';
+import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
   handleListEvents,
   handleGetEvent,
@@ -438,6 +443,11 @@ export async function route(
   if (pathname.startsWith('/s/') && method === 'GET') {
     const code = pathname.slice('/s/'.length);
     return handleShortlinkResolve(request, env, code);
+  }
+
+  // OSE default sponsor image (0083) — static, same-origin, locked down.
+  if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
+    return sponsorDefaultLogoResponse();
   }
 
   if (pathname === '/ui.css') {
@@ -1593,6 +1603,13 @@ export async function route(
   // GET /sponsor?t=<token> — the sponsor's own page (token-gated, read-limited).
   if (pathname === '/sponsor' && method === 'GET') {
     return handleSponsorHomePage(request, env);
+  }
+
+  // Public sponsor card (0083): where a tap on a sponsor with no website lands.
+  // Rate-limited inside the handler (it renders an HTML 429, not JSON).
+  const sponsorCardMatch = pathname.match(/^\/sponsors\/([^/]+)$/);
+  if (sponsorCardMatch && method === 'GET') {
+    return handleSponsorCardPage(request, env, sponsorCardMatch[1]);
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────

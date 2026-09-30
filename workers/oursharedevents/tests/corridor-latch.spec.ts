@@ -1,5 +1,5 @@
 /**
- * Corridor readiness latch (VISION §6.2b; migration 0083; CCR PR 700).
+ * Corridor readiness latch (VISION §6.2b; migration 0084; CCR PR 700).
  *
  * The attendee map's gate is PER CORRIDOR (H3 res 7) and LATCHES: once a
  * corridor holds ≥ CORRIDOR_READY_MIN_EVENTS upcoming published events, the

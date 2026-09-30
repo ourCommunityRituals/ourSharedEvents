@@ -345,23 +345,34 @@
             banner.innerHTML = '<span hidden data-testid="public-sponsor-empty"></span>';
             return;
           }
-          const esc = (s) => {
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-          };
+          const SPONSOR_DEFAULT_LOGO = '/sponsor-default-logo.svg';
+          const attr = (v) =>
+            String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
           banner.innerHTML = sponsors
             .map((s) => {
-              const logo = s.logo_url
-                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="public-sponsor-logo">'
+              // 0083: every sponsor shows an image — its logo through the
+              // same-origin proxy (the page CSP is img-src 'self' data:, so an
+              // external URL here was always blocked), or the OSE default. The
+              // title is display_name → name. attr() escapes quotes too: these
+              // values land inside attributes.
+              const title = s.title || s.name;
+              const src = s.logo_url
+                ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo'
+                : SPONSOR_DEFAULT_LOGO;
+              const logo =
+                '<img src="' + attr(src) + '" alt="' + attr(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="public-sponsor-logo">';
+              const place = s.address_line
+                ? '<small data-testid="public-sponsor-address">' + attr(s.address_line) + '</small>'
                 : '';
+              // A tap goes to the https website when there is one, otherwise to
+              // the sponsor's own card (title, location, contact).
               const link = s.website_url
                 ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
                   // Referer header to the sponsor's site — the outbound click leaks neither
                   // the attendee nor which OSE event page they came from.
-                  '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + esc(s.name) + '</span></a>'
-                : '<span data-testid="public-sponsor-fallback">' + esc(s.name) + '</span>';
-              return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
+                  '<a href="' + attr(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
+                : '<a href="' + attr(s.card_url || '/sponsors/' + encodeURIComponent(s.id)) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>';
+              return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + place + '</div>';
             })
             .join('');
           banner.classList.add('sponsor-strip');
@@ -404,7 +415,13 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            el.style.display = 'none';
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
+            // vanishing; only if the default itself fails is the image hidden.
+            // The fallback is a fixed same-origin path, never read back from
+            // the DOM — data-default-src only marks which images may fall back.
+            var d = '/sponsor-default-logo.svg';
+            if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+            else el.style.display = 'none';
           }
         },
         true

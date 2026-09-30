@@ -234,7 +234,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('rel="noopener noreferrer nofollow"');
   });
 
-  test('javascript: sponsor URL falls back to name-only span — no href emitted (XSS guard)', async () => {
+  test('javascript: sponsor URL is never emitted — the tap falls back to the sponsor card (XSS guard)', async () => {
     const id = 'evt_ssp1_pre_sponsor_xss';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
     await seedSponsor(id, {
@@ -248,11 +248,13 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('Malicious Sponsor');
     expect(html).not.toContain('href="javascript:');
     expect(html).not.toContain('javascript:alert');
-    // Falls back to name-only span
-    expect(html).toContain('class="ose-sponsor-name"');
+    // 0083: a sponsor with no usable website links to its own public card.
+    expect(html).toMatch(
+      /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link"/
+    );
   });
 
-  test('null sponsor URL falls back to name-only span', async () => {
+  test('null sponsor URL links to the sponsor card instead of an outbound site', async () => {
     const id = 'evt_ssp1_pre_sponsor_nourl';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
     await seedSponsor(id, { name: 'No Link Sponsor', websiteUrl: null });
@@ -260,8 +262,11 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('No Link Sponsor');
-    expect(html).toContain('class="ose-sponsor-name"');
-    expect(html).not.toContain('class="ose-sponsor-link"');
+    // 0083 (decided 2026-09-30): tap → the sponsor's card, never nowhere.
+    expect(html).toMatch(
+      /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link">No Link Sponsor</
+    );
+    expect(html).not.toContain('rel="noopener noreferrer nofollow"');
   });
 });
 

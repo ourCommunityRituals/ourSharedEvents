@@ -109,3 +109,34 @@ export async function seedSponsorHome(
     token,
   };
 }
+
+/**
+ * A sponsor that is ON SHOW — for the public card (GET /sponsors/:id, migration
+ * 0083), which renders only a sponsor with an active, accepted placement.
+ * Accepts through the sponsor's own respond endpoint with its minted token —
+ * the same door a real sponsor uses — so no row is written behind the API.
+ */
+export async function seedSponsorCard(
+  request: APIRequestContext,
+  bearer: string,
+  label = 'Card'
+): Promise<SeededSponsorHome> {
+  const seeded = await seedSponsorHome(request, bearer, label);
+  await ok(
+    await request.post(
+      `/api/v2/sponsor/placements/${encodeURIComponent(seeded.placementId)}/respond`,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        data: { token: seeded.token, accepted: true },
+      }
+    ),
+    'sponsor accepts placement'
+  );
+  // The audit measures whatever page comes back, and a 404 would measure fine —
+  // so prove it is the card before handing the id over.
+  const card = await request.get(`/sponsors/${encodeURIComponent(seeded.sponsorId)}`);
+  if (card.status() !== 200) {
+    throw new Error(`sponsor card for ${seeded.sponsorId} returned ${card.status()}, not the card`);
+  }
+  return seeded;
+}

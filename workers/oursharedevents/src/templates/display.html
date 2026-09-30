@@ -475,14 +475,23 @@
           const data = await res.json();
           if (!data.ok) return;
           const bundle = data.bundle || {};
-          const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+          // Escapes quotes as well: these values land inside attributes (0083).
+          const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+          const SPONSOR_DEFAULT_LOGO = '/sponsor-default-logo.svg';
+          // 0083: logos load through the same-origin proxy (the page CSP and
+          // COEP both block an external <img src>), and a sponsor with no logo
+          // shows the OSE default. slot=sidebar prefers the compact logo.
+          const logoSrc = (s, slot) => s.logo_url || s.sidebar_logo_url
+            ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' + (slot ? '?slot=' + slot : '')
+            : SPONSOR_DEFAULT_LOGO;
           const tvTop = bundle.surface_sponsors?.tvTop || [];
           const tvSide = bundle.surface_sponsors?.tvSide || [];
           if (banner && tvTop.length) {
             banner.innerHTML = tvTop.map(s => {
               // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="display-sponsor-logo">' : '';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name" data-testid="display-sponsor-name">' + esc(s.name) + '</span></div>';
+              const title = s.title || s.name;
+              const logo = '<img src="' + esc(s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO) + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="display-sponsor-logo">';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name" data-testid="display-sponsor-name">' + esc(title) + '</span></div>';
             }).join('');
           }
           if (sidebar && tvSide.length) {
@@ -494,10 +503,11 @@
               // listener attached below advances the rotation immediately
               // instead of leaving a broken <img> on the venue TV.
               // OSE-1317: the side rail is the compact slot, so it prefers the
-              // sidebar logo and falls back to the header logo, then the name.
-              const sideSrc = [s.sidebar_logo_url, s.logo_url].find(function(u) { return typeof u === 'string' && /^https?:\/\//i.test(u); });
-              const logo = sideSrc ? '<img src="' + esc(sideSrc).replace(/"/g, '&quot;') + '" alt="' + esc(s.name).replace(/"/g, '&quot;') + '" referrerpolicy="no-referrer" data-testid="display-sponsor-sidebar-logo">' : '';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(s.name) + '</span></div>' +
+              // sidebar logo and falls back to the header logo (the proxy's
+              // slot=sidebar does both), then — 0083 — to the OSE default.
+              const title = s.title || s.name;
+              const logo = '<img src="' + esc(logoSrc(s, 'sidebar')) + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="display-sponsor-sidebar-logo">';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(title) + '</span></div>' +
                 (total > 1 ? '<div class="sponsor-counter" data-testid="display-sponsor-counter">' + num + '/' + total + '</div>' : '');
             }
             function attachErrorAdvance() {
@@ -512,12 +522,21 @@
               const img = sidebar.querySelector('img');
               if (!img) return;
               img.addEventListener('error', function onLogoError() {
+                if (!sidebar.querySelector('[data-testid="display-sponsor-error"]')) {
+                  const sentinel = document.createElement('span');
+                  sentinel.setAttribute('data-testid', 'display-sponsor-error');
+                  sentinel.hidden = true;
+                  sidebar.appendChild(sentinel);
+                }
+                // 0083: the sponsor keeps its slot on the OSE default rather
+                // than losing its rotation time to a broken host (#25 share).
+                if (img.getAttribute('src') !== SPONSOR_DEFAULT_LOGO) {
+                  img.setAttribute('src', SPONSOR_DEFAULT_LOGO);
+                  return;
+                }
+                // Only if the default itself cannot load: hide it and move on.
                 img.removeEventListener('error', onLogoError);
                 img.style.display = 'none';
-                const sentinel = document.createElement('span');
-                sentinel.setAttribute('data-testid', 'display-sponsor-error');
-                sentinel.hidden = true;
-                sidebar.appendChild(sentinel);
                 if (total > 1) showNext();
               });
             }
@@ -577,7 +596,13 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            el.style.display = 'none';
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
+            // vanishing; only if the default itself fails is the image hidden.
+            // The fallback is a fixed same-origin path, never read back from
+            // the DOM — data-default-src only marks which images may fall back.
+            var d = '/sponsor-default-logo.svg';
+            if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+            else el.style.display = 'none';
           }
         },
         true

@@ -3867,6 +3867,23 @@
                 aria-required="true"
               />
             </div>
+            <!-- 0083: the public card. A sponsor is complete with only a name;
+                 everything below the tier is optional and shown publicly. -->
+            <div>
+              <label for="spon-display-name">Display name (optional)</label>
+              <input
+                type="text"
+                id="spon-display-name"
+                name="display_name"
+                data-testid="spon-display-name"
+                placeholder="Joe's Pizza — Beverly"
+                maxlength="80"
+                aria-describedby="spon-display-name-hint"
+              />
+              <p class="spon-covenant-note" id="spon-display-name-hint" data-testid="spon-display-name-hint">
+                The title people see. Leave blank to show the name above.
+              </p>
+            </div>
             <!-- OSE-1316/1317: tier is the only hard gate. The six stored tiers
                  share out as Premium / Mid / Base (sovTierOf). -->
             <div>
@@ -3912,6 +3929,21 @@
               </p>
             </div>
             <div>
+              <label for="spon-image-choice">Image</label>
+              <select
+                id="spon-image-choice"
+                name="image_choice"
+                data-testid="spon-image-choice"
+                aria-describedby="spon-image-choice-hint"
+              >
+                <option value="default">OSE default image</option>
+                <option value="own">Our own logo</option>
+              </select>
+              <p class="spon-covenant-note" id="spon-image-choice-hint" data-testid="spon-image-choice-hint">
+                Every sponsor shows an image. No logo? The OSE default is used, at every tier.
+              </p>
+            </div>
+            <div id="spon-logo-field" hidden data-testid="spon-logo-field">
               <label for="spon-logo">Header logo URL (optional)</label>
               <input
                 type="text"
@@ -3927,7 +3959,7 @@
                 Wide, about 3:1 (e.g. 600&times;200), for the top of the page.
               </p>
             </div>
-            <div>
+            <div id="spon-sidebar-logo-field" hidden data-testid="spon-sidebar-logo-field">
               <label for="spon-sidebar-logo">Sidebar logo URL (optional)</label>
               <input
                 type="text"
@@ -3940,7 +3972,7 @@
                 aria-describedby="spon-sidebar-logo-hint"
               />
               <p class="spon-covenant-note" id="spon-sidebar-logo-hint" data-testid="spon-sidebar-logo-hint">
-                Square or compact (e.g. 300&times;300), for the side rail. No logo? The name shows instead.
+                Square or compact (e.g. 300&times;300), for the side rail. Blank uses the header logo, then the OSE default.
               </p>
             </div>
             <div class="full-width">
@@ -3956,8 +3988,48 @@
                 aria-describedby="spon-website-hint"
               />
               <p class="spon-covenant-note" id="spon-website-hint" data-testid="spon-website-hint">
-                Must start with https://. Leave blank for no link.
+                Must start with https://. Leave blank and a tap opens the sponsor's card instead.
               </p>
+            </div>
+            <div class="full-width">
+              <label for="spon-address">Location (optional)</label>
+              <input
+                type="text"
+                id="spon-address"
+                name="address_line"
+                data-testid="spon-address"
+                placeholder="10255 S Western Ave, Chicago — or just Beverly"
+                maxlength="200"
+                autocomplete="street-address"
+                aria-describedby="spon-address-hint"
+              />
+              <p class="spon-covenant-note" id="spon-address-hint" data-testid="spon-address-hint">
+                Shown publicly, where your business wants to be found. A neighborhood is fine.
+              </p>
+            </div>
+            <div>
+              <label for="spon-phone">Phone (optional)</label>
+              <input
+                type="tel"
+                id="spon-phone"
+                name="contact_phone"
+                data-testid="spon-phone"
+                placeholder="(773) 555-0100"
+                maxlength="32"
+                autocomplete="tel"
+              />
+            </div>
+            <div>
+              <label for="spon-email">Email (optional)</label>
+              <input
+                type="email"
+                id="spon-email"
+                name="contact_email"
+                data-testid="spon-email"
+                placeholder="hello@acme.com"
+                maxlength="254"
+                autocomplete="email"
+              />
             </div>
             <div class="full-width">
               <label id="spon-placement-label">Placement &amp; share</label>
@@ -4173,6 +4245,27 @@
         // Event-row selection drives the scope.
         window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
 
+        // 0083: the image choice reveals the two logo fields only for "own".
+        // "default" is not stored — it is simply "no logo", so choosing it on
+        // an edit clears both logos (see the submit handler).
+        const SPON_IMAGE_HINT = 'Every sponsor shows an image. No logo? The OSE default is used, at every tier.';
+        function syncImageChoice() {
+          const own = document.getElementById('spon-image-choice').value === 'own';
+          document.getElementById('spon-logo-field').hidden = !own;
+          document.getElementById('spon-sidebar-logo-field').hidden = !own;
+          // Editing a sponsor that HAS logos and switching to the default clears
+          // them on save — say so before it happens, not after (CCR PR #699).
+          const editing = !!document.getElementById('spon-edit-id').value.trim();
+          const hasLogo = !!(document.getElementById('spon-logo').value.trim() ||
+                             document.getElementById('spon-sidebar-logo').value.trim());
+          document.getElementById('spon-image-choice-hint').textContent =
+            !own && editing && hasLogo
+              ? 'Saving will remove this sponsor’s saved logos and show the OSE default image.'
+              : SPON_IMAGE_HINT;
+        }
+        document.getElementById('spon-image-choice').addEventListener('change', syncImageChoice);
+        const SPON_CARD_FIELDS = ['spon-display-name', 'spon-address', 'spon-phone', 'spon-email'];
+
         function openForm() {
           const wrap = document.getElementById('spon-form-wrap');
           const btn = document.getElementById('add-spon-toggle');
@@ -4188,7 +4281,8 @@
           document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
           document.getElementById('spon-edit-id').value = '';
           document.getElementById('spon-create-form').reset();
-          ['spon-name', 'spon-tier', 'spon-website'].forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
+          syncImageChoice();
+          ['spon-name', 'spon-tier', 'spon-website', 'spon-logo', 'spon-sidebar-logo'].concat(SPON_CARD_FIELDS).forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
           const msg = document.getElementById('spon-form-msg');
           msg.textContent = '';
           msg.className = 'create-msg';
@@ -4253,7 +4347,13 @@
             document.getElementById('spon-tier').value = s.tier || '';
             document.getElementById('spon-logo').value = s.logo_url || '';
             document.getElementById('spon-sidebar-logo').value = s.sidebar_logo_url || '';
+            document.getElementById('spon-image-choice').value = s.logo_url || s.sidebar_logo_url ? 'own' : 'default';
+            syncImageChoice();
             document.getElementById('spon-website').value = s.website_url || '';
+            document.getElementById('spon-display-name').value = s.display_name || '';
+            document.getElementById('spon-address').value = s.address_line || '';
+            document.getElementById('spon-phone').value = s.contact_phone || '';
+            document.getElementById('spon-email').value = s.contact_email || '';
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
             const localPill = document.getElementById('spon-is-local-pill');
@@ -4402,11 +4502,20 @@
           // ignores any client-supplied slot. Tier is what governs share.
           const body = { name: name, tier: tier };
           if (event_id) body.event_id = event_id;
-          const logoVal = document.getElementById('spon-logo').value.trim();
-          if (logoVal) body.logo_url = logoVal;
-          const sideLogoVal = document.getElementById('spon-sidebar-logo').value.trim();
-          if (sideLogoVal) body.sidebar_logo_url = sideLogoVal;
-          if (siteVal) body.website_url = siteVal;
+          // 0083: "OSE default" means no logo — on an edit that CLEARS any logo
+          // the sponsor had; "own" sends both fields (blank clears that one).
+          const ownImage = document.getElementById('spon-image-choice').value === 'own';
+          const logoVal = ownImage ? document.getElementById('spon-logo').value.trim() : '';
+          const sideLogoVal = ownImage ? document.getElementById('spon-sidebar-logo').value.trim() : '';
+          if (logoVal || editId) body.logo_url = logoVal || null;
+          if (sideLogoVal || editId) body.sidebar_logo_url = sideLogoVal || null;
+          if (siteVal || editId) body.website_url = siteVal || null;
+          // Public card fields: optional; on an edit a blank field clears it.
+          [['spon-display-name', 'display_name'], ['spon-address', 'address_line'],
+           ['spon-phone', 'contact_phone'], ['spon-email', 'contact_email']].forEach(function(pair) {
+            const v = document.getElementById(pair[0]).value.trim();
+            if (v || editId) body[pair[1]] = v || null;
+          });
 
           btn.disabled = true;
           btn.textContent = editId ? 'Updating…' : 'Saving…';
@@ -4417,7 +4526,18 @@
             const url = editId ? '/api/v2/admin/sponsors/' + editId : '/api/v2/admin/sponsors';
             const res = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+            if (!res.ok || !data.ok) {
+              // Point at the field the server rejected (inline, focused).
+              const fieldFor = {
+                INVALID_DISPLAY_NAME: 'spon-display-name', INVALID_ADDRESS_LINE: 'spon-address',
+                INVALID_CONTACT_PHONE: 'spon-phone', INVALID_CONTACT_EMAIL: 'spon-email',
+                INVALID_WEBSITE_URL: 'spon-website', INVALID_LOGO_URL: 'spon-logo',
+                INVALID_SIDEBAR_LOGO_URL: 'spon-sidebar-logo', MISSING_TIER: 'spon-tier', INVALID_TIER: 'spon-tier'
+              }[data.code];
+              const fieldEl = fieldFor ? document.getElementById(fieldFor) : null;
+              if (fieldEl) { fieldEl.setAttribute('aria-invalid', 'true'); fieldEl.focus(); }
+              throw new Error(data.error || 'Save failed');
+            }
             msg.className = 'create-msg success';
             msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) +
               ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';

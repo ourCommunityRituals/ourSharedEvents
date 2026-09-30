@@ -15,6 +15,7 @@ import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
+import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -681,6 +682,9 @@ interface SponsorBasicRow {
   id: string;
   name: string;
   website_url: string | null;
+  /** 0083: optional public title and location (sponsor-entered, public). */
+  display_name?: string | null;
+  address_line?: string | null;
 }
 
 interface EventPageSocialData {
@@ -694,12 +698,17 @@ interface EventPageSocialData {
 }
 
 function renderSponsorItem(s: SponsorBasicRow): string {
-  const name = esc(s.name);
+  const name = esc(sponsorTitle(s));
   const url = s.website_url ?? '';
+  // 0083: the location the sponsor chose to show, after the name.
+  const place = s.address_line
+    ? ` <small data-testid="sponsor-item-address">${esc(s.address_line)}</small>`
+    : '';
   if (url.startsWith('https://')) {
-    return `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>`;
+    return `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>${place}`;
   }
-  return `<span class="ose-sponsor-name">${name}</span>`;
+  // No website: a tap opens the sponsor's own card (title, location, contact).
+  return `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link">${name}</a>${place}`;
 }
 
 /**
@@ -1529,7 +1538,8 @@ async function fetchEventPageSocialData(
         ? env.DB.prepare(
             // OSE-799 A2: reconstruct the public sponsor list from the split model —
             // active placements on this event, joined to their business identity.
-            `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url
+            `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
+                    sb.display_name AS display_name, sb.address_line AS address_line
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
@@ -2138,7 +2148,7 @@ export async function handleLandingPage(
     const result = await dp.listEvents('root');
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
     // §6.2b latch: corridors that have ever reached the threshold stay on the
-    // map. Brand-bound read; a missing table (pre-0083) just means none yet.
+    // map. Brand-bound read; a missing table (pre-0084) just means none yet.
     let latched = new Set<string>();
     if ((env as LandingEnv).DB) {
       try {

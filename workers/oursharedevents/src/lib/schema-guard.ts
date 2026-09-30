@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0083_corridor_readiness_latch.sql */
-export const REQUIRED_DB_MIGRATION = 83;
+/** Highest migration in migrations/ — currently 0084_corridor_readiness_latch.sql */
+export const REQUIRED_DB_MIGRATION = 84;
 
 /** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
 export const REQUIRED_FORMS_MIGRATION = 15;

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title><!--OCR_SPONSOR_TITLE--> · OurSharedEvents</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      main{max-width:560px;margin:0 auto;padding:1rem 16px 3rem}
+      .sc-logo{display:block;width:96px;height:96px;object-fit:contain;margin:0 auto 1rem}
+      .sc-title{text-align:center;overflow-wrap:anywhere}
+      .sc-line{text-align:center;color:var(--text-muted)}
+      .sc-actions{display:grid;gap:12px;margin-top:1.25rem}
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>OurSharedEvents</h1>
+      <a class="btn btn-link" href="/events" data-testid="sponsor-card-nav-events">What's on</a>
+    </header>
+    <main id="main-content" data-testid="sponsor-card" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
+      <section class="card" aria-labelledby="sponsor-card-title">
+        <div class="card-body">
+          <!--OCR_SPONSOR_LOGO-->
+          <h2 class="sc-title" id="sponsor-card-title" data-testid="sponsor-card-title"><!--OCR_SPONSOR_TITLE--></h2>
+          <!--OCR_SPONSOR_LINES-->
+          <div class="sc-actions"><!--OCR_SPONSOR_ACTIONS--></div>
+        </div>
+      </section>
+    </main>
+    <!--OCR_LEGAL_FOOTER-->
+    <script>
+      // A logo that fails to load becomes the OSE default (inline onerror= is
+      // CSP-blocked; the 'error' event does not bubble, so listen in capture).
+      document.addEventListener(
+        'error',
+        function (ev) {
+          var el = ev.target;
+          // Fixed same-origin fallback; never read back from the DOM.
+          var d = '/sponsor-default-logo.svg';
+          if (el && el.tagName === 'IMG' && el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) {
+            el.setAttribute('src', d);
+          }
+        },
+        true
+      );
+    </script>
+  </body>
+</html>

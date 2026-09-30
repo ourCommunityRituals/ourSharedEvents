@@ -228,9 +228,13 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     );
     await page.check('[data-testid="events-sort-upcoming"]');
     await listed;
+    // Wait for the SORTED list first: `near` is on the default page too, so
+    // checking its row before the label flips could pass on the stale list.
+    await expect(page.getByTestId('events-count')).toContainText('soonest first', {
+      timeout: 15000,
+    });
     const nearRow = page.locator(`[data-testid="event-row-${near}"]`);
     await expect(nearRow).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('events-count')).toContainText('soonest first');
     const order = await page.$$eval(
       '[data-testid="events-tbody"] tr[data-action="event-select"]',
       (rows) => rows.map((r) => r.getAttribute('data-event-id'))

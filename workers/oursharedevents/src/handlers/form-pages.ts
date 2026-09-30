@@ -240,7 +240,12 @@ const FORM_JS_SUBMIT = `
   document.addEventListener('error', function (ev) {
     var el = ev.target;
     if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-      el.style.display = 'none';
+      // 0083: swap a failing sponsor logo to the OSE default; hide only if
+      // the default itself fails.
+      // Fixed same-origin fallback; never read back from the DOM.
+      var d = '/sponsor-default-logo.svg';
+      if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+      else el.style.display = 'none';
     }
   }, true);
   // OSE-R-002: code → friendly copy. Update both this map AND the standard
@@ -350,10 +355,9 @@ const FORM_JS_SUBMIT = `
         });
       };
       var items = cache.slice(0, 3).map(function(s) {
-        var name = escAttr(s.name);
-        var logo = s.logo_url && s.id
-          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" />'
-          : '';
+        var name = escAttr(s.title || s.name);
+        // 0083: no logo → the OSE default; a failing logo swaps to it too.
+        var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');
       thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">Event supported by</span><div class="sponsor-row">' + items + '</div></div>';
@@ -394,10 +398,8 @@ const FORM_JS_SPONSOR = `
           });
         };
         var items = banner.slice(0, 3).map(function(s) {
-          var name = escAttr(s.name);
-          var logo = s.logo_url && s.id
-            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" />'
-            : '';
+          var name = escAttr(s.title || s.name);
+          var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
         }).join('');
         strip.innerHTML = '<span class="strip-label">Supported by</span>' + items;
