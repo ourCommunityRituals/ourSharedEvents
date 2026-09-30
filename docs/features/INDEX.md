@@ -43,29 +43,30 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 
 ## Feature Map by Tier
 
-| Feature                           | Free | Mid | Enterprise | Doc                            |
-| --------------------------------- | :--: | :-: | :--------: | ------------------------------ |
-| Event listing (public page)       |  Y   |  Y  |     Y      | [EVENTS.md](EVENTS.md)         |
-| Registration form                 |  Y   |  Y  |     Y      | [FORMS.md](FORMS.md)           |
-| Check-in counter                  |  Y   |  Y  |     Y      | [FORMS.md](FORMS.md)           |
-| Survey form                       |  -   |  Y  |     Y      | [FORMS.md](FORMS.md)           |
-| Email signup form                 |  -   |  Y  |     Y      | [FORMS.md](FORMS.md)           |
-| UEC color-coded QR system         |  Y   |  Y  |     Y      | [UEC-CODES.md](UEC-CODES.md)   |
-| QR code form routing              |  Y   |  Y  |     Y      | [QR-ROUTING.md](QR-ROUTING.md) |
-| Sponsor attribution tracking      |  Y   |  Y  |     Y      | [SPONSORS.md](SPONSORS.md)     |
-| Admin dashboard                   |  Y   |  Y  |     Y      | [SURFACES.md](SURFACES.md)     |
-| Own brand namespace               |  -   |  Y  |     Y      | [BRANDS.md](BRANDS.md)         |
-| Self-serve event config           |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
-| Shared analytics report           |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
-| SharedReport depth (sections/tier) |  -   |  Y  |     Y      | [REPORT-DEPTH.md](REPORT-DEPTH.md) |
-| Advanced metrics + PDF export     |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
-| Portfolio reports                 |  -   |  -  |     Y      | [TIERS.md](TIERS.md)           |
-| File upload (logos, posters)      |  -   |  -  |     Y      | [TIERS.md](TIERS.md)           |
-| White-label branding              |  -   |  -  |     Y      | [BRANDS.md](BRANDS.md)         |
-| Custom domain                     |  -   |  -  |     Y      | [BRANDS.md](BRANDS.md)         |
-| Per-event feature overrides       |  -   |  -  |     Y      | [TIERS.md](TIERS.md)           |
-| PII lifecycle (auto-scrub/delete) |  Y   |  Y  |     Y      | [PRIVACY.md](PRIVACY.md)       |
-| Landing page + email capture      |  Y   |  Y  |     Y      | [SURFACES.md](SURFACES.md)     |
+| Feature                                       | Free | Mid | Enterprise | Doc                                          |
+| --------------------------------------------- | :--: | :-: | :--------: | -------------------------------------------- |
+| Event listing (public page)                   |  Y   |  Y  |     Y      | [EVENTS.md](EVENTS.md)                       |
+| Registration form                             |  Y   |  Y  |     Y      | [FORMS.md](FORMS.md)                         |
+| Check-in counter                              |  Y   |  Y  |     Y      | [FORMS.md](FORMS.md)                         |
+| Survey form                                   |  -   |  Y  |     Y      | [FORMS.md](FORMS.md)                         |
+| Email signup form                             |  -   |  Y  |     Y      | [FORMS.md](FORMS.md)                         |
+| UEC color-coded QR system                     |  Y   |  Y  |     Y      | [UEC-CODES.md](UEC-CODES.md)                 |
+| QR codes and short links (tracking + routing) |  Y   |  Y  |     Y      | [QR-AND-SHORTLINKS.md](QR-AND-SHORTLINKS.md) |
+| QR code form routing                          |  Y   |  Y  |     Y      | [QR-ROUTING.md](QR-ROUTING.md)               |
+| Sponsor attribution tracking                  |  Y   |  Y  |     Y      | [SPONSORS.md](SPONSORS.md)                   |
+| Admin dashboard                               |  Y   |  Y  |     Y      | [SURFACES.md](SURFACES.md)                   |
+| Own brand namespace                           |  -   |  Y  |     Y      | [BRANDS.md](BRANDS.md)                       |
+| Self-serve event config                       |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)                         |
+| Shared analytics report                       |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)                         |
+| SharedReport depth (sections/tier)            |  -   |  Y  |     Y      | [REPORT-DEPTH.md](REPORT-DEPTH.md)           |
+| Advanced metrics + PDF export                 |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)                         |
+| Portfolio reports                             |  -   |  -  |     Y      | [TIERS.md](TIERS.md)                         |
+| File upload (logos, posters)                  |  -   |  -  |     Y      | [TIERS.md](TIERS.md)                         |
+| White-label branding                          |  -   |  -  |     Y      | [BRANDS.md](BRANDS.md)                       |
+| Custom domain                                 |  -   |  -  |     Y      | [BRANDS.md](BRANDS.md)                       |
+| Per-event feature overrides                   |  -   |  -  |     Y      | [TIERS.md](TIERS.md)                         |
+| PII lifecycle (auto-scrub/delete)             |  Y   |  Y  |     Y      | [PRIVACY.md](PRIVACY.md)                     |
+| Landing page + email capture                  |  Y   |  Y  |     Y      | [SURFACES.md](SURFACES.md)                   |
 
 ---
 
@@ -88,7 +89,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Document                                 | Description                                                             |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
 | [SPONSORS.md](SPONSORS.md)               | Sponsor experience: attribution, analytics, tiers by scale              |
-| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | What each report depth (local/mid/premium) shows a sponsor, and why      |
+| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | What each report depth (local/mid/premium) shows a sponsor, and why     |
 | [SPONSOR-PRICING.md](SPONSOR-PRICING.md) | Pricing governance: weight classes, governor, pool dynamics             |
 | [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) | Deep dive: pool-based allocation — security, edge cases, error handling |
 | [BRANDS.md](BRANDS.md)                   | Multi-brand isolation, white-label, sponsor layering                    |
@@ -99,15 +100,15 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 
 ### For Admins (Event Organizers)
 
-| Document                                 | Description                                           |
-| ---------------------------------------- | ----------------------------------------------------- |
-| [TIERS.md](TIERS.md)                     | How to enable features, manage flags, apply tiers     |
+| Document                                 | Description                                            |
+| ---------------------------------------- | ------------------------------------------------------ |
+| [TIERS.md](TIERS.md)                     | How to enable features, manage flags, apply tiers      |
 | [REPORT-DEPTH.md](REPORT-DEPTH.md)       | How report depth is minted into share links + enforced |
-| [FORMS.md](FORMS.md)                     | Admin endpoints, registration counts, form management |
-| [QR-ROUTING.md](QR-ROUTING.md)           | Generating QR links, test-IDs for automation          |
-| [BRANDS.md](BRANDS.md)                   | Brand setup, isolation, sponsor management            |
-| [SPONSORS.md](SPONSORS.md)               | Sponsor attribution data and placement tracking       |
-| [AUTH.md](AUTH.md)                       | Admin access: Cloudflare Access + Bearer token        |
-| [EVENTS.md](EVENTS.md)                   | Event APIs and data model                             |
-| [SURFACES.md](SURFACES.md)               | Admin dashboard and all surfaces                      |
-| [ERROR-REFERENCE.md](ERROR-REFERENCE.md) | Troubleshooting every error code                      |
+| [FORMS.md](FORMS.md)                     | Admin endpoints, registration counts, form management  |
+| [QR-ROUTING.md](QR-ROUTING.md)           | Generating QR links, test-IDs for automation           |
+| [BRANDS.md](BRANDS.md)                   | Brand setup, isolation, sponsor management             |
+| [SPONSORS.md](SPONSORS.md)               | Sponsor attribution data and placement tracking        |
+| [AUTH.md](AUTH.md)                       | Admin access: Cloudflare Access + Bearer token         |
+| [EVENTS.md](EVENTS.md)                   | Event APIs and data model                              |
+| [SURFACES.md](SURFACES.md)               | Admin dashboard and all surfaces                       |
+| [ERROR-REFERENCE.md](ERROR-REFERENCE.md) | Troubleshooting every error code                       |
