@@ -27,12 +27,17 @@ function cardMarkup(html: string): string {
   return html.slice(start, end);
 }
 
+// The card's script, found as a parsed element (jsdom parses without running
+// scripts) rather than by searching the raw text for a script tag — string
+// slicing around a script tag is what Semgrep's unknown-value-with-script-tag
+// rule flags, and a parser is the more honest extraction anyway.
 function cardScript(html: string): string {
-  const anchor = html.indexOf('window.loadPosterDeployments = async function');
-  expect(anchor, 'poster card script').toBeGreaterThan(-1);
-  const open = html.lastIndexOf('<script>', anchor);
-  const close = html.indexOf('</script>', anchor);
-  return html.slice(open + '<script>'.length, close);
+  const doc = new JSDOM(html).window.document;
+  const el = Array.from(doc.querySelectorAll('script')).find((s) =>
+    (s.textContent || '').includes('window.loadPosterDeployments = async function')
+  );
+  expect(el, 'poster card script').toBeDefined();
+  return el!.textContent || '';
 }
 
 type Reply = { status?: number; body?: unknown; reject?: boolean };
