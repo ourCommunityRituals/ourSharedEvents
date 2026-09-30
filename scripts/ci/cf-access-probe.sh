@@ -46,6 +46,21 @@
 # USAGE
 #   CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… ADMIN_KEY=… \
 #     scripts/ci/cf-access-probe.sh [--gate] [--url=https://stg…/api/v2/admin/sponsors]
+#
+# CHALLENGE MODE (OSE-1418) — `--expect-challenge`
+#   Sends NO credentials. An unauthenticated request to an admin path must be
+#   stopped by the Cloudflare Access app that belongs to THAT host: the login
+#   redirect names `/cdn-cgi/access/login/<host>`. This catches OSE-1353's exact
+#   symptom (the production host answered by the STAGING Access app) and the
+#   worse one (no Access app at all, so the request reaches the Worker). It
+#   needs no secret, so it can watch production before a prod service token
+#   exists. Classifications:
+#     access_ok         login challenge for the probed host.
+#     wrong_access_app  login challenge for a DIFFERENT host (OSE-1353).
+#     no_access         the Worker answered (no Access challenge at all).
+#     network           curl failed (transient, not gated).
+#     unexpected        anything else.
+#   Under --gate only access_ok and network exit 0.
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
@@ -61,21 +76,75 @@ cf_access_classify() {
   echo unexpected
 }
 
+# --- Pure challenge classifier (OSE-1418). ------------------------------------
+# (curl_exit, http_status, probed_host, login_url) → enum. `login_url` is the
+# redirect Location, or any Access login URL found in the body; empty if none.
+cf_access_challenge_classify() {
+  local curl_exit="$1" status="$2" probed_host="$3" login_url="$4" login_host
+  if [ "$curl_exit" -ne 0 ]; then echo network; return; fi
+  login_host=$(printf '%s' "$login_url" \
+    | sed -nE 's#.*/cdn-cgi/access/login/([^/?#&"]+).*#\1#p' | head -n1 | tr '[:upper:]' '[:lower:]')
+  if [ -n "$login_host" ]; then
+    if [ "$login_host" = "$(printf '%s' "$probed_host" | tr '[:upper:]' '[:lower:]')" ]; then
+      echo access_ok
+    else
+      echo wrong_access_app
+    fi
+    return
+  fi
+  case "$status" in
+    2??|401|404|405) echo no_access ;;
+    *)               echo unexpected ;;
+  esac
+}
+
 # When sourced (by the test), stop here — expose the classifier only.
 [ "${BASH_SOURCE[0]:-$0}" != "${0}" ] && return 0
 
 GATE=0
+CHALLENGE=0
 URL="${PROBE_URL:-https://stg.oursharedevents.com/api/v2/admin/sponsors}"
 for arg in "$@"; do
   case "$arg" in
-    --gate)   GATE=1 ;;
-    --url=*)  URL="${arg#--url=}" ;;
+    --gate)             GATE=1 ;;
+    --expect-challenge) CHALLENGE=1 ;;
+    --url=*)            URL="${arg#--url=}" ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
 
 summary() { [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo -e "$1" >> "$GITHUB_STEP_SUMMARY"; }
 emit()    { [ -n "${GITHUB_OUTPUT:-}" ] && echo "$1" >> "$GITHUB_OUTPUT"; }
+
+# --- Challenge mode: no credentials, check WHICH Access app answers. ----------
+if [ "$CHALLENGE" -eq 1 ]; then
+  host=$(printf '%s' "$URL" | sed -E 's#^[a-z]+://([^/:]+).*#\1#')
+  BODY_FILE="${RUNNER_TEMP:-/tmp}/cf-access-challenge.body"
+  response=$(curl -sS -o "$BODY_FILE" -w '%{http_code}|%{redirect_url}' --max-time 30 "$URL")
+  curl_exit=$?
+  IFS='|' read -r status location <<< "$response"
+  login_url="$location"
+  if [ -z "$login_url" ] || ! printf '%s' "$login_url" | grep -q '/cdn-cgi/access/login/'; then
+    login_url=$(grep -o 'https\?://[^"'"'"' <>]*/cdn-cgi/access/login/[^"'"'"' <>]*' "$BODY_FILE" 2>/dev/null | head -n1)
+  fi
+  classification=$(cf_access_challenge_classify "$curl_exit" "$status" "$host" "$login_url")
+  login_host=$(printf '%s' "$login_url" | sed -nE 's#.*/cdn-cgi/access/login/([^/?#&"]+).*#\1#p' | head -n1)
+  summary "## CF Access challenge — \`$host\`\n\n| Field | Value |\n| --- | --- |\n| URL | \`$URL\` |\n| HTTP status | \`$status\` |\n| Access login host | \`${login_host:-none}\` |\n| Result | \`$classification\` |\n"
+  case "$classification" in
+    access_ok)        ;;
+    wrong_access_app) echo "::error title=Wrong Access app (OSE-1353)::$host is challenged by the Access app for $login_host" ;;
+    no_access)        echo "::error title=No Access challenge::$URL reached the Worker (HTTP $status) without an Access login" ;;
+    network)          echo "::warning title=CF Access challenge: network::curl exit=$curl_exit" ;;
+    *)                echo "::warning title=CF Access challenge: unexpected::HTTP $status" ;;
+  esac
+  emit "classification=$classification"
+  emit "http_code=$status"
+  echo "classification=$classification (HTTP $status, host $host, access login host ${login_host:-none})"
+  if [ "$GATE" -eq 1 ]; then
+    case "$classification" in access_ok|network) exit 0 ;; *) exit 1 ;; esac
+  fi
+  exit 0
+fi
 
 # --- Config-absent guard: classify BEFORE spending a network round-trip. ------
 missing=()
