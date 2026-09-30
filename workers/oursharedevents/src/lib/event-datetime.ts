@@ -12,6 +12,13 @@
  * the .ics `formatInTimezone` in handlers/calendar.ts; this generalizes it.
  */
 
+/**
+ * The platform's home zone (the Blue Island / south-Chicagoland corridor). The
+ * zone an event is read in when `events.timezone` is missing or not a valid IANA
+ * name — the same fallback event-discovery and pre-event-activity use.
+ */
+export const PLATFORM_HOME_TZ = 'America/Chicago';
+
 /** True if `tz` is an IANA zone the runtime's Intl accepts (e.g. "America/Chicago"). */
 export function isValidIanaTimezone(tz: string | null | undefined): boolean {
   if (!tz || typeof tz !== 'string') return false;
@@ -191,6 +198,89 @@ export function zonedTimePart(utcIso: string | null | undefined, tz: string | nu
   return `${hour}:${map.minute}`;
 }
 
+// ── OSE-1376: SharedReport hour-bucket labels in the EVENT's zone ────────────
+
+/** Where a report's display zone came from. */
+export type EventZoneSource = 'event' | 'platform_default';
+
+export interface EventZone {
+  /** The IANA zone every hour label on the report is rendered in. */
+  zone: string;
+  /**
+   * 'event' = the event's own `events.timezone`; 'platform_default' = the event
+   * had no usable zone, so its hours are shown in PLATFORM_HOME_TZ — the page
+   * says so rather than letting a viewer assume the times are the event's own.
+   */
+  source: EventZoneSource;
+}
+
+/** The zone a report labels this event's hours in (event's own, else the platform home zone). */
+export function resolveEventZone(tz: string | null | undefined): EventZone {
+  return isValidIanaTimezone(tz)
+    ? { zone: tz as string, source: 'event' }
+    : { zone: PLATFORM_HOME_TZ, source: 'platform_default' };
+}
+
+// A stored timestamp WITHOUT an offset. Two shapes reach the report: the hourly
+// `scan_bucket` ("YYYY-MM-DDTHH:00") and SQLite `datetime('now')`
+// ("YYYY-MM-DD HH:MM:SS"). Both are UTC by construction, but `new Date()` reads
+// an offset-less date-time as the RUNTIME's local time — correct on workerd
+// (UTC) only by accident. Parse them as UTC explicitly.
+const OFFSETLESS_DATETIME_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+/** Parse a stored UTC timestamp (with or without an explicit offset). Null if unparseable. */
+export function parseUtcInstant(value: string | null | undefined): Date | null {
+  if (!value || typeof value !== 'string') return null;
+  const s = value.trim();
+  const m = OFFSETLESS_DATETIME_RE.exec(s);
+  const d = new Date(m ? `${m[1]}T${m[2]}Z` : s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Label one UTC hour bucket in the event's zone, e.g. "Sat, Oct 24 · 7 PM CDT".
+ *
+ * Decisions (OSE-1376), all deliberate:
+ *  - LABEL, NEVER RE-BUCKET. Buckets stay the stored UTC hours, so the 60-minute
+ *    floor and the K>=5 per-bucket floor act on exactly the cells they were
+ *    audited on (OSE-945/OSE-676). Only the words on a bucket change.
+ *  - Half-hour / 45-minute zones (Asia/Kolkata, Asia/Kathmandu): a UTC hour
+ *    starts at :30/:45 local, and the label says so ("6:30 PM GMT+5:30") rather
+ *    than rounding to a local hour the bucket does not start on. Whole-hour zones
+ *    omit ":00".
+ *  - DST: the zone abbreviation is always part of the label, so the two 1 AM
+ *    hours of a fall-back day stay distinct ("1 AM CDT" / "1 AM CST"). Labels
+ *    come from Intl for the bucket's real instant, so a spring-forward day never
+ *    shows the skipped hour (1 AM CST is followed by 3 AM CDT).
+ *  - An invalid/missing zone falls back to PLATFORM_HOME_TZ (resolveEventZone).
+ *
+ * Returns '' for an unparseable value (the caller keeps the raw UTC value).
+ */
+export function formatHourBucketLabel(
+  utcValue: string | null | undefined,
+  tz: string | null | undefined
+): string {
+  const d = parseUtcInstant(utcValue);
+  if (!d) return '';
+  const zone = resolveEventZone(tz).zone;
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+  const minute = zonedTimePart(d.toISOString(), zone).slice(3);
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hour: 'numeric',
+    ...(minute !== '00' ? { minute: '2-digit' as const } : {}),
+    timeZoneName: 'short',
+  }).format(d);
+  // Newer ICU separates "7" and "PM" with U+202F; normalize so a label is one
+  // stable string regardless of the runtime's ICU version.
+  return `${day} · ${time}`.replace(/[  ]/g, ' ');
+}
+
 /**
  * The ISO start/end the canonical phase resolver (domain/event-phase) should
  * see for an event. The resolver's contract takes ISO datetimes and is left
@@ -232,7 +322,7 @@ export function phaseTimesFor(row: {
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The zone a date-only event's day is read in when events.timezone is unusable. */
-const DATE_ONLY_DEFAULT_ZONE = 'America/Chicago';
+const DATE_ONLY_DEFAULT_ZONE = PLATFORM_HOME_TZ;
 
 /** Local 23:59:59.999 of `dateStr` in `zone`, as a UTC ISO instant. */
 function endOfLocalDayUtcIso(dateStr: string, zone: string): string | null {

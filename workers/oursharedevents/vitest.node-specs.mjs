@@ -14,8 +14,8 @@
 // workerd and a node run fails at its `cloudflare:test` import).
 // ─────────────────────────────────────────────────────────────────────────────
 export const NODE_SPECS = [
-// Batch 1 — pure-logic units (import a src/ module, assert its output; no DOM,
-// no axe, no cloudflare:test, no fs). Proven green in the node project.
+  // Batch 1 — pure-logic units (import a src/ module, assert its output; no DOM,
+  // no axe, no cloudflare:test, no fs). Proven green in the node project.
   'tests/count-floor.spec.ts',
   'tests/event-price.spec.ts',
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
@@ -31,13 +31,13 @@ export const NODE_SPECS = [
   // no runtime (no cloudflare:test / SELF.fetch) and runs node-clean.
   'tests/shared-report-read-depth-wiring.spec.ts',
 
-// Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
-// node project: added all 43 non-review node candidates, ran the node project,
-// kept the 27 that passed. Of the 16 then excluded, 11 were only blocked by the
-// `.html` transform and moved here in Batch 3 once the loader landed. The 5 that
-// remain in the workers pool: `uec-fixtures-example` (transitive `cloudflare:test`
-// via helpers/uec) and the four that need a real DOM — `a11y-axe`, `keyboard-nav`,
-// `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
+  // Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
+  // node project: added all 43 non-review node candidates, ran the node project,
+  // kept the 27 that passed. Of the 16 then excluded, 11 were only blocked by the
+  // `.html` transform and moved here in Batch 3 once the loader landed. The 5 that
+  // remain in the workers pool: `uec-fixtures-example` (transitive `cloudflare:test`
+  // via helpers/uec) and the four that need a real DOM — `a11y-axe`, `keyboard-nav`,
+  // `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
   'tests/admin-brand-scope.spec.ts',
   'tests/admin-servicetoken-fallthrough.spec.ts',
   'tests/codeql-src-findings.spec.ts',
@@ -145,6 +145,11 @@ export const NODE_SPECS = [
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
   'tests/poster-multi-code-ui.spec.ts',
+  // OSE-1316 / OSE-1317 — admin Create Sponsor form + /display side rail, run
+  // in jsdom from the template Text imports with a stubbed fetch.
+  'tests/sponsor-create-fields-ui.spec.ts',
+  // SharedReport corridor map: mountCorridorSvg run in jsdom (CodeQL, PR #691).
+  'tests/corridor-map-mount.spec.ts',
   // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks
   // extracted from the admin.html template string; no DOM / cloudflare:test.
   'tests/admin-event-status-phase-consistency.spec.ts',

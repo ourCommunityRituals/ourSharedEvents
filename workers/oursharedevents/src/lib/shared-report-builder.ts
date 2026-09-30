@@ -32,6 +32,12 @@ import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
 import { applyCountFloor } from './count-floor';
+import {
+  formatHourBucketLabel,
+  parseUtcInstant,
+  resolveEventZone,
+  type EventZone,
+} from './event-datetime';
 
 // OSE-683 — ratified rule "K-anon Per-Bucket Consistency" (2026-08-09): the
 // per-bucket K-anon floor (K = CORRIDOR_MAP_MIN_COUNT = 5) is applied PER
@@ -55,8 +61,10 @@ function sumContributingBuckets(rows: Array<{ count: number | null }>): number {
 // before surfacing in poster_attribution. Sub-second precision exposes timing
 // patterns that can correlate individual scan events across anonymised reports.
 function bucketToHour(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso; // pass through unparseable values unchanged
+  // OSE-1376: created_at is SQLite `datetime('now')` ("YYYY-MM-DD HH:MM:SS", UTC,
+  // no offset) — parse it as UTC explicitly, never as the runtime's local time.
+  const d = parseUtcInstant(iso);
+  if (!d) return iso; // pass through unparseable values unchanged
   d.setUTCMinutes(0, 0, 0);
   return d.toISOString().replace('.000Z', 'Z');
 }
@@ -111,7 +119,11 @@ export interface SharedReport {
     density_ratio_90d: number | null;
     /** Q5: day-of-week (0=Sunday) used to look up the baseline — same bucket the builder queried. */
     bucket_dow: number | null;
-    /** Q5: hour-of-day (0-23 UTC) used to look up the baseline. */
+    /**
+     * Q5: hour-of-day (0-23 UTC) used to look up the baseline. A UTC LOOKUP KEY
+     * that must match corridor_density_baseline's UTC-keyed rows — never a
+     * display label (OSE-1376: the page does not render it as a time of day).
+     */
     bucket_hour: number | null;
   };
 
@@ -163,8 +175,16 @@ export interface SharedReport {
     location: string;
     h3_res9: string | null;
     scan_count: number;
+    /** UTC hour bucket (ISO-8601 `Z`) — the stored cell, unchanged. */
     first_scan_at: string;
     last_scan_at: string;
+    /**
+     * OSE-1376: the same UTC hour buckets labelled in the EVENT's zone
+     * (`_meta.timezone.zone`), e.g. "Sat, Oct 24 · 7 PM CDT". Label only —
+     * never a re-bucketing, so the hourly floor is untouched. '' if unparseable.
+     */
+    first_scan_label: string;
+    last_scan_label: string;
   }>;
 
   headcount_trend: {
@@ -188,6 +208,13 @@ export interface SharedReport {
   _meta: {
     materialized_at: string | null;
     suppression_reasons: SuppressionReason[];
+    /**
+     * OSE-1376: the zone every hour label on this report is rendered in. The
+     * event's own IANA zone, or PLATFORM_HOME_TZ (America/Chicago) with
+     * source='platform_default' when the event has none — the page states that.
+     * In `_meta` so it reaches every depth (it is presentation, not paid data).
+     */
+    timezone: EventZone;
   };
 }
 
@@ -204,13 +231,14 @@ interface EventRow {
   series_id: string | null;
   h3_res9: string | null;
   h3_res7: string | null;
+  timezone: string | null;
 }
 
 export async function buildSharedReport(db: D1Database, eventId: string): Promise<BuildResult> {
   // 1. Resolve the event.
   const event = await db
     .prepare(
-      `SELECT id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7
+      `SELECT id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7, timezone
        FROM events WHERE id = ?`
     )
     .bind(eventId)
@@ -223,6 +251,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   const suppression: SuppressionReason[] = [];
+  // OSE-1376: hour labels render in the event's zone (fallback: platform home zone).
+  const reportZone = resolveEventZone(event.timezone);
 
   // 2. unique_gatherings — sum scan_aggregates.distinct_agent_hashes over all buckets
   //    for this event. OSE-683: each bucket is a contributing bucket — apply the
@@ -568,14 +598,21 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const posterAttribution = (posters.results ?? [])
     .map((r) => ({ r, floored: applyCountFloor(r.scan_count) }))
     .filter((x) => !x.floored.suppressed)
-    .map(({ r, floored }) => ({
-      poster_deployment_id: r.poster_deployment_id,
-      location: r.location,
-      h3_res9: r.h3_res9 ?? null,
-      scan_count: floored.count as number,
-      first_scan_at: bucketToHour(r.first_scan_at),
-      last_scan_at: bucketToHour(r.last_scan_at),
-    }));
+    .map(({ r, floored }) => {
+      const firstBucket = bucketToHour(r.first_scan_at);
+      const lastBucket = bucketToHour(r.last_scan_at);
+      return {
+        poster_deployment_id: r.poster_deployment_id,
+        location: r.location,
+        h3_res9: r.h3_res9 ?? null,
+        scan_count: floored.count as number,
+        first_scan_at: firstBucket,
+        last_scan_at: lastBucket,
+        // OSE-1376: label the already-hourly UTC bucket in the event's zone.
+        first_scan_label: formatHourBucketLabel(firstBucket, reportZone.zone),
+        last_scan_label: formatHourBucketLabel(lastBucket, reportZone.zone),
+      };
+    });
 
   // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
   //    Source: scan_aggregates.h3_res9 rows for this event.
@@ -800,6 +837,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       _meta: {
         materialized_at: materializedAt,
         suppression_reasons: suppression,
+        timezone: reportZone,
       },
     },
   };
