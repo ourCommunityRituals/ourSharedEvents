@@ -120,7 +120,8 @@ describe('DESIGN-9 L1: static source file checks', () => {
   test('OSE-1356 print poster layout uses 11x14 page, large art viewport, legible title, and QR quiet zone', () => {
     const pages = sourceFile('templates/poster.html');
     expect(pages).toContain('size: 11in 14in');
-    expect(pages).toContain('max-height: 6.2in');
+    // Art viewport raised 6.2in → 7in (dogfooding: 'print needs a larger viewport').
+    expect(pages).toContain('max-height: 7in');
     expect(pages).toContain('font-size: 38pt');
     expect(pages).toContain('padding: 0.08in');
     expect(pages).toContain('background: #fff');
