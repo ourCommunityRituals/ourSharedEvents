@@ -29,7 +29,7 @@
     },
     "workers/oursharedevents/src/lib/landing-area.ts": {
       "own-tokens": 0,
-      "own-stylesheet": 1314,
+      "own-stylesheet": 1267,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -53,7 +53,7 @@
     },
     "workers/oursharedevents/src/templates/landing.html": {
       "own-tokens": 5,
-      "own-stylesheet": 7432,
+      "own-stylesheet": 6773,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -65,7 +65,7 @@
     },
     "workers/oursharedevents/src/templates/public.html": {
       "own-tokens": 0,
-      "own-stylesheet": 6883,
+      "own-stylesheet": 6857,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },

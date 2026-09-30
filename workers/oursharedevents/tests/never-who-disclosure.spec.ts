@@ -152,7 +152,8 @@ describe('OSE-1372 | /events chip, count line, and empty copy agree for every `w
       const bar = renderDiscoveryFilters({ when, q: '' }, 0);
       // The active chip is the one for this `when`, and only it.
       const active = [
-        ...bar.matchAll(/data-testid="disc-when-([a-z-]+)" aria-current="true"/g),
+        // [0-9] since OSE-1362 added `next-90` — the first `when` value with a digit.
+        ...bar.matchAll(/data-testid="disc-when-([a-z0-9-]+)" aria-current="true"/g),
       ].map((m) => m[1]);
       expect(active).toEqual([when]);
       expect(bar).toContain(`>${discoveryChipLabel(when)}</a>`);
