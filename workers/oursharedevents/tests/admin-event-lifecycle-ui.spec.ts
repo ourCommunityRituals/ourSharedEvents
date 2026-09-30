@@ -59,7 +59,10 @@ describe('events list — lifecycle filters, only-mine, show more', () => {
 
   test('filters are applied SERVER-SIDE via the allowlisted query params, never by trimming a wider list', async () => {
     const html = await adminHtml();
-    expect(html).toContain("qs.push('status=' + encodeURIComponent(L.status))");
+    // The query is built from the per-request snapshot Q (the list labels its rows
+    // with the query they were fetched for — CCR PR 700 label race).
+    expect(html).toContain("qs.push('status=' + encodeURIComponent(Q.status))");
+    expect(html).toContain("qs.push('sort=upcoming')");
     expect(html).toContain("qs.push('mine=1')");
     expect(html).toContain('data-testid="events-filter-mine"');
   });

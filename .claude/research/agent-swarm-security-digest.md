@@ -8,24 +8,24 @@
 
 ## Corroboration Tracker (update every scan)
 
-| Item                                                              | First seen | Last seen  | Status        | Notes                                                                                  |
-| ----------------------------------------------------------------- | ---------- | ---------- | ------------- | -------------------------------------------------------------------------------------- |
-| Prompt Infection (LLM→LLM injection, self-replicating across MAS) | 2026-09-11 | 2026-09-30 | CORROBORATED  | arXiv 2410.07283; still cited in 2026 surveys; foundational                            |
-| OWASP Top 10 for Agentic Apps (ASI01–ASI10)                       | 2026-09-11 | 2026-09-30 | CORROBORATED  | Widely cited; 2026 edition confirmed at genai.owasp.org                                |
-| MITRE ATLAS (agentic tactics; now v2026.09)                       | 2026-09-11 | 2026-09-30 | CORROBORATED  | Updated: 16 tactics / 84 techniques (+18 from v5.1.0); 139 entries tagged Agentic AI  |
-| CaMeL — defeating prompt injection by design                      | 2026-09-11 | 2026-09-30 | CORROBORATED  | IEEE S&P SATML 2026 proceedings; extended by CaMeLoT (arXiv 2609.18674)               |
-| MCP tool poisoning (descriptions/results)                         | 2026-09-11 | 2026-09-30 | CORROBORATED  | Growing: AEGIS (2608.20481), DOD advisory Jun 2026, Parasites in Toolchain (2509.06572)|
-| Lethal trifecta (private data + untrusted input + exfil)          | 2026-09-11 | 2026-09-30 | CORROBORATED  | Pattern embedded in Five Eyes guidance + SoK papers; real-world CVE evidence          |
-| Infection monitoring (INFA-Guard, VIGIL verify-before-commit)     | 2026-09-11 | 2026-09-11 | FADED         | Not specifically surfaced Q4 2026; concept subsumed into IFC/CaMeL family             |
-| Cross-Agent Campaign Attribution (async multi-hop attacks)        | 2026-09-30 | 2026-09-30 | NEW           | arXiv 2607.18826; attacks can be deferred across agent hops                           |
-| Confused Deputy in the Swarm (cascade priv-esc + memory poison)   | 2026-09-30 | 2026-09-30 | NEW           | SSRN 7360399; IPC cascade + RAG vector-store poisoning                                |
-| SoK: When Safe Agents Fail Together                               | 2026-09-30 | 2026-09-30 | NEW           | arXiv 2609.00595 (Sept 2026); comprehensive MAS security SoK                          |
-| NSA/CISA Five Eyes "Careful Adoption of Agentic AI Services"      | 2026-09-30 | 2026-09-30 | NEW           | May 1 2026; 5 risk categories; first joint Five Eyes agentic advisory                |
-| NIST CAISI AI Agent Standards Initiative                          | 2026-09-30 | 2026-09-30 | NEW           | Feb 17 2026 formal launch; replaces earlier CSF 2.0 entry                            |
-| CaMeLoT (CaMeL + temporal logic static verification)              | 2026-09-30 | 2026-09-30 | NEW           | arXiv 2609.18674; extends CaMeL with liveness verification                            |
-| CVE-2025-53773 (GitHub Copilot RCE via prompt injection)          | 2026-09-30 | 2026-09-30 | NEW           | Real-world RCE; confirms prompt injection reaches code execution in prod              |
-| CVE-2026-40217 (LiteLLM guardrail sandbox escape)                 | 2026-09-30 | 2026-09-30 | NEW           | Bytecode rewriting escapes unsafe Python sandbox in guardrail test path               |
-| Image-based prompt injection in multimodal LLMs                   | 2026-09-30 | 2026-09-30 | NEW           | CSA Lab Space Jan 2026; adversarial images bypass text-layer sanitization             |
+| Item                                                              | First seen | Last seen  | Status       | Notes                                                                                   |
+| ----------------------------------------------------------------- | ---------- | ---------- | ------------ | --------------------------------------------------------------------------------------- |
+| Prompt Infection (LLM→LLM injection, self-replicating across MAS) | 2026-09-11 | 2026-09-30 | CORROBORATED | arXiv 2410.07283; still cited in 2026 surveys; foundational                             |
+| OWASP Top 10 for Agentic Apps (ASI01–ASI10)                       | 2026-09-11 | 2026-09-30 | CORROBORATED | Widely cited; 2026 edition confirmed at genai.owasp.org                                 |
+| MITRE ATLAS (agentic tactics; now v2026.09)                       | 2026-09-11 | 2026-09-30 | CORROBORATED | Updated: 16 tactics / 84 techniques (+18 from v5.1.0); 139 entries tagged Agentic AI    |
+| CaMeL — defeating prompt injection by design                      | 2026-09-11 | 2026-09-30 | CORROBORATED | IEEE S&P SATML 2026 proceedings; extended by CaMeLoT (arXiv 2609.18674)                 |
+| MCP tool poisoning (descriptions/results)                         | 2026-09-11 | 2026-09-30 | CORROBORATED | Growing: AEGIS (2608.20481), DOD advisory Jun 2026, Parasites in Toolchain (2509.06572) |
+| Lethal trifecta (private data + untrusted input + exfil)          | 2026-09-11 | 2026-09-30 | CORROBORATED | Pattern embedded in Five Eyes guidance + SoK papers; real-world CVE evidence            |
+| Infection monitoring (INFA-Guard, VIGIL verify-before-commit)     | 2026-09-11 | 2026-09-11 | FADED        | Not specifically surfaced Q4 2026; concept subsumed into IFC/CaMeL family               |
+| Cross-Agent Campaign Attribution (async multi-hop attacks)        | 2026-09-30 | 2026-09-30 | NEW          | arXiv 2607.18826; attacks can be deferred across agent hops                             |
+| Confused Deputy in the Swarm (cascade priv-esc + memory poison)   | 2026-09-30 | 2026-09-30 | NEW          | SSRN 7360399; IPC cascade + RAG vector-store poisoning                                  |
+| SoK: When Safe Agents Fail Together                               | 2026-09-30 | 2026-09-30 | NEW          | arXiv 2609.00595 (Sept 2026); comprehensive MAS security SoK                            |
+| NSA/CISA Five Eyes "Careful Adoption of Agentic AI Services"      | 2026-09-30 | 2026-09-30 | NEW          | May 1 2026; 5 risk categories; first joint Five Eyes agentic advisory                   |
+| NIST CAISI AI Agent Standards Initiative                          | 2026-09-30 | 2026-09-30 | NEW          | Feb 17 2026 formal launch; replaces earlier CSF 2.0 entry                               |
+| CaMeLoT (CaMeL + temporal logic static verification)              | 2026-09-30 | 2026-09-30 | NEW          | arXiv 2609.18674; extends CaMeL with liveness verification                              |
+| CVE-2025-53773 (GitHub Copilot RCE via prompt injection)          | 2026-09-30 | 2026-09-30 | NEW          | Real-world RCE; confirms prompt injection reaches code execution in prod                |
+| CVE-2026-40217 (LiteLLM guardrail sandbox escape)                 | 2026-09-30 | 2026-09-30 | NEW          | Bytecode rewriting escapes unsafe Python sandbox in guardrail test path                 |
+| Image-based prompt injection in multimodal LLMs                   | 2026-09-30 | 2026-09-30 | NEW          | CSA Lab Space Jan 2026; adversarial images bypass text-layer sanitization               |
 
 ---
 
@@ -97,6 +97,7 @@ _Evolving defenses:_
 - **Adaptive evaluation of out-of-band defenses** (arXiv 2606.26479): adaptive attacks bypass >90% of published defenses given sufficient optimization time — framing defense arms race honestly.
 
 **Tracker summary (vs. baseline scan):**
+
 - CORROBORATED (6): Prompt Infection, OWASP ASI01–ASI10, MITRE ATLAS, CaMeL, MCP tool poisoning, Lethal trifecta
 - NEW (9): Cross-Agent Attribution, Confused Deputy, SoK MAS, Five Eyes advisory, NIST CAISI, CaMeLoT, CVE-2025-53773, CVE-2026-40217, Image-based injection
 - FADED (1): Infection monitoring (INFA-Guard/VIGIL) — concept absorbed into IFC/CaMeL family; not independently surfaced
@@ -122,10 +123,12 @@ _Evolving defenses:_
 6. **CaMeLoT as upgrade path (NEW DEFENSE):** CaMeL (our existing referenced defense) now has a temporal-logic extension with static liveness verification. If we implement an inter-agent trust layer, CaMeLoT is the current best-practice reference.
 
 **Open gaps list — unchanged items still open:**
+
 - No explicit trifecta break (reader vs. actor agents) — still open
 - Broad per-subagent tool inheritance (not least-privilege) — still open; now externally validated by Five Eyes
 - Cross-agent messages treated as trusted (no spotlighting/provenance) — still open; now highest-priority given Cross-Agent Attribution paper
 - No infection monitoring on the pipeline — partially FADED (INFA-Guard/VIGIL not active), but cascade-break needed
 
 **New gap added this scan:**
+
 - No cascade-break mechanism in Workflow `pipeline`/`parallel` — if one subagent produces poisoned output, nothing quarantines it before the next hop processes it as trusted input.

@@ -18,51 +18,51 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// Even with browser-style Accept header, API endpoints must NEVER return the admin\r
+      code: "// Even with browser-style Accept header, API endpoints must NEVER return the admin
 
-        // dashboard or a writable admin surface. The HTML branch (worker) is for HTML *page*\r
+        // dashboard or a writable admin surface. The HTML branch (worker) is for HTML *page*
 
-        // routes only.\r
+        // routes only.
 
-        //\r
+        //
 
-        // OSE-338 reality update: /api/v2/admin/* is also CF-Access-gated on staging/prod.\r
+        // OSE-338 reality update: /api/v2/admin/* is also CF-Access-gated on staging/prod.
 
-        // POST requests get a 302 from CF Access to its login page, just like GET. Worker\r
+        // POST requests get a 302 from CF Access to its login page, just like GET. Worker
 
-        // JSON-401 path only fires on non-CF-Access environments. The universal contract\r
+        // JSON-401 path only fires on non-CF-Access environments. The universal contract
 
-        // remains: unauthenticated request is blocked + body does not contain a successful\r
+        // remains: unauthenticated request is blocked + body does not contain a successful
 
-        // admin response (no event id, no created status). Worker JSON shape asserted only\r
+        // admin response (no event id, no created status). Worker JSON shape asserted only
 
-        // when status === 401.\r
+        // when status === 401.
 
-        test('Unauthenticated admin POST is blocked (CF Access OR worker 401)', function() {\r
+        test('Unauthenticated admin POST is blocked (CF Access OR worker 401)', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        test('Body does NOT contain a created-event success payload', function() {\r
+        test('Body does NOT contain a created-event success payload', function() {
 
-        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        \    expect(body).to.not.match(/\"ok\":\\s*true/);\r
+        \    expect(body).to.not.match(/\"ok\":\\s*true/);
 
-        \    expect(body).to.not.match(/\"id\":\\s*\"evt_/);\r
+        \    expect(body).to.not.match(/\"id\":\\s*\"evt_/);
 
-        });\r
+        });
 
-        if (res.getStatus() === 401) {\r
+        if (res.getStatus() === 401) {
 
-        \    test('Worker response is JSON, not HTML', function() {\r
+        \    test('Worker response is JSON, not HTML', function() {
 
-        \        expect(res.getHeader('Content-Type')).to.include('application/json');\r
+        \        expect(res.getHeader('Content-Type')).to.include('application/json');
 
-        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.not.include('<!DOCTYPE html>');\r
+        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.not.include('<!DOCTYPE html>');
 
-        \    });\r
+        \    });
 
         }"
 

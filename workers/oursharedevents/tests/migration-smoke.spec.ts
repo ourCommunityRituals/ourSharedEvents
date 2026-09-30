@@ -49,6 +49,7 @@ const DB_TABLES = [
   'category_registry', // 0058 (OSE-729 Sponsor Onboarding — canonical category lookup)
   'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
   'corridor_density_snapshots', // 0044 (OER longitudinal archive — append-only)
+  'corridor_readiness_latch', // 0082 (VISION §6.2b corridor readiness latch)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
   'event_series', // 0033 (OSE-272 SharedReport pipeline)

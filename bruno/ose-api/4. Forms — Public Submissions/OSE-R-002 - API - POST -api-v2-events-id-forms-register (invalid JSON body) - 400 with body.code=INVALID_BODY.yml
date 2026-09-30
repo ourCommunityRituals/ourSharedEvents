@@ -17,23 +17,23 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-002 (2026-05-15): the client-side friendly-copy map in form-pages.ts\r
+      code: "// OSE-R-002 (2026-05-15): the client-side friendly-copy map in form-pages.ts
 
-        // keys off body.code. This locks the server contract: invalid JSON returns 400\r
+        // keys off body.code. This locks the server contract: invalid JSON returns 400
 
-        // with code=INVALID_BODY. If this contract breaks, the friendly-copy map cannot\r
+        // with code=INVALID_BODY. If this contract breaks, the friendly-copy map cannot
 
-        // translate the error and bar attendees see raw dev strings.\r
+        // translate the error and bar attendees see raw dev strings.
 
-        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });\r
+        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });
 
-        const json = res.getBody();\r
+        const json = res.getBody();
 
-        test('body.ok is false', function() { expect(json.ok).to.equal(false); });\r
+        test('body.ok is false', function() { expect(json.ok).to.equal(false); });
 
-        test('body.code is INVALID_BODY (client-mappable)', function() {\r
+        test('body.code is INVALID_BODY (client-mappable)', function() {
 
-        \    expect(json.code).to.equal('INVALID_BODY');\r
+        \    expect(json.code).to.equal('INVALID_BODY');
 
         });"
 

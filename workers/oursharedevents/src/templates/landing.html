@@ -17,16 +17,15 @@
       window toggles are CSS-only (hidden radios + :checked), so nothing about the
       viewer is stored or sent. The page must live up to the statement it prints.
     -->
+    <!-- Colour tokens (bg, surface, text, accent, on-accent) come from /ui.css,
+         light and dark. They used to be re-declared below as var(--x, fallback)
+         on the same element; a custom property that refers to itself is a cycle,
+         so all five computed to nothing (no accent, no selected-pill highlight,
+         no dark mode). Found by the PR 700 CCR. Only two local aliases remain. -->
     <style>
       [data-surface='ose-landing'] {
-        --bg: var(--bg, #faf9f7);
-        --surface: var(--surface, #fff);
-        --text: var(--text, #1a1a1a);
         --muted: var(--text-muted, #5a5a5a);
-        /* Platform accent (OSE-221): one scan path, one accent. NOT Tailwind blue. */
-        --accent: var(--accent, #4361ee);
-        --on-accent: var(--on-accent, #fff);
-        --line: rgba(42, 42, 42, 0.12);
+        --line: var(--border, rgba(42, 42, 42, 0.12));
       }
       * {
         box-sizing: border-box;

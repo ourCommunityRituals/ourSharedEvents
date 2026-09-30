@@ -46,6 +46,7 @@
  *
  *   Sponsor Admin (auth required):
  *   GET    /api/v2/admin/sponsors              → list all sponsors
+ *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
  *   POST   /api/v2/admin/sponsors              → create sponsor
  *   PUT    /api/v2/admin/sponsors/:id          → update sponsor
@@ -58,8 +59,12 @@
  *   Sponsor Public (no auth):
  *   GET    /api/v2/events/:id/sponsors         → resolved sponsors for event
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
+ *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
+ *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
+ *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
+ *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *
  *   Poster Deployments Admin (auth required):
@@ -124,6 +129,8 @@ import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
 import { publicReadLimited } from './lib/public-read-limit.js';
+import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
   handleListEvents,
   handleGetEvent,
@@ -161,6 +168,8 @@ import {
   handleSponsorHomePage,
   handleSponsorPlacementRespond,
   type SponsorHomeEnv,
+  handleSponsorRequestCreate,
+  handleAdminAnswerSponsorRequest,
 } from './handlers/sponsor-home';
 import {
   logAdminAction,
@@ -434,6 +443,11 @@ export async function route(
   if (pathname.startsWith('/s/') && method === 'GET') {
     const code = pathname.slice('/s/'.length);
     return handleShortlinkResolve(request, env, code);
+  }
+
+  // OSE default sponsor image (0083) — static, same-origin, locked down.
+  if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
+    return sponsorDefaultLogoResponse();
   }
 
   if (pathname === '/ui.css') {
@@ -888,6 +902,22 @@ export async function route(
       return deny;
     }
     return handleAdminMintSponsorHomeLink(request, env, sponsorHomeLinkMatch[1]);
+  }
+
+  // POST /api/v2/admin/sponsor-requests/:placementId/respond — the organizer
+  // approves (switches the placement on) or declines a sponsor's request.
+  // Admin + brand-scoped inside the handler (out of scope = 404), audited.
+  const sponsorRequestAnswerMatch = pathname.match(
+    /^\/api\/v2\/admin\/sponsor-requests\/([^/]+)\/respond$/
+  );
+  if (sponsorRequestAnswerMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'ANSWER_SPONSOR_REQUEST', 'denied', 'sponsor', sponsorRequestAnswerMatch[1]);
+      return deny;
+    }
+    return handleAdminAnswerSponsorRequest(request, env, sponsorRequestAnswerMatch[1]);
   }
 
   // PUT/GET /api/v2/admin/sponsors/:id/areas
@@ -1359,6 +1389,14 @@ export async function route(
     )(request, env);
   }
 
+  // POST /api/v2/sponsor/requests — a sponsor asks to back an event from their
+  // own page (sponsor discovery, lib/sponsor-discovery). Token in the body, the
+  // brand from the signed claim; stored switched OFF until the organizer
+  // approves (ADR-019). Rate-limited here, at the route, like respond above.
+  if (pathname === '/api/v2/sponsor/requests' && method === 'POST') {
+    return publicReadLimited('sponsor-request', handleSponsorRequestCreate, 30)(request, env);
+  }
+
   // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).
   // Public route: authorized by a signed sponsor invite token (NOT admin bearer);
   // brand scope comes from the token claim. Placed before the /:id/logo matcher so
@@ -1565,6 +1603,13 @@ export async function route(
   // GET /sponsor?t=<token> — the sponsor's own page (token-gated, read-limited).
   if (pathname === '/sponsor' && method === 'GET') {
     return handleSponsorHomePage(request, env);
+  }
+
+  // Public sponsor card (0083): where a tap on a sponsor with no website lands.
+  // Rate-limited inside the handler (it renders an HTML 429, not JSON).
+  const sponsorCardMatch = pathname.match(/^\/sponsors\/([^/]+)$/);
+  if (sponsorCardMatch && method === 'GET') {
+    return handleSponsorCardPage(request, env, sponsorCardMatch[1]);
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────

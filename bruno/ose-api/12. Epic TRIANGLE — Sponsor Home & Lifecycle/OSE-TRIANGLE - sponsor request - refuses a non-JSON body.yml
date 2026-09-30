@@ -1,0 +1,34 @@
+info:
+  name: TRIANGLE | sponsor request | refuses a non-JSON body
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/requests"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: text
+    data: '{"token":"x","event_id":"y"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: JSON only — a cross-site text/plain form cannot reach the write.
+        test('400 BAD_CONTENT_TYPE', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('BAD_CONTENT_TYPE');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -21,19 +21,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        test('Raw <script> tag from query string NOT present', function() {\r
+        test('Raw <script> tag from query string NOT present', function() {
 
-        \    expect(body).to.not.include('<script>alert(1)</script>');\r
+        \    expect(body).to.not.include('<script>alert(1)</script>');
 
-        });\r
+        });
 
-        test('alert(1) literal NOT present', function() {\r
+        test('alert(1) literal NOT present', function() {
 
-        \    expect(body).to.not.include('alert(1)');\r
+        \    expect(body).to.not.include('alert(1)');
 
         });"
 

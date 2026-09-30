@@ -68,6 +68,8 @@ const TENANT_TABLES = [
   'sponsor_placement',
   'corridors',
   'node_hierarchy',
+  // 0082 (VISION §6.2b): per-brand corridor latch. Every read must bind brand_id.
+  'corridor_readiness_latch',
 ];
 
 /**
@@ -85,7 +87,14 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'handlers/events.ts:337':
+  'lib/corridor-latch.ts:43':
+    'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
+    'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
+    'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
+    'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
+    'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
+    'request-path read (readLatchedCorridors) binds brand_id.',
+  'handlers/events.ts:371':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -93,8 +102,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
     'resolveEventType helper + import land above it; 335→336 by OSE-1313, whose ' +
     'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
-    'it; 336→337 by OSE-869, whose one-line event-settings import lands above it. ' +
-    'Scope enforcement unchanged; ' +
+    'it; 336→370 by the "Soonest first" slice — the admin-events-upcoming import ' +
+    'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
+    'one-line event-settings import lands above it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
@@ -137,6 +147,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
+  'handlers/sponsor-card.ts:64':
+    'Public sponsor card (0083). Correlated EXISTS on `events e` keyed by ' +
+    '`e.id = sp.event_id AND e.brand_id = sb.brand_id`, nested inside a lookup ' +
+    'whose outer `sponsor_business sb` is keyed by `sb.id = ?` (held sponsor id) ' +
+    'and whose placement sub-select is keyed by `sp.sponsor_business_id = ?`. It ' +
+    'asks "is this one sponsor on an active event of its own brand" — one row, ' +
+    'not enumeration. Line-sensitive: bump on any edit above it in that file.',
   // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand
@@ -200,11 +217,15 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // sponsor-resolver.ts above this query. 228→252 for OSE-1316/1317 (the
   // publicWebsiteUrl helper + sidebar_logo_url above it; the subselect now sits
   // inside COALESCE(..., sb.tier) so a pool sponsor with no placement keeps its tier).
-  'lib/sponsor-resolver.ts:252':
+  // 267→272 by the ADR-019 amendment comment (PR #700, sponsor-initiated
+  // placements) in the resolver header. Query unchanged.
+  'lib/sponsor-resolver.ts:272':
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
     '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
     'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +
-    '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration.',
+    '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration. ' +
+    '(Line shifted 252→267 by 0083, which added display_name / address_line to ' +
+    'the Path-1 SELECT and SponsorRow above it. Scope unchanged.)',
 };
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {

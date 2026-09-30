@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
+    "measure:startup": "node scripts/measure-startup.mjs",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:prod": "wrangler deploy --env production",
     "secrets:staging": "bash ../../scripts/set-secrets.sh staging",

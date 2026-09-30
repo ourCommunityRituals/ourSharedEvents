@@ -768,8 +768,13 @@
       // Resolve once every rendered QR <img> has loaded or errored. Data-URI
       // codes settle almost immediately; a slow venue link is exactly the case
       // this waits out. No images (all failed / none injected) → resolve now.
+      // 0083: sponsor logos are part of the printed page too (they load through
+      // the same-origin proxy, or swap to the OSE default), so Print also waits
+      // for their images to settle. The strip itself renders from the same
+      // poster-bundle call before this runs (OSE-867), so there is no separate
+      // sponsor request to wait on.
       function awaitQrImages() {
-        const imgs = Array.prototype.slice.call(document.querySelectorAll('.qr-section .qr-img'));
+        const imgs = Array.prototype.slice.call(document.querySelectorAll('.qr-section .qr-img, [data-testid="poster-sponsor-logo"]'));
         if (!imgs.length) return Promise.resolve();
         return Promise.all(imgs.map(function (img) {
           if (img.complete) return Promise.resolve();
@@ -848,7 +853,7 @@
             '</div>' +
             '<div class="qr-section" data-testid="poster-qr-section">' +
               // Typed destination slots (/q tracking + /s routing → Public /
-              // Donate / Sign Up). loadPosterQR fills this from bundle.slots. The
+              // Donate / Sign Up). loadPosterBundle fills this from bundle.slots. The
               // .qr-loading placeholder keeps the print gate closed until codes
               // settle. NOT the forms (register/checkin/survey/feedback are a
               // separate, destroyed-by-cron implementation — off the poster).
@@ -922,12 +927,18 @@
         strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
             // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-sponsor-logo">' : '';
+            // 0083: logo via the same-origin proxy (external URLs are CSP-
+            // blocked here), or the OSE default; title = display_name → name.
+            // attr() also escapes quotes — these values sit in attributes.
+            const attr = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+            const title = s.title || s.name;
+            const src = s.logo_url ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg';
+            const logo = '<img src="' + attr(src) + '" alt="' + attr(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="poster-sponsor-logo">';
             const validTiers = ['title','platinum','gold','silver','bronze','primary'];
             // data-tier retained for rotation/frequency-share identity only; NO
             // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + attr(title) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + attr(title) + '</span></div>';
           }).join('');
       }
       // Typed destination slots (Public / Donate / Sign Up) from the bundle:
@@ -1044,7 +1055,13 @@
         function (ev) {
           var el = ev.target;
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
-            el.style.display = 'none';
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
+            // vanishing; only if the default itself fails is the image hidden.
+            // The fallback is a fixed same-origin path, never read back from
+            // the DOM — data-default-src only marks which images may fall back.
+            var d = '/sponsor-default-logo.svg';
+            if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+            else el.style.display = 'none';
           }
         },
         true

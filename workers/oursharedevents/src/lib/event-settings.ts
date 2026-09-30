@@ -3,7 +3,7 @@
 // OSE-869 (PO-4), first slice of OSE-851 (X-14). GAS let an organiser turn
 // sections of an event's surfaces on and off; the Worker port dropped every one
 // of those switches. PO decision (2026-09-30): the switches live PER EVENT, in
-// `events.settings_json` (migration 0083), read through THIS module and nowhere
+// `events.settings_json` (migration 0085), read through THIS module and nowhere
 // else. X-14's other toggles (showSchedule, showSponsors, …) and the template
 // `default_sections` fallback extend this file — they do not get a second home.
 //

@@ -179,9 +179,10 @@
     </main>
     <!--OCR_LEGAL_FOOTER-->
     <script>
-      // Accept / decline a placement. The token rides in the URL (?t=) and is
-      // re-sent in the body; the server re-verifies it and checks the placement
-      // belongs to the token's sponsor before writing. No other JS on the page.
+      // Accept / decline a placement, and ask to back an event. The token rides
+      // in the URL (?t=) and is re-sent in the body; the server re-verifies it
+      // and scopes every write to the token's sponsor + brand. No other JS on
+      // the page.
       (function () {
         var token = new URLSearchParams(window.location.search).get('t') || '';
         function setMsg(card, text, cls) {
@@ -190,7 +191,35 @@
           m.textContent = text;
           m.className = 'sh-msg ' + (cls || '');
         }
+        // Sponsor discovery: ask to back an event. Stored switched off until the
+        // organizer says yes, so the card only ever says "asked", never "on".
+        async function askToJoin(btn) {
+          var card = btn.closest('.sh-card');
+          btn.disabled = true;
+          try {
+            var res = await fetch('/api/v2/sponsor/requests', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: token, event_id: btn.getAttribute('data-event-id') }),
+            });
+            var data = null;
+            try { data = await res.json(); } catch (e) { data = null; }
+            if (res.ok && data && data.ok) {
+              btn.hidden = true;
+              card.setAttribute('data-requested', '1');
+              setMsg(card, 'Asked. The organizer will see your request; your name appears only if they say yes.', 'ok');
+            } else {
+              btn.disabled = false;
+              setMsg(card, (data && (data.error || data.code)) || 'Could not send (server said ' + res.status + ').', 'error');
+            }
+          } catch (e) {
+            btn.disabled = false;
+            setMsg(card, 'No connection. Try again.', 'error');
+          }
+        }
         document.addEventListener('click', async function (ev) {
+          var ask = ev.target && ev.target.closest && ev.target.closest('[data-action="sponsor-request"]');
+          if (ask) { await askToJoin(ask); return; }
           var btn = ev.target && ev.target.closest && ev.target.closest('[data-action="placement-respond"]');
           if (!btn) return;
           var card = btn.closest('.sh-card');

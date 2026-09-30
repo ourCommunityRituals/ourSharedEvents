@@ -16,19 +16,19 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-003: invalid-token path. Same friendly copy bucket as the no-auth\r
+      code: "// OSE-R-003: invalid-token path. Same friendly copy bucket as the no-auth
 
-        // case ('This share link has expired or isn’t valid. Ask the sender for a\r
+        // case ('This share link has expired or isn’t valid. Ask the sender for a
 
-        // fresh link.'). Server contract: 401 + code=UNAUTHORIZED, not 400 or 403.\r
+        // fresh link.'). Server contract: 401 + code=UNAUTHORIZED, not 400 or 403.
 
-        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });
 
-        const json = res.getBody();\r
+        const json = res.getBody();
 
-        test('body.code is UNAUTHORIZED', function() {\r
+        test('body.code is UNAUTHORIZED', function() {
 
-        \    expect(json.code).to.equal('UNAUTHORIZED');\r
+        \    expect(json.code).to.equal('UNAUTHORIZED');
 
         });"
 

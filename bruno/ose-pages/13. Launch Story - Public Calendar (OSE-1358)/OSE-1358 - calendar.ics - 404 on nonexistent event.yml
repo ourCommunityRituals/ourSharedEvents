@@ -14,7 +14,7 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// Non-existent event blocked (worker 404 OR edge WAF 403), same unified contract as OSE-R-004's /events/:id error page (OSE-348).\r\ntest('404 worker OR 403 WAF block', function () { expect([404, 403]).to.include(res.getStatus()); });\r\nif (res.getStatus() === 404) {\r\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\r\n}"
+      code: "// Non-existent event blocked (worker 404 OR edge WAF 403), same unified contract as OSE-R-004's /events/:id error page (OSE-348).\ntest('404 worker OR 403 WAF block', function () { expect([404, 403]).to.include(res.getStatus()); });\nif (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n}"
 
 settings:
   encodeUrl: true

@@ -21,7 +21,12 @@
  *     an event it did not opt into. (CCR-PR567 M4 replaced the old permissive
  *     COALESCE(sponsor_accepted, 1); there is no backfill — pending placements are
  *     dark until answered.)
- *   • ORGANIZER side is PERMISSIVE: `COALESCE(sp.organizer_accepted, 1) = 1` —
+ *   • ORGANIZER side is PERMISSIVE for placements the organizer CREATED:
+ *     `COALESCE(sp.organizer_accepted, <1, or 0 when source='sponsor_request'>) = 1`.
+ *     A sponsor-initiated request (sponsor discovery) is NOT organizer-created,
+ *     so its silence is not consent: it renders only with organizer_accepted = 1
+ *     (ADR-019 amendment 2026-09-30). Defence in depth beside its is_active = 0.
+ *     Original note —
  *     silence reads as OK; the organizer hides a sponsor only by rejecting (0).
  *
  * A rejection is durable: Path 2 skips any business the organizer already
@@ -49,6 +54,7 @@
  */
 
 import { allocateShares, sovTierOf } from './sponsor-allocation';
+import { sponsorTitle, sponsorCardPath } from './sponsor-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -63,6 +69,17 @@ export interface SponsorRow {
    * prefers it and falls back to logo_url, then to the sponsor's name.
    */
   sidebar_logo_url?: string | null;
+  /**
+   * 0083 public card. display_name is the optional public title (the resolver's
+   * public seam folds it into `title`); address_line is the sponsor-entered
+   * public location. Contact lives on the card page only, not in the bundle.
+   */
+  display_name?: string | null;
+  address_line?: string | null;
+  /** Public title: display_name, else name. Set at the public seam. */
+  title?: string;
+  /** Where a tap goes when there is no https website. Set at the public seam. */
+  card_url?: string;
   website_url: string | null;
   tier: string;
   placement_formats: string;
@@ -193,6 +210,8 @@ export async function resolveSponsorsForEvent(
     sb.id AS id,
     sp.event_id AS event_id,
     sb.name AS name,
+    sb.display_name AS display_name,
+    sb.address_line AS address_line,
     la.url AS logo_url,
     lc.url AS sidebar_logo_url,
     sb.website_url AS website_url,
@@ -217,7 +236,7 @@ export async function resolveSponsorsForEvent(
        LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
        WHERE sp.event_id = ? AND sp.is_active = 1
          AND sb.is_active = 1
-         AND COALESCE(sp.organizer_accepted, 1) = 1
+         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
          AND sp.sponsor_accepted = 1
        ORDER BY sb.id`
     )
@@ -245,7 +264,8 @@ export async function resolveSponsorsForEvent(
     // + the representative tier from their latest placement).
     const templateResult = await db
       .prepare(
-        `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
+        `SELECT sb.id AS id, sb.name AS name, sb.display_name AS display_name,
+                sb.address_line AS address_line, sb.website_url AS website_url,
                 sb.h3_res7 AS h3_res7, la.url AS logo_url,
                 (SELECT lc.url FROM sponsor_asset lc WHERE lc.sponsor_business_id = sb.id
                   AND lc.format = 'logo_compact') AS sidebar_logo_url,
@@ -270,6 +290,8 @@ export async function resolveSponsorsForEvent(
       .all<{
         id: string;
         name: string;
+        display_name: string | null;
+        address_line: string | null;
         website_url: string | null;
         h3_res7: string | null;
         logo_url: string | null;
@@ -282,6 +304,8 @@ export async function resolveSponsorsForEvent(
       id: b.id,
       event_id: eventId,
       name: b.name,
+      display_name: b.display_name,
+      address_line: b.address_line,
       logo_url: b.logo_url,
       sidebar_logo_url: b.sidebar_logo_url,
       website_url: b.website_url,
@@ -352,7 +376,14 @@ export async function resolveSponsorsForEvent(
       // OSE-1317: an outbound link renders only for an https:// website. Writes
       // are validated, but a row stored before that rule (or seeded directly)
       // is normalised here, at the one seam every public surface reads through.
-      all.push({ ...s, website_url: publicWebsiteUrl(s.website_url) });
+      // 0083: the public title and the no-website tap target are decided here
+      // too, once, so no surface re-derives them.
+      all.push({
+        ...s,
+        website_url: publicWebsiteUrl(s.website_url),
+        title: sponsorTitle(s),
+        card_url: sponsorCardPath(s.id),
+      });
     }
   }
 

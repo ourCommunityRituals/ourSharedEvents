@@ -11,33 +11,33 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() {\r
+      code: "test('Returns 200', function() {
 
-        \    expect(res.getStatus()).to.equal(200);\r
+        \    expect(res.getStatus()).to.equal(200);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Content-Type is HTML', function() {\r
+        test('Content-Type is HTML', function() {
 
-        \    expect(res.getHeader('Content-Type')).to.include('text/html');\r
+        \    expect(res.getHeader('Content-Type')).to.include('text/html');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has <!DOCTYPE html>', function() {\r
+        test('Has <!DOCTYPE html>', function() {
 
-        \    expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('<!DOCTYPE html>');\r
+        \    expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('<!DOCTYPE html>');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Has lang attribute', function() {\r
+        test('Has lang attribute', function() {
 
-        \    expect(String(res.getBody())).to.match(/lang=[\"']en/);\r
+        \    expect(String(res.getBody())).to.match(/lang=[\"']en/);
 
         });"
 

@@ -140,10 +140,20 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     // a placement renders publicly only when the sponsor explicitly accepted
     // (= 1); NULL (pending) and 0 (declined) both hide. A permissive COALESCE on
     // the sponsor side would re-open the pre-ADR-019 non-consented-render leak.
+    // ADR-019 amendment (2026-09-30, PR #700): organizer silence is consent only
+    // for placements the ORGANIZER created. A sponsor-initiated request
+    // (source = 'sponsor_request') defaults to NO — the clause must carry that
+    // CASE, and the old unconditional COALESCE(...,1) must be gone.
     expect(
       src,
-      'organizer acceptance must be COALESCE(sp.organizer_accepted, 1) = 1 — organizer silence is consent'
-    ).toMatch(/COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*1\s*\)\s*=\s*1/i);
+      "organizer acceptance must be COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1"
+    ).toMatch(
+      /COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*CASE\s+WHEN\s+sp\.source\s*=\s*'sponsor_request'\s+THEN\s+0\s+ELSE\s+1\s+END\s*\)\s*=\s*1/i
+    );
+    expect(
+      src,
+      'the unconditional organizer COALESCE(..., 1) would publish a sponsor request the organizer never approved'
+    ).not.toMatch(/COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*1\s*\)/i);
     expect(
       src,
       'sponsor acceptance must be STRICT sp.sponsor_accepted = 1 (ADR-019: sponsor silence is NOT consent)'

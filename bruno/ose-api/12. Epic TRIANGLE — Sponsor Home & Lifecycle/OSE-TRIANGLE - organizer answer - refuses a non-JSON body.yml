@@ -1,0 +1,35 @@
+info:
+  name: TRIANGLE | organizer answer | refuses a non-JSON body (CSRF)
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsor-requests/spl_does_not_exist/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: text
+    data: '{"approve":true,"a":"="}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (CCR PR 700): JSON only, so a cross-site <form enctype=text/plain>
+        // cannot make an organizer approve a sponsor's own request.
+        test('400 BAD_CONTENT_TYPE', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('BAD_CONTENT_TYPE');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

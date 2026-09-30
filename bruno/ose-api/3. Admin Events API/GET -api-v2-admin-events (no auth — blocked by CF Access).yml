@@ -14,33 +14,33 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// CF Access intercepts unauthenticated admin requests before they reach the Worker.\r
+      code: "// CF Access intercepts unauthenticated admin requests before they reach the Worker.
 
-        // The response is either 302 (redirect to login) or 200 (login page HTML after redirect).\r
+        // The response is either 302 (redirect to login) or 200 (login page HTML after redirect).
 
-        // The key contract: unauthenticated requests do NOT receive JSON event data.\r
+        // The key contract: unauthenticated requests do NOT receive JSON event data.
 
-        test('Unauthenticated admin request is blocked', function() {\r
+        test('Unauthenticated admin request is blocked', function() {
 
-        \    const status = res.getStatus();\r
+        \    const status = res.getStatus();
 
-        \    expect([200, 302, 401, 403]).to.include(status);\r
+        \    expect([200, 302, 401, 403]).to.include(status);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Does not return JSON event data', function() {\r
+        test('Does not return JSON event data', function() {
 
-        \    const ct = res.getHeader('Content-Type') || '';\r
+        \    const ct = res.getHeader('Content-Type') || '';
 
-        \    if (ct.includes('application/json')) {\r
+        \    if (ct.includes('application/json')) {
 
-        \        const json = res.getBody();\r
+        \        const json = res.getBody();
 
-        \        expect(json.ok).to.not.eql(true);\r
+        \        expect(json.ok).to.not.eql(true);
 
-        \    }\r
+        \    }
 
         });"
 

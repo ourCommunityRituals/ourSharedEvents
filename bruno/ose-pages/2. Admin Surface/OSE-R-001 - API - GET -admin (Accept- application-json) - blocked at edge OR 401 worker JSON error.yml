@@ -13,59 +13,59 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-001 contract: API consumers (curl, scripts, CI) get a structured JSON 401\r
+      code: "// OSE-R-001 contract: API consumers (curl, scripts, CI) get a structured JSON 401
 
-        // from the worker. Only browsers (Accept: text/html) get the HTML sign-in page.\r
+        // from the worker. Only browsers (Accept: text/html) get the HTML sign-in page.
 
-        //\r
+        //
 
-        // OSE-338 (2026-05-18) reality update: on CF-Access-gated environments (staging/prod),\r
+        // OSE-338 (2026-05-18) reality update: on CF-Access-gated environments (staging/prod),
 
-        // CF Access shadows BOTH the HTML and JSON worker paths — it doesn't differentiate by\r
+        // CF Access shadows BOTH the HTML and JSON worker paths — it doesn't differentiate by
 
-        // Accept header. API consumers hitting /admin get a 302 to CF Access login (HTML).\r
+        // Accept header. API consumers hitting /admin get a 302 to CF Access login (HTML).
 
-        // The unified contract: unauthenticated admin request is blocked; worker JSON shape\r
+        // The unified contract: unauthenticated admin request is blocked; worker JSON shape
 
-        // is enforced only when status === 401.\r
+        // is enforced only when status === 401.
 
-        test('Unauthenticated admin request is blocked (CF Access OR worker 401)', function() {\r
+        test('Unauthenticated admin request is blocked (CF Access OR worker 401)', function() {
 
-        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        \r
+        
 
-        // Worker-401 contract details — only enforced on non-CF-Access environments.\r
+        // Worker-401 contract details — only enforced on non-CF-Access environments.
 
-        if (res.getStatus() === 401) {\r
+        if (res.getStatus() === 401) {
 
-        \    test('Content-Type is application/json (NOT HTML)', function() {\r
+        \    test('Content-Type is application/json (NOT HTML)', function() {
 
-        \        expect(res.getHeader('Content-Type')).to.include('application/json');\r
+        \        expect(res.getHeader('Content-Type')).to.include('application/json');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Body is the JSON error shape', function() {\r
+        \    test('Body is the JSON error shape', function() {
 
-        \        const json = res.getBody();\r
+        \        const json = res.getBody();
 
-        \        expect(json.ok).to.equal(false);\r
+        \        expect(json.ok).to.equal(false);
 
-        \        expect(json.code).to.equal('UNAUTH');\r
+        \        expect(json.code).to.equal('UNAUTH');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('WWW-Authenticate Bearer challenge present', function() {\r
+        \    test('WWW-Authenticate Bearer challenge present', function() {
 
-        \        expect(res.getHeader('WWW-Authenticate')).to.match(/Bearer/i);\r
+        \        expect(res.getHeader('WWW-Authenticate')).to.match(/Bearer/i);
 
-        \    });\r
+        \    });
 
         }"
 

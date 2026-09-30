@@ -11,21 +11,21 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Response time is under 3 seconds', function () {\r
+      code: "test('Response time is under 3 seconds', function () {
 
-        \  expect(res.getResponseTime()).to.be.below(3000);\r
+        \  expect(res.getResponseTime()).to.be.below(3000);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Response time is ideally under 1 second', function () {\r
+        test('Response time is ideally under 1 second', function () {
 
-        \  if (res.getResponseTime() > 1000) {\r
+        \  if (res.getResponseTime() > 1000) {
 
-        \    console.warn('SharedReport response time: ' + res.getResponseTime() + 'ms (above 1s target)');\r
+        \    console.warn('SharedReport response time: ' + res.getResponseTime() + 'ms (above 1s target)');
 
-        \  }\r
+        \  }
 
         });"
 

@@ -47,6 +47,8 @@
 
 ## What is still not a screen (next slices, in order)
 
+> **Update 2026-09-30 (PR #700):** 1 ✅ attendee map (landing map view, `lib/attendee-map.ts`); 2 ✅ sponsor discovery (`/sponsor` "Events you could back" → organizer Approve/Decline, `lib/sponsor-discovery.ts`); 3 ✅ organizer inbox (Event checklist "Needs your attention"); 4 ✅ Soonest first (`?sort=upcoming`); 5 re-scoped — measured, admin costs ~0 ms at startup and `h3-js` ~85% (`STARTUP-COST-2026-09-30.md`). Also: `/sponsor` now has PR-gating browser E2E.
+
 1. **Attendee map** over `GET /api/v2/events/map` (H3 res-7 cells, no coordinates accepted) — render with the existing CSP-clean `renderCorridorMap` SVG rather than a map library.
 2. **Sponsor discovery**: a sponsor browsing events they _could_ back (the invite flow exists; a browse-and-ask flow does not).
 3. **Organizer inbox**: pending sponsor drafts and declined placements surfaced on the timeline card rather than inside the sponsors table.

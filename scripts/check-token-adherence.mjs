@@ -73,6 +73,9 @@ const BASELINE = {
   // text (all AA-verified by the hub @ocr/ui verify-contrast.mjs), messages to
   // --success / --danger, left-border accents to --warn. Zero raw hex; keep at 0.
   'sponsor-home.html': 0,
+  // sponsor-card.html (0083): the public sponsor card — /ui.css classes plus a
+  // sub-400-char page style on tokens. Zero raw hex; keep at 0.
+  'sponsor-card.html': 0,
 };
 
 function rawHexCount(html) {

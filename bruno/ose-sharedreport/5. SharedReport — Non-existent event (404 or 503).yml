@@ -11,43 +11,43 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 404 or 503 for non-existent event', function () {\r
+      code: "test('Returns 404 or 503 for non-existent event', function () {
 
-        \  expect([404, 503]).to.include(res.getStatus());\r
+        \  expect([404, 503]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Error response has ok=false', function () {\r
+        test('Error response has ok=false', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.ok).to.eql(false);\r
+        \  expect(json.ok).to.eql(false);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Error response includes requestId', function () {\r
+        test('Error response includes requestId', function () {
 
-        \  const json = res.getBody();\r
+        \  const json = res.getBody();
 
-        \  expect(json.requestId).to.be.a('string');\r
+        \  expect(json.requestId).to.be.a('string');
 
-        });\r
+        });
 
-        \r
+        
 
-        test('404 error message does not echo eventId', function () {\r
+        test('404 error message does not echo eventId', function () {
 
-        \  if (res.getStatus() === 404) {\r
+        \  if (res.getStatus() === 404) {
 
-        \    const json = res.getBody();\r
+        \    const json = res.getBody();
 
-        \    expect(json.message).to.not.include('nonexistent_event_xyz');\r
+        \    expect(json.message).to.not.include('nonexistent_event_xyz');
 
-        \  }\r
+        \  }
 
         });"
 

@@ -20,41 +20,41 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        if (res.getStatus() === 200) {\r
+        if (res.getStatus() === 200) {
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Has signup id', function() {\r
+        \    test('Has signup id', function() {
 
-        \        expect(json.id).to.be.a('string');\r
+        \        expect(json.id).to.be.a('string');
 
-        \    });\r
+        \    });
 
-        } else if (res.getStatus() === 403) {\r
+        } else if (res.getStatus() === 403) {
 
-        \    test('403 means form disabled', function() {\r
+        \    test('403 means form disabled', function() {
 
-        \        expect(json.code).to.eql('FORM_DISABLED');\r
+        \        expect(json.code).to.eql('FORM_DISABLED');
 
-        \    });\r
+        \    });
 
-        } else if (res.getStatus() === 503) {\r
+        } else if (res.getStatus() === 503) {
 
-        \    test('503 has error code', function() {\r
+        \    test('503 has error code', function() {
 
-        \        expect(json.code).to.exist;\r
+        \        expect(json.code).to.exist;
 
-        \    });\r
+        \    });
 
         }"
 

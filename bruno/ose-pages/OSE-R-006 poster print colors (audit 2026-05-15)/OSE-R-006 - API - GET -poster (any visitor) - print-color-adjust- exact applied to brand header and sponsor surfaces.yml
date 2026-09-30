@@ -14,37 +14,37 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);
 
-        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+        test('Print block extractable', function() { expect(match).to.not.be.null; });
 
-        const printBlock = match[1];\r
+        const printBlock = match[1];
 
-        test('print-color-adjust: exact present', function() {\r
+        test('print-color-adjust: exact present', function() {
 
-        \    expect(printBlock).to.match(/print-color-adjust:\\s*exact/);\r
+        \    expect(printBlock).to.match(/print-color-adjust:\\s*exact/);
 
-        });\r
+        });
 
-        test('-webkit-print-color-adjust: exact present', function() {\r
+        test('-webkit-print-color-adjust: exact present', function() {
 
-        \    expect(printBlock).to.match(/-webkit-print-color-adjust:\\s*exact/);\r
+        \    expect(printBlock).to.match(/-webkit-print-color-adjust:\\s*exact/);
 
-        });\r
+        });
 
-        test('.poster-header is in the color-adjust rule set', function() {\r
+        test('.poster-header is in the color-adjust rule set', function() {
 
-        \    expect(printBlock).to.match(/\\.poster-header[\\s\\S]*print-color-adjust:\\s*exact/);\r
+        \    expect(printBlock).to.match(/\\.poster-header[\\s\\S]*print-color-adjust:\\s*exact/);
 
-        });\r
+        });
 
-        test('.poster-sponsor is in the color-adjust rule set', function() {\r
+        test('.poster-sponsor is in the color-adjust rule set', function() {
 
-        \    expect(printBlock).to.match(/\\.poster-sponsor[\\s\\S]*print-color-adjust:\\s*exact/);\r
+        \    expect(printBlock).to.match(/\\.poster-sponsor[\\s\\S]*print-color-adjust:\\s*exact/);
 
         });"
 

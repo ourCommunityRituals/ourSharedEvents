@@ -13,6 +13,7 @@ import { runSharedReportMaterialization } from './handlers/shared-report-materia
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
+import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
@@ -93,6 +94,10 @@ export default {
     // runDraftExpiry (lib/draft-expiry.ts) touches DB.events ONLY: archives
     //   (never deletes) drafts untouched for DRAFT_EXPIRY_DAYS (default 30;
     //   0 = off). Future-dated drafts are left alone. Audits to admin_audit_log.
+    // runCorridorLatch (lib/corridor-latch.ts, VISION §6.2b) reads DB.events and
+    //   INSERT OR IGNOREs DB.corridor_readiness_latch: one row per (brand, res-7
+    //   corridor) the first night it holds ≥ 5 upcoming published events. A
+    //   one-way door; carries no identity. Never throws.
     // runScanReturnsRetention (lib/scan-returns-retention.ts, OSE-1351) reads
     //   DB.scan_node_returns + DB.anon_id_returns ONLY; off by default
     //   (env.SCAN_RETURNS_RETENTION_DAYS unset → no-op — Q3-ratified "no
@@ -110,6 +115,7 @@ export default {
         runSharedReportBigQueryExport(env),
         runSecurityMetricsCron(env),
         runDraftExpiry(env),
+        runCorridorLatch(env),
         runScanReturnsRetention(env),
       ])
     );

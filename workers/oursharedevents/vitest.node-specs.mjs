@@ -119,6 +119,7 @@ export const NODE_SPECS = [
   // event shape; asserts the CSS-filter tags (window/type/product/modality) and
   // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
   'tests/landing-area.spec.ts',
+  'tests/attendee-map.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
@@ -151,11 +152,17 @@ export const NODE_SPECS = [
   // OSE-1316 / OSE-1317 — admin Create Sponsor form + /display side rail, run
   // in jsdom from the template Text imports with a stubbed fetch.
   'tests/sponsor-create-fields-ui.spec.ts',
+  // 0082 — sponsor public card + OSE default image: admin image choice and the
+  // /events sponsor banner, run in jsdom with a stubbed fetch.
+  'tests/sponsor-public-card-ui.spec.ts',
   // SharedReport corridor map: mountCorridorSvg run in jsdom (CodeQL, PR #691).
   'tests/corridor-map-mount.spec.ts',
   // OSE-1360 / OSE-1361 — run the pure oseEventView / oseFormsSection blocks
   // extracted from the admin.html template string; no DOM / cloudflare:test.
   'tests/admin-event-status-phase-consistency.spec.ts',
+  'tests/admin-organizer-inbox.spec.ts',
+  'tests/admin-events-upcoming-cursor.spec.ts',
+  'tests/public-projection-routing.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +

@@ -11,41 +11,41 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        if (res.getStatus() === 200) {\r
+        if (res.getStatus() === 200) {
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Has count field (number when >= K-anon floor, else suppressed to null)', function() {\r
+        \    test('Has count field (number when >= K-anon floor, else suppressed to null)', function() {
 
-        \        // OSE-665 uniform count floor: below K=5 the exact count is\r
+        \        // OSE-665 uniform count floor: below K=5 the exact count is
 
-        \        // suppressed to null (never-who / anti-composition). Certify the\r
+        \        // suppressed to null (never-who / anti-composition). Certify the
 
-        \        // floor holds, do not contradict it by demanding a raw number.\r
+        \        // floor holds, do not contradict it by demanding a raw number.
 
-        \        if (json.suppressed) {\r
+        \        if (json.suppressed) {
 
-        \            expect(json.count).to.equal(null);\r
+        \            expect(json.count).to.equal(null);
 
-        \            expect(json.floor).to.be.a('number');\r
+        \            expect(json.floor).to.be.a('number');
 
-        \        } else {\r
+        \        } else {
 
-        \            expect(json.count).to.be.a('number');\r
+        \            expect(json.count).to.be.a('number');
 
-        \        }\r
+        \        }
 
-        \    });\r
+        \    });
 
         }"
 

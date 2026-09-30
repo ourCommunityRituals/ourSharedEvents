@@ -21,25 +21,25 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        test('Phishing payload absent from rendered HTML', function() {\r
+        test('Phishing payload absent from rendered HTML', function() {
 
-        \    expect(body).to.not.include('Cheap Rolex Deals');\r
+        \    expect(body).to.not.include('Cheap Rolex Deals');
 
-        \    expect(body).to.not.include('Cheap%20Rolex');\r
+        \    expect(body).to.not.include('Cheap%20Rolex');
 
-        });\r
+        });
 
-        test('Document title does NOT contain the phishing payload', function() {\r
+        test('Document title does NOT contain the phishing payload', function() {
 
-        \    const m = body.match(/<title>([^<]*)<\\/title>/);\r
+        \    const m = body.match(/<title>([^<]*)<\\/title>/);
 
-        \    expect(m).to.not.be.null;\r
+        \    expect(m).to.not.be.null;
 
-        \    expect(m[1]).to.not.match(/Cheap Rolex|PWNED/i);\r
+        \    expect(m[1]).to.not.match(/Cheap Rolex|PWNED/i);
 
         });"
 

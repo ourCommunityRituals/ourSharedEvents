@@ -10,29 +10,29 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// CF Access intercepts /admin without auth and redirects to login.\r
+      code: "// CF Access intercepts /admin without auth and redirects to login.
 
-        // Newman follows the redirect, landing on the CF Access login page (200 HTML).\r
+        // Newman follows the redirect, landing on the CF Access login page (200 HTML).
 
-        // The key contract: unauthenticated users never see the admin dashboard.\r
+        // The key contract: unauthenticated users never see the admin dashboard.
 
-        test('Unauthenticated admin request is blocked', function() {\r
+        test('Unauthenticated admin request is blocked', function() {
 
-        \    const status = res.getStatus();\r
+        \    const status = res.getStatus();
 
-        \    expect([200, 302, 401, 403]).to.include(status);\r
+        \    expect([200, 302, 401, 403]).to.include(status);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('Does not serve admin dashboard HTML', function() {\r
+        test('Does not serve admin dashboard HTML', function() {
 
-        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        \    expect(body).to.not.include('data-testid=\"admin-header\"');\r
+        \    expect(body).to.not.include('data-testid=\"admin-header\"');
 
-        \    expect(body).to.not.include('data-testid=\"admin-main\"');\r
+        \    expect(body).to.not.include('data-testid=\"admin-main\"');
 
         });"
 

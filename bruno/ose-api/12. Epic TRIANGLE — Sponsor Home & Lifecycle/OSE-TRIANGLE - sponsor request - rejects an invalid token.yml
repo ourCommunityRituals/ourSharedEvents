@@ -1,0 +1,34 @@
+info:
+  name: TRIANGLE | sponsor request | rejects an invalid token
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/requests"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"token":"not.a.valid.token","event_id":"evt_does_not_exist"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (sponsor discovery, PR 700): a sponsor's ask-to-join is authorized ONLY
+        // by a valid sponsor-home token in the body; the brand comes from its signed
+        // claim. A forged token is rejected before any read or write.
+        test('401 on a forged token', function () { expect(res.getStatus()).to.eql(401); });
+        test('ok is false', function () { expect(res.getBody().ok).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

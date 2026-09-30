@@ -20,21 +20,21 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
 
-        \r
+        
 
-        test('Returns 400', function() {\r
+        test('Returns 400', function() {
 
-        \    expect(res.getStatus()).to.equal(400);\r
+        \    expect(res.getStatus()).to.equal(400);
 
-        });\r
+        });
 
-        \r
+        
 
-        test('INVALID_EVENT_ID code', function() {\r
+        test('INVALID_EVENT_ID code', function() {
 
-        \    expect(json.code).to.eql('INVALID_EVENT_ID');\r
+        \    expect(json.code).to.eql('INVALID_EVENT_ID');
 
         });"
 

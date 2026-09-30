@@ -66,7 +66,7 @@ interface Row {
 interface ListBody {
   ok: boolean;
   items: Row[];
-  filters?: { status: string | null; mine: boolean };
+  filters?: { status: string | null; mine: boolean; sort?: string };
   code?: string;
 }
 
@@ -125,7 +125,7 @@ describe('admin list — ?status= lifecycle filter', () => {
         'lc-ready-mine',
       ].sort()
     );
-    expect(body.filters).toEqual({ status: null, mine: false });
+    expect(body.filters).toEqual({ status: null, mine: false, sort: 'created' });
   });
 
   test('?status=draft returns only drafts', async () => {

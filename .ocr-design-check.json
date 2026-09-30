@@ -29,7 +29,7 @@
     },
     "workers/oursharedevents/src/lib/landing-area.ts": {
       "own-tokens": 0,
-      "own-stylesheet": 1267,
+      "own-stylesheet": 0,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -52,8 +52,8 @@
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/landing.html": {
-      "own-tokens": 5,
-      "own-stylesheet": 6773,
+      "own-tokens": 0,
+      "own-stylesheet": 6501,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },

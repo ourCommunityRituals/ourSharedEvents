@@ -11,33 +11,33 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// CF WAF may return 403 before the Worker returns 404\r
+      code: "// CF WAF may return 403 before the Worker returns 404
 
-        test('Returns 404 or 403 (WAF block)', function() {\r
+        test('Returns 404 or 403 (WAF block)', function() {
 
-        \    expect([403, 404]).to.include(res.getStatus());\r
+        \    expect([403, 404]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        \r
+        
 
-        const ct = (res.getHeader('Content-Type') || '');\r
+        const ct = (res.getHeader('Content-Type') || '');
 
-        if (ct.includes('application/json')) {\r
+        if (ct.includes('application/json')) {
 
-        \    const json = res.getBody();\r
+        \    const json = res.getBody();
 
-        \    test('ok is false', function() {\r
+        \    test('ok is false', function() {
 
-        \        expect(json.ok).to.eql(false);\r
+        \        expect(json.ok).to.eql(false);
 
-        \    });\r
+        \    });
 
-        \    test('Has error message', function() {\r
+        \    test('Has error message', function() {
 
-        \        expect(json.error).to.eql('Not found');\r
+        \        expect(json.error).to.eql('Not found');
 
-        \    });\r
+        \    });
 
         }"
 

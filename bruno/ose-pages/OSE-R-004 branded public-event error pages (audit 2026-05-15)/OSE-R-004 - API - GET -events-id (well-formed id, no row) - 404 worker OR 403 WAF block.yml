@@ -14,79 +14,79 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// OSE-R-004 (2026-05-15): non-existent event must render the branded\r
+      code: "// OSE-R-004 (2026-05-15): non-existent event must render the branded
 
-        // error shell, not bare <h1>Event not found</h1>. Locks status + the\r
+        // error shell, not bare <h1>Event not found</h1>. Locks status + the
 
-        // data-testids the FE Playwright spec relies on.\r
+        // data-testids the FE Playwright spec relies on.
 
-        //\r
+        //
 
-        // OSE-348 reality update (2026-05-18): on Cloudflare-WAF-protected\r
+        // OSE-348 reality update (2026-05-18): on Cloudflare-WAF-protected
 
-        // environments (staging/prod), the WAF intercepts requests whose path\r
+        // environments (staging/prod), the WAF intercepts requests whose path
 
-        // contains suspicious substrings (e.g., 'does_not_exist') and returns\r
+        // contains suspicious substrings (e.g., 'does_not_exist') and returns
 
-        // 403 Forbidden BEFORE reaching the worker. The unified contract is:\r
+        // 403 Forbidden BEFORE reaching the worker. The unified contract is:
 
-        // 'unauthenticated request to a non-existent event must NEVER serve\r
+        // 'unauthenticated request to a non-existent event must NEVER serve
 
-        // real event data OR leak D1 errors.' Either 404-worker or 403-WAF\r
+        // real event data OR leak D1 errors.' Either 404-worker or 403-WAF
 
-        // satisfies the contract. Worker-specific assertions (branded shell,\r
+        // satisfies the contract. Worker-specific assertions (branded shell,
 
-        // data-testids, CTA) fire ONLY when status === 404. Sibling: OSE-338\r
+        // data-testids, CTA) fire ONLY when status === 404. Sibling: OSE-338
 
-        // (CF Access shadowing of admin sign-in 401).\r
+        // (CF Access shadowing of admin sign-in 401).
 
-        test('Non-existent event blocked (404 worker OR 403 WAF)', function() {\r
+        test('Non-existent event blocked (404 worker OR 403 WAF)', function() {
 
-        \    expect([404, 403]).to.include(res.getStatus());\r
+        \    expect([404, 403]).to.include(res.getStatus());
 
-        });\r
+        });
 
-        test('Content-Type is text/html', function() {\r
+        test('Content-Type is text/html', function() {
 
-        \    expect(res.getHeader('Content-Type') || '').to.include('text/html');\r
+        \    expect(res.getHeader('Content-Type') || '').to.include('text/html');
 
-        });\r
+        });
 
-        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        test('Bare pre-fix HTML phrases NOT present (no 1996-style raw <h1>)', function() {\r
+        test('Bare pre-fix HTML phrases NOT present (no 1996-style raw <h1>)', function() {
 
-        \    expect(body).to.not.include('<h1>Event not found</h1>');\r
+        \    expect(body).to.not.include('<h1>Event not found</h1>');
 
-        \    expect(body).to.not.include('<title>Not found</title>');\r
+        \    expect(body).to.not.include('<title>Not found</title>');
 
-        });\r
+        });
 
-        // Worker-404 contract details — only enforced on non-WAF environments.\r
+        // Worker-404 contract details — only enforced on non-WAF environments.
 
-        if (res.getStatus() === 404) {\r
+        if (res.getStatus() === 404) {
 
-        \    test('Brand header present', function() {\r
+        \    test('Brand header present', function() {
 
-        \        expect(body).to.include('data-testid=\"error-header\"');\r
+        \        expect(body).to.include('data-testid=\"error-header\"');
 
-        \        expect(body).to.include('OurSharedEvents');\r
+        \        expect(body).to.include('OurSharedEvents');
 
-        \    });\r
+        \    });
 
-        \    test('Friendly title present', function() {\r
+        \    test('Friendly title present', function() {
 
-        \        expect(body).to.include('data-testid=\"error-title\"');\r
+        \        expect(body).to.include('data-testid=\"error-title\"');
 
-        \    });\r
+        \    });
 
-        \    test('CTA back to /events present', function() {\r
+        \    test('CTA back to /events present', function() {
 
-        \        expect(body).to.include('href=\"/events\"');\r
+        \        expect(body).to.include('href=\"/events\"');
 
-        \        expect(body).to.include('Browse upcoming events');\r
+        \        expect(body).to.include('Browse upcoming events');
 
-        \    });\r
+        \    });
 
         }"
 

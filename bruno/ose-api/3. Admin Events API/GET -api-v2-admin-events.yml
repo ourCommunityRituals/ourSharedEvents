@@ -11,75 +11,75 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// CF Access may intercept this request before it reaches the Worker.\r
+      code: "// CF Access may intercept this request before it reaches the Worker.
 
-        // Three valid outcomes: 200 JSON (auth passed), 401 (Worker auth), or CF Access block (302/200 HTML).\r
+        // Three valid outcomes: 200 JSON (auth passed), 401 (Worker auth), or CF Access block (302/200 HTML).
 
-        const ct = res.getHeader('Content-Type') || '';\r
+        const ct = res.getHeader('Content-Type') || '';
 
-        const isCfAccessBlocked = !ct.includes('application/json');\r
+        const isCfAccessBlocked = !ct.includes('application/json');
 
-        \r
+        
 
-        if (isCfAccessBlocked) {\r
+        if (isCfAccessBlocked) {
 
-        \    test('CF Access blocked — admin route protected', function() {\r
+        \    test('CF Access blocked — admin route protected', function() {
 
-        \        expect([200, 302, 403]).to.include(res.getStatus());\r
+        \        expect([200, 302, 403]).to.include(res.getStatus());
 
-        \    });\r
+        \    });
 
-        \    console.warn('CF Access blocked admin API — set CF-Access-Client-Id/Secret to bypass');\r
+        \    console.warn('CF Access blocked admin API — set CF-Access-Client-Id/Secret to bypass');
 
-        } else if (res.getStatus() === 200) {\r
+        } else if (res.getStatus() === 200) {
 
-        \    const json = res.getBody();\r
+        \    const json = res.getBody();
 
-        \    test('ok is true', function() {\r
+        \    test('ok is true', function() {
 
-        \        expect(json.ok).to.eql(true);\r
+        \        expect(json.ok).to.eql(true);
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('items is array', function() {\r
+        \    test('items is array', function() {
 
-        \        expect(json.items).to.be.an('array');\r
+        \        expect(json.items).to.be.an('array');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Cache-Control is no-store (admin)', function() {\r
+        \    test('Cache-Control is no-store (admin)', function() {
 
-        \        expect(res.getHeader('Cache-Control')).to.eql('no-store');\r
+        \        expect(res.getHeader('Cache-Control')).to.eql('no-store');
 
-        \    });\r
+        \    });
 
-        \r
+        
 
-        \    test('Returns items sorted by updated_at DESC', function() {\r
+        \    test('Returns items sorted by updated_at DESC', function() {
 
-        \        if (json.items.length >= 2) {\r
+        \        if (json.items.length >= 2) {
 
-        \            expect(json.items[0].updated_at >= json.items[1].updated_at).to.be.true;\r
+        \            expect(json.items[0].updated_at >= json.items[1].updated_at).to.be.true;
 
-        \        }\r
+        \        }
 
-        \    });\r
+        \    });
 
-        } else if (res.getStatus() === 401) {\r
+        } else if (res.getStatus() === 401) {
 
-        \    const json = res.getBody();\r
+        \    const json = res.getBody();
 
-        \    test('401 has UNAUTH code', function() {\r
+        \    test('401 has UNAUTH code', function() {
 
-        \        expect(json.code).to.eql('UNAUTH');\r
+        \        expect(json.code).to.eql('UNAUTH');
 
-        \    });\r
+        \    });
 
-        \    console.warn('AUTH FAILED — set adminKey in environment');\r
+        \    console.warn('AUTH FAILED — set adminKey in environment');
 
         }"
 

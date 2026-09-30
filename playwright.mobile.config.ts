@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -92,6 +93,18 @@ const BASE = `http://127.0.0.1:${PORT}`;
  */
 const LOCAL_ADMIN_KEY = 'ose-local-mobile-audit-key';
 
+/**
+ * Local-only HMAC key for signed links (sponsor home, SharedReport). Without
+ * it the worker fails closed — mint returns 503 SIGNING_NOT_CONFIGURED — and
+ * /sponsor can only ever render its invalid-link page. Same reasoning as the
+ * admin key above: it signs tokens for a worker that exists for this run only.
+ * Random per run (64 hex chars, above the /health signingSecretConfigured
+ * floor of 32): nothing outside the worker needs to know it — tokens are
+ * minted by that same worker — so there is no literal for a secret scanner to
+ * flag or a reader to reuse.
+ */
+const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
+
 // Read by the spec at import time. The config module is evaluated in the
 // runner AND in each test worker process, so this reaches the spec in both.
 process.env.OSE_ADMIN_BEARER = LOCAL_ADMIN_KEY;
@@ -102,7 +115,13 @@ export default defineConfig({
   // against deployed staging; one that reads seeded rows would go green here
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
-  testMatch: /(mobile-workability|admin-wizard-isolation|admin-csp-controls)\.spec\.ts/,
+  testMatch:
+    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|sponsor-home-flow|landing-theme)\.spec\.ts/,
+
+  // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
+  // measures the real sponsor surface instead of skipping it. Runs after the
+  // webServer is up. See tests/playwright/mobile.global-setup.ts.
+  globalSetup: './tests/playwright/mobile.global-setup.ts',
 
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -169,7 +188,8 @@ export default defineConfig({
       `npx wrangler dev --local --port ${PORT}` +
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
-      ` --var ADMIN_SCOPE_ALL:true`,
+      ` --var ADMIN_SCOPE_ALL:true` +
+      ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}`,
     cwd: 'workers/oursharedevents',
     url: BASE + '/',
     reuseExistingServer: !process.env.CI,

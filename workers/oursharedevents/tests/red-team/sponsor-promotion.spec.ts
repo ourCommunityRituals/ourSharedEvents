@@ -238,8 +238,25 @@ describe('OSE-736 — is_active writer enumeration (truthful, not "sole writer")
       .sort();
 
     // The ONLY writers: the admin sponsor handlers (create + soft-delete, admin-
-    // gated + brand-scoped) and the promotion lib (covenant + brand gated). If a
-    // new writer appears, this test fails until it is reviewed and enumerated.
-    expect(writers).toEqual(['src/handlers/sponsors.ts', 'src/lib/sponsor-promotion.ts']);
+    // gated + brand-scoped), the promotion lib (covenant + brand gated), and
+    // sponsor discovery (reviewed 2026-09-30, PR #700). If a new writer appears,
+    // this test fails until it is reviewed and enumerated.
+    //
+    // sponsor-discovery.ts has two writes, and neither lets a sponsor turn a
+    // placement ON by itself:
+    //   - createSponsorRequest INSERTs a sponsor-asked placement with
+    //     is_active = 0 (a literal, never a bound value) — token-verified, brand
+    //     from the signed claim. Behaviourally held by sponsor-discovery.spec.ts
+    //     ("stored as the sponsor's yes but switched off"; verified red by
+    //     making it insert is_active = 1).
+    //   - answerSponsorRequest UPDATEs is_active = 1 only on the organizer's
+    //     approval, reached solely through POST
+    //     /api/v2/admin/sponsor-requests/:id/respond (requireAdmin at the router,
+    //     admin brand scope in the SELECT; outside scope = 404).
+    expect(writers).toEqual([
+      'src/handlers/sponsors.ts',
+      'src/lib/sponsor-discovery.ts',
+      'src/lib/sponsor-promotion.ts',
+    ]);
   });
 });

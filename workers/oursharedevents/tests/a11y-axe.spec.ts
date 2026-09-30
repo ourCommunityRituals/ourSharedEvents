@@ -18,6 +18,7 @@ import {
 import { handleFormPage } from '../src/handlers/form-pages';
 import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
 import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
+import { renderSponsorCardPage } from '../src/lib/sponsor-card-render';
 
 async function axeScan(html: string): Promise<axe.Result[]> {
   document.open();
@@ -104,6 +105,38 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
     await scanPage(
       'Email form',
       await (await handleFormPage(formReq('email'), {} as never, 'evt1')).text()
+    );
+  });
+
+  // 0083: the public sponsor card — full (logo, location, all three actions)
+  // and minimal (a name only), so both the richest and the barest card are
+  // scanned for landmarks, one <h1>, and named controls.
+  test('sponsor card (full + name-only)', async () => {
+    await scanPage(
+      'Sponsor card (full)',
+      renderSponsorCardPage({
+        id: 'sp_a11y',
+        name: 'Card Co LLC',
+        display_name: 'Card Co',
+        address_line: '123 Main St, Blue Island',
+        contact_phone: '(708) 555-0100',
+        contact_email: 'hi@cardco.example',
+        website_url: 'https://cardco.example',
+        has_logo: true,
+      })
+    );
+    await scanPage(
+      'Sponsor card (name only)',
+      renderSponsorCardPage({
+        id: 'sp_a11y2',
+        name: 'Just A Name',
+        display_name: null,
+        address_line: null,
+        contact_phone: null,
+        contact_email: null,
+        website_url: null,
+        has_logo: false,
+      })
     );
   });
 

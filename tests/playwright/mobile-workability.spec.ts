@@ -71,6 +71,14 @@ const SPONSOR_HOME_SKIP_REASON = SPONSOR_HOME_TOKEN
   ? undefined
   : 'Set OSE_SPONSOR_HOME_TOKEN to a minted sponsor-home bearer (POST /api/v2/admin/sponsors/:id/home-link on a seeded sponsor) — without it /sponsor?t= renders the invalid-link page, not the phone-first sponsor surface.';
 
+// 0083: /sponsors/:id is the public sponsor card (title, location, contact).
+// It renders only for a sponsor that is on show (active + accepted placement),
+// so it needs a seeded id; skip (documented) otherwise, like /sponsor above.
+const SPONSOR_CARD_ID = process.env.OSE_SPONSOR_CARD_ID || '';
+const SPONSOR_CARD_SKIP_REASON = SPONSOR_CARD_ID
+  ? undefined
+  : 'Set OSE_SPONSOR_CARD_ID to a seeded sponsor with an accepted placement — otherwise /sponsors/:id renders the 404 page, not the sponsor card.';
+
 // Mobile floor: iPhone 13 Mini / iPhone X. Smallest modern phone in
 // significant active use. Designing to this floor passes for every
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
@@ -200,6 +208,15 @@ const SURFACES: Surface[] = [
     primaryCtaSelector:
       '[data-testid="placement-accept"], [data-testid="sponsor-home-nav-events"], main a, main button',
     skipReason: SPONSOR_HOME_SKIP_REASON,
+  },
+  {
+    // 0083: the public sponsor card — where a tap on a sponsor with no website
+    // lands. Buttons are @ocr/ui .btn (44px+); documented-skip without a seed.
+    path: `/sponsors/${SPONSOR_CARD_ID || 'unseeded'}`,
+    name: 'sponsor card',
+    primaryCtaSelector:
+      '[data-testid="sponsor-card-phone"], [data-testid="sponsor-card-email"], [data-testid="sponsor-card-website"], [data-testid="sponsor-card-nav-events"]',
+    skipReason: SPONSOR_CARD_SKIP_REASON,
   },
   {
     path: '/poster',
@@ -360,9 +377,16 @@ async function getInputLocators(page: Page): Promise<Locator[]> {
 
 // ─── The audit ────────────────────────────────────────────────────────────
 
+// Test titles show bearer-token params elided: `/sponsor?t=…` rather than a
+// run-specific token, so titles are stable across runs and a token never lands
+// in a report. Only `t` / `token` — `?type=register` etc. must stay distinct.
+// Navigation still uses the full path.
+const titlePath = (p: string) => p.replace(/([?&](?:t|token)=)[^&]+/g, '$1…');
+
 for (const surface of SURFACES) {
-  test.describe(`OSE-292 mobile workability — ${surface.name} (${surface.path})`, () => {
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | no horizontal scroll`, async ({
+  const shown = titlePath(surface.path);
+  test.describe(`OSE-292 mobile workability — ${surface.name} (${shown})`, () => {
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no horizontal scroll`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -378,7 +402,7 @@ for (const surface of SURFACES) {
       ).toBeLessThanOrEqual(clientWidth + 1);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | all touch targets ≥ 44×44 px`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all touch targets ≥ 44×44 px`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -408,7 +432,7 @@ for (const surface of SURFACES) {
       ).toEqual([]);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | all input font-size ≥ 16 px`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all input font-size ≥ 16 px`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -432,7 +456,7 @@ for (const surface of SURFACES) {
       ).toEqual([]);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | primary CTA above the fold`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | primary CTA above the fold`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');
@@ -497,7 +521,7 @@ for (const surface of SURFACES) {
       ).toBeLessThan(MOBILE_VIEWPORT.height);
     });
 
-    test(`OSE-292 | FE | GET ${surface.path} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
+    test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
       page,
     }) => {
       test.skip(!!surface.skipReason, surface.skipReason ?? '');

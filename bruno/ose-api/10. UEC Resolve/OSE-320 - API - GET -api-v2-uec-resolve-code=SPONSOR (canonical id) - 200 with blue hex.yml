@@ -15,15 +15,15 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const json = res.getBody();\r
+      code: "const json = res.getBody();
 
-        test('Status is 200', () => expect(res.getStatus()).to.equal(200));\r
+        test('Status is 200', () => expect(res.getStatus()).to.equal(200));
 
-        test('code.id is SPONSOR', () => expect(json.code.id).to.eql('SPONSOR'));\r
+        test('code.id is SPONSOR', () => expect(json.code.id).to.eql('SPONSOR'));
 
-        test('code.label is Blue', () => expect(json.code.label).to.eql('Blue'));\r
+        test('code.label is Blue', () => expect(json.code.label).to.eql('Blue'));
 
-        test('code.scan_hex is canonical sponsor blue', () => expect(json.code.scan_hex).to.eql('#1A3A8A'));\r
+        test('code.scan_hex is canonical sponsor blue', () => expect(json.code.scan_hex).to.eql('#1A3A8A'));
 
         test('code.url_path is /sponsor', () => expect(json.code.url_path).to.eql('/sponsor'));"
 
