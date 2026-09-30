@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -97,9 +98,12 @@ const LOCAL_ADMIN_KEY = 'ose-local-mobile-audit-key';
  * it the worker fails closed — mint returns 503 SIGNING_NOT_CONFIGURED — and
  * /sponsor can only ever render its invalid-link page. Same reasoning as the
  * admin key above: it signs tokens for a worker that exists for this run only.
- * ≥32 chars, matching the /health signingSecretConfigured floor.
+ * Random per run (64 hex chars, above the /health signingSecretConfigured
+ * floor of 32): nothing outside the worker needs to know it — tokens are
+ * minted by that same worker — so there is no literal for a secret scanner to
+ * flag or a reader to reuse.
  */
-const LOCAL_SIGNING_SECRET = 'ose-local-mobile-audit-signing-secret-000000';
+const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
 
 // Read by the spec at import time. The config module is evaluated in the
 // runner AND in each test worker process, so this reaches the spec in both.
