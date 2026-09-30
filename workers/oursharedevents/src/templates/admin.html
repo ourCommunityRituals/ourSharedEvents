@@ -6352,7 +6352,10 @@
 
       window.renderEventsList = async function (opts) {
         var L = window._oseList;
-        if (L.loading) return;
+        // A reset requested mid-load (a filter tapped while page one is still
+        // arriving) is queued, not dropped: dropping it left the chip saying
+        // "Published" over a list fetched for "All".
+        if (L.loading) { if (opts && opts.reset) L.pendingReset = true; return; }
         L.loading = true;
         var esc = function (s) {
           var d = document.createElement('div');
@@ -6360,11 +6363,12 @@
           return d.innerHTML;
         };
         var container = document.getElementById('events');
-        if (opts && opts.reset) {
-          L.cursor = null;
-          L.items = [];
-          L.byId = Object.create(null);
-        }
+        // A reset (filter / sort / mine change) swaps in the new index only
+        // once the new page ARRIVES. Emptying L.byId up front left a window in
+        // which a tap on a still-visible row selected an event the index no
+        // longer held, and the checklist hid itself ("no such event").
+        var reset = !!(opts && opts.reset);
+        if (reset) L.cursor = null;
         try {
           var qs = [];
           if (L.status && L.status !== 'all') qs.push('status=' + encodeURIComponent(L.status));
@@ -6374,6 +6378,10 @@
           var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
           var data = await fetch(url).then(function (r) { return r.json(); });
           if (!data.ok) throw new Error(data.error || data.code || 'list failed');
+          if (reset) {
+            L.items = [];
+            L.byId = Object.create(null);
+          }
           // Ids from the response become object keys, so only real event-id
           // shapes are accepted and the map has no prototype (a "__proto__" id
           // must never write onto Object.prototype — CodeQL
@@ -6513,6 +6521,10 @@
             '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
         } finally {
           L.loading = false;
+          if (L.pendingReset) {
+            L.pendingReset = false;
+            window.renderEventsList({ reset: true });
+          }
         }
       };
 
