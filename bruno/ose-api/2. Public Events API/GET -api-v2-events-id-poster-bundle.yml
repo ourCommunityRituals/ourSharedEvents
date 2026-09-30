@@ -1,0 +1,78 @@
+info:
+  name: GET /api/v2/events/:id/poster-bundle
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/poster-bundle"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-867 (PO-3): poster-bundle is the poster's WHOLE payload — the
+        // event (title/start/venue under the canonical OSE-844 names), the
+        // sponsor strip and the QR slots, in one call. Before OSE-867 the start
+        // and venue keys literally did not exist in this response.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access / edge block — not a JSON response', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
+
+        if (res.getStatus() === 200) {
+          test('envelope: ok true, numeric status 200, event state under eventStatus (OSE-842)', function() {
+            expect(json.ok).to.eql(true);
+            expect(json.status).to.eql(200);
+            expect(json.eventStatus).to.be.a('string');
+          });
+
+          test('event carries title, start and venue under the canonical names', function() {
+            expect(json.event).to.be.an('object');
+            expect(json.event.id).to.eql(json.eventId);
+            expect(json.event).to.have.property('name');
+            expect(json.event).to.have.property('startDateISO');
+            expect(json.event).to.have.property('starts_at');
+            expect(json.event).to.have.property('timezone');
+            expect(json.event).to.have.property('venue');
+          });
+
+          test('one name per value: no eventName duplicate', function() {
+            expect(json).to.not.have.property('eventName');
+          });
+
+          test('sponsors and slots ride in the same call', function() {
+            expect(json.sponsors).to.be.an('array');
+            expect(json.slots).to.be.an('array');
+            expect(json.slots.length).to.be.above(0);
+            expect(json.slots[0].kind).to.eql('public');
+          });
+
+          test('section switches are resolved booleans (OSE-869: absent means on)', function() {
+            expect(json.settings).to.be.an('object');
+            expect(json.settings.showQRSection).to.be.a('boolean');
+          });
+
+          test('the printed poster fires no impression beacons', function() {
+            json.sponsors.forEach(function(s) {
+              expect(s).to.not.have.property('beacon_token');
+            });
+          });
+        } else if (res.getStatus() === 403 || res.getStatus() === 404) {
+          test('refusal is an ok:false envelope with a numeric status', function() {
+            expect(json.ok).to.eql(false);
+            expect(json.status).to.eql(res.getStatus());
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

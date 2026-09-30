@@ -70,9 +70,10 @@ describe('OSE-864 / #25: Poster renderer — no tier class, data-tier retained',
 
   test('renderer still normalizes an unknown tier to primary (rotation default)', async () => {
     const body = await posterHtml();
-    const fnStart = body.indexOf('async function loadPosterSponsors');
-    const fnEnd = body.indexOf('init();', fnStart);
-    const fn = fnStart >= 0 && fnEnd > fnStart ? body.slice(fnStart, fnEnd) : '';
+    const fnStart = body.indexOf('function renderPosterSponsors');
+    const fnEnd = body.indexOf('function renderPosterSlots', fnStart);
+    expect(fnStart, 'renderPosterSponsors must exist').toBeGreaterThanOrEqual(0);
+    const fn = body.slice(fnStart, fnEnd);
     expect(fn).toContain("['title','platinum','gold','silver','bronze','primary']");
     expect(fn).toMatch(/'primary'/);
   });

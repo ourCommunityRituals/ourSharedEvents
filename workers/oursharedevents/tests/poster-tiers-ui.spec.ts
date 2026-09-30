@@ -199,10 +199,15 @@ async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
     if (url === '/api/v2/events') {
       return { body: { ok: true, items: [{ id: EVT, name: 'Harbor County Bocce' }] } };
     }
-    if (url.includes('/poster-bundle')) return { body: { ok: true, slots } };
+    // OSE-867: a scoped poster is one poster-bundle call carrying the event.
+    if (url.includes('/poster-bundle')) {
+      return {
+        body: { ok: true, event: { id: EVT, name: 'Harbor County Bocce' }, sponsors: [], slots },
+      };
+    }
     return { body: { ok: false } };
   });
-  w.eval(scriptContaining(POSTER_HTML, 'async function loadPosterQR'));
+  w.eval(scriptContaining(POSTER_HTML, 'async function loadPosterBundle'));
   await flush();
   return w.document;
 }

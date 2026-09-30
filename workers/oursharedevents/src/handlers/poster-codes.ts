@@ -4,6 +4,10 @@
  *   GET /api/v2/admin/events/:id/poster-codes → the poster's codes, in order
  *   PUT /api/v2/admin/events/:id/poster-codes → save { codes: [{ kind, target_url? }] }
  *
+ * Both responses also carry `settings` (OSE-869): the event's section switches,
+ * so the card can show whether the poster prints its QR grid at all. The switch
+ * itself is WRITTEN through PUT /api/v2/admin/events/:id { settings }.
+ *
  * Both are requireAdmin-gated in the router, and the /admin/events/:id/... path
  * sits under the admin object-scope guard (brand scope, OSE-1080).
  *
@@ -27,6 +31,7 @@ import {
   posterCodeLimit,
   savePosterCodes,
 } from '../lib/poster-codes';
+import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 
 export interface PosterCodesEnv {
   DB?: D1Database;
@@ -89,6 +94,11 @@ async function currentCodes(env: PosterCodesEnv, eventId: string): Promise<SlotS
 async function respond(request: Request, env: PosterCodesEnv, eventId: string, status = 200) {
   const origin = new URL(request.url).origin;
   const codes = (await currentCodes(env, eventId)).map((s) => describeCode(origin, eventId, s));
+  // OSE-869: the card's "QR codes on the poster" switch shows the stored value.
+  const ev = await env
+    .DB!.prepare('SELECT settings_json FROM events WHERE id = ?')
+    .bind(eventId)
+    .first<{ settings_json: string | null }>();
   return json(
     request,
     {
@@ -102,6 +112,7 @@ async function respond(request: Request, env: PosterCodesEnv, eventId: string, s
         needs_url: k.target === 'https',
       })),
       codes,
+      settings: resolveEventSettings(parseEventSettings(ev?.settings_json)),
     },
     status
   );

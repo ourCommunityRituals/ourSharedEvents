@@ -375,6 +375,188 @@ test.describe('Poster Page — Print Gate (OSE-286)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 6c. ONE CALL  (OSE-867 — the poster-bundle IS the poster's data)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Poster Page — One Data Call (OSE-867)', () => {
+  const TINY_PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+  const BUNDLE = {
+    ok: true,
+    status: 200,
+    eventId: 'evt_one',
+    eventStatus: 'active',
+    event: {
+      id: 'evt_one',
+      name: 'Bocce Night',
+      start_date: '2026-10-24',
+      startDateISO: '2026-10-24',
+      starts_at: null,
+      timezone: 'America/Chicago',
+      venue: 'Eagles Hall',
+      cover_image_url: null,
+    },
+    sponsors: [{ id: 'sp_1', name: 'Corner Bakery', logo_url: null, tier: 'primary' }],
+    slots: [
+      {
+        kind: 'public',
+        word: 'EVENT',
+        tone: 'neutral',
+        label: 'Event page',
+        code: 'Abc123',
+        url: 'https://x/s/Abc123',
+        qr: TINY_PNG,
+      },
+    ],
+  };
+
+  test('a scoped poster (?event=) issues exactly one data request and prints date + venue from it', async ({
+    page,
+  }) => {
+    const dataCalls: string[] = [];
+    page.on('request', (req) => {
+      const u = new URL(req.url());
+      if (u.pathname.startsWith('/api/')) dataCalls.push(u.pathname);
+    });
+    // Any list / sponsor-bundle call is a waterfall regression: answer it so a
+    // regressed page still renders, and let the count below catch it.
+    await page.route('**/api/v2/events', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, status: 200, items: [BUNDLE.event] }),
+      })
+    );
+    await page.route('**/sponsor-bundle*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, status: 200, bundle: {} }),
+      })
+    );
+    await page.route('**/poster-bundle', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(BUNDLE) })
+    );
+
+    await page.goto('/poster?event=evt_one', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+
+    await expect(page.locator('[data-testid="poster-title"]')).toHaveText('Bocce Night');
+    await expect(page.locator('[data-testid="poster-meta-venue"]')).toContainText('Eagles Hall');
+    await expect(page.locator('[data-testid="poster-meta-date"]')).toContainText('2026');
+    await expect(page.locator('[data-testid="poster-sponsor-name"]')).toHaveText('Corner Bakery');
+    await expect(page.locator('[data-testid="qr-img-slot-public"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="poster-print"]')).toBeEnabled();
+
+    expect(dataCalls).toEqual(['/api/v2/events/evt_one/poster-bundle']);
+  });
+
+  test('a scoped poster for an event that cannot be shown says so (no silent fallback to another event)', async ({
+    page,
+  }) => {
+    await page.route('**/poster-bundle', (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, status: 404, error: 'Event not found' }),
+      })
+    );
+    await page.goto('/poster?event=evt_missing', {
+      waitUntil: 'domcontentloaded',
+      timeout: 20_000,
+    });
+    await expect(page.locator('[data-testid="poster-error"]')).toBeVisible();
+    await expect(page.locator('[data-testid="poster-card"]')).toHaveCount(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 6d. showQRSection  (OSE-869 — a walk-up event prints no QR grid, and no gap)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Poster Page — showQRSection (OSE-869)', () => {
+  const TINY_PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+  const bundle = (settings?: Record<string, unknown>) => ({
+    ok: true,
+    status: 200,
+    eventId: 'evt_walkup',
+    eventStatus: 'active',
+    event: {
+      id: 'evt_walkup',
+      name: 'Walk-up Bocce',
+      start_date: '2026-10-24',
+      startDateISO: '2026-10-24',
+      starts_at: null,
+      timezone: 'America/Chicago',
+      venue: 'Eagles Hall',
+      cover_image_url: null,
+    },
+    sponsors: [],
+    slots: [
+      {
+        kind: 'public',
+        word: 'EVENT',
+        tone: 'neutral',
+        label: 'Event page',
+        code: 'Abc123',
+        url: 'https://x/s/Abc123',
+        qr: TINY_PNG,
+      },
+    ],
+    ...(settings ? { settings } : {}),
+  });
+
+  async function open(page: import('@playwright/test').Page, settings?: Record<string, unknown>) {
+    await page.route('**/poster-bundle', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(bundle(settings)),
+      })
+    );
+    await page.goto('/poster?event=evt_walkup', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await expect(page.locator('[data-testid="poster-title"]')).toHaveText('Walk-up Bocce');
+    await expect(page.locator('[data-testid="poster-print"]')).toBeEnabled();
+  }
+
+  test('off: no QR section on screen or in print, and no reserved gap', async ({ page }) => {
+    await open(page, { showQRSection: false });
+    await expect(page.locator('[data-testid="poster-qr-section"]')).toHaveCount(0);
+    // No QR-shaped hole, on screen or on paper: the poster body's content ends
+    // where its last VISIBLE child ends (plus its own bottom padding) — nothing
+    // empty is left holding space where the grid was.
+    const holeHeight = async () =>
+      page.evaluate(() => {
+        const body = document.querySelector('[data-testid="poster-body"]') as HTMLElement;
+        const pad = parseFloat(getComputedStyle(body).paddingBottom) || 0;
+        let lastBottom = body.getBoundingClientRect().top;
+        for (const child of Array.from(body.children)) {
+          const r = child.getBoundingClientRect();
+          const mb = parseFloat(getComputedStyle(child).marginBottom) || 0;
+          if (r.height > 0) lastBottom = Math.max(lastBottom, r.bottom + mb);
+        }
+        return body.getBoundingClientRect().bottom - pad - lastBottom;
+      });
+    expect(await holeHeight()).toBeLessThan(2);
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('[data-testid="poster-qr-section"]')).toHaveCount(0);
+    expect(await holeHeight()).toBeLessThan(2);
+  });
+
+  test('on and absent: the QR section renders with its code', async ({ page }) => {
+    await open(page, { showQRSection: true });
+    await expect(page.locator('[data-testid="poster-qr-section"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="qr-img-slot-public"]')).toHaveCount(1);
+  });
+
+  test('absent setting behaves as on (existing posters unchanged)', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('[data-testid="poster-qr-section"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="qr-img-slot-public"]')).toHaveCount(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 7. RESPONSE TIME
 // ═══════════════════════════════════════════════════════════════════════════════
 

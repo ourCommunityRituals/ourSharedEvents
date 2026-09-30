@@ -95,7 +95,13 @@ function codesScript(html: string): string {
 }
 
 async function mountAdmin(
-  opts: { limit?: number; codes?: unknown[]; put?: (b: unknown) => Reply } = {}
+  opts: {
+    limit?: number;
+    codes?: unknown[];
+    put?: (b: unknown) => Reply;
+    settings?: Record<string, unknown>;
+    putEvent?: (b: unknown) => Reply;
+  } = {}
 ) {
   const dom = new JSDOM(`<!doctype html><body>${cardMarkup(ADMIN_HTML)}</body>`, {
     runScripts: 'outside-only',
@@ -111,8 +117,20 @@ async function mountAdmin(
     }
     if (url.endsWith('/poster-codes')) {
       return {
-        body: { ok: true, limit: opts.limit ?? 4, kinds: KINDS, codes: opts.codes ?? SAVED },
+        body: {
+          ok: true,
+          limit: opts.limit ?? 4,
+          kinds: KINDS,
+          codes: opts.codes ?? SAVED,
+          ...(opts.settings ? { settings: opts.settings } : {}),
+        },
       };
+    }
+    // OSE-869: the QR switch saves through the event itself.
+    if (url === `/api/v2/admin/events/${EVT}` && init?.method === 'PUT') {
+      return opts.putEvent
+        ? opts.putEvent(JSON.parse(String(init.body)))
+        : { body: { ok: true, status: 200 } };
     }
     return { status: 404, body: { ok: false } };
   });
@@ -130,6 +148,62 @@ async function mountAdmin(
   };
   return { w, doc, calls, rows, click, writeText };
 }
+
+describe('admin | OSE-869 "Print QR codes on this poster" switch', () => {
+  const toggle = (doc: Document) =>
+    doc.querySelector('[data-testid="poster-show-qr"]') as HTMLInputElement;
+  const change = async (w: Window, el: HTMLInputElement) => {
+    el.checked = !el.checked;
+    el.dispatchEvent(new w.Event('change'));
+    await flush();
+  };
+
+  test('shows the stored value: absent → on, false → off', async () => {
+    expect(toggle((await mountAdmin()).doc).checked).toBe(true);
+    expect(toggle((await mountAdmin({ settings: { showQRSection: true } })).doc).checked).toBe(
+      true
+    );
+    expect(toggle((await mountAdmin({ settings: { showQRSection: false } })).doc).checked).toBe(
+      false
+    );
+  });
+
+  test('turning it off saves settings.showQRSection=false through PUT /admin/events/:id', async () => {
+    const { w, doc, calls } = await mountAdmin();
+    await change(w as unknown as Window, toggle(doc));
+    const put = calls.find((c) => c.method === 'PUT' && c.url === `/api/v2/admin/events/${EVT}`);
+    expect(put?.body).toEqual({ settings: { showQRSection: false } });
+    expect(toggle(doc).checked).toBe(false);
+    expect(doc.querySelector('[data-testid="poster-codes-msg"]')!.textContent).toMatch(
+      /without QR codes/
+    );
+  });
+
+  test('CCR PR701 F3: while another event loads, the switch is disabled and never shows the previous event', async () => {
+    const { w, doc } = await mountAdmin({ settings: { showQRSection: false } });
+    expect(toggle(doc).checked).toBe(false);
+    // Select a second event whose codes never arrive (load fails).
+    (w as unknown as { fetch: unknown }).fetch = async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ ok: false }),
+    });
+    await (w.loadPosterCodes as (id: string) => Promise<void>)('evt_other');
+    await flush();
+    expect(toggle(doc).disabled).toBe(true);
+  });
+
+  test('a failed save reverts the switch and says the poster is unchanged', async () => {
+    const { w, doc } = await mountAdmin({
+      putEvent: () => ({ status: 400, body: { ok: false, code: 'INVALID_SETTINGS' } }),
+    });
+    await change(w as unknown as Window, toggle(doc));
+    expect(toggle(doc).checked).toBe(true);
+    expect(doc.querySelector('[data-testid="poster-codes-msg"]')!.textContent).toMatch(
+      /poster is unchanged/
+    );
+  });
+});
 
 describe('admin | Codes on the poster', () => {
   test('loads the event’s codes in order; the event page is first and cannot be moved or removed', async () => {
@@ -323,28 +397,49 @@ function posterBody(html: string): string {
   return doc.body.innerHTML;
 }
 function posterScript(html: string): string {
-  return scriptContaining(html, 'async function loadPosterQR');
+  return scriptContaining(html, 'async function loadPosterBundle');
 }
 
-async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
+async function mountPoster(
+  kind: 'print' | 'digital',
+  slots: unknown[],
+  settings?: Record<string, unknown>
+) {
   const dom = new JSDOM(`<!doctype html><body>${posterBody(POSTER_HTML)}</body>`, {
     runScripts: 'outside-only',
     url: `https://ose.test/poster?event=${EVT}&kind=${kind}`,
   });
   const w = dom.window as unknown as Window &
     Record<string, unknown> & { eval(s: string): unknown };
-  stubFetch(w, (url) => {
+  const calls = stubFetch(w, (url) => {
     if (url === '/api/v2/events') {
       return {
         body: { ok: true, items: [{ id: EVT, name: 'Harbor County Bocce', venue: 'Sawyer' }] },
       };
     }
-    if (url.includes('/poster-bundle')) return { body: { ok: true, slots } };
+    if (url.includes('/poster-bundle')) {
+      // OSE-867: the bundle is the poster's whole payload.
+      return {
+        body: {
+          ok: true,
+          status: 200,
+          event: {
+            id: EVT,
+            name: 'Harbor County Bocce',
+            venue: 'Sawyer',
+            startDateISO: '2026-10-24',
+          },
+          sponsors: [{ id: 'sp1', name: 'Sawyer Hardware', tier: 'primary' }],
+          slots,
+          ...(settings ? { settings } : {}),
+        },
+      };
+    }
     return { body: { ok: false } };
   });
   w.eval(posterScript(POSTER_HTML));
   await flush();
-  return { doc: w.document, w };
+  return { doc: w.document, w, calls };
 }
 
 const BUNDLE_SLOTS = [
@@ -385,6 +480,70 @@ const BUNDLE_SLOTS = [
     qr: QR,
   },
 ];
+
+describe('/poster | OSE-867 one data call', () => {
+  test('a scoped poster makes exactly one request — the poster-bundle — and renders event, venue and sponsors from it', async () => {
+    const { doc, calls } = await mountPoster('print', BUNDLE_SLOTS);
+    expect(calls.map((c) => c.url)).toEqual([
+      `/api/v2/events/${encodeURIComponent(EVT)}/poster-bundle`,
+    ]);
+    expect(doc.querySelector('[data-testid="poster-title"]')!.textContent).toBe(
+      'Harbor County Bocce'
+    );
+    expect(doc.querySelector('[data-testid="poster-meta-venue"]')!.textContent).toContain('Sawyer');
+    expect(doc.querySelector('[data-testid="poster-meta-date"]')!.textContent).toContain('2026');
+    expect(doc.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
+      'Sawyer Hardware'
+    );
+  });
+});
+
+describe('/poster | OSE-869 showQRSection — both branches', () => {
+  test('off: no QR section at all (absent, not empty) and Print is ready', async () => {
+    const { doc, w } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: false });
+    // #699: Print also waits for sponsor logos to settle, and every sponsor now
+    // renders a logo <img> (the OSE default when it has none). JSDOM never
+    // loads images, so settle them here the way a browser would.
+    doc
+      .querySelectorAll('[data-testid="poster-sponsor-logo"]')
+      .forEach((img) => img.dispatchEvent(new (w as unknown as Window).Event('load')));
+    await flush();
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(0);
+    expect(doc.querySelectorAll('.qr-img')).toHaveLength(0);
+    expect(doc.querySelectorAll('.qr-loading')).toHaveLength(0);
+    // The rest of the poster is untouched.
+    expect(doc.querySelector('[data-testid="poster-title"]')!.textContent).toBe(
+      'Harbor County Bocce'
+    );
+    expect(doc.querySelector('[data-testid="poster-sponsor-name"]')).not.toBeNull();
+    expect(
+      (doc.querySelector('[data-testid="poster-print"]') as HTMLButtonElement | null)?.disabled ??
+        false
+    ).toBe(false);
+  });
+
+  test('on: the QR grid renders exactly as before', async () => {
+    const { doc } = await mountPoster('print', BUNDLE_SLOTS, { showQRSection: true });
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots .code-card')).toHaveLength(BUNDLE_SLOTS.length);
+  });
+
+  test('absent: the QR grid renders (existing posters do not change)', async () => {
+    const { doc } = await mountPoster('print', BUNDLE_SLOTS);
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots .code-card')).toHaveLength(BUNDLE_SLOTS.length);
+  });
+});
+
+describe('/poster | CCR PR701 F2: the switch governs PRINTED QR codes only', () => {
+  test('digital poster keeps its tappable links when showQRSection is false', async () => {
+    const { doc } = await mountPoster('digital', BUNDLE_SLOTS, { showQRSection: false });
+    expect(doc.querySelectorAll('[data-testid="poster-qr-section"]')).toHaveLength(1);
+    expect(doc.querySelectorAll('#poster-qr-slots a.qr-slot-code')).toHaveLength(
+      BUNDLE_SLOTS.length
+    );
+  });
+});
 
 describe('/poster | every code, in order, word + colour', () => {
   test('print: each code renders its word, tone class, QR and the printed short link, in the saved order', async () => {

@@ -28,6 +28,7 @@ import {
   type EventState,
 } from '../domain/event-state';
 import { enrichWithPhase } from '../lib/event-enrich.js';
+import { validateSettingsPatch } from '../lib/event-settings';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
@@ -658,6 +659,15 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     );
   }
 
+  // OSE-869 — per-event section switches (lib/event-settings.ts). Optional; a
+  // body without `settings` stores '{}' (every section on). Strict on write.
+  let settingsJson = '{}';
+  if ('settings' in body && body.settings !== undefined) {
+    const v = validateSettingsPatch(body.settings);
+    if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
+    settingsJson = JSON.stringify(v.value);
+  }
+
   // OSE-489: capture-time H3 tagging — computation happens here (admin create),
   // never in the scan/read hot path.
   const lat = typeof body.lat === 'number' && Number.isFinite(body.lat) ? body.lat : null;
@@ -698,9 +708,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published, created_by,
-                           event_type_id,
+                           event_type_id, settings_json,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -734,6 +744,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         isPublished,
         createdBy,
         eventType.id,
+        settingsJson,
         now,
         now
       )
@@ -918,6 +929,17 @@ export async function handleUpdateEvent(
     }
     sets.push('event_type_id = ?');
     values.push(et.id);
+  }
+
+  // OSE-869 — per-event section switches. A partial patch: keys the body does
+  // not name keep their stored value. Strict on write (400 INVALID_SETTINGS).
+  if ('settings' in body) {
+    const v = validateSettingsPatch(body.settings);
+    if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
+    // Merged in SQL (json_patch, RFC 7396) so two concurrent toggles cannot
+    // lose each other's write the way a read-modify-write would (CCR PR701 F6).
+    sets.push("settings_json = json_patch(COALESCE(settings_json, '{}'), ?)");
+    values.push(JSON.stringify(v.value));
   }
 
   if ('is_published' in body) {

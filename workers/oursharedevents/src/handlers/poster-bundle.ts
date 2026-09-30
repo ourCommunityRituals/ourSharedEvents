@@ -1,7 +1,13 @@
 /**
  * GET /api/v2/events/:id/poster-bundle
  *
- * Returns a pre-baked poster bundle for an event:
+ * Returns a pre-baked poster bundle for an event — the poster's WHOLE payload
+ * (OSE-867: one call, no waterfall):
+ *   - `event`: the public event projection (same allowlist + OSE-844 names as
+ *     GET /api/v2/events/:id — name, start_date/starts_at/timezone, venue …)
+ *   - `sponsors`: the poster sponsor strip (sponsor-bundle?surface=poster's
+ *     posterTop set, without impression beacons — print fires none)
+ *   - `slots`: the organizer's poster codes (the QR grid the paper carries)
  *   - QR code data URIs (PNG) for all 4 form types
  *   - Form links for the same 4 destinations
  *   - Human-readable labels for each type
@@ -25,11 +31,28 @@ import { ensureSlotShortlinks } from '../lib/shortlinks';
 import { listSavedPosterCodes, posterCodeKind } from '../lib/poster-codes';
 import { assertRenderable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
+import { enrichWithPhase } from '../lib/event-enrich.js';
+import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../lib/public-event-projection';
+import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import {
+  buildSponsorBundle,
+  filterSponsorsForSurface,
+  type SponsorRow,
+} from '../lib/sponsor-resolver';
+import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 
-export interface PosterBundleEnv {
+export interface PosterBundleEnv extends DataProviderEnv {
   DB: D1Database;
   FORMS_DB: D1Database;
 }
+
+// OSE-867: the event columns the poster needs are exactly the public ones —
+// select the allowlist (plus the routing-slot columns, which never leave this
+// handler) so the bundle can never publish a field GET /events/:id does not.
+const POSTER_EVENT_SELECT =
+  'SELECT ' +
+  PUBLIC_EVENT_COLUMNS.join(', ') +
+  ', what_url, what_url_type, what_url_enabled, settings_json FROM events WHERE id = ?';
 
 // UEC ENTER (01) scan_hex — WCAG AA on white (6.59:1). Sourced via getCode() per OSE-322.
 const UEC_ENTER_HEX = getCode('ENTER')!.scan_hex;
@@ -157,18 +180,17 @@ export async function handleGetPosterBundle(
   env: PosterBundleEnv,
   eventId: string
 ): Promise<Response> {
-  const row = await env.DB.prepare(
-    'SELECT id, title, status, what_url, what_url_type, what_url_enabled FROM events WHERE id = ?'
-  )
-    .bind(eventId)
-    .first<{
+  const row = await env.DB.prepare(POSTER_EVENT_SELECT).bind(eventId).first<
+    Record<string, unknown> & {
       id: string;
       title: string;
       status: string;
       what_url: string | null;
       what_url_type: string | null;
       what_url_enabled: number | null;
-    }>();
+      settings_json: string | null;
+    }
+  >();
 
   if (!row) {
     return Response.json({ ok: false, status: 404, error: 'Event not found' }, { status: 404 });
@@ -264,6 +286,28 @@ export async function handleGetPosterBundle(
     };
   });
 
+  // OSE-867: the poster sponsor strip, from the same resolver + surface filter
+  // sponsor-bundle?surface=poster uses, so the two can never disagree. No
+  // beacon tokens: a printed poster fires no impressions (the tokens exist for
+  // the live surfaces that do).
+  // A sponsor failure empties the strip; it never takes the poster (and its QR
+  // codes) down with it — before OSE-867 the strip was its own call and failed
+  // alone (CCR PR701 F1).
+  let sponsors: SponsorRow[] = [];
+  try {
+    const sponsorResult = await getDataProvider(env).getSponsors(row.id, { bypassCache: true });
+    sponsors = buildSponsorBundle(filterSponsorsForSurface(sponsorResult.data, 'poster'), row.id)
+      .surface_sponsors.posterTop;
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleGetPosterBundle.sponsors',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+
   return Response.json({
     ok: true,
     // OSE-842: `status` is reserved for the numeric HTTP status on every path
@@ -272,7 +316,10 @@ export async function handleGetPosterBundle(
     // collision so #16 consumers can read one meaning per field.
     status: 200,
     eventId: row.id,
-    eventName: row.title,
+    // OSE-867: the event the poster prints — title, start and venue under the
+    // canonical names (one name per value; the old `eventName` duplicate of
+    // `event.name` is retired). Same projection as GET /api/v2/events/:id.
+    event: toPublicEvent(enrichWithPhase(row)),
     eventStatus: row.status,
     deploymentId: deployment?.id ?? null,
     qr,
@@ -282,5 +329,10 @@ export async function handleGetPosterBundle(
     uecQr,
     uecEnterHex: UEC_ENTER_HEX,
     slots,
+    sponsors,
+    // OSE-869: the organiser's section switches, resolved (absent → on). The
+    // poster drops its QR grid when showQRSection is false. The codes above are
+    // still minted and coloured as always — hiding them is a visibility choice.
+    settings: resolveEventSettings(parseEventSettings(row.settings_json)),
   });
 }

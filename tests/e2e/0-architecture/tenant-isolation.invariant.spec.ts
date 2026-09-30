@@ -94,7 +94,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
     'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
     'request-path read (readLatchedCorridors) binds brand_id.',
-  'handlers/events.ts:370':
+  'handlers/events.ts:371':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -103,7 +103,8 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'resolveEventType helper + import land above it; 335→336 by OSE-1313, whose ' +
     'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
     'it; 336→370 by the "Soonest first" slice — the admin-events-upcoming import ' +
-    'and the ?sort= / cursor parsing sit above the SELECT. Scope enforcement unchanged; ' +
+    'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
+    'one-line event-settings import lands above it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +

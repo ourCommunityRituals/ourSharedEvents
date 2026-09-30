@@ -101,8 +101,12 @@ describe('Print | Digital — the URL is the state', () => {
 });
 
 describe('the picker only offers the event being configured', () => {
-  test('?event= narrows the list to that event and hides the picker', () => {
-    expect(html).toContain('if (scoped >= 0) items = [items[scoped]];');
-    expect(html).toContain("document.getElementById('poster-event-select').hidden = scoped >= 0;");
+  test('?event= shows only that event: the picker is hidden and no list is fetched', () => {
+    // OSE-867: the scoped poster is one poster-bundle call — there is no list
+    // to narrow, so no other event can ever be offered.
+    expect(html).toContain("document.getElementById('poster-event-select').hidden = true;");
+    const scoped = html.slice(html.indexOf('if (wanted) {'), html.indexOf('// No event named'));
+    expect(scoped).toContain('loadPosterBundle(wanted, true)');
+    expect(scoped).not.toContain("fetch('/api/v2/events')");
   });
 });

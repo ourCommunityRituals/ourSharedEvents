@@ -45,7 +45,7 @@ describe('AS-2: Poster page has 30+ data-testid values (OSE-47)', () => {
     // init() error/empty states (in script strings)
     'poster-empty',
     'poster-error',
-    // loadPosterSponsors() output (in script strings)
+    // renderPosterSponsors() / loadPosterBundle() output (in script strings)
     'poster-sponsors-loading',
     'poster-sponsor-label',
     'poster-sponsor-item',
@@ -135,14 +135,16 @@ describe('SPON-4: Poster sponsor rendering (OSE-177)', () => {
     expect(body).toMatch(/data-testid="poster-sponsor-strip"[^>]*role="list"/);
   });
 
-  test('poster has loadPosterSponsors function', async () => {
-    expect(await posterHtml()).toContain('loadPosterSponsors');
+  test('poster has renderPosterSponsors function', async () => {
+    expect(await posterHtml()).toContain('function renderPosterSponsors');
   });
 
-  test('poster fetches sponsor bundle via /api/v2/events/', async () => {
+  test('poster sponsors arrive in the poster-bundle via /api/v2/events/ (OSE-867)', async () => {
     const body = await posterHtml();
+    // OSE-867: the sponsor strip rides in the poster-bundle — one call.
     expect(body).toContain('/api/v2/events/');
-    expect(body).toContain('sponsor-bundle');
+    expect(body).toContain("'/poster-bundle'");
+    expect(body).toContain('renderPosterSponsors(data.sponsors)');
   });
 
   test('poster sponsor strip has aria-busy lifecycle', async () => {
