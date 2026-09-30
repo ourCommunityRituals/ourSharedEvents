@@ -198,4 +198,47 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     }
     expect(csp, `CSP refusals: ${csp.join(' | ')}`).toEqual([]);
   });
+
+  // TRIANGLE slice #4: the toggle asks the server for ?sort=upcoming and the
+  // table follows the server's order (a nearer event above a later one, even
+  // though the later one was created last).
+  test('Soonest first reorders the list by start date', async ({ page }) => {
+    const csp = watchCsp(page);
+    await openAdvanced(page);
+    const seedDated = async (label: string, daysOut: number): Promise<string> => {
+      const res = await page.request.post('/api/v2/admin/events', {
+        headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
+        data: {
+          title: `Soonest ${label} ${Date.now()}`,
+          start_date: new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10),
+          location: 'Eagles Hall',
+        },
+      });
+      expect(res.ok(), `seed failed: ${res.status()} ${await res.text()}`).toBe(true);
+      return ((await res.json()) as { id: string }).id;
+    };
+    const near = await seedDated('near', 2);
+    const far = await seedDated('far', 300); // created LAST → first under the default sort
+    await waitForEventInAdminList(page, far);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.click('[data-testid="admin-path-advanced"]');
+
+    const listed = page.waitForRequest(
+      (r) => r.url().includes('/api/v2/admin/events?') && r.url().includes('sort=upcoming')
+    );
+    await page.check('[data-testid="events-sort-upcoming"]');
+    await listed;
+    const nearRow = page.locator(`[data-testid="event-row-${near}"]`);
+    await expect(nearRow).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('events-count')).toContainText('soonest first');
+    const order = await page.$$eval(
+      '[data-testid="events-tbody"] tr[data-action="event-select"]',
+      (rows) => rows.map((r) => r.getAttribute('data-event-id'))
+    );
+    const iNear = order.indexOf(near);
+    const iFar = order.indexOf(far);
+    expect(iNear, 'near event not in the list').toBeGreaterThan(-1);
+    if (iFar > -1) expect(iNear).toBeLessThan(iFar);
+    expect(csp).toEqual([]);
+  });
 });

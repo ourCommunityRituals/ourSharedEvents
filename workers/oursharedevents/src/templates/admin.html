@@ -6128,6 +6128,7 @@
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
         <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
         <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
+        <label class="events-filter-mine"><input type="checkbox" id="events-sort-upcoming" data-testid="events-sort-upcoming" /> Soonest first</label>
       </div>
       <div id="events" data-testid="events-container">
         <div class="skeleton-table" data-testid="skeleton-events">
@@ -6268,7 +6269,7 @@
       // wider set down (the list is brand-scoped per request, #9). Cursor
       // pagination replaces the old silent 50-row cap: the API always paged,
       // the UI just never asked for page two.
-      window._oseList = { status: 'all', mine: false, cursor: null, items: [], byId: Object.create(null), loading: false };
+      window._oseList = { status: 'all', mine: false, sort: 'created', cursor: null, items: [], byId: Object.create(null), loading: false };
 
       window.setEventsFilter = function (status) {
         window._oseList.status = status || 'all';
@@ -6298,6 +6299,16 @@
             window.renderEventsList({ reset: true });
           });
         }
+        // "Soonest first": ?sort=upcoming — coming up soonest, then undated,
+        // then past (lib/admin-events-upcoming). Same set, its own cursor.
+        var sortEl = document.getElementById('events-sort-upcoming');
+        if (sortEl) {
+          sortEl.addEventListener('change', function () {
+            window._oseList.sort = sortEl.checked ? 'upcoming' : 'created';
+            try { sessionStorage.setItem('ose_events_sort', window._oseList.sort); } catch (e) {}
+            window.renderEventsList({ reset: true });
+          });
+        }
       })();
 
       window.renderEventsList = async function (opts) {
@@ -6319,6 +6330,7 @@
           var qs = [];
           if (L.status && L.status !== 'all') qs.push('status=' + encodeURIComponent(L.status));
           if (L.mine) qs.push('mine=1');
+          if (L.sort === 'upcoming') qs.push('sort=upcoming');
           if (L.cursor) qs.push('cursor=' + encodeURIComponent(L.cursor));
           var url = '/api/v2/admin/events' + (qs.length ? '?' + qs.join('&') : '');
           var data = await fetch(url).then(function (r) { return r.json(); });
@@ -6401,7 +6413,8 @@
             .join('');
           var countLine = L.items.length + (hasMore ? '+' : '') + ' event' + (L.items.length === 1 && !hasMore ? '' : 's') +
             (L.status !== 'all' ? ' · ' + esc(window.friendlyStatus ? window.friendlyStatus(L.status) : L.status) : '') +
-            (L.mine ? ' · only mine' : '');
+            (L.mine ? ' · only mine' : '') +
+            (L.sort === 'upcoming' ? ' · soonest first' : '');
           container.innerHTML =
           '<div class="events-toolbar">' +
             '<label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>' +
@@ -6928,6 +6941,8 @@
           var savedMine = sessionStorage.getItem('ose_events_mine') === '1';
           var mineEl = document.getElementById('events-filter-mine');
           if (mineEl && savedMine) { mineEl.checked = true; window._oseList.mine = true; }
+          var sortEl = document.getElementById('events-sort-upcoming');
+          if (sortEl && sessionStorage.getItem('ose_events_sort') === 'upcoming') { sortEl.checked = true; window._oseList.sort = 'upcoming'; }
           if (savedFilter && ['all', 'draft', 'ready', 'active', 'archived'].indexOf(savedFilter) >= 0) {
             window._oseList.status = savedFilter;
             document.querySelectorAll('[data-action="events-filter"]').forEach(function (b) {

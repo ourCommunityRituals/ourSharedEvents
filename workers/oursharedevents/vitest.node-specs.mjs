@@ -155,6 +155,7 @@ export const NODE_SPECS = [
   // extracted from the admin.html template string; no DOM / cloudflare:test.
   'tests/admin-event-status-phase-consistency.spec.ts',
   'tests/admin-organizer-inbox.spec.ts',
+  'tests/admin-events-upcoming-cursor.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +

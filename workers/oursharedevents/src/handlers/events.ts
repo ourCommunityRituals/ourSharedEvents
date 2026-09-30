@@ -14,6 +14,12 @@
 
 import { corsHeaders } from '../lib/cors';
 import {
+  cursorAfter,
+  decodeUpcomingCursor,
+  upcomingFloor,
+  upcomingSql,
+} from '../lib/admin-events-upcoming';
+import {
   assertRenderable,
   VALID_EVENT_STATES,
   parseEventState,
@@ -271,6 +277,27 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   const mineRaw = url.searchParams.get('mine');
   const mine = mineRaw === '1' || mineRaw === 'true';
 
+  // ?sort=upcoming — "Soonest first" (lib/admin-events-upcoming). Reorders the
+  // same scoped + filtered set and pages with its own opaque cursor. Absent or
+  // `created` keeps the created_at DESC default; anything else is 400.
+  const rawSort = url.searchParams.get('sort');
+  const sort =
+    rawSort == null || rawSort === '' || rawSort === 'created'
+      ? 'created'
+      : rawSort === 'upcoming'
+        ? 'upcoming'
+        : null;
+  if (sort === null) {
+    return errorResponse('INVALID_SORT', 'sort must be one of: created, upcoming', 400, rid);
+  }
+  const upcomingAfter = sort === 'upcoming' && cursor ? decodeUpcomingCursor(cursor) : null;
+  if (sort === 'upcoming' && cursor && !upcomingAfter) {
+    return errorResponse('INVALID_CURSOR', 'cursor does not belong to this listing', 400, rid);
+  }
+  // The floor is fixed by page one and carried in the cursor, so a list paged
+  // across midnight keeps one ordering.
+  const floor = upcomingAfter ? upcomingAfter.f : upcomingFloor();
+
   if (!env.DB) {
     return Response.json(
       {
@@ -308,7 +335,11 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     // filters, and the opaque cursor only — never a caller-chosen brand.
     const whereParts: string[] = [];
     const bindings: (string | number)[] = [];
-    if (cursor) {
+    const upcoming = sort === 'upcoming' ? upcomingSql(floor, upcomingAfter) : null;
+    if (upcoming?.where) {
+      whereParts.push(upcoming.where.sql);
+      bindings.push(...upcoming.where.binds);
+    } else if (cursor && sort === 'created') {
       whereParts.push('e.created_at < ?');
       bindings.push(cursor);
     }
@@ -328,14 +359,18 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       whereParts.push('e.created_by = ?');
       bindings.push(actor);
     }
-    bindings.push(limit + 1);
     const whereClause = whereParts.length ? ' WHERE ' + whereParts.join(' AND ') : '';
+    // ORDER BY binds come after every WHERE bind, in text order, then LIMIT.
+    const orderBy = upcoming ? upcoming.orderBy.sql : ' ORDER BY e.created_at DESC';
+    if (upcoming) bindings.push(...upcoming.orderBy.binds);
+    bindings.push(limit + 1);
     const adminListSql =
       'SELECT ' +
       EVENT_SELECT_COLS +
       ' FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id' +
       whereClause +
-      ' ORDER BY e.created_at DESC LIMIT ?';
+      orderBy +
+      ' LIMIT ?';
 
     const result = await env.DB.prepare(adminListSql)
       .bind(...bindings)
@@ -348,8 +383,13 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     // Cursor key MUST come from the source row, not the enriched value -
     // enrichWithPhase copies created_at through unchanged, but explicit
     // is safer and matches audit.ts pattern.
+    const last = page[page.length - 1] as Record<string, unknown> | undefined;
     const nextCursor =
-      hasMore && page.length > 0 ? ((page[page.length - 1].created_at as string) ?? null) : null;
+      hasMore && last
+        ? sort === 'upcoming'
+          ? cursorAfter(last, floor)
+          : ((last.created_at as string) ?? null)
+        : null;
 
     return Response.json(
       {
@@ -361,6 +401,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
         filters: {
           status: statusFilter,
           mine: Boolean(mine && actor && !actor.startsWith('key:')),
+          sort,
         },
       },
       {
