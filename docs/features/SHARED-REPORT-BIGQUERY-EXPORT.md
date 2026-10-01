@@ -148,7 +148,7 @@ Calls the three exporters in sequence. Failure isolation per phase (S4-Q4). Logs
 
 ### `scheduled()` wiring (`index.ts`)
 
-Append `runSharedReportBigQueryExport(env)` to the existing `Promise.all` in `scheduled()`. Runs same tick as materialization (S4-Q1). Order doesn't matter — exports read aggregate tables that were just written; if materialization writes after export reads, those rows just get picked up on the next tick (idempotent watermark advancement).
+`scheduled()` runs `runSharedReportPipeline(env)`: materialization, **then** `runSharedReportBigQueryExport(env)`, in the same tick (S4-Q1). The order matters (OSE-616). A baseline refresh stamps every row with one `computed_at` and writes them one by one, and the export's watermark is that timestamp alone. An export running beside the refresh could ship part of a group and advance past the rest for good. The export still runs (in a `finally`) when materialization throws. Gate: `shared-report-pipeline-invariants.spec.ts`.
 
 ---
 
