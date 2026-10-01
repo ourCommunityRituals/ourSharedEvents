@@ -66,6 +66,7 @@ const MSG: ScanMessage = {
   deployment_id: 'pd_1',
   anon_id: 'anon_abc',
   ua_hash: 'deadbeefdeadbeef',
+  country: null,
   scan_bucket: '2026-09-16T20:00',
 };
 

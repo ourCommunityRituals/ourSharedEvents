@@ -165,6 +165,20 @@ async function resetForTest(): Promise<void> {
 // ─── Phase 1 — anon_id_returns materialization ──────────────────────────────
 
 describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
+  test('the pepper purge and its leftover probe use the pepper_epoch index, not a full scan', async () => {
+    for (const sql of [
+      `EXPLAIN QUERY PLAN SELECT rowid FROM anon_id_returns
+         WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1000`,
+      `EXPLAIN QUERY PLAN SELECT 1 FROM anon_id_returns
+         WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1`,
+    ]) {
+      const plan = await tenv().DB.prepare(sql).bind('epoch').all<{ detail: string }>();
+      const details = (plan.results ?? []).map((r) => r.detail).join(' | ');
+      expect(details).toContain('idx_anon_id_returns_pepper_epoch');
+      expect(details).not.toMatch(/SCAN anon_id_returns(?! USING)/);
+    }
+  });
+
   beforeEach(async () => {
     await resetForTest();
   });

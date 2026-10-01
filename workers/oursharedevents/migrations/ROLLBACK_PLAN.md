@@ -110,6 +110,7 @@ the relevant sections from the bottom up.
 -- 0091: anon_id_returns.pepper_epoch (OSE-1460). Additive column; SQLite
 -- 3.35+ can drop it. Rolling back means the export again mixes peppers after a
 -- rotation, so roll the Worker back first.
+DROP INDEX IF EXISTS idx_anon_id_returns_pepper_epoch;
 ALTER TABLE anon_id_returns DROP COLUMN pepper_epoch;
 
 -- 0090: anon_id_returns indexes for the returns export (rolling window + watermark probe).

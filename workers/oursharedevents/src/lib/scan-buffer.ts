@@ -35,6 +35,14 @@ export interface ScanMessage {
   deployment_id: string;
   anon_id: string;
   ua_hash: string | null;
+  /**
+   * Always null (OSE-1460: the visitor's country is never read). Kept on the
+   * wire for rollback safety: the previous consumer binds `msg.country`, and
+   * D1 rejects an undefined binding, so a message without the field would
+   * dead-letter if the Worker were rolled back while scans are queued. Remove
+   * once no older consumer can still be deployed.
+   */
+  country: null;
   scan_bucket: string;
 }
 

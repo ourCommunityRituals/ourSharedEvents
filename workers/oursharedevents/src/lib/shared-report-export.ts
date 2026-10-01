@@ -391,8 +391,9 @@ export async function exportAnonIdReturns(
 
     // The groups are read a page at a time by a stable key (corridor, pool,
     // type), so neither the D1 result nor this Worker ever holds the whole
-    // snapshot, however many corridors and types there are. Each page re-runs
-    // the aggregation; the indexed window keeps that cheap. A run that dies
+    // snapshot, however many corridors and types there are. The page key is
+    // applied inside the aggregation, so a later page groups only the keys
+    // after the cursor; each page still reads the indexed window. A run that dies
     // part-way has written no marker, so OER keeps reading the last complete
     // snapshot.
     let after: [string, string, string] = ['', '', ''];
@@ -422,11 +423,17 @@ export async function exportAnonIdReturns(
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?2
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?3
                   AND air.pepper_epoch = ?4
+                  -- The page key, applied before both GROUP BYs so each page
+                  -- only aggregates the groups still ahead of the cursor.
+                  AND (?5 = 1 OR (
+                        COALESCE(COALESCE(LOWER(e.h3_res7), e.corridor_id), ''),
+                        ${RETURNS_POOL_KEY_SQL},
+                        COALESCE(etr.uec_code, '')
+                      ) > (?6, ?7, ?8))
                 GROUP BY air.anon_id_hash, 2, 3, 5
              )
             GROUP BY corridor_id, pool_key, uec_code
          )
-         WHERE ?5 = 1 OR (k_corridor, pool_key, k_type) > (?6, ?7, ?8)
          ORDER BY k_corridor, pool_key, k_type
          LIMIT ?9`
       )

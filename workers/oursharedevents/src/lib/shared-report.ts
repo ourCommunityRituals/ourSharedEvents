@@ -165,7 +165,7 @@ export async function materializeAnonIdReturns(
       const res = await env.DB.prepare(
         `DELETE FROM anon_id_returns WHERE rowid IN (
            SELECT rowid FROM anon_id_returns
-            WHERE pepper_epoch IS NULL OR pepper_epoch <> ?
+            WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1
             LIMIT ${PEPPER_PURGE_CHUNK})`
       )
         .bind(epoch)
@@ -184,7 +184,8 @@ export async function materializeAnonIdReturns(
       // Every chunk came back full: rows may remain, or the last chunk took the
       // last of them. Look before raising the alert.
       const left = await env.DB.prepare(
-        `SELECT 1 FROM anon_id_returns WHERE pepper_epoch IS NULL OR pepper_epoch <> ? LIMIT 1`
+        `SELECT 1 FROM anon_id_returns
+          WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1`
       )
         .bind(epoch)
         .first();

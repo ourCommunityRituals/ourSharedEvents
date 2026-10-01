@@ -285,6 +285,22 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     }
   });
 
+  test('OSE-1460 | ROLLBACK | the queued message keeps country, always null', async () => {
+    // The previous consumer binds msg.country; D1 rejects undefined, so the
+    // field must stay on the wire (as null) or a rollback dead-letters scans.
+    const sent: Record<string, unknown>[] = [];
+    const queue = { send: async (m: Record<string, unknown>) => void sent.push(m) };
+    const res = await handleQrScan(
+      makeRequest(VALID_QR_TOKEN),
+      { ...makeEnv(makeInMemoryKV()), SCAN_QUEUE: queue as never },
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(sent).toHaveLength(1);
+    expect(Object.prototype.hasOwnProperty.call(sent[0], 'country')).toBe(true);
+    expect(sent[0].country).toBeNull();
+  });
+
   test('OSE-1459 | CONFIG | SCAN_QUEUE_MAX_RETRIES matches the staging scan consumer max_retries', () => {
     // The consumer releases a dropped scan's dedup marker on the last delivery,
     // which it recognises by this constant. It must track wrangler.toml.
