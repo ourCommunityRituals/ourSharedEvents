@@ -607,6 +607,30 @@
         board.rotation.setHidden(document.hidden);
         board.rotation.start(Math.max(panes.indexOf(keepType), 0), keepPaused);
       }
+      // Nothing is featured any more (the list came back empty): drop every
+      // piece of state that belonged to the previous event, so its sponsors,
+      // ticker and saved config are not left on screen or polled.
+      const TICKER_DEFAULT = (document.getElementById('ticker') || {}).textContent || '';
+      function clearEventState() {
+        if (board.rotation) board.rotation.stop();
+        board.rotation = null;
+        board.items = null;
+        board.config = null;
+        board.configEtag = null;
+        board.configFor = null;
+        board.configSeq = (board.configSeq || 0) + 1; // drop any check in flight
+        if (board.stopSideRail) board.stopSideRail();
+        board.stopSideRail = null;
+        board.sideRailVisibility = null;
+        board.sponsorsFor = null; // also drops a sponsor load in flight
+        board.sponsors = [];
+        const banner = document.getElementById('display-sponsor-banner');
+        const sidebar = document.getElementById('display-sponsor-sidebar');
+        if (banner) banner.innerHTML = '';
+        if (sidebar) sidebar.innerHTML = '';
+        const ticker = document.getElementById('ticker');
+        if (ticker) ticker.textContent = TICKER_DEFAULT;
+      }
       async function loadEvents() {
         const main = document.getElementById('main-content');
         try {
@@ -625,8 +649,7 @@
             } catch { /* fall back to the list */ }
           }
           if (!items.length) {
-            if (board.rotation) board.rotation.stop();
-            board.rotation = null;
+            clearEventState();
             main.innerHTML = '<p class="empty">No upcoming events scheduled.</p>';
             return;
           }

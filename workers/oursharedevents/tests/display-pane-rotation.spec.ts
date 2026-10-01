@@ -285,12 +285,14 @@ async function bootPage(
     configs: {} as Record<string, DisplayConfig>,
     /** Event ids whose display-config request never answers (in flight). */
     holdConfig: new Set<string>(),
+    configFetches: 0,
     impressions: [] as string[],
   };
   w.fetch = (async (url: string) => {
     const u = String(url);
     if (u.includes('/display-config')) {
       const id = /\/events\/([^/]+)\/display-config/.exec(u)![1];
+      server.configFetches++;
       if (server.holdConfig.has(id)) return new Promise<Response>(() => {});
       const cfg = server.configs[id] ?? server.config;
       return {
@@ -684,5 +686,27 @@ describe('display page: the right event and its own config (review fixes)', () =
     expect(
       doc.querySelector('[data-testid="display-wall-sponsor-logo"]')?.getAttribute('src')
     ).toBe('/api/v2/sponsors/sp-c/logo?slot=sidebar');
+  });
+});
+
+describe('display page: an empty event list clears the previous event (review fix)', () => {
+  test("no events left: sponsors, ticker and config are cleared and the old event isn't polled", async () => {
+    const { doc, server, refreshEvents, recheckConfig, paneTimers } = await bootPage();
+    const tickerBefore = doc.querySelector('[data-testid="display-ticker-text"]')!.textContent;
+    expect(doc.querySelector('[data-testid="display-sponsor-item"]')).not.toBeNull();
+    server.events = [];
+    await refreshEvents();
+    expect(doc.querySelector('[data-testid="display-main"]')?.textContent).toContain(
+      'No upcoming events'
+    );
+    expect(doc.querySelector('[data-testid="display-sponsor-item"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-sponsor-rotate"]')).toBeNull();
+    const ticker = doc.querySelector('[data-testid="display-ticker-text"]')!.textContent;
+    expect(ticker).not.toBe(tickerBefore);
+    expect(ticker).toContain('We count the room');
+    expect(paneTimers()).toHaveLength(0);
+    const fetches = server.configFetches;
+    await recheckConfig();
+    expect(server.configFetches, 'no config check for an event that is gone').toBe(fetches);
   });
 });

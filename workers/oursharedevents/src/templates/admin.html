@@ -5068,9 +5068,14 @@
             .concat(ALL.filter(function (p) { return saved.indexOf(p) === -1; }).map(function (p) { return { pane: p, on: false }; }));
           var dwell = $('tv-dwell');
           if (dwell) dwell.value = String(data.dwell_seconds || 15);
-          var links = {};
-          (Array.isArray(data.league) ? data.league : []).forEach(function (l) { if (l && l.kind) links[l.kind] = l.url || ''; });
-          KINDS.forEach(function (k) { var el = $('tv-league-' + k); if (el) el.value = links[k] || ''; });
+          // Look each known kind up in the list; never write a property named by
+          // the response (CodeQL js/remote-property-injection).
+          var league = Array.isArray(data.league) ? data.league : [];
+          KINDS.forEach(function (k) {
+            var el = $('tv-league-' + k);
+            var hit = league.find(function (l) { return l && l.kind === k && typeof l.url === 'string'; });
+            if (el) el.value = hit ? hit.url : '';
+          });
           render();
         }
         window.loadTvDisplay = async function (eventId) {
