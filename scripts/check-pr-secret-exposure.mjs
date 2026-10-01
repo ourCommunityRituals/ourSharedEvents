@@ -294,22 +294,31 @@ function makeParser(tokens, env) {
     return left;
   }
 
-  function parseAnd() {
-    let v = truthy(parseComparison());
-    while (peek() && peek().t === '&&') {
+  // GitHub's && and || return an operand VALUE, not a boolean (the ternary
+  // idiom `a && 'x' || 'y'` relies on it), and that value can then be compared
+  // with loose coercion. A lone operand keeps its value; a chain whose operands
+  // are all booleans (or UNKNOWN) follows Kleene logic; a chain with any other
+  // operand is UNKNOWN, so a value-dependent comparison fails closed.
+  const isLogical = (v) => v === true || v === false || v === UNKNOWN;
+
+  function parseChain(parseOperand, op, combine) {
+    const first = parseOperand();
+    if (!(peek() && peek().t === op)) return first;
+    const operands = [first];
+    while (peek() && peek().t === op) {
       next();
-      v = and3(v, truthy(parseComparison()));
+      operands.push(parseOperand());
     }
-    return v;
+    if (!operands.every(isLogical)) return UNKNOWN;
+    return operands.reduce(combine);
+  }
+
+  function parseAnd() {
+    return parseChain(parseComparison, '&&', and3);
   }
 
   function parseOr() {
-    let v = parseAnd();
-    while (peek() && peek().t === '||') {
-      next();
-      v = or3(v, parseAnd());
-    }
-    return v;
+    return parseChain(parseAnd, '||', or3);
   }
 
   return {
@@ -1522,6 +1531,21 @@ function runSelfTest() {
           jobs: {
             rt: {
               if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || (github.event.workflow_run.status == 'requested' && !github.event.workflow_run.conclusion)",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: value-preserving || compared with loose coercion ((false || '0') == false)",
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || (false || '0') == false",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
