@@ -946,6 +946,9 @@ jobs:
           ref: main
           path: ocr-docs-brain-checkout
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          # ADR-012 0.1: the next step runs PR code (npm ci + tests); never leave
+          # the token where it can be read.
+          persist-credentials: false
 
       - name: 'Run T0 test section'
         working-directory: ${{ matrix.workdir }}

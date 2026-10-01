@@ -147,6 +147,52 @@ Add the secret name to `scripts/check-pr-secret-exposure.allowlist.json` under
 `approved` **with a reason**. The file is CODEOWNERS-locked (`@mzdano`), so the
 addition is reviewed as a security decision.
 
+## Rules P and W (ADR-012 Phase 0.1 and 0.2, added 2026-10-01)
+
+The guard also enforces two credential-isolation rules from OCR-docs ADR-012
+(`docs/standards/OCR_STANDARD_secretsAndTokens.md` §4.2). They apply to every
+workflow, not only PR-triggered ones.
+
+**Rule P: no persisted token checkouts.**
+
+- What it requires: an `actions/checkout` step that receives a `token:` must set `persist-credentials: false`. This includes checkouts inside local composite actions (`uses: ./path`), followed recursively, because they persist the token for the calling job's later steps just the same.
+- Why: without it, the token stays readable by every later step in the job, from `.git/config` or, with checkout v6+, from a credentials file under `$RUNNER_TEMP`. Those later steps include PR test code and dependencies installed from the PR's lockfile.
+- The one legitimate exception is a job that must `git push` with that token, an org-automation (Z4) job. None exists in this repo.
+
+**Rule W: no secrets in a `workflow_run` started by a pull request.**
+
+- What it requires: a job in a `workflow_run` workflow may hold no secret (other than `GITHUB_TOKEN`) if a source run whose event was `pull_request` can trigger it.
+- Why: `workflow_run` runs with the default branch as its ref, so environment branch rules do not stop it. A `head_repository` check stops forks, but not same-repo agent branches.
+- How it is checked: the PR author chooses the source branch, so the guard does not enumerate branch names. The `workflow_run` head branch is a **symbolic** value: any test on it is UNKNOWN, and a job whose `if:` is true or UNKNOWN counts as reachable (see "Three-valued model" below). The source repo is tried as this repo and as a fork (which never equals this repo), and the source run's `conclusion` and `status` are symbolic (a `requested` or `in_progress` source has a null conclusion, and the author decides how a completed one ends). The source **event** is symbolic too: anything except `push` and `schedule` (any PR variant, `issue_comment`, `merge_group`, a dispatch on any ref). Expression comparison ignores case, so a push to a branch named `MAIN` satisfies `head_branch == 'main'`: the pushed branch is fully symbolic unless every source workflow named in `on.workflow_run.workflows` has a push trigger pinned to exactly `main` (tags only with patterns that cannot match a case-variant of `main`); a source the guard cannot find is treated as unpinned, and because workflow names are not unique, every workflow carrying a source name is checked (one unpinned match makes it unpinned). Job ids in `needs.<job>.result` are matched case-insensitively, like every other context lookup. Checkout `with:` keys are matched case-insensitively (`Token:` is `token:`). A `push` source from any branch other than `main` is modelled too (OCR-docs Standard §1, Z1): its code and artifacts are author-controlled, so a job that trusts any push source fails.
+- **Structural backstop:** a secret-holding `workflow_run` job must also name `github.event.workflow_run.event == 'push'` (or `'schedule'`) in its `if:` and never `'pull_request'`, so a gap in the model cannot pass it.
+- **Inherited secrets count:** for both rules, workflow-level `env:` secrets count for every job. `secrets: inherit`, `toJSON(secrets)` and computed `secrets[...]` indexes fail closed as "all secrets". Checkout matching is case-insensitive.
+- Unmodeled refs fail closed.
+- The fix is to require `github.event.workflow_run.event == 'push'` on `main` (plus the same-repo check), or to read the PR's files as data without running them.
+
+**Evidence (2026-10-01):** against `main` at `565fb78`, the extended guard failed on:
+
+- the three persisted brain checkouts (`brain-contract-check`, `inv22-cross-repo-gate`, `oursharedevents-ci.yml` `gate-tests-sub`);
+- `red-team-adversarial` / `security-finale` holding `ADMIN_KEY`, `CF_ACCESS_*` and `OCR_PROPAGATE_TOKEN` for `full-pipeline/*` PR source runs.
+
+**Mutation checks:** each of these turns the guard or its self-test red:
+
+- reverting any fix;
+- restoring the original red-team `if:`;
+- allowing PR sources together with attacker-chosen branch prefixes;
+- disabling either rule;
+- dropping the fork-from-`main` case;
+- making any author-controlled value concrete (a branch name, a fork's name, this repository's name), dropping the workflow-level `env:` scan, the `secrets: inherit` or `toJSON(secrets)` sentinel, the structural backstop, or case-insensitive matching;
+- dropping whitespace tolerance in the named `secrets [ 'X' ]` or computed `secrets [ x ]` index, or case-insensitive matching of the `secrets` context name (Copilot review on #743; each of the three was mutation-checked);
+- making the source run's `conclusion` concrete (it is symbolic: null while `requested` or `in_progress`, and any terminal value once complete).
+
+- **(CCR Loop 3 red-team, 2026-10-01)** case-folded string comparison and `startsWith`/`endsWith`/`contains`; status functions and `needs.<job>.result` answered per need (UNKNOWN for any need that can run, because the PR author decides whether it passes); head **and** base branch treated as symbolic on the `pull_request` path too (see the three-valued model below); `pull_request_review` and `pull_request_review_comment` treated as PR triggers; and secrets in a local reusable workflow a PR job calls. Each has a fixture that goes red when its fix is reverted.
+
+**Scope boundary, stated:** the `pull_request` model excludes exactly one head-branch prefix, `full-pipeline/` (`APPROVED_DEPLOY_PREFIX`), because that is ADR-020's approved deploy path. ADR-012 decision 6 would retire it. **Not modelled yet**, tracked in the ADR-012 gate register: unfiltered `push` triggers, `issue_comment` jobs that check out PR code, `merge_group`, and default-`GITHUB_TOKEN` checkouts in jobs with write scopes.
+
+**Three-valued model (2026-10-01, second Copilot round):** witness lists lost to compound predicates (a prefix AND a suffix, a prefix AND a not-equal, mixed upstream results). The evaluator now treats every value the PR author controls as **symbolic**: the head and base branch, the `workflow_run` head branch, a fork's name, and each reachable upstream job's result. Any test whose answer the author could pick is UNKNOWN; `&&`, `||` and `!` follow Kleene logic; a job whose `if:` is true **or** unknown is reachable. The only facts the model keeps are the ones the author cannot change: the event name, `github.ref`'s shape, a fork never equals this repo, and a plain PR's head does not start with `full-pipeline/`. A comparison between different types is UNKNOWN (GitHub coerces loosely: `false == ''` is true); `&&` and `||` keep operand values as GitHub does (a lone operand keeps its value; a chain with any non-boolean operand is UNKNOWN); chained comparisons are evaluated left to right, and any token the parser does not consume fails closed. Local reusable workflows and composite actions are followed in both same-repository forms, `./path` and `$/path`. This repository is itself symbolic (`THIS_REPO`): it equals only itself, and comparing it with a literal repo name is UNKNOWN, so a gate that names the real repository by literal cannot prove a same-repo PR unreachable. Rule W also follows local reusable workflows. Upstream status functions: `success()` is false when any need is skipped; `failure()` and `cancelled()` are UNKNOWN whenever at least one need can run, because one failed or cancelled need is enough. The four new leak fixtures were missed by the previous guard and are caught now; weakening any part of the model (unknown counted as unreachable, unknown counted as false under `&&`, upstream results fixed to success, Rule W not following callees, the symbolic value made concrete) turns the self-test red, and dropping the approved prefix turns the live repo red.
+
+The self-test has 67 fixtures. Secret names are normalised to uppercase before any comparison (GitHub resolves them case-insensitively), in the guard and in the invariant spec's forbidden-key checks.
+
 ## Born-red proof
 
 Revert the `security-regression.yml` PR-gate (or add a Cloudflare token to the S0
