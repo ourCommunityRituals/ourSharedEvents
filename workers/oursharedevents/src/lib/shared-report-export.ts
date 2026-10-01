@@ -53,6 +53,7 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
+import { assertCorridorGrainRow, isCorridorId } from './export-geography';
 
 export type SharedReportExportEnv = BigQueryEnv & { DB: D1Database };
 
@@ -64,6 +65,37 @@ export interface ExportResult {
   errors: number;
   perPool: Record<RegulatoryPool, number>;
   durationMs: number;
+  /** OSE-616: rows whose corridor_id is a real H3 res7 (or coarser) node. */
+  corridorIdPresent?: number;
+  /** OSE-616: rows exported with corridor_id 'unknown' (event has no res7 node). */
+  corridorIdUnknown?: number;
+  /**
+   * OSE-616: true when the phase actually ran against BigQuery (configured),
+   * even if nothing was past the watermark. A configured zero-row run still
+   * gets a manifest row, so "ran, nothing new" is distinguishable from "did
+   * not run".
+   */
+  ran?: boolean;
+}
+
+/**
+ * Hand one row to its BigQuery batch. OSE-616: the row is checked at corridor
+ * grain first (throws on any sub-corridor geography — the phase then fails
+ * closed and the watermark does not move), and its corridor coverage is counted
+ * for the export manifest.
+ */
+function emitRow(
+  target: Record<string, unknown>[],
+  row: Record<string, unknown>,
+  result: ExportResult
+): void {
+  assertCorridorGrainRow(row);
+  if (isCorridorId(row.corridor_id)) {
+    result.corridorIdPresent = (result.corridorIdPresent ?? 0) + 1;
+  } else {
+    result.corridorIdUnknown = (result.corridorIdUnknown ?? 0) + 1;
+  }
+  target.push(row);
 }
 
 // BigQuery insertAll max batch size — must align with the platform limit
@@ -209,6 +241,7 @@ async function prepareExport(
   return {
     watermark,
     result: {
+      ran: true,
       phase: phaseLabel,
       rowsRead: 0,
       rowsExported: 0,
@@ -257,7 +290,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       `SELECT
          air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
          air.visit_count, air.computed_at,
-         e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+         e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
          etr.uec_code
        FROM anon_id_returns air
        JOIN events e ON e.id = air.venue_id
@@ -298,16 +331,20 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         product_id: PRODUCT_ID,
       };
       assertRequiredTags(tags); // throws if any required tag is missing
-      byPool[pool].push({
-        // tags spread first; explicit fields below win for overlap-free keys.
-        ...tags,
-        anon_id_hash: r.anon_id_hash,
-        first_seen_at: r.first_seen_at,
-        last_seen_at: r.last_seen_at,
-        visit_count: r.visit_count,
-        computed_at: r.computed_at,
-        exported_at: new Date().toISOString(),
-      });
+      emitRow(
+        byPool[pool],
+        {
+          // tags spread first; explicit fields below win for overlap-free keys.
+          ...tags,
+          anon_id_hash: r.anon_id_hash,
+          first_seen_at: r.first_seen_at,
+          last_seen_at: r.last_seen_at,
+          visit_count: r.visit_count,
+          computed_at: r.computed_at,
+          exported_at: new Date().toISOString(),
+        },
+        result
+      );
     }
 
     // Stream per-pool batches; idempotent insertId derived from row content.
@@ -419,15 +456,19 @@ export async function exportCorridorDensityBaseline(
         product_id: PRODUCT_ID,
       };
       assertRequiredTags(tags);
-      batch.push({
-        ...tags,
-        bucket_dow: r.bucket_dow,
-        bucket_hour: r.bucket_hour,
-        window_30d_count: r.window_30d_count,
-        window_90d_count: r.window_90d_count,
-        computed_at: r.computed_at,
-        exported_at: new Date().toISOString(),
-      });
+      emitRow(
+        batch,
+        {
+          ...tags,
+          bucket_dow: r.bucket_dow,
+          bucket_hour: r.bucket_hour,
+          window_30d_count: r.window_30d_count,
+          window_90d_count: r.window_90d_count,
+          computed_at: r.computed_at,
+          exported_at: new Date().toISOString(),
+        },
+        result
+      );
     }
 
     if (batch.length > 0) {
@@ -507,7 +548,7 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
       `SELECT
          es.id, es.venue_id, es.series_name, es.cadence,
          es.day_of_week, es.hour_of_day, es.state, es.confirmed_at, es.updated_at,
-         e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+         e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
          etr.uec_code
        FROM event_series es
        JOIN events e ON e.id = es.venue_id
@@ -546,18 +587,22 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
         product_id: PRODUCT_ID,
       };
       assertRequiredTags(tags);
-      byPool[pool].push({
-        ...tags,
-        id: r.id,
-        series_name: r.series_name,
-        cadence: r.cadence,
-        day_of_week: r.day_of_week,
-        hour_of_day: r.hour_of_day,
-        state: r.state,
-        confirmed_at: r.confirmed_at,
-        updated_at: r.updated_at,
-        exported_at: new Date().toISOString(),
-      });
+      emitRow(
+        byPool[pool],
+        {
+          ...tags,
+          id: r.id,
+          series_name: r.series_name,
+          cadence: r.cadence,
+          day_of_week: r.day_of_week,
+          hour_of_day: r.hour_of_day,
+          state: r.state,
+          confirmed_at: r.confirmed_at,
+          updated_at: r.updated_at,
+          exported_at: new Date().toISOString(),
+        },
+        result
+      );
     }
 
     for (const pool of REGULATORY_POOLS) {
