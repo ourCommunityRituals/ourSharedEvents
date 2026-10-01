@@ -270,7 +270,16 @@ async function bootPage(
     intervals.set(ms, [...(intervals.get(ms) ?? []), f]);
     return 0;
   }) as unknown as typeof setInterval;
-  const server = { config, etag, configBodiesRead: 0 };
+  const server = {
+    config,
+    etag,
+    configBodiesRead: 0,
+    events,
+    /** Sponsor bundle per event id; falls back to `sponsors` for any event. */
+    bundles: {} as Record<string, unknown>,
+    bundleFetches: [] as string[],
+    impressions: [] as string[],
+  };
   w.fetch = (async (url: string) => {
     const u = String(url);
     if (u.includes('/display-config')) {
@@ -284,11 +293,15 @@ async function bootPage(
         },
       } as unknown as Response;
     }
-    const body = u.includes('/sponsor-bundle')
-      ? sponsors
-      : u.includes('/impression')
-        ? {}
-        : { ok: true, items: events };
+    const m = /\/api\/v2\/events\/([^/]+)\/(sponsor-bundle|sponsors\/([^/]+)\/impression)/.exec(u);
+    if (m && m[2] === 'sponsor-bundle') server.bundleFetches.push(m[1]);
+    if (m && m[3]) server.impressions.push(`${m[1]}:${m[3]}`);
+    const body =
+      m && m[2] === 'sponsor-bundle'
+        ? (server.bundles[m[1]] ?? sponsors)
+        : m
+          ? {}
+          : { ok: true, items: server.events };
     return {
       ok: true,
       status: 200,
@@ -296,7 +309,11 @@ async function bootPage(
       json: async () => body,
     } as unknown as Response;
   }) as typeof fetch;
-  for (const m of DISPLAY_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)) w.eval(m[1]);
+  // The page's scripts, found by a parser (jsdom does not run them here) rather
+  // than by a regex over the raw HTML, which CodeQL rightly flags.
+  for (const el of new JSDOM(DISPLAY_HTML).window.document.querySelectorAll('script')) {
+    w.eval(el.textContent || '');
+  }
   for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
   const doc = w.document;
   const visible = () =>
@@ -325,7 +342,12 @@ async function bootPage(
     for (const f of intervals.get(60 * 1000) ?? []) f();
     await flush();
   };
-  return { doc, visible, key, tick, paneTimers, setHidden, server, recheckConfig };
+  /** Run the five-minute events refresh, as its interval would. */
+  const refreshEvents = async () => {
+    for (const f of intervals.get(5 * 60 * 1000) ?? []) f();
+    await flush();
+  };
+  return { doc, visible, key, tick, paneTimers, setHidden, server, recheckConfig, refreshEvents };
 }
 
 describe('display page: panes on the real template', () => {
@@ -534,5 +556,53 @@ describe('display page: the order saved in /admin, league links, ETag re-checks'
     expect(paneTimers()[0][1].ms).toBe(45000);
     expect(doc.querySelector('[data-testid="display-pane-league"]')).toBeNull();
     expect(doc.querySelectorAll('.pane-dots li')).toHaveLength(2);
+  });
+});
+
+describe('display page: sponsors follow the featured event across refreshes', () => {
+  const bundle = (id: string, name: string) => ({
+    ok: true,
+    bundle: { surface_sponsors: { tvTop: [{ id, name }], tvSide: [{ id, name }] } },
+  });
+
+  test('a refresh of the same event does not reload sponsors or log impressions again', async () => {
+    const { server, refreshEvents } = await bootPage();
+    expect(server.bundleFetches).toEqual(['evt-1']);
+    const logged = server.impressions.length;
+    expect(logged).toBeGreaterThan(0);
+    await refreshEvents();
+    expect(server.bundleFetches).toEqual(['evt-1']);
+    expect(server.impressions).toHaveLength(logged);
+  });
+
+  test('when the featured event changes, its sponsors replace the old ones everywhere', async () => {
+    const { doc, server, refreshEvents } = await bootPage();
+    server.bundles['evt-1'] = bundle('sp-old', 'Old Sponsor');
+    server.bundles['evt-2'] = bundle('sp-new', 'New Sponsor');
+    // evt-1 ended: the list now leads with evt-2.
+    server.events = [EVENTS[1]];
+    await refreshEvents();
+    expect(server.bundleFetches).toEqual(['evt-1', 'evt-2']);
+    const names = (testid: string) =>
+      [...doc.querySelectorAll(`[data-testid="${testid}"]`)].map((e) => e.textContent);
+    expect(names('display-wall-sponsor-name')).toEqual(['New Sponsor']);
+    expect(names('display-sponsor-name')).toEqual(['New Sponsor']);
+    expect(names('display-sponsor-sidebar-name')).toEqual(['New Sponsor']);
+    expect(doc.body.textContent).not.toContain('Hall Bakery');
+    // Impressions for the new event are logged once, against the new event.
+    expect(server.impressions.filter((i) => i.startsWith('evt-2:'))).toEqual([
+      'evt-2:sp-new',
+      'evt-2:sp-new',
+    ]);
+  });
+
+  test('the new event has no sponsors: the old ones are cleared, not left behind', async () => {
+    const { doc, server, refreshEvents } = await bootPage();
+    server.bundles['evt-2'] = { ok: true, bundle: { surface_sponsors: { tvTop: [], tvSide: [] } } };
+    server.events = [EVENTS[1]];
+    await refreshEvents();
+    expect(doc.querySelector('[data-testid="display-pane-sponsors"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-sponsor-item"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-sponsor-rotate"]')).toBeNull();
   });
 });

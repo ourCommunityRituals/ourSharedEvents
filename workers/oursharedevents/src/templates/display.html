@@ -488,7 +488,8 @@
       // board.items: the fetched events; board.sponsors: [{ title, src }] for
       // the sponsors pane, filled by loadDisplaySponsors (logo rules live there).
       // board.config: the last display-config body, board.configEtag its ETag.
-      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null };
+      // board.sponsorsFor: the event whose sponsors are on screen (loadDisplaySponsors).
+      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, stopSideRail: null, sideRailVisibility: null };
       // A league link's QR is a PNG data URI from our own endpoint; anything
       // else is not put in an <img src>.
       function isQrDataUri(v) {
@@ -618,6 +619,7 @@
           board.items = items;
           renderBoard();
           loadDisplayConfig();
+          loadDisplaySponsors();
           // Update ticker
           const ticker = document.getElementById('ticker');
           if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
@@ -644,6 +646,7 @@
       });
       document.addEventListener('visibilitychange', function () {
         if (board.rotation) board.rotation.setHidden(document.hidden);
+        if (board.sideRailVisibility) board.sideRailVisibility();
       });
       // The featured event's saved TV config. The response carries a strong
       // ETag with Cache-Control: no-cache, so the browser revalidates it and the
@@ -675,23 +678,41 @@
       setInterval(loadDisplayConfig, 60 * 1000);
 
       // ── Display sponsor loading + rotation ──
+      // Called by loadEvents() on every refresh, with the events it just read.
+      // It loads only when the FEATURED event changed (board.sponsorsFor), so a
+      // refresh of the same event never reloads, never restarts the side rail and
+      // never logs impressions twice. When the featured event does change (the
+      // leading event ended, say), the previous event's sponsors are cleared
+      // from the banner, the side rail and the sponsors pane before the new
+      // event's load; a failed load is retried on the next refresh.
       async function loadDisplaySponsors() {
         const sidebar = document.getElementById('display-sponsor-sidebar');
         const banner = document.getElementById('display-sponsor-banner');
+        const items = board.items || [];
+        if (!items.length) return;
+        // OSE-1081: sponsors follow the FEATURED event, so a ?event=<id> kiosk
+        // shows that event's sponsors rather than items[0]'s. Same resolution as
+        // loadEvents(), so the two halves of the screen can never disagree.
+        const featuredIdx = Math.max(requestedEventIndex(items), 0);
+        const eventId = items[featuredIdx] && items[featuredIdx].id;
+        if (!eventId || eventId === board.sponsorsFor) return;
+        const hadSponsors = board.sponsorsFor !== null;
+        board.sponsorsFor = eventId;
+        if (hadSponsors) {
+          if (board.stopSideRail) board.stopSideRail();
+          board.stopSideRail = null;
+          board.sideRailVisibility = null;
+          if (banner) banner.innerHTML = '';
+          if (sidebar) sidebar.innerHTML = '';
+          board.sponsors = [];
+          renderBoard();
+        }
+        const stale = () => board.sponsorsFor !== eventId;
         try {
-          const evRes = await fetch('/api/v2/events');
-          const evData = await evRes.json();
-          const items = (evData.ok && evData.items) ? evData.items : [];
-          if (!items.length) return;
-          // OSE-1081: sponsors follow the FEATURED event, so a ?event=<id> kiosk
-          // shows that event's sponsors rather than items[0]'s. Same resolution as
-          // loadEvents(), so the two halves of the screen can never disagree.
-          const featuredIdx = Math.max(requestedEventIndex(items), 0);
-          const eventId = items[featuredIdx] && items[featuredIdx].id;
-          if (!eventId) return;
           const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=display');
           const data = await res.json();
-          if (!data.ok) return;
+          if (stale()) return; // a newer featured event won
+          if (!data.ok) { board.sponsorsFor = null; return; }
           const bundle = data.bundle || {};
           // Escapes quotes as well: these values land inside attributes (0083).
           const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -770,6 +791,7 @@
               if (current && total > 1) {
                 current.classList.add('fade-out');
                 setTimeout(function() {
+                  if (stale()) return; // this event's rail was replaced
                   sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
                   attachErrorAdvance();
                 }, 600);
@@ -785,7 +807,10 @@
             var rotTimer = null;
             function startRot() { if (rotMs > 0 && !rotTimer) rotTimer = setInterval(showNext, rotMs); }
             function stopRot() { if (rotTimer) { clearInterval(rotTimer); rotTimer = null; } }
-            document.addEventListener('visibilitychange', function() { document.hidden ? stopRot() : startRot(); });
+            // One page-level visibilitychange listener calls this; it is replaced,
+            // not added to, when the featured event changes.
+            board.sideRailVisibility = function() { document.hidden ? stopRot() : startRot(); };
+            board.stopSideRail = stopRot;
             startRot();
           }
           // Log impressions — placement is bound per SOURCE array (FE-14). The
@@ -804,9 +829,11 @@
           }
           tvTop.forEach(s => logImpression(s, 'tvTop'));
           tvSide.forEach(s => logImpression(s, 'tvSide'));
-        } catch { /* sponsor loading is non-critical */ }
+        } catch {
+          // Sponsor loading is non-critical; retry on the next refresh.
+          if (!stale()) board.sponsorsFor = null;
+        }
       }
-      loadDisplaySponsors();
     </script>
     <!-- Sponsor logos hide themselves when the image 404s (OSE-1239).
          This replaced onerror="this.style.display='none'", which the nonce CSP
