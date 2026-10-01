@@ -102,6 +102,7 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_created_at',
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
+  'idx_admin_audit_log_brand_created', // 0087 (AUD-3 Phase B brand-scoped audit view)
   'idx_admin_brand_memberships_email', // 0050 (OSE-666/B2 membership scope lookup)
   'idx_events_data_class', // 0052 (OSE-606/608 demo data-class filtering)
   // OSE-240 (migration 0030)

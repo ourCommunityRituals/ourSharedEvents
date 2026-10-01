@@ -107,6 +107,11 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0087: admin_audit_log.brand_id (AUD-3 Phase B, OSE-1447). Additive column +
+-- index. Never DROP the table (append-only, deprecation-lock). To roll back,
+-- drop the index and leave the nullable column: the writer tolerates either.
+DROP INDEX IF EXISTS idx_admin_audit_log_brand_created;
+
 -- 0086: remove 0013's test-event-001 where nothing references it (OSE-1419).
 -- Data-only, no schema change. Rollback is not needed and not wanted: the row
 -- is a test fixture, and production should not hold it. To put it back on a

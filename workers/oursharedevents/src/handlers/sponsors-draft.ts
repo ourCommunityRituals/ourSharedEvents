@@ -279,6 +279,7 @@ export async function handlePromoteSponsorDraft(
       actor: extractAdminActor(request, env),
       resource_type: 'sponsor_draft',
       resource_id: result.brand_id,
+      brand_id: result.brand_id ?? null,
       request_id: reqId,
       outcome: result.ok ? 'success' : 'denied',
       details: result.ok

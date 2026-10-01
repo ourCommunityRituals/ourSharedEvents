@@ -22,28 +22,71 @@ export interface AuditEntry {
   outcome: 'success' | 'denied';
   ip?: string;
   details?: Record<string, unknown>;
+  /**
+   * AUD-3 Phase B (OSE-1447): the tenant this row belongs to. Leave it unset and
+   * the INSERT resolves it from resource_type/resource_id (AUDIT_BRAND_RESOLVE_SQL).
+   * Set it only when the writer already holds a server-derived brand id.
+   */
+  brand_id?: string | null;
 }
+
+/**
+ * AUD-3 Phase B (OSE-1447): resolve the row's brand from its target, inside the
+ * INSERT, so the router's ~50 audit call sites need no change. ?4 is
+ * resource_type, ?5 is resource_id. Anything not listed (platform routes,
+ * global flags, erase, retention jobs, scope refusals) and any target that no
+ * longer exists resolves to NULL, which a brand-scoped read never returns: an
+ * unresolvable row fails closed. Migration 0087 backfills with the same mapping.
+ */
+export const AUDIT_BRAND_RESOLVE_SQL = `CASE
+    WHEN ?4 IN ('event', 'forms', 'forms-export', 'shared-report')
+      THEN (SELECT e.brand_id FROM events e WHERE e.id = ?5)
+    WHEN ?4 = 'flag' AND instr(?5, '/') > 1
+      THEN (SELECT e.brand_id FROM events e WHERE e.id = substr(?5, 1, instr(?5, '/') - 1))
+    WHEN ?4 = 'sponsor'
+      THEN (SELECT sb.brand_id FROM sponsor_business sb WHERE sb.id = ?5)
+    WHEN ?4 = 'sponsor_placement'
+      THEN (SELECT e.brand_id FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
+             WHERE sp.id = ?5)
+    ELSE NULL
+  END`;
 
 export async function logAdminAction(env: AuditLogEnv, entry: AuditEntry): Promise<void> {
   const id = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}-${Math.random()}`;
+  const values = [
+    id,
+    entry.action,
+    entry.actor ?? null,
+    entry.resource_type ?? null,
+    entry.resource_id ?? null,
+    entry.request_id,
+    entry.outcome,
+    entry.ip ?? null,
+    entry.details ? JSON.stringify(entry.details) : null,
+  ];
   try {
-    await env.DB.prepare(
-      `INSERT INTO admin_audit_log
-         (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        entry.action,
-        entry.actor ?? null,
-        entry.resource_type ?? null,
-        entry.resource_id ?? null,
-        entry.request_id,
-        entry.outcome,
-        entry.ip ?? null,
-        entry.details ? JSON.stringify(entry.details) : null
+    try {
+      await env.DB.prepare(
+        `INSERT INTO admin_audit_log
+           (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details,
+            brand_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(?10, ${AUDIT_BRAND_RESOLVE_SQL}))`
       )
-      .run();
+        .bind(...values, entry.brand_id ?? null)
+        .run();
+    } catch (e: unknown) {
+      // A database that has not applied 0087 yet (the deploy window) has no
+      // brand_id column. Write the row without it rather than lose it: a row
+      // with no brand is platform-only, which is the fail-closed reading.
+      if (!/no such column: brand_id|has no column named brand_id/i.test(String(e))) throw e;
+      await env.DB.prepare(
+        `INSERT INTO admin_audit_log
+           (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(...values)
+        .run();
+    }
   } catch {
     // Must never propagate — audit failures must not break admin operations
     console.warn(
