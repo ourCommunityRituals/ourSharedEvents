@@ -30,6 +30,7 @@
  *   DRY_RUN       - If 'true', only log actions without executing
  */
 
+const { isProductionUrl } = require('../config/production-hosts');
 const https = require('https');
 const http = require('http');
 
@@ -56,6 +57,12 @@ const CONFIG = {
   maxRetries: 3,
   retryDelay: 2000,
 };
+
+// ADR-021 (OSE-906): this script writes test data, so never against production.
+if (isProductionUrl(CONFIG.baseUrl)) {
+  console.error('ADR-021: refusing to write QA data to production; point BASE_URL at staging.');
+  process.exit(1);
+}
 
 // Test data markers for identification
 const TEST_MARKERS = {

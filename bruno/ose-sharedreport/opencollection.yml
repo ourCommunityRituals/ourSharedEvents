@@ -12,20 +12,27 @@ request:
   scripts:
     - type: before-request
       code: |-
-        // ADR-021 (OSE-906): production is read-only for tests. Refuse any write
-        // before it is sent, whichever environment file was chosen. Compares exact
-        // hostnames (userinfo, port, case and a trailing dot cannot hide production).
+        // ADR-021 (OSE-906): production is read-only for tests. Writes may only go to
+        // a known non-production host; anything else (production, an unknown host, or
+        // a URL that does not parse cleanly) is refused before it is sent.
         (function () {
-          var PRODUCTION_HOSTS = ['oursharedevents.com', 'www.oursharedevents.com'];
+          var WRITE_HOSTS = ['stg.oursharedevents.com', 'localhost', '127.0.0.1'];
           function host(url) {
-            var m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i.exec(String(url || ''));
-            return m ? m[1].toLowerCase().replace(/\.$/, '') : '';
+            var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#]*)/i.exec(String(url || ''));
+            if (!m) return null;
+            var h = m[1].slice(m[1].lastIndexOf('@') + 1).replace(/:\d*$/, '');
+            return h.toLowerCase().replace(/\.$/, '');
           }
           var method = String(req.getMethod() || '').toUpperCase();
-          var targets = [host(bru.getEnvVar('baseUrl')), host(req.getUrl())];
-          var isProduction = targets.some(function (h) { return PRODUCTION_HOSTS.indexOf(h) !== -1; });
-          if (isProduction && ['GET', 'HEAD', 'OPTIONS'].indexOf(method) === -1) {
-            throw new Error('ADR-021: production is read-only for tests; refusing ' + method + ' ' + req.getUrl());
+          if (['GET', 'HEAD', 'OPTIONS'].indexOf(method) !== -1) return;
+          var targets = [bru.getEnvVar('baseUrl'), req.getUrl()].map(host).filter(function (h) {
+            return h !== null;
+          });
+          var allowed = targets.length > 0 && targets.every(function (h) {
+            return WRITE_HOSTS.indexOf(h) !== -1;
+          });
+          if (!allowed) {
+            throw new Error('ADR-021: tests write only to staging or localhost; refusing ' + method + ' ' + req.getUrl());
           }
         })();
 

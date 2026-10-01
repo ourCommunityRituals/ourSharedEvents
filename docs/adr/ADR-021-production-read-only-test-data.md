@@ -52,14 +52,19 @@ and `config/feature-flags.js`):
   `security-smoke.spec.js`, every group that writes also skips on production and
   `createEvent()` throws there.
 - **Bruno.** Every collection (`bruno/*/opencollection.yml`) has a collection-level
-  before-request script that throws on any method other than GET, HEAD or OPTIONS when
-  the target host is production (exact hostname, so userinfo, port, case or a trailing
-  dot cannot hide it). A thrown pre-request script means Bruno never sends the request.
+  before-request script that allows writes (anything but GET, HEAD, OPTIONS) only to a
+  known non-production host: staging or localhost. Production, an unknown host, or a
+  URL that does not parse cleanly is refused. An allowlist, so encoded or unusual URL
+  forms cannot slip through. A thrown pre-request script means Bruno never sends the
+  request.
+- **Helper scripts.** Scripts that write to a deployed environment
+  (`scripts/mint-t4-report-tokens.mjs`, `scripts/qa-environment-setup.js`) refuse a
+  production `BASE_URL` with the same host rule.
 - **CI gate.** `tests/integration/production-read-only.test.js` (root vitest, every PR)
   locks the approved specs and configs on `smoke-production`, the read-only API smoke
   specs, the wrapper on every config, the guard's behaviour over a table of targets
-  and env vars, the env vars specs read, the `security-smoke` skips, and each Bruno
-  collection's own script.
+  and env vars, the env vars specs read, the `security-smoke` skips, each Bruno
+  collection's own script, and the refusal in every writing script under `scripts/`.
 
 Every `security-smoke` describe that sends a write, including the rejected-key probe
 (an invalid bearer, expected 401), skips on production. A rejected-key POST could still

@@ -194,13 +194,39 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
             setHeader() {},
           }
         );
-      expect(() => run(PROD, 'POST'), rel).toThrow(/ADR-021/);
-      expect(() => run('https://www.oursharedevents.com:443', 'DELETE'), rel).toThrow(/ADR-021/);
-      expect(() => run('https://user@oursharedevents.com/', 'PUT'), rel).toThrow(/ADR-021/);
+      for (const url of [
+        PROD,
+        'https://www.oursharedevents.com:443',
+        'https://user@oursharedevents.com/',
+        'https://user@evil@oursharedevents.com/',
+        'https://oursharedevents%2ecom/',
+        `${PROD}.evil.example`, // unknown hosts are refused too: writes are allowlisted
+        'not a url',
+      ]) {
+        expect(() => run(url, 'POST'), `${rel} POST ${url}`).toThrow(/ADR-021/);
+      }
+      for (const url of [STG, 'http://localhost:8787', 'http://127.0.0.1:8787']) {
+        expect(() => run(url, 'POST'), `${rel} POST ${url}`).not.toThrow();
+      }
       expect(() => run(PROD, 'GET'), rel).not.toThrow();
-      expect(() => run(STG, 'POST'), rel).not.toThrow();
-      expect(() => run(`${PROD}.evil.example`, 'POST'), rel).not.toThrow();
     }
+  });
+
+  test('every network-writing helper in scripts/ refuses production', () => {
+    // Derived: a script that reads a target URL from the env and sends a write
+    // must call the shared host rule before it does.
+    const writers = listFiles('scripts').filter((rel) => {
+      if (!/\.(m?js|cjs)$/.test(rel)) return false;
+      const src = read(rel);
+      return /process\.env\.(BASE_URL|STAGING_URL|TARGET_URL)\b/.test(src) && WRITE_CALL.test(src);
+    });
+    expect(writers).toEqual(
+      expect.arrayContaining([
+        'scripts/mint-t4-report-tokens.mjs',
+        'scripts/qa-environment-setup.js',
+      ])
+    );
+    for (const rel of writers) expect(read(rel), rel).toMatch(/isProductionUrl\(/);
   });
 
   test.each([
@@ -208,6 +234,8 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     ['https://www.oursharedevents.com/', true],
     ['https://OURSHAREDEVENTS.COM.:443/admin', true],
     ['https://u:p@oursharedevents.com', true],
+    ['https://user@evil@oursharedevents.com/x', true],
+    ['https://oursharedevents%2ecom/x', true],
     [STG, false],
     [`${PROD}.evil.example`, false],
     ['http://localhost:8787', false],
