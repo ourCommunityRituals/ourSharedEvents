@@ -373,7 +373,8 @@ export async function route(
     action: string,
     outcome: 'success' | 'denied',
     resourceType?: string,
-    resourceId?: string
+    resourceId?: string,
+    brandId?: string | null
   ): void {
     ctx.waitUntil(
       logAdminAction(env, {
@@ -384,8 +385,23 @@ export async function route(
         request_id: reqId,
         outcome,
         ip: _ip,
+        brand_id: brandId ?? null,
       })
     );
+  }
+
+  /**
+   * AUD-3 Phase B: the id a successful create returned, so its audit row can be
+   * attributed to the new object's brand. Undefined when the body has none.
+   */
+  async function _createdId(res: Response): Promise<string | undefined> {
+    if (res.status >= 400) return undefined;
+    try {
+      const body = (await res.clone().json()) as { id?: unknown };
+      return typeof body.id === 'string' ? body.id : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -683,7 +699,7 @@ export async function route(
     }
     const response = await handleCreateEvent(request, env);
     const outcome = _auditOutcome(response);
-    _audit(reqId, 'CREATE_EVENT', outcome, 'event');
+    _audit(reqId, 'CREATE_EVENT', outcome, 'event', await _createdId(response));
     return response;
   }
 
@@ -743,13 +759,21 @@ export async function route(
     if (method === 'DELETE') {
       // Status-derived outcome: the handler refuses (409) events that already
       // have scans, so the audit row must distinguish that from a real delete.
+      // AUD-3 Phase B: a delete removes the row the audit INSERT would resolve
+      // the brand from, so read it first and pass it explicitly.
+      const deletedBrand = await env.DB.prepare('SELECT brand_id FROM events WHERE id = ?')
+        .bind(adminEventMatch[1])
+        .first<{ brand_id: string | null }>()
+        .then((r) => r?.brand_id ?? null)
+        .catch(() => null);
       const response = await handleDeleteEvent(request, env, adminEventMatch[1]);
       _audit(
         reqId,
         'DELETE_EVENT',
         response.status < 400 ? 'success' : 'denied',
         'event',
-        adminEventMatch[1]
+        adminEventMatch[1],
+        deletedBrand
       );
       return response;
     }
@@ -861,7 +885,7 @@ export async function route(
     }
     const response = await handleAdminCreateSponsor(request, env);
     const outcome = _auditOutcome(response);
-    _audit(reqId, 'CREATE_SPONSOR', outcome, 'sponsor');
+    _audit(reqId, 'CREATE_SPONSOR', outcome, 'sponsor', await _createdId(response));
     return response;
   }
 

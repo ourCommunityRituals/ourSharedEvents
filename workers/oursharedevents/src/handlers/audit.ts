@@ -27,6 +27,7 @@
 
 import type { AuditLogEnv } from '../lib/audit-log';
 import {
+  resolveAdminBrandScope,
   resolveAdminBrandScopeAsync,
   resolveAdminRoles,
   type AdminBrandScopeEnv,
@@ -65,8 +66,12 @@ const FILTER_SHAPES: Record<'action' | 'actor' | 'resource_type', RegExp> = {
   actor: /^[A-Za-z0-9._%+@:-]+$/,
   resource_type: /^[a-z0-9_-]+$/,
 };
-/** created_at is written as strftime('%Y-%m-%dT%H:%M:%fZ'), so the cursor has that shape. */
-const CURSOR_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
+/**
+ * created_at is written as strftime('%Y-%m-%dT%H:%M:%fZ'): always three
+ * fractional digits. The cursor is compared lexically, so it must have exactly
+ * that shape (".0Z" would sort after ".000Z" and repeat the boundary row).
+ */
+const CURSOR_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
  * Resolve the brand view for a caller, or null when they may not read any brand's
@@ -100,26 +105,46 @@ function parseDetails(details: string | null): unknown {
   }
 }
 
+/** Automation and system actors carry no person's identity and are always shown. */
+function isServiceActor(actor: string): boolean {
+  return actor.startsWith('key:') || actor.startsWith('system:');
+}
+
 /**
- * The actor a brand reader may see on a row: automation and system actors as-is,
- * a member of the row's brand as-is, anyone else as null.
+ * Brand memberships of several human actors in ONE query (no N+1). An actor with
+ * no membership row falls back to the interim env map, exactly as
+ * resolveAdminBrandScopeAsync does; anything unresolvable maps to [].
  */
-async function visibleActor(
-  actor: string | null,
-  brandId: string | null,
-  env: AdminBrandScopeEnv,
-  cache: Map<string, string[] | 'all'>
-): Promise<string | null> {
-  if (!actor) return null;
-  if (actor.startsWith('key:') || actor.startsWith('system:')) return actor;
-  if (!brandId) return null;
-  let brands = cache.get(actor);
-  if (brands === undefined) {
-    const scope = await resolveAdminBrandScopeAsync(actor, env);
-    brands = scope.mode === 'scoped' ? scope.brandIds : [];
-    cache.set(actor, brands);
+async function membershipsOf(
+  actors: string[],
+  env: AdminBrandScopeEnv
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const humans = Array.from(new Set(actors.filter((a) => !isServiceActor(a))));
+  if (humans.length === 0) return out;
+  if (env.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        `SELECT email, brand_id FROM admin_brand_memberships
+          WHERE email IN (${humans.map(() => '?').join(', ')})`
+      )
+        .bind(...humans)
+        .all<{ email: string; brand_id: string }>();
+      for (const r of rows.results ?? []) {
+        const list = out.get(r.email) ?? [];
+        list.push(r.brand_id);
+        out.set(r.email, list);
+      }
+    } catch {
+      // Table absent → env-map fallback below.
+    }
   }
-  return brands === 'all' || brands.includes(brandId) ? actor : null;
+  for (const a of humans) {
+    if (out.has(a)) continue;
+    const scope = resolveAdminBrandScope(a, env);
+    out.set(a, scope.mode === 'scoped' ? scope.brandIds : []);
+  }
+  return out;
 }
 
 export async function handleListAuditLog(
@@ -161,11 +186,28 @@ export async function handleListAuditLog(
   const bindings: (string | number | null)[] = [];
 
   if (view.kind === 'brand') {
-    if (view.brandIds === 'all') {
+    let brandIds = view.brandIds;
+    // An actor filter must not confirm an identity the reader may not see, not
+    // even through hasMore/nextCursor. A human actor is visible only on rows of
+    // brands they belong to, so narrow the query to those brands BEFORE it runs;
+    // none in common → the canonical empty page.
+    if (view.maskIps && filters.actor && !isServiceActor(filters.actor)) {
+      const theirs = (await membershipsOf([filters.actor], env)).get(filters.actor) ?? [];
+      brandIds = view.brandIds.filter((b) => theirs.includes(b));
+      if (brandIds.length === 0) {
+        return Response.json({
+          ok: true,
+          scope: 'brand',
+          entries: [],
+          pagination: { limit, hasMore: false, nextCursor: null },
+        });
+      }
+    }
+    if (brandIds === 'all') {
       conditions.push('brand_id IS NOT NULL');
     } else {
-      conditions.push(`brand_id IN (${view.brandIds.map(() => '?').join(', ')})`);
-      bindings.push(...view.brandIds);
+      conditions.push(`brand_id IN (${brandIds.map(() => '?').join(', ')})`);
+      bindings.push(...brandIds);
     }
   }
   if (cursor) {
@@ -228,21 +270,25 @@ export async function handleListAuditLog(
     });
   }
 
-  const actorCache = new Map<string, string[] | 'all'>();
-  const entries = [];
-  for (const row of page) {
-    const actor = view.maskIps
-      ? await visibleActor(row.actor, row.brand_id, env, actorCache)
-      : row.actor;
-    // An actor filter must not confirm an identity the reader may not see.
-    if (filters.actor && actor === null) continue;
-    entries.push({
+  const members = view.maskIps
+    ? await membershipsOf(
+        page.map((r) => r.actor).filter((a): a is string => typeof a === 'string'),
+        env
+      )
+    : new Map<string, string[]>();
+  const entries = page.map((row) => {
+    let actor = row.actor;
+    if (view.maskIps && actor && !isServiceActor(actor)) {
+      const brands = members.get(actor) ?? [];
+      actor = row.brand_id && brands.includes(row.brand_id) ? actor : null;
+    }
+    return {
       ...row,
       actor,
       ip: view.maskIps ? maskIp(row.ip) : row.ip,
       details: parseDetails(row.details),
-    });
-  }
+    };
+  });
 
   return Response.json({
     ok: true,

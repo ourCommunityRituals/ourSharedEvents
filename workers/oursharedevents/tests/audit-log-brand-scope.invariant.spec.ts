@@ -24,6 +24,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { logAdminAction } from '../src/lib/audit-log';
 import { maskIp } from '../src/lib/ip-mask';
+import { handleListAuditLog } from '../src/handlers/audit';
 
 interface TestEnv {
   DB: D1Database;
@@ -209,6 +210,14 @@ beforeAll(async () => {
     resource_id: EVT_A,
     ip: '198.51.100.9',
     created_at: '2020-01-01T10:00:03.000Z',
+  });
+  await seedRow('alb-3b', {
+    action: 'UPDATE_EVENT',
+    actor: OWNER_B,
+    resource_type: 'event',
+    resource_id: EVT_A,
+    ip: '198.51.100.9',
+    created_at: '2020-01-01T10:00:02.500Z',
   });
   await seedRow('alb-4', {
     action: 'SET_EVENT_FLAG',
@@ -446,6 +455,8 @@ describe('AUD-3 B — input validation', () => {
     ['scope=all', 'INVALID_SCOPE'],
     ['scope=BRAND', 'INVALID_SCOPE'],
     ['scope=brand&cursor=not-a-date', 'INVALID_CURSOR'],
+    ['scope=brand&cursor=2020-01-01T10:00:04.0Z', 'INVALID_CURSOR'],
+    ['scope=brand&cursor=2020-01-01T10:00:04Z', 'INVALID_CURSOR'],
     ["scope=brand&cursor=2026-10-01' OR 1=1--", 'INVALID_CURSOR'],
     ["scope=brand&actor=x' OR '1'='1", 'INVALID_FILTER'],
     ['scope=brand&action=update_event;DROP', 'INVALID_FILTER'],
@@ -473,7 +484,100 @@ describe('AUD-3 B — input validation', () => {
     );
     expect(res.status).toBe(200);
     const ids = ((await res.json()) as ListBody).entries.map((e) => e.id);
-    expect(ids).toEqual(['alb-3', 'alb-4']);
+    expect(ids).toEqual(['alb-3', 'alb-3b', 'alb-4']);
+  });
+});
+
+// ── Review fixes (Copilot on #737) ──────────────────────────────────────────
+
+describe('AUD-3 B — no leak through pagination, no N+1, creates and deletes attributed', () => {
+  test('a hidden actor filter returns the canonical empty page, even past limit', async () => {
+    const res = await call(
+      'GET',
+      `/api/v2/admin/audit-log?scope=brand&limit=1&actor=${encodeURIComponent(OWNER_B)}`,
+      asEmail(OWNER_A)
+    );
+    const body = (await res.json()) as ListBody;
+    expect(body.entries).toEqual([]);
+    expect(body.pagination).toEqual({ limit: 1, hasMore: false, nextCursor: null });
+  });
+
+  test('a page with many human actors costs one membership query, not one per actor', async () => {
+    for (let i = 0; i < 6; i++) {
+      await seedRow(`alb-many-${i}`, {
+        action: 'UPDATE_EVENT',
+        actor: `alb-many-${i}@example.com`,
+        resource_type: 'event',
+        resource_id: EVT_A,
+        ip: '203.0.113.5',
+        created_at: `2019-01-01T10:00:0${i}.000Z`,
+      });
+    }
+    let prepares = 0;
+    const db = new Proxy(tenv.DB, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            prepares++;
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const res = await handleListAuditLog(
+      new Request(
+        'https://ose.test/api/v2/admin/audit-log?scope=brand&cursor=2019-12-31T00:00:00.000Z'
+      ),
+      { DB: db } as never,
+      { kind: 'brand', brandIds: [BRAND_A], maskIps: true },
+      'req-alb-n1'
+    );
+    const body = (await res.json()) as ListBody;
+    expect(body.entries.length).toBe(6);
+    expect(body.entries.every((e) => e.actor === null)).toBe(true);
+    expect(prepares).toBe(2); // the page + one batched membership lookup
+  });
+
+  test('CREATE_EVENT and DELETE_EVENT rows carry the brand', async () => {
+    const created = await call('POST', '/api/v2/admin/events', asEmail(OWNER_A), {
+      title: 'ALB Created Event',
+      brand_id: BRAND_A,
+    });
+    expect(created.status).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+    const createRow = await tenv.DB.prepare(
+      `SELECT brand_id, resource_id FROM admin_audit_log WHERE action = 'CREATE_EVENT' AND resource_id = ?`
+    )
+      .bind(id)
+      .first<{ brand_id: string; resource_id: string }>();
+    expect(createRow?.brand_id).toBe(BRAND_A);
+
+    const deleted = await call('DELETE', `/api/v2/admin/events/${id}`, asEmail(OWNER_A));
+    expect(deleted.status).toBeLessThan(400);
+    const deleteRow = await tenv.DB.prepare(
+      `SELECT brand_id FROM admin_audit_log WHERE action = 'DELETE_EVENT' AND resource_id = ?`
+    )
+      .bind(id)
+      .first<{ brand_id: string | null }>();
+    expect(deleteRow?.brand_id).toBe(BRAND_A);
+  });
+
+  test('CREATE_SPONSOR rows carry the brand', async () => {
+    const created = await call('POST', '/api/v2/admin/sponsors', asEmail(OWNER_A), {
+      name: 'ALB Created Sponsor',
+      tier: 'gold',
+      event_id: EVT_A,
+    });
+    expect(created.status).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+    const row = await tenv.DB.prepare(
+      `SELECT brand_id FROM admin_audit_log WHERE action = 'CREATE_SPONSOR' AND resource_id = ?`
+    )
+      .bind(id)
+      .first<{ brand_id: string | null }>();
+    expect(row?.brand_id).toBe(BRAND_A);
   });
 });
 
