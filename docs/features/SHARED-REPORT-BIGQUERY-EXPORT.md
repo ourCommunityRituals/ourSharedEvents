@@ -168,8 +168,10 @@ aggregates only, never `anon_id`, and corridor-level location only
 (`OCR-docs/docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`). It now
 sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
-**When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
-`wrangler.toml`). Each run snapshots events whose day (`end_date`, else
+**When:** once a week. The export runs on the nightly cron (`0 3 * * *` in
+`wrangler.toml`), but a returns snapshot is taken only when one is due (see
+"Rounding and cadence" below). Each due run snapshots events whose day
+(`end_date`, else
 `start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), up to and including today (an event rescheduled into the future is not counted), even when no source
 row is past the watermark, because a rolling window changes as events age out.
 The window is the event's day, not `last_seen_at`, which is when the cron
@@ -207,6 +209,26 @@ equal to, or at least 5 below, the last count sent before it. Otherwise it is
 `returned_2plus` 9 would tell a reader that 3 people came once. A group with
 no real res7 corridor is withheld, never sent as `'unknown'`.
 
+**Rounding and cadence (PO decision 2026-10-01):** a snapshot is compared
+with the one before it, so exact counts would show a one-person change between
+two runs (12, then 13). Every published count is rounded down to a multiple of
+5 (`roundForPublish`, `PUBLISH_ROUNDING`) before the floors apply, and the
+returns snapshot is taken weekly, not nightly: a run takes one only when both
+the last complete snapshot (`bigquery_export_state` row
+`corridor_returns_snapshot`) and the last run that began publishing (row
+`corridor_returns_snapshot_claim`) are at least 6.5 days old. The claim is
+written just before a run's first BigQuery insert, as a compare-and-set on the
+value the due check read, so of two overlapping runs only one publishes. A run
+that fails after
+that point, or whose final state write fails, still uses up its week: some of
+its rows may already be in BigQuery, and a retry the next night would put a
+second snapshot one day after the first. A run that fails before it sends
+anything (a D1 read error) writes no claim and is retried the next night. A run
+that is not due sends nothing and moves no watermark. Rounding leaves every gap between published counts at 0 or a
+multiple of 5, so the chain rule above can no longer be broken by rounded
+values. The corridor baseline export is rounded the same way, but still follows
+the baseline refresh cadence; making it weekly is a follow-up.
+
 **Paging:** the grouped query is read 500 groups at a time
 (`RETURNS_PAGE_SIZE`), keyed by (corridor, pool, type), and each page is
 sent as it arrives, so the snapshot is never held whole in D1's result or
@@ -240,7 +262,7 @@ does, so the required-tag contract (`REQUIRED_TAGS`, brain `product-registry.yam
 is unchanged. `assertRequiredTags()` runs on each row before send.
 
 **Grain you can query in OER:** one corridor × event type × pool, a 90-day
-rolling window, with one new snapshot per scheduled run (nightly today). You cannot see
+rolling window, with at most one new snapshot a week. You cannot see
 individual journeys or venues, or anyone's movement between corridors.
 
 **Corridor id for returns (OSE-1460).** A returns group with no real res7
@@ -377,9 +399,16 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 
 - Rows BigQuery already accepted stay there.
 - The watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
+- For the baseline and event-series phases, the next tick retries from the
+  watermark. The returns snapshot does not: once a run has claimed its week
+  (see "Rounding and cadence"), a failure waits for the next week's snapshot
+  rather than retrying the next night, so a partial snapshot is never followed
+  a day later by a second one. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+Delivery guarantee: **at-least-once** for the baseline and event-series phases.
+For returns, each weekly snapshot is all-or-nothing from OER's point of view: a
+snapshot without its marker row is incomplete and must be ignored, and it is
+not retried. No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`

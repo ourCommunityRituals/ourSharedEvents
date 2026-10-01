@@ -96,6 +96,8 @@ export interface ExportResult {
    * in rowsExported: a marker is not data, it tells OER which snapshot is current.
    */
   snapshotMarkers?: number;
+  /** Returns phase only: false when no weekly snapshot was due this run. */
+  snapshotDue?: boolean;
 }
 
 /**
@@ -294,6 +296,35 @@ async function prepareExport(
 export const RETURNS_WINDOW_DAYS = 90;
 /** A group, or a count inside it, below this is never exported (k-floor). */
 export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
+/**
+ * Every published count is rounded down to a multiple of this before the
+ * floors apply (PO decision 2026-10-01). A snapshot is compared with the last
+ * one, so an exact count would show a one-person change between them (12 then
+ * 13); rounded, small changes disappear inside a step of 5, and a change that
+ * crosses a step never says how many people moved.
+ */
+export const PUBLISH_ROUNDING = CORRIDOR_MAP_MIN_COUNT;
+/** A count rounded down to a multiple of PUBLISH_ROUNDING. */
+export function roundForPublish(n: number): number {
+  const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return v - (v % PUBLISH_ROUNDING);
+}
+/**
+ * The returns snapshot is weekly, not nightly (PO decision 2026-10-01): fewer
+ * snapshots to compare. A run takes one only when the last successful snapshot
+ * is at least this old; the 12-hour slack keeps a daily cron from slipping a
+ * day on a few minutes of jitter, and a failed run is retried the next night.
+ */
+export const RETURNS_SNAPSHOT_INTERVAL_MS = 7 * 86_400_000 - 12 * 3_600_000;
+/** Export-state row that records when the last returns snapshot succeeded. */
+export const RETURNS_SNAPSHOT_STATE = 'corridor_returns_snapshot';
+/**
+ * Export-state row that records when a returns snapshot last began publishing.
+ * It is written before the first BigQuery insert of a run, so a run that fails
+ * after sending some rows (or whose success write fails) still uses up its week:
+ * the next night must not publish a second snapshot a day after the first.
+ */
+export const RETURNS_SNAPSHOT_CLAIM_STATE = 'corridor_returns_snapshot_claim';
 /** Groups read per page of the snapshot query. */
 export const RETURNS_PAGE_SIZE = 500;
 /** Page bound: a snapshot larger than this fails closed (no marker) rather than run unbounded. */
@@ -320,10 +351,17 @@ interface CorridorReturnsRow {
   returned_5plus: number;
 }
 
+/** Thrown when another invocation won the weekly snapshot claim first. */
+class SnapshotClaimLost extends Error {
+  constructor() {
+    super('returns snapshot already claimed by another run');
+  }
+}
+
 export async function exportAnonIdReturns(
   env: SharedReportExportEnv,
-  // Test seam only: the paging limits. Production always uses the defaults.
-  limits: { pageSize?: number; maxPages?: number } = {}
+  // Test seam only: paging limits and the clock. Production uses the defaults.
+  limits: { pageSize?: number; maxPages?: number; now?: Date } = {}
 ): Promise<ExportResult> {
   const pageSize = limits.pageSize ?? RETURNS_PAGE_SIZE;
   const maxPages = limits.maxPages ?? RETURNS_MAX_PAGES;
@@ -342,11 +380,28 @@ export async function exportAnonIdReturns(
   }
   const { watermark, result } = prep;
 
+  // Weekly cadence: a run that is not due changes nothing, not even the source
+  // watermark, so the next due run sees exactly what this one would have.
+  const now = limits.now ?? new Date();
+  // The week starts at the later of the last complete snapshot and the last run
+  // that began publishing, finished or not (RETURNS_SNAPSHOT_CLAIM_STATE).
+  const lastSnapshot = await getWatermark(env.DB, RETURNS_SNAPSHOT_STATE);
+  const lastClaim = await getWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE);
+  const sinceLast = now.getTime() - Math.max(Date.parse(lastSnapshot), Date.parse(lastClaim));
+  // Fail closed: due only once the full interval has passed. A last snapshot or
+  // claim stamped ahead of this clock (skew between invocations) is not due;
+  // treating a negative gap as due would let a second run publish at once.
+  result.snapshotDue = sinceLast >= RETURNS_SNAPSHOT_INTERVAL_MS;
+  if (!result.snapshotDue) {
+    result.durationMs = Date.now() - start;
+    return result;
+  }
+
   try {
     // A rolling window changes as rows age out even when nothing new was
-    // materialized, so a snapshot is taken on every scheduled run (nightly
-    // today), each with its own computed_at. OER reads the latest snapshot;
-    // a group missing from it has fallen out of the window or under the floor.
+    // materialized, so every due run (weekly, above) takes a whole snapshot
+    // with its own computed_at. OER reads the latest marked snapshot; a group
+    // missing from it has fallen out of the window or under the floor.
     // The watermark only records how far the source has been seen.
     const changed = await env.DB.prepare(
       `SELECT COUNT(*) AS n, MAX(computed_at) AS max_computed_at
@@ -357,7 +412,6 @@ export async function exportAnonIdReturns(
     result.rowsRead = changed?.n ?? 0;
     const nextWatermark = changed?.max_computed_at ?? watermark;
 
-    const now = new Date();
     // One pepper only (migration 0091): after a rotation the same browser has a
     // second hash, so mixing peppers would count one person twice and could lift
     // a group of fewer than five people over the floor. Rows of an older or
@@ -388,11 +442,31 @@ export async function exportAnonIdReturns(
       (row: Record<string, unknown>): string =>
         `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
     const groupsInSnapshot: Record<RegulatoryPool, number> = { general: 0 };
+    // Claim the week before the first row can reach BigQuery. Lazy, so a run
+    // that fails on its D1 reads (nothing sent) is retried the next night; once
+    // anything may have been sent, a failure waits for the next week.
+    // The claim is a compare-and-set on the value the due check read: of two
+    // overlapping invocations that both found the snapshot due, only the one
+    // whose UPDATE changes the row publishes; the other stops, having sent nothing.
+    let claimed = false;
+    const claimSnapshot = async (): Promise<void> => {
+      if (claimed) return;
+      const res = await env.DB.prepare(
+        `UPDATE bigquery_export_state
+            SET last_exported_at = ?1, last_run_at = datetime('now'), updated_at = datetime('now')
+          WHERE table_name = ?2 AND last_exported_at = ?3`
+      )
+        .bind(computedAt, RETURNS_SNAPSHOT_CLAIM_STATE, lastClaim)
+        .run();
+      if ((res.meta?.changes ?? 0) !== 1) throw new SnapshotClaimLost();
+      claimed = true;
+    };
 
     // The groups are read a page at a time by a stable key (corridor, pool,
     // type), so neither the D1 result nor this Worker ever holds the whole
-    // snapshot, however many corridors and types there are. Each page re-runs
-    // the aggregation; the indexed window keeps that cheap. A run that dies
+    // snapshot, however many corridors and types there are. The page key is
+    // applied inside the aggregation, so a later page groups only the keys
+    // after the cursor; each page still reads the indexed window. A run that dies
     // part-way has written no marker, so OER keeps reading the last complete
     // snapshot.
     let after: [string, string, string] = ['', '', ''];
@@ -422,11 +496,17 @@ export async function exportAnonIdReturns(
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?2
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?3
                   AND air.pepper_epoch = ?4
+                  -- The page key, applied before both GROUP BYs so each page
+                  -- only aggregates the groups still ahead of the cursor.
+                  AND (?5 = 1 OR (
+                        COALESCE(COALESCE(LOWER(e.h3_res7), e.corridor_id), ''),
+                        ${RETURNS_POOL_KEY_SQL},
+                        COALESCE(etr.uec_code, '')
+                      ) > (?6, ?7, ?8))
                 GROUP BY air.anon_id_hash, 2, 3, 5
              )
             GROUP BY corridor_id, pool_key, uec_code
          )
-         WHERE ?5 = 1 OR (k_corridor, pool_key, k_type) > (?6, ?7, ?8)
          ORDER BY k_corridor, pool_key, k_type
          LIMIT ?9`
       )
@@ -469,8 +549,9 @@ export async function exportAnonIdReturns(
         // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
         // published counts reveals a group under the floor (people 12, 2+ 9
         // would say 3 came once). The group floor above already holds people.
-        const [, ret2, ret3, ret5] = floorNestedCounts(
-          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
+        // Rounded first, so every published value is a multiple of 5.
+        const [peopleOut, ret2, ret3, ret5] = floorNestedCounts(
+          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus].map(roundForPublish),
           RETURNS_MIN_COUNT,
           RETURNS_MIN_COUNT
         );
@@ -490,7 +571,7 @@ export async function exportAnonIdReturns(
             ...tags,
             row_type: 'group',
             window_days: RETURNS_WINDOW_DAYS,
-            people_count: r.people,
+            people_count: peopleOut,
             returned_2plus: ret2,
             returned_3plus: ret3,
             returned_5plus: ret5,
@@ -505,6 +586,7 @@ export async function exportAnonIdReturns(
         const batch = byPool[pool];
         groupsInSnapshot[pool] += batch.length;
         for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+          await claimSnapshot();
           const res = await bigQueryInsertRowsToDataset(
             env,
             datasetForPool(pool, env.WORKER_ENV),
@@ -542,6 +624,7 @@ export async function exportAnonIdReturns(
         exported_at: now.toISOString(),
       };
       assertCorridorGrainRow(marker);
+      await claimSnapshot();
       await bigQueryInsertRowsToDataset(
         env,
         datasetForPool(pool, env.WORKER_ENV),
@@ -553,7 +636,16 @@ export async function exportAnonIdReturns(
     }
 
     await advanceWatermark(env.DB, 'anon_id_returns', nextWatermark, result.rowsExported);
+    // Only a complete snapshot (groups and markers sent) starts the next week.
+    await advanceWatermark(env.DB, RETURNS_SNAPSHOT_STATE, computedAt, 0);
   } catch (err) {
+    if (err instanceof SnapshotClaimLost) {
+      // Another invocation claimed this week first and is publishing it. This
+      // run sent nothing, so it is not a failure; it is simply not due.
+      result.snapshotDue = false;
+      result.durationMs = Date.now() - start;
+      return result;
+    }
     result.errors++;
     const msg = err instanceof Error ? err.message : String(err);
     console.error(
@@ -662,7 +754,7 @@ export async function exportCorridorDensityBaseline(
       // chain (90d ⊇ 30d), so 90d − 30d never names a group under K. A row
       // with nothing left to say is withheld.
       const [w90, w30] = floorNestedCounts(
-        [r.window_90d_count, r.window_30d_count],
+        [r.window_90d_count, r.window_30d_count].map(roundForPublish),
         CORRIDOR_BASELINE_MIN_SAMPLE,
         CORRIDOR_MAP_MIN_COUNT
       );

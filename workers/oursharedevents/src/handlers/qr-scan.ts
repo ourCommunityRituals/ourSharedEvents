@@ -161,6 +161,7 @@ export async function handleQrScan(
         deployment_id: deploymentId,
         anon_id: anonId,
         ua_hash: uaHash,
+        country: null, // rollback-safe wire field; never a real country (OSE-1460)
         scan_bucket: bucket,
       });
 

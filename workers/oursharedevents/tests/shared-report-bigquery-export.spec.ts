@@ -32,6 +32,9 @@ vi.mock('../src/google/auth', () => ({
 
 import {
   RETURNS_POOL_KEY_SQL,
+  RETURNS_SNAPSHOT_STATE,
+  RETURNS_SNAPSHOT_CLAIM_STATE,
+  roundForPublish,
   exportAnonIdReturns,
   exportCorridorDensityBaseline,
   exportEventSeries,
@@ -152,6 +155,9 @@ async function seedEvent(opts: SeedEventOpts): Promise<void> {
 }
 
 // Real res7 corridor cells (ADR-011): Eagles Hall's corridor and a neighbour.
+/** A week and a day on: the next weekly returns snapshot is due. */
+const nextWeek = (): Date => new Date(Date.now() + 8 * 86_400_000);
+
 const RES7_A = '872664544ffffff';
 const RES7_B = '872664546ffffff';
 const RES7_C = '872664540ffffff';
@@ -472,6 +478,153 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows()[0].groups_in_snapshot).toBe(501);
   });
 
+  test('the returns snapshot is weekly: a run inside the week sends nothing and moves nothing', async () => {
+    await seedCorridorEvent('test-evt-exp-wk');
+    await seedPeople('test-evt-exp-wk', [1, 1, 1, 1, 1]);
+    const first = await exportAnonIdReturns(makeEnv());
+    expect(first.snapshotDue).toBe(true);
+    expect(markerRows()).toHaveLength(1);
+    const state = async (t: string) =>
+      (
+        await tenv()
+          .DB.prepare(`SELECT last_exported_at FROM bigquery_export_state WHERE table_name = ?`)
+          .bind(t)
+          .first<{ last_exported_at: string }>()
+      )?.last_exported_at;
+    const before = [await state('anon_id_returns'), await state(RETURNS_SNAPSHOT_STATE)];
+
+    bqCalls = [];
+    const tomorrow = await exportAnonIdReturns(makeEnv(), {
+      now: new Date(Date.now() + 86_400_000),
+    });
+    expect(tomorrow.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+    expect([await state('anon_id_returns'), await state(RETURNS_SNAPSHOT_STATE)]).toEqual(before);
+
+    const later = await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
+    expect(later.snapshotDue).toBe(true);
+    expect(markerRows()).toHaveLength(1);
+  });
+
+  test('a run that fails after publishing began still uses its week: no second snapshot the next night', async () => {
+    await seedCorridorEvent('test-evt-exp-wkf');
+    await seedPeople('test-evt-exp-wkf', [1, 1, 1, 1, 1]);
+    // The first insert fails, so rows may or may not have landed. Either way the
+    // claim was written before it, and the next night must not publish again.
+    bqFailNextN = 1;
+    const failed = await exportAnonIdReturns(makeEnv());
+    expect(failed.errors).toBe(1);
+    bqCalls = [];
+    const tomorrow = await exportAnonIdReturns(makeEnv(), {
+      now: new Date(Date.now() + 86_400_000),
+    });
+    expect(tomorrow.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+    // A week on, it is due again and completes.
+    const later = await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
+    expect(later.snapshotDue).toBe(true);
+    expect(later.errors).toBe(0);
+    expect(markerRows()).toHaveLength(1);
+  });
+
+  test('a run that fails before sending anything is retried the next night', async () => {
+    await seedCorridorEvent('test-evt-exp-wkd');
+    await seedPeople('test-evt-exp-wkd', [1, 1, 1, 1, 1]);
+    // The group query fails in D1, before any BigQuery insert: no claim is
+    // written, so the week is not used up.
+    const db = tenv().DB;
+    const failingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (sql.includes('FROM anon_id_returns air')) throw new Error('simulated D1 failure');
+            return target.prepare(sql);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+    const failed = await exportAnonIdReturns({ ...makeEnv(), DB: failingDb });
+    expect(failed.errors).toBe(1);
+    expect(bqCalls).toHaveLength(0);
+    const retry = await exportAnonIdReturns(makeEnv(), {
+      now: new Date(Date.now() + 86_400_000),
+    });
+    expect(retry.snapshotDue).toBe(true);
+    expect(retry.errors).toBe(0);
+    expect(markerRows()).toHaveLength(1);
+  });
+
+  test('a claim stamped ahead of this clock (skew) is not due: the gate fails closed', async () => {
+    await seedCorridorEvent('test-evt-exp-wks');
+    await seedPeople('test-evt-exp-wks', [1, 1, 1, 1, 1]);
+    // Another invocation, its clock a minute ahead of ours, has just claimed the week.
+    await exportAnonIdReturns(makeEnv(), { now: new Date(Date.now() + 60_000) });
+    expect(markerRows()).toHaveLength(1);
+    bqCalls = [];
+    const skewed = await exportAnonIdReturns(makeEnv());
+    expect(skewed.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+  });
+
+  test('of two overlapping runs that both find the snapshot due, only the one that wins the claim publishes', async () => {
+    await seedCorridorEvent('test-evt-exp-wkc');
+    await seedPeople('test-evt-exp-wkc', [1, 1, 1, 1, 1]);
+    const db = tenv().DB;
+    // This run passes the due check; then, before its first insert, another
+    // invocation claims the week (as an overlapping cron would).
+    const otherClaim = '2026-10-01T03:00:00.123Z';
+    let raced = false;
+    const racingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            const stmt = target.prepare(sql);
+            if (!raced && sql.includes('FROM anon_id_returns air')) {
+              raced = true;
+              return new Proxy(stmt, {
+                get(t, p2, r2) {
+                  if (p2 === 'bind') {
+                    return (...args: unknown[]) => {
+                      const bound = t.bind(...args);
+                      return new Proxy(bound, {
+                        get(b, p3, r3) {
+                          if (p3 === 'all') {
+                            return async () => {
+                              await target
+                                .prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
+                                .bind(otherClaim, RETURNS_SNAPSHOT_CLAIM_STATE)
+                                .run();
+                              return b.all();
+                            };
+                          }
+                          return Reflect.get(b, p3, r3);
+                        },
+                      });
+                    };
+                  }
+                  return Reflect.get(t, p2, r2);
+                },
+              });
+            }
+            return stmt;
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+    const lost = await exportAnonIdReturns({ ...makeEnv(), DB: racingDb });
+    expect(raced).toBe(true);
+    expect(lost.errors).toBe(0);
+    expect(lost.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+    const claim = await db
+      .prepare(`SELECT last_exported_at FROM bigquery_export_state WHERE table_name = ?`)
+      .bind(RETURNS_SNAPSHOT_CLAIM_STATE)
+      .first<{ last_exported_at: string }>();
+    expect(claim?.last_exported_at).toBe(otherClaim);
+  });
+
   test('a snapshot of exactly the page cap passes; one group more fails closed with no marker', async () => {
     await seedManyGroups();
     // 167 x 3 = 501: exactly at the cap, so it must complete and mark.
@@ -482,12 +635,16 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
 
     bqCalls.length = 0;
     // 250 x 2 = 500 < 501: over the cap, so no marker and an error.
-    const over = await exportAnonIdReturns(makeEnv(), { pageSize: 250, maxPages: 2 });
+    const over = await exportAnonIdReturns(makeEnv(), {
+      pageSize: 250,
+      maxPages: 2,
+      now: nextWeek(),
+    });
     expect(over.errors).toBe(1);
     expect(markerRows()).toHaveLength(0);
   });
 
-  test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export as 6', async () => {
+  test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export (rounded) as 5', async () => {
     await seedCorridorEvent('test-evt-exp-t1', 1);
     await seedCorridorEvent('test-evt-exp-t2', 2);
     await tenv()
@@ -499,7 +656,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r.errors).toBe(0);
     expect(groupCalls()).toHaveLength(1);
     expect(groupCalls()[0].rows).toHaveLength(1);
-    expect(groupCalls()[0].rows[0].json.people_count).toBe(6);
+    expect(groupCalls()[0].rows[0].json.people_count).toBe(5); // 6, rounded down to a multiple of 5
   });
 
   test('the SQL pool key agrees with phaseToPool for every tier', async () => {
@@ -536,7 +693,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .bind(new Date(Date.now() - 100 * 86_400_000).toISOString())
       .run();
     bqCalls = [];
-    const r2 = await exportAnonIdReturns(makeEnv());
+    const r2 = await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
     expect(r2.errors).toBe(0);
     expect(groupCalls()).toHaveLength(0);
     expect(markerRows()).toHaveLength(1);
@@ -544,21 +701,23 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r2.rowsExported).toBe(0); // a marker is not data
   });
 
-  test('no two published counts subtract to a group under the floor', async () => {
-    // 12 people, 9 came twice: publishing both says 3 people came once.
+  test('published counts are rounded to multiples of 5, so no subtraction names an exact small group', async () => {
+    // 12 people, 9 came twice: exact, both would say 3 people came once.
+    // Rounded down to 10 and 5, the difference covers anywhere from 1 to 9.
     await seedCorridorEvent('test-evt-exp-c1');
     await seedCorridorEvent('test-evt-exp-c2');
     await seedPeople('test-evt-exp-c1', Array(12).fill(1), { prefix: 'c' });
     await seedPeople('test-evt-exp-c2', Array(9).fill(1), { prefix: 'c' });
     await exportAnonIdReturns(makeEnv());
     const row = groupCalls()[0].rows[0].json;
-    expect(row.people_count).toBe(12);
-    expect(row.returned_2plus).toBeNull();
+    expect(row.people_count).toBe(10);
+    expect(row.returned_2plus).toBe(5);
+    for (const v of [row.people_count, row.returned_2plus]) expect((v as number) % 5).toBe(0);
   });
 
-  test('a chain count is compared with the last published count, not the suppressed one', async () => {
-    // people 15, 2+ 10 (gap 5, published), 3+ 7 (gap 3 from 10, suppressed),
-    // 5+ 5 (gap 5 from 10, published): every published pair differs by >= 5.
+  test('the whole chain is rounded: 15 / 10 / 7 / 5 publishes as 15 / 10 / 5 / 5', async () => {
+    // Rounding makes every gap 0 or a multiple of 5; the chain floor's gap rule
+    // is covered on unrounded input in count-floor.spec.ts.
     for (let i = 1; i <= 5; i++) await seedCorridorEvent(`test-evt-exp-k${i}`);
     await seedPeople('test-evt-exp-k1', Array(15).fill(1), { prefix: 'k' });
     await seedPeople('test-evt-exp-k2', Array(10).fill(1), { prefix: 'k' });
@@ -568,10 +727,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await exportAnonIdReturns(makeEnv());
     const row = groupCalls()[0].rows[0].json;
     expect([row.people_count, row.returned_2plus, row.returned_3plus, row.returned_5plus]).toEqual([
-      15,
-      10,
-      null,
-      5,
+      15, 10, 5, 5,
     ]);
   });
 
@@ -670,7 +826,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows().length).toBeGreaterThan(0);
   });
 
-  test('one corridor stored in two letter cases is one group: 3 + 3 people export as 6', async () => {
+  test('one corridor stored in two letter cases is one group: 3 + 3 people export (rounded) as 5', async () => {
     await seedCorridorEvent('test-evt-exp-case-lo', 1, RES7_A);
     await seedCorridorEvent('test-evt-exp-case-up', 1, RES7_A.toUpperCase());
     await seedPeople('test-evt-exp-case-lo', [1, 1, 1], { prefix: 'lo' });
@@ -679,7 +835,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r.errors).toBe(0);
     const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 6 });
+    expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 5 }); // 6, rounded
   });
 
   test('an event rescheduled into the future is not counted, even with earlier rows', async () => {
@@ -747,7 +903,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .map((c) => c.rows.map((r) => r.insertId))
       .flat();
     bqCalls = [];
-    await exportAnonIdReturns(makeEnv());
+    await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
     const second = groupCalls()
       .map((c) => c.rows.map((r) => r.insertId))
       .flat();
@@ -774,7 +930,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .bind(new Date(Date.now() - 100 * 86_400_000).toISOString())
       .run();
     bqCalls = [];
-    const r = await exportAnonIdReturns(makeEnv());
+    const r = await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
     expect(r.errors).toBe(0);
     expect(groupCalls()).toHaveLength(0);
   });
@@ -868,9 +1024,9 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
   test('counts are floored like the read path, and 90d - 30d never names a group under K', async () => {
     const rows: Array<[string, number, number]> = [
       [RES7_A, 4, 9], // both under 10 → the row is withheld
-      [RES7_B, 12, 30], // both published
-      [RES7_C, 27, 30], // 30d under no floor alone, but 30 - 27 = 3 people
-      [RES7_D, 3, 11], // 30d under 10 → null, 90d published
+      [RES7_B, 12, 30], // rounded 10 / 30: both published
+      [RES7_C, 27, 30], // rounded 25 / 30: exact 30 - 27 = 3 is gone
+      [RES7_D, 3, 11], // rounded 0 / 10: 30d under 10 → null, 90d published
     ];
     for (const [key, w30, w90] of rows) {
       await tenv()
@@ -891,9 +1047,9 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
       )
     );
     expect(sent).toEqual({
-      [RES7_B]: [12, 30],
-      [RES7_C]: [null, 30],
-      [RES7_D]: [null, 11],
+      [RES7_B]: [10, 30],
+      [RES7_C]: [25, 30],
+      [RES7_D]: [null, 10],
     });
   });
 
@@ -1015,5 +1171,12 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
     expect(parsed.type).toBe('SHARED_REPORT_EXPORT_COMPLETE');
     expect(parsed.phases).toBeDefined();
     logSpy.mockRestore();
+  });
+});
+
+describe('roundForPublish', () => {
+  test('rounds down to a multiple of 5; junk and negatives are 0', () => {
+    expect([0, 4, 5, 9, 10, 14, 15, 99].map(roundForPublish)).toEqual([0, 0, 5, 5, 10, 10, 15, 95]);
+    expect([Number.NaN, -3, 7.9].map(roundForPublish)).toEqual([0, 0, 5]);
   });
 });

@@ -107,6 +107,10 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0092: index on anon_id_returns(pepper_epoch) (OSE-1460 review). Drop it before
+-- rolling back 0091.
+DROP INDEX IF EXISTS idx_anon_id_returns_pepper_epoch;
+
 -- 0091: anon_id_returns.pepper_epoch (OSE-1460). Additive column; SQLite
 -- 3.35+ can drop it. Rolling back means the export again mixes peppers after a
 -- rotation, so roll the Worker back first.
