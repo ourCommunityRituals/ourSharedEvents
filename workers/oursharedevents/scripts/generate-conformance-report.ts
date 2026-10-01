@@ -579,11 +579,15 @@ function severityBadge(s: string): string {
   return '⚪';
 }
 
+function shortCommit(commit: string): string {
+  return commit === 'local' ? 'local' : commit.slice(0, 8);
+}
+
 function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): string {
   const counts = { enforced: 0, partial: 0, gap: 0, retired: 0 };
   for (const r of rows) counts[r.enforcement_status]++;
 
-  const shortSha = meta.commit === 'local' ? 'local' : meta.commit.slice(0, 8);
+  const shortSha = shortCommit(meta.commit);
   const runLink = meta.run_url ? `[CI Run](${meta.run_url})` : 'local';
 
   let md = `# OurSharedEvents — Invariant Conformance Report
@@ -710,7 +714,10 @@ function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): s
 function renderJson(rows: ConformanceRow[], meta: Record<string, string>): string {
   const output = {
     generated_at: meta.run_date,
-    commit: meta.commit,
+    // The same 8-character short SHA the Markdown shows. A full 40-character
+    // SHA reads as a high-entropy hex string to detect-secrets (S0), so every
+    // automated refresh PR went red on its own provenance line.
+    commit: shortCommit(meta.commit),
     run_url: meta.run_url,
     schema_version: '1.0.0',
     story: 'OSE-560',

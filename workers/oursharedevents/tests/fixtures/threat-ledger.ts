@@ -1142,7 +1142,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     threat:
       'Batch SharedReport no depth gate: handleBatchSharedReports() returned result.report directly without applying a depth gate — any WKRP_SERVICE_TOKEN bearer received all fields regardless of the requested depth. OSE-577: the deeper defect was keying access on the ENDPOINT, not the token class — so the cross-product (named-identity) WKRP token received full-depth aggregates joinable against a name-bearing roster.',
     severity: 'CRITICAL',
-    target_invariant: { number: 5, name: 'tier_equity' },
+    target_invariant: { number: 1, name: 'anonymous_id' },
     mitigation_story: 'OSE-577',
     test_ref:
       'tests/shared-report-read.spec.ts > OSE-577 — batch service-token class split (cross-product fails closed)',
@@ -1180,7 +1180,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     threat:
       "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_impressions (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
     severity: 'CRITICAL',
-    target_invariant: { number: 5, name: 'tier_equity' },
+    target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-595',
     test_ref:
       'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_impressions',
@@ -1197,20 +1197,17 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-057',
     layer: 'worker_surface',
     threat:
-      'Public form endpoints accept unlimited submissions with no per-IP rate limiting: all 4 public form handlers (register, checkin, survey, email-signup) process requests without calling checkRateLimit, enabling unbounded spam of form_registrations, form_surveys, email_signups, and checkin_counts for any event_id including non-existent events.',
+      'Public form endpoints accept unlimited submissions: the anonymous check-in and survey handlers have no rate limit, enabling unbounded spam of checkin_counts and form_surveys for any event_id. Registration, self-delete and email-signup (the PII handlers) ARE per-IP limited (isFormRateLimited, 10/min per ip:event); the anonymous handlers are deliberately exempt from IP-based limiting because they must not read the visitor IP (never-who, see form-rate-limit.spec.ts).',
     severity: 'HIGH',
     target_invariant: { number: 8, name: 'bounded_pii_retention' },
     mitigation_story: 'OSE-599',
     test_ref:
-      'tests/forms-adversarial.spec.ts > A1-A9 injection/boundary coverage; A10 rate-limit gap documented',
-    status: 'tested',
-    red_birth: {
-      date: '2026-08-03',
-      method: 'deliberate-fixture-break',
-      notes:
-        'Fleet sweep: all 4 public form handlers confirmed via static grep — zero calls to checkRateLimit in forms.ts (open gap, documented as A10). A1-A9 adversarial tests confirmed injection resistance, null-body 500 and array-body 200 bugs found and fixed (parseJsonBody + email-over-320 silent truncation). Rate limiting mitigation pending separate story.',
-    },
-    last_run_green: '2026-08-03',
+      'tests/form-rate-limit.spec.ts > SR-16 | Rate limiting | Integration gate (registration + email-signup only; check-in and survey unlimited)',
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Reclassified 2026-10-01 (conformance refresh review): was marked tested on the strength of A1-A9 injection tests and an always-passing A10 placeholder. The injection coverage now has its own entry, TL-070. This entry stays open until check-in and survey get a limiter that does not read the visitor IP.',
   },
   {
     id: 'TL-058',
@@ -1477,6 +1474,24 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
         'Existing OSE-660 spec ledger-tagged by OSE-662: asserts the geo link contains lat/lon and never the supplied H3 cell, and is an anchor (no embed/referrer). Goes red if an H3 token leaks into the link or an embed is introduced.',
     },
     last_run_green: '2026-08-22',
+  },
+  {
+    id: 'TL-070',
+    layer: 'worker_surface',
+    threat:
+      'Injection and malformed-body handling on the public form endpoints (register, check-in, survey, email-signup): SQL metacharacters, oversized fields, null and array bodies, and path-segment injection must not escape parameterisation, crash the handler, or silently truncate stored PII.',
+    severity: 'HIGH',
+    target_invariant: { number: 8, name: 'bounded_pii_retention' },
+    mitigation_story: 'OSE-599',
+    test_ref: 'tests/forms-adversarial.spec.ts > A1-A9 injection/boundary coverage',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-03',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Split out of TL-057 on 2026-10-01. Fleet sweep: A1-A9 adversarial tests confirmed injection resistance; null-body 500 and array-body 200 bugs found and fixed (parseJsonBody + email-over-320 silent truncation).',
+    },
+    last_run_green: '2026-08-03',
   },
 ];
 

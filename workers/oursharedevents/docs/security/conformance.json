@@ -1,17 +1,17 @@
 {
   "generated_at": "2026-10-01",
-  "commit": "9a6c27c06f12500d7c44f14a801a74b9bc047cb5",
-  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/workflows/conformance-report.yml",
+  "commit": "9a6c27c0",
+  "run_url": "",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
     "total": 28,
-    "enforced": 16,
+    "enforced": 15,
     "partial": 7,
-    "gap": 3,
+    "gap": 4,
     "retired": 2,
-    "threat_entries": 69,
-    "open_threats": 0
+    "threat_entries": 70,
+    "open_threats": 1
   },
   "invariants": [
     {
@@ -21,8 +21,8 @@
       "invariant_status": "live",
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 4,
+      "last_green": "2026-08-22",
+      "threat_count": 5,
       "open_threat_count": 0,
       "brain_conformance": []
     },
@@ -69,10 +69,10 @@
       "name": "tier_equity",
       "label": "#5 — Local Sponsor Covenant",
       "invariant_status": "partial",
-      "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-22",
-      "threat_count": 2,
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
       "open_threat_count": 0,
       "brain_conformance": []
     },
@@ -105,11 +105,11 @@
       "name": "bounded_pii_retention",
       "label": "#8 — Bounded PII Retention",
       "invariant_status": "live",
-      "enforcement_status": "enforced",
+      "enforcement_status": "partial",
       "last_attacked": "2026-08-13",
       "last_green": "2026-08-13",
-      "threat_count": 5,
-      "open_threat_count": 0,
+      "threat_count": 6,
+      "open_threat_count": 1,
       "brain_conformance": []
     },
     {
@@ -120,7 +120,7 @@
       "enforcement_status": "partial",
       "last_attacked": "2026-08-13",
       "last_green": "2026-08-13",
-      "threat_count": 7,
+      "threat_count": 8,
       "open_threat_count": 0,
       "brain_conformance": []
     },
