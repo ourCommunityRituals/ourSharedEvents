@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-01 — 538 ids.
+ * Generated 2026-10-01 — 544 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -428,7 +428,7 @@
       'public-sponsor-section',
       'public-title',
     ]),
-    // display.html — 41 ids
+    // display.html — 47 ids
     DISPLAY: Object.freeze([
       'display-clock',
       'display-consent',
@@ -440,10 +440,16 @@
       'display-featured-title',
       'display-featured-venue',
       'display-header',
+      'display-league-heading',
+      'display-league-item',
+      'display-league-label',
+      'display-league-qr',
+      'display-league-url',
       'display-loading',
       'display-main',
       'display-pane-dots',
       'display-pane-event',
+      'display-pane-league',
       'display-pane-paused',
       'display-pane-sponsors',
       'display-pane-upcoming',

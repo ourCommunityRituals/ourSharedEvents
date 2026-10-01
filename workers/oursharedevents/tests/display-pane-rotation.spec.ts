@@ -23,7 +23,16 @@ type Rotation = {
 };
 
 function extract(): {
-  rotationConfig: (search: string) => { order: string[]; dwellMs: number };
+  rotationConfig: (search: string) => {
+    order: string[];
+    dwellMs: number;
+    fixedOrder: boolean;
+    fixedDwell: boolean;
+  };
+  effectiveRotation: (
+    url: { order: string[]; dwellMs: number; fixedOrder: boolean; fixedDwell: boolean },
+    saved: unknown
+  ) => { order: string[]; dwellMs: number };
   createPaneRotation: (
     panes: string[],
     dwellMs: number,
@@ -37,11 +46,12 @@ function extract(): {
   expect(end).toBeGreaterThan(start);
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   return new Function(
-    `${DISPLAY_HTML.slice(start, end)}; return { rotationConfig, createPaneRotation };`
+    `${DISPLAY_HTML.slice(start, end)}; return { rotationConfig, effectiveRotation, createPaneRotation };`
   )();
 }
 
-const { rotationConfig, createPaneRotation } = extract();
+const { rotationConfig, effectiveRotation, createPaneRotation } = extract();
+const ALL = ['event', 'upcoming', 'sponsors', 'league'];
 
 function fakeTimers() {
   let nextId = 1;
@@ -71,8 +81,10 @@ function fakeTimers() {
 describe('rotationConfig: the kiosk URL is the configuration', () => {
   test('defaults: every pane, 15 s each', () => {
     expect(rotationConfig('')).toEqual({
-      order: ['event', 'upcoming', 'sponsors'],
+      order: ALL,
       dwellMs: 15000,
+      fixedOrder: false,
+      fixedDwell: false,
     });
   });
 
@@ -84,7 +96,7 @@ describe('rotationConfig: the kiosk URL is the configuration', () => {
   });
 
   test('?panes= with nothing valid falls back to every pane, never to none', () => {
-    expect(rotationConfig('?panes=<script>').order).toEqual(['event', 'upcoming', 'sponsors']);
+    expect(rotationConfig('?panes=<script>').order).toEqual(ALL);
   });
 
   test('?dwell= is seconds, clamped to 5..120; junk reads as the default', () => {
@@ -93,6 +105,36 @@ describe('rotationConfig: the kiosk URL is the configuration', () => {
     expect(rotationConfig('?dwell=9999').dwellMs).toBe(120000);
     expect(rotationConfig('?dwell=abc').dwellMs).toBe(15000);
     expect(rotationConfig('?dwell=-4').dwellMs).toBe(15000);
+  });
+});
+
+describe('effectiveRotation: saved in /admin beats the default; the URL beats both', () => {
+  const saved = { panes: ['league', 'event'], dwell_seconds: 30 };
+
+  test('no URL params: the saved order and seconds are used', () => {
+    expect(effectiveRotation(rotationConfig(''), saved)).toEqual({
+      order: ['league', 'event'],
+      dwellMs: 30000,
+    });
+  });
+
+  test('URL params win, each on its own', () => {
+    expect(effectiveRotation(rotationConfig('?panes=sponsors'), saved)).toEqual({
+      order: ['sponsors'],
+      dwellMs: 30000,
+    });
+    expect(effectiveRotation(rotationConfig('?dwell=10'), saved)).toEqual({
+      order: ['league', 'event'],
+      dwellMs: 10000,
+    });
+  });
+
+  test('nothing saved, or junk saved, is the default', () => {
+    expect(effectiveRotation(rotationConfig(''), null)).toEqual({ order: ALL, dwellMs: 15000 });
+    expect(
+      effectiveRotation(rotationConfig(''), { panes: ['<b>', 7], dwell_seconds: 'x' })
+    ).toEqual({ order: ALL, dwellMs: 15000 });
+    expect(effectiveRotation(rotationConfig(''), { dwell_seconds: 9999 }).dwellMs).toBe(120000);
   });
 });
 
@@ -190,7 +232,24 @@ const SPONSOR_BUNDLE = {
   },
 };
 
-async function bootPage(search = '', { events = EVENTS, sponsors = SPONSOR_BUNDLE } = {}) {
+interface DisplayConfig {
+  ok: boolean;
+  panes: string[];
+  dwell_seconds: number;
+  league: Array<{ kind: string; label: string; url: string; qr: string | null }>;
+}
+const DEFAULT_CONFIG: DisplayConfig = { ok: true, panes: ALL, dwell_seconds: 15, league: [] };
+const QR = 'data:image/png;base64,iVBORw0KGgo=';
+
+async function bootPage(
+  search = '',
+  {
+    events = EVENTS,
+    sponsors = SPONSOR_BUNDLE as unknown,
+    config = DEFAULT_CONFIG as DisplayConfig,
+    etag = '"c1"',
+  } = {}
+) {
   const dom = new JSDOM(DISPLAY_HTML, {
     url: `https://stg.oursharedevents.com/display${search}`,
     runScripts: 'outside-only',
@@ -205,14 +264,37 @@ async function bootPage(search = '', { events = EVENTS, sponsors = SPONSOR_BUNDL
   w.setTimeout = ((f: () => void, ms: number) =>
     ft.timers.set(f, ms)) as unknown as typeof setTimeout;
   w.clearTimeout = ((id: number) => ft.timers.clear(id)) as unknown as typeof clearTimeout;
-  w.setInterval = (() => 0) as unknown as typeof setInterval;
+  // Intervals are parked, but kept by period so a test can run one on demand.
+  const intervals = new Map<number, Array<() => void>>();
+  w.setInterval = ((f: () => void, ms: number) => {
+    intervals.set(ms, [...(intervals.get(ms) ?? []), f]);
+    return 0;
+  }) as unknown as typeof setInterval;
+  const server = { config, etag, configBodiesRead: 0 };
   w.fetch = (async (url: string) => {
-    const body = String(url).includes('/sponsor-bundle')
+    const u = String(url);
+    if (u.includes('/display-config')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: new w.Headers({ ETag: server.etag }),
+        json: async () => {
+          server.configBodiesRead++;
+          return server.config;
+        },
+      } as unknown as Response;
+    }
+    const body = u.includes('/sponsor-bundle')
       ? sponsors
-      : String(url).includes('/impression')
+      : u.includes('/impression')
         ? {}
         : { ok: true, items: events };
-    return { json: async () => body } as Response;
+    return {
+      ok: true,
+      status: 200,
+      headers: new w.Headers(),
+      json: async () => body,
+    } as unknown as Response;
   }) as typeof fetch;
   for (const m of DISPLAY_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)) w.eval(m[1]);
   for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
@@ -235,7 +317,15 @@ async function bootPage(search = '', { events = EVENTS, sponsors = SPONSOR_BUNDL
     Object.defineProperty(doc, 'hidden', { configurable: true, get: () => h });
     doc.dispatchEvent(new w.Event('visibilitychange'));
   };
-  return { doc, visible, key, tick, paneTimers, setHidden };
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+  };
+  /** Run the once-a-minute TV config check, as its interval would. */
+  const recheckConfig = async () => {
+    for (const f of intervals.get(60 * 1000) ?? []) f();
+    await flush();
+  };
+  return { doc, visible, key, tick, paneTimers, setHidden, server, recheckConfig };
 }
 
 describe('display page: panes on the real template', () => {
@@ -348,5 +438,101 @@ describe('display page: panes on the real template', () => {
     expect(doc.querySelector('[data-testid="display-panes"]')?.getAttribute('aria-live')).toBe(
       'off'
     );
+  });
+});
+
+describe('display page: the order saved in /admin, league links, ETag re-checks', () => {
+  const SAVED: DisplayConfig = {
+    ok: true,
+    panes: ['league', 'event'],
+    dwell_seconds: 30,
+    league: [
+      { kind: 'schedule', label: 'Schedule', url: 'https://www.league.example/schedule', qr: QR },
+      {
+        kind: 'standings',
+        label: 'Standings',
+        url: 'https://docs.google.com/spreadsheets/d/abc/edit',
+        qr: null,
+      },
+    ],
+  };
+
+  test('the saved order and seconds drive the board', async () => {
+    const { visible, paneTimers, tick } = await bootPage('', { config: SAVED });
+    // Events render first (default order, event pane); the saved config then
+    // re-renders and keeps the event pane on screen rather than jumping.
+    expect(visible()).toEqual(['event']);
+    expect(paneTimers()[0][1].ms).toBe(30000);
+    tick();
+    expect(visible()).toEqual(['league']);
+    tick();
+    expect(visible()).toEqual(['event']);
+  });
+
+  test('league pane: label, scan-to-open QR, short link; no QR when there is none', async () => {
+    const { doc } = await bootPage('', { config: SAVED });
+    const items = doc.querySelectorAll('[data-testid="display-league-item"]');
+    expect(items).toHaveLength(2);
+    expect(
+      [...doc.querySelectorAll('[data-testid="display-league-label"]')].map((e) => e.textContent)
+    ).toEqual(['Schedule', 'Standings']);
+    const qrs = doc.querySelectorAll('[data-testid="display-league-qr"]');
+    expect(qrs).toHaveLength(1);
+    expect(qrs[0].getAttribute('src')).toBe(QR);
+    expect(doc.querySelector('[data-testid="display-league-url"]')?.textContent).toBe(
+      'league.example/schedule'
+    );
+  });
+
+  test('a QR that is not our PNG data URI never reaches an <img src>', async () => {
+    const { doc } = await bootPage('', {
+      config: {
+        ...SAVED,
+        league: [
+          {
+            kind: 'schedule',
+            label: 'Schedule',
+            url: 'https://l.example/',
+            qr: 'javascript:alert(1)',
+          },
+        ],
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-league-qr"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-league-item"]')).not.toBeNull();
+  });
+
+  test('no league links: no league pane, and the default board is unchanged', async () => {
+    const { doc } = await bootPage();
+    expect(doc.querySelector('[data-testid="display-pane-league"]')).toBeNull();
+    expect(doc.querySelectorAll('.pane-dots li')).toHaveLength(3);
+  });
+
+  test('the URL still overrides what was saved', async () => {
+    const { paneTimers, doc } = await bootPage('?panes=event,upcoming&dwell=8', { config: SAVED });
+    expect(paneTimers()[0][1].ms).toBe(8000);
+    expect(doc.querySelector('[data-testid="display-pane-league"]')).toBeNull();
+  });
+
+  test('same ETag on the minute check: the body is not even read and nothing re-renders', async () => {
+    const { doc, server, recheckConfig, tick, visible } = await bootPage('', { config: SAVED });
+    tick();
+    expect(visible()).toEqual(['league']);
+    const panesEl = doc.querySelector('[data-testid="display-panes"]');
+    const reads = server.configBodiesRead;
+    await recheckConfig();
+    expect(server.configBodiesRead).toBe(reads);
+    expect(doc.querySelector('[data-testid="display-panes"]')).toBe(panesEl);
+    expect(visible()).toEqual(['league']);
+  });
+
+  test('a new ETag (the organiser saved a change) re-renders with the new order', async () => {
+    const { server, recheckConfig, paneTimers, doc } = await bootPage('', { config: SAVED });
+    server.config = { ...SAVED, panes: ['event', 'upcoming'], dwell_seconds: 45 };
+    server.etag = '"c2"';
+    await recheckConfig();
+    expect(paneTimers()[0][1].ms).toBe(45000);
+    expect(doc.querySelector('[data-testid="display-pane-league"]')).toBeNull();
+    expect(doc.querySelectorAll('.pane-dots li')).toHaveLength(2);
   });
 });

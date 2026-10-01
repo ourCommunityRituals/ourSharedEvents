@@ -337,6 +337,15 @@
         text-align: center;
         color: var(--text-muted);
       }
+      .league-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .league-card img {
+        width: clamp(140px, 14vw, 240px);
+      }
       .sponsor-wall {
         display: flex;
         flex-wrap: wrap;
@@ -404,14 +413,31 @@
       // startRotationEngine). Instead of one fixed layout, the TV cycles through
       // screens ("panes") one at a time. Only a pane with something to show
       // joins the cycle; with one pane there is no timer and no dots.
-      //   ?panes=event,upcoming,sponsors  picks and orders them (allowlisted;
-      //                                   anything else is ignored)
-      //   ?dwell=15                       seconds per pane, clamped to 5..120
+      // The order and seconds per pane are what the organiser saved in /admin
+      // (GET /api/v2/events/:id/display-config, re-checked every minute with its
+      // ETag: unchanged means no re-render). The kiosk URL can still override:
+      //   ?panes=event,upcoming,sponsors,league  picks and orders them
+      //                                          (allowlisted; others ignored)
+      //   ?dwell=15                              seconds per pane, 5..120
       // Space pauses, the arrow keys step: the remote a host actually holds.
       // The panes are a VISIBILITY layer: every pane renders the same data,
       // escaped the same way, as the board did before; rotation only hides.
-      var PANE_TYPES = ['event', 'upcoming', 'sponsors'];
-      var PANE_LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Our sponsors' };
+      var PANE_TYPES = ['event', 'upcoming', 'sponsors', 'league'];
+      var PANE_LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Our sponsors', league: 'League' };
+      function clampDwell(secs) {
+        return Math.min(120, Math.max(5, secs));
+      }
+      // The saved config wins over the default; the URL wins over both.
+      function effectiveRotation(url, saved) {
+        var order = url.order;
+        var dwellMs = url.dwellMs;
+        if (saved && !url.fixedOrder && Array.isArray(saved.panes)) {
+          var picked = saved.panes.filter(function (t) { return PANE_TYPES.indexOf(t) !== -1; });
+          if (picked.length) order = picked;
+        }
+        if (saved && !url.fixedDwell && saved.dwell_seconds > 0) dwellMs = clampDwell(saved.dwell_seconds) * 1000;
+        return { order: order, dwellMs: dwellMs };
+      }
       function rotationConfig(search) {
         var params = new URLSearchParams(search);
         var order = [];
@@ -419,11 +445,12 @@
           t = t.trim();
           if (PANE_TYPES.indexOf(t) !== -1 && order.indexOf(t) === -1) order.push(t);
         });
-        if (!order.length) order = PANE_TYPES.slice();
+        var fixedOrder = order.length > 0;
+        if (!fixedOrder) order = PANE_TYPES.slice();
         var secs = parseInt(params.get('dwell') || '', 10);
-        if (!(secs > 0)) secs = 15;
-        secs = Math.min(120, Math.max(5, secs));
-        return { order: order, dwellMs: secs * 1000 };
+        var fixedDwell = secs > 0;
+        if (!fixedDwell) secs = 15;
+        return { order: order, dwellMs: clampDwell(secs) * 1000, fixedOrder: fixedOrder, fixedDwell: fixedDwell };
       }
       // Pure engine: no DOM. onShow(pane, index, paused) does the painting, and
       // timers are injectable so the cadence can be tested without waiting.
@@ -460,7 +487,18 @@
       var ROTATION = rotationConfig(location.search);
       // board.items: the fetched events; board.sponsors: [{ title, src }] for
       // the sponsors pane, filled by loadDisplaySponsors (logo rules live there).
-      var board = { items: null, sponsors: [], rotation: null };
+      // board.config: the last display-config body, board.configEtag its ETag.
+      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null };
+      // A league link's QR is a PNG data URI from our own endpoint; anything
+      // else is not put in an <img src>.
+      function isQrDataUri(v) {
+        return typeof v === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v);
+      }
+      // "league.example/standings" — enough to recognise, short enough for a TV.
+      function shortUrl(u) {
+        try { var x = new URL(u); var t = x.hostname.replace(/^www\./, '') + (x.pathname === '/' ? '' : x.pathname); return t.length > 40 ? t.slice(0, 39) + '…' : t; }
+        catch (err) { return ''; }
+      }
       // Quote-safe: sponsor values land inside attributes.
       function escAttr(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -532,7 +570,21 @@
               '<span class="name" data-testid="display-wall-sponsor-name">' + escAttr(s.title) + '</span></div>').join('') +
             '</div></div></section>';
         }
-        const panes = ROTATION.order.filter(type => paneHtml[type]);
+        // League: the links the organiser saved (the league keeps its own
+        // tools; we link out). Each card: label, scan-to-open QR, short link.
+        const league = (board.config && Array.isArray(board.config.league) ? board.config.league : [])
+          .filter(l => l && typeof l.url === 'string');
+        if (league.length) {
+          paneHtml.league = '<section data-pane="league" data-testid="display-pane-league" aria-label="League" hidden>' +
+            '<div class="next-events"><h3 data-testid="display-league-heading">League</h3><div class="sponsor-wall">' +
+            league.map(l => '<div class="league-card" data-testid="display-league-item">' +
+              (isQrDataUri(l.qr) ? '<img src="' + escAttr(l.qr) + '" alt="Scan for the ' + escAttr(l.label) + '" data-testid="display-league-qr">' : '') +
+              '<strong data-testid="display-league-label">' + escAttr(l.label) + '</strong>' +
+              '<span data-testid="display-league-url">' + escAttr(shortUrl(l.url)) + '</span></div>').join('') +
+            '</div></div></section>';
+        }
+        const rot = effectiveRotation(ROTATION, board.config);
+        const panes = rot.order.filter(type => paneHtml[type]);
         // The featured event always exists, so a narrowed ?panes= that matches
         // nothing renderable still shows it rather than a blank TV.
         if (!panes.length) panes.push('event');
@@ -547,7 +599,7 @@
               panes.map(type => '<li aria-label="' + PANE_LABELS[type] + '" aria-current="false"></li>').join('') + '</ol>' +
               '<p class="pane-paused" data-testid="display-pane-paused" hidden>Paused. Press Space to resume.</p>'
             : '');
-        board.rotation = createPaneRotation(panes, ROTATION.dwellMs, showPane);
+        board.rotation = createPaneRotation(panes, rot.dwellMs, showPane);
         board.rotation.setHidden(document.hidden);
         board.rotation.start(Math.max(panes.indexOf(keepType), 0), keepPaused);
       }
@@ -565,6 +617,7 @@
           }
           board.items = items;
           renderBoard();
+          loadDisplayConfig();
           // Update ticker
           const ticker = document.getElementById('ticker');
           if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
@@ -592,9 +645,34 @@
       document.addEventListener('visibilitychange', function () {
         if (board.rotation) board.rotation.setHidden(document.hidden);
       });
+      // The featured event's saved TV config. The response carries a strong
+      // ETag with Cache-Control: no-cache, so the browser revalidates it and the
+      // server answers 304 while nothing changed (ported from the GAS bundles'
+      // ETag + swr()). Same ETag as last time → nothing to do: the rotation is
+      // never restarted by a check. A failed check keeps the last config.
+      async function loadDisplayConfig() {
+        const items = board.items;
+        if (!items || !items.length || document.hidden) return;
+        const featured = items[Math.max(requestedEventIndex(items), 0)];
+        const id = featured && featured.id;
+        if (!id) return;
+        try {
+          const res = await fetch('/api/v2/events/' + encodeURIComponent(id) + '/display-config', { cache: 'no-cache' });
+          if (!res.ok) return;
+          const etag = res.headers.get('ETag');
+          if (etag && etag === board.configEtag && board.configFor === id) return;
+          const data = await res.json();
+          if (!data || !data.ok) return;
+          board.config = data;
+          board.configEtag = etag;
+          board.configFor = id;
+          renderBoard();
+        } catch { /* keep the last config */ }
+      }
       loadEvents();
-      // Auto-refresh every 5 minutes
+      // Auto-refresh every 5 minutes; the TV config is re-checked every minute.
       setInterval(loadEvents, 5 * 60 * 1000);
+      setInterval(loadDisplayConfig, 60 * 1000);
 
       // ── Display sponsor loading + rotation ──
       async function loadDisplaySponsors() {
