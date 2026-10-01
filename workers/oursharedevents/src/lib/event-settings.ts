@@ -225,7 +225,7 @@ export function validateSettingsPatch(
         if (!clean) {
           return {
             ok: false,
-            error: `settings.leagueLinks.${kind} must be an https:// link of at most ${MAX_LINK_BYTES} characters, so it fits in a QR code (try the sheet's share link or a short link)`,
+            error: `settings.leagueLinks.${kind} must be an https:// link of at most ${MAX_LINK_BYTES} bytes once encoded, so it fits in a QR code (plain letters and digits are 1 byte each; spaces and accented letters count for more). Try the sheet's share link or a short link`,
           };
         }
         links[kind as LeagueLinkKind] = clean;

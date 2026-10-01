@@ -14,7 +14,7 @@ vi.mock('../src/lib/qr', () => ({
   },
 }));
 
-import { handleDisplayConfig } from '../src/handlers/display-config';
+import { handleAdminDisplayConfig, handleDisplayConfig } from '../src/handlers/display-config';
 
 function env(settings: unknown) {
   const row = { id: 'evt-1', status: 'active', settings_json: JSON.stringify(settings) };
@@ -69,5 +69,19 @@ describe('display-config ETag is computed before any QR is drawn', () => {
     const res = await handleDisplayConfig(get(a), env(changed), 'evt-1');
     expect(res.status).toBe(200);
     expect(res.headers.get('ETag')).not.toBe(a);
+  });
+});
+
+describe('the admin read carries no QR images', () => {
+  test('links come back, no qr field, and the encoder is never called', async () => {
+    const res = await handleAdminDisplayConfig(get(), env(SETTINGS), 'evt-1');
+    expect(res.status).toBe(200);
+    expect(qr.calls).toBe(0);
+    const body = (await res.json()) as { league: Array<Record<string, unknown>> };
+    expect(body.league.map((l) => l.url)).toEqual([
+      'https://league.example/schedule',
+      'https://league.example/standings',
+    ]);
+    for (const l of body.league) expect(l).not.toHaveProperty('qr');
   });
 });

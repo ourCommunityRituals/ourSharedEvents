@@ -102,7 +102,7 @@ export async function handleDisplayConfig(
     );
   }
 
-  return withEtag(request, headers, row);
+  return withEtag(request, headers, row, { withQr: true });
 }
 
 /**
@@ -132,7 +132,8 @@ function configShape(row: { id: string; settings_json: string | null }) {
 async function withEtag(
   request: Request,
   headers: Record<string, string>,
-  row: { id: string; settings_json: string | null }
+  row: { id: string; settings_json: string | null },
+  { withQr }: { withQr: boolean }
 ): Promise<Response> {
   const shape = configShape(row);
   const etag = await strongEtag(QR_VERSION + JSON.stringify(shape));
@@ -145,8 +146,13 @@ async function withEtag(
   if (etagMatches(request.headers.get('If-None-Match'), etag)) {
     return new Response(null, { status: 304, headers: cacheHeaders });
   }
-  const league: LeagueItem[] = shape.league.map((l) => ({ ...l, qr: qrFor(l.url) }));
-  const body = JSON.stringify({ ...shape, league });
+  // The admin card only edits the links, so its read carries no images.
+  const body = withQr
+    ? JSON.stringify({
+        ...shape,
+        league: shape.league.map((l): LeagueItem => ({ ...l, qr: qrFor(l.url) })),
+      })
+    : JSON.stringify(shape);
   return new Response(body, {
     headers: { ...cacheHeaders, 'Content-Type': 'application/json; charset=utf-8' },
   });
@@ -168,5 +174,5 @@ export async function handleAdminDisplayConfig(
       { status: 404, headers }
     );
   }
-  return withEtag(request, headers, row);
+  return withEtag(request, headers, row, { withQr: false });
 }

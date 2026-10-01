@@ -286,6 +286,8 @@ async function bootPage(
     /** Event ids whose display-config request never answers (in flight). */
     holdConfig: new Set<string>(),
     configFetches: 0,
+    /** When true, GET /api/v2/events rejects (a network failure). */
+    failEvents: false,
     impressions: [] as string[],
   };
   w.fetch = (async (url: string) => {
@@ -318,6 +320,7 @@ async function bootPage(
     const m = /\/api\/v2\/events\/([^/]+)\/(sponsor-bundle|sponsors\/([^/]+)\/impression)/.exec(u);
     if (m && m[2] === 'sponsor-bundle') server.bundleFetches.push(m[1]);
     if (m && m[3]) server.impressions.push(`${m[1]}:${m[3]}`);
+    if (!m && server.failEvents) throw new TypeError('network down');
     const body =
       m && m[2] === 'sponsor-bundle'
         ? (server.bundles[m[1]] ?? sponsors)
@@ -708,5 +711,31 @@ describe('display page: an empty event list clears the previous event (review fi
     const fetches = server.configFetches;
     await recheckConfig();
     expect(server.configFetches, 'no config check for an event that is gone').toBe(fetches);
+  });
+});
+
+describe('display page: a failed refresh keeps the last good board (review fix)', () => {
+  test('the board, its rotation and its sponsors stay; no error replaces them', async () => {
+    const { doc, server, refreshEvents, paneTimers, visible } = await bootPage();
+    server.failEvents = true;
+    await refreshEvents();
+    expect(visible()).toEqual(['event']);
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Bocce Night'
+    );
+    expect(doc.querySelector('[data-testid="display-empty"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-sponsor-item"]')).not.toBeNull();
+    expect(paneTimers()).toHaveLength(1);
+  });
+
+  test('a TV that never loaded anything shows the error', async () => {
+    const { doc } = await bootPage('', {
+      seed: (server) => {
+        server.failEvents = true;
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-empty"]')?.textContent).toBe(
+      'Could not load events.'
+    );
   });
 });

@@ -661,8 +661,11 @@
           const ticker = document.getElementById('ticker');
           if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
         } catch {
-          if (board.rotation) board.rotation.stop();
-          board.rotation = null;
+          // A failed refresh keeps the last good board (rotation, sponsors,
+          // config) on screen; it is retried in five minutes. Only a TV that
+          // never loaded anything shows the error.
+          if (board.items && board.items.length) return;
+          clearEventState();
           main.innerHTML = '<p class="empty" data-testid="display-empty">Could not load events.</p>';
         }
       }
