@@ -186,7 +186,7 @@ LIMIT 500;  -- max BQ batch size
   "last_seen_at": "ISO",
   "visit_count": 1,
   "computed_at": "ISO",
-  "corridor_id": "the event's res7 H3 cell (e.g. 872664544ffffff), or 'unknown'",
+  "corridor_id": "the event's lowercase res7-or-coarser H3 cell (e.g. 872664544ffffff), or 'unknown'",
   "event_type": "etr.uec_code or 'unknown'",
   "uec_code": "etr.uec_code",
   "regulatory_pool": "general|hipaa|coppa",
@@ -231,7 +231,7 @@ LIMIT 500;
 
 ```json
 {
-  "corridor_id": "the res7 H3 cell the baseline is keyed by, or 'unknown'",
+  "corridor_id": "the lowercase H3 cell (res7 or coarser) the baseline is keyed by — never 'unknown' (non-H3 keys are withheld)",
   "bucket_dow": 4,
   "bucket_hour": 19,
   "window_30d_count": 42,

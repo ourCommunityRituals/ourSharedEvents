@@ -56,14 +56,16 @@ export function isCorridorId(value: unknown): boolean {
 
 /**
  * The corridor id to export for a stored value (ADR-011: the corridor is the
- * res7 node). A value shaped like an H3 cell is passed through untouched, so
- * the row guard judges it (a res9 or malformed cell fails the phase closed).
- * Anything else is not geography at all — absent, or a legacy named id such as
- * the pre-H3 `corridors.id` — and becomes the explicit 'unknown' sentinel
- * rather than an opaque string the warehouse would treat as a corridor.
+ * res7 node). A value shaped like an H3 cell is lowercased (H3 addresses are
+ * case-insensitive, warehouse grouping is not, so one corridor must have one
+ * spelling) and otherwise passed through, so the row guard judges it (a res9
+ * or malformed cell fails the phase closed). Anything else is not geography
+ * at all — absent, or a legacy named id such as the pre-H3 `corridors.id` —
+ * and becomes the explicit 'unknown' sentinel rather than an opaque string the
+ * warehouse would treat as a corridor.
  */
 export function canonicalCorridorId(value: unknown): string {
-  if (typeof value === 'string' && H3_CELL.test(value)) return value;
+  if (typeof value === 'string' && H3_CELL.test(value)) return value.toLowerCase();
   return UNKNOWN_CORRIDOR;
 }
 

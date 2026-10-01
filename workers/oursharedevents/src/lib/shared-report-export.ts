@@ -457,14 +457,15 @@ export async function exportCorridorDensityBaseline(
       // 'unknown' with the same computed_at, collide on insertId and be
       // silently deduplicated by BigQuery while counted here as exported.
       // An H3-shaped key still goes through, so the row guard judges it.
-      if (canonicalCorridorId(r.corridor_id) === UNKNOWN_CORRIDOR) {
+      const corridorId = canonicalCorridorId(r.corridor_id);
+      if (corridorId === UNKNOWN_CORRIDOR) {
         result.rowsSkipped++;
         continue;
       }
       const tags = {
         // Sentinel values for required tags that don't apply to corridor
         // aggregates. assertRequiredTags accepts any non-empty string.
-        corridor_id: r.corridor_id,
+        corridor_id: corridorId,
         venue_id: 'corridor-aggregate',
         event_type: 'corridor-aggregate',
         uec_code: 'corridor-aggregate',

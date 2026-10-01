@@ -57,6 +57,7 @@ import {
   isCorridorId,
 } from '../src/lib/export-geography';
 import { phaseTimesFor } from '../src/lib/event-datetime';
+import { bigQueryInsertRows } from '../src/cloud/bigquery';
 
 interface TestEnv {
   DB: D1Database;
@@ -454,8 +455,10 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(canonicalCorridorId('corr_blue_island')).toBe('unknown');
     expect(canonicalCorridorId(null)).toBe('unknown');
     expect(canonicalCorridorId(EAGLES_RES7)).toBe(EAGLES_RES7);
-    // An H3-shaped value passes through so the guard judges it (res9 fails).
+    // An H3-shaped value passes through so the guard judges it (res9 fails),
+    // lowercased so one corridor has one spelling in the warehouse.
     expect(canonicalCorridorId(EAGLES_RES9)).toBe(EAGLES_RES9);
+    expect(canonicalCorridorId(EAGLES_RES7.toUpperCase())).toBe(EAGLES_RES7);
     expect(isCorridorId(EAGLES_RES7.toUpperCase())).toBe(true);
   });
 
@@ -487,6 +490,43 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(state?.last_export_status).toBe('failed');
     expect(state?.last_error).toMatch(/rejected 1\/1 rows/);
     expect(state?.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  test('an uppercase baseline key exports as the one lowercase corridor id', async () => {
+    await clearPipeline();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 1, 18, 3, 3, ?)`
+      )
+      .bind(EAGLES_RES7.toUpperCase(), new Date().toISOString())
+      .run();
+
+    installBqMock();
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(result.errors).toBe(0);
+    expect(bqCalls.flatMap((c) => c.rows.map((r) => r.json.corridor_id))).toEqual([EAGLES_RES7]);
+  });
+
+  test('the legacy insertAll client also fails on rows rejected inside an HTTP 200', async () => {
+    installBqMock({
+      insertErrors: [{ index: 0, errors: [{ reason: 'invalid', message: 'bad' }] }],
+    });
+    const attempt = bigQueryInsertRows(
+      {
+        ...BQ_ENV,
+        WORKER_ENV: 'development',
+        BIGQUERY_DATASET_ID: 'oursharedevents_backup_dev',
+      } as never,
+      'events_backup',
+      [{ id: 'evt_1' }]
+    );
+    await expect(attempt).rejects.toThrow(/rejected 1\/1 rows/);
+    vi.restoreAllMocks();
+    expect(bqCalls).toHaveLength(1);
   });
 
   test('a res9 corridor key in the baseline fails the phase closed: nothing sent, watermark held', async () => {
