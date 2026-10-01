@@ -163,13 +163,22 @@ aggregates only, never `anon_id`, and corridor-level location only
 (`OCR-docs/docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`). It now
 sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
-**When:** only when `anon_id_returns` has rows past the watermark. Each run takes
-a snapshot of the last `RETURNS_WINDOW_DAYS` (90) and then moves the watermark to
-the newest source row.
+**When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
+`wrangler.toml`). Each run snapshots the last `RETURNS_WINDOW_DAYS` (90), even
+when no source row is past the watermark, because a rolling window changes as
+rows age out. The watermark then records the newest source row seen. A re-run
+within the same hour sends the same insertIds, so BigQuery dedupes it.
 
-**Grouping:** a person is counted once per (corridor, event type, clearance tier).
-Their visits at every venue in that corridor are summed first. The tier maps to a
-pool, and a declined regime is withheld (OSE-1220).
+**Reading it:** take the latest `computed_at` snapshot. A group that is missing
+from it has aged out of the window or fallen under the floor. Each run is also
+recorded in `export_manifest` (phase `anon_id_returns`, table
+`corridor_returns_export`), so a run that produced no rows is still visible.
+
+**Grouping:** a person is counted once per (corridor, event type, pool). A return
+means they were seen at 2 or more distinct events there. `visit_count` is not
+used, because the materializer bumps it on every re-run. Tiers that share a pool
+(NULL and 1–3 are `general`) are one group before the floor applies
+(`RETURNS_POOL_KEY_SQL`). A declined regime is withheld (OSE-1220).
 
 **Floor:** a group with fewer than `RETURNS_MIN_COUNT` people (5, the same
 floor as `CORRIDOR_MAP_MIN_COUNT`) is not exported. Inside an exported group,
@@ -201,7 +210,7 @@ does, so the required-tag contract (`REQUIRED_TAGS`, brain `product-registry.yam
 is unchanged. `assertRequiredTags()` runs on each row before send.
 
 **Grain you can query in OER:** one corridor × event type × pool, a 90-day
-rolling window, with a new snapshot each hour anything changes. You cannot see
+rolling window, with one new snapshot per scheduled run (nightly today). You cannot see
 individual journeys or venues, or anyone's movement between corridors.
 
 **Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The

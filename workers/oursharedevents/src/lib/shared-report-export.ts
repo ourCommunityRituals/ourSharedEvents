@@ -333,8 +333,9 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
 
   try {
     // A rolling window changes as rows age out even when nothing new was
-    // materialized, so a snapshot is taken on every run (one per hour: the
-    // insertId is keyed by the snapshot hour). OER reads the latest snapshot;
+    // materialized, so a snapshot is taken on every scheduled run (nightly
+    // today). The insertId is keyed by the snapshot hour, so a re-run within
+    // the same hour dedupes in BigQuery. OER reads the latest snapshot;
     // a group missing from it has fallen out of the window or under the floor.
     // The watermark only records how far the source has been seen.
     const changed = await env.DB.prepare(
