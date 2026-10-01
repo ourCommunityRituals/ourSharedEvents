@@ -493,6 +493,30 @@ describe('AUD-3 B — input validation', () => {
 // ── Review fixes (Copilot on #737) ──────────────────────────────────────────
 
 describe('AUD-3 B — no leak through pagination, no N+1, creates and deletes attributed', () => {
+  test('an owner of 150 brands still gets their page (D1 binds at most 100 parameters)', async () => {
+    const owner = 'alb-wide-owner@example.com';
+    const brands = [BRAND_A, ...Array.from({ length: 149 }, (_, i) => `alb-wide-${i}`)];
+    const insert = tenv.DB.prepare(
+      `INSERT INTO admin_brand_memberships (email, brand_id, role) VALUES (?, ?, 'brand_owner')`
+    );
+    await tenv.DB.batch(brands.map((b) => insert.bind(owner, b)));
+    try {
+      const res = await call(
+        'GET',
+        `${BRAND_PATH}&action=UPDATE_EVENT&cursor=2030-01-01T00:00:00.000Z`,
+        asEmail(owner)
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as ListBody;
+      expect(body.entries.map((e) => e.id)).toContain('alb-1');
+      expect(body.entries.every((e) => e.brand_id === BRAND_A)).toBe(true);
+    } finally {
+      await tenv.DB.prepare('DELETE FROM admin_brand_memberships WHERE email = ?')
+        .bind(owner)
+        .run();
+    }
+  });
+
   test('a hidden actor filter returns the canonical empty page, even past limit', async () => {
     const res = await call(
       'GET',

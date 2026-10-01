@@ -107,8 +107,9 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0089: anon_id_returns(last_seen_at) index for the rolling-window export.
+-- 0089: anon_id_returns indexes for the returns export (rolling window + watermark probe).
 DROP INDEX IF EXISTS idx_anon_id_returns_last_seen;
+DROP INDEX IF EXISTS idx_anon_id_returns_computed_at;
 
 -- 0088: clear the visitor's IP country (OSE-1460). Data-only: sets
 -- scan_node_returns.country_code and scan_aggregates.top_country to NULL. Not

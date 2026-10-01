@@ -152,9 +152,9 @@ async function membershipsOf(
     try {
       const rows = await env.DB.prepare(
         `SELECT email, brand_id FROM admin_brand_memberships
-          WHERE email IN (${humans.map(() => '?').join(', ')})`
+          WHERE email IN (SELECT value FROM json_each(?))`
       )
-        .bind(...humans)
+        .bind(JSON.stringify(humans))
         .all<{ email: string; brand_id: string }>();
       for (const r of rows.results ?? []) {
         const list = out.get(r.email) ?? [];
@@ -233,8 +233,10 @@ export async function handleListAuditLog(
     if (brandIds === 'all') {
       conditions.push('brand_id IS NOT NULL');
     } else {
-      conditions.push(`brand_id IN (${brandIds.map(() => '?').join(', ')})`);
-      bindings.push(...brandIds);
+      // One bound parameter however many brands the reader owns: D1 caps a
+      // statement at 100 bound parameters, and the cursor and filters need room.
+      conditions.push('brand_id IN (SELECT value FROM json_each(?))');
+      bindings.push(JSON.stringify(brandIds));
     }
   }
   if (cursor && cursor.id !== null) {
