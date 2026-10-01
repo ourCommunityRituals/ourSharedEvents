@@ -1,17 +1,17 @@
 {
   "generated_at": "2026-10-01",
-  "commit": "9a6c27c0",
+  "commit": "31319579",
   "run_url": "",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
     "total": 28,
-    "enforced": 15,
-    "partial": 7,
+    "enforced": 16,
+    "partial": 6,
     "gap": 4,
     "retired": 2,
-    "threat_entries": 70,
-    "open_threats": 1
+    "threat_entries": 71,
+    "open_threats": 2
   },
   "invariants": [
     {
@@ -105,11 +105,11 @@
       "name": "bounded_pii_retention",
       "label": "#8 — Bounded PII Retention",
       "invariant_status": "live",
-      "enforcement_status": "partial",
+      "enforcement_status": "enforced",
       "last_attacked": "2026-08-13",
       "last_green": "2026-08-13",
-      "threat_count": 6,
-      "open_threat_count": 1,
+      "threat_count": 4,
+      "open_threat_count": 0,
       "brain_conformance": []
     },
     {
