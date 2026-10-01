@@ -18,6 +18,8 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
+import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 
 interface TestEnv {
@@ -914,6 +916,55 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // Not the venue fallback: that would read as "no scans yet".
+    expect(r.report.corridor_map).toEqual({
+      svg: '',
+      suppressed: [],
+      cell_count: 0,
+      source: 'suppressed',
+    });
+    expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
+  });
+
+  test('OSE-1459 writer → builder: an event with only sub-K poster activity reads suppressed, not fallback', async () => {
+    // End to end through the nightly writer: four scans at one poster in one
+    // hour (under K). The writer keeps a 0 row for that cell-hour, so the
+    // builder reports the map as withheld rather than as the venue preview.
+    const today = new Date().toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+         VALUES ('test-evt-read-q8-e2e', 'test-brand', 'Quiet poster', 'test-evt-read-q8-e2e',
+                 'active', 'Eagles Hall', ?, '89266454447ffff', '872664544ffffff',
+                 datetime('now'), datetime('now'))`
+      )
+      .bind(today)
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+         VALUES ('test-pd-read-q8-e2e', 'test-evt-read-q8-e2e', 'qr-test-pd-read-q8-e2e',
+                 'Beverly window', '892664cdb13ffff', '872664cdbffffff')`
+      )
+      .run();
+    for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT - 1; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+           VALUES (?, 'test-evt-read-q8-e2e', 'test-pd-read-q8-e2e', ?)`
+        )
+        .bind(`spe-read-q8-e2e-${i}`, `${today}T19:00`)
+        .run();
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-e2e');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
     expect(r.report.corridor_map).toEqual({
       svg: '',
       suppressed: [],

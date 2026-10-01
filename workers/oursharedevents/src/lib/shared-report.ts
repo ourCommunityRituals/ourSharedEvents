@@ -771,6 +771,7 @@ export async function aggregateScanBuckets(
  * Only poster-hours with at least CORRIDOR_MAP_MIN_COUNT scans are counted:
  * dedup is per person per poster per hour, so a floored poster-hour is K
  * people, while a cell summed from raw scans could be one person at K posters.
+ * A cell-hour whose poster-hours are all under the floor is stored as 0.
  *
  * Recomputed from scratch for every event in the 90-day window and swapped in
  * with one atomic batch (DELETE the window, INSERT the fresh rows), so a
@@ -804,7 +805,9 @@ async function aggregateScanCells(
     // into their cell. /q/ dedup is one scan per person per poster per hour,
     // so a poster-hour of >= K scans is >= K people; a cell-hour summed from
     // raw scans is not (one person scanning K posters in one cell is K
-    // scans). Only floored poster-hours ever reach this table.
+    // scans). A sub-K poster-hour adds 0, so a cell-hour with activity but no
+    // poster-hour at the floor is kept as a 0 row: the report then reads the
+    // map as 'suppressed' (activity withheld), not as 'no scans'.
     const [, inserted] = await env.DB.batch([
       env.DB.prepare(
         `DELETE FROM scan_cell_aggregates
@@ -820,7 +823,7 @@ async function aggregateScanCells(
                 ph.bucket_hour,
                 ph.h3_res9,
                 ph.h3_res7,
-                SUM(ph.scans),
+                SUM(CASE WHEN ph.scans >= ? THEN ph.scans ELSE 0 END),
                 ?
            FROM (SELECT spe.event_id AS event_id,
                         substr(spe.scan_bucket, 1, 10) AS bucket_date,
@@ -832,10 +835,9 @@ async function aggregateScanCells(
                    JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
                   WHERE pd.h3_res9 IS NOT NULL
                     AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)
-                  GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), spe.poster_deployment_id
-                 HAVING COUNT(*) >= ?) ph
+                  GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), spe.poster_deployment_id) ph
           GROUP BY ph.event_id, ph.bucket_date, ph.bucket_hour, ph.h3_res9, ph.h3_res7`
-      ).bind(nowIso, floor90dIso, CORRIDOR_MAP_MIN_COUNT),
+      ).bind(CORRIDOR_MAP_MIN_COUNT, nowIso, floor90dIso),
     ]);
     result.rowsUpserted += inserted?.meta?.changes ?? 0;
   } catch (err) {

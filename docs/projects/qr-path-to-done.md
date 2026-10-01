@@ -203,5 +203,9 @@ the SharedReport corridor map shows **scans per poster cell**.
   the single Eagles scan stays under the floor and is not counted.
 - Review fix: the K-floor applies to each poster-hour before it is added into
   its cell, so one person scanning five posters in one cell does not publish
-  that cell (trace hop 8). Gates: NCR structural (no TTL, no placement id, no
+  that cell (trace hop 8).
+- Second review fix: `poster_attribution` floors each poster-hour too (one
+  scan in each of five hours can be one person), and a cell-hour with only
+  sub-K activity is stored as 0, so a quiet event's map reads "hidden", not the
+  venue preview (writer → builder test in `shared-report-read.spec.ts`). Gates: NCR structural (no TTL, no placement id, no
   session value, one writer), schema Gate 4, tenant-isolation exemptions.

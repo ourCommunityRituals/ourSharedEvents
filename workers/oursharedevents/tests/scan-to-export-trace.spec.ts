@@ -33,7 +33,7 @@
  * Hop 7 (OSE-1459): a scan at a second poster across town is counted at that
  * poster's own res9 cell (scan_cell_aggregates), not the venue's, once that
  * poster-hour reaches the K-floor. Hop 8: one person scanning several posters
- * in one cell does not add up to a published cell.
+ * in one cell does not add up to a published cell (the cell-hour holds 0).
  *
  * Not traced here, and why: corridor registry ids + definition_version
  * (OSE-613 / OSE-603, not built).
@@ -447,7 +447,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
 
     // The place-side rollup: scans at their own poster's cell. Beverly's five
     // are counted at Beverly. The Eagles poster's single scan (hop 1) is under
-    // the floor for its poster-hour, so it never reaches the table.
+    // the floor for its poster-hour, so its cell-hour is kept at 0.
     const cells = await tenv()
       .DB.prepare(
         `SELECT h3_res9, h3_res7, SUM(scan_count) AS scans
@@ -456,7 +456,12 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       )
       .bind(eventId)
       .all<{ h3_res9: string; h3_res7: string; scans: number }>();
-    expect(cells.results).toEqual([{ h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 5 }]);
+    expect(cells.results).toEqual(
+      [
+        { h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7, scans: 0 },
+        { h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 5 },
+      ].sort((a, b) => a.h3_res9.localeCompare(b.h3_res9))
+    );
 
     // The event-level rollup is unchanged in kind: every scan, one event,
     // labelled with the event's venue (it is not a statement of scan place).
@@ -486,7 +491,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
   test('hop 8 (OSE-1459) — one person scanning five posters in one cell does not publish it', async () => {
     // Five posters hung at one spot (one res9 cell), all scanned by the SAME
     // visitor within the hour. Dedup is per poster, so that is five scans in
-    // the cell, but one person: the cell must not reach the table.
+    // the cell, but one person: the cell must hold 0, never a publishable count.
     const tokens: string[] = [];
     for (let i = 0; i < 5; i++) {
       const placed = await SELF.fetch(
@@ -534,11 +539,20 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       .DB.prepare(
         `SELECT h3_res9, SUM(scan_count) AS scans
            FROM scan_cell_aggregates WHERE event_id = ?
-          GROUP BY h3_res9 ORDER BY h3_res9`
+          GROUP BY h3_res9 HAVING SUM(scan_count) > 0 ORDER BY h3_res9`
       )
       .bind(eventId)
       .all<{ h3_res9: string; scans: number }>();
     expect(cells.results).toEqual([{ h3_res9: BEVERLY_RES9, scans: 5 }]);
+    // The Morgan Park cell-hour exists (activity happened) but counts 0.
+    const zero = await tenv()
+      .DB.prepare(
+        `SELECT COUNT(*) AS n FROM scan_cell_aggregates
+          WHERE event_id = ? AND scan_count = 0 AND h3_res9 NOT IN (?, ?)`
+      )
+      .bind(eventId, EAGLES_RES9, BEVERLY_RES9)
+      .first<{ n: number }>();
+    expect(zero?.n).toBe(1);
   });
 });
 

@@ -578,23 +578,35 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // 6. poster_attribution — per poster_deployment_id
+  //    OSE-1459: the K-floor is applied per poster-HOUR before the hours are
+  //    summed. /q/ dedup is one scan per person per poster per hour, so only a
+  //    poster-hour of >= K scans is >= K people; a total over all hours is
+  //    not (one person scanning once in each of K hours is K scans). A sub-K
+  //    hour adds nothing, including to first/last scan times.
   const posters = await db
     .prepare(
       `SELECT
          pd.id                  AS poster_deployment_id,
          COALESCE(pd.location_desc, pd.placement_label, '(no label)') AS location,
          pd.h3_res9             AS h3_res9,
-         COUNT(s.id)            AS scan_count,
-         MIN(s.created_at)      AS first_scan_at,
-         MAX(s.created_at)      AS last_scan_at
+         COALESCE(SUM(CASE WHEN ph.n >= ? THEN ph.n ELSE 0 END), 0) AS scan_count,
+         MIN(CASE WHEN ph.n >= ? THEN ph.first_at END) AS first_scan_at,
+         MAX(CASE WHEN ph.n >= ? THEN ph.last_at END)  AS last_scan_at
        FROM poster_deployments pd
-       LEFT JOIN scan_placement_events s ON s.poster_deployment_id = pd.id AND s.event_id = ?
+       LEFT JOIN (SELECT poster_deployment_id,
+                         COUNT(*)        AS n,
+                         MIN(created_at) AS first_at,
+                         MAX(created_at) AS last_at
+                    FROM scan_placement_events
+                   WHERE event_id = ?
+                   GROUP BY poster_deployment_id, substr(scan_bucket, 1, 13)) ph
+         ON ph.poster_deployment_id = pd.id
        WHERE pd.event_id = ?
        GROUP BY pd.id, pd.location_desc, pd.placement_label, pd.h3_res9
        HAVING scan_count > 0
        ORDER BY scan_count DESC`
     )
-    .bind(eventId, eventId)
+    .bind(CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, eventId, eventId)
     .all<{
       poster_deployment_id: string;
       location: string;

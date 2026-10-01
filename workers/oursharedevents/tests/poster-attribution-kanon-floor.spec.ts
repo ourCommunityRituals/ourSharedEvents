@@ -193,6 +193,70 @@ describe('OSE-711 — poster_attribution applies the uniform K-anon floor', () =
   });
 });
 
+/** Seed one scan per hour bucket for `hours` distinct hours (one person, deduped hourly). */
+async function seedScansAcrossHours(
+  eventId: string,
+  posterId: string,
+  hours: number
+): Promise<void> {
+  for (let h = 0; h < hours; h++) {
+    const bucket = `2026-05-07T${String(10 + h).padStart(2, '0')}:00`;
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind(
+        `spe-711-${posterId}-h${h}`,
+        eventId,
+        posterId,
+        bucket,
+        `${bucket.replace('T', ' ')}:00`
+      )
+      .run();
+  }
+}
+
+describe('OSE-1459 — the poster floor is applied per poster-hour', () => {
+  beforeEach(async () => {
+    await applyMigrations();
+    await clearTables();
+  });
+
+  test('one scan in each of K different hours is NOT published (could be one person)', async () => {
+    // /q/ dedup allows one scan per person per poster per hour, so K scans in
+    // K different hours can be a single visitor. Each hour is under the floor.
+    const evt = 'test-evt-711-hours';
+    await seedEvent(evt);
+    await seedDeployment('pd-711-hours', evt, 'Laundromat window');
+    await seedScansAcrossHours(evt, 'pd-711-hours', CORRIDOR_MAP_MIN_COUNT + 2);
+
+    const r = await buildSharedReport(tenv().DB, evt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.poster_attribution.map((p) => p.poster_deployment_id)).not.toContain(
+      'pd-711-hours'
+    );
+    expect(JSON.stringify(r.report)).not.toContain('Laundromat window');
+  });
+
+  test('a sub-K hour does not add to a published poster, nor set its first scan time', async () => {
+    const evt = 'test-evt-711-mixed-hours';
+    await seedEvent(evt);
+    await seedDeployment('pd-711-mixed', evt, 'Library board');
+    await seedScans(evt, 'pd-711-mixed', 6); // one bucket of 6 (>= K)
+    await seedScansAcrossHours(evt, 'pd-711-mixed', 2); // two lone scans, earlier hours
+
+    const r = await buildSharedReport(tenv().DB, evt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const row = r.report.poster_attribution.find((p) => p.poster_deployment_id === 'pd-711-mixed');
+    expect(row).toBeDefined();
+    expect(row!.scan_count).toBe(6);
+    expect(row!.first_scan_at).not.toContain('2026-05-07T10');
+  });
+});
+
 describe('OSE-711 — aggregate-only invariant (static guard)', () => {
   // Belt-and-suspenders alongside the runtime coverage above: a future refactor
   // that returned the raw poster scan_count would trip here even if the seed

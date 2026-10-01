@@ -135,7 +135,9 @@ person per poster per hour, so an hourly poster count is a count of people
 through). The K-floor is applied to each **poster-hour** before poster-hours are
 added into their cell, because dedup is per poster: one person scanning five
 posters in one cell is five scans but one person. A cell is built only from
-poster-hours that clear the floor, and then from hours that clear it. A cell under the K-floor is
+poster-hours that clear the floor, and then from hours that clear it. A
+cell-hour whose poster-hours are all under the floor is stored as 0, so the
+report can tell "activity, withheld" from "no scans". A cell under the K-floor is
 dropped, never drawn: its res9 is a poster's location, so it is not published
 at all (the same rule as `poster_attribution`). If every cell is under the
 floor, the report shows the map as hidden rather than the venue preview.
@@ -148,7 +150,9 @@ counts, so the same person scanning in two different hours counts twice. `scan_a
 `distinct_agent_hashes` and `top_country` are per event and hour, and its
 `h3_res9/h3_res7` are the **event's venue** (`backfillH3Cells`), not a scan
 place. Per-poster counts reach a report through `poster_attribution`, also
-K-floored (see §5).
+K-floored per poster-hour before the hours are summed (one scan in each of five
+hours can be one person), and its first/last scan times come only from hours
+that clear the floor (see §5).
 
 ---
 
