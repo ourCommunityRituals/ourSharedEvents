@@ -382,15 +382,57 @@ export function isReachableOnPlainPR(jobName, jobs, _memo = {}, eventName = 'pul
  * conclusion and status are symbolic: a requested or in-progress source run
  * has a null conclusion, and the author decides how a completed one ends.
  */
-export function prSourcedWorkflowRunEnvs() {
+export function prSourcedWorkflowRunEnvs(pushSource = 'unpinned') {
   const envs = [];
   for (const headRepo of [THIS_REPO, sym({ notSelf: true })]) envs.push(makeWorkflowRunEnv(headRepo));
   // A push to any branch other than main is author-controlled too (Standard
   // §1 Z1): its code and artifacts are unreviewed, and the environment rule
   // checks the triggered workflow's ref, not the source run's. Only this repo
   // can push (fork pushes do not trigger workflow_run here).
-  envs.push(makeWorkflowRunEnv(THIS_REPO, 'push', sym({ notEqual: ['main'] })));
+  // Expression comparison ignores case, so a push to a branch named `MAIN`
+  // satisfies head_branch == 'main'. Unless every source workflow's push
+  // trigger is pinned to exactly `main` (pushSource 'pinned'), the pushed
+  // branch is fully symbolic; if no source can be pushed at all, no push env.
+  if (pushSource === 'unpinned') envs.push(makeWorkflowRunEnv(THIS_REPO, 'push', sym()));
+  else if (pushSource === 'pinned') envs.push(makeWorkflowRunEnv(THIS_REPO, 'push', sym({ notEqual: ['main'] })));
   return envs;
+}
+
+/**
+ * How a workflow_run workflow's SOURCE workflows can be pushed:
+ * 'none'     — no source has a push trigger;
+ * 'pinned'   — every push trigger admits only the exact branch `main` (and
+ *              tags whose patterns cannot match a case-variant of `main`);
+ * 'unpinned' — anything else, including a source that cannot be found.
+ */
+export function workflowRunPushSource(wf, workflowMap) {
+  const on = wf && (wf.on ?? wf[true]);
+  const wr = on && typeof on === 'object' && !Array.isArray(on) ? on.workflow_run : null;
+  const names = wr && Array.isArray(wr.workflows) ? wr.workflows : null;
+  if (!names || names.length === 0) return 'unpinned';
+  let sawPush = false;
+  for (const name of names) {
+    const src = Object.values(workflowMap).find((w) => w && typeof w === 'object' && w.name === name);
+    if (!src) return 'unpinned';
+    const sOn = src.on ?? src[true];
+    if (sOn === 'push' || (Array.isArray(sOn) && sOn.includes('push'))) return 'unpinned';
+    if (!sOn || typeof sOn !== 'object' || !('push' in sOn)) continue;
+    sawPush = true;
+    const push = sOn.push || {};
+    if (push['branches-ignore'] || push['tags-ignore']) return 'unpinned';
+    const branches = push.branches;
+    if (!Array.isArray(branches) || branches.length === 0 || !branches.every((b) => b === 'main')) {
+      // No branch filter means every branch; a tags-only trigger has none.
+      if (!(branches === undefined && Array.isArray(push.tags))) return 'unpinned';
+    }
+    const tags = push.tags;
+    if (tags !== undefined) {
+      if (!Array.isArray(tags)) return 'unpinned';
+      // A tag pattern that could match a case-variant of `main` is not pinned.
+      if (!tags.every((t) => typeof t === 'string' && /^[^mM*?[!\\]/.test(t))) return 'unpinned';
+    }
+  }
+  return sawPush ? 'pinned' : 'none';
 }
 
 // Any source event the author can cause (pull_request, its review variants,
@@ -549,7 +591,8 @@ function persistedCheckouts(steps, label, resolveAction, out, seen = new Set()) 
     const uses = step.uses.trim();
     const where = `${label}:step${i + 1}${step.name ? ` (${step.name})` : ''}`;
     if (/^actions\/checkout@/i.test(uses)) {
-      const w = step.with || {};
+      // Action input names are case-insensitive (`Token:` is `token:`).
+      const w = Object.fromEntries(Object.entries(step.with || {}).map(([k, v]) => [String(k).toLowerCase(), v]));
       if (w.token == null || String(w.token).trim() === '') return;
       if (String(w['persist-credentials']).trim().toLowerCase() === 'false') return;
       out.push(where);
@@ -588,7 +631,8 @@ export function analyzeWorkflows(workflowMap, resolveAction = () => null) {
     if (triggers.includes('workflow_run')) {
       const jobs = wf.jobs || {};
       for (const [jobName, job] of Object.entries(jobs)) {
-        const reachable = prSourcedWorkflowRunEnvs().some((env) =>
+        const pushSource = workflowRunPushSource(wf, workflowMap);
+        const reachable = prSourcedWorkflowRunEnvs(pushSource).some((env) =>
           isReachableUnder(jobName, jobs, {}, env)
         );
         const secrets = jobSecrets(wf, job);
@@ -879,8 +923,9 @@ function runSelfTest() {
       expectViolation: true,
     },
     {
-      name: 'safe: workflow_run job limited to push runs on main',
+      name: 'safe: workflow_run job limited to push runs on main (source push pinned to main)',
       wf: {
+        'ci.yml': { name: 'CI', on: { push: { branches: ['main'], tags: ['v*.*.*'] }, pull_request: {} }, jobs: {} },
         'rt.yml': {
           on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
           jobs: {
@@ -1552,6 +1597,47 @@ function runSelfTest() {
         },
       },
       expectViolation: true,
+    },
+    {
+      name: "leak: source CI runs on every push, so a push to 'MAIN' satisfies head_branch == 'main'",
+      wf: {
+        'ci.yml': { name: 'CI', on: { push: {}, pull_request: {} }, jobs: {} },
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { if: "github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository", steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: source workflow not found, so its push trigger cannot be proved pinned',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['Somewhere Else'], types: ['completed'] } },
+          jobs: { rt: { if: "github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository", steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: checkout input key in mixed case (Token:) still persists the token',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ uses: 'actions/checkout@v4', with: { Token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: mixed-case Persist-Credentials: false is honoured',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ uses: 'actions/checkout@v4', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}', 'Persist-Credentials': 'false' } }] } },
+        },
+      },
+      expectViolation: false,
     },
     {
       name: 'safe: workflow_run job with no secrets at all',
