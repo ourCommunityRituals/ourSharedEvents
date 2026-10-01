@@ -27,6 +27,7 @@
 import { vi, describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
+import { SCAN_QUEUE_MAX_RETRIES } from '../src/lib/scan-buffer';
 
 interface TestEnv {
   DB: D1Database;
@@ -282,6 +283,17 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     } finally {
       errSpy.mockRestore();
     }
+  });
+
+  test('OSE-1459 | CONFIG | SCAN_QUEUE_MAX_RETRIES matches the staging scan consumer max_retries', () => {
+    // The consumer releases a dropped scan's dedup marker on the last delivery,
+    // which it recognises by this constant. It must track wrangler.toml.
+    const toml = (env as Record<string, unknown>).TEST_WRANGLER_TOML as string;
+    expect(typeof toml).toBe('string');
+    const block =
+      toml.match(/\[\[env\.staging\.queues\.consumers\]\][\s\S]*?(?=\n\[|$)/)?.[0] ?? '';
+    const retries = Number(block.match(/max_retries\s*=\s*(\d+)/)?.[1]);
+    expect(retries).toBe(SCAN_QUEUE_MAX_RETRIES);
   });
 
   test('OSE-625 | UNIT | duplicate scan, no KV available | writes both rows (dedup is best-effort)', async () => {

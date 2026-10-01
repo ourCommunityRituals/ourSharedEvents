@@ -30,7 +30,7 @@
  */
 
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
-import { enqueueOrWriteScan, type ScanMessage } from '../lib/scan-buffer';
+import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 
 export interface QrScanEnv {
   DB: D1Database;
@@ -131,7 +131,7 @@ export async function handleQrScan(
   let isDuplicate = false;
   let dedupKey: string | null = null;
   if (env.RATE_LIMIT_KV) {
-    dedupKey = `scan:dedup:${anonId}:${deploymentId}:${scanBucket(nowDate)}`;
+    dedupKey = scanDedupKey(anonId, deploymentId, scanBucket(nowDate));
     const existing = await env.RATE_LIMIT_KV.get(dedupKey);
     if (existing !== null) {
       isDuplicate = true;
