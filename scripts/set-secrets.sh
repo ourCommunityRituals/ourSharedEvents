@@ -24,6 +24,12 @@
 #   SHARED_REPORT_SIGNING_SECRET — HMAC key for SharedReport + sponsor-home signed
 #                                  links (>=32 chars). FAIL-CLOSED: unset -> the whole
 #                                  /sponsor corner and every /sharedReport link is inert.
+# Optional (not prompted here; set with `wrangler secret put <NAME> --env <env>`):
+#   RATE_LIMIT_KEY_PEPPER        — HMAC key for rate-limit / beacon-dedup KV keys (>=32
+#                                  chars, own secret). Unset -> keys fall back to bare
+#                                  SHA-256, which reverses to the IP (OSE-1447), and the
+#                                  Worker logs RATE_LIMIT_PEPPER_MISSING once per isolate.
+#                                  Rotate freely: buckets live one minute.
 #
 # Ref: E2E-LAUNCH.md Part 5
 

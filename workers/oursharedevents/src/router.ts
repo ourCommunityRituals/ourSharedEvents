@@ -274,6 +274,7 @@ import {
   RATE_LIMIT_ADMIN_MAX,
   RATE_LIMIT_BATCH_MAX,
   RATE_LIMIT_MINT_MAX,
+  RATE_LIMIT_WINDOW_MS,
   type RateLimitEnv,
 } from './lib/rate-limit';
 import {
@@ -606,7 +607,15 @@ export async function route(
     (pathname.startsWith('/api/v2/admin') || pathname === '/admin' || pathname === '/manage')
   ) {
     const adminKey = `admin:${clientIp(request)}`;
-    if (await checkRateLimit(adminKey, env.RATE_LIMIT_KV, RATE_LIMIT_ADMIN_MAX)) {
+    if (
+      await checkRateLimit(
+        adminKey,
+        env.RATE_LIMIT_KV,
+        RATE_LIMIT_ADMIN_MAX,
+        RATE_LIMIT_WINDOW_MS,
+        env.RATE_LIMIT_KEY_PEPPER
+      )
+    ) {
       return rateLimitResponse();
     }
   }
@@ -948,7 +957,15 @@ export async function route(
   if (sponsorHomeLinkMatch && method === 'POST') {
     if (env.RATE_LIMIT_KV) {
       const mintKey = `mint-sponsor-home:${clientIp(request)}:${sponsorHomeLinkMatch[1]}`;
-      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+      if (
+        await checkRateLimit(
+          mintKey,
+          env.RATE_LIMIT_KV,
+          RATE_LIMIT_MINT_MAX,
+          RATE_LIMIT_WINDOW_MS,
+          env.RATE_LIMIT_KEY_PEPPER
+        )
+      ) {
         return rateLimitResponse();
       }
     }
@@ -1388,7 +1405,15 @@ export async function route(
     // OSE-576: rate limit mint by actor+eventId before paying auth cost
     if (env.RATE_LIMIT_KV) {
       const mintKey = `mint:${clientIp(request)}:${mintLinkMatch[1]}`;
-      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+      if (
+        await checkRateLimit(
+          mintKey,
+          env.RATE_LIMIT_KV,
+          RATE_LIMIT_MINT_MAX,
+          RATE_LIMIT_WINDOW_MS,
+          env.RATE_LIMIT_KEY_PEPPER
+        )
+      ) {
         return rateLimitResponse();
       }
     }
@@ -1419,7 +1444,15 @@ export async function route(
     if (env.RATE_LIMIT_KV) {
       const tokenId = request.headers.get('Authorization')?.slice(-16) ?? clientIp(request);
       const batchKey = `batch:${tokenId}`;
-      if (await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX)) {
+      if (
+        await checkRateLimit(
+          batchKey,
+          env.RATE_LIMIT_KV,
+          RATE_LIMIT_BATCH_MAX,
+          RATE_LIMIT_WINDOW_MS,
+          env.RATE_LIMIT_KEY_PEPPER
+        )
+      ) {
         return rateLimitResponse();
       }
     }
@@ -1572,7 +1605,7 @@ export async function route(
   // identity surface). Writes only to FORMS_DB.
   const selfDeleteMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/forms\/register$/);
   if (selfDeleteMatch && method === 'DELETE') {
-    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
+    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV, env.RATE_LIMIT_KEY_PEPPER)) {
       return rateLimitResponse();
     }
     return handleSelfDeleteRegistration(request, env, selfDeleteMatch[1]);
@@ -1586,7 +1619,7 @@ export async function route(
     const [, eventId, formType] = publicFormsMatch;
 
     // Rate limit: 60 req/min per IP, persistent via CF KV (OSE-552).
-    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
+    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV, env.RATE_LIMIT_KEY_PEPPER)) {
       return rateLimitResponse();
     }
 

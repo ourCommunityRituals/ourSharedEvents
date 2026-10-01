@@ -37,6 +37,7 @@ import { checkRateLimit, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS } from '../l
 export type SharedReportReadEnv = SharedReportAuthEnv & {
   DB: D1Database;
   RATE_LIMIT_KV?: KVNamespace;
+  RATE_LIMIT_KEY_PEPPER?: string;
 };
 
 const BATCH_MAX_IDS = 50; // S5-Q3 ratified
@@ -214,7 +215,13 @@ export async function handleBatchSharedReports(
     const batchIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     const batchKey = `batch-sr:${batchIp}`;
     if (
-      await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS)
+      await checkRateLimit(
+        batchKey,
+        env.RATE_LIMIT_KV,
+        RATE_LIMIT_BATCH_MAX,
+        RATE_LIMIT_WINDOW_MS,
+        env.RATE_LIMIT_KEY_PEPPER
+      )
     ) {
       return jsonResponse(
         { ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' },
