@@ -293,12 +293,18 @@ Then, signed in through Access: `GET /briefing` returns 200 for the founder, and
 **Apply** (idempotent: it touches only rows whose `brand_id` is still NULL, and re-running it changes nothing):
 
 ```bash
+ENV=staging   # then ENV=production after the production deploy
 cd workers/oursharedevents
 sed -n '/^UPDATE/,$p' migrations/0087_admin_audit_log_brand_id.sql > /tmp/0087-backfill.sql  # the five UPDATEs only
-npx wrangler d1 execute DB --env staging --remote --file /tmp/0087-backfill.sql
+npx wrangler d1 execute DB --env "$ENV" --remote --file /tmp/0087-backfill.sql
 ```
 
-**Verify:** `SELECT brand_id IS NOT NULL AS resolved, COUNT(*) FROM admin_audit_log GROUP BY 1;`
+**Verify** (same `ENV`):
+
+```bash
+npx wrangler d1 execute DB --env "$ENV" --remote \
+  --command "SELECT brand_id IS NOT NULL AS resolved, COUNT(*) FROM admin_audit_log GROUP BY 1;"
+```
 
 The visitor-country cleanup (0088) needs no such step: the nightly roll-up clears any `country_code` a Worker wrote in the deploy window (`aggregateScanBuckets`, OSE-1460).
 

@@ -169,9 +169,11 @@ aggregates only, never `anon_id`, and corridor-level location only
 sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
 **When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
-`wrangler.toml`). Each run snapshots the last `RETURNS_WINDOW_DAYS` (90), even
-when no source row is past the watermark, because a rolling window changes as
-rows age out. The watermark then records the newest source row seen. Each run
+`wrangler.toml`). Each run snapshots events whose day (`end_date`, else
+`start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), even when no source
+row is past the watermark, because a rolling window changes as events age out.
+The window is the event's day, not `last_seen_at`, which is when the cron
+materialized the row (hours after the event, later again on a re-run). The watermark then records the newest source row seen. Each run
 is its own snapshot, identified by its full `computed_at` timestamp; retries
 inside one run reuse it, so their insertIds dedupe.
 
@@ -377,7 +379,7 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 
 **Integration (vitest-pool-workers, D1 + mocked BQ):**
 
-- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; a group under the floor is withheld; a group with no real corridor is withheld; rows last seen before the 90-day window are not counted
+- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; a group under the floor is withheld; a group with no real corridor is withheld; events before the 90-day window are not counted, even when materialized recently
 - Every run writes one snapshot marker per pool, even with no groups, so an empty run is distinguishable from a missing run
 - More than 500 groups go in chunks of at most 500
 - Watermark advances to the newest source row on success and is **not** advanced when BigQuery rejects the insert (S4-Q4)

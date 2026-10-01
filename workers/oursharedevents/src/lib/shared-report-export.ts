@@ -348,6 +348,11 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
 
     const now = new Date();
     const since = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000).toISOString();
+    // The window is the event's own day (COALESCE(end_date, start_date), as the
+    // materializer reads it), not last_seen_at: last_seen_at is when the cron
+    // materialized the row, hours after the event and later again on a re-run.
+    // The last_seen_at bound stays because it can only be later than the event
+    // day, so it is a safe, indexed pre-filter (0089) and never drops a row.
     // A return is a person seen at 2+ distinct events in the corridor. This
     // counts events, not visit_count: the materializer bumps visit_count on
     // every re-run over the same scans, so it is not a return signal.
@@ -368,11 +373,12 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
              JOIN events e ON e.id = air.venue_id
              LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
             WHERE air.last_seen_at >= ?
+              AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?
             GROUP BY air.anon_id_hash, 2, 3, 5
          )
         GROUP BY corridor_id, pool_key, uec_code`
     )
-      .bind(since)
+      .bind(since, since.slice(0, 10))
       .all<CorridorReturnsRow>();
 
     // Each run is its own snapshot, identified by its full timestamp: the

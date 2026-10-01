@@ -529,6 +529,19 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(groupCalls()).toHaveLength(0);
   });
 
+  test('the window is the event day, not when the row was materialized', async () => {
+    await seedCorridorEvent('test-evt-exp-late');
+    await tenv()
+      .DB.prepare(`UPDATE events SET start_date = date('now', '-120 days') WHERE id = ?`)
+      .bind('test-evt-exp-late')
+      .run();
+    // Materialized (or re-materialized) yesterday, for an event 120 days ago.
+    await seedPeople('test-evt-exp-late', [2, 2, 2, 2, 2]);
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(groupCalls()).toHaveLength(0);
+  });
+
   test('a group with no real corridor is withheld', async () => {
     await seedCorridorEvent('test-evt-exp-nocorr', 1, null);
     await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);

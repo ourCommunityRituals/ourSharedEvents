@@ -189,7 +189,7 @@ export async function handleListAuditLog(
   if (rawCursor !== null && cursor === null) {
     return errorResponse(
       'INVALID_CURSOR',
-      'cursor must be an ISO-8601 UTC timestamp',
+      'cursor must be YYYY-MM-DDTHH:MM:SS.sssZ, optionally followed by ~<id> (as returned in nextCursor)',
       400,
       request
     );
