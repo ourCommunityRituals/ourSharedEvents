@@ -37,7 +37,8 @@ function rowToFlagRow(r: Record<string, unknown>): FlagRow {
   return {
     id: String(r.id),
     scope: String(r.scope) as Scope,
-    scope_id: String(r.scope_id ?? ''),
+    // TEXT column, NULL for global rows: better-sqlite3 yields string | null.
+    scope_id: r.scope_id == null ? '' : (r.scope_id as string),
     flag_key: String(r.flag_key),
     enabled: Number(r.enabled) === 1,
     updated_at: String(r.updated_at),

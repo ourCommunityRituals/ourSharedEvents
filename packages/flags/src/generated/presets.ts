@@ -93,4 +93,4 @@ export const TIER_PRESETS: Record<Tier, Readonly<Record<FlagKey, boolean>>> = Ob
     "report.export-pdf": true,
     "report.portfolio": true,
   }),
-}) as Record<Tier, Readonly<Record<FlagKey, boolean>>>;
+});

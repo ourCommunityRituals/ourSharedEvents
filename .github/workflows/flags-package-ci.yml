@@ -35,8 +35,12 @@
 # file that was meant to run did run, at least one test passed, and nothing was
 # skipped, todo'd or failed.
 #
-# NOT HERE: lint. The root eslint config ignores **/*.ts and this package has
-# no eslint config/devDep of its own, so `npm run lint` cannot run yet.
+# LINT (OSE-1461): the root eslint config ignores **/*.ts, so this package
+# carries its own (packages/flags/eslint.config.mjs, type-aware
+# typescript-eslint for .ts, Node globals for .mjs) and CI runs `npm run lint`
+# (`eslint . --max-warnings 0`) over the whole package. It is not
+# in the lint-staged hook: the hook runs the root eslint, which has no
+# typescript-eslint, and this job is the gate.
 name: '@ocr/flags CI'
 
 on:
@@ -117,6 +121,21 @@ jobs:
         working-directory: packages/flags
         run: npm run typecheck
 
+      # eslint prints nothing on success, so the step also proves what it
+      # linted: zero .ts or zero .mjs files is a lint that covered nothing.
+      - name: Lint whole package (eslint; type-aware for .ts)
+        working-directory: packages/flags
+        run: |
+          npm run lint
+          npx eslint . --format json --output-file eslint-results.json
+          node -e '
+            const r = require("./eslint-results.json");
+            const count = (ext) => r.filter((f) => f.filePath.endsWith(ext)).length;
+            const ts = count(".ts"), mjs = count(".mjs");
+            console.log(`eslint linted ${ts} .ts + ${mjs} .mjs files, ${r.reduce((n, f) => n + f.errorCount, 0)} errors`);
+            if (ts === 0 || mjs === 0) { console.log("::error::eslint linted zero .ts or zero .mjs files"); process.exit(1); }
+          '
+
       # Byte-compares src/generated/*.ts against the generator's output for the
       # brain contract. Catches contract drift AND hand/prettier edits to the
       # generated files (packages/flags/src/generated/ is in .prettierignore).
@@ -134,10 +153,15 @@ jobs:
       # Level 0 security gate: secret/PII/forbidden-URL scans, contract SHA
       # parity, parameterized-SQL-only adapters, type-only workers-types
       # imports, every adapter has a spec-running test, pragma audit.
+      # PyYAML backs the yaml_syntax check. Without it the check used to report
+      # PASS while parsing nothing; level0 now fails closed on that SKIP.
       - name: Level 0 security gate (test:level0)
         if: github.actor != 'dependabot[bot]'
         working-directory: packages/flags
-        run: npm run test:level0
+        run: |
+          python3 -m pip install pyyaml
+          python3 -c 'import yaml' || { echo "::error::pyyaml missing from the python3 env"; exit 1; }
+          npm run test:level0
 
       - name: Run Vitest suite
         working-directory: packages/flags

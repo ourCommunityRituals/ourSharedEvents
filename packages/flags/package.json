@@ -41,7 +41,7 @@
     "typecheck": "tsc -p tsconfig.tests.json",
     "generate": "node scripts/generate-from-yaml.mjs",
     "check:generated": "node scripts/generate-from-yaml.mjs --check",
-    "lint": "eslint src tests",
+    "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:level0": "python3 tests/level0_security.py"
@@ -59,15 +59,19 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/better-sqlite3": "^7.6.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
     "better-sqlite3": "^11.0.0",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
     "js-yaml": "^4.1.0",
     "pg": "^8.11.0",
     "pg-mem": "^3.0.5",
     "typescript": "^5.4.0",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.11"
   },
   "engines": {

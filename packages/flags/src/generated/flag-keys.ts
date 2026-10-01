@@ -62,7 +62,7 @@ export const ALL_FLAG_KEYS: readonly FlagKey[] = Object.freeze([
   "report.export-json",
   "report.export-pdf",
   "report.portfolio",
-]) as readonly FlagKey[];
+]);
 
 export const FLAG_KEY_DOMAIN: Readonly<Record<FlagKey, string>> = Object.freeze({
   "analytics.shared-report": "analytics",
@@ -92,4 +92,4 @@ export const FLAG_KEY_DOMAIN: Readonly<Record<FlagKey, string>> = Object.freeze(
   "report.export-json": "analytics",
   "report.export-pdf": "analytics",
   "report.portfolio": "analytics",
-}) as Readonly<Record<FlagKey, string>>;
+});
