@@ -257,6 +257,38 @@ describe('OSE-1459 — the poster floor is applied per poster-hour', () => {
   });
 });
 
+describe('OSE-1459 — poster scan times come from the scan hour, not the write time', () => {
+  beforeEach(async () => {
+    await applyMigrations();
+    await clearTables();
+  });
+
+  test('a queued scan written an hour late reports the hour it was scanned', async () => {
+    // The queue consumer sets created_at when it writes the row; scan_bucket
+    // is the hour /q/ recorded. The report must show the scan hour.
+    const evt = 'test-evt-711-queued';
+    await seedEvent(evt);
+    await seedDeployment('pd-711-queued', evt, 'Bus shelter');
+    for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+           VALUES (?, ?, 'pd-711-queued', '2026-05-07T19:00', '2026-05-07 20:10:00')`
+        )
+        .bind(`spe-711-queued-${i}`, evt)
+        .run();
+    }
+
+    const r = await buildSharedReport(tenv().DB, evt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const row = r.report.poster_attribution.find((p) => p.poster_deployment_id === 'pd-711-queued');
+    expect(row).toBeDefined();
+    expect(row!.first_scan_at).toBe('2026-05-07T19:00:00Z');
+    expect(row!.last_scan_at).toBe('2026-05-07T19:00:00Z');
+  });
+});
+
 describe('OSE-711 — aggregate-only invariant (static guard)', () => {
   // Belt-and-suspenders alongside the runtime coverage above: a future refactor
   // that returned the raw poster scan_count would trip here even if the seed

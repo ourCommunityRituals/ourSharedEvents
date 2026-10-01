@@ -582,7 +582,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    summed. /q/ dedup is one scan per person per poster per hour, so only a
   //    poster-hour of >= K scans is >= K people; a total over all hours is
   //    not (one person scanning once in each of K hours is K scans). A sub-K
-  //    hour adds nothing, including to first/last scan times.
+  //    hour adds nothing, including to first/last scan times. Those times
+  //    come from scan_bucket (the hour /q/ recorded), not created_at, which a
+  //    queued scan gets when the consumer writes it, possibly an hour later.
   const posters = await db
     .prepare(
       `SELECT
@@ -595,8 +597,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
        FROM poster_deployments pd
        LEFT JOIN (SELECT poster_deployment_id,
                          COUNT(*)        AS n,
-                         MIN(created_at) AS first_at,
-                         MAX(created_at) AS last_at
+                         MIN(scan_bucket) AS first_at,
+                         MAX(scan_bucket) AS last_at
                     FROM scan_placement_events
                    WHERE event_id = ?
                    GROUP BY poster_deployment_id, substr(scan_bucket, 1, 13)) ph

@@ -785,6 +785,10 @@ async function aggregateScanCells(
   nowIso: string,
   result: MaterializationResult
 ): Promise<void> {
+  // events.start_date is usually a bare 'YYYY-MM-DD'; compared as text with an
+  // ISO timestamp it would drop every event on the cutoff day. Bind the
+  // cutoff as a date so all three statements use the same inclusive window.
+  const floorDate = floor90dIso.slice(0, 10);
   try {
     const uncelled = await env.DB.prepare(
       `SELECT COUNT(*) AS n
@@ -793,7 +797,7 @@ async function aggregateScanCells(
         WHERE pd.h3_res9 IS NULL
           AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)`
     )
-      .bind(floor90dIso)
+      .bind(floorDate)
       .first<{ n: number }>();
     result.rowsSkipped += uncelled?.n ?? 0;
 
@@ -818,7 +822,7 @@ async function aggregateScanCells(
       env.DB.prepare(
         `DELETE FROM scan_cell_aggregates
            WHERE event_id IN (SELECT id FROM events WHERE start_date >= ?)`
-      ).bind(floor90dIso),
+      ).bind(floorDate),
       env.DB.prepare(
         `INSERT INTO scan_cell_aggregates
            (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
@@ -843,7 +847,7 @@ async function aggregateScanCells(
                     AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)
                   GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), spe.poster_deployment_id) ph
           GROUP BY ph.event_id, ph.bucket_date, ph.bucket_hour, ph.h3_res9`
-      ).bind(CORRIDOR_MAP_MIN_COUNT, nowIso, floor90dIso),
+      ).bind(CORRIDOR_MAP_MIN_COUNT, nowIso, floorDate),
     ]);
     result.rowsUpserted += inserted?.meta?.changes ?? 0;
   } catch (err) {

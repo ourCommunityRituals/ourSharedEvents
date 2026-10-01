@@ -1031,6 +1031,50 @@ describe('H3 corridor map + open-question resolutions', () => {
     ]);
   });
 
+  test('OSE-1459 writer: an event dated exactly 90 days ago is inside the rollup window', async () => {
+    // start_date is a bare date. Compared as text with the ISO cutoff
+    // timestamp, the cutoff day itself fell outside the window.
+    const boundary = new Date(Date.now() - 90 * 86400 * 1000).toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
+         VALUES ('test-evt-read-q8-boundary', 'test-brand', 'Boundary', 'test-evt-read-q8-boundary',
+                 'archived', 'Beverly', ?, datetime('now'), datetime('now'))`
+      )
+      .bind(boundary)
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+         VALUES ('test-pd-read-q8-boundary', 'test-evt-read-q8-boundary', 'qr-test-pd-read-q8-boundary',
+                 'Beverly wall', '892664cdb13ffff', '872664cdbffffff')`
+      )
+      .run();
+    for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+           VALUES (?, 'test-evt-read-q8-boundary', 'test-pd-read-q8-boundary', ?)`
+        )
+        .bind(`spe-read-q8-boundary-${i}`, `${boundary}T19:00`)
+        .run();
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const row = await tenv()
+      .DB.prepare(
+        `SELECT SUM(scan_count) AS n FROM scan_cell_aggregates
+          WHERE event_id = 'test-evt-read-q8-boundary'`
+      )
+      .first<{ n: number | null }>();
+    expect(row?.n).toBe(CORRIDOR_MAP_MIN_COUNT);
+  });
+
   test('OSE-1459: the map ignores event-level scan_aggregates cells (the venue tag is not a scan place)', async () => {
     await seedEvent({ id: 'test-evt-read-q8-venueonly', start_date: '2026-05-07T19:00:00Z' });
     // An event-level row tagged with the venue's cell: not where scans happened.
