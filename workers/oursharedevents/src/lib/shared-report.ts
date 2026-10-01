@@ -808,6 +808,12 @@ async function aggregateScanCells(
     // scans). A sub-K poster-hour adds 0, so a cell-hour with activity but no
     // poster-hour at the floor is kept as a 0 row: the report then reads the
     // map as 'suppressed' (activity withheld), not as 'no scans'.
+    //
+    // Rows are keyed by the res9 cell alone (the id has no res7), so the outer
+    // GROUP BY must be too: poster_deployments.h3_res7 is nullable, and grouping
+    // by it would split one cell into two rows with the same id and fail the
+    // whole batch. The res7 is the cell's parent, so MAX keeps whichever poster
+    // has it.
     const [, inserted] = await env.DB.batch([
       env.DB.prepare(
         `DELETE FROM scan_cell_aggregates
@@ -822,7 +828,7 @@ async function aggregateScanCells(
                 ph.bucket_date,
                 ph.bucket_hour,
                 ph.h3_res9,
-                ph.h3_res7,
+                MAX(ph.h3_res7),
                 SUM(CASE WHEN ph.scans >= ? THEN ph.scans ELSE 0 END),
                 ?
            FROM (SELECT spe.event_id AS event_id,
@@ -836,7 +842,7 @@ async function aggregateScanCells(
                   WHERE pd.h3_res9 IS NOT NULL
                     AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)
                   GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), spe.poster_deployment_id) ph
-          GROUP BY ph.event_id, ph.bucket_date, ph.bucket_hour, ph.h3_res9, ph.h3_res7`
+          GROUP BY ph.event_id, ph.bucket_date, ph.bucket_hour, ph.h3_res9`
       ).bind(CORRIDOR_MAP_MIN_COUNT, nowIso, floor90dIso),
     ]);
     result.rowsUpserted += inserted?.meta?.changes ?? 0;

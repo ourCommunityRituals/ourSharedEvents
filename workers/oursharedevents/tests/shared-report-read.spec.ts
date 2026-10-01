@@ -974,6 +974,63 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
   });
 
+  test('OSE-1459 writer: two posters in one cell, one with no res7, roll up into one row', async () => {
+    // The row id is keyed by the res9 cell, so the rollup must group by it
+    // alone. A poster with a NULL h3_res7 beside one with its parent res7 must
+    // not split the cell into two rows with one id (a UNIQUE violation that
+    // would roll back the whole batch for every event).
+    const today = new Date().toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
+         VALUES ('test-evt-read-q8-nullres7', 'test-brand', 'Two posters', 'test-evt-read-q8-nullres7',
+                 'active', 'Beverly', ?, datetime('now'), datetime('now'))`
+      )
+      .bind(today)
+      .run();
+    for (const [pd, res7] of [
+      ['test-pd-read-q8-withres7', '872664cdbffffff'],
+      ['test-pd-read-q8-nores7', null],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+           VALUES (?, 'test-evt-read-q8-nullres7', ?, 'Beverly wall', '892664cdb13ffff', ?)`
+        )
+        .bind(pd, `qr-${pd}`, res7)
+        .run();
+      for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT; i++) {
+        await tenv()
+          .DB.prepare(
+            `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+             VALUES (?, 'test-evt-read-q8-nullres7', ?, ?)`
+          )
+          .bind(`spe-${pd}-${i}`, pd, `${today}T19:00`)
+          .run();
+      }
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const rows = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, h3_res7, scan_count FROM scan_cell_aggregates
+          WHERE event_id = 'test-evt-read-q8-nullres7'`
+      )
+      .all<{ h3_res9: string; h3_res7: string | null; scan_count: number }>();
+    expect(rows.results).toEqual([
+      {
+        h3_res9: '892664cdb13ffff',
+        h3_res7: '872664cdbffffff',
+        scan_count: 2 * CORRIDOR_MAP_MIN_COUNT,
+      },
+    ]);
+  });
+
   test('OSE-1459: the map ignores event-level scan_aggregates cells (the venue tag is not a scan place)', async () => {
     await seedEvent({ id: 'test-evt-read-q8-venueonly', start_date: '2026-05-07T19:00:00Z' });
     // An event-level row tagged with the venue's cell: not where scans happened.
