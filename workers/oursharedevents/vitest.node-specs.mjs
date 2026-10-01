@@ -142,6 +142,10 @@ export const NODE_SPECS = [
   // order). Runs the card's script from the admin.html Text import in a jsdom
   // window with a stubbed fetch; no cloudflare:test / D1.
   'tests/poster-deployment-address-ui.spec.ts',
+  // TV display pane rotation (ported from the GAS display's rotation engine):
+  // the pure engine with fake timers + the display.html script run in jsdom
+  // with a stubbed fetch; no cloudflare:test / D1.
+  'tests/display-pane-rotation.spec.ts',
   // OSE-1357 part 2 — poster codes: pure rules (lib/poster-codes.ts) and the
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',

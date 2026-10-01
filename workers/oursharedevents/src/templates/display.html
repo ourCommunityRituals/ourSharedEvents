@@ -21,18 +21,14 @@
           system-ui,
           -apple-system,
           sans-serif;
-        background: var(--bg);
-        color: var(--text);
         display: flex;
         flex-direction: column;
       }
       header {
-        background: var(--surface);
         padding: 1rem 2rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
       header h1 {
         font-size: 1.4rem;
@@ -54,34 +50,27 @@
         gap: 1.5rem;
       }
       .event-card {
-        background: rgba(255, 255, 255, 0.05);
         border-radius: 12px;
         padding: 2rem 2.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid;
       }
       .event-card .label {
         font-size: 0.75rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: var(--text-muted);
         margin-bottom: 0.5rem;
       }
       .event-card h2 {
         font-size: clamp(1.5rem, 4vw, 2.5rem);
         font-weight: 800;
         line-height: 1.15;
-        color: var(--text);
         margin-bottom: 0.75rem;
       }
       .event-card .meta {
         font-size: 1.1rem;
-        color: var(--text-muted);
         display: flex;
         gap: 1.5rem;
         flex-wrap: wrap;
-      }
-      .event-card .meta span::before {
-        content: '';
       }
       .next-events {
         display: grid;
@@ -91,14 +80,12 @@
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
-        color: var(--text-muted);
         margin-bottom: 0.25rem;
       }
       .next-card {
-        background: rgba(255, 255, 255, 0.03);
         border-radius: 8px;
         padding: 1rem 1.25rem;
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -109,12 +96,10 @@
       }
       .next-card .date {
         font-size: 0.85rem;
-        color: var(--text-muted);
       }
       .empty {
         text-align: center;
         padding: 4rem;
-        color: var(--text-muted);
         font-size: 1.1rem;
       }
       .display-consent {
@@ -133,11 +118,9 @@
         }
       }
       .ticker {
-        background: var(--surface);
         padding: 0.6rem 2rem;
         font-size: 0.85rem;
-        color: var(--accent);
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        border-top: 1px solid;
         overflow: hidden;
         white-space: nowrap;
       }
@@ -159,9 +142,8 @@
         justify-content: center;
         gap: 2rem;
         padding: 0.75rem 1.5rem;
-        background: rgba(255, 255, 255, 0.03);
         border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid;
         min-height: 48px;
       }
       .display-sponsor-banner:empty {
@@ -186,9 +168,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem;
-        background: rgba(255, 255, 255, 0.05);
         border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid;
         transition: opacity 0.6s ease-in-out;
       }
       .display-sponsor-item.fade-out {
@@ -206,7 +187,6 @@
       }
       .display-sponsor-item .name {
         font-size: 0.8rem;
-        color: var(--text-muted);
       }
       /* OSE-878/#25: the per-tier treatment blocks (title/platinum gold accent
          border + background + padding + 48px/64px logos + brighter/bolder name;
@@ -278,12 +258,10 @@
         width: auto;
         height: auto;
         padding: 0.5rem 1rem;
-        background: var(--surface);
-        color: var(--text);
         font-size: 1rem;
         z-index: 9999;
         text-decoration: none;
-        border-bottom: 2px solid var(--accent);
+        border-bottom: 2px solid;
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
@@ -339,6 +317,31 @@
         background: var(--surface);
         color: var(--text);
         border-bottom-color: var(--accent);
+      }
+      .pane-dots {
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        list-style: none;
+      }
+      .pane-dots li {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        background: var(--border);
+      }
+      .pane-dots li[aria-current='true'] {
+        background: var(--accent);
+      }
+      .pane-paused {
+        text-align: center;
+        color: var(--text-muted);
+      }
+      .sponsor-wall {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1.5rem;
       }
     </style>
   </head>
@@ -396,7 +399,158 @@
         return -1;
       }
 
+      // ── Pane rotation ──
+      // Ported from the GAS display's rotation engine (MVP-EVENT-TOOLKIT,
+      // startRotationEngine). Instead of one fixed layout, the TV cycles through
+      // screens ("panes") one at a time. Only a pane with something to show
+      // joins the cycle; with one pane there is no timer and no dots.
+      //   ?panes=event,upcoming,sponsors  picks and orders them (allowlisted;
+      //                                   anything else is ignored)
+      //   ?dwell=15                       seconds per pane, clamped to 5..120
+      // Space pauses, the arrow keys step: the remote a host actually holds.
+      // The panes are a VISIBILITY layer: every pane renders the same data,
+      // escaped the same way, as the board did before; rotation only hides.
+      var PANE_TYPES = ['event', 'upcoming', 'sponsors'];
+      var PANE_LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Our sponsors' };
+      function rotationConfig(search) {
+        var params = new URLSearchParams(search);
+        var order = [];
+        String(params.get('panes') || '').split(',').forEach(function (t) {
+          t = t.trim();
+          if (PANE_TYPES.indexOf(t) !== -1 && order.indexOf(t) === -1) order.push(t);
+        });
+        if (!order.length) order = PANE_TYPES.slice();
+        var secs = parseInt(params.get('dwell') || '', 10);
+        if (!(secs > 0)) secs = 15;
+        secs = Math.min(120, Math.max(5, secs));
+        return { order: order, dwellMs: secs * 1000 };
+      }
+      // Pure engine: no DOM. onShow(pane, index, paused) does the painting, and
+      // timers are injectable so the cadence can be tested without waiting.
+      function createPaneRotation(panes, dwellMs, onShow, timers) {
+        var t = timers || {
+          set: function (f, ms) { return setTimeout(f, ms); },
+          clear: function (id) { clearTimeout(id); }
+        };
+        var state = { index: 0, paused: false, hidden: false, timer: null };
+        function schedule() {
+          if (state.timer !== null) { t.clear(state.timer); state.timer = null; }
+          if (panes.length > 1 && !state.paused && !state.hidden) {
+            state.timer = t.set(function () { state.timer = null; go(state.index + 1); }, dwellMs);
+          }
+        }
+        function go(i) {
+          if (!panes.length) return;
+          state.index = ((i % panes.length) + panes.length) % panes.length;
+          onShow(panes[state.index], state.index, state.paused);
+          schedule();
+        }
+        return {
+          start: function (i, paused) { state.paused = !!paused; go(i || 0); },
+          next: function () { go(state.index + 1); },
+          prev: function () { go(state.index - 1); },
+          togglePause: function () { state.paused = !state.paused; go(state.index); return state.paused; },
+          setHidden: function (h) { state.hidden = !!h; schedule(); },
+          stop: function () { if (state.timer !== null) t.clear(state.timer); state.timer = null; },
+          current: function () { return panes[state.index]; },
+          isPaused: function () { return state.paused; },
+          size: function () { return panes.length; }
+        };
+      }
+      var ROTATION = rotationConfig(location.search);
+      // board.items: the fetched events; board.sponsors: [{ title, src }] for
+      // the sponsors pane, filled by loadDisplaySponsors (logo rules live there).
+      var board = { items: null, sponsors: [], rotation: null };
+      // Quote-safe: sponsor values land inside attributes.
+      function escAttr(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+      function showPane(type, index, paused) {
+        document.querySelectorAll('[data-pane]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-pane') !== type;
+        });
+        document.querySelectorAll('.pane-dots li').forEach(function (li, i) {
+          li.setAttribute('aria-current', i === index ? 'true' : 'false');
+        });
+        var note = document.querySelector('.pane-paused');
+        if (note) note.hidden = !paused;
+      }
+
       // Events
+      function renderBoard() {
+        const main = document.getElementById('main-content');
+        const items = board.items;
+        if (!main || !items || !items.length) return;
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        // OSE-1313 — render in the EVENT's zone, never the viewer's (see poster.html).
+        const inZone = (iso, tz, opts) => {
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) return ''; // dirty value: render nothing, never throw
+          try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(d); }
+          catch (err) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(d); } // unknown zone only
+        };
+        const DATE_OPTS = { weekday:'long', month:'long', day:'numeric' };
+        const fmt = ev => {
+          const day = ev.starts_at ? inZone(ev.starts_at, ev.timezone, DATE_OPTS) : '';
+          if (day) {
+            return day + ' · ' +
+              inZone(ev.starts_at, ev.timezone, { hour:'numeric', minute:'2-digit', timeZoneName:'short' });
+          }
+          const d = String(ev.startDateISO || '').slice(0, 10);
+          return /^\d{4}-\d{2}-\d{2}$/.test(d) ? inZone(d + 'T00:00:00Z', 'UTC', DATE_OPTS) : '';
+        };
+        // OSE-1081: the deep-linked event takes the featured slot; the rest of
+        // the board is unchanged (still every other event, original order), so
+        // a scoped link narrows the focus without hiding what else is coming up.
+        const featuredIdx = Math.max(requestedEventIndex(items), 0);
+        const featured = items[featuredIdx];
+        const rest = items.filter((_, i) => i !== featuredIdx);
+        const paneHtml = {};
+        paneHtml.event = '<section data-pane="event" data-testid="display-pane-event" aria-label="Featured event" hidden>' +
+          '<div class="event-card" data-testid="display-featured-card">' +
+          '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
+          '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
+          '<div class="meta" data-testid="display-featured-meta">' +
+          (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
+          (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
+          '</div></div></section>';
+        if (rest.length) {
+          paneHtml.upcoming = '<section data-pane="upcoming" data-testid="display-pane-upcoming" aria-label="Also coming up" hidden>' +
+            '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
+            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
+              '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
+            '</div></section>';
+        }
+        // Tier-blind (OSE-878/#25): one uniform box per sponsor, no data-tier,
+        // no size or order treatment. Impressions are NOT logged again here:
+        // loadDisplaySponsors already counted each sponsor once per placement.
+        if (board.sponsors.length) {
+          paneHtml.sponsors = '<section data-pane="sponsors" data-testid="display-pane-sponsors" aria-label="Our sponsors" hidden>' +
+            '<div class="next-events"><h3 data-testid="display-wall-heading">Thanks to our sponsors</h3><div class="sponsor-wall">' +
+            board.sponsors.map(s => '<div class="display-sponsor-item" data-testid="display-wall-sponsor">' +
+              '<img src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-wall-sponsor-logo">' +
+              '<span class="name" data-testid="display-wall-sponsor-name">' + escAttr(s.title) + '</span></div>').join('') +
+            '</div></div></section>';
+        }
+        const panes = ROTATION.order.filter(type => paneHtml[type]);
+        // The featured event always exists, so a narrowed ?panes= that matches
+        // nothing renderable still shows it rather than a blank TV.
+        if (!panes.length) panes.push('event');
+        const prev = board.rotation;
+        const keepType = prev ? prev.current() : null;
+        const keepPaused = prev ? prev.isPaused() : false;
+        if (prev) prev.stop();
+        main.innerHTML = '<div class="display-panes" aria-live="off" data-testid="display-panes">' +
+          panes.map(type => paneHtml[type]).join('') + '</div>' +
+          (panes.length > 1
+            ? '<ol class="pane-dots" data-testid="display-pane-dots" aria-label="Screens">' +
+              panes.map(type => '<li aria-label="' + PANE_LABELS[type] + '" aria-current="false"></li>').join('') + '</ol>' +
+              '<p class="pane-paused" data-testid="display-pane-paused" hidden>Paused. Press Space to resume.</p>'
+            : '');
+        board.rotation = createPaneRotation(panes, ROTATION.dwellMs, showPane);
+        board.rotation.setHidden(document.hidden);
+        board.rotation.start(Math.max(panes.indexOf(keepType), 0), keepPaused);
+      }
       async function loadEvents() {
         const main = document.getElementById('main-content');
         try {
@@ -404,54 +558,40 @@
           const data = await res.json();
           const items = (data.ok && data.items) ? data.items : [];
           if (!items.length) {
+            if (board.rotation) board.rotation.stop();
+            board.rotation = null;
             main.innerHTML = '<p class="empty">No upcoming events scheduled.</p>';
             return;
           }
-          const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-          // OSE-1313 — render in the EVENT's zone, never the viewer's (see poster.html).
-          const inZone = (iso, tz, opts) => {
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return ''; // dirty value: render nothing, never throw
-            try { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: tz || 'UTC' }, opts)).format(d); }
-            catch (err) { return new Intl.DateTimeFormat('en-US', Object.assign({ timeZone: 'UTC' }, opts)).format(d); } // unknown zone only
-          };
-          const DATE_OPTS = { weekday:'long', month:'long', day:'numeric' };
-          const fmt = ev => {
-            const day = ev.starts_at ? inZone(ev.starts_at, ev.timezone, DATE_OPTS) : '';
-            if (day) {
-              return day + ' · ' +
-                inZone(ev.starts_at, ev.timezone, { hour:'numeric', minute:'2-digit', timeZoneName:'short' });
-            }
-            const d = String(ev.startDateISO || '').slice(0, 10);
-            return /^\d{4}-\d{2}-\d{2}$/.test(d) ? inZone(d + 'T00:00:00Z', 'UTC', DATE_OPTS) : '';
-          };
-          // OSE-1081: the deep-linked event takes the featured slot; the rest of
-          // the board is unchanged (still every other event, original order), so
-          // a scoped link narrows the focus without hiding what else is coming up.
-          const featuredIdx = Math.max(requestedEventIndex(items), 0);
-          const featured = items[featuredIdx];
-          const rest = items.filter((_, i) => i !== featuredIdx);
-          let html = '<div class="event-card" data-testid="display-featured-card">' +
-            '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
-            '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
-            '<div class="meta" data-testid="display-featured-meta">' +
-            (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
-            (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
-            '</div></div>';
-          if (rest.length) {
-            html += '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
-              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
-                '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
-              '</div>';
-          }
-          main.innerHTML = html;
+          board.items = items;
+          renderBoard();
           // Update ticker
           const ticker = document.getElementById('ticker');
           if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
         } catch {
+          if (board.rotation) board.rotation.stop();
+          board.rotation = null;
           main.innerHTML = '<p class="empty" data-testid="display-empty">Could not load events.</p>';
         }
       }
+      // Remote control: only when there is more than one pane to move between.
+      document.addEventListener('keydown', function (e) {
+        const r = board.rotation;
+        if (!r || r.size() < 2) return;
+        if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'MediaPlayPause') {
+          e.preventDefault();
+          r.togglePause();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          r.next();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          r.prev();
+        }
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (board.rotation) board.rotation.setHidden(document.hidden);
+      });
       loadEvents();
       // Auto-refresh every 5 minutes
       setInterval(loadEvents, 5 * 60 * 1000);
@@ -486,6 +626,12 @@
             : SPONSOR_DEFAULT_LOGO;
           const tvTop = bundle.surface_sponsors?.tvTop || [];
           const tvSide = bundle.surface_sponsors?.tvSide || [];
+          // The sponsors pane: every display sponsor once (a sponsor in both
+          // slots is one tile), same proxy + default-logo rule as the banner.
+          const seen = new Set();
+          board.sponsors = tvTop.concat(tvSide).filter(s => s && s.id && !seen.has(s.id) && seen.add(s.id))
+            .map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO }));
+          renderBoard();
           if (banner && tvTop.length) {
             banner.innerHTML = tvTop.map(s => {
               // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
