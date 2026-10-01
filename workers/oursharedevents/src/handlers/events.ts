@@ -496,9 +496,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     return errorResponse('MISSING_FIELD', 'Missing required field: title', 400, rid);
   }
 
-  // Brand validation
-  const brandId = typeof body.brand_id === 'string' ? body.brand_id.slice(0, 64) : 'root';
-  if (!isValidBrand(brandId)) {
+  // Brand validation, then brand SCOPE (R-3 / OSE-845, Invariant #9). The target
+  // brand is resolved from the server-verified actor, never trusted from the body:
+  // a scoped admin may only create inside a brand they belong to, an unmapped
+  // admin creates nothing, and only 'all' (key actor + ADMIN_SCOPE_ALL) may fall
+  // back to 'root'. Same rules as sponsors' resolvePoolBrand.
+  const requestedBrand = typeof body.brand_id === 'string' ? body.brand_id.slice(0, 64) : '';
+  if (requestedBrand && !isValidBrand(requestedBrand)) {
     return errorResponse(
       'INVALID_BRAND',
       'brand_id must be lowercase alphanumeric, hyphens, or underscores (1-64 chars)',
@@ -506,6 +510,30 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       rid
     );
   }
+  // A null actor reaches here only through the DEV_OPEN_ADMIN local-dev bypass,
+  // which requireAdmin refuses on staging and production
+  // (tests/dev-open-admin-guard.spec.ts); treat it like the object-scope guard
+  // does and leave the decision to requireAdmin.
+  const actor = extractAdminActor(request, env);
+  const scope =
+    actor === null ? ({ mode: 'all' } as const) : await resolveAdminBrandScopeAsync(actor, env);
+  if (scope.mode === 'deny') {
+    return errorResponse(
+      'BRAND_FORBIDDEN',
+      'Your admin account is not a member of any brand, so it cannot create events',
+      403,
+      rid
+    );
+  }
+  if (scope.mode === 'scoped' && requestedBrand && !scope.brandIds.includes(requestedBrand)) {
+    return errorResponse(
+      'BRAND_FORBIDDEN',
+      `Not entitled to brand_id "${requestedBrand}"`,
+      403,
+      rid
+    );
+  }
+  const brandId = requestedBrand || (scope.mode === 'scoped' ? scope.brandIds[0] : 'root');
 
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
   const slug = typeof body.slug === 'string' ? body.slug.slice(0, 100) : slugify(title);

@@ -44,7 +44,11 @@
  */
 
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
-import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from './admin-brand-scope';
+import {
+  PLATFORM_BRAND_ID,
+  resolveAdminBrandScopeAsync,
+  type AdminBrandScopeEnv,
+} from './admin-brand-scope';
 import { corsHeaders } from './cors';
 
 export type AdminObjectScopeEnv = AdminEnv &
@@ -190,4 +194,30 @@ export async function guardAdminObjectScope(
   if (extractAdminActor(request, env) === null) return null;
 
   return (await isAdminObjectInScope(request, env, target)) ? null : notFound(request, target);
+}
+
+/**
+ * AUD-3 (OSE-1447) — PLATFORM-SCOPE guard for platform-owned admin routes.
+ *
+ * Some admin routes act on data that belongs to no brand (decrypted subscriber
+ * emails, rate-limit telemetry, the cross-brand audit log, confidential briefing
+ * pages) or on every tenant at once (data-subject erase, H3 backfills). They are
+ * reachable in scope mode 'all' (a `key:` actor with the ADMIN_SCOPE_ALL opt-in,
+ * absent in production) or by a member of the reserved PLATFORM_BRAND_ID, which is
+ * how the founder reaches them in production. Platform-brand membership grants
+ * nothing inside other tenants, so there is still no human super-admin (Feature G /
+ * OSE-832, Invariant #9).
+ *
+ * Call AFTER requireAdmin, so an anonymous caller still gets 401 from auth. Every
+ * other caller gets a 404 byte-identical to the router's unknown-route fallback,
+ * so a brand admin cannot tell a platform route from one that does not exist.
+ */
+export async function requirePlatformScope(
+  request: Request,
+  env: AdminObjectScopeEnv
+): Promise<Response | null> {
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'all') return null;
+  if (scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID)) return null;
+  return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
 }

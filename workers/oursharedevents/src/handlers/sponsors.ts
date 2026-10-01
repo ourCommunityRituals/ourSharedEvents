@@ -558,6 +558,21 @@ export async function handleAdminCreateSponsor(
     } catch {
       // Non-fatal for locality; brand_id is required below.
     }
+    // AUD-3 S16 (#9): the event's brand must be inside the caller's scope, or a
+    // brand-A admin could create a sponsor + placement inside brand B just by
+    // naming a (public) brand-B event id. An out-of-scope event answers exactly
+    // like a missing one, so the route is not an existence oracle. A null actor
+    // is the DEV_OPEN_ADMIN local bypass (refused on staging/production).
+    if (eventBrandId) {
+      const actor = extractAdminActor(request, env);
+      if (actor !== null) {
+        const scope = await resolveAdminBrandScopeAsync(actor, env);
+        const inScope =
+          scope.mode === 'all' ||
+          (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
+        if (!inScope) eventBrandId = null;
+      }
+    }
     if (!eventBrandId) {
       return errorResponse('EVENT_NOT_FOUND', 'event_id does not resolve to a brand', 400, rid);
     }
