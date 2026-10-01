@@ -33,11 +33,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const { getBaseUrl } = require('./config/environments');
-const { assertNotProduction } = require('./config/production-read-only');
+const { refuseProductionTargets } = require('./config/production-read-only');
 
 // ADR-021 (OSE-906): the red-team suite writes adversarial payloads, so it may
 // never run against production. Refuse at config load, before any request.
-assertNotProduction(process.env.BASE_URL, 'the red-team suite (T5/T6)');
+refuseProductionTargets('the red-team suite (T5/T6)');
 
 export default defineConfig({
   testDir: './tests/red-team',

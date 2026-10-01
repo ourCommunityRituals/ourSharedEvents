@@ -47,6 +47,11 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.COMPONENT_PORT ?? 8787);
 const BASE = `http://127.0.0.1:${PORT}`;
 
+const { refuseProductionTargets } = require('./config/production-read-only');
+
+// ADR-021 (OSE-906): this suite can write, so it never targets production.
+refuseProductionTargets('playwright.component.config.ts', BASE);
+
 export default defineConfig({
   testDir: './tests/e2e',
 

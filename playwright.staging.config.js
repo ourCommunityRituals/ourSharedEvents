@@ -21,6 +21,11 @@ const stagingEnv = {
   qaBrand: process.env.QA_BRAND_ID || 'qa-testing',
 };
 
+const { refuseProductionTargets } = require('./config/production-read-only');
+
+// ADR-021 (OSE-906): this suite can write, so it never targets production.
+refuseProductionTargets('playwright.staging.config.js', stagingEnv.baseUrl);
+
 module.exports = defineConfig({
   testDir: './tests/e2e',
 

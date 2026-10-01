@@ -49,6 +49,11 @@ function adminExtraHeaders(): Record<string, string> {
   return h;
 }
 
+const { refuseProductionTargets } = require('./config/production-read-only');
+
+// ADR-021 (OSE-906): this suite can write, so it never targets production.
+refuseProductionTargets('playwright.ui-smoke.config.ts', getBaseUrl());
+
 export default defineConfig({
   testDir: './tests/ui/smoke',
 

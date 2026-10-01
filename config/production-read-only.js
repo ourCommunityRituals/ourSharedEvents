@@ -3,9 +3,9 @@
  *
  * No suite seeds, mutates or probes-with-writes against production. The
  * post-deploy tier asserts health, schema version and public GET shapes only.
- * Suites that write (red-team T5, the T6 finale, staging E2E) call
- * assertNotProduction() at config load so pointing them at production fails
- * before a single request is sent.
+ * Every Playwright config except the two production-smoke ones calls
+ * refuseProductionTargets() at config load, so pointing a suite that can write
+ * at production fails before a single request is sent.
  */
 
 const PRODUCTION_HOSTS = new Set(['oursharedevents.com', 'www.oursharedevents.com']);
@@ -32,4 +32,32 @@ function assertNotProduction(url, suite) {
   }
 }
 
-module.exports = { PRODUCTION_HOSTS, isProductionUrl, assertNotProduction };
+/**
+ * Refuse at config load when any URL a suite may target is production: the
+ * config's own base plus BASE_URL and STAGING_URL, because many specs read those
+ * env vars directly instead of the config's baseURL.
+ */
+function refuseProductionTargets(suite, ...urls) {
+  for (const url of [...urls, process.env.BASE_URL, process.env.STAGING_URL]) {
+    assertNotProduction(url, suite);
+  }
+}
+
+/**
+ * The only Playwright configs allowed to target production: the ones the
+ * T2 Smoke → Production job uses. They run only the allowlisted read-only specs
+ * (locked by tests/integration/production-read-only.test.js). Every other
+ * playwright*.config.* calls refuseProductionTargets().
+ */
+const PRODUCTION_READ_ONLY_CONFIGS = [
+  'playwright.e2e-smoke.config.ts',
+  'playwright.smoke.config.ts',
+];
+
+module.exports = {
+  PRODUCTION_HOSTS,
+  PRODUCTION_READ_ONLY_CONFIGS,
+  isProductionUrl,
+  assertNotProduction,
+  refuseProductionTargets,
+};

@@ -1070,7 +1070,7 @@ jobs:
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (value-length verified post-deploy via /health)."
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -2240,7 +2240,7 @@ jobs:
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (value-length verified post-deploy via /health)."
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
 
       - name: Apply D1 migrations (main DB)
         env:

@@ -19,6 +19,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 const { getBaseUrl } = require('./config/environments');
 
+const { refuseProductionTargets } = require('./config/production-read-only');
+
+// ADR-021 (OSE-906): this suite can write, so it never targets production.
+refuseProductionTargets('playwright.e2e.config.ts', getBaseUrl());
+
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '**/*.spec.ts',

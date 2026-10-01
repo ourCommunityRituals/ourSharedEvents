@@ -8,7 +8,8 @@
  *   3. security-smoke.spec.js: every describe that writes skips on production,
  *      createEvent refuses on production, and production detection is the shared
  *      isProductionUrl() helper, so the URL the job passes is caught.
- *   4. Writing suites (red-team T5/T6) refuse a production BASE_URL at config load.
+ *   4. Every Playwright config except the two production-smoke ones refuses a
+ *      production target at config load.
  *
  * Run: npx vitest run tests/integration/production-read-only.test.js
  */
@@ -16,7 +17,13 @@
 const { readFileSync } = require('fs');
 const { join } = require('path');
 const yaml = require('js-yaml');
-const { isProductionUrl, assertNotProduction } = require('../../config/production-read-only');
+const { readdirSync } = require('fs');
+const {
+  isProductionUrl,
+  assertNotProduction,
+  refuseProductionTargets,
+  PRODUCTION_READ_ONLY_CONFIGS,
+} = require('../../config/production-read-only');
 
 const ROOT = join(__dirname, '..', '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -104,10 +111,50 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     expect(probe.slice(0, probe.indexOf('\n});'))).toMatch(/toBe\(401\)/);
   });
 
-  test('writing suites refuse a production BASE_URL at config load', () => {
-    expect(read('playwright.red-team.config.ts')).toMatch(
-      /assertNotProduction\(process\.env\.BASE_URL,/
+  test('every Playwright config outside the allowlist refuses production at load', () => {
+    const configs = readdirSync(ROOT).filter((f) =>
+      /^playwright\..*config\.(ts|js|mjs|cjs)$/.test(f)
     );
+    expect(configs.length).toBeGreaterThan(PRODUCTION_READ_ONLY_CONFIGS.length);
+    // The allowlist is exactly the configs the production smoke job runs.
+    const prodJobConfigs = new Set();
+    for (const step of job.steps) {
+      for (const m of String(step.run ?? '').matchAll(/--config=(\S+)/g)) prodJobConfigs.add(m[1]);
+    }
+    expect([...prodJobConfigs].sort()).toEqual([...PRODUCTION_READ_ONLY_CONFIGS].sort());
+    for (const cfg of configs) {
+      const src = read(cfg);
+      if (PRODUCTION_READ_ONLY_CONFIGS.includes(cfg)) continue;
+      expect(src, cfg).toMatch(/\brefuseProductionTargets\(/);
+      // Called before the config is exported, so it runs at load.
+      const call = src.search(/^refuseProductionTargets\(/m);
+      const exp = src.search(/^(export default|module\.exports)/m);
+      expect(call, `${cfg}: refusal call`).toBeGreaterThan(-1);
+      expect(call, `${cfg}: refusal before export`).toBeLessThan(exp);
+    }
+  });
+
+  test('the refusal catches production in BASE_URL, STAGING_URL or the config base', () => {
+    const saved = { BASE_URL: process.env.BASE_URL, STAGING_URL: process.env.STAGING_URL };
+    try {
+      delete process.env.BASE_URL;
+      delete process.env.STAGING_URL;
+      expect(() => refuseProductionTargets('t', 'https://stg.oursharedevents.com')).not.toThrow();
+      expect(() => refuseProductionTargets('t', 'https://oursharedevents.com')).toThrow(/ADR-021/);
+      process.env.BASE_URL = 'https://www.oursharedevents.com';
+      expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
+      delete process.env.BASE_URL;
+      process.env.STAGING_URL = 'https://oursharedevents.com:443/';
+      expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
+  test('isProductionUrl matches production hosts only', () => {
     for (const url of [
       'https://oursharedevents.com',
       'https://www.oursharedevents.com/',

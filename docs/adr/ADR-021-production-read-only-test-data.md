@@ -37,21 +37,29 @@ It is enforced in three places:
 
 - `security-smoke.spec.js` `createEvent()` throws on production before it posts. This
   is the second line behind each describe's `test.skip(IS_PRODUCTION)`.
-- `config/production-read-only.js` `assertNotProduction()` runs at load in
-  `playwright.red-team.config.ts`. T5/T6 pointed at `oursharedevents.com` or `www.`
-  fail before any request.
+- `config/production-read-only.js` `refuseProductionTargets()` runs at load in every
+  `playwright*.config.*` except the two the production smoke job uses
+  (`e2e-smoke`, `smoke`, listed in `PRODUCTION_READ_ONLY_CONFIGS`). It checks the
+  config's own base URL plus `BASE_URL` and `STAGING_URL`, since many specs read those
+  directly. A suite that can write fails before any request if pointed at production.
 - The CI gate `tests/integration/production-read-only.test.js` (root vitest, so it runs
   on every PR) locks all of the following:
   - the allowlist of specs on `smoke-production`;
   - no write calls in the API smoke specs;
   - the guard, the skips and the write-site inventory in `security-smoke`;
   - `IS_PRODUCTION` coming from the shared helper and matching `PROD_BASE_URL`;
-  - the red-team refusal.
+  - the production refusal in every Playwright config outside the allowlist.
 
 Every `security-smoke` describe that sends a write, including the rejected-key probe
 (an invalid bearer, expected 401), skips on production. A rejected-key POST could still
 create a row if authentication ever regressed, so it does not run there. Production
 detection is the shared `isProductionUrl()` helper, so ports, paths and case are caught.
+
+One bounded exception: `scripts/security/security_regression.sh` (the production
+security monitor once `PRODUCTION_LIVE=true`) sends credential-less, body-less POSTs to
+admin routes to detect an open admin surface, and POSTs to `/jserror`, which no longer
+exists in the Worker (404). Neither can create a row: no credentials and no body. The
+probe's purpose is the production check itself, so it stays.
 
 ## Alternatives Considered
 
