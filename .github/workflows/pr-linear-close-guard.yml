@@ -63,6 +63,12 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
+          COUNT="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq 'length' | awk '{s+=$1} END {print s+0}')"
+          echo "Fetched $COUNT commit(s) for PR #$PR_NUMBER"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::Fetched 0 commits for PR #$PR_NUMBER — refusing to pass without examining commit messages."
+            exit 1
+          fi
           PR_COMMITS="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[].commit.message')"
           export PR_COMMITS
           node scripts/check-pr-linear-close.mjs

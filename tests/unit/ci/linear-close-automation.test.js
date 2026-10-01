@@ -13,10 +13,11 @@
  */
 
 let evaluate;
+let evidenceLine;
 let classify;
 
 beforeAll(async () => {
-  ({ evaluate } = await import('../../../scripts/check-pr-linear-close.mjs'));
+  ({ evaluate, evidenceLine } = await import('../../../scripts/check-pr-linear-close.mjs'));
   ({ classify } = await import('../../../scripts/detect-premature-close.mjs'));
 });
 
@@ -134,6 +135,20 @@ describe('OSE-1250 — PR close-guard (evaluate)', () => {
     const r = evaluate({ branch: 'ci/x', title: 't', body: 'Part of OSE-1\nCloses OSE-2' });
     expect(r.ok).toBe(true);
     expect(r.bodyContradictions).toEqual([]);
+  });
+
+  test('evidence line records what was examined (so a green log proves it looked)', () => {
+    const line = evidenceLine(
+      evaluate({
+        branch: 'ci/x',
+        title: 't',
+        body: 'Part of OSE-1443',
+        commits: 'feat: x\n\nCloses OSE-9',
+      })
+    );
+    expect(line).toMatch(/commits 21 chars/);
+    expect(line).toMatch(/Part of in body: OSE-1443/);
+    expect(line).toMatch(/closed in commits: OSE-9/);
   });
 
   test('commits omitted → only branch/title are judged (backward compatible)', () => {

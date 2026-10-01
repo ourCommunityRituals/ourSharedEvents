@@ -48,6 +48,8 @@
  *     → runs built-in born-red cases; exit 0 if the guard logic is correct.
  */
 
+import { appendFileSync } from 'node:fs';
+
 // Linear's closing magic words (docs: linking that AUTO-CLOSES on merge).
 const CLOSING_WORDS = new Set([
   'close', 'closes', 'closed', 'closing',
@@ -115,7 +117,26 @@ export function evaluate({ branch, title, body, commits }) {
     violations,
     commitViolations,
     bodyContradictions,
+    // What was examined, so a green run's log shows it actually looked.
+    seen: {
+      branchTitleIds: [...new Set([...idsIn(branch), ...idsIn(title)])],
+      closedInBody: [...declaredClosed],
+      sliceInBody: [...sliceIds],
+      closedInCommits: [...closedIdsIn(commits)],
+      bodyChars: String(body ?? '').length,
+      commitChars: String(commits ?? '').length,
+    },
   };
+}
+
+/** One-line record of what the guard examined; printed on pass AND fail. */
+export function evidenceLine({ seen }) {
+  const list = (a) => (a.length ? a.join(',') : '-');
+  return (
+    `examined: body ${seen.bodyChars} chars, commits ${seen.commitChars} chars | ` +
+    `branch/title ids: ${list(seen.branchTitleIds)} | closed in body: ${list(seen.closedInBody)} | ` +
+    `Part of in body: ${list(seen.sliceInBody)} | closed in commits: ${list(seen.closedInCommits)}`
+  );
 }
 
 function fail(msg) {
@@ -158,12 +179,25 @@ if (isMain) {
   if (process.argv.includes('--self-test')) {
     runSelfTest();
   } else {
-    const { ok, violations, commitViolations, bodyContradictions } = evaluate({
+    const result = evaluate({
       branch: process.env.PR_BRANCH,
       title: process.env.PR_TITLE,
       body: process.env.PR_BODY,
       commits: process.env.PR_COMMITS,
     });
+    const { ok, violations, commitViolations, bodyContradictions } = result;
+    // In CI the workflow always supplies commits; an empty value means the
+    // fetch silently returned nothing, so refuse to pass without looking.
+    if (process.env.GITHUB_ACTIONS === 'true' && !process.env.PR_COMMITS) {
+      fail('❌ Linear close-guard: PR_COMMITS is empty in CI — commit messages were not examined. Refusing to pass blind.');
+    }
+    console.log(evidenceLine(result));
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        `### Linear close-guard: ${ok ? '✅ pass' : '❌ fail'}\n\n\`${evidenceLine(result)}\`\n`
+      );
+    }
     if (ok) {
       console.log('✅ Linear close-guard: no undeclared auto-close. (Slice PR uses an id-free branch/title/commits + "Part of OSE-###", or completing PR declares "Closes OSE-###".)');
       process.exit(0);
