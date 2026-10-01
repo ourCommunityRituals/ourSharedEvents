@@ -54,6 +54,7 @@ const WORKERS_CONFIG = join(WORKER, 'vitest.workers.config.mts');
 const WORKER_PKG = join(WORKER, 'package.json');
 const ROOT_PKG = join(REPO_ROOT, 'package.json');
 const MUTATION_CATALOG = join(WORKER, 'scripts', 'mutate.mjs');
+const VITEST_RETRY = join(REPO_ROOT, 'scripts', 'vitest-retry.mjs');
 const CI_WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'oursharedevents-ci.yml');
 
 type Level = 'L' | 'M' | 'Q' | 'H';
@@ -206,7 +207,7 @@ function code(path: string): string {
 
 /** String literals in a config array, plus `...NODE_SPECS` expanded. */
 async function arrayPatterns(body: string): Promise<string[]> {
-  const literals = [...body.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const literals = [...body.matchAll(/(['"`])((?:(?!\1).)+)\1/g)].map((m) => m[2]);
   const spreads = [...body.matchAll(/\.\.\.\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
   const unknown = spreads.filter((name) => name !== 'NODE_SPECS');
   expect(
@@ -315,7 +316,8 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
       `the node project selects the decode spec (${inNode.join(', ')}) — it needs SELF.fetch (cloudflare:test), so it must stay in the workers pool`
     ).toEqual([]);
 
-    const cfg = read(WORKERS_CONFIG);
+    // Comment-stripped, so a commented-out include or exclude does not count.
+    const cfg = code(WORKERS_CONFIG);
     const include = cfg.match(/include:\s*\[([^\]]*)\]/);
     const exclude = cfg.match(/exclude:\s*\[([^\]]*)\]/);
     expect(include, 'could not read the workers project include list').not.toBeNull();
@@ -366,9 +368,22 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
     expect(shard!.workdir, 'the worker-d1-schema shard must run in the worker').toBe(
       'workers/oursharedevents'
     );
-    expect(shard!.command, 'the worker-d1-schema shard must run `npm test`').toMatch(
-      /(^|\s)npm test(\s|$)/
-    );
+    // The whole command is locked, not a token in it: `echo npm test` must fail.
+    // The only accepted wrapper is the repo's retry runner, which executes its
+    // argv exactly as passed (checked below).
+    expect(
+      ['npm test', 'node ../../scripts/vitest-retry.mjs npm test'],
+      `the worker-d1-schema shard must run the worker suite; it runs: ${shard!.command}`
+    ).toContain(String(shard!.command).trim());
+    if (String(shard!.command).includes('vitest-retry.mjs')) {
+      const runner = code(VITEST_RETRY);
+      expect(runner, 'vitest-retry.mjs must spawn the command it is given').toMatch(
+        /process\.argv\.slice\(2\)/
+      );
+      expect(runner, 'vitest-retry.mjs must spawn the command it is given').toMatch(
+        /\bspawn(Sync)?\(/
+      );
+    }
   });
 
   test('OSE-1439 | the encoder mutants it kills stay in the mutation catalog', () => {
