@@ -13,7 +13,8 @@ function emit(
     kind: 'fail_open',
     adapter_id,
     level: 'warn',
-    flag_key,
+    // exactOptionalPropertyTypes: omit the key rather than set it to undefined.
+    ...(flag_key !== undefined ? { flag_key } : {}),
     error_class: error instanceof Error ? error.constructor.name : typeof error,
     ts: new Date().toISOString(),
   });

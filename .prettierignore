@@ -19,3 +19,9 @@ postman/environments/testids.json
 # breaks byte-parity and turns every propagation PR into table-alignment churn
 # (observed on OSE-1194). Format them in OCR-docs or not at all.
 .ocr-standards/
+
+# @ocr/flags generated modules. scripts/generate-from-yaml.mjs is the canonical
+# formatter and `npm run check:generated` byte-compares against its output, so a
+# prettier reformat (single quotes) is permanent false drift. Same reason as the
+# testids registry above.
+packages/flags/src/generated/
