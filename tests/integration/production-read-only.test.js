@@ -212,21 +212,37 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     }
   });
 
-  test('every network-writing helper in scripts/ refuses production', () => {
-    // Derived: a script that reads a target URL from the env and sends a write
-    // must call the shared host rule before it does.
-    const writers = listFiles('scripts').filter((rel) => {
-      if (!/\.(m?js|cjs)$/.test(rel)) return false;
-      const src = read(rel);
-      return /process\.env\.(BASE_URL|STAGING_URL|TARGET_URL)\b/.test(src) && WRITE_CALL.test(src);
-    });
-    expect(writers).toEqual(
+  test('every script that writes to its target URL refuses production, wherever the write lives', () => {
+    // Derived: a script that reads a target URL from the env is checked together
+    // with the local helpers it loads, and every file among them that sends a
+    // write must call the shared host rule (the refusal lives where the write is).
+    const { dirname, normalize } = require('path');
+    const localDeps = (rel) =>
+      [...read(rel).matchAll(/(?:require\(|from\s+)['"](\.{1,2}\/[^'"]+)['"]/g)]
+        .map((m) => normalize(join(dirname(rel), m[1])))
+        .flatMap((dep) => [dep, `${dep}.js`].filter((f) => /\.(m?js|cjs)$/.test(f)))
+        .filter((f) => existsSync(join(ROOT, f)));
+    const senders = new Set();
+    for (const rel of listFiles('scripts').filter((f) => /\.(m?js|cjs)$/.test(f))) {
+      if (!/process\.env\.(BASE_URL|STAGING_URL|TARGET_URL)\b/.test(read(rel))) continue;
+      for (const f of [rel, ...localDeps(rel)]) if (WRITE_CALL.test(read(f))) senders.add(f);
+    }
+    expect([...senders]).toEqual(
       expect.arrayContaining([
         'scripts/mint-t4-report-tokens.mjs',
         'scripts/qa-environment-setup.js',
+        'tests/shared/helpers/test-runner.js', // scripts/run-matrix-tests.js delegates its POSTs here
       ])
     );
-    for (const rel of writers) expect(read(rel), rel).toMatch(/isProductionUrl\(/);
+    for (const f of senders) expect(read(f), f).toMatch(/isProductionUrl\(/);
+  });
+
+  test('the matrix runner refuses production before it posts', async () => {
+    const { TestRunner } = require('../shared/helpers/test-runner.js');
+    const post = vi.fn();
+    const runner = new TestRunner({ baseUrl: `${PROD}/`, requestFn: { post } });
+    await expect(runner.request({ action: 'x' })).rejects.toThrow(/ADR-021/);
+    expect(post).not.toHaveBeenCalled();
   });
 
   test.each([

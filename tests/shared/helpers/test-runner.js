@@ -24,6 +24,7 @@ const {
   dateHelpers,
   generateTestId,
 } = require('./test.helpers.js');
+const { isProductionUrl } = require('../../../config/production-hosts');
 
 // Helper to safely check if object has own property
 const hasOwn = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
@@ -97,6 +98,10 @@ class TestRunner {
       url.searchParams.set('action', payload.action);
     }
     const targetUrl = url.toString();
+    // ADR-021: every request here is a POST, and production is read-only for tests.
+    if (isProductionUrl(targetUrl)) {
+      throw new Error(`ADR-021: refusing to POST to production (${url.host}).`);
+    }
 
     if (this.requestFn) {
       // Use provided request function (Playwright)

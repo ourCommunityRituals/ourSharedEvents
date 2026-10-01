@@ -23,6 +23,7 @@ import {
   RATE_LIMIT_MAX,
   RATE_LIMIT_PEPPER_MIN_LENGTH,
 } from '../src/lib/rate-limit';
+import { classifyBeacon } from '../src/lib/invalid-traffic';
 
 const PEPPER = 'p'.repeat(RATE_LIMIT_PEPPER_MIN_LENGTH);
 const OTHER_PEPPER = 'q'.repeat(RATE_LIMIT_PEPPER_MIN_LENGTH);
@@ -80,6 +81,31 @@ describe('rate-limit KV key — peppered (OSE-1447)', () => {
     expect(
       await checkRateLimit({ RATE_LIMIT_KV: kv, RATE_LIMIT_KEY_PEPPER: OTHER_PEPPER }, 'admin:x')
     ).toBe(false);
+  });
+
+  it('beacon dedup keys are peppered too, and still catch the repeat', async () => {
+    const kv = fakeKv();
+    const env = { RATE_LIMIT_KV: kv, RATE_LIMIT_KEY_PEPPER: PEPPER };
+    const ip = '198.51.100.42';
+    const req = () =>
+      new Request('https://t.test/b', {
+        headers: { 'CF-Connecting-IP': ip, 'User-Agent': 'Mozilla/5.0' },
+      });
+    const beacon = {
+      eventId: 'e1',
+      sponsorId: 's1',
+      surface: 'public',
+      placement: 'top',
+      kind: 'impression',
+    };
+    expect(await classifyBeacon(req(), env, beacon)).toEqual({ counted: true });
+    expect(await classifyBeacon(req(), env, beacon)).toEqual({
+      counted: false,
+      reason: 'duplicate',
+    });
+    const identity = [ip, 'e1', 's1', 'public', 'top', 'impression'].join('|');
+    expect(kv.keys()).toContain(`ivt:dedup:${hmac(PEPPER, identity)}`);
+    expect(kv.keys()).not.toContain(`ivt:dedup:${sha256(identity)}`);
   });
 
   it('fails open with no KV bound', async () => {
