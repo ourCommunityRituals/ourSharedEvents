@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createHash, createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   checkRateLimit,
@@ -99,22 +99,43 @@ describe('rate-limit KV key — peppered (OSE-1447)', () => {
 // it silently falls back to the reversible SHA-256 key, and nothing else fails.
 describe('rate-limit KV key — every src call site passes RATE_LIMIT_KEY_PEPPER', () => {
   const root = join(__dirname, '..');
-  const sites: Array<[string, RegExp]> = [
-    ['src/router.ts', /\b(checkRateLimit|isRateLimited)\(/g],
-    ['src/handlers/shared-report-read.ts', /\bcheckRateLimit\(/g],
-    ['src/lib/public-read-limit.ts', /\bcheckRateLimit\(/g],
-    ['src/lib/invalid-traffic.ts', /\b(checkRateLimit|isDuplicateBeacon)\(/g],
-  ];
+  const CALL = /\b(checkRateLimit|isRateLimited|isDuplicateBeacon|pepperedKeyHash)\(/g;
+  const IMPORTS_RATE_LIMIT = /from\s+['"](?:\.{1,2}\/)+(?:lib\/)?rate-limit['"]/;
 
-  for (const [file, re] of sites) {
-    it(`${file}: each call carries env.RATE_LIMIT_KEY_PEPPER`, () => {
+  // Derived, not listed: every src file that imports the KV rate limiter. A new
+  // caller anywhere in src/ is covered without editing this spec.
+  function walk(dir: string): string[] {
+    return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) return walk(rel);
+      return /\.ts$/.test(e.name) ? [rel] : [];
+    });
+  }
+  const files = walk('src').filter(
+    (rel) =>
+      rel !== 'src/lib/rate-limit.ts' &&
+      IMPORTS_RATE_LIMIT.test(readFileSync(join(root, rel), 'utf8'))
+  );
+
+  it('finds the known callers (the scan is not empty)', () => {
+    expect(files).toEqual(
+      expect.arrayContaining([
+        'src/router.ts',
+        'src/handlers/shared-report-read.ts',
+        'src/lib/public-read-limit.ts',
+        'src/lib/invalid-traffic.ts',
+      ])
+    );
+  });
+
+  it('each call in every importing file carries env.RATE_LIMIT_KEY_PEPPER', () => {
+    for (const file of files) {
       const src = readFileSync(join(root, file), 'utf8');
-      const calls = [...src.matchAll(re)].filter((m) => {
+      const calls = [...src.matchAll(CALL)].filter((m) => {
         // Skip declarations (`function isDuplicateBeacon(`).
         const before = src.slice(Math.max(0, m.index! - 15), m.index!);
         return !/function\s+$/.test(before);
       });
-      expect(calls.length).toBeGreaterThan(0);
       for (const m of calls) {
         // The argument list: up to the matching close paren.
         let depth = 0;
@@ -124,8 +145,8 @@ describe('rate-limit KV key — every src call site passes RATE_LIMIT_KEY_PEPPER
           else if (src[end] === ')' && --depth === 0) break;
         }
         const args = src.slice(m.index!, end + 1);
-        expect(args, `${file}: ${args}`).toContain('RATE_LIMIT_KEY_PEPPER');
+        expect(args, `${file}: ${args}`).toMatch(/RATE_LIMIT_KEY_PEPPER|\bpepper\b/);
       }
-    });
-  }
+    }
+  });
 });

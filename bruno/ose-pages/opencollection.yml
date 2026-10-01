@@ -6,7 +6,19 @@ info:
 request:
   scripts:
     - type: before-request
-      code: bru.setVar('requestStartTime', Date.now());
+      code: |-
+        // ADR-021 (OSE-906): production is read-only for tests. Refuse any write
+        // before it is sent, whichever environment file was chosen.
+        var adr021Target = String(bru.getEnvVar('baseUrl') || '') + ' ' + String(req.getUrl() || '');
+        var adr021Method = String(req.getMethod() || '').toUpperCase();
+        if (
+          /(^|\s|\/\/)(www\.)?oursharedevents\.com\.?(:\d+)?(\/|\s|$)/i.test(adr021Target) &&
+          ['GET', 'HEAD', 'OPTIONS'].indexOf(adr021Method) === -1
+        ) {
+          throw new Error('ADR-021: production is read-only for tests; refusing ' + adr021Method + ' ' + req.getUrl());
+        }
+
+        bru.setVar('requestStartTime', Date.now());
     - type: after-response
       code: "const elapsed = Date.now() - bru.getVar('requestStartTime');
 

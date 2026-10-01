@@ -86,7 +86,7 @@
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
  *   Security Monitoring (auth required — OSE-SEC-1):
- *   GET    /api/v2/admin/security/rate-limit-stats → top-10 rate-limited buckets (last hour, from KV; keyed ids, not IPs)
+ *   GET    /api/v2/admin/security/rate-limit-stats → top-10 currently rate-limited buckets (active 60 s windows, from KV; keyed ids, not IPs)
  *
  *   QR Verify/Unverify (auth required — OSE-213):
  *   POST   /api/v2/admin/events/:id/verify-qr    → handleV2AdminVerifyQr (READY→ACTIVE)
@@ -1341,7 +1341,7 @@ export async function route(
 
   // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
   // GET /api/v2/admin/security/rate-limit-stats
-  // Returns top-10 rate-limited buckets in the last hour from RATE_LIMIT_KV. The
+  // Returns the top-10 currently rate-limited buckets (active 60 s windows) from RATE_LIMIT_KV. The
   // `ip`/`top_ips` field names are the API contract; the values are HMAC bucket
   // ids under RATE_LIMIT_KEY_PEPPER (OSE-1447), never addresses.
   // Requires admin auth. Read-only — never modifies KV state.
@@ -1894,17 +1894,16 @@ export async function route(
 //
 // GET /api/v2/admin/security/rate-limit-stats
 //
-// Returns the top-10 rate-limited IPs from the last hour.
-// "Rate-limited" means the KV entry has count > RATE_LIMIT_MAX (60).
+// Returns the top-10 currently rate-limited buckets: windows still active now
+// (each RATE_LIMIT_WINDOW_MS, 60 s). There is no hourly rollup; for history, use
+// Cloudflare Security → Events. "Rate-limited" means count > RATE_LIMIT_MAX (60).
 //
-// KV key format: ratelimit:{ip}
+// KV key format: ratelimit:{hmac} (OSE-1447: keyed id, never an address)
 // KV value format: { count: number, resetAt: number }
 //
 // The resetAt field is a Unix ms timestamp. We only return entries whose
-// resetAt is in the future (i.e. the window is still active) as a proxy
-// for "this happened in the last minute", which is the actual rate-limit
-// window. For a 1-hour view we return all active KV entries — expired keys
-// have been deleted by KV TTL already.
+// resetAt is in the future (i.e. the window is still active). Expired keys are
+// gone by KV TTL, so this is a "right now" view, not an hourly one.
 //
 // Response shape:
 // {

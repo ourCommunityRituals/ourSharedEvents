@@ -194,6 +194,46 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     }
   });
 
+  test('every Bruno collection refuses writes to production before sending', () => {
+    const collections = readdirSync(join(ROOT, 'bruno'), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => `bruno/${d.name}/opencollection.yml`)
+      .filter((p) => {
+        try {
+          return !!read(p);
+        } catch {
+          return false;
+        }
+      });
+    expect(collections.length).toBeGreaterThanOrEqual(3);
+    for (const rel of collections) {
+      const doc = yaml.load(read(rel));
+      const pre = (doc.request?.scripts ?? []).find((s) => s.type === 'before-request');
+      expect(pre?.code, `${rel}: before-request script`).toMatch(/ADR-021/);
+      // Run the collection's own script with a fake bru/req: a write to
+      // production throws (Bruno then never sends it); reads and staging pass.
+      const run = (baseUrl, method) => {
+        const bru = {
+          getEnvVar: (k) => (k === 'baseUrl' ? baseUrl : ''),
+          setVar() {},
+          getVar() {},
+        };
+        const req = {
+          getUrl: () => '{{baseUrl}}/api/x',
+          getMethod: () => method,
+          getHeader() {},
+          setHeader() {},
+        };
+        new Function('bru', 'req', pre.code)(bru, req);
+      };
+      expect(() => run('https://oursharedevents.com', 'POST'), rel).toThrow(/ADR-021/);
+      expect(() => run('https://www.oursharedevents.com:443', 'DELETE'), rel).toThrow(/ADR-021/);
+      expect(() => run('https://oursharedevents.com', 'GET'), rel).not.toThrow();
+      expect(() => run('https://stg.oursharedevents.com', 'POST'), rel).not.toThrow();
+      expect(() => run('https://oursharedevents.com.evil.example', 'POST'), rel).not.toThrow();
+    }
+  });
+
   test('isProductionUrl matches production hosts only', () => {
     for (const url of [
       'https://oursharedevents.com',

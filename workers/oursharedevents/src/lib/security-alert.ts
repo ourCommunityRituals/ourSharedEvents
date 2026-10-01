@@ -202,7 +202,7 @@ export function buildInvestigationSteps(payload: SecurityAlertPayload, workerEnv
 6. Check \`/api/v2/admin/security/rate-limit-stats\` for rate-limit context (keyed bucket ids, not IPs; addresses are in Cloudflare Security → Events)`;
 
     case 'rate_limit_triggers':
-      return `1. Check \`GET /api/v2/admin/security/rate-limit-stats\` — top-10 rate-limited buckets in the last hour. The \`ip\` field is an HMAC bucket id (OSE-1447), never an address
+      return `1. Check \`GET /api/v2/admin/security/rate-limit-stats\` — top-10 buckets rate-limited right now (active 60 s windows; no hourly history — use Cloudflare Security → Events for that). The \`ip\` field is an HMAC bucket id (OSE-1447), never an address
 2. Identify if triggers come from one bucket (scraping / DDoS) or many (viral event)
 3. For a single abuser: find its address in Cloudflare Dashboard → Security → Events (or Workers logs), then add a WAF → Block rule
 4. For legitimate traffic spike: raise RATE_LIMIT_MAX env var or add KV namespace capacity

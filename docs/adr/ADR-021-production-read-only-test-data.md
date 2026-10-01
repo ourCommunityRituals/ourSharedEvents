@@ -46,13 +46,18 @@ It is enforced in three places:
   `productionTestMatch()` to the approved read-only specs (`PRODUCTION_SMOKE_SPECS`). So
   `USE_PRODUCTION=true npm run test:api:smoke`, or naming a writing spec on the command
   line, finds nothing else to run.
+- Every Bruno collection (`bruno/*/opencollection.yml`) has a collection-level
+  before-request script that throws on any method other than GET, HEAD or OPTIONS when
+  the target is production. A thrown pre-request script means Bruno never sends the
+  request, so `bru run --env ose` cannot write to production.
 - The CI gate `tests/integration/production-read-only.test.js` (root vitest, so it runs
   on every PR) locks all of the following:
   - the allowlist of specs on `smoke-production`;
   - no write calls in the API smoke specs;
   - the guard, the skips and the write-site inventory in `security-smoke`;
   - `IS_PRODUCTION` coming from the shared helper and matching `PROD_BASE_URL`;
-  - the production refusal in every Playwright config outside the allowlist.
+  - the production refusal in every Playwright config outside the allowlist;
+  - the Bruno write refusal, by running each collection's own script.
 
 Every `security-smoke` describe that sends a write, including the rejected-key probe
 (an invalid bearer, expected 401), skips on production. A rejected-key POST could still
