@@ -304,6 +304,15 @@ describe('OSE-272 Session 4: phaseToPool() boundary mapping', () => {
 // OSE-1460: the returns phase sends k-floored counts per corridor × event type ×
 // pool. No anon_id_hash, no venue, no per-person row ever reaches BigQuery.
 describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return counts (OSE-1460)', () => {
+  // OSE-1460: every run also writes one snapshot marker per pool. These helpers
+  // separate the data (row_type 'group') from the markers.
+  const groupCalls = (): InsertAllCall[] =>
+    bqCalls
+      .map((c) => ({ ...c, rows: c.rows.filter((r) => r.json.row_type === 'group') }))
+      .filter((c) => c.rows.length > 0);
+  const markerRows = (): Array<Record<string, unknown>> =>
+    bqCalls.flatMap((c) => c.rows.map((r) => r.json)).filter((j) => j.row_type === 'snapshot');
+
   const recent = (hoursAgo: number): string =>
     new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
 
@@ -350,7 +359,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const r = await exportAnonIdReturns({ DB: tenv().DB } as SharedReportExportEnv);
     expect(r.errors).toBe(0);
     expect(r.rowsExported).toBe(0);
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
   });
 
   test('exports one floored count row per corridor and type, with no person or venue in it', async () => {
@@ -365,10 +374,10 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(r.rowsExported).toBe(1);
-    expect(bqCalls).toHaveLength(1);
-    expect(bqCalls[0].dataset).toBe('oureventring_general');
-    expect(bqCalls[0].tableId).toBe('corridor_returns_export');
-    const row = bqCalls[0].rows[0].json;
+    expect(groupCalls()).toHaveLength(1);
+    expect(groupCalls()[0].dataset).toBe('oureventring_general');
+    expect(groupCalls()[0].tableId).toBe('corridor_returns_export');
+    const row = groupCalls()[0].rows[0].json;
     expect(row).toMatchObject({
       corridor_id: RES7_A,
       venue_id: 'corridor-aggregate',
@@ -381,7 +390,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       returned_3plus: null, // 3 people: under the floor, suppressed
       returned_5plus: null,
     });
-    const wire = JSON.stringify(bqCalls[0].rows);
+    const wire = JSON.stringify(groupCalls()[0].rows);
     expect(wire).not.toContain('anon_id_hash');
     expect(wire).not.toContain('test-evt-exp-1');
     expect(wire).not.toMatch(/m\d0{20,}/); // no seeded hash value
@@ -393,7 +402,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedCorridorEvent('test-evt-exp-vc');
     await seedPeople('test-evt-exp-vc', [9, 9, 9, 9, 9]);
     await exportAnonIdReturns(makeEnv());
-    const row = bqCalls[0].rows[0].json;
+    const row = groupCalls()[0].rows[0].json;
     expect(row.people_count).toBe(5);
     expect(row.returned_2plus).toBeNull();
   });
@@ -431,8 +440,8 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(r.rowsExported).toBe(501);
-    expect(bqCalls.length).toBe(2);
-    expect(Math.max(...bqCalls.map((c) => c.rows.length))).toBeLessThanOrEqual(500);
+    expect(groupCalls().length).toBe(2);
+    expect(Math.max(...groupCalls().map((c) => c.rows.length))).toBeLessThanOrEqual(500);
   });
 
   test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export as 6', async () => {
@@ -445,9 +454,9 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedPeople('test-evt-exp-t2', [1, 1, 1], { prefix: 'tb' });
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
-    expect(bqCalls).toHaveLength(1);
-    expect(bqCalls[0].rows).toHaveLength(1);
-    expect(bqCalls[0].rows[0].json.people_count).toBe(6);
+    expect(groupCalls()).toHaveLength(1);
+    expect(groupCalls()[0].rows).toHaveLength(1);
+    expect(groupCalls()[0].rows[0].json.people_count).toBe(6);
   });
 
   test('the SQL pool key agrees with phaseToPool for every tier', async () => {
@@ -466,13 +475,39 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     }
   });
 
+  test('every run writes a snapshot marker, even when it has no groups', async () => {
+    await seedCorridorEvent('test-evt-exp-mk');
+    await seedPeople('test-evt-exp-mk', [1, 1, 1, 1, 1]);
+    const r1 = await exportAnonIdReturns(makeEnv());
+    expect(r1.snapshotMarkers).toBe(1);
+    expect(markerRows()).toHaveLength(1);
+    expect(markerRows()[0]).toMatchObject({
+      row_type: 'snapshot',
+      corridor_id: 'unknown',
+      regulatory_pool: 'general',
+      groups_in_snapshot: 1,
+    });
+    // Every group ages out: the next run must still say "this snapshot is empty".
+    await tenv()
+      .DB.prepare(`UPDATE anon_id_returns SET last_seen_at = ?`)
+      .bind(new Date(Date.now() - 100 * 86_400_000).toISOString())
+      .run();
+    bqCalls = [];
+    const r2 = await exportAnonIdReturns(makeEnv());
+    expect(r2.errors).toBe(0);
+    expect(groupCalls()).toHaveLength(0);
+    expect(markerRows()).toHaveLength(1);
+    expect(markerRows()[0].groups_in_snapshot).toBe(0);
+    expect(r2.rowsExported).toBe(0); // a marker is not data
+  });
+
   test('a group under the floor is withheld, not exported', async () => {
     await seedCorridorEvent('test-evt-exp-small');
     await seedPeople('test-evt-exp-small', [3, 3, 3, 3]);
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(r.rowsSkipped).toBe(1);
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
   });
 
   test('one person at two events in a corridor counts once, as a return', async () => {
@@ -481,7 +516,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedPeople('test-evt-exp-v1', [1, 1, 1, 1, 1], { prefix: 'x' });
     await seedPeople('test-evt-exp-v2', [1, 1, 1, 1, 1], { prefix: 'x' });
     await exportAnonIdReturns(makeEnv());
-    const row = bqCalls[0].rows[0].json;
+    const row = groupCalls()[0].rows[0].json;
     expect(row.people_count).toBe(5);
     expect(row.returned_2plus).toBe(5);
   });
@@ -491,7 +526,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedPeople('test-evt-exp-old', [2, 2, 2, 2, 2], { lastSeen: recent(24 * 120) });
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
   });
 
   test('a group with no real corridor is withheld', async () => {
@@ -499,7 +534,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.rowsSkipped).toBe(1);
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
   });
 
   test('OSE-1416: on staging the export lands in oureventring_general_stg, never production', async () => {
@@ -507,8 +542,8 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedPeople('test-evt-exp-stg', [1, 1, 1, 1, 1]);
     const r = await exportAnonIdReturns({ ...makeEnv(), WORKER_ENV: 'staging' });
     expect(r.errors).toBe(0);
-    expect(bqCalls.length).toBeGreaterThan(0);
-    expect(bqCalls.every((c) => c.dataset === 'oureventring_general_stg')).toBe(true);
+    expect(groupCalls().length).toBeGreaterThan(0);
+    expect(groupCalls().every((c) => c.dataset === 'oureventring_general_stg')).toBe(true);
   });
 
   test('phase 4 (HIPAA) group is QUARANTINED — never routed or leaked (OSE-1220)', async () => {
@@ -520,7 +555,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .run();
     await seedPeople('test-evt-exp-h1', [1, 1, 1, 1, 1]);
     const r = await exportAnonIdReturns(makeEnv());
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
     expect(r.rowsSkipped).toBeGreaterThanOrEqual(1);
   });
 
@@ -528,7 +563,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedCorridorEvent('test-evt-exp-tags');
     await seedPeople('test-evt-exp-tags', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
-    const row = bqCalls[0].rows[0].json;
+    const row = groupCalls()[0].rows[0].json;
     for (const tag of ['corridor_id', 'venue_id', 'event_type', 'uec_code', 'regulatory_pool']) {
       expect(typeof row[tag]).toBe('string');
     }
@@ -543,10 +578,14 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       computedAt: '2026-09-30T15:00:00.000Z',
     });
     await exportAnonIdReturns(makeEnv());
-    const first = bqCalls.map((c) => c.rows.map((r) => r.insertId)).flat();
+    const first = groupCalls()
+      .map((c) => c.rows.map((r) => r.insertId))
+      .flat();
     bqCalls = [];
     await exportAnonIdReturns(makeEnv());
-    const second = bqCalls.map((c) => c.rows.map((r) => r.insertId)).flat();
+    const second = groupCalls()
+      .map((c) => c.rows.map((r) => r.insertId))
+      .flat();
     expect(second).toEqual(first);
     const state = await tenv()
       .DB.prepare(
@@ -562,7 +601,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedCorridorEvent('test-evt-exp-age');
     await seedPeople('test-evt-exp-age', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
-    expect(bqCalls).toHaveLength(1);
+    expect(groupCalls()).toHaveLength(1);
     // Nothing new is materialized; the rows simply get old.
     await tenv()
       .DB.prepare(`UPDATE anon_id_returns SET last_seen_at = ?`)
@@ -571,7 +610,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     bqCalls = [];
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
-    expect(bqCalls).toHaveLength(0);
+    expect(groupCalls()).toHaveLength(0);
   });
 
   test('watermark NOT advanced on BQ failure (S4-Q4)', async () => {
@@ -594,14 +633,14 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     await seedCorridorEvent('test-evt-exp-i1');
     await seedPeople('test-evt-exp-i1', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
-    const insertId1 = bqCalls[0].rows[0].insertId;
+    const insertId1 = groupCalls()[0].rows[0].insertId;
     await tenv()
       .DB.prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
       .bind('1970-01-01T00:00:00.000Z', 'anon_id_returns')
       .run();
     bqCalls = [];
     await exportAnonIdReturns(makeEnv());
-    expect(bqCalls[0].rows[0].insertId).toBe(insertId1);
+    expect(groupCalls()[0].rows[0].insertId).toBe(insertId1);
     expect(insertId1).not.toMatch(/test-evt-exp/);
   });
 });

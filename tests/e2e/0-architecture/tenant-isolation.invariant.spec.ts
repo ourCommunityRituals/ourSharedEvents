@@ -227,14 +227,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
   // 296→303 and 554→611 by the PR #726 follow-ups (import list + withheld
   // legacy-keyed baseline rows + duplicate canonical key check +
-  // whole-timestamp-group baseline read). 303→368 and 611→671 by OSE-1460 (the
+  // whole-timestamp-group baseline read). 303→374 and 611→711 by OSE-1460 (the
   // returns phase now aggregates to k-floored corridor counts before export).
-  'lib/shared-report-export.ts:368':
+  'lib/shared-report-export.ts:374':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:671':
+  'lib/shared-report-export.ts:711':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

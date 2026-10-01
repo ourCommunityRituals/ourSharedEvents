@@ -40,10 +40,10 @@ The scan system stores **presence signal only**. By schema design, no PII can en
 | ----------------------------- | --------------------------- | ----------------------------- |
 | `scan_bucket`                 | Hourly time window          | When (approximate)            |
 | `user_agent_hash`             | SHA-256 of user agent       | Device class (not individual) |
-| `country_code`, `region_code` | From CF headers             | Where (approximate)           |
+| _no location_                 | Never read (OSE-1460)       | Place comes only from the poster's corridor; the visitor's IP country is not recorded |
 | `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
 
-**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint.
+**What's explicitly excluded:** email, name, IP address, any request-derived location (country, region, city; `CF-IPCountry` is never read since OSE-1460, and migration 0088 cleared what was recorded), exact timestamp, cookies, device fingerprint.
 
 This data is **permanent** — it's safe to keep forever because it contains no personal information. It becomes the foundation for geo-spatial intelligence at scale.
 

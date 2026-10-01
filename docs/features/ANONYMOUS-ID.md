@@ -61,8 +61,7 @@ FORMS_DB (opt-in personal data)          DB (anonymous presence signal)
 form_registrations                       scans
   name          (plain text)               scan_bucket      (hourly window)
   email_hash    (SHA-256)                  user_agent_hash  (device class)
-  expires_at    (90-day TTL)               country_code     (from CF headers)
-                                           region_code      (from CF headers)
+  expires_at    (90-day TTL)               (no country: OSE-1460)
 form_surveys                               poster_deployment_id (FK)
   responses_json (scrubbed)
   pii_scrubbed   (boolean)              scan_aggregates
@@ -96,8 +95,8 @@ CREATE TABLE IF NOT EXISTS scans (
   scan_bucket           TEXT NOT NULL,        -- hourly window, not exact time
   user_agent_hash       TEXT,                 -- device class, not individual
   referrer_domain       TEXT,
-  country_code          TEXT,                 -- from CF headers, not IP
-  region_code           TEXT,                 -- from CF headers, not IP
+  country_code          TEXT,                 -- always NULL since OSE-1460 (CF-IPCountry is not read; 0088 cleared it)
+  region_code           TEXT,                 -- never written
   created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
@@ -133,7 +132,7 @@ CREATE TABLE IF NOT EXISTS scan_aggregates (
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,
+  top_country     TEXT,                       -- always NULL since OSE-1460
   top_region      TEXT,
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -246,7 +245,7 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 | **Cross-database correlation**      | Separate D1 databases, no foreign keys between them                     |
 | **Timing correlation**              | Hour-bucketed timestamps prevent exact-time matching                    |
 | **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual            |
-| **IP logging**                      | IP never stored; country/region derived from CF headers at request time |
+| **IP logging**                      | IP never stored; no location is derived from the request either (country removed by OSE-1460) |
 | **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                      |
 | **Admin data access**               | Admin APIs return hashes, counts, and scrubbed data — never raw PII     |
 

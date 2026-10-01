@@ -85,6 +85,11 @@ export interface ExportResult {
    * not run".
    */
   ran?: boolean;
+  /**
+   * OSE-1460: snapshot marker rows written (one per pool per run). Not counted
+   * in rowsExported: a marker is not data, it tells OER which snapshot is current.
+   */
+  snapshotMarkers?: number;
 }
 
 /**
@@ -402,6 +407,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         byPool[pool],
         {
           ...tags,
+          row_type: 'group',
           window_days: RETURNS_WINDOW_DAYS,
           people_count: r.people,
           returned_2plus: floorCount(r.returned_2plus),
@@ -430,6 +436,39 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         result.rowsExported += res.rowCount;
         result.perPool[pool] += res.rowCount;
       }
+    }
+
+    // One marker per pool per run, written after the groups, so OER can tell
+    // which snapshot is current even when it is empty: without it, a run in
+    // which every group aged out or fell under the floor would write nothing,
+    // and OER would keep reading the previous snapshot as current.
+    for (const pool of REGULATORY_POOLS) {
+      const markerTags = {
+        corridor_id: UNKNOWN_CORRIDOR,
+        venue_id: 'corridor-aggregate',
+        event_type: 'snapshot',
+        uec_code: 'snapshot',
+        regulatory_pool: pool,
+        product_id: PRODUCT_ID,
+      };
+      assertRequiredTags(markerTags);
+      const marker = {
+        ...markerTags,
+        row_type: 'snapshot',
+        window_days: RETURNS_WINDOW_DAYS,
+        groups_in_snapshot: byPool[pool].length,
+        computed_at: computedAt,
+        exported_at: now.toISOString(),
+      };
+      assertCorridorGrainRow(marker);
+      await bigQueryInsertRowsToDataset(
+        env,
+        datasetForPool(pool, env.WORKER_ENV),
+        BQ_TABLE_CORRIDOR_RETURNS,
+        [marker],
+        () => `cr-${computedAt}-snapshot-${pool}`
+      );
+      result.snapshotMarkers = (result.snapshotMarkers ?? 0) + 1;
     }
 
     await advanceWatermark(env.DB, 'anon_id_returns', nextWatermark, result.rowsExported);

@@ -169,10 +169,15 @@ when no source row is past the watermark, because a rolling window changes as
 rows age out. The watermark then records the newest source row seen. A re-run
 within the same hour sends the same insertIds, so BigQuery dedupes it.
 
-**Reading it:** take the latest `computed_at` snapshot. A group that is missing
-from it has aged out of the window or fallen under the floor. Each run is also
-recorded in `export_manifest` (phase `anon_id_returns`, table
-`corridor_returns_export`), so a run that produced no rows is still visible.
+**Reading it:** every run writes one **snapshot marker** row per pool, with
+`row_type = 'snapshot'`, `corridor_id = 'unknown'` and `groups_in_snapshot` set
+to the number of groups. Data rows have `row_type = 'group'`. The current
+snapshot is the latest marker's `computed_at`. Read the `group` rows with that
+`computed_at`; there may be none. A group missing from it has aged out of the
+window or fallen under the floor. Without the marker, a run in which every group
+disappeared would write nothing, and the previous snapshot would look current.
+Markers are not counted as exported rows. Runs are also recorded in the D1
+`export_manifest`, but OER cannot see that table, so the marker is what OER uses.
 
 **Grouping:** a person is counted once per (corridor, event type, pool). A return
 means they were seen at 2 or more distinct events there. `visit_count` is not
@@ -200,6 +205,7 @@ with no real res7 corridor is withheld, never sent as `'unknown'`.
   "returned_2plus": 17,
   "returned_3plus": 6,
   "returned_5plus": null,
+  "row_type": "group",
   "computed_at": "the snapshot hour, ISO (YYYY-MM-DDTHH:00:00.000Z)",
   "exported_at": "ISO (now)"
 }

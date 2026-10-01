@@ -348,14 +348,24 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
     // OSE-1460: one scanner is a group of one, under the k-floor, so the
-    // corridor return counts withhold it. No per-person row crosses.
-    expect(Object.keys(byTable).sort()).toEqual(['corridor_density_baseline_export']);
+    // corridor return counts withhold it. No per-person row crosses; the
+    // returns table gets only its snapshot marker (no groups).
+    expect(Object.keys(byTable).sort()).toEqual([
+      'corridor_density_baseline_export',
+      'corridor_returns_export',
+    ]);
+    const returnRows = byTable.corridor_returns_export.rows.map((r) => r.json);
+    expect(returnRows).toEqual([
+      expect.objectContaining({ row_type: 'snapshot', groups_in_snapshot: 0 }),
+    ]);
     const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
     expect(returns?.rowsExported).toBe(0);
     expect(returns?.rowsSkipped).toBe(1);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
-    const rows = bqCalls.flatMap((c) => c.rows.map((r) => r.json));
+    const rows = bqCalls
+      .flatMap((c) => c.rows.map((r) => r.json))
+      .filter((j) => j.row_type !== 'snapshot');
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       // The corridor is the res7 node — before OSE-616 the event-joined tables
