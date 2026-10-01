@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-30 — 528 ids.
+ * Generated 2026-10-01 — 557 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 361 ids
+    // admin.html — 374 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -125,6 +125,7 @@
       'ecb-nav-poster',
       'ecb-nav-sponsors',
       'ecb-nav-surfaces',
+      'ecb-nav-tv',
       'event-context-bar',
       'event-date',
       'event-id',
@@ -358,6 +359,18 @@
       'sponsors-tbody',
       'surface-cards',
       'tier-badge',
+      'tv-display-card',
+      'tv-dwell',
+      'tv-intro',
+      'tv-league-bracket',
+      'tv-league-hint',
+      'tv-league-schedule',
+      'tv-league-standings',
+      'tv-msg',
+      'tv-open',
+      'tv-open-hint',
+      'tv-save',
+      'tv-screens',
       'wizard-back-btn',
       'wizard-category',
       'wizard-copy-display',
@@ -428,7 +441,7 @@
       'public-sponsor-section',
       'public-title',
     ]),
-    // display.html — 31 ids
+    // display.html — 47 ids
     DISPLAY: Object.freeze([
       'display-clock',
       'display-consent',
@@ -440,8 +453,20 @@
       'display-featured-title',
       'display-featured-venue',
       'display-header',
+      'display-league-heading',
+      'display-league-item',
+      'display-league-label',
+      'display-league-qr',
+      'display-league-url',
       'display-loading',
       'display-main',
+      'display-pane-dots',
+      'display-pane-event',
+      'display-pane-league',
+      'display-pane-paused',
+      'display-pane-sponsors',
+      'display-pane-upcoming',
+      'display-panes',
       'display-skip-link',
       'display-sponsor-banner',
       'display-sponsor-counter',
@@ -461,6 +486,10 @@
       'display-upcoming-date',
       'display-upcoming-heading',
       'display-upcoming-name',
+      'display-wall-heading',
+      'display-wall-sponsor',
+      'display-wall-sponsor-logo',
+      'display-wall-sponsor-name',
     ]),
     // poster.html — 37 ids
     POSTER: Object.freeze([

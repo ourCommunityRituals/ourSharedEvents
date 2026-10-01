@@ -1128,9 +1128,10 @@
           padding-top: 0.75rem;
         }
       }
-      /* OSE-1328 card 3: uniform .card + .mcard-* anatomy (header/body own spacing). */
+      /* OSE-1328: .mcard-* header/body own the spacing. */
       .sponsors-card,
       .poster-deployments-card,
+      .tv-display-card,
       .poster-art-card {
         margin-top: 2rem;
         padding: 0;
@@ -2281,6 +2282,7 @@
           <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Forms</button>
           <button type="button" data-testid="ecb-nav-poster" data-action="ecb-jump" data-target="poster-deployments-card">Poster</button>
           <button type="button" data-testid="ecb-nav-sponsors" data-action="ecb-jump" data-target="sponsors-card">Sponsors</button>
+          <button type="button" data-testid="ecb-nav-tv" data-action="ecb-jump" data-target="tv-display-card">TV</button>
           <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Surfaces</button>
         </nav>
       </div>
@@ -4953,6 +4955,218 @@
       </div>
     </div>
 
+    <!-- TV display (2026-10-01). GAS kept a per-event display order in /admin
+         (AdminDisplay.html); this is that card, back. It saves into the event's
+         settings (displayPanes / displayDwellSeconds / leagueLinks,
+         lib/event-settings.ts) through PUT /api/v2/admin/events/:id, and a TV on
+         /display?event=<id> picks a change up within a minute (it re-checks
+         GET /api/v2/events/:id/display-config with that response's ETag).
+         League links point at wherever the league already keeps them — a Google
+         Sheet, an Excel link, any https page; the TV shows each as a QR. -->
+    <div class="card tv-display-card" id="tv-display-card" data-testid="tv-display-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">TV display</h2>
+      </div>
+      <div class="mcard-body">
+        <p class="pd-target" data-testid="tv-intro">
+          What the TV at the venue shows, in order, and for how long. Screens with nothing to show are skipped.
+        </p>
+        <h3 class="pd-card-title" id="tv-screens-title">Screens, in order</h3>
+        <ol class="pc-list" id="tv-screens" data-testid="tv-screens" aria-labelledby="tv-screens-title"></ol>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="tv-dwell">Seconds per screen (5 to 120)</label>
+            <input type="number" id="tv-dwell" data-testid="tv-dwell" min="5" max="120" step="1" inputmode="numeric" value="15" />
+          </div>
+          <h3 class="pd-card-title full-width" id="tv-league-title">League links</h3>
+          <p class="pd-target full-width" data-testid="tv-league-hint">
+            Paste where the league already keeps it: a Google Sheet, an Excel link, any https page (up to 154 bytes once encoded, so
+            it fits in a QR code: plain letters and digits are 1 byte each, spaces and accented letters count for more). Leave blank to skip.
+          </p>
+          <div class="full-width">
+            <label for="tv-league-schedule">Schedule</label>
+            <input type="url" id="tv-league-schedule" data-testid="tv-league-schedule" placeholder="https://" inputmode="url" />
+          </div>
+          <div class="full-width">
+            <label for="tv-league-standings">Standings</label>
+            <input type="url" id="tv-league-standings" data-testid="tv-league-standings" placeholder="https://" inputmode="url" />
+          </div>
+          <div class="full-width">
+            <label for="tv-league-bracket">Bracket</label>
+            <input type="url" id="tv-league-bracket" data-testid="tv-league-bracket" placeholder="https://" inputmode="url" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
+          <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
+        </div>
+        <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
+        <p class="create-msg" id="tv-msg" data-testid="tv-msg" role="status"></p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Sponsors', league: 'League links' };
+        var ALL = ['event', 'upcoming', 'sponsors', 'league'];
+        var KINDS = ['schedule', 'standings', 'bracket'];
+        // rows: every screen, in order, each on or off. Order of the ON rows is
+        // what is saved; OFF rows keep their place so turning one back on is easy.
+        var tv = { eventId: null, rows: ALL.map(function (p) { return { pane: p, on: true }; }) };
+        function $(id) { return document.getElementById(id); }
+        function msg(text, kind) {
+          var m = $('tv-msg');
+          if (!m) return;
+          m.textContent = text;
+          m.className = 'create-msg' + (kind ? ' ' + kind : '');
+        }
+        function setDisabled(off) {
+          var card = $('tv-display-card');
+          if (!card) return;
+          card.querySelectorAll('input, button').forEach(function (el) { el.disabled = off; });
+        }
+        function render() {
+          var list = $('tv-screens');
+          if (!list) return;
+          list.textContent = '';
+          tv.rows.forEach(function (r, i) {
+            var li = document.createElement('li');
+            li.className = 'pc-row';
+            li.setAttribute('data-testid', 'tv-screen-row');
+            li.setAttribute('data-pane', r.pane);
+            var label = document.createElement('label');
+            label.className = 'create-publish-label';
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = r.on;
+            box.setAttribute('data-act', 'toggle');
+            box.setAttribute('data-testid', 'tv-screen-on');
+            var name = document.createElement('span');
+            name.textContent = LABELS[r.pane];
+            label.appendChild(box);
+            label.appendChild(name);
+            var moves = document.createElement('div');
+            moves.className = 'form-actions';
+            [['up', 'Move up', i === 0], ['down', 'Move down', i === tv.rows.length - 1]].forEach(function (m) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'copy-btn';
+              b.textContent = m[1];
+              b.setAttribute('aria-label', m[1] + ': ' + LABELS[r.pane]);
+              b.setAttribute('data-act', m[0]);
+              b.setAttribute('data-testid', 'tv-screen-' + m[0]);
+              b.disabled = m[2];
+              moves.appendChild(b);
+            });
+            li.appendChild(label);
+            li.appendChild(moves);
+            list.appendChild(li);
+          });
+        }
+        function fill(data) {
+          var saved = Array.isArray(data.panes) ? data.panes.filter(function (p) { return ALL.indexOf(p) !== -1; }) : ALL;
+          tv.rows = saved.map(function (p) { return { pane: p, on: true }; })
+            .concat(ALL.filter(function (p) { return saved.indexOf(p) === -1; }).map(function (p) { return { pane: p, on: false }; }));
+          var dwell = $('tv-dwell');
+          if (dwell) dwell.value = String(data.dwell_seconds || 15);
+          // Look each known kind up in the list; never write a property named by
+          // the response (CodeQL js/remote-property-injection).
+          var league = Array.isArray(data.league) ? data.league : [];
+          KINDS.forEach(function (k) {
+            var el = $('tv-league-' + k);
+            var hit = league.find(function (l) { return l && l.kind === k && typeof l.url === 'string'; });
+            if (el) el.value = hit ? hit.url : '';
+          });
+          render();
+        }
+        window.loadTvDisplay = async function (eventId) {
+          tv.eventId = eventId;
+          setDisabled(true);
+          msg('');
+          // Clear the previous event's values first, so a failed load never
+          // shows event A's configuration under event B.
+          fill({ panes: ALL, dwell_seconds: 15, league: [] });
+          setDisabled(true);
+          var open = $('tv-open');
+          if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/display-config');
+            var data = await res.json();
+            if (!res.ok || !data || !data.ok) throw new Error('load');
+            if (tv.eventId !== eventId) return; // a newer selection won
+            fill(data);
+            setDisabled(false);
+            render();
+          } catch (e) {
+            if (tv.eventId === eventId) msg('Could not load the TV settings.', 'error');
+          }
+        };
+        var list = $('tv-screens');
+        if (list) {
+          list.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('button[data-act]');
+            if (!btn || btn.disabled) return;
+            var i = Array.prototype.indexOf.call(list.children, btn.closest('li'));
+            var j = btn.getAttribute('data-act') === 'up' ? i - 1 : i + 1;
+            if (i < 0 || j < 0 || j >= tv.rows.length) return;
+            var moved = tv.rows[i];
+            tv.rows[i] = tv.rows[j];
+            tv.rows[j] = moved;
+            render();
+            // Keep keyboard focus on the moved row: the same button, or the
+            // opposite one when the row reached the top or bottom.
+            var row = list.children[j];
+            var again = row && row.querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
+            var other = row && row.querySelector('[data-act="' + (btn.getAttribute('data-act') === 'up' ? 'down' : 'up') + '"]');
+            if (again && !again.disabled) again.focus();
+            else if (other && !other.disabled) other.focus();
+          });
+          list.addEventListener('change', function (ev) {
+            var box = ev.target.closest('input[data-act="toggle"]');
+            if (!box) return;
+            var i = Array.prototype.indexOf.call(list.children, box.closest('li'));
+            if (tv.rows[i]) tv.rows[i].on = box.checked;
+          });
+        }
+        render();
+        var save = $('tv-save');
+        if (save) save.addEventListener('click', async function () {
+          if (!tv.eventId) return;
+          var panes = tv.rows.filter(function (r) { return r.on; }).map(function (r) { return r.pane; });
+          if (!panes.length) { msg('Pick at least one screen.', 'error'); return; }
+          var dwell = Number(($('tv-dwell') || {}).value);
+          if (!Number.isInteger(dwell) || dwell < 5 || dwell > 120) { msg('Seconds per screen must be a whole number from 5 to 120.', 'error'); return; }
+          var leagueLinks = {};
+          KINDS.forEach(function (k) { var v = (($('tv-league-' + k) || {}).value || '').trim(); leagueLinks[k] = v || null; });
+          var eventId = tv.eventId;
+          setDisabled(true);
+          msg('Saving…');
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks } }),
+            });
+            var data = await res.json().catch(function () { return null; });
+            // Another event was selected while this saved: its card is on
+            // screen now, so this event's result must not be written into it.
+            if (tv.eventId !== eventId) return;
+            if (!res.ok || !data || !data.ok) {
+              msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV is unchanged.', 'error');
+              return;
+            }
+            msg('Saved. A TV showing this event picks it up within a minute.', 'success');
+          } catch (e) {
+            if (tv.eventId === eventId) msg('Could not save. The TV is unchanged.', 'error');
+          } finally {
+            if (tv.eventId === eventId) {
+              setDisabled(false);
+              render();
+            }
+          }
+        });
+      })();
+    </script>
+
     <!-- R4 (OSE-1319) — Poster art. A selected-event management card. The poster
          art VIEWPORT (poster.html, #551) renders events.cover_image_url; this card
          is how an organizer PUTS an image there. Same-origin ONLY: the poster CSP
@@ -6500,6 +6714,7 @@
         if (typeof window._loadSponsorsForEvent === 'function') window._loadSponsorsForEvent(d.id);
         if (typeof window.scopeSurfaceCards === 'function') window.scopeSurfaceCards(d.id, d.name);
         if (typeof window.loadPosterArt === 'function') window.loadPosterArt(d.id);
+        if (typeof window.loadTvDisplay === 'function') window.loadTvDisplay(d.id);
       });
 
       // ── OSE-675: memoized admin-events fetch ──

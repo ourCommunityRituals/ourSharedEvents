@@ -142,6 +142,18 @@ export const NODE_SPECS = [
   // order). Runs the card's script from the admin.html Text import in a jsdom
   // window with a stubbed fetch; no cloudflare:test / D1.
   'tests/poster-deployment-address-ui.spec.ts',
+  // TV display pane rotation (ported from the GAS display's rotation engine):
+  // the pure engine with fake timers + the display.html script run in jsdom
+  // with a stubbed fetch; no cloudflare:test / D1.
+  'tests/display-pane-rotation.spec.ts',
+  // TV display settings (order, seconds per screen, league links) — pure over
+  // lib/event-settings.ts.
+  'tests/display-settings.spec.ts',
+  // Admin TV display card — its script run in jsdom with a stubbed fetch.
+  'tests/admin-tv-display-card.spec.ts',
+  // display-config ETag computed before QR generation (handler called directly,
+  // stub DB, lib/qr mocked to count encoder calls).
+  'tests/display-config-etag.spec.ts',
   // OSE-1357 part 2 — poster codes: pure rules (lib/poster-codes.ts) and the
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
