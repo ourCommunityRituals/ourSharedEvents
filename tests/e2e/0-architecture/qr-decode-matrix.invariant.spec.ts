@@ -51,6 +51,7 @@ const DECODE_SPEC_REL = 'tests/qr-roundtrip.spec.ts';
 const DECODE_SPEC = join(WORKER, DECODE_SPEC_REL);
 const NODE_SPECS = join(WORKER, 'vitest.node-specs.mjs');
 const WORKERS_CONFIG = join(WORKER, 'vitest.workers.config.mts');
+const ROOT_VITEST_CONFIG = join(WORKER, 'vitest.config.mts');
 const WORKER_PKG = join(WORKER, 'package.json');
 const ROOT_PKG = join(REPO_ROOT, 'package.json');
 const MUTATION_CATALOG = join(WORKER, 'scripts', 'mutate.mjs');
@@ -255,6 +256,10 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
       src,
       'the sweep must assert the decoded string EQUALS the encoded URL, not merely that something decoded'
     ).toMatch(/expect\(decodeQr\(uri\)[^)]*\)\.toBe\(url\)/);
+    expect(
+      src,
+      'the sweep must decode what the real encoder produced: `const uri = generateQrCode(url, ...)`'
+    ).toMatch(/const\s+uri\s*=\s*generateQrCode\(\s*url\s*,/);
   });
 
   test('OSE-1439 | nothing in it is skipped, focused, todo or expected-to-fail', () => {
@@ -317,6 +322,16 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
     ).toEqual([]);
 
     // Comment-stripped, so a commented-out include or exclude does not count.
+    // `npm test` is `vitest run`, which loads vitest.config.mts; the workers
+    // project only runs if that root config still lists it.
+    const root = code(ROOT_VITEST_CONFIG);
+    const projects = root.match(/projects:\s*\[([^\]]*)\]/);
+    expect(projects, 'vitest.config.mts must declare its projects').not.toBeNull();
+    expect(
+      [...projects![1].matchAll(/(['"`])((?:(?!\1).)+)\1/g)].map((m) => m[2].replace(/^\.\//, '')),
+      'vitest.config.mts must load the workers project, where the decode spec runs'
+    ).toContain('vitest.workers.config.mts');
+
     const cfg = code(WORKERS_CONFIG);
     const include = cfg.match(/include:\s*\[([^\]]*)\]/);
     const exclude = cfg.match(/exclude:\s*\[([^\]]*)\]/);
@@ -376,12 +391,22 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
       `the worker-d1-schema shard must run the worker suite; it runs: ${shard!.command}`
     ).toContain(String(shard!.command).trim());
     if (String(shard!.command).includes('vitest-retry.mjs')) {
+      // Data flow, not two independent tokens: argv → commandLine → runOnce →
+      // spawn(<that parameter>). `spawn('true', ...)` must fail.
       const runner = code(VITEST_RETRY);
-      expect(runner, 'vitest-retry.mjs must spawn the command it is given').toMatch(
-        /process\.argv\.slice\(2\)/
+      const argvVar = runner.match(/const\s+(\w+)\s*=\s*process\.argv\.slice\(2\)/);
+      expect(
+        argvVar,
+        'vitest-retry.mjs must read its command from process.argv.slice(2)'
+      ).not.toBeNull();
+      expect(runner, 'vitest-retry.mjs must build commandLine from the argv it read').toMatch(
+        new RegExp(`const\\s+commandLine\\s*=\\s*${argvVar![1]}\\b`)
       );
-      expect(runner, 'vitest-retry.mjs must spawn the command it is given').toMatch(
-        /\bspawn(Sync)?\(/
+      expect(runner, 'vitest-retry.mjs must run commandLine').toMatch(
+        /\brunOnce\(\s*commandLine\s*\)/
+      );
+      expect(runner, 'runOnce must spawn the command it was given, not a fixed one').toMatch(
+        /function\s+runOnce\(\s*(\w+)\s*\)\s*\{[\s\S]*?\bspawn\(\s*\1\s*,/
       );
     }
   });
