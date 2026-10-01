@@ -169,9 +169,11 @@ function valEquals(a, b) {
     if (s.notPrefix.some((p) => other.startsWith(p))) return false;
     return UNKNOWN;
   }
-  if (typeof a === 'string' || typeof b === 'string') return fold(a) === fold(b);
+  if (typeof a === 'string' && typeof b === 'string') return fold(a) === fold(b);
   if (typeof a === typeof b) return a === b;
-  return String(a) === String(b);
+  // Mixed types: GitHub coerces loosely (false == '' is true), so a mixed
+  // comparison is not modelled; it is UNKNOWN and fails closed.
+  return UNKNOWN;
 }
 
 const not = (v) => (v === UNKNOWN ? UNKNOWN : !v);
@@ -281,13 +283,13 @@ function makeParser(tokens, env) {
   }
 
   function parseComparison() {
-    const left = parsePrimary();
-    const tok = peek();
-    if (tok && (tok.t === '==' || tok.t === '!=')) {
-      next();
+    // GitHub chains comparisons left to right: a == b == c is (a == b) == c.
+    let left = parsePrimary();
+    while (peek() && (peek().t === '==' || peek().t === '!=')) {
+      const op = next().t;
       const right = parsePrimary();
       const eq = valEquals(left, right);
-      return tok.t === '==' ? eq : not(eq);
+      left = op === '==' ? eq : not(eq);
     }
     return left;
   }
@@ -310,7 +312,15 @@ function makeParser(tokens, env) {
     return v;
   }
 
-  return { run: () => truthy(parseOr()) };
+  return {
+    run: () => {
+      const v = truthy(parseOr());
+      // Anything left over means the expression was not understood: throw,
+      // so the caller fails closed (reachable).
+      if (pos < tokens.length) throw new Error(`unexpected trailing token '${tokens[pos].t}'`);
+      return v;
+    },
+  };
 }
 
 /** Evaluate a job `if:`. Returns true, false or UNKNOWN; throws on unparseable input. */
@@ -495,7 +505,8 @@ const PR_EVENTS = ['pull_request', 'pull_request_review', 'pull_request_review_c
 export function calledWorkflowSecrets(job, workflowMap, seen = new Set()) {
   const out = new Set();
   const uses = job && typeof job.uses === 'string' ? job.uses.trim() : '';
-  const m = /^\.\/\.github\/workflows\/([^@\s]+)$/.exec(uses);
+  // Same-repository local forms: `./path` and `$/path`.
+  const m = /^(?:\.|\$)\/\.github\/workflows\/([^@\s]+)$/.exec(uses);
   if (!m || seen.has(m[1])) return out;
   seen.add(m[1]);
   const called = workflowMap[m[1]];
@@ -541,7 +552,7 @@ function persistedCheckouts(steps, label, resolveAction, out, seen = new Set()) 
       out.push(where);
       return;
     }
-    const local = /^\.\/(.+?)\/?$/.exec(uses);
+    const local = /^(?:\.|\$)\/(.+?)\/?$/.exec(uses);
     if (!local || /\.ya?ml$/i.test(local[1]) || seen.has(local[1])) return;
     const action = resolveAction(local[1]);
     if (!action || !action.runs || String(action.runs.using).toLowerCase() !== 'composite') return;
@@ -1432,6 +1443,62 @@ function runSelfTest() {
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: mixed-type comparison (false == '') that GitHub coerces to true",
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || false == ''",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: chained comparison (event == 'schedule' == false)",
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'schedule' == false",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: PR job calls a reusable workflow with the $/ same-repo syntax',
+      wf: {
+        'ci.yml': { on: { pull_request: {} }, jobs: { call: { uses: '$/.github/workflows/b.yml' } } },
+        'b.yml': {
+          on: { workflow_call: {} },
+          jobs: { deploy: { environment: 'staging', steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: $/ local composite action checks out with a persisted token',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ uses: '$/.github/actions/fetch-brain', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } }] } },
+        },
+      },
+      actions: {
+        '.github/actions/fetch-brain': {
+          runs: { using: 'composite', steps: [{ uses: 'actions/checkout@v4', with: { token: '${{ inputs.token }}' } }] },
         },
       },
       expectViolation: true,
