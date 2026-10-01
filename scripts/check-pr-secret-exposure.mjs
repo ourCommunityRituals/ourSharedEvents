@@ -487,7 +487,9 @@ export function collectSecretsDeep(node, out) {
     // matching what the GitHub expression parser accepts.
     const re = /(?<![\w-])secrets\s*\.\s*([A-Za-z0-9_]+)|(?<![\w-])secrets\s*\[\s*['"]([A-Za-z0-9_]+)['"]\s*\]/gi;
     let m;
-    while ((m = re.exec(node)) !== null) out.add(m[1] || m[2]);
+    // GitHub stores secret names uppercase and resolves references
+    // case-insensitively, so names are normalised before any comparison.
+    while ((m = re.exec(node)) !== null) out.add((m[1] || m[2]).toUpperCase());
     return;
   }
   if (Array.isArray(node)) {
@@ -646,7 +648,7 @@ function loadAllowlist() {
     process.exit(1);
   }
   const parsed = JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8'));
-  return new Set(Object.keys((parsed && parsed.approved) || {}));
+  return new Set(Object.keys((parsed && parsed.approved) || {}).map((k) => k.toUpperCase()));
 }
 
 /** Load `./<path>/action.yml` (or `.yaml`) from the repo; null if absent. */
@@ -1504,6 +1506,26 @@ function runSelfTest() {
       expectViolation: true,
     },
     {
+      name: 'safe: lowercase secrets.github_token is GITHUB_TOKEN (names are case-insensitive)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { steps: [{ env: { T: '${{ secrets.github_token }}' } }] } },
+        },
+      },
+      expectViolation: false,
+    },
+    {
+      name: 'safe: lowercase reference to an allowlisted secret matches its uppercase entry',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ env: { T: '${{ secrets.ocr_propagate_token }}' } }] } },
+        },
+      },
+      expectViolation: false,
+    },
+    {
       name: 'safe: workflow_run job with no secrets at all',
       wf: {
         'rt.yml': {
@@ -1592,7 +1614,7 @@ function main() {
     violations.push(
       `  secret ${secret} is held by a workflow_run job that a pull_request source run can trigger — via ${[...where]
         .sort()
-        .join(', ')} (ADR-012 0.2: require workflow_run.event != 'pull_request')`
+        .join(', ')} (ADR-012 0.2: trust a workflow_run only when its source was a push or schedule on this repository's main: event push/schedule, head_branch == 'main', head_repository.full_name == github.repository)`
     );
   }
 

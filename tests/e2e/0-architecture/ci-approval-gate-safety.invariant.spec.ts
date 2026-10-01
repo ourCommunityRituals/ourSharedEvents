@@ -70,7 +70,9 @@ test.describe('Invariant: CI Approval-Gate Safety (ADR-020)', () => {
   test('OSE-INV-CIGATE | security | scanner | allowlist exists and holds no infra/deploy creds', () => {
     expect(existsSync(ALLOWLIST), 'the reviewed allowlist must exist (fail-closed)').toBe(true);
     const parsed = JSON.parse(readFileSync(ALLOWLIST, 'utf8'));
-    const keys = Object.keys((parsed && parsed.approved) || {});
+    // Secret names are case-insensitive in GitHub, so compare uppercase: a
+    // lowercase entry must not slip past the forbidden-key checks.
+    const keys = Object.keys((parsed && parsed.approved) || {}).map((k) => k.toUpperCase());
     for (const forbidden of FORBIDDEN_ALLOWLIST_KEYS) {
       expect(
         keys.includes(forbidden),
