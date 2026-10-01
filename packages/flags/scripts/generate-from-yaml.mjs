@@ -75,11 +75,11 @@ const keysModule = [
   '',
   'export const ALL_FLAG_KEYS: readonly FlagKey[] = Object.freeze([',
   ...keys.map(({ key }) => `  ${JSON.stringify(key)},`),
-  ']) as readonly FlagKey[];',
+  ']);',
   '',
   'export const FLAG_KEY_DOMAIN: Readonly<Record<FlagKey, string>> = Object.freeze({',
   ...keys.map(({ key, domain }) => `  ${JSON.stringify(key)}: ${JSON.stringify(domain)},`),
-  '}) as Readonly<Record<FlagKey, string>>;',
+  '});',
   '',
 ].join('\n');
 
@@ -102,7 +102,7 @@ const presetsModule = [
       '  }),',
     ];
   }),
-  '}) as Record<Tier, Readonly<Record<FlagKey, boolean>>>;',
+  '});',
   '',
 ].join('\n');
 

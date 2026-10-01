@@ -171,7 +171,11 @@ yaml_check = subprocess.run(
     [sys.executable, str(PKG_ROOT / 'scripts' / 'check-yaml-syntax.py')],
     capture_output=True, text=True,
 )
-if yaml_check.returncode == 0:
+# Fail closed: the script exits 0 with [SKIP] when PyYAML is missing, which
+# used to read here as 'contract parses' without parsing anything (OSE-1461).
+if yaml_check.returncode == 0 and '[SKIP]' in yaml_check.stdout:
+    check('yaml_syntax', False, 'SKIPPED - PyYAML not installed, contract was not parsed')
+elif yaml_check.returncode == 0:
     check('yaml_syntax', True, 'contract parses')
 else:
     tail = (yaml_check.stdout + yaml_check.stderr).strip().splitlines()[-3:]

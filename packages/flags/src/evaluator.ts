@@ -51,11 +51,11 @@ export async function resolveFlags(
     for (const key of ALL_FLAG_KEYS) {
       out[key] = resolved.has(key) ? resolved.get(key)! : true;
     }
-    return out as Record<FlagKey, boolean>;
+    return out;
   } catch (err) {
     emit(opts?.observability, adapter.id, err);
     for (const key of ALL_FLAG_KEYS) out[key] = true;
-    return out as Record<FlagKey, boolean>;
+    return out;
   }
 }
 

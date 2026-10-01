@@ -29,9 +29,9 @@ function freshClient(): PgClient {
     implementation: () => new Date(),
     impure: true,
   });
-  const pg = db.adapters.createPg();
-  const pool = new pg.Pool();
-  return pool as unknown as PgClient;
+  // createPg() is typed `any`; pin the one constructor this spec uses.
+  const { Pool } = db.adapters.createPg() as { Pool: new () => PgClient };
+  return new Pool();
 }
 
 runAdapterSpec('postgres', () => {
