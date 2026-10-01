@@ -26,11 +26,17 @@ queries:
   - uses: security-experimental
 
   # OSE's own Cloudflare Workers / D1 / CI queries (custom-queries/*.ql) are
-  # NOT enabled yet: they had never been compiled, and on first compile
-  # (CodeQL 2.27.1) html-innerhtml-xss.ql fails ("could not resolve type
-  # PropWrite"), which aborts the whole analysis. Repair + re-enable with
+  # still NOT enabled. The two files that failed to compile (html-innerhtml-xss.ql
+  # and cloudflare-debug-endpoints.ql both referenced the unqualified `PropWrite`
+  # type, which only resolves as `DataFlow::PropWrite`) are fixed and all 13
+  # queries now compile and evaluate cleanly (verified with CodeQL 2.27.0
+  # `codeql database analyze` against this repo). Enabling them is still held
+  # back on purpose: a full local run surfaced 56 gated findings in production
+  # code (innerHTML/XSS, insecure-random, timing-unsafe comparisons, one D1
+  # query, one debug-endpoint flag) that need individual triage before the gate
+  # can go on them. Re-enable with
   #   - uses: ./.github/codeql/custom-queries
-  # is OSE-1414.
+  # once that triage is done — tracked as OSE-1414.
 
 query-filters:
   # Include ALL security queries regardless of precision
