@@ -96,6 +96,8 @@ export interface ExportResult {
    * in rowsExported: a marker is not data, it tells OER which snapshot is current.
    */
   snapshotMarkers?: number;
+  /** Returns phase only: false when no weekly snapshot was due this run. */
+  snapshotDue?: boolean;
 }
 
 /**
@@ -294,6 +296,28 @@ async function prepareExport(
 export const RETURNS_WINDOW_DAYS = 90;
 /** A group, or a count inside it, below this is never exported (k-floor). */
 export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
+/**
+ * Every published count is rounded down to a multiple of this before the
+ * floors apply (PO decision 2026-10-01). A snapshot is compared with the last
+ * one, so an exact count would show a one-person change between them (12 then
+ * 13); rounded, small changes disappear inside a step of 5, and a change that
+ * crosses a step never says how many people moved.
+ */
+export const PUBLISH_ROUNDING = CORRIDOR_MAP_MIN_COUNT;
+/** A count rounded down to a multiple of PUBLISH_ROUNDING. */
+export function roundForPublish(n: number): number {
+  const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return v - (v % PUBLISH_ROUNDING);
+}
+/**
+ * The returns snapshot is weekly, not nightly (PO decision 2026-10-01): fewer
+ * snapshots to compare. A run takes one only when the last successful snapshot
+ * is at least this old; the 12-hour slack keeps a daily cron from slipping a
+ * day on a few minutes of jitter, and a failed run is retried the next night.
+ */
+export const RETURNS_SNAPSHOT_INTERVAL_MS = 7 * 86_400_000 - 12 * 3_600_000;
+/** Export-state row that records when the last returns snapshot succeeded. */
+export const RETURNS_SNAPSHOT_STATE = 'corridor_returns_snapshot';
 /** Groups read per page of the snapshot query. */
 export const RETURNS_PAGE_SIZE = 500;
 /** Page bound: a snapshot larger than this fails closed (no marker) rather than run unbounded. */
@@ -322,8 +346,8 @@ interface CorridorReturnsRow {
 
 export async function exportAnonIdReturns(
   env: SharedReportExportEnv,
-  // Test seam only: the paging limits. Production always uses the defaults.
-  limits: { pageSize?: number; maxPages?: number } = {}
+  // Test seam only: paging limits and the clock. Production uses the defaults.
+  limits: { pageSize?: number; maxPages?: number; now?: Date } = {}
 ): Promise<ExportResult> {
   const pageSize = limits.pageSize ?? RETURNS_PAGE_SIZE;
   const maxPages = limits.maxPages ?? RETURNS_MAX_PAGES;
@@ -342,6 +366,17 @@ export async function exportAnonIdReturns(
   }
   const { watermark, result } = prep;
 
+  // Weekly cadence: a run that is not due changes nothing, not even the source
+  // watermark, so the next due run sees exactly what this one would have.
+  const now = limits.now ?? new Date();
+  const lastSnapshot = await getWatermark(env.DB, RETURNS_SNAPSHOT_STATE);
+  const sinceLast = now.getTime() - Date.parse(lastSnapshot);
+  result.snapshotDue = !(sinceLast >= 0 && sinceLast < RETURNS_SNAPSHOT_INTERVAL_MS);
+  if (!result.snapshotDue) {
+    result.durationMs = Date.now() - start;
+    return result;
+  }
+
   try {
     // A rolling window changes as rows age out even when nothing new was
     // materialized, so a snapshot is taken on every scheduled run (nightly
@@ -357,7 +392,6 @@ export async function exportAnonIdReturns(
     result.rowsRead = changed?.n ?? 0;
     const nextWatermark = changed?.max_computed_at ?? watermark;
 
-    const now = new Date();
     // One pepper only (migration 0091): after a rotation the same browser has a
     // second hash, so mixing peppers would count one person twice and could lift
     // a group of fewer than five people over the floor. Rows of an older or
@@ -476,8 +510,9 @@ export async function exportAnonIdReturns(
         // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
         // published counts reveals a group under the floor (people 12, 2+ 9
         // would say 3 came once). The group floor above already holds people.
-        const [, ret2, ret3, ret5] = floorNestedCounts(
-          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
+        // Rounded first, so every published value is a multiple of 5.
+        const [peopleOut, ret2, ret3, ret5] = floorNestedCounts(
+          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus].map(roundForPublish),
           RETURNS_MIN_COUNT,
           RETURNS_MIN_COUNT
         );
@@ -497,7 +532,7 @@ export async function exportAnonIdReturns(
             ...tags,
             row_type: 'group',
             window_days: RETURNS_WINDOW_DAYS,
-            people_count: r.people,
+            people_count: peopleOut,
             returned_2plus: ret2,
             returned_3plus: ret3,
             returned_5plus: ret5,
@@ -560,6 +595,8 @@ export async function exportAnonIdReturns(
     }
 
     await advanceWatermark(env.DB, 'anon_id_returns', nextWatermark, result.rowsExported);
+    // Only a complete snapshot (groups and markers sent) starts the next week.
+    await advanceWatermark(env.DB, RETURNS_SNAPSHOT_STATE, computedAt, 0);
   } catch (err) {
     result.errors++;
     const msg = err instanceof Error ? err.message : String(err);
@@ -669,7 +706,7 @@ export async function exportCorridorDensityBaseline(
       // chain (90d ⊇ 30d), so 90d − 30d never names a group under K. A row
       // with nothing left to say is withheld.
       const [w90, w30] = floorNestedCounts(
-        [r.window_90d_count, r.window_30d_count],
+        [r.window_90d_count, r.window_30d_count].map(roundForPublish),
         CORRIDOR_BASELINE_MIN_SAMPLE,
         CORRIDOR_MAP_MIN_COUNT
       );

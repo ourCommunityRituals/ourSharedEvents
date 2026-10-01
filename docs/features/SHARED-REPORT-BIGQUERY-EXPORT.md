@@ -207,6 +207,19 @@ equal to, or at least 5 below, the last count sent before it. Otherwise it is
 `returned_2plus` 9 would tell a reader that 3 people came once. A group with
 no real res7 corridor is withheld, never sent as `'unknown'`.
 
+**Rounding and cadence (PO decision 2026-10-01):** a snapshot is compared
+with the one before it, so exact counts would show a one-person change between
+two runs (12, then 13). Every published count is rounded down to a multiple of
+5 (`roundForPublish`, `PUBLISH_ROUNDING`) before the floors apply, and the
+returns snapshot is taken weekly, not nightly: a run takes one only when the
+last successful snapshot (`bigquery_export_state` row
+`corridor_returns_snapshot`) is at least 6.5 days old, so a failed run is
+retried the next night. A run that is not due sends nothing and moves no
+watermark. Rounding leaves every gap between published counts at 0 or a
+multiple of 5, so the chain rule above can no longer be broken by rounded
+values. The corridor baseline export is rounded the same way, but still follows
+the baseline refresh cadence; making it weekly is a follow-up.
+
 **Paging:** the grouped query is read 500 groups at a time
 (`RETURNS_PAGE_SIZE`), keyed by (corridor, pool, type), and each page is
 sent as it arrives, so the snapshot is never held whole in D1's result or
