@@ -32,7 +32,12 @@ import {
   validateHttpsUrl,
   sponsorLogoPath,
   fetchAndProxyLogo,
+  isBlockedLogoHost,
+  validateProxiedLogoUrl,
+  readCapped,
+  LOGO_FETCH_TIMEOUT_MS,
   LOGO_MAX_BYTES,
+  LOGO_MAX_REDIRECTS,
 } from '../src/lib/sponsor-logo';
 
 afterEach(() => {
@@ -157,15 +162,13 @@ function makeFetchStub(opts: {
 }) {
   return vi.fn(async () => {
     if (opts.throws) throw new Error('network failure');
+    // A real Response, so the body is a stream: OSE-1433 reads it with a cap
+    // instead of arrayBuffer().
     const bytes = opts.bodyBytes ?? new ArrayBuffer(100);
-    return {
-      ok: (opts.status ?? 200) >= 200 && (opts.status ?? 200) < 300,
+    return new Response(bytes, {
       status: opts.status ?? 200,
-      headers: {
-        get: (name: string) => (name === 'content-type' ? (opts.contentType ?? 'image/png') : null),
-      },
-      arrayBuffer: async () => bytes,
-    };
+      headers: { 'content-type': opts.contentType ?? 'image/png' },
+    });
   });
 }
 
@@ -235,4 +238,263 @@ describe('fetchAndProxyLogo', () => {
       expect(r.ok).toBe(true);
     }
   );
+});
+
+// ── OSE-1433: host rule, redirects, streaming cap ─────────────────────────────
+//
+// @born-red OSE-1433 | method: these cases run against origin/main's
+//   sponsor-logo.ts (no host rule, redirect:'follow', arrayBuffer-then-check)
+//   fail; green with the change | date: 2026-10-01
+
+describe('OSE-1433 | a logo host must be a public DNS name', () => {
+  test.each([
+    'http://localhost/l.png',
+    'http://LOCALHOST./l.png',
+    'https://api.localhost/l.png',
+    'http://127.0.0.1/l.png',
+    'http://2130706433/l.png', // decimal 127.0.0.1
+    'http://0x7f.1/l.png', // hex short form
+    'http://10.0.0.5/l.png',
+    'http://192.168.1.1/l.png',
+    'http://169.254.169.254/latest/meta-data', // cloud metadata
+    'http://[::1]/l.png',
+    'http://[fd00::1]/l.png',
+    'http://intranet/l.png', // single-label
+    'http://printer.local/l.png',
+    'http://db.internal/l.png',
+    'http://nas.home.arpa/l.png',
+  ])('refuses %s on write (INVALID_HOST)', (u) => {
+    const r = validateProxiedLogoUrl(u);
+    expect(r.valid).toBe(false);
+    expect(r.error).toBe('INVALID_HOST');
+  });
+
+  test.each(['https://cdn.example.com/l.png', 'http://images.shop.example.org/logo.svg'])(
+    'accepts a public name: %s',
+    (u) => expect(validateProxiedLogoUrl(u).valid).toBe(true)
+  );
+
+  test('the proxied validator keeps every base check (scheme, parse, length)', () => {
+    expect(validateProxiedLogoUrl('javascript:alert(1)').error).toBe('INVALID_SCHEME');
+    expect(validateProxiedLogoUrl('not a url').error).toBe('INVALID_URL');
+    expect(validateProxiedLogoUrl('https://a.example.com/' + 'x'.repeat(500)).error).toBe(
+      'TOO_LONG'
+    );
+    expect(validateProxiedLogoUrl(null)).toEqual({ valid: true, url: null });
+  });
+
+  // Copilot review on #721: validateLogoUrl also guards event media
+  // (who_image_url, what_video_url) and the WHAT link, which the visitor's
+  // browser loads. The host rule must not change those.
+  test('browser-loaded URLs keep the old rule: no host check on validateLogoUrl / validateHttpsUrl', () => {
+    for (const u of [
+      'http://203.0.113.7/photo.jpg',
+      'https://intranet/page',
+      'http://localhost/x',
+    ]) {
+      expect(validateLogoUrl(u).valid, u).toBe(true);
+    }
+    expect(validateHttpsUrl('https://intranet/page').valid).toBe(true);
+  });
+
+  test('isBlockedLogoHost is the same rule the fetch re-checks', () => {
+    expect(isBlockedLogoHost(new URL('http://2130706433/').hostname)).toBe(true);
+    expect(isBlockedLogoHost('cdn.example.com')).toBe(false);
+  });
+
+  test('at fetch time a blocked host is refused without any request', async () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    const r = await fetchAndProxyLogo('http://169.254.169.254/latest/meta-data');
+    expect(r).toEqual({ ok: false, error: 'BLOCKED_HOST' });
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe('OSE-1433 | redirects are followed by hand, capped, and re-checked', () => {
+  const png = () =>
+    new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } });
+  const to = (location: string, status = 302) =>
+    new Response(null, { status, headers: { location } });
+
+  test('fetch never follows on its own', async () => {
+    const f = vi.fn(async () => png());
+    vi.stubGlobal('fetch', f);
+    await fetchAndProxyLogo('https://cdn.example.com/l.png');
+    expect(f).toHaveBeenCalledWith(
+      'https://cdn.example.com/l.png',
+      expect.objectContaining({ redirect: 'manual' })
+    );
+  });
+
+  test(`a chain of ${LOGO_MAX_REDIRECTS} redirects is followed`, async () => {
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce(to('https://cdn.example.com/a'))
+      .mockResolvedValueOnce(to('/b', 301)) // relative Location
+      .mockResolvedValueOnce(to('https://cdn2.example.com/c', 307))
+      .mockResolvedValueOnce(png());
+    vi.stubGlobal('fetch', f);
+    const r = await fetchAndProxyLogo('https://start.example.com/l.png');
+    expect(r.ok).toBe(true);
+    expect(f.mock.calls.map((c) => c[0])).toEqual([
+      'https://start.example.com/l.png',
+      'https://cdn.example.com/a',
+      'https://cdn.example.com/b',
+      'https://cdn2.example.com/c',
+    ]);
+  });
+
+  test(`a chain longer than ${LOGO_MAX_REDIRECTS} is refused`, async () => {
+    const f = vi.fn(async () => to('https://loop.example.com/again'));
+    vi.stubGlobal('fetch', f);
+    const r = await fetchAndProxyLogo('https://loop.example.com/start');
+    expect(r).toEqual({ ok: false, error: 'TOO_MANY_REDIRECTS' });
+    expect(f).toHaveBeenCalledTimes(LOGO_MAX_REDIRECTS + 1);
+  });
+
+  test('a redirect to a blocked host is refused before it is requested', async () => {
+    const f = vi.fn(async () => to('http://169.254.169.254/latest/meta-data'));
+    vi.stubGlobal('fetch', f);
+    const r = await fetchAndProxyLogo('https://cdn.example.com/l.png');
+    expect(r).toEqual({ ok: false, error: 'BLOCKED_HOST' });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  test('a redirect with no Location is an upstream error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 302 }))
+    );
+    expect(await fetchAndProxyLogo('https://cdn.example.com/l.png')).toEqual({
+      ok: false,
+      error: 'UPSTREAM_302',
+    });
+  });
+});
+
+describe('OSE-1433 | an oversized body is cut off while streaming', () => {
+  /** A stream of 64 KB chunks that never ends; counts how many were pulled. */
+  function endless() {
+    let pulled = 0;
+    let cancelled = false;
+    const chunk = new Uint8Array(64 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulled++;
+        c.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    return { body, pulled: () => pulled, cancelled: () => cancelled };
+  }
+
+  test('readCapped stops one chunk past the cap and cancels the stream', async () => {
+    const s = endless();
+    const out = await readCapped(new Response(s.body), LOGO_MAX_BYTES);
+    expect(out).toBeNull();
+    expect(s.cancelled()).toBe(true);
+    // Never more than the cap plus one chunk (and the stream's one-chunk lookahead).
+    expect(s.pulled() * 64 * 1024).toBeLessThanOrEqual(LOGO_MAX_BYTES + 2 * 64 * 1024);
+  });
+
+  test('an endless upstream with no Content-Length is refused, not buffered', async () => {
+    const s = endless();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(s.body, { headers: { 'content-type': 'image/png' } }))
+    );
+    const r = await fetchAndProxyLogo('https://cdn.example.com/huge.png');
+    expect(r).toEqual({ ok: false, error: 'RESPONSE_TOO_LARGE' });
+    expect(s.cancelled()).toBe(true);
+  });
+
+  test('a declared Content-Length over the cap is refused before reading', async () => {
+    const s = endless();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(s.body, {
+            headers: { 'content-type': 'image/png', 'content-length': String(LOGO_MAX_BYTES + 1) },
+          })
+      )
+    );
+    const r = await fetchAndProxyLogo('https://cdn.example.com/huge.png');
+    expect(r).toEqual({ ok: false, error: 'RESPONSE_TOO_LARGE' });
+    expect(s.pulled()).toBeLessThanOrEqual(1);
+  });
+
+  test('a body at or under the cap is returned whole', async () => {
+    const bytes = new Uint8Array(1000).fill(7);
+    const out = await readCapped(new Response(bytes), LOGO_MAX_BYTES);
+    expect(out).toEqual(bytes);
+  });
+});
+
+describe('OSE-1433 | a slow upstream is cut off at LOGO_FETCH_TIMEOUT_MS (Copilot review on #721)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A fetch stub that honours the abort signal, as the runtime does. */
+  function abortable(make: (signal: AbortSignal) => Promise<Response>) {
+    return vi.fn((_url: string, init?: RequestInit) => make(init!.signal!));
+  }
+  const onAbort = (signal: AbortSignal, reject: (e: unknown) => void) =>
+    signal.addEventListener('abort', () => reject(new Error('aborted')));
+
+  test('a fetch that never answers fails after the timeout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      abortable((signal) => new Promise<Response>((_, reject) => onAbort(signal, reject)))
+    );
+    const pending = fetchAndProxyLogo('https://slow.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+  });
+
+  test('a body that stalls mid-stream fails after the timeout (the signal stays armed while reading)', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      abortable(async (signal) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new Uint8Array(10)); // a first chunk, then nothing
+            signal.addEventListener('abort', () => c.error(new Error('aborted')));
+          },
+        });
+        return new Response(body, { headers: { 'content-type': 'image/png' } });
+      })
+    );
+    const pending = fetchAndProxyLogo('https://trickle.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+  });
+
+  test('a redirect hop that stalls fails after the timeout, on the shared signal', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      abortable(async (signal) => {
+        calls++;
+        if (calls === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: 'https://next.example.com/l.png' },
+          });
+        }
+        return new Promise<Response>((_, reject) => onAbort(signal, reject));
+      })
+    );
+    const pending = fetchAndProxyLogo('https://first.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+    expect(calls).toBe(2);
+  });
 });

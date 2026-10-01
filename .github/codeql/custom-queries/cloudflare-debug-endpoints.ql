@@ -15,7 +15,7 @@
 import javascript
 
 from
-  PropWrite pw
+  DataFlow::PropWrite pw
 where
   pw.getPropertyName().regexpMatch("(?i).*debug.*endpoint.*|.*enable.*debug.*") and
   pw.getRhs().getStringValue() = "true"

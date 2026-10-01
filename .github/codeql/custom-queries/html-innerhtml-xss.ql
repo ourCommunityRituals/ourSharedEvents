@@ -15,9 +15,9 @@
 
 import javascript
 
-from PropWrite pw
+from DataFlow::PropWrite pw
 where
   pw.getPropertyName() = "innerHTML" and
   // Flag when the RHS is not a string literal (i.e., it's dynamic)
-  not pw.getRhs() instanceof StringLiteral
+  not pw.getRhs().asExpr() instanceof StringLiteral
 select pw, "innerHTML set with dynamic content — use textContent or sanitize input to prevent XSS."

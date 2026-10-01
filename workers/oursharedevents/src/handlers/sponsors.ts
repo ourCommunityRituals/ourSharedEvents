@@ -31,7 +31,7 @@ import {
   type Surface,
   type SponsorRow,
 } from '../lib/sponsor-resolver';
-import { validateLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { validateProxiedLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import { CARD_FIELDS, checkCardField, type CardField } from '../lib/sponsor-card';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import {
@@ -466,21 +466,21 @@ export async function handleAdminCreateSponsor(
   // Two logos, both optional: the header logo (wide) stays format 'logo' so every
   // existing reader keeps working; the sidebar logo (square/compact) is its own
   // format 'logo_compact' (migration 0081). No logo → surfaces render the name.
-  const logoValidation = validateLogoUrl(body.logo_url ?? null);
+  const logoValidation = validateProxiedLogoUrl(body.logo_url ?? null);
   if (!logoValidation.valid) {
     return errorResponse(
       'INVALID_LOGO_URL',
-      'Header logo must be a valid http:// or https:// URL (max 500 chars)',
+      'Header logo must be an http:// or https:// URL on a public web host (max 500 chars)',
       400,
       rid
     );
   }
   const logoUrl = logoValidation.url;
-  const compactValidation = validateLogoUrl(body.sidebar_logo_url ?? null);
+  const compactValidation = validateProxiedLogoUrl(body.sidebar_logo_url ?? null);
   if (!compactValidation.valid) {
     return errorResponse(
       'INVALID_SIDEBAR_LOGO_URL',
-      'Sidebar logo must be a valid http:// or https:// URL (max 500 chars)',
+      'Sidebar logo must be an http:// or https:// URL on a public web host (max 500 chars)',
       400,
       rid
     );
@@ -822,11 +822,11 @@ export async function handleAdminUpdateSponsor(
     if (val === null || val === '') {
       logoUpdates.push({ format, url: null });
     } else if (typeof val === 'string') {
-      const logoValidation = validateLogoUrl(val);
+      const logoValidation = validateProxiedLogoUrl(val);
       if (!logoValidation.valid) {
         return errorResponse(
           format === 'logo' ? 'INVALID_LOGO_URL' : 'INVALID_SIDEBAR_LOGO_URL',
-          `${label} must be a valid http:// or https:// URL (max 500 chars)`,
+          `${label} must be an http:// or https:// URL on a public web host (max 500 chars)`,
           400,
           rid
         );
@@ -1621,8 +1621,10 @@ export async function handleSponsorLogo(
                AND sp.is_active = 1
                -- CCR PR #699: the same consent gate as the card, the bundle and
                -- the public page — a logo is not served for a sponsor that has
-               -- not accepted, or that the organizer has not accepted.
-               AND COALESCE(sp.organizer_accepted, 1) = 1
+               -- not accepted, or that the organizer has not accepted. OSE-1433:
+               -- source-aware like the card and resolver (ADR-019 amendment), so
+               -- an unanswered sponsor_request is not served.
+               AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                AND sp.sponsor_accepted = 1
           )`
     )
@@ -1639,7 +1641,7 @@ export async function handleSponsorLogo(
   }
 
   const logoUrl = row.logo_url as string;
-  const validation = validateLogoUrl(logoUrl);
+  const validation = validateProxiedLogoUrl(logoUrl);
   if (!validation.valid || !validation.url) {
     return new Response(null, { status: 422, headers: { 'X-Request-Id': rid } });
   }
@@ -1647,11 +1649,13 @@ export async function handleSponsorLogo(
   // Edge cache, keyed by the UPSTREAM url — every public surface now loads logos
   // through here, so a page view must not mean a fetch to the sponsor's host.
   // Keying by the stored URL means an admin changing the logo is a cache miss,
-  // not a day of the old image. Only a successful proxy is cached.
+  // not a day of the old image. A success is cached for a day; a failure for
+  // SPONSOR_LOGO_NEGATIVE_TTL_S (OSE-1433), so a dead host is asked at most
+  // once a minute per colo instead of once per page view.
   const cache = typeof caches !== 'undefined' ? caches.default : null;
-  const cacheKey = new Request(
-    `https://sponsor-logo-cache.invalid/?u=${encodeURIComponent(validation.url)}`
-  );
+  const keyUrl = encodeURIComponent(validation.url);
+  const cacheKey = new Request(`https://sponsor-logo-cache.invalid/?u=${keyUrl}`);
+  const failKey = new Request(`https://sponsor-logo-cache.invalid/?failed=1&u=${keyUrl}`);
   if (cache) {
     const hit = await cache.match(cacheKey).catch(() => undefined);
     if (hit) {
@@ -1660,11 +1664,27 @@ export async function handleSponsorLogo(
       res.headers.set('X-Request-Id', rid);
       return res;
     }
+    if (await cache.match(failKey).catch(() => undefined)) {
+      logLogoOutcome('failed_cached', sidebar);
+      return logoUpstreamError(rid);
+    }
   }
 
   // Only a cache MISS reaches the sponsor's host, and misses are rate-limited
   // per caller (OSE-1247 posture) — this route is public and each miss is an
   // outbound fetch. Generous: one page shows several logos.
+  //
+  // OSE-1433 decision: the limiter stays FAIL-OPEN when KV is missing or errors,
+  // like every public read. What bounds outbound fetches without it:
+  //   - the URL is admin-set: a caller cannot choose what we fetch, and each
+  //     request makes at most one upstream fetch (no amplification);
+  //   - the caches dedupe REPEAT views (a day while healthy, a minute while
+  //     failing). They do not coalesce CONCURRENT cold misses — Workers cannot
+  //     share one in-flight fetch across requests without a Durable Object;
+  //   - so this isolate also caps upstream logo fetches in flight at
+  //     SPONSOR_LOGO_MAX_IN_FLIGHT, each cut off at LOGO_FETCH_TIMEOUT_MS. A miss
+  //     over the cap gets a 503 and the page shows the OSE default image.
+  // Failing closed would blank every logo on the platform during a KV outage.
   if (await isPublicReadLimited(request, env, 'sponsor-logo', SPONSOR_LOGO_READ_MAX)) {
     logLogoOutcome('limited', sidebar);
     return new Response(null, {
@@ -1673,13 +1693,31 @@ export async function handleSponsorLogo(
     });
   }
 
-  const result = await fetchAndProxyLogo(validation.url);
+  if (logoFetchesInFlight >= SPONSOR_LOGO_MAX_IN_FLIGHT) {
+    logLogoOutcome('busy', sidebar);
+    return new Response(null, {
+      status: 503,
+      headers: { 'X-Request-Id': rid, 'Retry-After': '5', 'Cache-Control': 'no-store' },
+    });
+  }
+  logoFetchesInFlight++;
+  let result: Awaited<ReturnType<typeof fetchAndProxyLogo>>;
+  try {
+    result = await fetchAndProxyLogo(validation.url);
+  } finally {
+    logoFetchesInFlight--;
+  }
   if (!result.ok || !result.response) {
     logLogoOutcome('upstream_error', sidebar);
-    return new Response(null, {
-      status: 502,
-      headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
-    });
+    if (cache) {
+      // An empty 200: the Cache API stores it (it will not store every status).
+      const marker = new Response('', {
+        status: 200,
+        headers: { 'Cache-Control': `public, max-age=${SPONSOR_LOGO_NEGATIVE_TTL_S}` },
+      });
+      await cache.put(failKey, marker).catch(() => undefined);
+    }
+    return logoUpstreamError(rid);
   }
 
   logLogoOutcome('miss', sidebar);
@@ -1694,7 +1732,7 @@ export async function handleSponsorLogo(
  * never the sponsor id, the URL, or anything about the caller (never-who).
  */
 function logLogoOutcome(
-  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error',
+  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error' | 'failed_cached' | 'busy',
   sidebar: boolean
 ): void {
   console.log(
@@ -1704,6 +1742,25 @@ function logLogoOutcome(
 
 /** Logo-proxy cache misses per caller per minute (a page shows several logos). */
 export const SPONSOR_LOGO_READ_MAX = 300;
+
+/** How long a failed upstream fetch is remembered before it is tried again (OSE-1433). */
+export const SPONSOR_LOGO_NEGATIVE_TTL_S = 60;
+
+/**
+ * Upstream logo fetches allowed in flight per isolate (OSE-1433). The hard bound
+ * on concurrent outbound fetches, independent of KV: the caches dedupe repeat
+ * views but cannot coalesce simultaneous cold misses.
+ */
+export const SPONSOR_LOGO_MAX_IN_FLIGHT = 16;
+let logoFetchesInFlight = 0;
+
+/** The 502 a surface sees for a logo that failed; its <img> swaps to the OSE default. */
+function logoUpstreamError(rid: string): Response {
+  return new Response(null, {
+    status: 502,
+    headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
+  });
+}
 
 /**
  * POST /api/v2/events/:id/sponsors/:sid/click
