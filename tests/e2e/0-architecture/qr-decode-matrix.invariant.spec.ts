@@ -30,7 +30,8 @@
  *   - the spec is moved into the node project (it needs the workers pool) or
  *     excluded from the workers project
  *   - CI stops running the worker suite (`npm test`) in the T0 `worker-d1-schema`
- *     shard, or `jsqr` stops being installed (root package.json; the worker
+ *     section, or splits it with `--shard` into anything other than exactly
+ *     1/N..N/N, or `jsqr` stops being installed (root package.json; the worker
  *     resolves it from the root node_modules)
  *   - the mutation catalog drops an encoder mutant that this spec is the killer of
  *
@@ -400,23 +401,47 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
     );
     expect(runStep!['continue-on-error'], 'the T0 step must not be continue-on-error').toBeFalsy();
     expect(runStep!.if, 'the T0 step must not be conditional').toBeUndefined();
-    const shards = job!.strategy?.matrix?.include ?? [];
-    const shard = shards.find((entry) => entry.section === 'worker-d1-schema');
-    expect(
-      shard,
-      'the T0 worker-d1-schema shard must exist in oursharedevents-ci.yml'
-    ).toBeTruthy();
-    expect(shard!.workdir, 'the worker-d1-schema shard must run in the worker').toBe(
-      'workers/oursharedevents'
+    const shards = (job!.strategy?.matrix?.include ?? []).filter(
+      (entry) => entry.section === 'worker-d1-schema'
     );
+    expect(
+      shards.length,
+      'the T0 worker-d1-schema section must exist in oursharedevents-ci.yml'
+    ).toBeGreaterThan(0);
     // The whole command is locked, not a token in it: `echo npm test` must fail.
     // The only accepted wrapper is the repo's retry runner, which executes its
-    // argv exactly as passed (checked below).
-    expect(
-      ['npm test', 'node ../../scripts/vitest-retry.mjs npm test'],
-      `the worker-d1-schema shard must run the worker suite; it runs: ${shard!.command}`
-    ).toContain(String(shard!.command).trim());
-    if (String(shard!.command).includes('vitest-retry.mjs')) {
+    // argv exactly as passed (checked below). The suite may be split across
+    // runners with vitest's `--shard=i/N` and nothing after it: an extra path
+    // or filter would narrow the run.
+    const SUITE =
+      /^(?:node \.\.\/\.\.\/scripts\/vitest-retry\.mjs )?npm test(?: -- --shard=(\d+)\/(\d+))?$/;
+    const slices = shards.map((entry) => {
+      expect(entry.workdir, 'every worker-d1-schema entry must run in the worker').toBe(
+        'workers/oursharedevents'
+      );
+      const m = String(entry.command).trim().match(SUITE);
+      expect(
+        m,
+        `the worker-d1-schema section must run the worker suite; it runs: ${entry.command}`
+      ).not.toBeNull();
+      return m![1] === undefined ? 'whole' : `${Number(m![1])}/${Number(m![2])}`;
+    });
+    if (slices.includes('whole')) {
+      expect(slices, 'an unsharded worker suite must be the only worker-d1-schema entry').toEqual([
+        'whole',
+      ]);
+    } else {
+      // Sharded: exactly 1/N..N/N, each once, one N, so every spec file
+      // (qr-roundtrip included) lands in exactly one runner. A missing 2/3, a
+      // duplicated 1/3, or a /2 mixed with /3 each leave files unrun.
+      const n = Number(slices[0].split('/')[1]);
+      expect(n, 'a sharded worker suite needs at least 2 shards').toBeGreaterThanOrEqual(2);
+      expect(
+        [...slices].sort(),
+        'worker-d1-schema shards must be exactly 1/N..N/N, each once'
+      ).toEqual(Array.from({ length: n }, (_, k) => `${k + 1}/${n}`).sort());
+    }
+    if (shards.some((entry) => String(entry.command).includes('vitest-retry.mjs'))) {
       // Data flow, not two independent tokens: argv → commandLine → runOnce →
       // spawn(<that parameter>). `spawn('true', ...)` must fail.
       const runner = code(VITEST_RETRY);
