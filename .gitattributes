@@ -1,3 +1,8 @@
 # Shell scripts must keep LF endings — a CRLF bash script fails with `\r` errors
 # on the runners (Git Bash on the self-hosted box, and ubuntu-latest). OSE-1056.
 *.sh text eol=lf
+
+# @ocr/flags generated modules: `npm run check:generated` byte-compares them
+# against the generator's LF output, so a CRLF checkout (Windows autocrlf) reads
+# as drift that is not there. OSE-1461.
+packages/flags/src/generated/*.ts text eol=lf
