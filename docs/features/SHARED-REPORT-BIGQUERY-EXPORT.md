@@ -207,6 +207,13 @@ equal to, or at least 5 below, the last count sent before it. Otherwise it is
 `returned_2plus` 9 would tell a reader that 3 people came once. A group with
 no real res7 corridor is withheld, never sent as `'unknown'`.
 
+**Paging:** the grouped query is read 500 groups at a time
+(`RETURNS_PAGE_SIZE`), keyed by (corridor, pool, type), and each page is
+sent as it arrives, so the snapshot is never held whole in D1's result or
+the Worker. The marker is written last; a run that stops part-way writes no
+marker, so OER keeps reading the previous complete snapshot. A snapshot over
+`RETURNS_MAX_PAGES` (200) pages fails closed.
+
 **BQ row shape:**
 
 ```json

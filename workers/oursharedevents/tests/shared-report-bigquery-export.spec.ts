@@ -460,6 +460,11 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r.rowsExported).toBe(501);
     expect(groupCalls().length).toBe(2);
     expect(Math.max(...groupCalls().map((c) => c.rows.length))).toBeLessThanOrEqual(500);
+    // The query is paged (500 groups a page): across the page boundary every
+    // group arrives exactly once, and the marker counts all of them.
+    const types = groupCalls().flatMap((c) => c.rows.map((x) => String(x.json.uec_code)));
+    expect(new Set(types).size).toBe(501);
+    expect(markerRows()[0].groups_in_snapshot).toBe(501);
   });
 
   test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export as 6', async () => {

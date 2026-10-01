@@ -80,7 +80,17 @@ describe('floorNestedCounts — a chain of nested counts never subtracts to a sm
     expect(floorNestedCounts([10, 12])).toEqual([10, null]);
   });
 
+  test('an increase after a suppressed count still fails closed, and so does the rest', () => {
+    // 4 is suppressed, then 10 > 4: the input is not nested, so 10 must not pass.
+    expect(floorNestedCounts([4, 10])).toEqual([null, null]);
+    // Baseline shape: 90d 9 (under 10), 30d 12 (> 9): both withheld.
+    expect(floorNestedCounts([9, 12], 10, 5)).toEqual([null, null]);
+    expect(floorNestedCounts([20, 25, 5])).toEqual([20, null, null]);
+  });
+
   test('non-finite and fractional inputs are treated like applyCountFloor treats them', () => {
-    expect(floorNestedCounts([Number.NaN, Infinity, 5.9])).toEqual([null, null, 5]);
+    expect(floorNestedCounts([5.9])).toEqual([5]);
+    expect(floorNestedCounts([10.7, 5.2])).toEqual([10, 5]);
+    expect(floorNestedCounts([Number.NaN, Infinity])).toEqual([null, null]);
   });
 });

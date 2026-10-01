@@ -91,6 +91,9 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
 
   const window = `-${days} days`;
   let ids: string[] = [];
+  // What this run actually archived (RETURNING), never the candidate list: a
+  // draft edited between the SELECT and the UPDATE is a candidate that stayed.
+  const archivedIds: string[] = [];
   try {
     // Select first, then update by id: the audit row names what moved, and a
     // draft edited between the two statements (updated_at bumped) is skipped by
@@ -134,6 +137,7 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
         .all<{ id: string }>();
       const changed = (archived.results ?? []).map((r) => r.id);
       result.archived += changed.length;
+      archivedIds.push(...changed);
       if (changed.length === 0) continue;
       // AUD-3 Phase B: one row per archived event, carrying that event's brand,
       // so it shows in the brand owner's audit view. One INSERT per chunk.
@@ -174,7 +178,7 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
       timestamp: now,
     })
   );
-  await audit(env, 'success', result, ids);
+  await audit(env, 'success', result, archivedIds);
   return result;
 }
 

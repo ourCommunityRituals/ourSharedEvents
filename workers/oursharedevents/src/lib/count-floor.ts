@@ -61,9 +61,16 @@ export function floorNestedCounts(
   diffFloor: number = CORRIDOR_MAP_MIN_COUNT
 ): (number | null)[] {
   let last: number | null = null;
+  // The chain must be nested (never increasing). Any increase over the
+  // previous raw count, published or not, means the input is not what the
+  // floor assumes, so it and everything after it fail closed.
+  let prevRaw: number | null = null;
+  let broken = false;
   return chain.map((raw) => {
     const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
-    if (n < floor) return null;
+    if (prevRaw !== null && n > prevRaw) broken = true;
+    prevRaw = n;
+    if (broken || n < floor) return null;
     if (last !== null) {
       const gap = last - n;
       if (gap !== 0 && gap < diffFloor) return null;

@@ -232,6 +232,50 @@ describe('runDraftExpiry', () => {
     expect([...details.ids].sort()).toEqual(['dx-audit-a', 'dx-audit-b']);
   });
 
+  test('the summary names only drafts actually archived, not one edited mid-run', async () => {
+    await seed('dx-race-a', 'draft', OLD);
+    await seed('dx-race-b', 'draft', OLD);
+    // Edit dx-race-b between the SELECT and the UPDATE: the UPDATE's WHERE
+    // skips it, so it must not appear in the audit as archived.
+    const racing = new Proxy(db(), {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (/^\s*UPDATE events/.test(sql)) {
+              return {
+                bind: (...args: unknown[]) => ({
+                  all: async () => {
+                    await target
+                      .prepare(
+                        "UPDATE events SET updated_at = datetime('now') WHERE id = 'dx-race-b'"
+                      )
+                      .run();
+                    return target
+                      .prepare(sql)
+                      .bind(...args)
+                      .all();
+                  },
+                }),
+              };
+            }
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const r = await runDraftExpiry({ ...expiryEnv(), DB: racing } as never);
+    expect(r.archived).toBe(1);
+    expect(await statusOf('dx-race-b')).toBe('draft');
+    const row = await db()
+      .prepare(
+        "SELECT details FROM admin_audit_log WHERE action = 'DRAFT_EXPIRY' ORDER BY rowid DESC LIMIT 1"
+      )
+      .first<{ details: string }>();
+    expect(JSON.parse(row!.details).ids).toEqual(['dx-race-a']);
+  });
+
   test('the archived draft can be reopened — expiry is reversible', async () => {
     await seed('dx-reopen', 'draft', OLD);
     await runDraftExpiry(expiryEnv());

@@ -294,6 +294,10 @@ async function prepareExport(
 export const RETURNS_WINDOW_DAYS = 90;
 /** A group, or a count inside it, below this is never exported (k-floor). */
 export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
+/** Groups read per page of the snapshot query. */
+export const RETURNS_PAGE_SIZE = 500;
+/** Page bound: a snapshot larger than this fails closed (no marker) rather than run unbounded. */
+export const RETURNS_MAX_PAGES = 200;
 
 /**
  * The pool a clearance tier exports to, in SQL, so the floor applies per pool
@@ -369,101 +373,142 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     // A return is a person seen at 2+ distinct events in the corridor. This
     // counts events, not visit_count: the materializer bumps visit_count on
     // every re-run over the same scans, so it is not a return signal.
-    const rows = await env.DB.prepare(
-      `SELECT corridor_id, MIN(legal_clearance_tier) AS legal_clearance_tier, uec_code,
-              COUNT(*)                                          AS people,
-              SUM(CASE WHEN events_seen >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
-              SUM(CASE WHEN events_seen >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
-              SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
-         FROM (
-           SELECT air.anon_id_hash,
-                  -- Lower-cased before grouping: H3 cells are case-insensitive, and
-                  -- one cell stored in two cases must be one group under the floor.
-                  COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
-                  ${RETURNS_POOL_KEY_SQL} AS pool_key,
-                  MIN(e.legal_clearance_tier) AS legal_clearance_tier,
-                  etr.uec_code,
-                  COUNT(DISTINCT air.venue_id) AS events_seen
-             FROM anon_id_returns air
-             JOIN events e ON e.id = air.venue_id
-             LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-            WHERE air.last_seen_at >= ?
-              AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?
-              AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?
-              AND air.pepper_epoch = ?
-            GROUP BY air.anon_id_hash, 2, 3, 5
-         )
-        GROUP BY corridor_id, pool_key, uec_code`
-    )
-      .bind(`${floorDay}T00:00:00.000Z`, floorDay, todayDay, epoch ?? '')
-      .all<CorridorReturnsRow>();
-
     // Each run is its own snapshot, identified by its full timestamp: the
     // window moves continuously, so two runs never describe the same data.
     // Retries inside one run reuse this value, so their insertIds dedupe.
     const computedAt = now.toISOString();
-    const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
-    for (const r of rows.results ?? []) {
-      const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.corridor_id, result);
-      if (pool === null) continue; // fail closed: withhold unclassifiable groups
-      // A group with no real corridor is withheld, never exported as 'unknown'
-      // (several would collide on one key), and so is any group under the floor.
-      const corridorId = canonicalCorridorId(r.corridor_id);
-      if (corridorId === UNKNOWN_CORRIDOR || r.people < RETURNS_MIN_COUNT) {
-        result.rowsSkipped++;
-        continue;
-      }
-      // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
-      // published counts reveals a group under the floor (people 12, 2+ 9
-      // would say 3 came once). The group floor above already holds people.
-      const [, ret2, ret3, ret5] = floorNestedCounts(
-        [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
-        RETURNS_MIN_COUNT,
-        RETURNS_MIN_COUNT
-      );
-      const uec = r.uec_code ?? 'unknown';
-      const tags = {
-        corridor_id: corridorId,
-        venue_id: 'corridor-aggregate',
-        event_type: uec,
-        uec_code: uec,
-        regulatory_pool: pool,
-        product_id: PRODUCT_ID,
-      };
-      assertRequiredTags(tags);
-      emitRow(
-        byPool[pool],
-        {
-          ...tags,
-          row_type: 'group',
-          window_days: RETURNS_WINDOW_DAYS,
-          people_count: r.people,
-          returned_2plus: ret2,
-          returned_3plus: ret3,
-          returned_5plus: ret5,
-          computed_at: computedAt,
-          exported_at: now.toISOString(),
-        },
-        result
-      );
-    }
-
-    for (const pool of REGULATORY_POOLS) {
-      const batch = byPool[pool];
-      if (batch.length === 0) continue;
-      const insertIdFn = (row: Record<string, unknown>): string =>
+    const insertIdFor =
+      (pool: RegulatoryPool) =>
+      (row: Record<string, unknown>): string =>
         `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
-      for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
-        const res = await bigQueryInsertRowsToDataset(
-          env,
-          datasetForPool(pool, env.WORKER_ENV),
-          BQ_TABLE_CORRIDOR_RETURNS,
-          batch.slice(i, i + BQ_INSERT_CHUNK),
-          insertIdFn
+    const groupsInSnapshot: Record<RegulatoryPool, number> = { general: 0 };
+
+    // The groups are read a page at a time by a stable key (corridor, pool,
+    // type), so neither the D1 result nor this Worker ever holds the whole
+    // snapshot, however many corridors and types there are. Each page re-runs
+    // the aggregation; the indexed window keeps that cheap. A run that dies
+    // part-way has written no marker, so OER keeps reading the last complete
+    // snapshot.
+    let after: [string, string, string] = ['', '', ''];
+    let first = true;
+    for (let page = 0; ; page++) {
+      if (page >= RETURNS_MAX_PAGES) {
+        throw new Error(
+          `returns snapshot exceeds ${RETURNS_MAX_PAGES * RETURNS_PAGE_SIZE} groups; no marker written`
         );
-        result.rowsExported += res.rowCount;
-        result.perPool[pool] += res.rowCount;
       }
+      const rows = await env.DB.prepare(
+        `SELECT * FROM (
+           SELECT corridor_id, pool_key, MIN(legal_clearance_tier) AS legal_clearance_tier, uec_code,
+                  COALESCE(corridor_id, '') AS k_corridor, COALESCE(uec_code, '') AS k_type,
+                  COUNT(*)                                          AS people,
+                  SUM(CASE WHEN events_seen >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
+                  SUM(CASE WHEN events_seen >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
+                  SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
+             FROM (
+               SELECT air.anon_id_hash,
+                      -- Lower-cased before grouping: H3 cells are case-insensitive, and
+                      -- one cell stored in two cases must be one group under the floor.
+                      COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
+                      ${RETURNS_POOL_KEY_SQL} AS pool_key,
+                      MIN(e.legal_clearance_tier) AS legal_clearance_tier,
+                      etr.uec_code,
+                      COUNT(DISTINCT air.venue_id) AS events_seen
+                 FROM anon_id_returns air
+                 JOIN events e ON e.id = air.venue_id
+                 LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+                WHERE air.last_seen_at >= ?1
+                  AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?2
+                  AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?3
+                  AND air.pepper_epoch = ?4
+                GROUP BY air.anon_id_hash, 2, 3, 5
+             )
+            GROUP BY corridor_id, pool_key, uec_code
+         )
+         WHERE ?5 = 1 OR (k_corridor, pool_key, k_type) > (?6, ?7, ?8)
+         ORDER BY k_corridor, pool_key, k_type
+         LIMIT ?9`
+      )
+        .bind(
+          `${floorDay}T00:00:00.000Z`,
+          floorDay,
+          todayDay,
+          epoch ?? '',
+          first ? 1 : 0,
+          after[0],
+          after[1],
+          after[2],
+          RETURNS_PAGE_SIZE
+        )
+        .all<CorridorReturnsRow & { pool_key: string; k_corridor: string; k_type: string }>();
+      const results = rows.results ?? [];
+      if (results.length === 0) break;
+      const last = results[results.length - 1];
+      after = [last.k_corridor, last.pool_key, last.k_type];
+      first = false;
+
+      const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
+      for (const r of results) {
+        const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.corridor_id, result);
+        if (pool === null) continue; // fail closed: withhold unclassifiable groups
+        // A group with no real corridor is withheld, never exported as 'unknown'
+        // (several would collide on one key), and so is any group under the floor.
+        const corridorId = canonicalCorridorId(r.corridor_id);
+        if (corridorId === UNKNOWN_CORRIDOR || r.people < RETURNS_MIN_COUNT) {
+          result.rowsSkipped++;
+          continue;
+        }
+        // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
+        // published counts reveals a group under the floor (people 12, 2+ 9
+        // would say 3 came once). The group floor above already holds people.
+        const [, ret2, ret3, ret5] = floorNestedCounts(
+          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
+          RETURNS_MIN_COUNT,
+          RETURNS_MIN_COUNT
+        );
+        const uec = r.uec_code ?? 'unknown';
+        const tags = {
+          corridor_id: corridorId,
+          venue_id: 'corridor-aggregate',
+          event_type: uec,
+          uec_code: uec,
+          regulatory_pool: pool,
+          product_id: PRODUCT_ID,
+        };
+        assertRequiredTags(tags);
+        emitRow(
+          byPool[pool],
+          {
+            ...tags,
+            row_type: 'group',
+            window_days: RETURNS_WINDOW_DAYS,
+            people_count: r.people,
+            returned_2plus: ret2,
+            returned_3plus: ret3,
+            returned_5plus: ret5,
+            computed_at: computedAt,
+            exported_at: now.toISOString(),
+          },
+          result
+        );
+      }
+
+      for (const pool of REGULATORY_POOLS) {
+        const batch = byPool[pool];
+        groupsInSnapshot[pool] += batch.length;
+        for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+          const res = await bigQueryInsertRowsToDataset(
+            env,
+            datasetForPool(pool, env.WORKER_ENV),
+            BQ_TABLE_CORRIDOR_RETURNS,
+            batch.slice(i, i + BQ_INSERT_CHUNK),
+            insertIdFor(pool)
+          );
+          result.rowsExported += res.rowCount;
+          result.perPool[pool] += res.rowCount;
+        }
+      }
+      if (results.length < RETURNS_PAGE_SIZE) break;
     }
 
     // One marker per pool per run, written after the groups, so OER can tell
@@ -484,7 +529,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         ...markerTags,
         row_type: 'snapshot',
         window_days: RETURNS_WINDOW_DAYS,
-        groups_in_snapshot: byPool[pool].length,
+        groups_in_snapshot: groupsInSnapshot[pool],
         computed_at: computedAt,
         exported_at: now.toISOString(),
       };

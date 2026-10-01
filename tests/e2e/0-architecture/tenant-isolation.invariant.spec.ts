@@ -172,14 +172,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
   // a never-who geographic aggregate, or a correlated/transitively-scoped
   // subselect — never a request-reachable per-brand row enumeration.
-  'lib/draft-expiry.ts:99':
+  'lib/draft-expiry.ts:102':
     'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
     'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
     'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
-  'lib/draft-expiry.ts:111':
+  'lib/draft-expiry.ts:114':
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
     'brand by design, not request-reachable.',
-  'lib/draft-expiry.ts:146':
+  'lib/draft-expiry.ts:150':
     'Same cron, AUD-3 Phase B: `INSERT INTO admin_audit_log ... SELECT ... FROM ' +
     'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
     '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
@@ -250,13 +250,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // whole-timestamp-group baseline read). 303→368 and 611→708 by OSE-1460 (the
   // returns phase now aggregates to k-floored corridor counts before export).
   // 392→388 and 735→752 when the merge with main moved the query and the
-  // baseline export gained its count floor (OSE-1460 follow-up).
-  'lib/shared-report-export.ts:388':
+  // baseline export gained its count floor (OSE-1460 follow-up). 388→418 and
+  // 752→797 when the returns snapshot query became paged (review follow-up).
+  'lib/shared-report-export.ts:418':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:752':
+  'lib/shared-report-export.ts:797':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
