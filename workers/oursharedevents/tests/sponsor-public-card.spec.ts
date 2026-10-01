@@ -31,6 +31,7 @@ import {
   handleSponsorLogo,
   SPONSOR_LOGO_READ_MAX,
   SPONSOR_LOGO_NEGATIVE_TTL_S,
+  SPONSOR_LOGO_MAX_IN_FLIGHT,
 } from '../src/handlers/sponsors';
 import { handleSponsorCardPage } from '../src/handlers/sponsor-card';
 import { checkCardField, telHref, sponsorTitle } from '../src/lib/sponsor-card';
@@ -671,6 +672,44 @@ describe('CCR PR #699 | logo proxy success path + edge cache', () => {
       .run();
     expect((await get(id)).status).toBe(422);
     expect(f).not.toHaveBeenCalled();
+  });
+
+  // Copilot review on #721: the caches cannot coalesce simultaneous cold misses,
+  // so the isolate caps upstream fetches in flight. Distinct URLs keep every
+  // request a cold miss; the stub holds each fetch open until released.
+  test('OSE-1433: concurrent cold misses are capped per isolate; the extra one gets a 503 and no fetch', async () => {
+    const release: Array<() => void> = [];
+    const held = vi.fn(
+      () =>
+        new Promise<Response>((resolve) =>
+          release.push(() =>
+            resolve(new Response(PNG, { headers: { 'content-type': 'image/png' } }))
+          )
+        )
+    );
+    vi.stubGlobal('fetch', held);
+    const t = Date.now();
+    const ids: string[] = [];
+    for (let i = 0; i <= SPONSOR_LOGO_MAX_IN_FLIGHT; i++) {
+      ids.push(
+        await onShow({ name: `Burst ${i}`, logo_url: `https://cdn.example.com/b${i}-${t}.png` })
+      );
+    }
+    const pending = ids.slice(0, SPONSOR_LOGO_MAX_IN_FLIGHT).map((id) => get(id));
+    // Let every held request reach its upstream fetch.
+    for (let i = 0; i < 50 && held.mock.calls.length < SPONSOR_LOGO_MAX_IN_FLIGHT; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(held).toHaveBeenCalledTimes(SPONSOR_LOGO_MAX_IN_FLIGHT);
+    const extra = await get(ids[SPONSOR_LOGO_MAX_IN_FLIGHT]);
+    expect(extra.status).toBe(503);
+    expect(extra.headers.get('cache-control')).toBe('no-store');
+    expect(held).toHaveBeenCalledTimes(SPONSOR_LOGO_MAX_IN_FLIGHT);
+    release.forEach((r) => r());
+    for (const res of await Promise.all(pending)) expect(res.status).toBe(200);
+    // The slots are given back: the next cold miss fetches again.
+    vi.stubGlobal('fetch', upstream);
+    expect((await get(ids[SPONSOR_LOGO_MAX_IN_FLIGHT])).status).toBe(200);
   });
 
   test('OSE-1433: an unanswered sponsor request gets no logo (same organizer rule as the card)', async () => {
