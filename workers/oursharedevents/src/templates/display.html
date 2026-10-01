@@ -635,6 +635,9 @@
         const main = document.getElementById('main-content');
         try {
           const res = await fetch('/api/v2/events');
+          // fetch() resolves on a 429/5xx; that is a failed refresh (the
+          // catch keeps the last good board), not an empty list of events.
+          if (!res.ok) throw new Error('events ' + res.status);
           const data = await res.json();
           let items = (data.ok && data.items) ? data.items : [];
           // A ?event=<id> that is live but not in the public list (unlisted, or

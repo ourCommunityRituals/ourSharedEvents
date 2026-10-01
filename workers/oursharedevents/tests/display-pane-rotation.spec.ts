@@ -288,6 +288,8 @@ async function bootPage(
     configFetches: 0,
     /** When true, GET /api/v2/events rejects (a network failure). */
     failEvents: false,
+    /** When set, GET /api/v2/events answers with this HTTP status and a JSON error. */
+    eventsStatus: 0,
     impressions: [] as string[],
   };
   w.fetch = (async (url: string) => {
@@ -321,6 +323,14 @@ async function bootPage(
     if (m && m[2] === 'sponsor-bundle') server.bundleFetches.push(m[1]);
     if (m && m[3]) server.impressions.push(`${m[1]}:${m[3]}`);
     if (!m && server.failEvents) throw new TypeError('network down');
+    if (!m && server.eventsStatus) {
+      return {
+        ok: false,
+        status: server.eventsStatus,
+        headers: new w.Headers(),
+        json: async () => ({ ok: false, error: 'Too many requests' }),
+      } as unknown as Response;
+    }
     const body =
       m && m[2] === 'sponsor-bundle'
         ? (server.bundles[m[1]] ?? sponsors)
@@ -732,6 +742,30 @@ describe('display page: a failed refresh keeps the last good board (review fix)'
     const { doc } = await bootPage('', {
       seed: (server) => {
         server.failEvents = true;
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-empty"]')?.textContent).toBe(
+      'Could not load events.'
+    );
+  });
+});
+
+describe('display page: an HTTP error on refresh is a failure, not an empty list (review fix)', () => {
+  test('a 429 keeps the board instead of showing "No upcoming events"', async () => {
+    const { doc, server, refreshEvents, visible } = await bootPage();
+    server.eventsStatus = 429;
+    await refreshEvents();
+    expect(visible()).toEqual(['event']);
+    expect(doc.querySelector('[data-testid="display-main"]')?.textContent).not.toContain(
+      'No upcoming events'
+    );
+    expect(doc.querySelector('[data-testid="display-sponsor-item"]')).not.toBeNull();
+  });
+
+  test('a 500 on the first load shows the error, not "No upcoming events"', async () => {
+    const { doc } = await bootPage('', {
+      seed: (server) => {
+        server.eventsStatus = 500;
       },
     });
     expect(doc.querySelector('[data-testid="display-empty"]')?.textContent).toBe(
