@@ -33,6 +33,7 @@ vi.mock('../src/google/auth', () => ({
 import {
   RETURNS_POOL_KEY_SQL,
   RETURNS_SNAPSHOT_STATE,
+  RETURNS_SNAPSHOT_CLAIM_STATE,
   roundForPublish,
   exportAnonIdReturns,
   exportCorridorDensityBaseline,
@@ -552,6 +553,64 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(retry.snapshotDue).toBe(true);
     expect(retry.errors).toBe(0);
     expect(markerRows()).toHaveLength(1);
+  });
+
+  test('of two overlapping runs that both find the snapshot due, only the one that wins the claim publishes', async () => {
+    await seedCorridorEvent('test-evt-exp-wkc');
+    await seedPeople('test-evt-exp-wkc', [1, 1, 1, 1, 1]);
+    const db = tenv().DB;
+    // This run passes the due check; then, before its first insert, another
+    // invocation claims the week (as an overlapping cron would).
+    const otherClaim = '2026-10-01T03:00:00.123Z';
+    let raced = false;
+    const racingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            const stmt = target.prepare(sql);
+            if (!raced && sql.includes('FROM anon_id_returns air')) {
+              raced = true;
+              return new Proxy(stmt, {
+                get(t, p2, r2) {
+                  if (p2 === 'bind') {
+                    return (...args: unknown[]) => {
+                      const bound = t.bind(...args);
+                      return new Proxy(bound, {
+                        get(b, p3, r3) {
+                          if (p3 === 'all') {
+                            return async () => {
+                              await target
+                                .prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
+                                .bind(otherClaim, RETURNS_SNAPSHOT_CLAIM_STATE)
+                                .run();
+                              return b.all();
+                            };
+                          }
+                          return Reflect.get(b, p3, r3);
+                        },
+                      });
+                    };
+                  }
+                  return Reflect.get(t, p2, r2);
+                },
+              });
+            }
+            return stmt;
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+    const lost = await exportAnonIdReturns({ ...makeEnv(), DB: racingDb });
+    expect(raced).toBe(true);
+    expect(lost.errors).toBe(0);
+    expect(lost.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+    const claim = await db
+      .prepare(`SELECT last_exported_at FROM bigquery_export_state WHERE table_name = ?`)
+      .bind(RETURNS_SNAPSHOT_CLAIM_STATE)
+      .first<{ last_exported_at: string }>();
+    expect(claim?.last_exported_at).toBe(otherClaim);
   });
 
   test('a snapshot of exactly the page cap passes; one group more fails closed with no marker', async () => {

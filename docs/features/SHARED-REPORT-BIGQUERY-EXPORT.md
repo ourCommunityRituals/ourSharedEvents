@@ -217,7 +217,9 @@ returns snapshot is taken weekly, not nightly: a run takes one only when both
 the last complete snapshot (`bigquery_export_state` row
 `corridor_returns_snapshot`) and the last run that began publishing (row
 `corridor_returns_snapshot_claim`) are at least 6.5 days old. The claim is
-written just before a run's first BigQuery insert, so a run that fails after
+written just before a run's first BigQuery insert, as a compare-and-set on the
+value the due check read, so of two overlapping runs only one publishes. A run
+that fails after
 that point, or whose final state write fails, still uses up its week: some of
 its rows may already be in BigQuery, and a retry the next night would put a
 second snapshot one day after the first. A run that fails before it sends
@@ -397,9 +399,16 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 
 - Rows BigQuery already accepted stay there.
 - The watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
+- For the baseline and event-series phases, the next tick retries from the
+  watermark. The returns snapshot does not: once a run has claimed its week
+  (see "Rounding and cadence"), a failure waits for the next week's snapshot
+  rather than retrying the next night, so a partial snapshot is never followed
+  a day later by a second one. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+Delivery guarantee: **at-least-once** for the baseline and event-series phases.
+For returns, each weekly snapshot is all-or-nothing from OER's point of view: a
+snapshot without its marker row is incomplete and must be ignored, and it is
+not retried. No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`

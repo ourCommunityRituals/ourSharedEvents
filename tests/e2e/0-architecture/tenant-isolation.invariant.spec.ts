@@ -253,13 +253,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // baseline export gained its count floor (OSE-1460 follow-up). 388→418 and
   // 752→797 when the returns snapshot query became paged (review follow-up);
   // 418→419 and 797→805 for the paging-limit test seam.
-  // 454→473 and 849→870 for the weekly snapshot claim (PR 741 review).
-  'lib/shared-report-export.ts:473':
+  // 454→473 and 849→870 for the weekly snapshot claim (PR 741 review);
+  // 473→490 and 870→894 when the claim became a compare-and-set.
+  'lib/shared-report-export.ts:490':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:870':
+  'lib/shared-report-export.ts:894':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

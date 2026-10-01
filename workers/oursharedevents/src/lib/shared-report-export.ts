@@ -351,6 +351,13 @@ interface CorridorReturnsRow {
   returned_5plus: number;
 }
 
+/** Thrown when another invocation won the weekly snapshot claim first. */
+class SnapshotClaimLost extends Error {
+  constructor() {
+    super('returns snapshot already claimed by another run');
+  }
+}
+
 export async function exportAnonIdReturns(
   env: SharedReportExportEnv,
   // Test seam only: paging limits and the clock. Production uses the defaults.
@@ -435,10 +442,20 @@ export async function exportAnonIdReturns(
     // Claim the week before the first row can reach BigQuery. Lazy, so a run
     // that fails on its D1 reads (nothing sent) is retried the next night; once
     // anything may have been sent, a failure waits for the next week.
+    // The claim is a compare-and-set on the value the due check read: of two
+    // overlapping invocations that both found the snapshot due, only the one
+    // whose UPDATE changes the row publishes; the other stops, having sent nothing.
     let claimed = false;
     const claimSnapshot = async (): Promise<void> => {
       if (claimed) return;
-      await advanceWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE, computedAt, 0);
+      const res = await env.DB.prepare(
+        `UPDATE bigquery_export_state
+            SET last_exported_at = ?1, last_run_at = datetime('now'), updated_at = datetime('now')
+          WHERE table_name = ?2 AND last_exported_at = ?3`
+      )
+        .bind(computedAt, RETURNS_SNAPSHOT_CLAIM_STATE, lastClaim)
+        .run();
+      if ((res.meta?.changes ?? 0) !== 1) throw new SnapshotClaimLost();
       claimed = true;
     };
 
@@ -619,6 +636,13 @@ export async function exportAnonIdReturns(
     // Only a complete snapshot (groups and markers sent) starts the next week.
     await advanceWatermark(env.DB, RETURNS_SNAPSHOT_STATE, computedAt, 0);
   } catch (err) {
+    if (err instanceof SnapshotClaimLost) {
+      // Another invocation claimed this week first and is publishing it. This
+      // run sent nothing, so it is not a failure; it is simply not due.
+      result.snapshotDue = false;
+      result.durationMs = Date.now() - start;
+      return result;
+    }
     result.errors++;
     const msg = err instanceof Error ? err.message : String(err);
     console.error(
