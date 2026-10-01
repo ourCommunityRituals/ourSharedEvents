@@ -89,7 +89,12 @@ CREATE TABLE IF NOT EXISTS bigquery_export_state (
 
 ### Helper: `phaseToPool(phase)` in `src/lib/pool-contract.ts`
 
-Maps `events.legal_clearance_tier` (1-5) to `RegulatoryPool` (`general` / `hipaa` / `coppa`):
+> **Superseded (OSE-1220 / OSE-380).** HIPAA and COPPA are declined regimes. `phaseToPool`
+> now maps tiers 1-3 and null/undefined to `general` and **throws** for 4, 5 or any value it
+> cannot classify; there is no `hipaa` or `coppa` dataset to route to. The original design
+> sketch is kept below for history only.
+
+Original design (no longer the code):
 
 ```typescript
 export function phaseToPool(phase: number): RegulatoryPool {
@@ -362,20 +367,23 @@ manifested as exported, and the watermark does not advance (OSE-616).
 
 ## Tests
 
+Every line below names a test in `workers/oursharedevents/tests/shared-report-bigquery-export.spec.ts`.
+
 **Unit (no BQ; mocked client):**
 
-- Watermark advancement on success
-- Watermark NOT advanced on failure
-- Phase-to-pool mapping correctness (phase 1-3 → general, 4 → hipaa, 5 → coppa)
+- Phase-to-pool mapping: phases 1-3 → general; null/undefined → general (the Phase-1 default); tiers 4 (HIPAA) and 5 (COPPA) are **refused**, never routed (OSE-1220); an unrecognized phase fails closed (OSE-380)
 - Required-tag assertion (every exported row carries all 6 required tags)
-- Empty source table → graceful no-op, zero rows exported
-- Source table with no rows past watermark → zero rows exported, watermark unchanged
+- Graceful no-op when BigQuery is not configured
 
 **Integration (vitest-pool-workers, D1 + mocked BQ):**
 
-- Seed Session 3 materialization rows → run export → verify state row updated, mocked BQ received correct rows
-- Seed a HIPAA-pool event + its anon_id_returns rows → verify those rows route to `oureventring_hipaa` dataset (mock asserts)
-- Inject BQ failure on the 2nd batch of 3 → assert first batch's watermark advancement, second batch retry on next tick
+- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; a group under the floor is withheld; a group with no real corridor is withheld; rows last seen before the 90-day window are not counted
+- Every run writes one snapshot marker per pool, even with no groups, so an empty run is distinguishable from a missing run
+- More than 500 groups go in chunks of at most 500
+- Watermark advances to the newest source row on success and is **not** advanced when BigQuery rejects the insert (S4-Q4)
+- A tier-4 group is quarantined, never routed or leaked
+- On staging the export lands in `oureventring_general_stg`, never the production dataset (OSE-1416)
+- Orchestrator: a failure in one phase does not abort the others
 
 **Gate (static-invariant test):**
 

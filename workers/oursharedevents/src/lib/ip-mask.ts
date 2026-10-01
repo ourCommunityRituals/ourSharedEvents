@@ -46,5 +46,12 @@ export function maskIp(raw: string | null | undefined): string | null {
 
   const hextets = ipv6Hextets(ip);
   if (!hextets) return null;
+  // IPv4-mapped written in hex (::ffff:c000:280 is 192.0.2.128): mask the
+  // IPv4 in the last 32 bits, the same as the dotted form above.
+  if (hextets.slice(0, 5).every((h) => h === '0') && hextets[5] === 'ffff') {
+    const hi = parseInt(hextets[6], 16);
+    const lo = parseInt(hextets[7], 16);
+    return maskIpv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
   return `${hextets.slice(0, 3).join(':')}::/48`;
 }

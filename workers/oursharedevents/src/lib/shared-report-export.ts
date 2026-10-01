@@ -279,8 +279,8 @@ async function prepareExport(
 // corridor-level location only). It now sends counts per corridor, event type
 // and pool over a rolling window, and nothing below RETURNS_MIN_COUNT.
 //
-// One person is counted once per (corridor, event type, clearance tier), and a
-// return means they were seen at 2+ distinct events there. The venue never
+// One person is counted once per (corridor, event type, pool): tiers that share
+// a pool are one group. A return means they were seen at 2+ distinct events. The venue never
 // leaves: venue_id carries the 'corridor-aggregate' sentinel, the same one the
 // corridor baseline uses, so the required-tag contract is unchanged.
 

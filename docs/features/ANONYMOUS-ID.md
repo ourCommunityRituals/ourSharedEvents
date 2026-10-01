@@ -18,8 +18,8 @@ Most event platforms collect personal data first and worry about privacy later. 
 │  - No email in the scan system                                  │
 │  - No name in the scan system                                   │
 │  - No IP address in the scan system                             │
-│  - No exact timestamps (hourly buckets only)                    │
-│  - No cross-event individual tracking                           │
+│  - Reports and exports show hourly buckets, never exact times   │
+│  - Returns leave OSE only as k-floored corridor counts          │
 │  - No behavioral profiles                                       │
 │                                                                 │
 │  This is enforced by schema, not by policy.                     │
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS scans (
 );
 ```
 
-**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint, any column that could identify an individual.
+**What's explicitly excluded:** email, name, IP address, country, cookies, device fingerprint. Two honest caveats: `created_at` is the row's insert time to the second (it is kept for retention and ordering and never leaves the Worker; reports and exports use `scan_bucket`, the hour), and `anonymous_id` is a pseudonymous cookie id, so inside OSE one browser's scans at different events can be linked. That link is used only to count returns, and it leaves OSE only as k-floored corridor counts (OSE-1460).
 
 ### `poster_deployments` table
 
@@ -243,7 +243,7 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 | **Database breach of scan system**  | No PII to leak — schema has no PII columns                              |
 | **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted                  |
 | **Cross-database correlation**      | Separate D1 databases, no foreign keys between them                     |
-| **Timing correlation**              | Hour-bucketed timestamps prevent exact-time matching                    |
+| **Timing correlation**              | Reports and exports use hour buckets only; the second-level `created_at` stays inside the Worker |
 | **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual            |
 | **IP logging**                      | IP never stored; no location is derived from the request either (country removed by OSE-1460) |
 | **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                      |

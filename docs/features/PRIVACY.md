@@ -47,7 +47,7 @@ The scan system stores **presence signal only**. By schema design, no PII can en
 
 **What is held, stated plainly:** scan rows still carry an operational `created_at` at full precision (`src/lib/scan-buffer.ts`); only `scan_bucket` and everything exposed are hourly. That at-rest precision is an open decision ([QR-AND-SHORTLINKS.md](./QR-AND-SHORTLINKS.md) §4). `scan_node_returns` stores the pseudonymous `ose_anon` value from a one-year first-party cookie: no name, no email, and never joined to `FORMS_DB`.
 
-This data is **permanent** — it's safe to keep forever because it contains no personal information. It becomes the foundation for geo-spatial intelligence at scale.
+**How long it is kept.** Placement rows (`scan_placement_events`) carry no person-derived value and are kept as the foundation for corridor-level intelligence. `scan_node_returns` and `anon_id_returns` carry the pseudonymous cookie id, so they are not "safe forever": a visitor can erase them through the data-subject route, and `SCAN_RETURNS_RETENTION_DAYS` (`src/lib/scan-returns-retention.ts`, OSE-1351) bounds them once it is set. It is off by default, so today they are kept until erased; choosing the window is an open decision.
 
 ### System 2: Opt-In Form Data (FORMS_DB — temporary)
 

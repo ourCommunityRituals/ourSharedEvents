@@ -22,12 +22,14 @@ What the system captures is **signal of presence** — that someone was there, t
 ```
 What we store:                     What we never store:
 ─────────────────                  ──────────────────────
-scan_bucket (hourly window)        exact timestamps
+scan_bucket (hourly window)        exact times in any report or export
 user_agent_hash (device class)     IP addresses
 (no location, OSE-1460)            names, emails (raw)
-poster_deployment_id               individual tracking
+poster_deployment_id               a person's trail in any export
 aggregate counts                   behavioral profiles
 ```
+
+Stated plainly: scan rows keep an insert `created_at` to the second, and a pseudonymous cookie id lets OSE count a return visit. Neither leaves the Worker; returns leave only as k-floored corridor counts (OSE-1460).
 
 **Why this matters for customers:** You can scan any QR code at any event knowing that no personal data is being collected. Your email, if you voluntarily provide one, is immediately hashed or encrypted and auto-deleted on a schedule. Your presence is counted. Your identity is not.
 
