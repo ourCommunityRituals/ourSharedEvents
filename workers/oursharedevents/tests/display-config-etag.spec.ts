@@ -85,3 +85,21 @@ describe('the admin read carries no QR images', () => {
     for (const l of body.league) expect(l).not.toHaveProperty('qr');
   });
 });
+
+describe('the ETag covers the QR colour', () => {
+  async function etagWithColour(hex: string): Promise<string> {
+    vi.resetModules();
+    vi.doMock('../src/lib/uec', () => ({ getCode: () => ({ scan_hex: hex }) }));
+    const mod = await import('../src/handlers/display-config');
+    const res = await mod.handleDisplayConfig(get(), env(SETTINGS), 'evt-1');
+    vi.doUnmock('../src/lib/uec');
+    return res.headers.get('ETag')!;
+  }
+
+  test('a different UEC UTILITY colour gives a different ETag (no stale 304)', async () => {
+    const a = await etagWithColour('#2A2A3A');
+    const b = await etagWithColour('#112233');
+    expect(a).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(b).not.toBe(a);
+  });
+});

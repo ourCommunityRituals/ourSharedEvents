@@ -107,8 +107,10 @@ export async function handleDisplayConfig(
 
 /**
  * Everything the response depends on except the QR images. A QR is a pure
- * function of its link and the fixed options in qrFor(), so hashing this
- * (plus QR_VERSION) identifies the full body exactly. That lets a TV's
+ * function of its link and the options in qrFor() (the UEC UTILITY colour,
+ * error correction, scale), so hashing this plus those inputs identifies the
+ * full body exactly. QR_VERSION is bumped for an encoder change; the colour
+ * is hashed directly, so a UEC palette change also changes the ETag. That lets a TV's
  * once-a-minute check get its 304 WITHOUT the PNGs being generated: they
  * are only drawn on a 200.
  */
@@ -136,7 +138,7 @@ async function withEtag(
   { withQr }: { withQr: boolean }
 ): Promise<Response> {
   const shape = configShape(row);
-  const etag = await strongEtag(QR_VERSION + JSON.stringify(shape));
+  const etag = await strongEtag(`${QR_VERSION}|${UTILITY_HEX}|${JSON.stringify(shape)}`);
   const cacheHeaders = {
     ...headers,
     ETag: etag,
