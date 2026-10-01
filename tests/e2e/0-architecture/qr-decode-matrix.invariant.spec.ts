@@ -41,6 +41,8 @@
 import { test, expect } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import picomatch from 'picomatch';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const WORKER = join(REPO_ROOT, 'workers', 'oursharedevents');
@@ -101,6 +103,37 @@ function read(path: string): string {
   return readFileSync(path, 'utf8');
 }
 
+/**
+ * Source with comments removed, so a shape assertion is satisfied by code and
+ * never by the spec's own explanatory header (which names `/poster-bundle`,
+ * `jsQR` and the rest). Only whole-line `//` comments are dropped: a `//` inside
+ * a string (`https://…`) must survive.
+ */
+function code(path: string): string {
+  return read(path)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+}
+
+/** String literals in a config array, plus `...NODE_SPECS` expanded. */
+async function arrayPatterns(body: string): Promise<string[]> {
+  const literals = [...body.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const spreads = [...body.matchAll(/\.\.\.\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+  const unknown = spreads.filter((name) => name !== 'NODE_SPECS');
+  expect(
+    unknown,
+    `the workers exclude list spreads ${unknown.join(', ')}, which this gate cannot resolve — extend the gate`
+  ).toEqual([]);
+  if (spreads.includes('NODE_SPECS')) literals.push(...(await nodeSpecs()));
+  return literals;
+}
+
+async function nodeSpecs(): Promise<string[]> {
+  const mod = (await import(pathToFileURL(NODE_SPECS).href)) as { NODE_SPECS: string[] };
+  expect(Array.isArray(mod.NODE_SPECS), 'vitest.node-specs.mjs must export NODE_SPECS').toBe(true);
+  return mod.NODE_SPECS;
+}
+
 /** The (level, length) pairs inside the spec's `test.each([...])` sweep. */
 function parseSweep(src: string): Array<[Level, number]> {
   const block = src.match(/test\.each\(\s*\[([\s\S]*?)\]\s*as\s+Array/);
@@ -119,13 +152,15 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
   });
 
   test('OSE-1439 | it decodes real encoder output with jsQR, through the poster-bundle', () => {
-    const src = read(DECODE_SPEC);
+    const src = code(DECODE_SPEC);
     expect(src, 'must import the jsQR decoder').toMatch(/import\s+jsQR\s+from\s+'jsqr'/);
     expect(src, 'must call jsQR on pixels').toMatch(/jsQR\(/);
     expect(src, 'must exercise the real encoder').toMatch(
       /import\s*\{[^}]*generateQrCode[^}]*\}\s*from\s*'\.\.\/src\/lib\/qr'/
     );
-    expect(src, 'must read the bundle the poster page renders').toContain('/poster-bundle');
+    expect(src, 'must fetch the bundle the poster page renders (a comment does not count)').toMatch(
+      /SELF\.fetch\(\s*`[^`]*\/poster-bundle`/
+    );
     expect(
       src,
       'the sweep must assert the decoded string EQUALS the encoded URL, not merely that something decoded'
@@ -133,7 +168,7 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
   });
 
   test('OSE-1439 | nothing in it is skipped, focused, todo or expected-to-fail', () => {
-    const src = read(DECODE_SPEC);
+    const src = code(DECODE_SPEC);
     const weakeners = src.match(
       /\b(?:test|it|describe)\s*\.\s*(?:skip|only|todo|fails|skipIf|runIf|concurrent\.skip)\b|\bx(?:it|test|describe)\s*\(/g
     );
@@ -144,7 +179,7 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
   });
 
   test('OSE-1439 | the sweep still contains every locked (level, length) case', () => {
-    const sweep = parseSweep(read(DECODE_SPEC));
+    const sweep = parseSweep(code(DECODE_SPEC));
     expect(sweep.length, 'could not find the test.each sweep in the decode spec').toBeGreaterThan(
       0
     );
@@ -160,7 +195,7 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
   });
 
   test('OSE-1439 | every EC level is swept, and L and M span versions 1 to 7', () => {
-    const sweep = parseSweep(read(DECODE_SPEC));
+    const sweep = parseSweep(code(DECODE_SPEC));
     for (const level of ['L', 'M', 'Q', 'H'] as Level[]) {
       const versions = sweep.filter(([l]) => l === level).map(([l, n]) => versionFor(l, n));
       expect(versions.length, `EC level ${level} is not swept at all`).toBeGreaterThan(0);
@@ -179,20 +214,32 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
     }
   });
 
-  test('OSE-1439 | it runs in the workers pool, which CI runs', () => {
+  test('OSE-1439 | it runs in the workers pool, which CI runs', async () => {
+    // Patterns are glob-matched, not substring-matched: `tests/qr-*.spec.ts` in
+    // an exclude list drops the decode spec as surely as its exact name does.
+    const matches = (patterns: string[]) =>
+      patterns.filter((p) => picomatch(p, { dot: true })(DECODE_SPEC_REL));
+
+    const inNode = matches(await nodeSpecs());
     expect(
-      read(NODE_SPECS).includes('qr-roundtrip'),
-      'qr-roundtrip.spec.ts needs SELF.fetch (cloudflare:test) — moving it into the node project breaks it'
-    ).toBe(false);
+      inNode,
+      `the node project selects the decode spec (${inNode.join(', ')}) — it needs SELF.fetch (cloudflare:test), so it must stay in the workers pool`
+    ).toEqual([]);
+
     const cfg = read(WORKERS_CONFIG);
-    expect(cfg, 'the workers project must still include tests/**/*.spec.ts').toContain(
-      "include: ['tests/**/*.spec.ts']"
-    );
+    const include = cfg.match(/include:\s*\[([^\]]*)\]/);
     const exclude = cfg.match(/exclude:\s*\[([^\]]*)\]/);
+    expect(include, 'could not read the workers project include list').not.toBeNull();
     expect(exclude, 'could not read the workers project exclude list').not.toBeNull();
-    expect(exclude![1], 'the workers project must not exclude the decode spec').not.toContain(
-      'qr-roundtrip'
-    );
+    expect(
+      matches(await arrayPatterns(include![1])).length,
+      'no workers-project include pattern selects the decode spec'
+    ).toBeGreaterThan(0);
+    const excludedBy = matches(await arrayPatterns(exclude![1]));
+    expect(
+      excludedBy,
+      `the workers project excludes the decode spec via ${excludedBy.join(', ')}`
+    ).toEqual([]);
   });
 
   test('OSE-1439 | CI runs the worker suite on every PR, and jsqr is installed', () => {
