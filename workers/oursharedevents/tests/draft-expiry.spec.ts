@@ -164,6 +164,20 @@ describe('runDraftExpiry', () => {
     expect(JSON.parse(audit!.details).outcomeRaw).toBe('noop');
   });
 
+  test('AUD-3 B: each archived draft gets its own DRAFT_EXPIRED row, attributed to its brand', async () => {
+    await seed('dx-brand-a', 'draft', OLD);
+    await seed('dx-brand-keep', 'draft', new Date().toISOString());
+    await runDraftExpiry(expiryEnv());
+    const rows = await db()
+      .prepare(
+        "SELECT resource_id, brand_id, actor FROM admin_audit_log WHERE action = 'DRAFT_EXPIRED' AND resource_id LIKE 'dx-brand-%'"
+      )
+      .all<{ resource_id: string; brand_id: string | null; actor: string }>();
+    expect(rows.results).toEqual([
+      { resource_id: 'dx-brand-a', brand_id: BRAND, actor: 'system:lifecycle' },
+    ]);
+  });
+
   test('one audit row per run names the archived ids (never-who: system actor only)', async () => {
     await seed('dx-audit-a', 'draft', OLD);
     await seed('dx-audit-b', 'draft', OLD);

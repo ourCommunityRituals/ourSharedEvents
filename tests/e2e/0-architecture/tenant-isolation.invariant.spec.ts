@@ -172,11 +172,11 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
   // a never-who geographic aggregate, or a correlated/transitively-scoped
   // subselect — never a request-reachable per-brand row enumeration.
-  'lib/draft-expiry.ts:95':
+  'lib/draft-expiry.ts:98':
     'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
     'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
     'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
-  'lib/draft-expiry.ts:107':
+  'lib/draft-expiry.ts:110':
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
     'brand by design, not request-reachable.',
   'lib/shared-report.ts:167':

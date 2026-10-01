@@ -109,7 +109,9 @@ the relevant sections from the bottom up.
 ```sql
 -- 0088: clear the visitor's IP country (OSE-1460). Data-only: sets
 -- scan_node_returns.country_code and scan_aggregates.top_country to NULL. Not
--- reversible and not meant to be: the values are deliberately gone.
+-- reversible and not meant to be: the values are deliberately gone. The partial
+-- index can be dropped:
+DROP INDEX IF EXISTS idx_snr_country_nonnull;
 
 -- 0087: admin_audit_log.brand_id (AUD-3 Phase B, OSE-1447). Additive column +
 -- index. Never DROP the table (append-only, deprecation-lock). To roll back,

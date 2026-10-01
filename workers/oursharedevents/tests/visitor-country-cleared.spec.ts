@@ -66,6 +66,14 @@ describe('OSE-1460 — migration 0088 clears the recorded visitor country', () =
     }
   });
 
+  test('the roll-up cleanup is bounded by the partial index, not a scan of all history', async () => {
+    const plan = await tenv.DB.prepare(
+      `EXPLAIN QUERY PLAN UPDATE scan_node_returns SET country_code = NULL WHERE country_code IS NOT NULL`
+    ).all<{ detail: string }>();
+    const details = (plan.results ?? []).map((r) => r.detail).join(' | ');
+    expect(details).toContain('idx_snr_country_nonnull');
+  });
+
   test('the nightly roll-up writes top_country as NULL even if a country is present', async () => {
     await tenv.DB.prepare(
       `INSERT INTO scan_node_returns (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)

@@ -29,9 +29,12 @@
  *
  * AUDIT. Every run writes one admin_audit_log row (action DRAFT_EXPIRY, actor
  * 'system:lifecycle') carrying the count, the window, and the ids archived, so
- * "where did my event go?" is answerable from the log. Never-who: the row
+ * "where did my event go?" is answerable from the log. Each archived event also
+ * gets its own DRAFT_EXPIRED row, attributed to the event's brand (AUD-3 B). Never-who: the row
  * carries event ids only, no operator identity beyond the system actor.
  */
+
+import { logAdminAction } from './audit-log';
 
 export interface DraftExpiryEnv {
   DB: D1Database;
@@ -121,7 +124,22 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
       )
         .bind(id, window)
         .run();
-      result.archived += res.meta?.changes ?? 0;
+      const changed = res.meta?.changes ?? 0;
+      result.archived += changed;
+      // AUD-3 Phase B: one row per archived event, so it is attributed to that
+      // event's brand and shows in the brand owner's audit view. The run summary
+      // below stays platform-only.
+      if (changed > 0) {
+        await logAdminAction(env, {
+          action: 'DRAFT_EXPIRED',
+          actor: 'system:lifecycle',
+          resource_type: 'event',
+          resource_id: id,
+          request_id: `draft-expiry:${now}`,
+          outcome: 'success',
+          details: { days },
+        });
+      }
     }
   } catch (err) {
     result.errors = 1;

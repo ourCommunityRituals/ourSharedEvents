@@ -103,6 +103,7 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
   'idx_admin_audit_log_brand_created', // 0087 (AUD-3 Phase B brand-scoped audit view)
+  'idx_snr_country_nonnull', // 0088 (OSE-1460 bounded country cleanup)
   'idx_admin_brand_memberships_email', // 0050 (OSE-666/B2 membership scope lookup)
   'idx_events_data_class', // 0052 (OSE-606/608 demo data-class filtering)
   // OSE-240 (migration 0030)
@@ -307,7 +308,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 74 custom indexes exist', async () => {
+  test('all 75 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -340,7 +341,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(74); // +1 0087 idx_admin_audit_log_brand_created; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(75); // +1 0088 idx_snr_country_nonnull; +1 0087 idx_admin_audit_log_brand_created; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

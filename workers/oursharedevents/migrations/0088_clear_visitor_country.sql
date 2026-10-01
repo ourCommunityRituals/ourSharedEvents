@@ -13,3 +13,9 @@
 UPDATE scan_node_returns SET country_code = NULL WHERE country_code IS NOT NULL;
 
 UPDATE scan_aggregates SET top_country = NULL WHERE top_country IS NOT NULL;
+
+-- The nightly roll-up clears any country an older Worker wrote in the deploy
+-- window (aggregateScanBuckets). This partial index holds only non-NULL rows, so
+-- that UPDATE touches the few stray rows instead of scanning all scan history.
+CREATE INDEX IF NOT EXISTS idx_snr_country_nonnull
+  ON scan_node_returns (id) WHERE country_code IS NOT NULL;
