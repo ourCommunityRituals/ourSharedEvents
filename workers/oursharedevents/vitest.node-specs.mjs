@@ -149,6 +149,8 @@ export const NODE_SPECS = [
   // TV display settings (order, seconds per screen, league links) — pure over
   // lib/event-settings.ts.
   'tests/display-settings.spec.ts',
+  // Admin TV display card — its script run in jsdom with a stubbed fetch.
+  'tests/admin-tv-display-card.spec.ts',
   // OSE-1357 part 2 — poster codes: pure rules (lib/poster-codes.ts) and the
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',

@@ -18,6 +18,11 @@
 //
 // Same visibility as the poster bundle: an event that is not live is 404/403.
 // Public read: rate-limited at the route (publicReadLimited), like every other.
+//
+// GET /api/v2/admin/events/:id/display-config is the same body for the admin
+// "TV display" card, which must work on a draft too: admin auth and the
+// object-level brand guard (lib/admin-object-scope.ts) sit in front of it at
+// the router, and it skips the live-only check.
 
 import { corsHeaders } from '../lib/cors';
 import { parseEventState, assertRenderable } from '../domain/event-state';
@@ -97,6 +102,10 @@ export async function handleDisplayConfig(
     );
   }
 
+  return withEtag(request, headers, configBody(row));
+}
+
+function configBody(row: { id: string; settings_json: string | null }): string {
   const display = resolveDisplaySettings(parseEventSettings(row.settings_json));
   const league: LeagueItem[] = [];
   for (const kind of LEAGUE_LINK_KINDS) {
@@ -104,14 +113,20 @@ export async function handleDisplayConfig(
     if (!url) continue;
     league.push({ kind, label: LEAGUE_LABELS[kind], url, qr: qrFor(url) });
   }
-
-  const body = JSON.stringify({
+  return JSON.stringify({
     ok: true,
     event_id: row.id,
     panes: display.panes,
     dwell_seconds: display.dwellSeconds,
     league,
   });
+}
+
+async function withEtag(
+  request: Request,
+  headers: Record<string, string>,
+  body: string
+): Promise<Response> {
   const etag = await strongEtag(body);
   const cacheHeaders = {
     ...headers,
@@ -125,4 +140,23 @@ export async function handleDisplayConfig(
   return new Response(body, {
     headers: { ...cacheHeaders, 'Content-Type': 'application/json; charset=utf-8' },
   });
+}
+
+/** Admin read for the TV display card: any status (drafts are configured too). */
+export async function handleAdminDisplayConfig(
+  request: Request,
+  env: DisplayConfigEnv,
+  eventId: string
+): Promise<Response> {
+  const headers = { ...corsHeaders(request) };
+  const row = await env.DB.prepare('SELECT id, settings_json FROM events WHERE id = ?')
+    .bind(eventId)
+    .first<{ id: string; settings_json: string | null }>();
+  if (!row) {
+    return Response.json(
+      { ok: false, status: 404, code: 'NOT_FOUND', error: 'Event not found' },
+      { status: 404, headers }
+    );
+  }
+  return withEtag(request, headers, configBody(row));
 }

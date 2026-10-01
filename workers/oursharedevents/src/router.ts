@@ -76,6 +76,7 @@
  *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
+ *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league links, any status (admin)
  *   PUT    /api/v2/admin/events/:id/poster-codes        → save codes + targets (tier-limited)
  *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
  *                                                         posters/places + scans per day
@@ -237,7 +238,7 @@ import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
-import { handleDisplayConfig } from './handlers/display-config';
+import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
 import {
   handleAdminCreatePosterDeployment,
   handleAdminListPosterDeployments,
@@ -975,6 +976,18 @@ export async function route(
       return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
     if (method === 'GET')
       return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/display-config — the TV card's current values.
+  // Writes go through PUT /api/v2/admin/events/:id { settings } like the poster switch.
+  const adminDisplayConfigMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/display-config$/
+  );
+  if (adminDisplayConfigMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminDisplayConfig(request, env, adminDisplayConfigMatch[1]);
   }
 
   // GET/PUT /api/v2/admin/events/:id/poster-codes — the poster's codes (OSE-1357 p2)

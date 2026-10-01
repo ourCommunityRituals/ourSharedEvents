@@ -183,3 +183,27 @@ describe('display-config: ETag / 304', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('admin display-config: what the TV card loads', () => {
+  test('works on a draft (configure the TV before going live)', async () => {
+    const id = await createEvent({ status: 'draft', settings: { displayDwellSeconds: 25 } });
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}/display-config`, {
+      headers: ADMIN,
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Config).dwell_seconds).toBe(25);
+  });
+
+  test('needs admin auth', async () => {
+    const id = await createEvent();
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}/display-config`);
+    expect(res.status).toBe(401);
+  });
+
+  test('an unknown event is a 404', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events/no-such/display-config', {
+      headers: ADMIN,
+    });
+    expect(res.status).toBe(404);
+  });
+});
