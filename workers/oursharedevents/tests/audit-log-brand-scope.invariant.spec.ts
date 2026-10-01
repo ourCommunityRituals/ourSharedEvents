@@ -457,6 +457,8 @@ describe('AUD-3 B — input validation', () => {
     ['scope=brand&cursor=not-a-date', 'INVALID_CURSOR'],
     ['scope=brand&cursor=2020-01-01T10:00:04.0Z', 'INVALID_CURSOR'],
     ['scope=brand&cursor=2020-01-01T10:00:04Z', 'INVALID_CURSOR'],
+    ['scope=brand&cursor=2026-99-99T99:99:99.999Z', 'INVALID_CURSOR'],
+    ['scope=brand&cursor=2026-02-30T10:00:00.000Z', 'INVALID_CURSOR'],
     ["scope=brand&cursor=2026-10-01' OR 1=1--", 'INVALID_CURSOR'],
     ["scope=brand&actor=x' OR '1'='1", 'INVALID_FILTER'],
     ['scope=brand&action=update_event;DROP', 'INVALID_FILTER'],

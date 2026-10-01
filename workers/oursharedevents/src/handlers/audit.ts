@@ -74,6 +74,16 @@ const FILTER_SHAPES: Record<'action' | 'actor' | 'resource_type', RegExp> = {
 const CURSOR_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
+ * The cursor must be a real instant in the stored form: the right shape, and a
+ * value that parses and round-trips to itself (so 2026-02-30 or hour 99 fail).
+ */
+function isCanonicalCursor(cursor: string): boolean {
+  if (!CURSOR_SHAPE.test(cursor)) return false;
+  const t = Date.parse(cursor);
+  return Number.isFinite(t) && new Date(t).toISOString() === cursor;
+}
+
+/**
  * Resolve the brand view for a caller, or null when they may not read any brand's
  * audit trail. Scope mode 'all' (a `key:` actor with ADMIN_SCOPE_ALL) reads every
  * brand-attributed row with full IPs. An email actor reads only the brands they
@@ -159,7 +169,7 @@ export async function handleListAuditLog(
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 100);
 
   const cursor = url.searchParams.get('cursor');
-  if (cursor !== null && !CURSOR_SHAPE.test(cursor)) {
+  if (cursor !== null && !isCanonicalCursor(cursor)) {
     return errorResponse(
       'INVALID_CURSOR',
       'cursor must be an ISO-8601 UTC timestamp',
