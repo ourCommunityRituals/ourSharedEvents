@@ -272,6 +272,47 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
 
 // ─── Bruno contract budgets ───────────────────────────────────────────
 
+// ─── No Postman/Newman left in the repo ──────────────────────────────
+
+// OSE-1191 moved the contract from Newman to Bruno, but postman/ lived on as a
+// home for staging SQL seeds the Bruno run depends on. Every test asset and
+// every piece of infra the contract needs lives under bruno/ now (collections,
+// and bruno/fixtures/ for the D1 seeds T2 applies). Archived history stays in
+// archive/; this only guards the live tree.
+describe('Postman is gone: tests and infra live under bruno/', () => {
+  const { existsSync, readdirSync } = require('fs');
+
+  test('there is no postman/ directory', () => {
+    expect(existsSync(join(ROOT, 'postman'))).toBe(false);
+  });
+
+  const workflows = () =>
+    readdirSync(join(ROOT, '.github/workflows'))
+      .filter((n) => /\.ya?ml$/.test(n))
+      .map((n) => ({ name: n, text: readFile(`.github/workflows/${n}`) }));
+
+  test('no workflow refers to postman/', () => {
+    const offenders = workflows()
+      // A path, not prose: "Postman/Newman" in a comment or issue title is history.
+      .filter((w) => /(^|[^A-Za-z])postman\//.test(w.text))
+      .map((w) => w.name);
+    expect(offenders).toEqual([]);
+  });
+
+  test('every D1 seed a workflow applies is a bruno/fixtures/ file that exists', () => {
+    const seeds = [];
+    for (const w of workflows()) {
+      for (const m of w.text.matchAll(/--file\s+(?:\.\.\/)+(\S+\.sql)/g)) seeds.push(m[1]);
+    }
+    expect(seeds.length).toBeGreaterThan(0);
+    const misplaced = seeds.filter(
+      (p) => !p.startsWith('bruno/fixtures/') && !p.startsWith('tests/')
+    );
+    expect(misplaced).toEqual([]);
+    expect(seeds.filter((p) => !existsSync(join(ROOT, p)))).toEqual([]);
+  });
+});
+
 describe('Bruno contract latency budgets', () => {
   test('admin registrations read has an explicit decrypted-list budget', () => {
     const collection = readFile('bruno/ose-api/opencollection.yml');

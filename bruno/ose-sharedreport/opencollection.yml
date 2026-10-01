@@ -24,7 +24,7 @@ docs:
     - Cache header verification
     - Rate limit awareness
 
-    Run with: newman run postman/collections/sharedreport-api.json -e postman/environments/mvp-event-toolkit-dev.json
+    Run with: npx bru run . --env <env> (from bruno/ose-sharedreport)
   type: text/markdown
 bundled: false
 extensions: {}

@@ -192,7 +192,7 @@ docs/                         # Architecture, regulatory phases, methodology
 schemas/                      # JSON schema definitions
 specs/                        # Test specifications
 tests/                        # Vitest + Playwright test suites
-postman/                      # Newman/Postman collections + environments
+bruno/                        # Bruno API + pages contract collections, fixtures/ = staging SQL seeds
 archive/                      # Legacy GAS/NUSDK code (preserved, not deployed)
 
 STORIES.md                    # Story registry — synced with Linear
@@ -296,8 +296,8 @@ Stories are tracked in [Linear](https://linear.app/oursharedevents) under the **
 # Vitest (unit/integration)
 cd workers/oursharedevents && npx vitest run
 
-# Newman (API against mock server)
-npx newman run postman/ose-api-staging.json -e postman/mock-env.json
+# Bruno (API contract against staging; T2 runs this in CI)
+cd bruno/ose-api && npx bru run . -r --env ose-staging
 
 # Playwright smoke
 npx playwright test --config=playwright.smoke.config.ts
