@@ -1487,6 +1487,23 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-sponsors-seed.sql
 
+      # OSE-1432: one fixed-id sponsor per case for the Bruno folder "14. Public
+      # Sponsor Card & Logo" (on show / no logo / dead logo host / pool / draft-only),
+      # on its own active-but-unlisted event so the covenant order on
+      # test-event-001 is untouched. Idempotent. NOT continue-on-error, like the
+      # OSE-1419 event seed: a missing fixture fails here by name, not as a 404 in
+      # the contract run.
+      - name: 'Seed public sponsor card fixtures (OSE-1432)'
+        if: matrix.section == 'api'
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../postman/fixtures/sponsor-public-card-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are

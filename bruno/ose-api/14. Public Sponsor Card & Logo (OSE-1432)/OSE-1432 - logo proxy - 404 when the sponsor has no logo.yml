@@ -1,0 +1,26 @@
+info:
+  name: OSE-1432 | logo proxy | 404 when the sponsor has no logo
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_pcard_nologo/logo"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Surfaces render the OSE default for a logo-less sponsor; the proxy itself is a plain 404.
+        test('404 for an on-show sponsor without a logo', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

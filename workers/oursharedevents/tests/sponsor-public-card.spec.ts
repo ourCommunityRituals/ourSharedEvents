@@ -567,7 +567,28 @@ describe('CCR PR #699 | logo proxy success path + edge cache', () => {
     expect(res.headers.get('content-type')).toBe('image/png');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('content-security-policy')).toBe("default-src 'none'");
+    // OSE-1432: the full header set the T2 Bruno request asserts on staging, so
+    // the offline layer and the staging layer check the same contract.
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+    expect(res.headers.get('cache-control')).toContain('max-age=86400');
     expect(upstream).toHaveBeenCalledWith(u, expect.anything());
+  });
+
+  // OSE-1432 mirror of the T2 "not on show" case: the sponsor HAS a logo, so the
+  // 404 comes from the consent gate, not from missing data, and nothing is fetched.
+  test('a pool sponsor with a logo, and an unknown id, get 404 with no upstream fetch', async () => {
+    vi.stubGlobal('fetch', upstream);
+    const { status, body } = await create({
+      name: 'Pool With Logo',
+      tier: 'gold',
+      logo_url: `https://cdn.example.com/pool-${Date.now()}.png`,
+    });
+    expect(status, JSON.stringify(body)).toBe(201);
+    expect((await get(String(body.id))).status).toBe(404);
+    expect((await get(String(body.id), '?slot=sidebar')).status).toBe(404);
+    expect((await get('sb_does_not_exist')).status).toBe(404);
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   test('?slot=sidebar prefers the compact logo and falls back to the header logo', async () => {

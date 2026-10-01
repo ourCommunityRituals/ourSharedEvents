@@ -1,0 +1,28 @@
+info:
+  name: OSE-1432 | logo proxy | ?slot=sidebar falls back to the header logo
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_pcard_onshow/logo?slot=sidebar"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-1317: no compact logo is stored, so the side rail gets the header logo.
+        test('200 via the header-logo fallback', function () { expect(res.getStatus()).to.eql(200); });
+        test('Content-Type is image/png', function () { expect(String(res.getHeader('content-type') || '')).to.eql('image/png'); });
+        test('X-Content-Type-Options: nosniff', function () { expect(String(res.getHeader('x-content-type-options') || '')).to.eql('nosniff'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

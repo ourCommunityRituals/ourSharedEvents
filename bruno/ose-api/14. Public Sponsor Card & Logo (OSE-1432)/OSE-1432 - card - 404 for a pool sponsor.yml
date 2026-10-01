@@ -1,0 +1,28 @@
+info:
+  name: OSE-1432 | sponsor card | 404 for a pool sponsor
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/sponsors/sb_pcard_pool"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // A sponsor nobody has placed is not on show: 404, so the card cannot enumerate a pool.
+        const body = String(res.getBody() || '');
+        test('404 for a pool sponsor', function () { expect(res.getStatus()).to.eql(404); });
+        test('nothing of the sponsor leaks into the 404', function () { expect(body).to.not.include('Public Card Pool'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
