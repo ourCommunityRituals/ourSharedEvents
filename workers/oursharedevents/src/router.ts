@@ -379,6 +379,16 @@ export async function route(
   }
 
   /**
+   * An admin mutation is audited as 'success' only when the handler accepted
+   * it. A 4xx/5xx (validation 400, scoped 404, state-machine 409, D1 503) is
+   * recorded as 'denied': the append-only log must never claim a write that
+   * did not happen (same rule as UPDATE_EVENT, CCR-PR567 item 7).
+   */
+  function _auditOutcome(res: Response): 'success' | 'denied' {
+    return res.status < 400 ? 'success' : 'denied';
+  }
+
+  /**
    * AUD-3 (OSE-1447): platform-owned routes are key-actor only. Call after
    * requireAdmin; a refusal is audited and answered with the router's own 404.
    */
@@ -540,9 +550,12 @@ export async function route(
   // ALLOW_ADMIN_KEY_FALLBACK or ALLOW_OCR_INTERNAL — those paths carry no JWT).
   const _cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   if (_cfJwt && (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN) {
+    // `request` lets requireAdmin reuse this signature verdict (one RSA pass
+    // per admin request); its own aud/iss/exp checks still run.
     const _jwtResult = await verifyCfAccessJWT(
       _cfJwt,
-      (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN as string
+      (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN as string,
+      { request }
     );
     if (!_jwtResult.valid) {
       return new Response(
@@ -659,7 +672,8 @@ export async function route(
       return deny;
     }
     const response = await handleCreateEvent(request, env);
-    _audit(reqId, 'CREATE_EVENT', 'success', 'event');
+    const outcome = _auditOutcome(response);
+    _audit(reqId, 'CREATE_EVENT', outcome, 'event');
     return response;
   }
 
@@ -747,38 +761,28 @@ export async function route(
   // POST /api/v2/admin/events/:id/verify-qr
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/verify-qr$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
     if (authRes) {
-      _audit(crypto.randomUUID(), 'VERIFY_QR', 'denied', 'event', eventId);
+      _audit(reqId, 'VERIFY_QR', 'denied', 'event', eventId);
       return authRes;
     }
     const res = await handleV2AdminVerifyQr(request, env, eventId);
-    _audit(
-      crypto.randomUUID(),
-      'VERIFY_QR',
-      res.status < 400 ? 'success' : 'denied',
-      'event',
-      eventId
-    );
+    _audit(reqId, 'VERIFY_QR', res.status < 400 ? 'success' : 'denied', 'event', eventId);
     return res;
   }
 
   // POST /api/v2/admin/events/:id/unverify-qr
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/unverify-qr$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
     if (authRes) {
-      _audit(crypto.randomUUID(), 'UNVERIFY_QR', 'denied', 'event', eventId);
+      _audit(reqId, 'UNVERIFY_QR', 'denied', 'event', eventId);
       return authRes;
     }
     const res = await handleV2AdminUnverifyQr(request, env, eventId);
-    _audit(
-      crypto.randomUUID(),
-      'UNVERIFY_QR',
-      res.status < 400 ? 'success' : 'denied',
-      'event',
-      eventId
-    );
+    _audit(reqId, 'UNVERIFY_QR', res.status < 400 ? 'success' : 'denied', 'event', eventId);
     return res;
   }
 
@@ -846,7 +850,8 @@ export async function route(
       return deny;
     }
     const response = await handleAdminCreateSponsor(request, env);
-    _audit(reqId, 'CREATE_SPONSOR', 'success', 'sponsor');
+    const outcome = _auditOutcome(response);
+    _audit(reqId, 'CREATE_SPONSOR', outcome, 'sponsor');
     return response;
   }
 
@@ -888,10 +893,11 @@ export async function route(
         env,
         adminSponsorEventTypesMatch[1]
       );
+      const outcome = _auditOutcome(response);
       _audit(
         reqId,
         'UPDATE_SPONSOR_EVENT_TYPES',
-        'success',
+        outcome,
         'sponsor',
         adminSponsorEventTypesMatch[1]
       );
@@ -948,7 +954,8 @@ export async function route(
     }
     if (method === 'PUT') {
       const response = await handleSetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
-      _audit(reqId, 'UPDATE_SPONSOR_AREAS', 'success', 'sponsor', adminSponsorAreasMatch[1]);
+      const outcome = _auditOutcome(response);
+      _audit(reqId, 'UPDATE_SPONSOR_AREAS', outcome, 'sponsor', adminSponsorAreasMatch[1]);
       return response;
     }
     if (method === 'GET') return handleGetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
@@ -966,12 +973,14 @@ export async function route(
     if (method === 'GET') return handleAdminGetSponsor(request, env, adminSponsorMatch[1]);
     if (method === 'PUT') {
       const response = await handleAdminUpdateSponsor(request, env, adminSponsorMatch[1]);
-      _audit(reqId, 'UPDATE_SPONSOR', 'success', 'sponsor', adminSponsorMatch[1]);
+      const outcome = _auditOutcome(response);
+      _audit(reqId, 'UPDATE_SPONSOR', outcome, 'sponsor', adminSponsorMatch[1]);
       return response;
     }
     if (method === 'DELETE') {
       const response = await handleAdminDeleteSponsor(request, env, adminSponsorMatch[1]);
-      _audit(reqId, 'DELETE_SPONSOR', 'success', 'sponsor', adminSponsorMatch[1]);
+      const outcome = _auditOutcome(response);
+      _audit(reqId, 'DELETE_SPONSOR', outcome, 'sponsor', adminSponsorMatch[1]);
       return response;
     }
   }
@@ -1149,11 +1158,13 @@ export async function route(
     }
     if (method === 'PUT') {
       const response = await handleSetEventFlag(request, env, eventId, flagKey);
-      _audit(reqId, 'SET_EVENT_FLAG', 'success', 'flag', `${eventId}/${flagKey}`);
+      const outcome = _auditOutcome(response);
+      _audit(reqId, 'SET_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
       return response;
     }
     const response = await handleRemoveEventFlag(env, eventId, flagKey);
-    _audit(reqId, 'REMOVE_EVENT_FLAG', 'success', 'flag', `${eventId}/${flagKey}`);
+    const outcome = _auditOutcome(response);
+    _audit(reqId, 'REMOVE_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
     return response;
   }
 
@@ -1191,7 +1202,8 @@ export async function route(
       return deny;
     }
     const response = await handleSetFlag(request, env, flagKeyMatch[1]);
-    _audit(reqId, 'SET_FLAG', 'success', 'flag', flagKeyMatch[1]);
+    const outcome = _auditOutcome(response);
+    _audit(reqId, 'SET_FLAG', outcome, 'flag', flagKeyMatch[1]);
     return response;
   }
 
@@ -1203,7 +1215,8 @@ export async function route(
       return deny;
     }
     const response = await handleApplyTier(request, env);
-    _audit(reqId, 'APPLY_TIER', 'success', 'flag');
+    const outcome = _auditOutcome(response);
+    _audit(reqId, 'APPLY_TIER', outcome, 'flag');
     return response;
   }
 

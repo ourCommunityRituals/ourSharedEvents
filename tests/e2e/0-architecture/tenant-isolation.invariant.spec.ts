@@ -106,9 +106,11 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
     'one-line event-settings import lands above it. Scope enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
-  'handlers/portfolio-rollup.ts:148':
+  'handlers/portfolio-rollup.ts:185':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
-    'WHERE clause is interpolated, so the bind is invisible to a static scan.',
+    'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
+    '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
+    'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
   'handlers/bigquery.ts:83':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
@@ -129,10 +131,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'COUNT of active placements for ONE event, keyed by `event_id = ?` (a ' +
     'caller-held event UUID). A per-event aggregate, not a cross-brand read — ' +
     'same held-key rationale as the single-event GET design note above.',
-  'handlers/portfolio-rollup.ts:165':
+  'handlers/portfolio-rollup.ts:203':
     'COUNT over `event_id IN (?, …)` where the id list is the brand-scoped ' +
     'event set assembled above (the same dynamic brandFilter that exempts ' +
-    'portfolio-rollup.ts:148). Not a cross-brand read.',
+    'portfolio-rollup.ts:185). Not a cross-brand read. (Line shifted 165→203 ' +
+    'by the 2026-10-01 architecture review: the same held-id IN list, now ' +
+    'chunked under the D1 100-bound-parameter cap via perEventCounts.)',
   'handlers/shared-report-read.ts:431':
     'Single-row existence check keyed by `sponsor_business_id = ? AND ' +
     'event_id = ?` (both caller-held ids) — verifies a sponsor belongs to an ' +

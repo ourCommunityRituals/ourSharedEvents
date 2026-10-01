@@ -64,9 +64,9 @@ export async function handleShortlinkResolve(
   }
 
   // Anonymous click logging: counter + timestamp only. No IP, no anon_id.
-  // Fire-and-forget semantics — the redirect must succeed even if this
-  // increment fails. (incrementClick already swallows D1 errors with a
-  // structured log; we still don't await the result before redirecting.)
+  // The redirect must succeed even if this increment fails: incrementClick
+  // swallows D1 errors with a structured log. It IS awaited (one UPDATE …
+  // RETURNING round trip), so the count is current when the 302 lands.
   await incrementClick(env, code);
 
   // 302 to the public event HTML page. OSE-243a wired /events/:id to
