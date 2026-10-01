@@ -1,16 +1,17 @@
 {
-  "generated_at": "2026-08-03",
-  "commit": "local-gap-closure-2",
+  "generated_at": "2026-10-01",
+  "commit": "b2dc0c57",
   "run_url": "",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
-    "total": 24,
-    "enforced": 15,
-    "partial": 8,
-    "gap": 1,
-    "threat_entries": 52,
-    "open_threats": 5
+    "total": 28,
+    "enforced": 16,
+    "partial": 6,
+    "gap": 4,
+    "retired": 2,
+    "threat_entries": 71,
+    "open_threats": 2
   },
   "invariants": [
     {
@@ -20,31 +21,36 @@
       "invariant_status": "live",
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 4,
-      "open_threat_count": 0
+      "last_green": "2026-08-22",
+      "threat_count": 5,
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 2,
       "name": "hyperlocal_geo_resolution",
-      "label": "#2 — Hyperlocal Geo Resolution",
+      "label": "#2 — Hyperlocal Geo-Resolution",
       "invariant_status": "live",
       "enforcement_status": "enforced",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 1,
-      "open_threat_count": 0
+      "last_attacked": "2026-08-22",
+      "last_green": "2026-08-22",
+      "threat_count": 3,
+      "open_threat_count": 0,
+      "brain_conformance": [
+        "riph-brain-conformance.spec.ts:19"
+      ]
     },
     {
       "id": 3,
       "name": "uec_encoding",
-      "label": "#3 — UEC Encoding",
+      "label": "#3 — Universal Event Code Standard",
       "invariant_status": "live",
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 4,
@@ -55,18 +61,20 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 5,
       "name": "tier_equity",
-      "label": "#5 — Tier Equity",
+      "label": "#5 — Local Sponsor Covenant",
       "invariant_status": "partial",
       "enforcement_status": "gap",
       "last_attacked": null,
       "last_green": null,
       "threat_count": 0,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 6,
@@ -77,7 +85,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 7,
@@ -85,21 +94,23 @@
       "label": "#7 — Aggregate-Only Reporting",
       "invariant_status": "partial",
       "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 1,
-      "open_threat_count": 0
+      "last_attacked": "2026-08-22",
+      "last_green": "2026-08-22",
+      "threat_count": 3,
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 8,
       "name": "bounded_pii_retention",
       "label": "#8 — Bounded PII Retention",
       "invariant_status": "live",
-      "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 3,
-      "open_threat_count": 1
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-13",
+      "last_green": "2026-08-13",
+      "threat_count": 4,
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 9,
@@ -107,10 +118,11 @@
       "label": "#9 — Tenant Isolation",
       "invariant_status": "partial",
       "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 4,
-      "open_threat_count": 0
+      "last_attacked": "2026-08-13",
+      "last_green": "2026-08-13",
+      "threat_count": 8,
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 10,
@@ -121,40 +133,44 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 11,
       "name": "self_hosted_runner_bash_resolution",
-      "label": "#11 — Runner Bash Resolution",
-      "invariant_status": "live",
-      "enforcement_status": "enforced",
+      "label": "#11 — Self-Hosted Runner Bash Resolution",
+      "invariant_status": "retired",
+      "enforcement_status": "retired",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 12,
       "name": "runner_pool_readiness_probe",
       "label": "#12 — Runner Pool Readiness Probe",
-      "invariant_status": "live",
-      "enforcement_status": "enforced",
+      "invariant_status": "retired",
+      "enforcement_status": "retired",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 13,
       "name": "brain_enforcement_location",
-      "label": "#13 — Brain Enforcement Location",
+      "label": "#13 — Brain Enforcement Co-location",
       "invariant_status": "live",
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 14,
@@ -165,7 +181,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 15,
@@ -176,7 +193,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 16,
@@ -187,7 +205,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 17,
@@ -197,19 +216,21 @@
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
-      "threat_count": 1,
-      "open_threat_count": 0
+      "threat_count": 2,
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 18,
       "name": "slug_permanence",
-      "label": "#18 — Slug Permanence",
+      "label": "#18 — QR Code URL / Slug Permanence",
       "invariant_status": "live",
       "enforcement_status": "enforced",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 19,
@@ -220,29 +241,32 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 20,
       "name": "standards_propagation_completeness",
-      "label": "#20 — Standards Propagation",
+      "label": "#20 — Standards Propagation Completeness",
       "invariant_status": "partial",
       "enforcement_status": "partial",
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 21,
       "name": "shared_report_schema_stability",
       "label": "#21 — SharedReport Schema Stability",
       "invariant_status": "live",
-      "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-06",
       "last_green": "2026-08-03",
       "threat_count": 3,
-      "open_threat_count": 1
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 22,
@@ -253,7 +277,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 2,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 23,
@@ -264,7 +289,8 @@
       "last_attacked": "2026-08-03",
       "last_green": "2026-08-03",
       "threat_count": 1,
-      "open_threat_count": 0
+      "open_threat_count": 0,
+      "brain_conformance": []
     },
     {
       "id": 24,
@@ -272,10 +298,59 @@
       "label": "#24 — Auditability",
       "invariant_status": "partial",
       "enforcement_status": "partial",
-      "last_attacked": "2026-08-03",
-      "last_green": "2026-08-03",
-      "threat_count": 7,
-      "open_threat_count": 0
+      "last_attacked": "2026-08-13",
+      "last_green": "2026-08-13",
+      "threat_count": 8,
+      "open_threat_count": 0,
+      "brain_conformance": []
+    },
+    {
+      "id": 25,
+      "name": "sponsor_share_covenant",
+      "label": "#25 — Sponsor Share Covenant",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-13",
+      "last_green": "2026-08-13",
+      "threat_count": 4,
+      "open_threat_count": 0,
+      "brain_conformance": []
+    },
+    {
+      "id": 26,
+      "name": "explicit_identity",
+      "label": "#26 — Explicit Identity",
+      "invariant_status": "partial",
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
+      "open_threat_count": 0,
+      "brain_conformance": []
+    },
+    {
+      "id": 27,
+      "name": "no_biometric_identifiers",
+      "label": "#27 — No Biometric Identifiers",
+      "invariant_status": "partial",
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
+      "open_threat_count": 0,
+      "brain_conformance": []
+    },
+    {
+      "id": 28,
+      "name": "ci_approval_gate_secret_surface",
+      "label": "#28 — CI Approval-Gate Secret Surface",
+      "invariant_status": "partial",
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
+      "open_threat_count": 0,
+      "brain_conformance": []
     }
   ]
 }

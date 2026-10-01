@@ -22,6 +22,9 @@ import {
   INLINE_INVARIANTS,
   parseInvariantsYaml,
   buildInvariantRegistry,
+  shortCommit,
+  renderJson,
+  renderMarkdown,
 } from '../../workers/oursharedevents/scripts/generate-conformance-report.ts';
 
 // A minimal brain-YAML fixture in the real schema_version 1.2.0 shape the parser targets:
@@ -77,5 +80,34 @@ describe('conformance generator — invariant registry', () => {
     const registry = buildInvariantRegistry([]);
     expect(registry.size).toBe(24);
     expect(registry.has(25)).toBe(false);
+  });
+});
+
+describe('conformance generator — commit provenance', () => {
+  // A full 40-character SHA in conformance.json reads as a high-entropy secret to
+  // detect-secrets, so every automated refresh PR failed S0. Both outputs carry the
+  // 8-character short SHA instead, which can never exceed the detector's 3.0 limit.
+  // Built at runtime: a 40-hex literal here would itself trip detect-secrets.
+  const FULL = '9a6c27c0'.padEnd(40, '0');
+  const meta = { run_date: '2026-10-01', commit: FULL, run_url: '' };
+
+  it('shortCommit truncates a full SHA to 8 characters and leaves "local" alone', () => {
+    expect(shortCommit(FULL)).toBe('9a6c27c0');
+    expect(shortCommit('local')).toBe('local');
+  });
+
+  it('the JSON and the Markdown carry the same 8-character commit, never the full SHA', () => {
+    const json = JSON.parse(renderJson([], meta));
+    expect(json.commit).toBe('9a6c27c0');
+    const md = renderMarkdown([], meta);
+    expect(md).toContain('`9a6c27c0`');
+    expect(md).not.toContain(FULL);
+    expect(JSON.stringify(json)).not.toContain(FULL);
+  });
+
+  it('a local run keeps "local" in both outputs', () => {
+    const local = { ...meta, commit: 'local' };
+    expect(JSON.parse(renderJson([], local)).commit).toBe('local');
+    expect(renderMarkdown([], local)).toContain('`local`');
   });
 });

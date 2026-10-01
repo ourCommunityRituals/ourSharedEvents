@@ -1142,7 +1142,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     threat:
       'Batch SharedReport no depth gate: handleBatchSharedReports() returned result.report directly without applying a depth gate — any WKRP_SERVICE_TOKEN bearer received all fields regardless of the requested depth. OSE-577: the deeper defect was keying access on the ENDPOINT, not the token class — so the cross-product (named-identity) WKRP token received full-depth aggregates joinable against a name-bearing roster.',
     severity: 'CRITICAL',
-    target_invariant: { number: 5, name: 'tier_equity' },
+    target_invariant: { number: 1, name: 'anonymous_id' },
     mitigation_story: 'OSE-577',
     test_ref:
       'tests/shared-report-read.spec.ts > OSE-577 — batch service-token class split (cross-product fails closed)',
@@ -1180,7 +1180,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     threat:
       "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_impressions (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
     severity: 'CRITICAL',
-    target_invariant: { number: 5, name: 'tier_equity' },
+    target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-595',
     test_ref:
       'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_impressions',
@@ -1197,20 +1197,17 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-057',
     layer: 'worker_surface',
     threat:
-      'Public form endpoints accept unlimited submissions with no per-IP rate limiting: all 4 public form handlers (register, checkin, survey, email-signup) process requests without calling checkRateLimit, enabling unbounded spam of form_registrations, form_surveys, email_signups, and checkin_counts for any event_id including non-existent events.',
-    severity: 'HIGH',
-    target_invariant: { number: 8, name: 'bounded_pii_retention' },
-    mitigation_story: 'OSE-599',
+      'Public check-in and survey forms have no per-event cap: every public form POST is behind the router\'s KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).',
+    severity: 'MEDIUM',
+    target_invariant: null, // resource abuse / input handling, not PII retention (#8)
+    mitigation_story: 'OSE-1465',
     test_ref:
-      'tests/forms-adversarial.spec.ts > A1-A9 injection/boundary coverage; A10 rate-limit gap documented',
-    status: 'tested',
-    red_birth: {
-      date: '2026-08-03',
-      method: 'deliberate-fixture-break',
-      notes:
-        'Fleet sweep: all 4 public form handlers confirmed via static grep — zero calls to checkRateLimit in forms.ts (open gap, documented as A10). A1-A9 adversarial tests confirmed injection resistance, null-body 500 and array-body 200 bugs found and fixed (parseJsonBody + email-over-320 silent truncation). Rate limiting mitigation pending separate story.',
-    },
-    last_run_green: '2026-08-03',
+      'tests/form-rate-limit.spec.ts > TL-057 | route-level limit covers the anonymous form handlers',
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Reclassified 2026-10-01 (conformance refresh review): was marked tested on the strength of A1-A9 injection tests and an always-passing A10 placeholder; the injection coverage now has its own entry, TL-070. Narrowed and lowered from HIGH the same day: the earlier text said check-in and survey had no rate limit at all, but the router limits every public form POST per IP. The test_ref pins that per-IP limit (red when the router check is removed); it does not mitigate the per-event gap, which stays open until OSE-1465.',
   },
   {
     id: 'TL-058',
@@ -1477,6 +1474,42 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
         'Existing OSE-660 spec ledger-tagged by OSE-662: asserts the geo link contains lat/lon and never the supplied H3 cell, and is an anchor (no embed/referrer). Goes red if an H3 token leaks into the link or an embed is introduced.',
     },
     last_run_green: '2026-08-22',
+  },
+  {
+    id: 'TL-070',
+    layer: 'worker_surface',
+    threat:
+      'Injection and malformed input on the public form endpoints (register, check-in, survey, email-signup): SQL metacharacters in fields and in the event-id path segment, null and array bodies, control and zero-width characters, and over-length emails must not escape parameterisation or crash the handler (no 500).',
+    severity: 'HIGH',
+    target_invariant: null, // resource abuse / input handling, not PII retention (#8)
+    mitigation_story: 'OSE-599',
+    test_ref: 'tests/forms-adversarial.spec.ts > A1-A9 injection/boundary coverage',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-03',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Split out of TL-057 on 2026-10-01. Fleet sweep: A1-A9 adversarial tests confirmed injection resistance; null-body 500 and array-body 200 bugs found and fixed (parseJsonBody + email-over-320 silent truncation).',
+    },
+    last_run_green: '2026-08-03',
+    notes:
+      'Scope narrowed 2026-10-01 to what the tests prove (no SQL escape, no 500). Not covered: the A3 homoglyph test sends ASCII twice, so homoglyph email handling is untested; silent name truncation (A4) and nonexistent-event acceptance (A9) are open as TL-071.',
+  },
+  {
+    id: 'TL-071',
+    layer: 'worker_surface',
+    threat:
+      'Public form endpoints accept a submission for an event id that does not exist (A9), and silently truncate a name over 200 characters instead of rejecting it (A4). Both let junk or altered data into the forms tables without an error the submitter can see.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: null,
+    test_ref:
+      'tests/forms-adversarial.spec.ts > A4 name over 200 chars is silently truncated; A9 submitting to non-existent event succeeds (both document current behaviour)',
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Opened 2026-10-01 from the conformance-refresh review: these behaviours were counted as tested coverage under TL-057, but the tests assert the gap, not a mitigation.',
   },
 ];
 

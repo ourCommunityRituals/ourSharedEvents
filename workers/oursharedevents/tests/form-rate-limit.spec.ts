@@ -16,7 +16,7 @@
  * Integration gate: direct handler invocation confirms 429 after 10 requests.
  */
 
-import { env } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import {
   handleFormRegistration,
@@ -24,6 +24,7 @@ import {
   handleFormSurvey,
   handleFormEmailSignup,
 } from '../src/handlers/forms';
+import { RATE_LIMIT_MAX } from '../src/lib/rate-limit';
 
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
@@ -207,4 +208,31 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
       expect(res.status).not.toBe(429);
     }
   });
+});
+
+// TL-057: the handler exemption above is not the whole picture. The router puts
+// every public form POST, check-in and survey included, behind the KV-backed
+// per-IP limiter (src/router.ts, isRateLimited(clientIp(request), ...), 60/min;
+// the KV key is a SHA-256 of the IP, never the IP itself). These tests pin that
+// route-level limit, so a router change that drops it turns red.
+describe('TL-057 | route-level limit covers the anonymous form handlers', () => {
+  for (const formType of ['checkin', 'survey'] as const) {
+    test(`POST /forms/${formType} returns 429 after ${RATE_LIMIT_MAX} requests from one IP`, async () => {
+      const ip = formType === 'checkin' ? '10.57.0.1' : '10.57.0.2';
+      const call = () =>
+        SELF.fetch(`http://localhost/api/v2/events/evt_tl057_${formType}/forms/${formType}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+          body: JSON.stringify({}),
+        });
+      for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+        const res = await call();
+        expect(res.status).not.toBe(429);
+        await res.body?.cancel();
+      }
+      const limited = await call();
+      expect(limited.status).toBe(429);
+      await limited.body?.cancel();
+    });
+  }
 });
