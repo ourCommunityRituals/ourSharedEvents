@@ -14,8 +14,11 @@
  *   - No referrer logged.
  *
  * Dedup:
- *   - KV key `scan:dedup:{anonId}:{deploymentId}:{5min_bucket}` with 5-min TTL.
- *   - Same anon + same deployment + same 5-min window → no second scan row.
+ *   - KV key `scan:dedup:{anonId}:{deploymentId}:{hour_bucket}`, 1-hour TTL.
+ *   - Same anon + same deployment + same hour bucket → no second scan row.
+ *     One person counts once per poster per hour, so an hourly poster count is
+ *     a count of people (OSE-1459): the K-floor on poster cells and on
+ *     poster_attribution then means "at least K people", not "K requests".
  *   - KV missing → still write scan (dedup is best-effort).
  *
  * Structured log (SCAN_RECORDED) contains only aggregated signals: no raw
@@ -41,11 +44,6 @@ export interface QrScanEnv {
 function scanBucket(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:00`;
-}
-
-/** 5-minute bucket index used as the KV dedup key suffix. */
-function fiveMinBucket(nowMs: number): number {
-  return Math.floor(nowMs / (5 * 60 * 1000));
 }
 
 /** SHA-256 of user-agent string, truncated to 16 hex chars. Not reversible. */
@@ -128,16 +126,17 @@ export async function handleQrScan(
   // Anonymous ID: read from cookie or generate new one.
   const { anonId, isNew } = getOrCreateAnonId(request);
 
-  // 5-minute dedup: same anon + same deployment in same bucket → skip write.
+  // Hour dedup (OSE-1459): same anon + same deployment in the same hour bucket
+  // the scan is stored under → skip write. One person, one poster, one hour.
   let isDuplicate = false;
   if (env.RATE_LIMIT_KV) {
-    const dedupKey = `scan:dedup:${anonId}:${deploymentId}:${fiveMinBucket(nowMs)}`;
+    const dedupKey = `scan:dedup:${anonId}:${deploymentId}:${scanBucket(nowDate)}`;
     const existing = await env.RATE_LIMIT_KV.get(dedupKey);
     if (existing !== null) {
       isDuplicate = true;
     } else {
-      // Mark dedup entry with 5-minute TTL.
-      await env.RATE_LIMIT_KV.put(dedupKey, '1', { expirationTtl: 300 });
+      // The key names its hour, so a 1-hour TTL always outlives that hour.
+      await env.RATE_LIMIT_KV.put(dedupKey, '1', { expirationTtl: 3600 });
     }
   }
 

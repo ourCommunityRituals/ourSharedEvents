@@ -125,7 +125,7 @@ The window closes **ONE ring in ONE corridor.** Compression forces engineered ig
 ### First-corridor choice criteria (select by CADENCE, not geography)
 
 1. **Event cadence ≥ weekly in a single (dow, hour) slot** — maximizes distinct-attendee accrual toward `source:'live'` + `return_rate`, keeps the rolling 30-day bucket occupied. It does NOT "clear 10 events."
-2. **≥5 scans at one poster within one hour** — the live map counts scans per poster cell per hour and drops any hour under K=5 before summing (`CORRIDOR_MAP_MIN_COUNT`, OSE-683). Thinly spread scans never light a cell; posters at the door during the event do.
+2. **≥5 people scanning one poster within one hour** (scans are deduplicated per person per poster per hour, OSE-1459) — the live map counts scans per poster cell per hour and drops any hour under K=5 before summing (`CORRIDOR_MAP_MIN_COUNT`, OSE-683). Thinly spread scans never light a cell; posters at the door during the event do.
 3. **NEW-attendee turnover, not just loyal returners** — the corridor needs a stream of _distinct_ anons to ever cross return_rate's min-sample cleanly.
 4. **A confirmable recurring `event_series`** so headcount_trend teaser can light (Premium visible-not-given demo).
 5. **Defensibly geo-derivable `is_local`** at the promotion seam (`draft.h3_res7 === ev.h3_res7`, sponsor-promotion.ts:166-168) — pick a corridor where locality is NOT contested (OSE-662 hazard).
