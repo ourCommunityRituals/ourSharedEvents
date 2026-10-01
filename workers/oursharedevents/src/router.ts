@@ -276,6 +276,8 @@ import {
   RATE_LIMIT_MINT_MAX,
   RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_MS,
+  bucketLimit,
+  isBucketTripped,
   type RateLimitEntry,
   type RateLimitEnv,
 } from './lib/rate-limit';
@@ -1954,8 +1956,8 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
             // Only entries that have actually been rate-limited (count > max)
             // Each bucket stores its own limit (mint 10, batch 30, 60, public
             // reads 120); entries from before that field default to 60.
-            const limit = entry.max ?? RATE_LIMIT_MAX;
-            if (entry.count <= limit) continue;
+            if (!isBucketTripped(entry)) continue;
+            const limit = bucketLimit(entry);
             const ip = batch[j].name.slice('ratelimit:'.length);
             ipEntries.push({ ip, count: entry.count, resetAt: entry.resetAt, limit });
             totalRateLimited++;

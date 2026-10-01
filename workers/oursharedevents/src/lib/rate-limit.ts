@@ -30,6 +30,19 @@ export interface RateLimitEnv {
   RATE_LIMIT_KEY_PEPPER?: string;
 }
 
+/** The limit a stored bucket enforces; entries from before `max` existed use the default. */
+export function bucketLimit(entry: RateLimitEntry): number {
+  return entry.max ?? RATE_LIMIT_MAX;
+}
+
+/**
+ * Has this stored bucket tripped its own limit? The single rule for every KV
+ * scan (rate-limit-stats, the security-metrics cron), so they cannot drift.
+ */
+export function isBucketTripped(entry: RateLimitEntry): boolean {
+  return entry.count > bucketLimit(entry);
+}
+
 /** Shorter peppers are ignored, matching the other hash peppers (min 32 chars). */
 export const RATE_LIMIT_PEPPER_MIN_LENGTH = 32;
 

@@ -19,6 +19,7 @@ import {
   isRateLimited,
   rateLimitKvKey,
   pepperedKeyHash,
+  isBucketTripped,
   RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_PEPPER_MIN_LENGTH,
@@ -147,6 +148,38 @@ describe('rate-limit KV key — every src call site passes RATE_LIMIT_KEY_PEPPER
         const args = src.slice(m.index!, end + 1);
         expect(args, `${file}: ${args}`).toMatch(/RATE_LIMIT_KEY_PEPPER|\bpepper\b/);
       }
+    }
+  });
+});
+
+// PR #744 review: buckets enforce different limits (mint 10, batch 30, 60,
+// public reads 120). Every KV scan must judge a bucket by its own stored limit.
+describe('rate-limit buckets are judged by their own limit', () => {
+  it('isBucketTripped uses the stored max, defaulting to RATE_LIMIT_MAX', () => {
+    expect(isBucketTripped({ count: 11, resetAt: 0, max: 10 })).toBe(true);
+    expect(isBucketTripped({ count: 100, resetAt: 0, max: 120 })).toBe(false);
+    expect(isBucketTripped({ count: RATE_LIMIT_MAX + 1, resetAt: 0 })).toBe(true);
+    expect(isBucketTripped({ count: RATE_LIMIT_MAX, resetAt: 0 })).toBe(false);
+  });
+
+  it('every src file that scans ratelimit: keys uses isBucketTripped, never a literal limit', () => {
+    const root = join(__dirname, '..');
+    const walk = (dir: string): string[] =>
+      readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(`${dir}/${e.name}`)
+          : /\.ts$/.test(e.name)
+            ? [`${dir}/${e.name}`]
+            : []
+      );
+    const scanners = walk('src').filter((rel) =>
+      /prefix:\s*'ratelimit:'/.test(readFileSync(join(root, rel), 'utf8'))
+    );
+    expect(scanners).toEqual(expect.arrayContaining(['src/router.ts', 'src/index.ts']));
+    for (const rel of scanners) {
+      const src = readFileSync(join(root, rel), 'utf8');
+      expect(src, rel).toMatch(/\bisBucketTripped\(/);
+      expect(src, rel).not.toMatch(/entry\.count\s*(>|<=)\s*\d/);
     }
   });
 });

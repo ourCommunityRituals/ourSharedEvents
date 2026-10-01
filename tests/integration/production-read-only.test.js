@@ -198,8 +198,8 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     expect(found.has('BASE_URL')).toBe(true);
   });
 
-  test('the refusal catches production in any target env var, USE_PRODUCTION, or the config base', () => {
-    const keys = [...TARGET_URL_ENV_VARS, 'USE_PRODUCTION'];
+  test('the refusal catches production in any target env var, USE_PRODUCTION, TEST_ENV, or the config base', () => {
+    const keys = [...TARGET_URL_ENV_VARS, 'USE_PRODUCTION', 'TEST_ENV'];
     const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
     const clear = () => keys.forEach((k) => delete process.env[k]);
     try {
@@ -214,6 +214,15 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
       clear();
       process.env.USE_PRODUCTION = 'true';
       expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
+      // getBaseUrl() gives TEST_ENV top priority; the guard asks the resolver.
+      clear();
+      process.env.TEST_ENV = 'production';
+      expect(() => refuseProductionTargets('t', 'http://127.0.0.1:8787')).toThrow(/ADR-021/);
+      clear();
+      process.env.TEST_ENV = 'staging';
+      expect(() => refuseProductionTargets('t', 'http://127.0.0.1:8787')).not.toThrow();
+      clear();
+      process.env.TEST_ENV = 'production';
       expect(productionTestMatch('playwright.smoke.config.ts')).toBeDefined();
     } finally {
       for (const [k, v] of Object.entries(saved)) {

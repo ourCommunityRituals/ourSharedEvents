@@ -22,6 +22,7 @@ import {
   normalizeOperation,
   emitOperationCost,
 } from './lib/cost-metric';
+import { isBucketTripped, type RateLimitEntry } from './lib/rate-limit';
 
 export type { RouterEnv as Env };
 
@@ -507,9 +508,10 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
   }
 
   // ── Phase 2: Rate-limit triggers from KV ────────────────────────────────
-  // KV keys have the form ratelimit:{ip}; value = { count, resetAt }.
-  // We list all keys and sum counts where count > RATE_LIMIT_MAX (60) as
-  // a proxy for "this IP was rate-limited at some point today".
+  // KV keys have the form ratelimit:{hmac}; value = { count, resetAt, max }.
+  // A bucket counts as tripped when count > its own stored limit (`max`: mint
+  // 10, batch 30, default 60, public reads 120); entries without `max` predate
+  // that field and use the default RATE_LIMIT_MAX (60).
   // NOTE: KV list is eventually consistent; exact counts are best-effort.
   try {
     let cursor: string | undefined;
@@ -529,9 +531,8 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
         for (const raw of values) {
           if (!raw) continue;
           try {
-            const entry = JSON.parse(raw) as { count: number; resetAt: number };
-            // Count as a "trigger" if the IP has exceeded 60 requests in its window
-            if (entry.count > 60) rateLimitTriggers++;
+            const entry = JSON.parse(raw) as RateLimitEntry;
+            if (isBucketTripped(entry)) rateLimitTriggers++;
           } catch {
             // malformed entry — skip
           }

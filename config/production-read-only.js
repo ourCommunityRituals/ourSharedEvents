@@ -39,11 +39,20 @@ function assertNotProduction(url, suite) {
  */
 const TARGET_URL_ENV_VARS = ['BASE_URL', 'STAGING_URL', 'PLAYWRIGHT_BASE_URL', 'APP_URL'];
 
-/** Every target a suite may reach: the given URLs plus the env-var targets. */
+/**
+ * Every target a suite may reach: the given URLs, the env-var targets, and
+ * whatever config/environments.js getBaseUrl() resolves to right now. Calling
+ * the resolver (rather than copying its rules) covers TEST_ENV=production,
+ * USE_PRODUCTION=true and any rule it gains later, since specs call it too.
+ */
 function targetUrls(urls) {
   const out = [...urls, ...TARGET_URL_ENV_VARS.map((k) => process.env[k])];
-  // config/environments.js getBaseUrl() switches to production on this flag.
   if (process.env.USE_PRODUCTION === 'true') out.push('https://oursharedevents.com');
+  try {
+    out.push(require('./environments').getBaseUrl());
+  } catch {
+    // An unresolvable environment cannot point at production.
+  }
   return out;
 }
 
