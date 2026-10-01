@@ -3,7 +3,7 @@
 --
 -- Applied by CI before the Bruno contract run (api section):
 --   npx wrangler d1 execute DB --env staging --remote \
---     --file ../../postman/fixtures/sponsor-public-card-seed.sql
+--     --file ../../bruno/fixtures/sponsor-public-card-seed.sql
 --
 -- ONE SPONSOR PER CASE, fixed ids, so each Bruno request is a pure assert:
 --

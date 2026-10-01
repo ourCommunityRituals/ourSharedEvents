@@ -1502,7 +1502,7 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           npx wrangler d1 execute DB --env staging --remote \
-            --file ../../postman/fixtures/sponsor-public-card-seed.sql
+            --file ../../bruno/fixtures/sponsor-public-card-seed.sql
 
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute

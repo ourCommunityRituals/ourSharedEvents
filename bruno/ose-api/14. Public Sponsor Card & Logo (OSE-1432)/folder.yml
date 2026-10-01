@@ -10,7 +10,7 @@ docs:
     Every request is credential-free (X-Test-No-Auth opts out of the collection
     auth hook): these are public routes, so the test proves it.
 
-    Fixture: postman/fixtures/sponsor-public-card-seed.sql, applied by CI before
+    Fixture: bruno/fixtures/sponsor-public-card-seed.sql, applied by CI before
     this run. One sponsor per case, fixed ids (sb_pcard_*), on their own
     active-but-unlisted event so the covenant order on test-event-001 is untouched.
 
