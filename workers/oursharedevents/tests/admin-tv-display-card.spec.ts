@@ -187,3 +187,29 @@ describe('admin TV display card', () => {
     }
   });
 });
+
+describe('admin TV display card: a save answered after switching events', () => {
+  test("event A's result is not written into event B's card", async () => {
+    const { w, $ } = await mount();
+    let answer: (v: unknown) => void = () => {};
+    // Hold A's PUT open until we have moved to B.
+    (w as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? 'GET').toUpperCase() === 'PUT') {
+        return new Promise((resolve) => {
+          answer = () => resolve({ ok: true, status: 200, json: async () => ({ ok: true }) });
+        });
+      }
+      return { ok: true, status: 200, json: async () => SAVED };
+    }) as unknown as typeof fetch;
+    const load = w.loadTvDisplay as (id: string) => Promise<void>;
+    await load('evt-A');
+    $<HTMLButtonElement>('tv-save').click();
+    await flush();
+    expect($('tv-msg').textContent).toBe('Saving…');
+    await load('evt-B');
+    answer(null);
+    await flush();
+    expect($('tv-msg').textContent, "A's 'Saved' must not land on B").toBe('');
+    expect($<HTMLButtonElement>('tv-save').disabled).toBe(false);
+  });
+});

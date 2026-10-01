@@ -5138,16 +5138,21 @@
               body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks } }),
             });
             var data = await res.json().catch(function () { return null; });
+            // Another event was selected while this saved: its card is on
+            // screen now, so this event's result must not be written into it.
+            if (tv.eventId !== eventId) return;
             if (!res.ok || !data || !data.ok) {
               msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV is unchanged.', 'error');
               return;
             }
             msg('Saved. A TV showing this event picks it up within a minute.', 'success');
           } catch (e) {
-            msg('Could not save. The TV is unchanged.', 'error');
+            if (tv.eventId === eventId) msg('Could not save. The TV is unchanged.', 'error');
           } finally {
-            if (tv.eventId === eventId) setDisabled(false);
-            render();
+            if (tv.eventId === eventId) {
+              setDisabled(false);
+              render();
+            }
           }
         });
       })();

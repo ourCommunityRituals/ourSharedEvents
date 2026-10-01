@@ -102,32 +102,40 @@ export async function handleDisplayConfig(
     );
   }
 
-  return withEtag(request, headers, configBody(row));
+  return withEtag(request, headers, row);
 }
 
-function configBody(row: { id: string; settings_json: string | null }): string {
+/**
+ * Everything the response depends on except the QR images. A QR is a pure
+ * function of its link and the fixed options in qrFor(), so hashing this
+ * (plus QR_VERSION) identifies the full body exactly. That lets a TV's
+ * once-a-minute check get its 304 WITHOUT the PNGs being generated: they
+ * are only drawn on a 200.
+ */
+const QR_VERSION = 'qr-utility-L-6';
+function configShape(row: { id: string; settings_json: string | null }) {
   const display = resolveDisplaySettings(parseEventSettings(row.settings_json));
-  const league: LeagueItem[] = [];
-  for (const kind of LEAGUE_LINK_KINDS) {
-    const url = display.leagueLinks[kind];
-    if (!url) continue;
-    league.push({ kind, label: LEAGUE_LABELS[kind], url, qr: qrFor(url) });
-  }
-  return JSON.stringify({
-    ok: true,
+  const league = LEAGUE_LINK_KINDS.filter((kind) => display.leagueLinks[kind]).map((kind) => ({
+    kind,
+    label: LEAGUE_LABELS[kind],
+    url: display.leagueLinks[kind] as string,
+  }));
+  return {
+    ok: true as const,
     event_id: row.id,
     panes: display.panes,
     dwell_seconds: display.dwellSeconds,
     league,
-  });
+  };
 }
 
 async function withEtag(
   request: Request,
   headers: Record<string, string>,
-  body: string
+  row: { id: string; settings_json: string | null }
 ): Promise<Response> {
-  const etag = await strongEtag(body);
+  const shape = configShape(row);
+  const etag = await strongEtag(QR_VERSION + JSON.stringify(shape));
   const cacheHeaders = {
     ...headers,
     ETag: etag,
@@ -137,6 +145,8 @@ async function withEtag(
   if (etagMatches(request.headers.get('If-None-Match'), etag)) {
     return new Response(null, { status: 304, headers: cacheHeaders });
   }
+  const league: LeagueItem[] = shape.league.map((l) => ({ ...l, qr: qrFor(l.url) }));
+  const body = JSON.stringify({ ...shape, league });
   return new Response(body, {
     headers: { ...cacheHeaders, 'Content-Type': 'application/json; charset=utf-8' },
   });
@@ -158,5 +168,5 @@ export async function handleAdminDisplayConfig(
       { status: 404, headers }
     );
   }
-  return withEtag(request, headers, configBody(row));
+  return withEtag(request, headers, row);
 }
