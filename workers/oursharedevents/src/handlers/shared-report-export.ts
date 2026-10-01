@@ -22,6 +22,14 @@ import {
   type ExportResult,
   type SharedReportExportEnv,
 } from '../lib/shared-report-export';
+import { logExportManifest } from '../lib/audit-log';
+
+/** BigQuery table each phase writes, for the manifest's provenance record. */
+const PHASE_TABLE: Record<string, string> = {
+  anon_id_returns: 'anon_id_returns_export',
+  corridor_density_baseline: 'corridor_density_baseline_export',
+  event_series: 'event_series_export',
+};
 
 export interface SharedReportExportRunResult {
   ok: boolean;
@@ -107,6 +115,33 @@ export async function runSharedReportBigQueryExport(
   const totalErrors = phases.reduce((acc, p) => acc + p.errors, 0);
   const totalDurationMs = Date.now() - start;
   const ok = totalErrors === 0;
+
+  // OSE-556 / OSE-616: every phase that crossed (or tried to cross) the D1 →
+  // BigQuery boundary leaves a manifest row: counts, routing and corridor
+  // coverage only, never row-level data. A phase that read nothing is a no-op
+  // (BigQuery unconfigured, or nothing past the watermark) and is not logged.
+  const runId = crypto.randomUUID();
+  for (const p of phases) {
+    if (p.rowsRead === 0 && p.errors === 0) continue;
+    await logExportManifest(env, {
+      export_type: 'BIGQUERY',
+      event_id: 'cron:shared-report',
+      actor: 'cron:scheduler',
+      request_id: runId,
+      rows_exported: p.rowsExported,
+      outcome: p.errors === 0 ? 'success' : 'failed',
+      details: {
+        phase: p.phase,
+        table: PHASE_TABLE[p.phase] ?? p.phase,
+        rows_read: p.rowsRead,
+        rows_withheld: p.rowsSkipped,
+        per_pool: p.perPool,
+        corridor_id_present: p.corridorIdPresent ?? 0,
+        corridor_id_unknown: p.corridorIdUnknown ?? 0,
+        geography: 'corridor (H3 res7) or coarser; sub-corridor rows rejected',
+      },
+    });
+  }
 
   console.log(
     JSON.stringify({
