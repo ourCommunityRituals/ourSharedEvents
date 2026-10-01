@@ -7,7 +7,7 @@
  * integration test against a real Postgres still belongs in the
  * consumer app when one picks up this adapter.
  */
-import { newDb } from 'pg-mem';
+import { DataType, newDb } from 'pg-mem';
 import { PostgresAdapter } from '../src/adapters/postgres.js';
 import { runAdapterSpec } from './adapter-spec.js';
 
@@ -25,7 +25,7 @@ function freshClient(): PgClient {
   // stay stable.
   db.public.registerFunction({
     name: 'now',
-    returns: db.public.types.timestamp as unknown as never,
+    returns: DataType.timestamp,
     implementation: () => new Date(),
     impure: true,
   });
