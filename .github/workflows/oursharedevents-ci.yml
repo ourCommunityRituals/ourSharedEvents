@@ -1699,10 +1699,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Staging is behind Cloudflare Access: without the service token the
-          # edge answers GET /q/<token> with 403 before the Worker sees it.
+          # Same Access service token every other staging step sends.
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # /q/* is also behind a Cloudflare managed challenge (OSE-939). A WAF
+          # custom rule skips it only for stg /q/* requests carrying X-OCR-CI
+          # with this value; real visitors stay challenged.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
         run: bash scripts/ci/trace-scan-staging.sh
 
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)

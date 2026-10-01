@@ -6,9 +6,15 @@
 #
 # Needs: STG_BASE_URL (default https://stg.oursharedevents.com), wrangler
 # credentials for the staging D1 (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID),
-# and the Cloudflare Access service token (CF_ACCESS_CLIENT_ID,
-# CF_ACCESS_CLIENT_SECRET). Staging sits behind Access, so a request without
-# the token is refused at the edge (403) before it reaches the Worker.
+# the Cloudflare Access service token (CF_ACCESS_CLIENT_ID,
+# CF_ACCESS_CLIENT_SECRET), and OCR_CI_EDGE_TOKEN.
+#
+# Why OCR_CI_EDGE_TOKEN: /q/* on staging sits behind a Cloudflare managed
+# challenge (bot protection), so a non-browser client gets a 403 "Just a
+# moment..." page from the edge and the Worker never runs (OSE-939). A WAF
+# custom rule on the zone skips that challenge only for requests to
+# stg.oursharedevents.com/q/* that carry the header X-OCR-CI with this value.
+# Real visitors and production stay challenged.
 # The poster comes from tests/ui/smoke/fixtures/trace-eagles-poster.sql.
 #
 # What it proves, on the deployed Worker:
@@ -45,15 +51,28 @@ if [ -z "${CF_ACCESS_CLIENT_ID:-}" ] || [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ]; t
   echo "::error::CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET are not set; staging is behind Cloudflare Access"
   exit 1
 fi
+if [ -z "${OCR_CI_EDGE_TOKEN:-}" ]; then
+  echo "::error::OCR_CI_EDGE_TOKEN is not set; without it the Cloudflare managed challenge on /q/* answers 403 (OSE-939)"
+  exit 1
+fi
 
 # The Worker answers a scan with 302 to /events/<id>. Access also answers with
 # a 302 (to its login page), so check where the redirect goes, not only the code.
-read -r status location < <(curl -sS -o /dev/null --max-redirs 0 \
+headers_file="$(mktemp)"
+trap 'rm -f "$headers_file"' EXIT
+read -r status location < <(curl -sS -o /dev/null -D "$headers_file" --max-redirs 0 \
   -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
   -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  -H "X-OCR-CI: $OCR_CI_EDGE_TOKEN" \
   -w '%{http_code} %{redirect_url}\n' "$BASE/q/$TOKEN")
 if [ "$status" != "302" ]; then
-  echo "::error::GET /q/$TOKEN returned $status, expected 302"
+  # cf-mitigated is set by Cloudflare when the edge challenged or blocked the
+  # request, so the Worker never saw it.
+  if grep -qi '^cf-mitigated:' "$headers_file"; then
+    echo "::error::GET /q/$TOKEN returned $status from the Cloudflare edge ($(grep -i '^cf-mitigated:' "$headers_file" | tr -d '\r')), not the Worker. Check the WAF skip rule for X-OCR-CI on stg /q/* and that OCR_CI_EDGE_TOKEN matches it (OSE-939)."
+  else
+    echo "::error::GET /q/$TOKEN returned $status, expected 302"
+  fi
   exit 1
 fi
 case "$location" in
