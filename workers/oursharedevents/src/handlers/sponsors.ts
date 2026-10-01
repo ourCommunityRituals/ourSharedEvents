@@ -1135,23 +1135,18 @@ export async function handleSetSponsorEventTypes(
   );
 
   try {
-    // Delete existing associations
-    await env.DB.prepare('DELETE FROM sponsor_event_types WHERE sponsor_id = ?')
-      .bind(sponsorId)
-      .run();
-
-    // Insert new ones
-    if (templateIds.length > 0) {
-      const statements = templateIds.map((tid: string) => {
-        const id = generateId('set');
-        return env
-          .DB!.prepare(
-            'INSERT INTO sponsor_event_types (id, sponsor_id, template_id) VALUES (?, ?, ?)'
-          )
-          .bind(id, sponsorId, tid);
-      });
-      await env.DB.batch(statements);
-    }
+    // Replace = DELETE + INSERTs in ONE batch. D1 runs a batch as a single
+    // transaction, so a failed insert rolls the delete back instead of leaving
+    // the sponsor with no associations.
+    const db = env.DB;
+    await db.batch([
+      db.prepare('DELETE FROM sponsor_event_types WHERE sponsor_id = ?').bind(sponsorId),
+      ...templateIds.map((tid: string) =>
+        db
+          .prepare('INSERT INTO sponsor_event_types (id, sponsor_id, template_id) VALUES (?, ?, ?)')
+          .bind(generateId('set'), sponsorId, tid)
+      ),
+    ]);
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -1245,23 +1240,23 @@ export async function handleSetSponsorAreas(
   const areas = body.areas as Array<Record<string, unknown>>;
 
   try {
-    await env.DB.prepare('DELETE FROM sponsor_areas WHERE sponsor_id = ?').bind(sponsorId).run();
-
-    if (areas.length > 0) {
-      const statements = areas.map((area) => {
+    // Replace atomically: see handleSetSponsorEventTypes.
+    const db = env.DB;
+    await db.batch([
+      db.prepare('DELETE FROM sponsor_areas WHERE sponsor_id = ?').bind(sponsorId),
+      ...areas.map((area) => {
         const id = generateId('sa');
         const zipCode = typeof area.zip_code === 'string' ? area.zip_code.slice(0, 10) : null;
         const lat = typeof area.lat === 'number' ? area.lat : null;
         const lon = typeof area.lon === 'number' ? area.lon : null;
         const radiusMiles = typeof area.radius_miles === 'number' ? area.radius_miles : 10;
-        return env
-          .DB!.prepare(
+        return db
+          .prepare(
             'INSERT INTO sponsor_areas (id, sponsor_id, zip_code, lat, lon, radius_miles) VALUES (?, ?, ?, ?, ?, ?)'
           )
           .bind(id, sponsorId, zipCode, lat, lon, radiusMiles);
-      });
-      await env.DB.batch(statements);
-    }
+      }),
+    ]);
   } catch (err) {
     console.error(
       JSON.stringify({

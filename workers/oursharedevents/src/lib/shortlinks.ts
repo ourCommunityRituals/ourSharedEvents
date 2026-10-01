@@ -300,15 +300,15 @@ export async function resolveCode(
 export async function incrementClick(env: ShortlinksEnv, code: string): Promise<number> {
   if (!env.DB) return 0;
   try {
-    await env.DB.prepare(
+    // One round trip: RETURNING reads the post-increment value in the same
+    // statement (was an UPDATE then a second SELECT on the redirect path).
+    const row = await env.DB.prepare(
       `UPDATE shortlinks
        SET clicks = clicks + 1,
            last_clicked_at = datetime('now')
-       WHERE code = ?`
+       WHERE code = ?
+       RETURNING clicks`
     )
-      .bind(code)
-      .run();
-    const row = await env.DB.prepare(`SELECT clicks FROM shortlinks WHERE code = ?`)
       .bind(code)
       .first<{ clicks: number }>();
     return row?.clicks ?? 0;

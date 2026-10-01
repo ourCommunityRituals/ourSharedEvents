@@ -96,6 +96,43 @@ function emptyRollup(request: Request, reqId: string, scopedTo: string[] | null)
   );
 }
 
+/**
+ * D1 refuses a statement with more than 100 bound parameters. Stay under it
+ * with headroom; exported so the boundary is testable.
+ */
+export const IN_LIST_CHUNK = 90;
+
+/**
+ * Run a per-event `… WHERE event_id IN (<ph>) …` count across `eventIds` in
+ * chunks of IN_LIST_CHUNK and concatenate the rows. Rows stay per event, so the
+ * #7 per-bucket count floor applied by the caller is unchanged by chunking. Any
+ * chunk failing returns null: the caller then reports 0, exactly as the
+ * single-query version did on error (never a partial sum).
+ */
+async function perEventCounts(
+  db: D1Database,
+  eventIds: string[],
+  sql: (placeholders: string) => string
+): Promise<Array<{ event_id: string; cnt: number }> | null> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < eventIds.length; i += IN_LIST_CHUNK) {
+    chunks.push(eventIds.slice(i, i + IN_LIST_CHUNK));
+  }
+  try {
+    const results = await Promise.all(
+      chunks.map((ids) =>
+        db
+          .prepare(sql(ids.map(() => '?').join(', ')))
+          .bind(...ids)
+          .all<{ event_id: string; cnt: number }>()
+      )
+    );
+    return results.flatMap((r) => r.results ?? []);
+  } catch {
+    return null;
+  }
+}
+
 export async function handlePortfolioRollup(
   request: Request,
   env: PortfolioRollupEnv
@@ -156,50 +193,46 @@ export async function handlePortfolioRollup(
     return emptyRollup(request, reqId, scopedTo);
   }
 
-  const ph = eventIds.map(() => '?').join(', ');
+  // Active sponsors — exact (public businesses, not privacy contributors), so
+  // the per-event rows are summed without a floor. Keyed by the brand-scoped
+  // held event ids and chunked: D1 caps a statement at 100 bound parameters,
+  // and past that the single query threw and the catch reported 0.
+  const sponsorsQ = perEventCounts(
+    env.DB,
+    eventIds,
+    (ph) => `SELECT event_id, COUNT(*) AS cnt FROM sponsor_placement
+     WHERE is_active = 1 AND event_id IN (${ph}) GROUP BY event_id`
+  ).then((rows) => (rows ?? []).reduce((n, r) => n + r.cnt, 0));
 
-  // Active sponsors — exact (public businesses, not privacy contributors).
-  let activeSponsors = 0;
-  try {
-    const sp = await env.DB.prepare(
-      `SELECT COUNT(*) AS cnt FROM sponsor_placement WHERE is_active = 1 AND event_id IN (${ph})`
-    )
-      .bind(...eventIds)
-      .first<{ cnt: number }>();
-    activeSponsors = sp?.cnt ?? 0;
-  } catch {
-    activeSponsors = 0;
-  }
-
-  // Registrations + check-ins live in FORMS_DB. Per-event counts → #7 per-bucket
-  // floor → sum of survivors → shared OSE-665 render shape.
-  let registrations = applyCountFloor(0);
-  let checkins = applyCountFloor(0);
-  if (env.FORMS_DB) {
-    try {
-      const reg = await env.FORMS_DB.prepare(
-        `SELECT event_id, COUNT(*) AS cnt FROM form_registrations
+  // Registrations + check-ins live in FORMS_DB: per-event counts, chunked the
+  // same way → #7 per-bucket floor → sum of survivors → shared OSE-665 shape.
+  const formsDb = env.FORMS_DB;
+  const registrationsQ = formsDb
+    ? perEventCounts(
+        formsDb,
+        eventIds,
+        (ph) => `SELECT event_id, COUNT(*) AS cnt FROM form_registrations
          WHERE event_id IN (${ph}) AND status = 'confirmed'
            AND (expires_at IS NULL OR expires_at > datetime('now'))
          GROUP BY event_id`
       )
-        .bind(...eventIds)
-        .all<{ event_id: string; cnt: number }>();
-      registrations = applyCountFloor(sumContributingBuckets(reg.results ?? []));
-    } catch {
-      registrations = applyCountFloor(0);
-    }
-    try {
-      const chk = await env.FORMS_DB.prepare(
-        `SELECT event_id, total_count AS cnt FROM checkin_counts WHERE event_id IN (${ph})`
+    : Promise.resolve(null);
+  const checkinsQ = formsDb
+    ? perEventCounts(
+        formsDb,
+        eventIds,
+        (ph) => `SELECT event_id, total_count AS cnt FROM checkin_counts WHERE event_id IN (${ph})`
       )
-        .bind(...eventIds)
-        .all<{ event_id: string; cnt: number }>();
-      checkins = applyCountFloor(sumContributingBuckets(chk.results ?? []));
-    } catch {
-      checkins = applyCountFloor(0);
-    }
-  }
+    : Promise.resolve(null);
+
+  // The three counts are independent — one round-trip window, not three.
+  const [activeSponsors, regRows, chkRows] = await Promise.all([
+    sponsorsQ,
+    registrationsQ,
+    checkinsQ,
+  ]);
+  const registrations = applyCountFloor(regRows ? sumContributingBuckets(regRows) : 0);
+  const checkins = applyCountFloor(chkRows ? sumContributingBuckets(chkRows) : 0);
 
   return jsonBody(
     {
