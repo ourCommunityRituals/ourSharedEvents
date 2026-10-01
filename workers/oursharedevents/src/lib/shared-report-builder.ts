@@ -39,6 +39,19 @@ import {
   type EventZone,
 } from './event-datetime';
 
+/**
+ * The corridor key an event is reported under (ADR-011 / OSE-616): its res7
+ * cell, LOWERCASED, else a legacy corridor_id. refreshCorridorBaselines groups
+ * by COALESCE(LOWER(h3_res7), corridor_id), so a reader that bound the raw
+ * cell would miss the baseline of an event stored with an uppercase cell.
+ */
+function corridorKeyOf(event: {
+  h3_res7: string | null;
+  corridor_id: string | null;
+}): string | null {
+  return event.h3_res7 ? event.h3_res7.toLowerCase() : event.corridor_id;
+}
+
 // OSE-683 — ratified rule "K-anon Per-Bucket Consistency" (2026-08-09): the
 // per-bucket K-anon floor (K = CORRIDOR_MAP_MIN_COUNT = 5) is applied PER
 // CONTRIBUTING BUCKET BEFORE summation, never to the final sum alone. A
@@ -313,14 +326,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // corridor_pct — fraction of anons at THIS event who appeared at any
     // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
     // to corridor_id for legacy events geocoded before BE-24b landed.
-    const corridorKey = event.h3_res7 ?? event.corridor_id;
+    const corridorKey = corridorKeyOf(event);
     if (corridorKey) {
       const corridorRow = await db
         .prepare(
           `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
            FROM anon_id_returns a
            JOIN events e ON e.id = a.venue_id
-           WHERE COALESCE(e.h3_res7, e.corridor_id) = ?
+           WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
              AND a.venue_id != ?
              AND a.anon_id_hash IN (
                SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
@@ -354,7 +367,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // Q5: hoisted so dow/hour are available in the return object regardless of branch taken.
   let corridorDow: number | null = null;
   let corridorHour: number | null = null;
-  const densityCorridorKey = event.h3_res7 ?? event.corridor_id;
+  const densityCorridorKey = corridorKeyOf(event);
   if (densityCorridorKey && event.start_date) {
     const startDate = new Date(event.start_date);
     corridorDow = startDate.getUTCDay();

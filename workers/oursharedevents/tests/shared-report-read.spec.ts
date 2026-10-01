@@ -264,6 +264,30 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(fields).toContain('corridor_density.baseline_90d');
   });
 
+  test('OSE-616: an event stored with an uppercase res7 cell reads the lowercase baseline', async () => {
+    // refreshCorridorBaselines keys by the LOWERCASED cell; the reader must too.
+    const cell = '872664544ffffff';
+    await seedEvent({ id: 'test-evt-read-upper', start_date: '2026-05-07T19:00:00Z' });
+    await tenv()
+      .DB.prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind(cell.toUpperCase(), 'test-evt-read-upper')
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 4, 19, 40, 90, datetime('now'))`
+      )
+      .bind(cell)
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-upper');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_density.baseline_90d).not.toBeNull();
+    const fields = r.report._meta.suppression_reasons.map((x) => x.field);
+    expect(fields).not.toContain('corridor_density');
+  });
+
   test('headcount_trend populates from confirmed event_series', async () => {
     await seedEvent({ id: 'test-evt-read-anchor' });
     await tenv()

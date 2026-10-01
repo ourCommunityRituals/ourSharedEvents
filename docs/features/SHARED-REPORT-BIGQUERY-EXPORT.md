@@ -320,9 +320,9 @@ Watermark advancement happens **per row** at end of successful export, not per-b
 
 - Rows that DID get inserted to BQ are already there (BQ insertAll is per-row idempotent via `insertId`).
 - Watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark; duplicate-row attempts are silent no-ops because BQ deduplicates on `insertId` (we use `${tableId}-${computed_at}-${anon_id_hash}` pattern).
+- Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Idempotency guarantee: re-running on the same source data is safe. Crash recovery is automatic on next tick.
+Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `anon_id_returns_export`: `(anon_id_hash, venue_id, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`

@@ -520,9 +520,13 @@ export async function exportCorridorDensityBaseline(
         }
         seen.add(id);
       }
-      // A whole timestamp group can exceed one insertAll call. Chunk it; the
-      // insertIds are content-derived, so a retry after a mid-group failure
-      // (watermark held) re-sends the earlier chunks as BigQuery no-ops.
+      // A whole timestamp group can exceed one insertAll call, so chunk it.
+      // Delivery is AT-LEAST-ONCE: after a mid-group failure the watermark is
+      // held and the next run re-sends the whole group. insertIds are
+      // content-derived, but BigQuery's insertId de-duplication is best-effort
+      // (about a minute), so a later retry can land duplicate rows. Readers
+      // dedupe on the natural key (corridor_id, bucket_dow, bucket_hour,
+      // computed_at); exactly-once delivery is a separate story (OSE-1462).
       let exported = 0;
       for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
         const res = await bigQueryInsertRowsToDataset(

@@ -208,16 +208,18 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   'lib/shared-report.ts:792':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
-  'lib/shared-report-builder.ts:322':
-    'Corridor-neighbour COUNT keyed by `COALESCE(h3_res7, corridor_id) = ?` ' +
+  // 322→335 and 729→742 by OSE-616 (corridorKeyOf helper above; the key is
+  // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
+  'lib/shared-report-builder.ts:335':
+    'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',
-  'lib/shared-report-builder.ts:729':
+  'lib/shared-report-builder.ts:742':
     'Series instances keyed by `series_id = ?` — the held series id of the ' +
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
-  // 296→303 and 554→607 by the PR #726 follow-ups (import list + withheld
+  // 296→303 and 554→611 by the PR #726 follow-ups (import list + withheld
   // legacy-keyed baseline rows + duplicate canonical key check +
   // whole-timestamp-group baseline read).
   'lib/shared-report-export.ts:303':
@@ -225,7 +227,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'anon_id_returns joined to event geo metadata, keyed by `computed_at > ?` ' +
     'watermark across ALL brands. OER ingests every brand by design; never-who ' +
     'anon hashes; not request-reachable.',
-  'lib/shared-report-export.ts:607':
+  'lib/shared-report-export.ts:611':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
