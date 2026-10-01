@@ -365,13 +365,17 @@
                 ? '<small data-testid="public-sponsor-address">' + attr(s.address_line) + '</small>'
                 : '';
               // A tap goes to the https website when there is one, otherwise to
-              // the sponsor's own card (title, location, contact).
+              // the sponsor's own card (title, location, contact). OSE-1438: the
+              // resolver sends card_url only when that card renders; without
+              // either, the name shows unlinked rather than linking to a 404.
               const link = s.website_url
                 ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
                   // Referer header to the sponsor's site — the outbound click leaks neither
                   // the attendee nor which OSE event page they came from.
                   '<a href="' + attr(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
-                : '<a href="' + attr(s.card_url || '/sponsors/' + encodeURIComponent(s.id)) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>';
+                : s.card_url
+                  ? '<a href="' + attr(s.card_url) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
+                  : '<span data-testid="public-sponsor-name">' + attr(title) + '</span>';
               return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + place + '</div>';
             })
             .join('');

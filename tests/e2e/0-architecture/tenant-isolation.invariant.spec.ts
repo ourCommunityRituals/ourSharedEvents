@@ -147,13 +147,21 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
-  'handlers/sponsor-card.ts:64':
-    'Public sponsor card (0083). Correlated EXISTS on `events e` keyed by ' +
-    '`e.id = sp.event_id AND e.brand_id = sb.brand_id`, nested inside a lookup ' +
-    'whose outer `sponsor_business sb` is keyed by `sb.id = ?` (held sponsor id) ' +
-    'and whose placement sub-select is keyed by `sp.sponsor_business_id = ?`. It ' +
-    'asks "is this one sponsor on an active event of its own brand" — one row, ' +
-    'not enumeration. Line-sensitive: bump on any edit above it in that file.',
+  // OSE-1438: the card's on-show rule moved out of handlers/sponsor-card.ts
+  // (formerly exempt at :64, same reasoning) into one shared SQL fragment, so the
+  // card page and the resolver's card_url read the same rule.
+  'lib/sponsor-card.ts:128':
+    'SPONSOR_ON_SHOW_SQL, a boolean fragment, never a query on its own. Its ' +
+    '`sponsor_placement sp_show` sub-select is correlated by ' +
+    "`sp_show.sponsor_business_id = sb.id` to the caller's outer " +
+    '`sponsor_business sb`, and both callers fence that row: the card page by ' +
+    '`sb.id = ?` (held sponsor id), the resolver by `sp.event_id = ?` (Path 1) or ' +
+    '`sb.brand_id = ?` (Path 2). Asks "is this one sponsor on show"; not ' +
+    'enumeration. Line-sensitive: bump on any edit above it in that file.',
+  'lib/sponsor-card.ts:132':
+    'Same fragment: the nested `events e_show` check is keyed by ' +
+    '`e_show.id = sp_show.event_id AND e_show.brand_id = sb.brand_id`, so it only ' +
+    "reads the one event each placement points at, inside the sponsor's own brand.",
   // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand
@@ -219,7 +227,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // inside COALESCE(..., sb.tier) so a pool sponsor with no placement keeps its tier).
   // 267→272 by the ADR-019 amendment comment (PR #700, sponsor-initiated
   // placements) in the resolver header. Query unchanged.
-  'lib/sponsor-resolver.ts:272':
+  // 272→277 by OSE-1438 (the CardableRow type above the resolver, and the
+  // has_card column in this SELECT list). Query scope unchanged.
+  'lib/sponsor-resolver.ts:277':
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
     '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
     'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +

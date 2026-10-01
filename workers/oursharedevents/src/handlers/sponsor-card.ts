@@ -14,6 +14,7 @@ import { html, renderErrorPage } from './pages';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import { publicWebsiteUrl } from '../lib/sponsor-resolver';
 import { renderSponsorCardPage } from '../lib/sponsor-card-render';
+import { SPONSOR_ON_SHOW_SQL } from '../lib/sponsor-card';
 
 export interface SponsorCardEnv extends PublicReadLimitEnv {
   DB?: D1Database;
@@ -49,24 +50,10 @@ export async function handleSponsorCardPage(
                        WHERE la.sponsor_business_id = sb.id AND la.format = 'logo'
                          AND la.url IS NOT NULL) AS has_logo
          FROM sponsor_business sb
-        WHERE sb.id = ? AND sb.is_active = 1
-          AND EXISTS (
-            SELECT 1 FROM sponsor_placement sp
-             WHERE sp.sponsor_business_id = ?
-               AND sp.sponsor_business_id = sb.id AND sp.is_active = 1
-               AND COALESCE(sp.organizer_accepted, 1) = 1
-               AND sp.sponsor_accepted = 1
-               -- On show = on an event whose public page renders (RENDERABLE
-               -- 'public' is 'active' only). A sponsor placed only on a draft,
-               -- ready or archived event is not on show, so its card 404s.
-               -- Deliberately NOT is_published: an unlisted-but-active event
-               -- page still shows its sponsors, and their card links must work.
-               AND EXISTS (SELECT 1 FROM events e WHERE e.id = sp.event_id
-                           AND e.brand_id = sb.brand_id AND e.status = 'active')
-          )
+        WHERE sb.id = ? AND ${SPONSOR_ON_SHOW_SQL}
         LIMIT 1`
     )
-      .bind(sponsorId, sponsorId)
+      .bind(sponsorId)
       .first();
   } catch {
     return renderErrorPage(503, 'Something went wrong', 'Try again in a moment.');
