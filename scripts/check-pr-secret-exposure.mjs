@@ -369,6 +369,13 @@ export function prSourcedWorkflowRunEnvs(ifStr) {
   for (const headRepo of [THIS_REPO, sym({ notSelf: true })]) {
     for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, conclusion));
   }
+  // A push to any branch other than main is author-controlled too (Standard
+  // §1 Z1): its code and artifacts are unreviewed, and the environment rule
+  // checks the triggered workflow's ref, not the source run's. Only this repo
+  // can push (fork pushes do not trigger workflow_run here).
+  for (const conclusion of conclusions) {
+    envs.push(makeWorkflowRunEnv(THIS_REPO, conclusion, 'push', sym({ notEqual: ['main'] })));
+  }
   return envs;
 }
 
@@ -376,16 +383,16 @@ const WORKFLOW_RUN_CONCLUSIONS = [
   'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale',
 ];
 
-const makeWorkflowRunEnv = (headRepo, conclusion) => ({
+const makeWorkflowRunEnv = (headRepo, conclusion, event = 'pull_request', headBranch = sym()) => ({
   event_name: 'workflow_run',
   head_ref: '',
   base_ref: '',
   ref: 'refs/heads/main',
   repository: THIS_REPO,
   workflow_run: {
-    event: 'pull_request',
+    event,
     conclusion,
-    head_branch: sym(),
+    head_branch: headBranch,
     'head_repository.full_name': headRepo,
   },
 });
@@ -1372,6 +1379,21 @@ function runSelfTest() {
           jobs: {
             rt: {
               if: "github.event.workflow_run.event == 'push' || (github.event.workflow_run.event != 'push' && github.event.workflow_run.head_repository.full_name == 'ourCommunityRituals/ourSharedEvents' && github.event.workflow_run.head_repository.full_name == github.repository)",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run trusts any push source, not only main',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
