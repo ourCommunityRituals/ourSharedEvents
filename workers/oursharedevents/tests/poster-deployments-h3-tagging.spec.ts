@@ -427,10 +427,12 @@ const SCAN_CLICK_PATH = [
  * Cloudflare request.cf geo fields (derived from the visitor's IP, timezone
  * included; dot, optional-chain, bracket and destructuring access), and every
  * CF-IP* header by prefix. OSE-1460 (2026-10-01): CF-IPCountry is no longer allowed —
- * the visitor's apparent country is not recorded either.
+ * the visitor's apparent country is not recorded either. Any read of `request.cf`
+ * itself is forbidden on these paths too (`x.cf`, `x?.cf`, `x['cf']`), so an alias
+ * (`const edge = request.cf; edge.country`) cannot slip past the field list.
  */
 const DEVICE_GEO =
-  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\bcf\s*\??\.?\s*\[\s*['"`]\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\{[^}]*\b(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b[^}]*\}\s*=\s*[\w.?]*\bcf\b|cf-ip[a-z-]+/i;
+  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\bcf\s*\??\.?\s*\[\s*['"`]\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\{[^}]*\b(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b[^}]*\}\s*=\s*[\w.?]*\bcf\b|cf-ip[a-z-]+|[\w)\]]\s*\??\.\s*cf\b(?!-)|\[\s*['"`]cf['"`]\s*\]/i;
 
 function sourcesMatching(pred: (p: string) => boolean): Array<[string, string]> {
   const sources: Record<string, string> = JSON.parse(
@@ -461,11 +463,17 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
       "headers.get('CF-IPCountry')",
       "headers.get('cf-ipcity')",
       'navigator.geolocation',
+      'const edge = request.cf; edge.country',
+      'const edge = req?.cf',
+      "request['cf']",
+      '(r as unknown as { cf?: unknown }).cf',
     ]) {
       expect(DEVICE_GEO.test(read), read).toBe(true);
     }
     // The rate-limit key is an IP header, not geography.
     expect(DEVICE_GEO.test("headers.get('CF-Connecting-IP')")).toBe(false);
+    // The Turnstile token field is not request.cf.
+    expect(DEVICE_GEO.test("body['cf-turnstile-response']")).toBe(false);
   });
 
   test('8b. no scan/click path reads device geolocation', () => {

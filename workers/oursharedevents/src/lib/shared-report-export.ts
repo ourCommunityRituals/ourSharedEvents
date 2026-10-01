@@ -347,7 +347,11 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     const nextWatermark = changed?.max_computed_at ?? watermark;
 
     const now = new Date();
-    const since = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000).toISOString();
+    // The window's first day, whole: the last_seen_at pre-filter starts at that
+    // day's midnight, so a row materialized early on the floor day is not dropped.
+    const floorDay = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     // The window is the event's own day (COALESCE(end_date, start_date), as the
     // materializer reads it), not last_seen_at: last_seen_at is when the cron
     // materialized the row, hours after the event and later again on a re-run.
@@ -378,7 +382,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
          )
         GROUP BY corridor_id, pool_key, uec_code`
     )
-      .bind(since, since.slice(0, 10))
+      .bind(`${floorDay}T00:00:00.000Z`, floorDay)
       .all<CorridorReturnsRow>();
 
     // Each run is its own snapshot, identified by its full timestamp: the

@@ -542,6 +542,21 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(groupCalls()).toHaveLength(0);
   });
 
+  test("an event on the window's first day counts, even materialized at that day's midnight", async () => {
+    const floorDay = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    await seedCorridorEvent('test-evt-exp-floor');
+    await tenv()
+      .DB.prepare(`UPDATE events SET start_date = ? WHERE id = ?`)
+      .bind(floorDay, 'test-evt-exp-floor')
+      .run();
+    await seedPeople('test-evt-exp-floor', [2, 2, 2, 2, 2], {
+      lastSeen: `${floorDay}T00:00:00.000Z`,
+    });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(groupCalls()).toHaveLength(1);
+  });
+
   test('a group with no real corridor is withheld', async () => {
     await seedCorridorEvent('test-evt-exp-nocorr', 1, null);
     await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);
