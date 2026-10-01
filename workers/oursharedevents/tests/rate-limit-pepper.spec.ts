@@ -19,6 +19,7 @@ import {
   isRateLimited,
   isBucketTripped,
   parseRateLimitEntry,
+  scanRateLimitBuckets,
   pepperedKeyHash,
   rateLimitKvKey,
   RATE_LIMIT_MAX,
@@ -39,6 +40,10 @@ function fakeKv(): KVNamespace & { keys(): string[] } {
     delete: async (k: string) => {
       store.delete(k);
     },
+    list: async ({ prefix = '' }: { prefix?: string } = {}) => ({
+      keys: [...store.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })),
+      list_complete: true,
+    }),
     keys: () => [...store.keys()],
   } as unknown as KVNamespace & { keys(): string[] };
 }
@@ -140,6 +145,17 @@ describe('stored bucket values are validated before use', () => {
       expect(parseRateLimitEntry(raw)).toBeNull();
     }
   );
+
+  it('the shared scan yields live windows only, skipping expired and malformed values', async () => {
+    const kv = fakeKv();
+    const now = Date.now();
+    await kv.put('ratelimit:live', JSON.stringify({ count: 99, resetAt: now + 30_000 }));
+    await kv.put('ratelimit:expired', JSON.stringify({ count: 99, resetAt: now - 1 }));
+    await kv.put('ratelimit:bad', 'null');
+    const ids: string[] = [];
+    for await (const { id } of scanRateLimitBuckets(kv)) ids.push(id);
+    expect(ids).toEqual(['live']);
+  });
 
   it('a malformed stored value is reset by the limiter, not thrown', async () => {
     const kv = fakeKv();

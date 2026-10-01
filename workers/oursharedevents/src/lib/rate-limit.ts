@@ -135,13 +135,17 @@ export async function rateLimitKvKey(key: string, pepper?: string): Promise<stri
 }
 
 /**
- * Every stored bucket as `{ id, entry }` (`id` is the keyed hash after the
- * prefix). Shared by rate-limit-stats and the security-metrics cron. KV list is
- * eventually consistent, so results are best-effort. Malformed values are skipped.
+ * Every live bucket as `{ id, entry }` (`id` is the keyed hash after the
+ * prefix). Shared by rate-limit-stats and the security-metrics cron. Expired
+ * windows are skipped: KV can keep a key well past its resetAt (each hit
+ * refreshes the TTL to at least 60 s), and an expired window blocks no one.
+ * Malformed values are skipped too. KV list is eventually consistent, so
+ * results are best-effort.
  */
 export async function* scanRateLimitBuckets(
   kv: KVNamespace
 ): AsyncGenerator<{ id: string; entry: RateLimitEntry }> {
+  const now = Date.now();
   let cursor: string | undefined;
   do {
     const page = await kv.list({ prefix: KEY_PREFIX, limit: 1000, cursor });
@@ -151,7 +155,9 @@ export async function* scanRateLimitBuckets(
       const values = await Promise.all(batch.map((k) => kv.get(k.name)));
       for (let j = 0; j < batch.length; j++) {
         const entry = parseRateLimitEntry(values[j]);
-        if (entry) yield { id: batch[j].name.slice(KEY_PREFIX.length), entry };
+        if (entry && entry.resetAt > now) {
+          yield { id: batch[j].name.slice(KEY_PREFIX.length), entry };
+        }
       }
     }
     cursor = page.list_complete ? undefined : (page as { cursor?: string }).cursor;

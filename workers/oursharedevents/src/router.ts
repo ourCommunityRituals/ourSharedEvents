@@ -1894,8 +1894,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
   const tripped: Array<{ id: string; entry: RateLimitEntry }> = [];
   try {
     for await (const bucket of scanRateLimitBuckets(env.RATE_LIMIT_KV)) {
-      // Active windows only; expired keys are gone by KV TTL anyway.
-      if (bucket.entry.resetAt > now && isBucketTripped(bucket.entry)) tripped.push(bucket);
+      if (isBucketTripped(bucket.entry)) tripped.push(bucket); // the scan yields live windows only
     }
   } catch (err) {
     return Response.json(
