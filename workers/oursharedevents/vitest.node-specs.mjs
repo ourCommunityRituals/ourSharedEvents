@@ -146,6 +146,9 @@ export const NODE_SPECS = [
   // the pure engine with fake timers + the display.html script run in jsdom
   // with a stubbed fetch; no cloudflare:test / D1.
   'tests/display-pane-rotation.spec.ts',
+  // TV display settings (order, seconds per screen, league links) — pure over
+  // lib/event-settings.ts.
+  'tests/display-settings.spec.ts',
   // OSE-1357 part 2 — poster codes: pure rules (lib/poster-codes.ts) and the
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
