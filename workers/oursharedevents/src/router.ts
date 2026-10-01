@@ -162,7 +162,11 @@ import {
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
-import { guardAdminObjectScope, type AdminObjectScopeEnv } from './lib/admin-object-scope';
+import {
+  guardAdminObjectScope,
+  requirePlatformScope,
+  type AdminObjectScopeEnv,
+} from './lib/admin-object-scope';
 import {
   handleAdminMintSponsorHomeLink,
   handleSponsorHomePage,
@@ -372,6 +376,16 @@ export async function route(
         ip: _ip,
       })
     );
+  }
+
+  /**
+   * AUD-3 (OSE-1447): platform-owned routes are key-actor only. Call after
+   * requireAdmin; a refusal is audited and answered with the router's own 404.
+   */
+  async function _platformOnly(reqId: string): Promise<Response | null> {
+    const off = await requirePlatformScope(request, env);
+    if (off) _audit(reqId, 'PLATFORM_SCOPE_DENIED', 'denied', 'platform', pathname);
+    return off;
   }
 
   // ── HTTPS redirect ──────────────────────────────────────────────────────
@@ -651,8 +665,11 @@ export async function route(
 
   // POST /api/v2/admin/events/backfill-h3-cells — OSE-489 one-shot H3 backfill
   if (pathname === '/api/v2/admin/events/backfill-h3-cells' && method === 'POST') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleBackfillH3Cells(request, env);
   }
 
@@ -1015,6 +1032,8 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleBackfillPosterH3(request, env);
   }
 
@@ -1196,6 +1215,8 @@ export async function route(
       _audit(reqId, 'DATA_SUBJECT_ERASE', 'denied', 'data-subject');
       return deny;
     }
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     const response = await handleDataSubjectErase(request, env);
     _audit(
       reqId,
@@ -1208,8 +1229,11 @@ export async function route(
 
   // ── Admin audit log (OSE-212) ──────────────────────────────────────────────
   if (pathname === '/api/v2/admin/audit-log' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleListAuditLog(request, env);
   }
 
@@ -1218,8 +1242,11 @@ export async function route(
   // Returns top-10 rate-limited IPs in the last hour from RATE_LIMIT_KV.
   // Requires admin auth. Read-only — never modifies KV state.
   if (pathname === '/api/v2/admin/security/rate-limit-stats' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleRateLimitStats(request, env);
   }
 
@@ -1231,6 +1258,8 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleListSubscribers(request, env, ctx, reqId);
   }
 
@@ -1653,8 +1682,11 @@ export async function route(
     (pathname === '/briefing' || pathname === '/overview' || pathname === '/summary') &&
     method === 'GET'
   ) {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
     return handleBriefingPage();
   }
 

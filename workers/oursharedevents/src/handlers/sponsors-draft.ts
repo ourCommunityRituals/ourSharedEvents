@@ -22,9 +22,14 @@ import { tagCoordinates } from '../lib/h3-tagging';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
 import { parseJsonBody, errorResponse, jsonResponse } from '../lib/form-validation';
 import { validateProxiedLogoUrl } from '../lib/sponsor-logo';
-import { promoteSponsorDraft, type PromotionEnv } from '../lib/sponsor-promotion';
+import {
+  promoteSponsorDraft,
+  type PromotionEnv,
+  type PromotionResult,
+} from '../lib/sponsor-promotion';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
 
@@ -255,7 +260,14 @@ export async function handlePromoteSponsorDraft(
   const compInviteToken =
     typeof parsed.body.comp_invite_token === 'string' ? parsed.body.comp_invite_token : undefined;
 
-  const result = await promoteSponsorDraft(env, draftToken, { compInviteToken });
+  // AUD-3 S17 (#9): the caller must belong to the draft's brand. The lib only
+  // proves the draft and its event share a brand; without this check any admin
+  // holding another tenant's draft token could promote it. An out-of-scope draft
+  // takes the lib's own not-found result, so the response and the audit row are
+  // identical to a missing draft (no existence oracle).
+  const result: PromotionResult = (await isDraftOutsideCallerScope(request, env, draftToken))
+    ? { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 }
+    : await promoteSponsorDraft(env, draftToken, { compInviteToken });
 
   // Eligibility-decision audit (#24 auditability). PII-FREE: brand_id is a tenant
   // id, and the details carry only the decision + granting source — no email, ip,
@@ -280,4 +292,27 @@ export async function handlePromoteSponsorDraft(
     { ok: true, sponsor_id: result.sponsor_id, template_ids: result.template_ids },
     request
   );
+}
+
+/**
+ * True when the draft exists but belongs to a brand outside the caller's scope.
+ * A missing draft returns false (the lib reports it as not found). A null actor
+ * is the DEV_OPEN_ADMIN local-dev bypass, refused on staging and production.
+ */
+async function isDraftOutsideCallerScope(
+  request: Request,
+  env: PromotionEnv & AdminEnv & AdminBrandScopeEnv,
+  draftToken: string
+): Promise<boolean> {
+  const actor = extractAdminActor(request, env);
+  if (actor === null) return false;
+  const scope = await resolveAdminBrandScopeAsync(actor, env);
+  if (scope.mode === 'all') return false;
+  const row = await env.DB.prepare(
+    'SELECT brand_id FROM sponsor_business_draft WHERE draft_token = ?'
+  )
+    .bind(draftToken)
+    .first<{ brand_id: string }>();
+  if (!row) return false;
+  return scope.mode === 'deny' || !scope.brandIds.includes(row.brand_id);
 }

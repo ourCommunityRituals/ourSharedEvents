@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { route } from '../src/router';
+import { PLATFORM_BRAND_ID } from '../src/lib/admin-brand-scope';
 
 /**
  * OSE-574 — the CEO Briefing route MUST be gated server-side.
@@ -63,28 +64,15 @@ describe('OSE-574 | /briefing server-side auth gate (production posture)', () =>
     }
   });
 
-  test('admin-authenticated GET /briefing → 200 with HTML', async () => {
+  test('AUD-3: the admin key has no brand, so in production it gets 404 and no content', async () => {
+    // Production carries no ADMIN_SCOPE_ALL (tests/prod-admin-scope-config.spec.ts),
+    // so a key actor is never platform-scoped there.
     const res = await get('/briefing', { Authorization: `Bearer ${ADMIN_KEY}` });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Type')).toContain('text/html');
-    const html = await res.text();
-    expect(html).toContain('id="root"');
-    expect(html).toContain('ourCommunityRituals');
-  });
-
-  test('admin-authenticated /overview and /summary route to the briefing page', async () => {
-    for (const path of ['/overview', '/summary']) {
-      const res = await get(path, { Authorization: `Bearer ${ADMIN_KEY}` });
-      expect(res.status).toBe(200);
-      const html = await res.text();
-      expect(html).toContain('ourCommunityRituals');
+    expect(res.status).toBe(404);
+    const body = await res.text();
+    for (const marker of CONFIDENTIAL_MARKERS) {
+      expect(body).not.toContain(marker);
     }
-  });
-
-  test('admin briefing response keeps its security headers', async () => {
-    const res = await get('/briefing', { Authorization: `Bearer ${ADMIN_KEY}` });
-    expect(res.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
-    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
   });
 
   test('a wrong Bearer token is still denied (401, no content)', async () => {
@@ -93,6 +81,71 @@ describe('OSE-574 | /briefing server-side auth gate (production posture)', () =>
     const body = await res.text();
     for (const marker of CONFIDENTIAL_MARKERS) {
       expect(body).not.toContain(marker);
+    }
+  });
+});
+
+// ── AUD-3 (OSE-1447): the briefing is platform-owned ────────────────────────────
+//
+// Only members of the reserved platform brand reach it. The env below keeps the
+// auth gate live (DEV_OPEN_ADMIN unset) but is not a deployed env, so the decode-only
+// Access token is accepted; JWT signature verification is covered by its own specs.
+
+const FOUNDER = 'founder@example.com';
+const BRAND_ADMIN = 'organizer@example.com';
+
+function liveGateEnv(): Parameters<typeof route>[1] {
+  return {
+    ALLOWED_ADMIN_DOMAINS: 'example.com',
+    ADMIN_BRAND_MEMBERSHIP: JSON.stringify({
+      [FOUNDER]: [PLATFORM_BRAND_ID],
+      [BRAND_ADMIN]: ['brand-x'],
+    }),
+  } as unknown as Parameters<typeof route>[1];
+}
+
+function b64url(obj: unknown): string {
+  return btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function getAs(email: string, path: string): Promise<Response> {
+  const now = Math.floor(Date.now() / 1000);
+  const jwt = `${b64url({ alg: 'none', typ: 'JWT' })}.${b64url({ email, iat: now - 10, exp: now + 3600 })}.sig`;
+  return route(
+    new Request(`https://t.test${path}`, { headers: { 'Cf-Access-Jwt-Assertion': jwt } }),
+    liveGateEnv(),
+    ctx
+  );
+}
+
+describe('AUD-3 | /briefing is reachable only through the reserved platform brand', () => {
+  test('a platform-brand member gets the briefing (200, HTML, security headers)', async () => {
+    const res = await getAs(FOUNDER, '/briefing');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/html');
+    expect(res.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    const html = await res.text();
+    expect(html).toContain('id="root"');
+    expect(html).toContain('ourCommunityRituals');
+  });
+
+  test('/overview and /summary route to the briefing for a platform-brand member', async () => {
+    for (const path of ['/overview', '/summary']) {
+      const res = await getAs(FOUNDER, path);
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain('ourCommunityRituals');
+    }
+  });
+
+  test('an ordinary brand admin gets 404 and no confidential content', async () => {
+    for (const path of ['/briefing', '/overview', '/summary']) {
+      const res = await getAs(BRAND_ADMIN, path);
+      expect(res.status).toBe(404);
+      const body = await res.text();
+      for (const marker of CONFIDENTIAL_MARKERS) {
+        expect(body).not.toContain(marker);
+      }
     }
   });
 });

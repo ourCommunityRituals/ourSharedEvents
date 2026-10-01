@@ -32,13 +32,22 @@ export interface AdminBrandScopeEnv {
   DB?: D1Database;
 }
 
+/**
+ * AUD-3 (OSE-1447) — the RESERVED PLATFORM BRAND. Platform-owned data (subscriber
+ * list, rate-limit telemetry, cross-brand audit log, confidential briefing) and
+ * platform-wide operations (data-subject erase, H3 backfills) belong to this brand.
+ * A membership row in it is how a human reaches them in production, where
+ * ADMIN_SCOPE_ALL is deliberately absent. It is a brand like any other: it grants
+ * nothing inside other tenants, so there is still no human super-admin (Invariant
+ * #9, Feature G / OSE-832). Rows are added only through the audited runbook step.
+ */
+export const PLATFORM_BRAND_ID = 'ose-platform';
+
 /** OSE-671 groundwork: the admin role vocabulary carried on a membership row. */
 export type AdminRole = 'brand_owner' | 'organizer' | 'sponsor_manager' | 'staff';
 
 export type AdminBrandScope =
-  | { mode: 'all' }
-  | { mode: 'scoped'; brandIds: string[] }
-  | { mode: 'deny' };
+  { mode: 'all' } | { mode: 'scoped'; brandIds: string[] } | { mode: 'deny' };
 
 /**
  * Resolve the brand scope for an admin caller. Pure — takes the already-extracted
