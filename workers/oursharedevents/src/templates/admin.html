@@ -5082,6 +5082,10 @@
           tv.eventId = eventId;
           setDisabled(true);
           msg('');
+          // Clear the previous event's values first, so a failed load never
+          // shows event A's configuration under event B.
+          fill({ panes: ALL, dwell_seconds: 15, league: [] });
+          setDisabled(true);
           var open = $('tv-open');
           if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
           try {
@@ -5108,8 +5112,13 @@
             tv.rows[i] = tv.rows[j];
             tv.rows[j] = moved;
             render();
-            var again = list.children[j] && list.children[j].querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
+            // Keep keyboard focus on the moved row: the same button, or the
+            // opposite one when the row reached the top or bottom.
+            var row = list.children[j];
+            var again = row && row.querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
+            var other = row && row.querySelector('[data-act="' + (btn.getAttribute('data-act') === 'up' ? 'down' : 'up') + '"]');
             if (again && !again.disabled) again.focus();
+            else if (other && !other.disabled) other.focus();
           });
           list.addEventListener('change', function (ev) {
             var box = ev.target.closest('input[data-act="toggle"]');

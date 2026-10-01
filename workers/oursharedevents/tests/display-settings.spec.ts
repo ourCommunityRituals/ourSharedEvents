@@ -133,6 +133,7 @@ describe('league links must fit in the QR code the TV shows', () => {
     const r = validateSettingsPatch({ leagueLinks: { schedule: fits + 'x' } });
     expect(r.ok).toBe(false);
     expect(r.ok ? '' : r.error).toContain('QR code');
+    expect(r.ok ? '' : r.error).toContain('no username or password');
   });
 
   test('the reader drops a stored link too long to encode', () => {

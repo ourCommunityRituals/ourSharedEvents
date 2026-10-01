@@ -213,3 +213,31 @@ describe('admin TV display card: a save answered after switching events', () => 
     expect($<HTMLButtonElement>('tv-save').disabled).toBe(false);
   });
 });
+
+describe('admin TV display card: review fixes', () => {
+  test("a failed load for event B never shows event A's values", async () => {
+    const { w, $, order } = await mount();
+    const load = w.loadTvDisplay as (id: string) => Promise<void>;
+    await load('evt-A');
+    expect($<HTMLInputElement>('tv-league-standings').value).toBe('https://docs.google.com/x');
+    (w as unknown as { fetch: typeof fetch }).fetch = (async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ ok: false }),
+    })) as unknown as typeof fetch;
+    await load('evt-B');
+    expect($<HTMLInputElement>('tv-league-standings').value).toBe('');
+    expect($<HTMLInputElement>('tv-dwell').value).toBe('15');
+    expect(order().map((r) => r[0])).toEqual(['event', 'upcoming', 'sponsors', 'league']);
+    expect($<HTMLButtonElement>('tv-save').disabled).toBe(true);
+  });
+
+  test('moving a row to the top keeps keyboard focus on that row', async () => {
+    const { doc, load } = await mount();
+    await load();
+    const rows = () => doc.querySelectorAll('[data-testid="tv-screen-row"]');
+    (rows()[1].querySelector('[data-testid="tv-screen-up"]') as HTMLButtonElement).click();
+    // Row 0 now; its Move up is disabled, so focus goes to its Move down.
+    expect(doc.activeElement).toBe(rows()[0].querySelector('[data-testid="tv-screen-down"]'));
+  });
+});
