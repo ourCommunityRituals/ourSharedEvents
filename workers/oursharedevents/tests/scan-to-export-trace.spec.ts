@@ -397,6 +397,16 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(h3Resolution(EAGLES_RES9.toUpperCase())).toBe(9);
   });
 
+  test('an unconfigured BigQuery leaves no manifest row — the phases never ran', async () => {
+    await clearPipeline();
+    const r = await runSharedReportBigQueryExport({ DB: tenv().DB } as SharedReportExportEnv);
+    expect(r.phases.every((p) => !p.ran && p.errors === 0)).toBe(true);
+    const n = await tenv()
+      .DB.prepare(`SELECT COUNT(*) AS n FROM export_manifest WHERE event_id = 'cron:shared-report'`)
+      .first<{ n: number }>();
+    expect(n?.n).toBe(0);
+  });
+
   test('a res9 corridor key in the baseline fails the phase closed: nothing sent, watermark held', async () => {
     await clearPipeline();
     // A legacy events.corridor_id holding a res9 node would flow into the
