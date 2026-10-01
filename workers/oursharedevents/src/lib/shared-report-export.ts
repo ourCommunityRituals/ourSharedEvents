@@ -388,7 +388,10 @@ export async function exportAnonIdReturns(
   const lastSnapshot = await getWatermark(env.DB, RETURNS_SNAPSHOT_STATE);
   const lastClaim = await getWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE);
   const sinceLast = now.getTime() - Math.max(Date.parse(lastSnapshot), Date.parse(lastClaim));
-  result.snapshotDue = !(sinceLast >= 0 && sinceLast < RETURNS_SNAPSHOT_INTERVAL_MS);
+  // Fail closed: due only once the full interval has passed. A last snapshot or
+  // claim stamped ahead of this clock (skew between invocations) is not due;
+  // treating a negative gap as due would let a second run publish at once.
+  result.snapshotDue = sinceLast >= RETURNS_SNAPSHOT_INTERVAL_MS;
   if (!result.snapshotDue) {
     result.durationMs = Date.now() - start;
     return result;

@@ -555,6 +555,18 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows()).toHaveLength(1);
   });
 
+  test('a claim stamped ahead of this clock (skew) is not due: the gate fails closed', async () => {
+    await seedCorridorEvent('test-evt-exp-wks');
+    await seedPeople('test-evt-exp-wks', [1, 1, 1, 1, 1]);
+    // Another invocation, its clock a minute ahead of ours, has just claimed the week.
+    await exportAnonIdReturns(makeEnv(), { now: new Date(Date.now() + 60_000) });
+    expect(markerRows()).toHaveLength(1);
+    bqCalls = [];
+    const skewed = await exportAnonIdReturns(makeEnv());
+    expect(skewed.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+  });
+
   test('of two overlapping runs that both find the snapshot due, only the one that wins the claim publishes', async () => {
     await seedCorridorEvent('test-evt-exp-wkc');
     await seedPeople('test-evt-exp-wkc', [1, 1, 1, 1, 1]);
