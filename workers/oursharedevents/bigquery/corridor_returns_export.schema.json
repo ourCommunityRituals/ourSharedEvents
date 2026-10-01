@@ -1,0 +1,62 @@
+[
+  {
+    "name": "row_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "'group' (one corridor x event type x pool) or 'snapshot' (one marker per pool per run)"
+  },
+  {
+    "name": "corridor_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "H3 res-7 cell; 'unknown' only on snapshot markers"
+  },
+  {
+    "name": "venue_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Always 'corridor-aggregate': no real venue crosses (OSE-1460)"
+  },
+  { "name": "event_type", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "uec_code", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "regulatory_pool", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "product_id", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "window_days", "type": "INT64", "mode": "REQUIRED" },
+  {
+    "name": "people_count",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Group rows only; never below the floor of 5"
+  },
+  {
+    "name": "returned_2plus",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "NULL when under the floor of 5"
+  },
+  {
+    "name": "returned_3plus",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "NULL when under the floor of 5"
+  },
+  {
+    "name": "returned_5plus",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "NULL when under the floor of 5"
+  },
+  {
+    "name": "groups_in_snapshot",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Snapshot markers only"
+  },
+  {
+    "name": "computed_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Snapshot identity: every row of one run shares it"
+  },
+  { "name": "exported_at", "type": "TIMESTAMP", "mode": "REQUIRED" }
+]

@@ -45,6 +45,7 @@ import {
   BIGQUERY_DATASETS,
   DECLINED_REGIMES,
 } from '../src/lib/pool-contract';
+import corridorReturnsSchema from '../bigquery/corridor_returns_export.schema.json';
 
 interface TestEnv {
   DB: D1Database;
@@ -555,6 +556,24 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(groupCalls()).toHaveLength(1);
+  });
+
+  test('every field the export sends is in the checked-in BigQuery schema, with its mode', async () => {
+    await seedCorridorEvent('test-evt-exp-schema');
+    await seedPeople('test-evt-exp-schema', [2, 2, 2, 2, 2]);
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const fields = new Map(
+      (corridorReturnsSchema as Array<{ name: string; mode: string }>).map((f) => [f.name, f.mode])
+    );
+    const rows = [...groupCalls().flatMap((c) => c.rows.map((x) => x.json)), ...markerRows()];
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) expect(fields.has(key), key).toBe(true);
+      for (const [name, mode] of fields) {
+        if (mode === 'REQUIRED') expect(row[name] ?? null, name).not.toBeNull();
+      }
+    }
   });
 
   test('a group with no real corridor is withheld', async () => {

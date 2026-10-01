@@ -58,12 +58,12 @@ The most critical design decision: **two separate D1 databases with no cross-lin
 ```
 FORMS_DB (opt-in personal data)          DB (anonymous presence signal)
 ───────────────────────────────          ──────────────────────────────
-form_registrations                       scans
-  name          (plain text)               scan_bucket      (hourly window)
-  email_hash    (SHA-256)                  user_agent_hash  (device class)
-  expires_at    (90-day TTL)               (no country: OSE-1460)
-form_surveys                               poster_deployment_id (FK)
-  responses_json (scrubbed)
+form_registrations                       scan_placement_events (WHERE)
+  name          (plain text)               poster_deployment_id (FK)
+  email_hash    (SHA-256)                  scan_bucket      (hourly window)
+  expires_at    (90-day TTL)             scan_node_returns (WHO came back)
+form_surveys                               anonymous_id     (pseudonymous)
+  responses_json (scrubbed)                user_agent_hash  (device class)
   pii_scrubbed   (boolean)              scan_aggregates
                                            bucket_date     (daily rollup)
 email_signups                              bucket_hour     (hourly rollup)
@@ -85,19 +85,29 @@ checkin_counts                             qr_token        (unique)
 
 ## Schema-Level Privacy (DB — Scan System)
 
-### `scans` table
+### Scan tables (`scan_placement_events` + `scan_node_returns`, migration 0062)
+
+Migration 0062 (OSE-798) dropped the old combined `scans` table and split each scan into two rows with no shared key, so no stored row holds both *where* (the placement) and *who* (the cookie id):
 
 ```sql
-CREATE TABLE IF NOT EXISTS scans (
-  id                    TEXT PRIMARY KEY,
-  event_id              TEXT NOT NULL,
-  poster_deployment_id  TEXT NOT NULL,
-  scan_bucket           TEXT NOT NULL,        -- hourly window, not exact time
-  user_agent_hash       TEXT,                 -- device class, not individual
-  referrer_domain       TEXT,
-  country_code          TEXT,                 -- always NULL since OSE-1460 (CF-IPCountry is not read; 0088 cleared it)
-  region_code           TEXT,                 -- never written
-  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+-- WHERE: which poster placement was scanned. No person-derived value.
+CREATE TABLE IF NOT EXISTS scan_placement_events (
+  id                   TEXT PRIMARY KEY,
+  event_id             TEXT NOT NULL,
+  poster_deployment_id TEXT NOT NULL,
+  scan_bucket          TEXT NOT NULL,        -- hourly window
+  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- WHO came back: the pseudonymous cookie id. No placement id, ever.
+CREATE TABLE IF NOT EXISTS scan_node_returns (
+  id              TEXT PRIMARY KEY,
+  event_id        TEXT NOT NULL,
+  anonymous_id    TEXT,                     -- pseudonymous ose_anon cookie value
+  user_agent_hash TEXT,                     -- device class, not individual
+  country_code    TEXT,                     -- always NULL since OSE-1460 (CF-IPCountry is not read; 0088 cleared it)
+  scan_bucket     TEXT NOT NULL,            -- hourly window
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
@@ -148,7 +158,7 @@ The Anonymous ID contract is enforced at multiple layers — not just one:
 
 ### Layer 1: Schema (database structure)
 
-No PII columns exist in the scan system tables. You cannot `INSERT` an email into the `scans` table because there's no column for it.
+No PII columns exist in the scan system tables. You cannot `INSERT` an email into `scan_placement_events` or `scan_node_returns` because there's no column for it.
 
 ### Layer 2: Hashing (form submissions)
 

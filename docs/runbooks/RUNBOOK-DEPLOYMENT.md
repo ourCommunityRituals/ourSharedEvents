@@ -308,6 +308,27 @@ npx wrangler d1 execute DB --env "$ENV" --remote \
 
 The visitor-country cleanup (0088) needs no such step: the nightly roll-up clears any `country_code` a Worker wrote in the deploy window (`aggregateScanBuckets`, OSE-1460).
 
+### Create the corridor-returns BigQuery table before the first export (OSE-1460)
+
+**Why:** the nightly export streams rows with `tabledata.insertAll`, which fails if the table does not exist; BigQuery does not create it on first insert. `corridor_returns_export` is new in OSE-1460. Its schema is checked in at `workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, and `tests/shared-report-bigquery-export.spec.ts` fails if the export sends a field the schema lacks.
+
+**When:** once per environment, before the deploy that carries OSE-1460 runs its first nightly export (`0 3 * * *` UTC).
+
+**Datasets:** staging writes `oureventring_general_stg`, which exists (US, read 2026-10-01). Production writes `oureventring_general`, which does **not** exist yet, so production creates the dataset first.
+
+```bash
+PROJECT=project-7cc9adcd-ed55-47aa-958
+DATASET=oureventring_general_stg   # production: DATASET=oureventring_general
+cd workers/oursharedevents
+bq --project_id="$PROJECT" show "$DATASET" >/dev/null 2>&1 \
+  || bq --project_id="$PROJECT" mk --dataset --location=US "$DATASET"   # production only, first time
+bq --project_id="$PROJECT" mk --table "$DATASET.corridor_returns_export" bigquery/corridor_returns_export.schema.json
+```
+
+**Verify:** `bq --project_id="$PROJECT" show --schema "$DATASET.corridor_returns_export"` lists the 15 fields.
+
+**Not covered here:** `corridor_density_baseline_export` and `event_series_export` predate OSE-1460 and also have no checked-in schema; they were never created either (staging's dataset held no tables on 2026-10-01). Creating them is separate work.
+
 ### Turn on production monitoring (OSE-1418)
 
 **When:** launch day, right after the first production deploy passes its smoke checks.

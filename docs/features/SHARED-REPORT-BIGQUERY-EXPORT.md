@@ -410,7 +410,7 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 - **Read API for the BQ exports.** Session 5 ships the read API (`GET /api/v2/events/:id/shared-report` + WKRP batch). Session 4 is write-only.
 - **WKRP batch endpoint.** Session 5 (ratified).
 - **Historical backfill of pre-Session-3 data.** First export pass uses the epoch watermark — picks up everything in D1 at the time. No special backfill needed.
-- **BQ table schema management (DDL).** BQ tables are auto-created on first insert by the BigQuery streaming API. Schema management is handled out-of-band via Terraform / GCP console; not Worker code's concern.
+- **BQ table creation.** *Corrected 2026-10-01:* this line said tables are auto-created on first insert. They are not: `tabledata.insertAll` fails when the table is missing. `corridor_returns_export` now has a checked-in schema (`workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, kept in step with the code by a test) and a creation step in `docs/runbooks/RUNBOOK-DEPLOYMENT.md`. `corridor_density_baseline_export` and `event_series_export` still have neither.
 - **Cross-pool baseline routing.** Corridor baselines default to `general` in v1. Documented for revisit if a HIPAA/COPPA corridor surfaces a need.
 - **Sponsor impression export.** Sponsor impressions are already exported via the existing `runBigQueryBackup`. No change in Session 4.
 - **Real-time export.** Cron-only, daily. No real-time streaming.

@@ -14,13 +14,14 @@ This isn't a privacy policy bolted on after the fact. The database schema itself
 ```
 FORMS_DB (opt-in personal data)     DB (anonymous presence signal)
 ───────────────────────────────     ────────────────────────────
-Registrations (name, email hash)    Scans (scan_bucket, agent_hash)
+Registrations (name, email hash)    Scans (placement row + return row)
 Surveys (responses, PII-scrubbed)   Poster deployments (qr_token, lat/lng)
 Email signups (encrypted, 30d TTL)  Scan aggregates (counts by hour)
 Check-in counts (aggregate only)    Sponsors (click/impression tokens)
                                     Events (the core entity)
     ↓                                   ↓
-  Auto-deleted on schedule          Permanent anonymous signal
+  Auto-deleted on schedule          Placements kept; cookie-id return
+                                    rows kept until erased (see below)
   Customer opted in voluntarily     No opt-in needed — no PII exists
 ```
 
@@ -32,7 +33,7 @@ Check-in counts (aggregate only)    Sponsors (click/impression tokens)
 
 ## The Two Data Systems
 
-### System 1: Anonymous Scan Signal (DB — permanent)
+### System 1: Anonymous Scan Signal (DB — placements kept, return rows retention-bound)
 
 The scan system stores **presence signal only**. By schema design, no PII can enter:
 
