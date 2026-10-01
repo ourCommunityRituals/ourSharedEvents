@@ -182,9 +182,10 @@ workflow, not only PR-triggered ones.
 - disabling either rule;
 - dropping the fork-from-`main` case;
 - dropping the literal-derived branch candidates, the workflow-level `env:` scan, the `secrets: inherit` or `toJSON(secrets)` sentinel, the structural backstop, or case-insensitive matching;
-- dropping whitespace tolerance in the named `secrets [ 'X' ]` or computed `secrets [ x ]` index, or case-insensitive matching of the `secrets` context name (Copilot review on #743; each of the three was mutation-checked).
+- dropping whitespace tolerance in the named `secrets [ 'X' ]` or computed `secrets [ x ]` index, or case-insensitive matching of the `secrets` context name (Copilot review on #743; each of the three was mutation-checked);
+- modelling a PR-sourced run as always `conclusion == 'success'` (Rule W now tries every conclusion GitHub reports plus any literal in the `if:`).
 
-The self-test has 29 fixtures.
+The self-test has 31 fixtures.
 
 ## Born-red proof
 

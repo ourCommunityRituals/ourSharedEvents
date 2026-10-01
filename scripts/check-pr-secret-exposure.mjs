@@ -313,14 +313,23 @@ export function prSourcedWorkflowRunEnvs(ifStr) {
   const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
   const branches = new Set([...SAMPLE_PR_BRANCHES, 'main']);
   for (const lit of literals) branches.add(lit);
+  // A PR run can end in any conclusion, so a job gated on
+  // `conclusion == 'neutral'` (or any other literal) is tried under it too.
+  const conclusions = new Set([...WORKFLOW_RUN_CONCLUSIONS, ...literals]);
   const envs = [];
   for (const headRepo of ['org/repo', 'fork/repo']) {
-    for (const headBranch of branches) envs.push(makeWorkflowRunEnv(headRepo, headBranch));
+    for (const headBranch of branches) {
+      for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, headBranch, conclusion));
+    }
   }
   return envs;
 }
 
-const makeWorkflowRunEnv = (headRepo, headBranch) => ({
+const WORKFLOW_RUN_CONCLUSIONS = [
+  'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale',
+];
+
+const makeWorkflowRunEnv = (headRepo, headBranch, conclusion = 'success') => ({
   event_name: 'workflow_run',
   head_ref: '',
   base_ref: '',
@@ -328,7 +337,7 @@ const makeWorkflowRunEnv = (headRepo, headBranch) => ({
   repository: 'org/repo',
   workflow_run: {
     event: 'pull_request',
-    conclusion: 'success',
+    conclusion,
     head_branch: headBranch,
     'head_repository.full_name': headRepo,
   },
@@ -934,6 +943,36 @@ function runSelfTest() {
               // Unreachable under the model (no PR run concludes 'neutral' here),
               // but it names no trusted event, so the structural rule fails it.
               if: "github.event.workflow_run.conclusion == 'neutral' && github.event.workflow_run.event != 'pull_request'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: trusted event OR'd with a conclusion a PR run can reach",
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' || github.event.workflow_run.conclusion == 'neutral'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: job gated on a failed source run',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_repository.full_name == github.repository",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
