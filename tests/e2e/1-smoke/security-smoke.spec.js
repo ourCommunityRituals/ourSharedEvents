@@ -125,9 +125,15 @@ async function createOk(request, fields) {
   return json.id;
 }
 
-/** Public HTML for an event, as the server sent it (no client rendering involved). */
-async function publicHtml(request, id) {
-  const res = await request.get(`${BASE_URL}/events/${id}`, { timeout: TIMEOUT });
+/**
+ * Public HTML for an event, exactly as the server sent it (the response body,
+ * not the rendered DOM). Loaded by the browser, not the `request` fixture: on
+ * staging, Cloudflare Bot Management answers 403 to Playwright's Node HTTP
+ * client for HTML pages whatever User-Agent it sends, and 200 to a real
+ * browser navigation (measured 2026-10-01). Leaves `page` on the event.
+ */
+async function publicHtml(page, id) {
+  const res = await page.goto(`${BASE_URL}/events/${id}`, { waitUntil: 'load', timeout: TIMEOUT });
   expect(res.status(), `public page /events/${id}`).toBe(200);
   return res.text();
 }
@@ -225,11 +231,10 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
     // Stored literally: escaping is the renderer's job, not the database's.
     expect((await publicItem(request, id)).title).toBe(payload);
 
-    const html = await publicHtml(request, id);
+    const html = await publicHtml(page, id);
     expect(html, 'raw <script> payload in public HTML').not.toContain(payload);
     expect(html, 'escaped payload in public HTML').toContain(htmlEscape(payload));
 
-    await page.goto(`${BASE_URL}/events/${id}`, { waitUntil: 'load', timeout: TIMEOUT });
     await expect(page.locator('h1').first()).toContainText(payload);
     // Not a :has-text locator: Playwright's text matching skips <script> contents.
     const injectedScripts = await page.evaluate(
@@ -243,16 +248,18 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
     const payload = `<img src=x data-run="${RUN}" onerror=alert("${RUN}-img")>`;
     const id = await createOk(request, { title: payload, description: payload });
 
-    const html = await publicHtml(request, id);
+    const html = await publicHtml(page, id);
     expect(html, 'raw <img onerror> payload in public HTML').not.toContain(`<img src=x data-run`);
     expect(html).toContain(htmlEscape(payload));
 
-    await page.goto(`${BASE_URL}/events/${id}`, { waitUntil: 'load', timeout: TIMEOUT });
     await expect(page.locator('h1').first()).toContainText(payload);
     expect(await page.locator(`img[data-run="${RUN}"]`).count()).toBe(0);
   });
 
-  test('SQL injection attempt is stored literally and the table survives', async ({ request }) => {
+  test('SQL injection attempt is stored literally and the table survives', async ({
+    request,
+    page,
+  }) => {
     const payload = `${RUN}'; DROP TABLE events; --`;
     const id = await createOk(request, { title: payload });
 
@@ -262,7 +269,7 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
     const list = await request.get(`${BASE_URL}/api/v2/events`, { timeout: TIMEOUT });
     expect(list.status()).toBe(200);
 
-    const html = await publicHtml(request, id);
+    const html = await publicHtml(page, id);
     expect(html).toContain(htmlEscape(payload));
   });
 });
@@ -292,7 +299,7 @@ test.describe('🔒 SECURITY: Invalid inputs', () => {
     expect(await leakedRows(request, title), 'rejected create must persist nothing').toEqual([]);
   });
 
-  test('Extremely long event name is bounded', async ({ request }) => {
+  test('Extremely long event name is bounded', async ({ request, page }) => {
     const longName = `${RUN}-` + 'A'.repeat(10000);
     const id = await createOk(request, { title: longName });
 
@@ -301,7 +308,7 @@ test.describe('🔒 SECURITY: Invalid inputs', () => {
     expect(stored.length).toBe(200);
     expect(longName.startsWith(stored)).toBe(true);
 
-    const html = await publicHtml(request, id);
+    const html = await publicHtml(page, id);
     expect(html).toContain(stored);
     expect(html).not.toContain(longName.slice(0, 201));
   });
