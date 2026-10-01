@@ -181,6 +181,16 @@ export async function materializeAnonIdReturns(
       console.log(JSON.stringify({ type: 'ANON_ID_RETURNS_PEPPER_PURGE', rows: purged }));
     }
     if (!complete) {
+      // Every chunk came back full: rows may remain, or the last chunk took the
+      // last of them. Look before raising the alert.
+      const left = await env.DB.prepare(
+        `SELECT 1 FROM anon_id_returns WHERE pepper_epoch IS NULL OR pepper_epoch <> ? LIMIT 1`
+      )
+        .bind(epoch)
+        .first();
+      complete = left === null;
+    }
+    if (!complete) {
       // Rows erasure cannot reach are still there; the next run continues. The
       // rotation runbook purges the table in full, so this is the safety net.
       console.error(

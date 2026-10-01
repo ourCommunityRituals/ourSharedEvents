@@ -184,39 +184,39 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
     '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
     'Held ids, not enumeration; not request-reachable.',
-  'lib/shared-report.ts:222':
+  'lib/shared-report.ts:232':
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
     'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
     'window incl. start-only events, then the real ' +
     'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
     'geographic baseline input; the output is never-who anon-return aggregates. ' +
     'Not request-reachable.',
-  'lib/shared-report.ts:351':
+  'lib/shared-report.ts:361':
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts:537':
+  'lib/shared-report.ts:547':
     'detectEventSeriesClusters cron — venue/day/hour event-count baseline across ' +
     'brands, count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
-  'lib/shared-report.ts:572':
+  'lib/shared-report.ts:582':
     'Same cron — subselect `venue_id IN (SELECT id FROM events WHERE location=?)` ' +
     '(a venue-geography key) for the confirmed/rejected series check. Cross-brand ' +
     'geographic by design; never-who.',
-  'lib/shared-report.ts:596':
+  'lib/shared-report.ts:606':
     'Same cron, the `state=pending` twin of :515. Same venue-geography rationale.',
-  'lib/shared-report.ts:730':
+  'lib/shared-report.ts:740':
     // 666→673 by OSE-1460 (country cleanup statement added above; the
     // country-code twin query at :687 was removed with top_country).
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
     '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
     'Never-who scan aggregate; not request-reachable.',
-  'lib/shared-report.ts:826':
+  'lib/shared-report.ts:836':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:827':
+  'lib/shared-report.ts:837':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:830':
+  'lib/shared-report.ts:840':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→335 and 729→742 by OSE-616 (corridorKeyOf helper above; the key is
