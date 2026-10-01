@@ -25,6 +25,7 @@ import {
 } from '../src/lib/shared-report';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { phaseTimesFor } from '../src/lib/event-datetime';
+import { hashAnonIdForReturns, pepperEpoch } from '../src/lib/anon-id-hash';
 
 interface TestEnv {
   DB: D1Database;
@@ -296,6 +297,33 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     });
     expect(r.errors).toBe(0);
     expect(r.rowsUpserted).toBe(0);
+  });
+
+  test('after a pepper rotation, rows of the old or an unknown pepper are deleted, so erasure can reach everything left', async () => {
+    await seedEvent({ id: 'test-evt-mat-rot', end_offset_hours: -4 });
+    await seedScan('test-evt-mat-rot', 'anon_rotated');
+    await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: 'retired-pepper' });
+    const oldHash = await hashAnonIdForReturns('anon_rotated', 'retired-pepper');
+    // A pre-0090 row: its pepper is unknown.
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         VALUES ('legacy-hash-000000000000000000000', 'test-evt-mat-rot', datetime('now'), datetime('now'), 1, datetime('now'))`
+      )
+      .run();
+
+    const r = await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
+    expect(r.errors).toBe(0);
+    const rows = await tenv()
+      .DB.prepare(`SELECT anon_id_hash, pepper_epoch FROM anon_id_returns`)
+      .all<{ anon_id_hash: string; pepper_epoch: string | null }>();
+    const current = await pepperEpoch(TEST_PEPPER);
+    // Erasure re-derives only the current hash; nothing under another one survives.
+    expect(rows.results?.map((x) => x.anon_id_hash)).toEqual([
+      await hashAnonIdForReturns('anon_rotated', TEST_PEPPER),
+    ]);
+    expect(rows.results?.every((x) => x.pepper_epoch === current)).toBe(true);
+    expect(rows.results?.some((x) => x.anon_id_hash === oldHash)).toBe(false);
   });
 
   test('skips events outside the lookback window (end_date too old OR too recent)', async () => {

@@ -9,7 +9,9 @@
 -- resets the return signal, as the hash module has always documented, instead of
 -- inflating it.
 --
--- Existing rows stay NULL: their pepper is unknown, so they are not counted. The
--- next nightly run re-materializes recent events under the current pepper.
+-- Existing rows stay NULL: their pepper is unknown, so they are not counted.
+-- The nightly materializer deletes rows of any pepper other than the current one
+-- (NULL included): erasure re-derives only the current hash, so it could never
+-- reach them. A rotation is a reset, not a second identity.
 
 ALTER TABLE anon_id_returns ADD COLUMN pepper_epoch TEXT;

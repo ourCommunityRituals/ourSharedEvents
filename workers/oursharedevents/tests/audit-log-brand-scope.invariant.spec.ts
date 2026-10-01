@@ -566,6 +566,33 @@ describe('AUD-3 B — no leak through pagination, no N+1, creates and deletes at
     expect(prepares).toBe(2); // the page + one batched membership lookup
   });
 
+  test('a failed membership lookup hides every operator; it never falls back to the env map', async () => {
+    const db = new Proxy(tenv.DB, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (sql.includes('admin_brand_memberships')) throw new Error('D1_ERROR: simulated');
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const res = await handleListAuditLog(
+      new Request('https://ose.test/api/v2/admin/audit-log?scope=brand&limit=100'),
+      // A stale env map that still names OWNER_A as a member of brand A.
+      { DB: db, ADMIN_BRAND_MEMBERSHIP: JSON.stringify({ [OWNER_A]: [BRAND_A] }) } as never,
+      { kind: 'brand', brandIds: [BRAND_A], maskIps: true },
+      'req-alb-memfail'
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ListBody;
+    const own = body.entries.find((e) => e.id === 'alb-1');
+    expect(own).toBeDefined();
+    expect(own!.actor).toBeNull();
+  });
+
   test('CREATE_EVENT and DELETE_EVENT rows carry the brand', async () => {
     const created = await call('POST', '/api/v2/admin/events', asEmail(OWNER_A), {
       title: 'ALB Created Event',

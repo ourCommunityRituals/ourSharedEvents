@@ -115,6 +115,10 @@ const MATERIALIZATION_CEILING_HOURS = 26;
  * scans of the same event by the same anon increment visit_count on the
  * single row; scans at different events produce separate rows.
  */
+/** Old-pepper rows deleted per statement, and the most statements per run. */
+const PEPPER_PURGE_CHUNK = 1000;
+const PEPPER_PURGE_MAX_CHUNKS = 50;
+
 export async function materializeAnonIdReturns(
   env: SharedReportMaterializeEnv
 ): Promise<MaterializationResult> {
@@ -144,6 +148,39 @@ export async function materializeAnonIdReturns(
     );
     result.durationMs = Date.now() - start;
     return result;
+  }
+
+  // Migration 0090: every row records which pepper hashed it. Rows of an older
+  // or unknown pepper are deleted here: the export never counts them, and after
+  // a rotation erasure (data-subject.ts) can only re-derive the current hash, so
+  // it could never find them. A rotation is a reset, not a second identity.
+  const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
+  try {
+    let purged = 0;
+    for (let i = 0; i < PEPPER_PURGE_MAX_CHUNKS; i++) {
+      const res = await env.DB.prepare(
+        `DELETE FROM anon_id_returns WHERE rowid IN (
+           SELECT rowid FROM anon_id_returns
+            WHERE pepper_epoch IS NULL OR pepper_epoch <> ?
+            LIMIT ${PEPPER_PURGE_CHUNK})`
+      )
+        .bind(epoch)
+        .run();
+      const n = res.meta?.changes ?? 0;
+      purged += n;
+      if (n < PEPPER_PURGE_CHUNK) break;
+    }
+    if (purged > 0) {
+      console.log(JSON.stringify({ type: 'ANON_ID_RETURNS_PEPPER_PURGE', rows: purged }));
+    }
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
   }
 
   // Find events that ended in the materialization window.
@@ -185,8 +222,6 @@ export async function materializeAnonIdReturns(
     }),
   };
 
-  // Migration 0090: every row records which pepper hashed it.
-  const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
   for (const row of candidates.results ?? []) {
     result.eventsProcessed++;
     try {

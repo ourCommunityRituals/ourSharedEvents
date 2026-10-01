@@ -39,28 +39,29 @@ You can scan any QR code at any event knowing no personal data is captured. If y
 - Survey comments → PII-scrubbed by daily job
 - Email signup → encrypted, auto-deleted after 30 days
 
-The scan system and the forms system are **completely separate databases with no cross-linking**.
+The scan system and the forms system are **separate databases with no SQL or foreign-key join between them**. Both store the same pseudonymous `ose_anon` value; the only code that uses it across the two is erasure, which reads it from `FORMS_DB` to delete the matching scan rows.
 
 ### For Sponsors
 
-The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, from what region. Not inflated by bots, not enriched with purchased data, not tracking individuals across events. Real presence at real events.
+The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, and in which corridor (from the poster's address; the visitor's own location is never read). Not inflated by bots, not enriched with purchased data, not tracking individuals across events. Real presence at real events.
 
 ### For the Platform
 
-By removing PII from the data layer by design, the platform can scale across thousands of events without becoming a surveillance system. The data becomes **more valuable** over time (NCR geo-spatial intelligence) precisely because it's safe to keep forever.
+By removing PII from the data layer by design, the platform can scale across thousands of events without becoming a surveillance system. The data becomes **more valuable** over time (NCR geo-spatial intelligence) because its durable part, placement and aggregate counts, holds no PII. Rows that carry the pseudonymous cookie id are not kept forever: they are erasable, and a retention window bounds them once set.
 
 ---
 
 ## Two-Database Architecture
 
-The most critical design decision: **two separate D1 databases with no cross-linking**.
+The most critical design decision: **two separate D1 databases, with no SQL join, foreign key or analytics join between them**. They do share one pseudonymous key, `anonymous_id` (the `ose_anon` cookie value), which erasure uses to find a person's scan rows.
 
 ```
 FORMS_DB (opt-in personal data)          DB (anonymous presence signal)
 ───────────────────────────────          ──────────────────────────────
 form_registrations                       scan_placement_events (WHERE)
-  name          (plain text)               poster_deployment_id (FK)
-  email_hash    (SHA-256)                  scan_bucket      (hourly window)
+  anonymous_id  (ose_anon, shared key)     poster_deployment_id (FK)
+  name          (plain text)               scan_bucket      (hourly window)
+  email_hash    (SHA-256)
   expires_at    (90-day TTL)             scan_node_returns (WHO came back)
 form_surveys                               anonymous_id     (pseudonymous)
   responses_json (scrubbed)                user_agent_hash  (device class)
@@ -75,11 +76,12 @@ checkin_counts                             qr_token        (unique)
   count (aggregate integer only)           latitude        (placement)
                                            longitude       (placement)
 
-  ↓ AUTO-DELETED on schedule               ↓ PERMANENT — no PII exists
-  ↓ Customer opted in voluntarily          ↓ No opt-in needed
+  ↓ AUTO-DELETED on schedule               ↓ placements kept; rows with the
+  ↓ Customer opted in voluntarily            cookie id kept until erased (no
+                                             retention window set by default)
 ```
 
-**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases make this architecturally impossible.
+**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases rule out that join in SQL. The shared `anonymous_id` is still a pseudonymous key across the two, and application code uses it for one purpose only: erasure.
 
 ---
 
@@ -265,7 +267,7 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 
 The Anonymous ID architecture creates a dataset that becomes **more valuable** over time:
 
-1. **Safe to keep forever** — no PII means no retention liability
+1. **Durable where it is aggregate** — placement and count rows hold no PII; cookie-id rows are erasable and retention-bound
 2. **Safe to aggregate** — cross-event analysis doesn't create surveillance
 3. **Safe to share** — sponsor reports contain aggregate signal, not individual data
 4. **Foundation for NCR** — geo-spatial intelligence from lat/lng + scan aggregates

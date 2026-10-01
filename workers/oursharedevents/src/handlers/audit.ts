@@ -139,7 +139,8 @@ function isServiceActor(actor: string): boolean {
 /**
  * Brand memberships of several human actors in ONE query (no N+1). An actor with
  * no membership row falls back to the interim env map, exactly as
- * resolveAdminBrandScopeAsync does; anything unresolvable maps to [].
+ * resolveAdminBrandScopeAsync does; anything unresolvable maps to []. If the
+ * query itself fails, every actor maps to [] (fail closed), never to the env map.
  */
 async function membershipsOf(
   actors: string[],
@@ -162,7 +163,11 @@ async function membershipsOf(
         out.set(r.email, list);
       }
     } catch {
-      // Table absent → env-map fallback below.
+      // Fail closed: a failed lookup is not "no rows". Nobody resolves to a
+      // brand, so no human actor is shown and an actor filter matches nothing.
+      // The env-map fallback below is only for a lookup that succeeded empty.
+      for (const a of humans) out.set(a, []);
+      return out;
     }
   }
   for (const a of humans) {
