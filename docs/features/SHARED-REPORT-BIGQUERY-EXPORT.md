@@ -154,48 +154,55 @@ Calls the three exporters in sequence. Failure isolation per phase (S4-Q4). Logs
 
 ## Per-table export procedure (detailed)
 
-### `anon_id_returns` export
+### `anon_id_returns` export → corridor return counts (OSE-1460)
 
-**Source:** `anon_id_returns` (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+**Changed 2026-10-01 (OSE-1460, PO decision).** This phase used to send one row per
+`(anon_id_hash, venue_id)` with first/last seen and a visit count. That is a
+pseudonymous, per-person record, and it crossed the OER boundary, which allows
+aggregates only, never `anon_id`, and corridor-level location only
+(`OCR-docs/docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`). It now
+sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
-**Routing:** Per row, look up `events.legal_clearance_tier` via `venue_id` (which IS the event_id). Map to pool. Stream to that pool's dataset.
+**When:** only when `anon_id_returns` has rows past the watermark. Each run takes
+a snapshot of the last `RETURNS_WINDOW_DAYS` (90) and then moves the watermark to
+the newest source row.
 
-**Query:**
+**Grouping:** a person is counted once per (corridor, event type, clearance tier).
+Their visits at every venue in that corridor are summed first. The tier maps to a
+pool, and a declined regime is withheld (OSE-1220).
 
-```sql
-SELECT
-  air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
-  air.visit_count, air.computed_at,
-  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
-  etr.uec_code
-FROM anon_id_returns air
-JOIN events e ON e.id = air.venue_id
-LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-WHERE air.computed_at > ?  -- watermark
-ORDER BY air.computed_at ASC
-LIMIT 500;  -- max BQ batch size
-```
+**Floor:** a group with fewer than `RETURNS_MIN_COUNT` people (5, the same
+floor as `CORRIDOR_MAP_MIN_COUNT`) is not exported. Inside an exported group,
+each `returned_*` count below 5 is sent as `null`, meaning suppressed. A group
+with no real res7 corridor is withheld, never sent as `'unknown'`.
 
-**BQ row shape (per required tags):**
+**BQ row shape:**
 
 ```json
 {
-  "anon_id_hash": "...32 hex...",
-  "venue_id": "evt_...",
-  "first_seen_at": "ISO",
-  "last_seen_at": "ISO",
-  "visit_count": 1,
-  "computed_at": "ISO",
-  "corridor_id": "the event's lowercase res7-or-coarser H3 cell (e.g. 872664544ffffff), or 'unknown'",
+  "corridor_id": "the event's lowercase res7-or-coarser H3 cell",
+  "venue_id": "corridor-aggregate",
   "event_type": "etr.uec_code or 'unknown'",
-  "uec_code": "etr.uec_code",
-  "regulatory_pool": "general|hipaa|coppa",
+  "uec_code": "etr.uec_code or 'unknown'",
+  "regulatory_pool": "general",
   "product_id": "ose",
+  "window_days": 90,
+  "people_count": 42,
+  "returned_2plus": 17,
+  "returned_3plus": 6,
+  "returned_5plus": null,
+  "computed_at": "the snapshot hour, ISO (YYYY-MM-DDTHH:00:00.000Z)",
   "exported_at": "ISO (now)"
 }
 ```
 
-`assertRequiredTags()` runs on each row before send.
+`venue_id` carries the `'corridor-aggregate'` sentinel, as the corridor baseline
+does, so the required-tag contract (`REQUIRED_TAGS`, brain `product-registry.yaml`)
+is unchanged. `assertRequiredTags()` runs on each row before send.
+
+**Grain you can query in OER:** one corridor × event type × pool, a 90-day
+rolling window, with a new snapshot each hour anything changes. You cannot see
+individual journeys or venues, or anyone's movement between corridors.
 
 **Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The
 exported `corridor_id` is the event's `h3_res7`; a legacy non-H3
@@ -207,7 +214,7 @@ neither a valid res7-or-coarser cell nor `'unknown'` **throws**, and the phase
 fails closed (watermark held). Rows are rejected, never trimmed and shipped. The
 event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 
-**BQ table:** `anon_id_returns_export` in the pool's dataset.
+**BQ table:** `corridor_returns_export` in the pool's dataset (it replaces `anon_id_returns_export`, which was never created in any environment: BigQuery read 2026-10-01).
 
 ### `corridor_density_baseline` export
 
@@ -322,7 +329,7 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 - The watermark is NOT advanced past the failed batch.
 - Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `anon_id_returns_export`: `(anon_id_hash, venue_id, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`

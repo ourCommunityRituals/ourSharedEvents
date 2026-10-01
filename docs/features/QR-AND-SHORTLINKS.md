@@ -43,7 +43,7 @@ There are two primitives. They are composed, never merged
 | What it identifies        | One **placement**: a `poster_deployments` row, which is one poster hung at one place                                                                                     | One **destination** per (event, kind): the event page, anonymous check-in, or an organizer-chosen https link                             |
 | Handler                   | `src/handlers/qr-scan.ts` (`handleQrScan`), routed at `src/router.ts` (`pathname.startsWith('/q/')`)                                                                     | `src/handlers/shortlink-resolve.ts` + `src/lib/shortlinks.ts`, routed at `src/router.ts` (`pathname.startsWith('/s/')`)                  |
 | What the visitor sees     | 302 to `/events/<id>?type=<form>&deployment=<pd_id>` (`qrScanTarget`). Bad, unknown or inactive token: 302 to `/`                                                        | 302 to the stored https `target_url`, or the internal target (`/events/<id>`, or `/forms/<id>?type=checkin` for check-in). Bad code: 404 |
-| What is stored            | Two rows per scan, split: `scan_placement_events` (event, deployment, hour bucket) and `scan_node_returns` (event, `anonymous_id`, 16-hex UA hash, country, hour bucket) | `shortlinks.clicks + 1` and `last_clicked_at`. No per-click row exists                                                                   |
+| What is stored            | Two rows per scan, split: `scan_placement_events` (event, deployment, hour bucket) and `scan_node_returns` (event, `anonymous_id`, 16-hex UA hash, hour bucket; `country_code` is always NULL since OSE-1460) | `shortlinks.clicks + 1` and `last_clicked_at`. No per-click row exists                                                                   |
 | Cookie                    | **Yes.** Sets `ose_anon` (HttpOnly, Secure, SameSite=Lax, 1 year) on a visitor's first scan (`src/lib/anonymous-id.ts`)                                                  | **No.** No cookie read or set                                                                                                            |
 | Never stored              | IP, Referer, exact time, coordinates or H3 cell on the scan row, anything from a named (ourWKRP) session                                                                 | IP, `anon_id`, cookie, Referer, user agent, any location                                                                                 |
 | Dedup                     | Best effort: KV key `scan:dedup:{anonId}:{deploymentId}:{5-min bucket}`, 300 s TTL. No KV means every scan is written                                                    | None. Every resolve increments                                                                                                           |
@@ -114,13 +114,13 @@ design consults a request's apparent location." Enforcement lives in
   `shortlinks` gains anything finer than res7, or if any table stores a cell
   finer than res9.
 
-> **Discrepancy: country code.** Gate 8b deliberately **allows** `CF-IPCountry`.
-> `qr-scan.ts` reads it and stores `country_code` on `scan_node_returns`, which
-> the rollup turns into `scan_aggregates.top_country`. That is request-derived,
-> country-level geography. It is not an H3 cell and not a person's position, but
-> it is not literally "nothing … consults a request's apparent location" (§9.2).
-> The code wins; the wording of §9.2 should be tightened when §9 is promoted to
-> an ADR (see §9 below).
+> **Resolved 2026-10-01 (OSE-1460): no visitor country.** Gate 8b used to allow
+> `CF-IPCountry`, and `qr-scan.ts` stored it as `scan_node_returns.country_code`,
+> which the rollup turned into `scan_aggregates.top_country`. The PO decided the
+> product does not hold a request's apparent location at any grain. The scan path
+> no longer reads the header, the rollup writes `top_country = NULL`, migration
+> 0088 clears the recorded values, and gate 8b now forbids every `CF-IP*` header
+> and `request.cf` geo field, country included.
 
 ### Which cells the SharedReport map uses
 
@@ -154,12 +154,11 @@ a report only through `poster_attribution`, which carries the deployment's
   The SharedReport rounds `first_scan_at`/`last_scan_at` down to the hour
   (`bucketToHour`).
 
-> **Discrepancy: ADR-001 says 15 minutes.** [ADR-001](../adr/ADR-001-anonymous-identity-architecture.md)
-> says time "is bucketed to 15-minute tranches" and describes `scan_aggregates`
-> as "counter + 15-min bucket". In code, scans, `scan_aggregates`, and forms
-> (`bucketTimestamp()` in `src/lib/forms-db.ts` returns `toISOString().slice(0, 13)`)
-> are all **hourly**. That is coarser, and so no less private. ADR-001 needs a
-> reconciliation note.
+> **Resolved 2026-10-01 (OSE-1460): the time grain is hourly.** ADR-001 used to
+> say 15-minute tranches. Code has always been hourly: scans, `scan_aggregates`,
+> and forms (`bucketTimestamp()` in `src/lib/forms-db.ts` returns
+> `toISOString().slice(0, 13)`). Hourly is coarser, so it is no less private.
+> ADR-001 now says hourly.
 >
 > **Open item: `created_at` at rest.** Both scan tables still write
 > `created_at = datetime('now')` at full precision (`src/lib/scan-buffer.ts`).
@@ -341,7 +340,7 @@ BUILT = in code with a test. PARTIAL = some of it. NOT BUILT = cites the story i
 | Hour bucket, 5-min KV dedup                                                                               | **BUILT**     | `qr-scan.ts`; `tests/qr-scan.spec.ts`                                                                                                                                                           |
 | Scan write buffer (Queues)                                                                                | **PARTIAL**   | Code + `tests/scan-buffer.spec.ts`; bound on staging, **dark in production** (`wrangler.toml`)                                                                                                  |
 | Placement res9 + res7 from an organizer address                                                           | **BUILT**     | `poster-deployments.ts`, `geocode.ts`, 0047, 0079; `tests/poster-deployments-h3-tagging.spec.ts`, `tests/poster-deployment-address.spec.ts`                                                     |
-| No request/device geolocation on scan or click path                                                       | **BUILT**     | Gate 8b in `tests/poster-deployments-h3-tagging.spec.ts` (country-level `CF-IPCountry` allowed, see §3)                                                                                         |
+| No request/device geolocation on scan or click path                                                       | **BUILT**     | Gate 8b in `tests/poster-deployments-h3-tagging.spec.ts` (no `CF-IP*` header at all, country included, since OSE-1460)                                                                                         |
 | `/s/` resolve, click counter, 302, 404 on probe                                                           | **BUILT**     | `shortlink-resolve.ts`, `shortlinks.ts`; `tests/shortlinks.spec.ts`                                                                                                                             |
 | Open-redirect protection (https-only at creation, re-checked at resolve, no destination from the request) | **BUILT**     | `isValidHttpsTarget`, resolver `startsWith('https://')`; `tests/shortlinks.spec.ts`, `tests/poster-multi-code.spec.ts` refusals                                                                 |
 | Several codes per poster, kinds, plan limits, order                                                       | **BUILT**     | `src/lib/poster-codes.ts`, 0080; `tests/poster-codes-parse.spec.ts`, `tests/poster-multi-code.spec.ts`, `tests/poster-multi-code-ui.spec.ts`                                                    |
@@ -369,7 +368,7 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
 | Rule                                                                              | Gate                                                                                                                                                   |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | No table couples a placement id with a session-derived value                      | `tests/e2e/0-architecture/scan-path-split.invariant.spec.ts`. **Main-DB migrations only**, see gap below                                               |
-| Scan/click path reads no device or request geolocation (finer than country)       | `tests/poster-deployments-h3-tagging.spec.ts` 8b. Names its files (`SCAN_CLICK_PATH`), so a new scan-path file is not covered until it is added        |
+| Scan/click path reads no device or request geolocation (country included)          | `tests/poster-deployments-h3-tagging.spec.ts` 8b. Names its files (`SCAN_CLICK_PATH`), so a new scan-path file is not covered until it is added        |
 | Nothing served asks the browser for its position                                  | same spec, 8b (second test; derives the file list from `src/`)                                                                                         |
 | Scan rows carry no coordinate or cell; placement res9 is the only place           | same spec, 8c                                                                                                                                          |
 | Short links store nothing finer than res7, and no identity column                 | same spec, 8d; `tests/shortlinks.spec.ts` (exact column list + forbidden PII names)                                                                    |
@@ -403,8 +402,8 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
 6. **The never-who "event" disclosure is not true for QR arrivals.** It says
    "The link you followed counted as a single click; nothing about your device,
    location, or identity was collected" (`src/lib/never-who.ts`). That is true
-   for `/s/`. A `/q/` arrival set a one-year cookie and stored a UA hash and a
-   country code on the hop before the page. `tests/never-who-disclosure.spec.ts`
+   for `/s/`. A `/q/` arrival set a one-year cookie and stored a UA hash on the
+   hop before the page (the country code is gone since OSE-1460). `tests/never-who-disclosure.spec.ts`
    checks presence and wording, not truth per arrival path.
 
 ---
@@ -417,7 +416,6 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
    - the `surface` column;
    - the CHECK constraint and its gate;
    - the §12.4 fixed-vs-mobile scope;
-   - the exact status of `CF-IPCountry` (§3).
 
    **Recommendation: write that ADR.** It is not written here.
 
@@ -447,7 +445,7 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
 - [Poster primitive reconciliation (2026-09-04)](../discovery/OSE_REFERENCE_posterPrimitiveReconciliation_2026-09-04.md):
   §8 stories, §9 resolution, §10 three-layer SharedReport, §12.4 mobile items
 - [ADR-001: anonymous identity / two-DB](../adr/ADR-001-anonymous-identity-architecture.md).
-  Note the 15-minute vs. hourly discrepancy (§4)
+  Says hourly since OSE-1460 (it used to say 15 minutes)
 - [ADR-009: NCR v2 geographic hierarchy](../adr/ADR-009-ncr-v2-geographic-hierarchy.md)
 - [ADR-017: SharedReport depth enforcement](../adr/ADR-017-sharedreport-depth-enforcement.md)
 - [ADR-019: sponsor consent-traced rendering](../../workers/oursharedevents/docs/ops/ADR-019-sponsor-consent-traced-rendering.md):

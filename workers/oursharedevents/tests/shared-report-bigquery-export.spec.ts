@@ -300,7 +300,43 @@ describe('OSE-272 Session 4: phaseToPool() boundary mapping', () => {
   });
 });
 
-describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
+// OSE-1460: the returns phase sends k-floored counts per corridor × event type ×
+// pool. No anon_id_hash, no venue, no per-person row ever reaches BigQuery.
+describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return counts (OSE-1460)', () => {
+  const recent = (hoursAgo: number): string =>
+    new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
+
+  async function seedPeople(
+    venueId: string,
+    visits: number[],
+    opts: { prefix?: string; lastSeen?: string; computedAt?: string } = {}
+  ): Promise<void> {
+    for (let i = 0; i < visits.length; i++) {
+      const seen = opts.lastSeen ?? recent(2);
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          `${opts.prefix ?? 'p'}${i}`.padEnd(32, '0'),
+          venueId,
+          seen,
+          seen,
+          visits[i],
+          opts.computedAt ?? recent(1)
+        )
+        .run();
+    }
+  }
+
+  async function seedCorridorEvent(id: string, phase = 1, h3: string | null = RES7_A) {
+    await seedEventTypeRegistry('et-trivia', 'UEC-TRIVIA', 1);
+    await seedEvent({ id, phase, event_type_id: 'et-trivia' });
+    await tenv().DB.prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`).bind(h3, id).run();
+  }
+
   beforeEach(async () => {
     await resetForTest();
     installBqMock();
@@ -316,98 +352,108 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
     expect(bqCalls).toHaveLength(0);
   });
 
-  test('first-run sweep exports everything past epoch watermark', async () => {
-    await seedEventTypeRegistry('et-trivia', 'UEC-TRIVIA', 1);
-    await seedEvent({ id: 'test-evt-exp-1', phase: 1, event_type_id: 'et-trivia' });
-    await seedAnonIdReturn({
-      hash: 'a'.repeat(32),
-      venueId: 'test-evt-exp-1',
-      computedAt: '2026-05-10T10:00:00.000Z',
-    });
-    await seedAnonIdReturn({
-      hash: 'b'.repeat(32),
-      venueId: 'test-evt-exp-1',
-      computedAt: '2026-05-10T11:00:00.000Z',
-    });
+  test('exports one floored count row per corridor and type, with no person or venue in it', async () => {
+    await seedCorridorEvent('test-evt-exp-1');
+    await seedPeople('test-evt-exp-1', [1, 2, 2, 3, 5, 6]);
 
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
-    expect(r.rowsRead).toBe(2);
-    expect(r.rowsExported).toBe(2);
+    expect(r.rowsExported).toBe(1);
     expect(bqCalls).toHaveLength(1);
     expect(bqCalls[0].dataset).toBe('oureventring_general');
-    expect(bqCalls[0].tableId).toBe('anon_id_returns_export');
+    expect(bqCalls[0].tableId).toBe('corridor_returns_export');
+    const row = bqCalls[0].rows[0].json;
+    expect(row).toMatchObject({
+      corridor_id: RES7_A,
+      venue_id: 'corridor-aggregate',
+      uec_code: 'UEC-TRIVIA',
+      regulatory_pool: 'general',
+      product_id: 'ose',
+      window_days: 90,
+      people_count: 6,
+      returned_2plus: 5,
+      returned_3plus: null, // 3 people: under the floor, suppressed
+      returned_5plus: null,
+    });
+    const wire = JSON.stringify(bqCalls[0].rows);
+    expect(wire).not.toContain('anon_id_hash');
+    expect(wire).not.toContain('test-evt-exp-1');
+    expect(wire).not.toMatch(/p\d0{20,}/); // no seeded hash value
   });
 
-  test('OSE-1416: on staging the same export lands in oureventring_general_stg, never production', async () => {
-    await seedEventTypeRegistry('et-trivia', 'UEC-TRIVIA', 1);
-    await seedEvent({ id: 'test-evt-exp-1', phase: 1, event_type_id: 'et-trivia' });
-    await seedAnonIdReturn({
-      hash: 'c'.repeat(32),
-      venueId: 'test-evt-exp-1',
-      computedAt: '2026-05-10T12:00:00.000Z',
-    });
+  test('a group under the floor is withheld, not exported', async () => {
+    await seedCorridorEvent('test-evt-exp-small');
+    await seedPeople('test-evt-exp-small', [3, 3, 3, 3]);
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(r.rowsSkipped).toBe(1);
+    expect(bqCalls).toHaveLength(0);
+  });
 
+  test('one person at two venues in a corridor counts once, with visits summed', async () => {
+    await seedCorridorEvent('test-evt-exp-v1');
+    await seedCorridorEvent('test-evt-exp-v2');
+    await seedPeople('test-evt-exp-v1', [1, 1, 1, 1, 1], { prefix: 'x' });
+    await seedPeople('test-evt-exp-v2', [1, 1, 1, 1, 1], { prefix: 'x' });
+    await exportAnonIdReturns(makeEnv());
+    const row = bqCalls[0].rows[0].json;
+    expect(row.people_count).toBe(5);
+    expect(row.returned_2plus).toBe(5);
+  });
+
+  test('rows last seen before the window are not counted', async () => {
+    await seedCorridorEvent('test-evt-exp-old');
+    await seedPeople('test-evt-exp-old', [2, 2, 2, 2, 2], { lastSeen: recent(24 * 120) });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(bqCalls).toHaveLength(0);
+  });
+
+  test('a group with no real corridor is withheld', async () => {
+    await seedCorridorEvent('test-evt-exp-nocorr', 1, null);
+    await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.rowsSkipped).toBe(1);
+    expect(bqCalls).toHaveLength(0);
+  });
+
+  test('OSE-1416: on staging the export lands in oureventring_general_stg, never production', async () => {
+    await seedCorridorEvent('test-evt-exp-stg');
+    await seedPeople('test-evt-exp-stg', [1, 1, 1, 1, 1]);
     const r = await exportAnonIdReturns({ ...makeEnv(), WORKER_ENV: 'staging' });
     expect(r.errors).toBe(0);
     expect(bqCalls.length).toBeGreaterThan(0);
     expect(bqCalls.every((c) => c.dataset === 'oureventring_general_stg')).toBe(true);
   });
 
-  test('phase 4 (HIPAA) row is QUARANTINED — never routed to hipaa OR leaked to general (OSE-1220)', async () => {
+  test('phase 4 (HIPAA) group is QUARANTINED — never routed or leaked (OSE-1220)', async () => {
     await seedEventTypeRegistry('et-health', 'UEC-HEALTH', 4);
     await seedEvent({ id: 'test-evt-exp-h1', phase: 4, event_type_id: 'et-health' });
-    await seedAnonIdReturn({
-      hash: 'h'.repeat(32),
-      venueId: 'test-evt-exp-h1',
-      computedAt: '2026-05-10T12:00:00.000Z',
-    });
+    await tenv()
+      .DB.prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind(RES7_A, 'test-evt-exp-h1')
+      .run();
+    await seedPeople('test-evt-exp-h1', [1, 1, 1, 1, 1]);
     const r = await exportAnonIdReturns(makeEnv());
-    // Declined regime: the row is fail-closed skipped, not written anywhere.
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_hipaa')).toBe(false);
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_general')).toBe(false);
-    expect(r.rowsSkipped).toBeGreaterThanOrEqual(1);
-  });
-
-  test('phase 5 (COPPA) row is QUARANTINED — never routed to coppa OR leaked to general (OSE-1220)', async () => {
-    await seedEventTypeRegistry('et-youth', 'UEC-YOUTH', 5);
-    await seedEvent({ id: 'test-evt-exp-c1', phase: 5, event_type_id: 'et-youth' });
-    await seedAnonIdReturn({
-      hash: 'c'.repeat(32),
-      venueId: 'test-evt-exp-c1',
-      computedAt: '2026-05-10T13:00:00.000Z',
-    });
-    const r = await exportAnonIdReturns(makeEnv());
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_coppa')).toBe(false);
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_general')).toBe(false);
+    expect(bqCalls).toHaveLength(0);
     expect(r.rowsSkipped).toBeGreaterThanOrEqual(1);
   });
 
   test('every exported row carries all 6 required tags', async () => {
-    await seedEventTypeRegistry('et-trivia', 'UEC-TRIVIA', 1);
-    await seedEvent({ id: 'test-evt-exp-tags', phase: 1, event_type_id: 'et-trivia' });
-    await seedAnonIdReturn({
-      hash: 't'.repeat(32),
-      venueId: 'test-evt-exp-tags',
-      computedAt: '2026-05-10T14:00:00.000Z',
-    });
+    await seedCorridorEvent('test-evt-exp-tags');
+    await seedPeople('test-evt-exp-tags', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
-    expect(bqCalls).toHaveLength(1);
     const row = bqCalls[0].rows[0].json;
-    expect(row.corridor_id).toBeDefined();
-    expect(row.venue_id).toBeDefined();
-    expect(row.event_type).toBeDefined();
-    expect(row.uec_code).toBeDefined();
-    expect(row.regulatory_pool).toBeDefined();
+    for (const tag of ['corridor_id', 'venue_id', 'event_type', 'uec_code', 'regulatory_pool']) {
+      expect(typeof row[tag]).toBe('string');
+    }
     expect(row.product_id).toBe('ose');
   });
 
-  test('watermark advances on success; re-run with no new rows exports nothing', async () => {
-    await seedEvent({ id: 'test-evt-exp-w1', phase: 1 });
-    await seedAnonIdReturn({
-      hash: 'w'.repeat(32),
-      venueId: 'test-evt-exp-w1',
-      computedAt: '2026-05-10T15:00:00.000Z',
+  test('watermark advances to the newest source row; a re-run with no change exports nothing', async () => {
+    await seedCorridorEvent('test-evt-exp-w1');
+    await seedPeople('test-evt-exp-w1', [1, 1, 1, 1, 1], {
+      computedAt: '2026-09-30T15:00:00.000Z',
     });
     await exportAnonIdReturns(makeEnv());
     const callsAfterFirst = bqCalls.length;
@@ -420,16 +466,12 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
       .bind('anon_id_returns')
       .first<{ last_export_status: string; last_exported_at: string }>();
     expect(state!.last_export_status).toBe('success');
-    expect(state!.last_exported_at).toBe('2026-05-10T15:00:00.000Z');
+    expect(state!.last_exported_at).toBe('2026-09-30T15:00:00.000Z');
   });
 
   test('watermark NOT advanced on BQ failure (S4-Q4)', async () => {
-    await seedEvent({ id: 'test-evt-exp-f1', phase: 1 });
-    await seedAnonIdReturn({
-      hash: 'f'.repeat(32),
-      venueId: 'test-evt-exp-f1',
-      computedAt: '2026-05-10T16:00:00.000Z',
-    });
+    await seedCorridorEvent('test-evt-exp-f1');
+    await seedPeople('test-evt-exp-f1', [1, 1, 1, 1, 1]);
     bqFailNextN = 1;
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(1);
@@ -443,24 +485,19 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
     expect(state!.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
   });
 
-  test('idempotent insertId pattern — same row → same insertId on retry', async () => {
-    await seedEvent({ id: 'test-evt-exp-i1', phase: 1 });
-    await seedAnonIdReturn({
-      hash: 'i'.repeat(32),
-      venueId: 'test-evt-exp-i1',
-      computedAt: '2026-05-10T17:00:00.000Z',
-    });
+  test('idempotent insertId — a re-run in the same hour sends the same id', async () => {
+    await seedCorridorEvent('test-evt-exp-i1');
+    await seedPeople('test-evt-exp-i1', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
     const insertId1 = bqCalls[0].rows[0].insertId;
-    // Reset watermark to simulate a re-run reading the same row
     await tenv()
       .DB.prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
       .bind('1970-01-01T00:00:00.000Z', 'anon_id_returns')
       .run();
     bqCalls = [];
     await exportAnonIdReturns(makeEnv());
-    const insertId2 = bqCalls[0].rows[0].insertId;
-    expect(insertId2).toBe(insertId1);
+    expect(bqCalls[0].rows[0].insertId).toBe(insertId1);
+    expect(insertId1).not.toMatch(/test-evt-exp/);
   });
 });
 
@@ -602,11 +639,19 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
 
   test('failure in one phase does NOT abort others (S4-Q4 isolation)', async () => {
     await seedEvent({ id: 'test-evt-exp-iso1', phase: 1 });
-    await seedAnonIdReturn({
-      hash: '1'.repeat(32),
-      venueId: 'test-evt-exp-iso1',
-      computedAt: '2026-05-10T21:00:00.000Z',
-    });
+    await tenv()
+      .DB.prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind(RES7_A, 'test-evt-exp-iso1')
+      .run();
+    // OSE-1460: phase 1 only calls BigQuery for a group at or above the floor.
+    const seen = new Date(Date.now() - 3_600_000).toISOString();
+    for (let i = 0; i < 5; i++) {
+      await seedAnonIdReturn({
+        hash: `${i}`.repeat(32),
+        venueId: 'test-evt-exp-iso1',
+        computedAt: seen,
+      });
+    }
     bqFailNextN = 1; // Phase 1 fails
     const r = await runSharedReportBigQueryExport(makeEnv());
     expect(r.phases).toHaveLength(3);

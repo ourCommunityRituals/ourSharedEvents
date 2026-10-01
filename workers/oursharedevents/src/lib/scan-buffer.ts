@@ -16,7 +16,7 @@
  *
  * INVARIANTS:
  *  - never-who: the message carries only the anonymized fields the rows already
- *    store (pseudonymous anon id, ua hash, country, hour-bucket) — no exact
+ *    store (pseudonymous anon id, ua hash, hour-bucket; never a country, OSE-1460) — no exact
  *    timestamp, no PII, internal-only. The two opaque row ids are pre-generated
  *    separately so queue retries are idempotent without creating a durable join key.
  *  - SCAN_PATH (no h3-js on the hot path): unchanged — this file only writes the
@@ -35,7 +35,6 @@ export interface ScanMessage {
   deployment_id: string;
   anon_id: string;
   ua_hash: string | null;
-  country: string | null;
   scan_bucket: string;
 }
 
@@ -64,16 +63,9 @@ export function buildScanStatements(db: D1Database, msg: ScanMessage): D1Prepare
       .prepare(
         `INSERT OR IGNORE INTO scan_node_returns
            (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+         VALUES (?, ?, ?, ?, NULL, ?, datetime('now'))`
       )
-      .bind(
-        msg.return_row_id,
-        msg.event_id,
-        msg.anon_id,
-        msg.ua_hash,
-        msg.country,
-        msg.scan_bucket
-      ),
+      .bind(msg.return_row_id, msg.event_id, msg.anon_id, msg.ua_hash, msg.scan_bucket),
   ];
 }
 

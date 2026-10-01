@@ -347,10 +347,12 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
-    expect(Object.keys(byTable).sort()).toEqual([
-      'anon_id_returns_export',
-      'corridor_density_baseline_export',
-    ]);
+    // OSE-1460: one scanner is a group of one, under the k-floor, so the
+    // corridor return counts withhold it. No per-person row crosses.
+    expect(Object.keys(byTable).sort()).toEqual(['corridor_density_baseline_export']);
+    const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
+    expect(returns?.rowsExported).toBe(0);
+    expect(returns?.rowsSkipped).toBe(1);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
     const rows = bqCalls.flatMap((c) => c.rows.map((r) => r.json));
@@ -395,7 +397,9 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       expect(r.actor).toBe('cron:scheduler');
       expect(r.outcome).toBe('success');
       const d = JSON.parse(r.details);
-      const expected = phase === 'event_series' ? 0 : 1;
+      // Only the corridor baseline crosses: event_series had nothing new, and
+      // the lone scanner's return group is under the floor (OSE-1460).
+      const expected = phase === 'corridor_density_baseline' ? 1 : 0;
       expect(r.rows_exported).toBe(expected);
       expect(d.corridor_id_present).toBe(expected);
       expect(d.corridor_id_unknown).toBe(0);

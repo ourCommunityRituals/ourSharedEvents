@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0087_admin_audit_log_brand_id.sql */
-export const REQUIRED_DB_MIGRATION = 87;
+/** Highest migration in migrations/ — currently 0088_clear_visitor_country.sql */
+export const REQUIRED_DB_MIGRATION = 88;
 
 /** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
 export const REQUIRED_FORMS_MIGRATION = 15;

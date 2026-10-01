@@ -424,12 +424,12 @@ const SCAN_CLICK_PATH = [
 
 /**
  * Device geolocation, in every shape it can arrive: the browser API, the
- * Cloudflare request.cf geo fields (derived from the visitor's IP), and the
- * CF-IP* geo headers finer than a country. CF-IPCountry stays allowed — a
- * country is the documented coarse aggregate qr-scan.ts already records.
+ * Cloudflare request.cf geo fields (derived from the visitor's IP), and every
+ * CF-IP* geo header. OSE-1460 (2026-10-01): CF-IPCountry is no longer allowed —
+ * the visitor's apparent country is not recorded either.
  */
 const DEVICE_GEO =
-  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode)\b|cf-ip(city|latitude|longitude|postal-code|region)/i;
+  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent)\b|cf-ip(city|latitude|longitude|postal-code|region|country|continent)/i;
 
 function sourcesMatching(pred: (p: string) => boolean): Array<[string, string]> {
   const sources: Record<string, string> = JSON.parse(

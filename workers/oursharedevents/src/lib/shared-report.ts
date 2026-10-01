@@ -621,7 +621,7 @@ function formatHour(hour: number): string {
  * start_date falls within the last 90 days. Computes:
  *   - total_scans   = COUNT(*) of scan rows in the bucket
  *   - distinct_agent_hashes = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
- *   - top_country   = most frequent non-null country_code in the bucket
+ *   - top_country   = always NULL (OSE-1460: the visitor's country is not recorded)
  *
  * IDs are deterministic — `agg_{event_id}_{bucket_date}_{bucket_hour}` — so
  * INSERT OR REPLACE is safe and the operation is fully idempotent.
@@ -676,37 +676,11 @@ export async function aggregateScanBuckets(
         distinct_agent_hashes: number;
       }>();
 
-    // Fetch top_country per (event_id, scan_bucket) — separate query to avoid
-    // correlated-subquery fan-out inside the main GROUP BY.
-    const topCountries = await env.DB.prepare(
-      `SELECT event_id, substr(scan_bucket, 1, 13) AS bucket_prefix, country_code
-       FROM (
-         SELECT event_id, scan_bucket, country_code, COUNT(*) AS cnt
-         FROM scan_node_returns
-         WHERE country_code IS NOT NULL
-           AND event_id IN (SELECT id FROM events WHERE start_date >= ?)
-         GROUP BY event_id, scan_bucket, country_code
-       ) ranked
-       GROUP BY event_id, bucket_prefix
-       HAVING COUNT(*) = MAX(cnt) OR 1=1`
-    )
-      .bind(floor90dIso)
-      .all<{ event_id: string; bucket_prefix: string; country_code: string }>();
-
-    // Build a lookup: "{event_id}:{YYYY-MM-DDTHH}" → top country_code
-    const countryMap = new Map<string, string>();
-    for (const row of topCountries.results ?? []) {
-      const key = `${row.event_id}:${row.bucket_prefix}`;
-      if (!countryMap.has(key)) countryMap.set(key, row.country_code);
-    }
-
     const seenEvents = new Set<string>();
 
     for (const b of buckets.results ?? []) {
       seenEvents.add(b.event_id);
       const id = `agg_${b.event_id}_${b.bucket_date}_${b.bucket_hour}`;
-      const bucketPrefix = `${b.bucket_date}T${String(b.bucket_hour).padStart(2, '0')}`;
-      const topCountry = countryMap.get(`${b.event_id}:${bucketPrefix}`) ?? null;
 
       try {
         await env.DB.prepare(
@@ -722,7 +696,7 @@ export async function aggregateScanBuckets(
             b.bucket_hour,
             b.total_scans,
             b.distinct_agent_hashes,
-            topCountry,
+            null, // top_country: OSE-1460, a visitor's IP country is not recorded
             nowIso
           )
           .run();

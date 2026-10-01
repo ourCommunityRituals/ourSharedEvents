@@ -67,7 +67,7 @@ These axes are **orthogonal**. A free-tier organizer in Phase 1 gets basic forms
 | LLC / Business entity | Required before launch | Shields founders from personal liability                   |
 | Terms of Service      | Required before launch | Covers organizer conduct, acceptable event types           |
 | Privacy Policy        | Required before launch | Describes data collection, anonymization, retention        |
-| Basic data handling   | Active                 | 15-min pooling, jitter, PII scrub jobs already implemented |
+| Basic data handling   | Active                 | Hourly pooling, jitter, PII scrub jobs already implemented |
 | GDPR/CCPA awareness   | Passive compliance     | Anonymous architecture minimizes exposure                  |
 
 ### Allowed Event Types (47)
@@ -159,7 +159,7 @@ These axes are **orthogonal**. A free-tier organizer in Phase 1 gets basic forms
 
 The existing anonymous architecture is already a strength here:
 
-- **15-min time-bucket pooling**: check-in timestamps are bucketed to 15-minute windows — no PII in aggregate analytics
+- **Hourly time-bucket pooling**: check-in timestamps are bucketed to the hour (corrected 2026-10-01, OSE-1460: this said 15-minute windows; code is hourly) — no PII in aggregate analytics
 - **PII scrub jobs**: scheduled destruction job (`index.ts` entry point) removes identifiable data per retention policy
 - **Encrypted form submissions**: `forms-db.ts` handles hashing and encryption of submitted data
 - **No payment processing**: zero PCI scope, no Stripe, no card data
@@ -246,7 +246,7 @@ The existing anonymous architecture is already a strength here:
 
 - **Corridor-aware licensing**: `event_type_registry` must include a `requires_license_check` flag and a `license_jurisdictions` JSON array. Admin panel surfaces license requirements per event type per state.
 - **FEC flag**: Events tagged `political` cannot accept payment through OSE's Stripe integration (FEC in-kind contribution risk). Admin panel enforces this at event creation.
-- **Cannabis events**: Hardcoded to no-payment, no-registration-data-retention mode. Anonymization is more aggressive (no 15-min window — immediate bucket destroy).
+- **Cannabis events**: Hardcoded to no-payment, no-registration-data-retention mode. Anonymization is more aggressive (no hour window — immediate bucket destroy).
 - **50-state matrix**: A `legal_corridors` table maps event type × state → `allowed | restricted | prohibited | requires_license`.
 
 ---
@@ -289,8 +289,8 @@ The existing anonymous architecture is already a strength here:
 
 ### OSE Architecture Notes (Phase 4)
 
-- **Three-layer anonymization becomes a HIPAA asset**: The existing 15-min pooling + jitter + scheduled destroy jobs already approach HIPAA-grade de-identification under Safe Harbor (45 CFR §164.514(b)). Phase 4 formalizes this by:
-  - Reducing the time bucket from 15 min → 5 min for HIPAA-tagged events
+- **Three-layer anonymization becomes a HIPAA asset**: The existing hourly pooling + jitter + scheduled destroy jobs already approach HIPAA-grade de-identification under Safe Harbor (45 CFR §164.514(b)). Phase 4 formalizes this by:
+  - Reconsidering the time bucket for HIPAA-tagged events (today hourly; HIPAA is a declined regime, OSE-1220)
   - Adding geographic generalization (zip → county for health events)
   - Activating HELP Code (UEC 05) Layer 2 fully (already scaffolded)
 - **BAA template library**: Admin panel generates pre-filled BAA for venue partners. Venue signs; OSE countersigns. Stored in `legal_documents` table (Phase 4 migration).

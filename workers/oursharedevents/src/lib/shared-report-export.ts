@@ -19,15 +19,18 @@
  *   - This file MUST NOT be invoked by any user-facing route — only the
  *     scheduled() handler.
  *   - This file MUST NOT read the forms database (Gate 1 carries over).
- *   - Mechanical pass-through: no re-hashing, no enrichment. Inputs are
- *     already anonymity-clean aggregates from Session 3 tables.
+ *   - No re-hashing, no enrichment. Phases 2 and 3 pass anonymity-clean
+ *     aggregates through; Phase 1 aggregates per-person return rows into
+ *     k-floored corridor counts first, so no per-person row ever leaves
+ *     (OSE-1460).
  *
  * Library shape:
  *
  *   exportAnonIdReturns(env)             — Phase 1 of the export tick.
- *     Reads rows from anon_id_returns past the watermark; joins to events
- *     for regulatory_pool routing + required tags; streams to per-pool
- *     dataset.
+ *     When anon_id_returns changed past the watermark, snapshots return
+ *     COUNTS per corridor × event type × pool over RETURNS_WINDOW_DAYS,
+ *     k-floored at RETURNS_MIN_COUNT (OSE-1460: no per-person row, no
+ *     anon_id_hash, no venue leaves); streams to per-pool dataset.
  *
  *   exportCorridorDensityBaseline(env)   — Phase 2 of the export tick.
  *     Reads new/changed rows from corridor_density_baseline; routes to
@@ -53,6 +56,7 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
+import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import {
   assertCorridorGrainRow,
   canonicalCorridorId,
@@ -113,7 +117,8 @@ const BQ_INSERT_CHUNK = 500;
 
 // BQ table names per source. Names are stable across pool datasets —
 // each pool's dataset has its own copy of these tables.
-const BQ_TABLE_ANON_ID_RETURNS = 'anon_id_returns_export';
+/** OSE-1460: counts per corridor; replaces the old per-person returns table. */
+const BQ_TABLE_CORRIDOR_RETURNS = 'corridor_returns_export';
 const BQ_TABLE_CORRIDOR_DENSITY = 'corridor_density_baseline_export';
 const BQ_TABLE_EVENT_SERIES = 'event_series_export';
 
@@ -260,24 +265,48 @@ async function prepareExport(
   };
 }
 
-// ── Phase 1 — exportAnonIdReturns ──────────────────────────────────────────
+// ── Phase 1 — exportAnonIdReturns (corridor return counts) ─────────────────
+//
+// OSE-1460 (PO decision 2026-10-01): no per-person row crosses to OER. Before,
+// this phase sent one row per (anon_id_hash, venue) with first/last seen and
+// a visit count: a pseudonymous longitudinal record, against the aggregate-only
+// boundary (OCR_ARCHITECTURE_oerAggregationBoundary.md: never emit anon_id;
+// corridor-level location only). It now sends counts per corridor, event type
+// and pool over a rolling window, and nothing below RETURNS_MIN_COUNT.
+//
+// One person is counted once per (corridor, event type, clearance tier): their
+// visits at every venue in that corridor are summed first. The venue never
+// leaves: venue_id carries the 'corridor-aggregate' sentinel, the same one the
+// corridor baseline uses, so the required-tag contract is unchanged.
 
-interface AnonIdReturnsJoinRow {
-  anon_id_hash: string;
-  venue_id: string;
-  first_seen_at: string;
-  last_seen_at: string;
-  visit_count: number;
-  computed_at: string;
-  legal_clearance_tier: number | null;
+/** Rolling window the return counts cover, in days. */
+export const RETURNS_WINDOW_DAYS = 90;
+/** A group, or a count inside it, below this is never exported (k-floor). */
+export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
+
+interface CorridorReturnsRow {
   corridor_id: string | null;
-  event_type_id: string | null;
+  legal_clearance_tier: number | null;
   uec_code: string | null;
+  people: number;
+  returned_2plus: number;
+  returned_3plus: number;
+  returned_5plus: number;
+}
+
+/** A floored count: the value at or above the floor, else null (suppressed). */
+function floorCount(n: number): number | null {
+  return n >= RETURNS_MIN_COUNT ? n : null;
+}
+
+/** The snapshot's computed_at: the current hour, so a re-run within it dedupes. */
+function snapshotHour(now: Date): string {
+  return `${now.toISOString().slice(0, 13)}:00:00.000Z`;
 }
 
 export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<ExportResult> {
   const start = Date.now();
-  const prep = await prepareExport(env.DB ? env : env, 'anon_id_returns', 'anon_id_returns');
+  const prep = await prepareExport(env, 'anon_id_returns', 'anon_id_returns');
   if (!prep) {
     return {
       phase: 'anon_id_returns',
@@ -292,78 +321,92 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
   const { watermark, result } = prep;
 
   try {
-    // Pull rows past the watermark, joined to events for routing tags.
-    const rows = await env.DB.prepare(
-      `SELECT
-         air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
-         air.visit_count, air.computed_at,
-         e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
-         etr.uec_code
-       FROM anon_id_returns air
-       JOIN events e ON e.id = air.venue_id
-       LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-       WHERE air.computed_at > ?
-       ORDER BY air.computed_at ASC
-       LIMIT ?`
+    // Only take a snapshot when something was materialized since the last one.
+    const changed = await env.DB.prepare(
+      `SELECT COUNT(*) AS n, MAX(computed_at) AS max_computed_at
+         FROM anon_id_returns WHERE computed_at > ?`
     )
-      .bind(watermark, EXPORT_BATCH_SIZE)
-      .all<AnonIdReturnsJoinRow>();
-
-    const sourceRows = rows.results ?? [];
-    result.rowsRead = sourceRows.length;
-    if (sourceRows.length === 0) {
-      // Still touch state to clear any previous 'failed' marker — success
-      // with zero rows is meaningful (catches transient failures recovering).
+      .bind(watermark)
+      .first<{ n: number; max_computed_at: string | null }>();
+    result.rowsRead = changed?.n ?? 0;
+    if (!changed || changed.n === 0 || !changed.max_computed_at) {
       await advanceWatermark(env.DB, 'anon_id_returns', watermark, 0);
       result.durationMs = Date.now() - start;
       return result;
     }
 
-    // Group rows by pool for per-dataset batching.
-    // Only the 'general' pool exists — HIPAA/COPPA are declined (OSE-1220).
-    const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = {
-      general: [],
-    };
-    let maxComputedAt = watermark;
-    for (const r of sourceRows) {
-      if (r.computed_at > maxComputedAt) maxComputedAt = r.computed_at;
-      const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.venue_id ?? null, result);
-      if (pool === null) continue; // fail closed: withhold unclassifiable rows
+    const now = new Date();
+    const since = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000).toISOString();
+    const rows = await env.DB.prepare(
+      `SELECT corridor_id, legal_clearance_tier, uec_code,
+              COUNT(*)                     AS people,
+              SUM(CASE WHEN visits >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
+              SUM(CASE WHEN visits >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
+              SUM(CASE WHEN visits >= 5 THEN 1 ELSE 0 END) AS returned_5plus
+         FROM (
+           SELECT air.anon_id_hash,
+                  COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
+                  e.legal_clearance_tier,
+                  etr.uec_code,
+                  SUM(air.visit_count) AS visits
+             FROM anon_id_returns air
+             JOIN events e ON e.id = air.venue_id
+             LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+            WHERE air.last_seen_at >= ?
+            GROUP BY air.anon_id_hash, 2, 3, 4
+         )
+        GROUP BY corridor_id, legal_clearance_tier, uec_code`
+    )
+      .bind(since)
+      .all<CorridorReturnsRow>();
+
+    const computedAt = snapshotHour(now);
+    const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
+    for (const r of rows.results ?? []) {
+      const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.corridor_id, result);
+      if (pool === null) continue; // fail closed: withhold unclassifiable groups
+      // A group with no real corridor is withheld, never exported as 'unknown'
+      // (several would collide on one key), and so is any group under the floor.
+      const corridorId = canonicalCorridorId(r.corridor_id);
+      if (corridorId === UNKNOWN_CORRIDOR || r.people < RETURNS_MIN_COUNT) {
+        result.rowsSkipped++;
+        continue;
+      }
+      const uec = r.uec_code ?? 'unknown';
       const tags = {
-        corridor_id: canonicalCorridorId(r.corridor_id),
-        venue_id: r.venue_id,
-        event_type: r.uec_code ?? 'unknown',
-        uec_code: r.uec_code ?? 'unknown',
+        corridor_id: corridorId,
+        venue_id: 'corridor-aggregate',
+        event_type: uec,
+        uec_code: uec,
         regulatory_pool: pool,
         product_id: PRODUCT_ID,
       };
-      assertRequiredTags(tags); // throws if any required tag is missing
+      assertRequiredTags(tags);
       emitRow(
         byPool[pool],
         {
-          // tags spread first; explicit fields below win for overlap-free keys.
           ...tags,
-          anon_id_hash: r.anon_id_hash,
-          first_seen_at: r.first_seen_at,
-          last_seen_at: r.last_seen_at,
-          visit_count: r.visit_count,
-          computed_at: r.computed_at,
-          exported_at: new Date().toISOString(),
+          window_days: RETURNS_WINDOW_DAYS,
+          people_count: r.people,
+          returned_2plus: floorCount(r.returned_2plus),
+          returned_3plus: floorCount(r.returned_3plus),
+          returned_5plus: floorCount(r.returned_5plus),
+          computed_at: computedAt,
+          exported_at: now.toISOString(),
         },
         result
       );
     }
 
-    // Stream per-pool batches; idempotent insertId derived from row content.
     for (const pool of REGULATORY_POOLS) {
       const batch = byPool[pool];
       if (batch.length === 0) continue;
       const insertIdFn = (row: Record<string, unknown>): string =>
-        `air-${String(row.computed_at)}-${String(row.anon_id_hash)}-${String(row.venue_id)}`;
+        `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
       const res = await bigQueryInsertRowsToDataset(
         env,
         datasetForPool(pool, env.WORKER_ENV),
-        BQ_TABLE_ANON_ID_RETURNS,
+        BQ_TABLE_CORRIDOR_RETURNS,
         batch,
         insertIdFn
       );
@@ -371,7 +414,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       result.perPool[pool] = res.rowCount;
     }
 
-    await advanceWatermark(env.DB, 'anon_id_returns', maxComputedAt, result.rowsExported);
+    await advanceWatermark(env.DB, 'anon_id_returns', changed.max_computed_at, result.rowsExported);
   } catch (err) {
     result.errors++;
     const msg = err instanceof Error ? err.message : String(err);
