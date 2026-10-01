@@ -284,6 +284,17 @@ export const RETURNS_WINDOW_DAYS = 90;
 /** A group, or a count inside it, below this is never exported (k-floor). */
 export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
 
+/**
+ * The pool a clearance tier exports to, in SQL, so the floor applies per pool
+ * and not per tier: tiers that share a pool are one group (OSE-1460 review).
+ * Mirrors phaseToPool() (pool-contract.ts): NULL and 1–3 are 'general'. Any
+ * other tier keeps its own key, and resolvePoolFailClosed quarantines it.
+ * tests/shared-report-bigquery-export.spec.ts pins the two against each other.
+ */
+export const RETURNS_POOL_KEY_SQL = `CASE WHEN e.legal_clearance_tier IS NULL
+            OR e.legal_clearance_tier IN (1, 2, 3) THEN 'general'
+          ELSE 'tier-' || e.legal_clearance_tier END`;
+
 interface CorridorReturnsRow {
   corridor_id: string | null;
   legal_clearance_tier: number | null;
@@ -341,24 +352,25 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     // counts events, not visit_count: the materializer bumps visit_count on
     // every re-run over the same scans, so it is not a return signal.
     const rows = await env.DB.prepare(
-      `SELECT corridor_id, legal_clearance_tier, uec_code,
-              COUNT(*)                                       AS people,
+      `SELECT corridor_id, MIN(legal_clearance_tier) AS legal_clearance_tier, uec_code,
+              COUNT(*)                                          AS people,
               SUM(CASE WHEN events_seen >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
               SUM(CASE WHEN events_seen >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
               SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
          FROM (
            SELECT air.anon_id_hash,
                   COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
-                  e.legal_clearance_tier,
+                  ${RETURNS_POOL_KEY_SQL} AS pool_key,
+                  MIN(e.legal_clearance_tier) AS legal_clearance_tier,
                   etr.uec_code,
                   COUNT(DISTINCT air.venue_id) AS events_seen
              FROM anon_id_returns air
              JOIN events e ON e.id = air.venue_id
              LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
             WHERE air.last_seen_at >= ?
-            GROUP BY air.anon_id_hash, 2, 3, 4
+            GROUP BY air.anon_id_hash, 2, 3, 5
          )
-        GROUP BY corridor_id, legal_clearance_tier, uec_code`
+        GROUP BY corridor_id, pool_key, uec_code`
     )
       .bind(since)
       .all<CorridorReturnsRow>();

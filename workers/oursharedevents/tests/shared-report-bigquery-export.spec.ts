@@ -31,6 +31,7 @@ vi.mock('../src/google/auth', () => ({
 }));
 
 import {
+  RETURNS_POOL_KEY_SQL,
   exportAnonIdReturns,
   exportCorridorDensityBaseline,
   exportEventSeries,
@@ -432,6 +433,37 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r.rowsExported).toBe(501);
     expect(bqCalls.length).toBe(2);
     expect(Math.max(...bqCalls.map((c) => c.rows.length))).toBeLessThanOrEqual(500);
+  });
+
+  test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export as 6', async () => {
+    await seedCorridorEvent('test-evt-exp-t1', 1);
+    await seedCorridorEvent('test-evt-exp-t2', 2);
+    await tenv()
+      .DB.prepare(`UPDATE events SET legal_clearance_tier = 2 WHERE id = 'test-evt-exp-t2'`)
+      .run();
+    await seedPeople('test-evt-exp-t1', [1, 1, 1], { prefix: 'ta' });
+    await seedPeople('test-evt-exp-t2', [1, 1, 1], { prefix: 'tb' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(bqCalls).toHaveLength(1);
+    expect(bqCalls[0].rows).toHaveLength(1);
+    expect(bqCalls[0].rows[0].json.people_count).toBe(6);
+  });
+
+  test('the SQL pool key agrees with phaseToPool for every tier', async () => {
+    for (const tier of [null, 0, 1, 2, 3, 4, 5, 6, 2.5]) {
+      const row = await tenv()
+        .DB.prepare(`SELECT ${RETURNS_POOL_KEY_SQL} AS k FROM (SELECT ? AS legal_clearance_tier) e`)
+        .bind(tier)
+        .first<{ k: string }>();
+      let pool: string | null;
+      try {
+        pool = phaseToPool(tier);
+      } catch {
+        pool = null;
+      }
+      expect(row!.k === 'general', `tier ${String(tier)}`).toBe(pool === 'general');
+    }
   });
 
   test('a group under the floor is withheld, not exported', async () => {
