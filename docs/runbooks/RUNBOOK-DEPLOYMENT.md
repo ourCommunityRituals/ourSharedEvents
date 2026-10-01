@@ -246,6 +246,44 @@ After OSE-1353, sign in to `https://oursharedevents.com/admin` through the **pro
 
 **Never:** add a wildcard brand, add a second identity without its own ticket, or set `ADMIN_SCOPE_ALL` on production.
 
+### Founder platform-brand membership (AUD-3, OSE-1447)
+
+**Why:** platform-owned admin routes are reachable only in scope mode `all` (a `key:` actor with `ADMIN_SCOPE_ALL`, which production never has) or by a member of the reserved platform brand `ose-platform` (`PLATFORM_BRAND_ID`, `src/lib/admin-brand-scope.ts`; guard `requirePlatformScope`, `src/lib/admin-object-scope.ts`). Those routes are:
+
+- `GET /briefing`, `/overview`, `/summary`
+- `GET /api/v2/admin/subscribers`, `/api/v2/admin/audit-log`, `/api/v2/admin/security/rate-limit-stats`
+- `POST /api/v2/admin/data-subject/erase`, `/api/v2/admin/events/backfill-h3-cells`, `/api/v2/admin/poster-deployments/backfill-h3`
+
+Every other admin gets 404 on them. Without this row the founder gets 404 too, which means data-subject erasure cannot be run over HTTP.
+
+**Order:** on **staging as soon as this change deploys** (the founder's staging identity is scoped to `root` and loses these routes until the row exists), and on **production** alongside the OSE-1415 row above.
+
+**The row:** `mzdano@gmail.com | ose-platform | brand_owner`. It grants nothing inside any other brand. Do not grant `ose-platform` to anyone else without its own ticket and a second approver (OSE-1133).
+
+**Apply** (idempotent; run once per environment, `--env staging` then `--env production`):
+
+```bash
+cd workers/oursharedevents
+npx wrangler d1 execute DB --env staging --remote --command "
+INSERT OR IGNORE INTO admin_brand_memberships (email, brand_id, role)
+  VALUES ('mzdano@gmail.com', 'ose-platform', 'brand_owner');
+INSERT OR IGNORE INTO admin_audit_log
+  (id, action, actor, resource_type, resource_id, request_id, outcome, details)
+  VALUES ('ose-1447-founder-platform-membership', 'GRANT_BRAND_MEMBERSHIP', 'mzdano@gmail.com',
+          'admin_brand_membership', 'mzdano@gmail.com:ose-platform', 'runbook:OSE-1447', 'success',
+          '{\"role\":\"brand_owner\",\"source\":\"RUNBOOK-DEPLOYMENT platform-brand step\"}');"
+```
+
+**Verify:**
+
+```bash
+npx wrangler d1 execute DB --env staging --remote --command "
+SELECT email, brand_id, role FROM admin_brand_memberships WHERE brand_id = 'ose-platform';"
+# Expected: exactly one row (mzdano@gmail.com | ose-platform | brand_owner).
+```
+
+Then, signed in through Access: `GET /briefing` returns 200 for the founder, and a brand-only identity gets 404 (`tests/platform-scope-tenant-writes.invariant.spec.ts`, `tests/briefing.spec.ts`).
+
 ### Turn on production monitoring (OSE-1418)
 
 **When:** launch day, right after the first production deploy passes its smoke checks.
