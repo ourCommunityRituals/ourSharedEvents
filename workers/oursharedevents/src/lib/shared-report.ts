@@ -752,8 +752,85 @@ export async function aggregateScanBuckets(
     );
   }
 
+  await aggregateScanCells(env, floor90dIso, nowIso, result);
+
   result.durationMs = Date.now() - start;
   return result;
+}
+
+/**
+ * OSE-1459 / ADR-011 — scans counted at the poster's own res9 cell.
+ *
+ * Every scan comes in through a poster (GET /q/:qr_token), so a scan's place
+ * is its poster's placement cell: the venue's cell for a poster at the venue,
+ * the poster's own cell for one across town. Counted from the placement side
+ * only (scan_placement_events × poster_deployments): doctrine rule 6 keeps any
+ * session-derived value out, so this is a SCAN count, and no poster id is
+ * stored — the cell is the place.
+ *
+ * Recomputed from scratch for every event in the 90-day window and swapped in
+ * with one atomic batch (DELETE the window, INSERT the fresh rows), so a
+ * poster whose location was corrected never leaves its scans counted in two
+ * cells. Scans at a poster with no cell yet are skipped (rowsSkipped) and
+ * counted on a later run, once the poster is geocoded.
+ */
+async function aggregateScanCells(
+  env: SharedReportMaterializeEnv,
+  floor90dIso: string,
+  nowIso: string,
+  result: MaterializationResult
+): Promise<void> {
+  try {
+    const uncelled = await env.DB.prepare(
+      `SELECT COUNT(*) AS n
+         FROM scan_placement_events spe
+         JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+        WHERE pd.h3_res9 IS NULL
+          AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)`
+    )
+      .bind(floor90dIso)
+      .first<{ n: number }>();
+    result.rowsSkipped += uncelled?.n ?? 0;
+
+    // Two statements, however busy the window: D1 counts every batched
+    // statement toward the per-invocation query limit, so the rollup is one
+    // INSERT ... SELECT ... GROUP BY rather than one INSERT per row.
+    const [, inserted] = await env.DB.batch([
+      env.DB.prepare(
+        `DELETE FROM scan_cell_aggregates
+           WHERE event_id IN (SELECT id FROM events WHERE start_date >= ?)`
+      ).bind(floor90dIso),
+      env.DB.prepare(
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         SELECT 'cell_' || spe.event_id || '_' || substr(spe.scan_bucket, 1, 10) || '_' ||
+                  CAST(substr(spe.scan_bucket, 12, 2) AS INTEGER) || '_' || LOWER(pd.h3_res9),
+                spe.event_id,
+                substr(spe.scan_bucket, 1, 10),
+                CAST(substr(spe.scan_bucket, 12, 2) AS INTEGER),
+                LOWER(pd.h3_res9),
+                LOWER(pd.h3_res7),
+                COUNT(*),
+                ?
+           FROM scan_placement_events spe
+           JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+          WHERE pd.h3_res9 IS NOT NULL
+            AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)
+          GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), LOWER(pd.h3_res9), LOWER(pd.h3_res7)`
+      ).bind(nowIso, floor90dIso),
+    ]);
+    result.rowsUpserted += inserted?.meta?.changes ?? 0;
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+        phase: 'scan_aggregation',
+        step: 'scan_cell_aggregates',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
 }
 
 /**

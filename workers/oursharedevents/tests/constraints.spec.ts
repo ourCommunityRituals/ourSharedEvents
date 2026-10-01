@@ -88,10 +88,11 @@ describe('QA-1: Migration idempotency', () => {
     //   sponsor_business + sponsor_asset + sponsor_placement → −1 +3) = 35.
     // + 1 (event_type_category_registry — migration 0076, OSE-1344) = 36.
     // + 1 (corridor_readiness_latch — migration 0084, VISION §6.2b latch) = 37.
-    expect(names).toHaveLength(37);
+    // + 1 (scan_cell_aggregates — migration 0087, OSE-1459) = 38.
+    expect(names).toHaveLength(38);
   });
 
-  test('indexes remain at exactly 73 after idempotent re-run', async () => {
+  test('indexes remain at exactly 74 after idempotent re-run', async () => {
     // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
     // idx_anon_id_returns_venue_visit, idx_event_series_venue_state,
     // idx_event_series_venue_dow_hour, idx_events_series_start) + 1
@@ -130,7 +131,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(73); // +2 (0075) +1 (0076: idx_event_type_registry_category)
+    expect(indexes.results).toHaveLength(74); // +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell)
   });
 });
 

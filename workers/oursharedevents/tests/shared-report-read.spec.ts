@@ -60,6 +60,7 @@ async function clearReadTables(): Promise<void> {
   await db.prepare(`DELETE FROM anon_id_returns`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM scan_aggregates`).run();
+  await db.prepare(`DELETE FROM scan_cell_aggregates`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
   // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
@@ -815,16 +816,18 @@ describe('H3 corridor map + open-question resolutions', () => {
   });
 
   // Q8 — corridor_map.source field
-  test('Q8: corridor_map.source is "live" when scan_aggregates h3_res9 data exists', async () => {
+  test('Q8: corridor_map.source is "live" when poster-cell scan data exists (OSE-1459)', async () => {
     await seedEvent({
       id: 'test-evt-read-q8-live',
       start_date: '2026-05-07T19:00:00Z',
     });
-    // Seed scan_aggregates with an h3_res9 cell (Eagles Hall res9)
+    // Scans counted at a poster's res9 cell (Eagles Hall res9), place side only.
     await tenv()
       .DB.prepare(
-        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
-       VALUES ('sa-q8-live', 'test-evt-read-q8-live', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         VALUES ('cell-q8-live', 'test-evt-read-q8-live', '2026-05-07', 19,
+                 '89266454447ffff', '872664544ffffff', 30, datetime('now'))`
       )
       .run();
 
@@ -833,6 +836,79 @@ describe('H3 corridor map + open-question resolutions', () => {
     if (!r.ok) return;
     expect(r.report.corridor_map).not.toBeNull();
     expect(r.report.corridor_map?.source).toBe('live');
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+  });
+
+  test('OSE-1459: a poster cell under the K-floor is dropped from the map, its id never published', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-subk', start_date: '2026-05-07T19:00:00Z' });
+    const busy = '89266454447ffff';
+    const quiet = '892664cdb13ffff';
+    for (const [id, cell, n] of [
+      ['cell-subk-busy', busy, 30],
+      ['cell-subk-quiet', quiet, 2],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_cell_aggregates
+             (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+           VALUES (?, 'test-evt-read-q8-subk', '2026-05-07', 19, ?, NULL, ?, datetime('now'))`
+        )
+        .bind(id, cell, n)
+        .run();
+    }
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-subk');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.source).toBe('live');
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+    // The quiet poster's location appears nowhere in the report.
+    expect(JSON.stringify(r.report)).not.toContain(quiet);
+    expect(r.report.corridor_map?.svg).toContain(busy);
+  });
+
+  test('OSE-1459: when every poster cell is under the K-floor, no map and no cell id is published', async () => {
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+         VALUES ('test-evt-read-q8-allsubk', 'test-brand', 'All sub-K', 'test-evt-read-q8-allsubk',
+                 'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
+                 datetime('now'), datetime('now'))`
+      )
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         VALUES ('cell-allsubk', 'test-evt-read-q8-allsubk', '2026-05-07', 19,
+                 '892664cdb13ffff', '872664cdbffffff', 3, datetime('now'))`
+      )
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-allsubk');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Not the venue fallback: that would read as "no scans yet".
+    expect(r.report.corridor_map).toEqual({
+      svg: '',
+      suppressed: [],
+      cell_count: 0,
+      source: 'suppressed',
+    });
+    expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
+  });
+
+  test('OSE-1459: the map ignores event-level scan_aggregates cells (the venue tag is not a scan place)', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-venueonly', start_date: '2026-05-07T19:00:00Z' });
+    // An event-level row tagged with the venue's cell: not where scans happened.
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
+       VALUES ('sa-q8-venueonly', 'test-evt-read-q8-venueonly', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+      )
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-venueonly');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.source ?? null).not.toBe('live');
   });
 
   test('Q8: corridor_map.source is "fallback" when no h3_res9 scan data but event has h3_res7', async () => {
@@ -849,7 +925,7 @@ describe('H3 corridor map + open-question resolutions', () => {
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-fallback');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // No h3_res9 in scan_aggregates → falls back to res7 ring
+    // No poster-cell scans → falls back to res7 ring
     expect(r.report.corridor_map?.source).toBe('fallback');
   });
 

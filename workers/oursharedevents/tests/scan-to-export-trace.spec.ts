@@ -30,10 +30,11 @@
  * that window right now (dateOnlyFixture) — the same day-end rule the public
  * page and the materializer use (phaseTimesFor).
  *
+ * Hop 7 (OSE-1459): a scan at a second poster across town is counted at that
+ * poster's own res9 cell (scan_cell_aggregates), not the venue's.
+ *
  * Not traced here, and why: corridor registry ids + definition_version
- * (OSE-613 / OSE-603, not built); per-placement scan aggregation (scan_aggregates
- * tags every scan with the venue's cells, so a pre-event scan at a poster is not
- * yet aggregated at the poster's node — follow-up ticket).
+ * (OSE-613 / OSE-603, not built).
  */
 
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -77,6 +78,10 @@ const ADMIN = {
 const EAGLES = { lat: 41.6571, lon: -87.6798 };
 const EAGLES_RES9 = '89266454447ffff'; // physical node (poster + venue)
 const EAGLES_RES7 = '872664544ffffff'; // the corridor
+// OSE-1459: a second poster across town, in Beverly (its own node and corridor).
+const BEVERLY = { lat: 41.7203, lon: -87.672 };
+const BEVERLY_RES9 = '892664cdb13ffff';
+const BEVERLY_RES7 = '872664cdbffffff';
 
 const BQ_ENV = {
   WIF_PRIVATE_KEY_PEM:
@@ -150,6 +155,7 @@ async function clearPipeline(): Promise<void> {
     'corridor_density_baseline',
     'corridor_density_snapshots',
     'scan_aggregates',
+    'scan_cell_aggregates',
     'scan_placement_events',
     'scan_node_returns',
     'export_manifest',
@@ -403,6 +409,75 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       expect(r.details).not.toContain(EAGLES_RES9);
       expect(r.details).not.toMatch(/anon_id_hash|anonymous_id/);
     }
+  });
+
+  test("hop 7 (OSE-1459) — a scan at a poster across town is counted at THAT poster's cell", async () => {
+    // A second poster for the same event, hung in Beverly: its own res9 node,
+    // in a different res7 corridor from the venue.
+    const placed = await SELF.fetch(
+      `https://t.test/api/v2/admin/events/${eventId}/poster-deployments`,
+      {
+        method: 'POST',
+        headers: ADMIN,
+        body: JSON.stringify({
+          placement_label: 'OSE-1459 Trace — Beverly window',
+          latitude: BEVERLY.lat,
+          longitude: BEVERLY.lon,
+        }),
+      }
+    );
+    expect(placed.status, await placed.clone().text()).toBe(201);
+    const away = (await placed.json()) as { qr_token: string };
+
+    const scan = await SELF.fetch(`https://t.test/q/${away.qr_token}`, { redirect: 'manual' });
+    expect(scan.status).toBe(302);
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    // The place-side rollup: each scan at its own poster's cell. The Eagles
+    // poster's scan (hop 1) at the venue node; the Beverly scan at Beverly.
+    const cells = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, h3_res7, SUM(scan_count) AS scans
+           FROM scan_cell_aggregates WHERE event_id = ?
+          GROUP BY h3_res9, h3_res7 ORDER BY h3_res9`
+      )
+      .bind(eventId)
+      .all<{ h3_res9: string; h3_res7: string; scans: number }>();
+    expect(cells.results).toEqual(
+      [
+        { h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7, scans: 1 },
+        { h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 1 },
+      ].sort((a, b) => a.h3_res9.localeCompare(b.h3_res9))
+    );
+
+    // The event-level rollup is unchanged in kind: both scans, one event,
+    // labelled with the event's venue (it is not a statement of scan place).
+    const agg = await tenv()
+      .DB.prepare('SELECT SUM(total_scans) AS n FROM scan_aggregates WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ n: number }>();
+    expect(agg?.n).toBe(2);
+
+    // Running the job again changes nothing: the window is recomputed, not added to.
+    // And the rollup is ONE two-statement batch (DELETE + INSERT ... SELECT),
+    // whatever the row count: D1 caps statements per invocation.
+    const batchSpy = vi.spyOn(tenv().DB, 'batch');
+    await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(batchSpy.mock.calls.map((c) => (c[0] as unknown[]).length)).toEqual([2]);
+    batchSpy.mockRestore();
+    const again = await tenv()
+      .DB.prepare('SELECT SUM(scan_count) AS n FROM scan_cell_aggregates WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ n: number }>();
+    expect(again?.n).toBe(2);
   });
 });
 

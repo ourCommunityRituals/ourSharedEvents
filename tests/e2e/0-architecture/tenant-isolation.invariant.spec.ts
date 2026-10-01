@@ -204,22 +204,36 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
     'Never-who scan aggregate; not request-reachable.',
   'lib/shared-report.ts:687': 'Same cron, the country-code bucket twin of :666. Same rationale.',
-  'lib/shared-report.ts:788':
+  // OSE-1459: aggregateScanCells (scans at the poster's own res9 cell). Same
+  // cron class as :666/:687; 788/789/792 re-keyed 865/866/869 by it.
+  'lib/shared-report.ts:789':
+    'aggregateScanCells cron — COUNT of scans at posters with no cell yet (skipped, ' +
+    'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
+    '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
+    'request-reachable.',
+  'lib/shared-report.ts:801':
+    'Same cron — DELETE of the window before the atomic re-insert, so a corrected ' +
+    'poster location never double-counts. Same time window, same rationale.',
+  'lib/shared-report.ts:818':
+    'Same cron — the single INSERT ... SELECT that rebuilds the window: ' +
+    'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
+    'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
+  'lib/shared-report.ts:865':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:789':
+  'lib/shared-report.ts:866':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:792':
+  'lib/shared-report.ts:869':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
-  // 322→335 and 729→742 by OSE-616 (corridorKeyOf helper above; the key is
+  // 322→339 and 729→771 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
-  'lib/shared-report-builder.ts:335':
+  'lib/shared-report-builder.ts:339':
     'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',
-  'lib/shared-report-builder.ts:742':
+  'lib/shared-report-builder.ts:771':
     'Series instances keyed by `series_id = ?` — the held series id of the ' +
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor

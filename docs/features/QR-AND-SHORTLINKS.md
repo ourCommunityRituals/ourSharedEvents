@@ -124,11 +124,23 @@ design consults a request's apparent location." Enforcement lives in
 
 ### Which cells the SharedReport map uses
 
-`scan_aggregates.h3_res9/h3_res7` are copied from the **event's venue**
-(`backfillH3Cells` in `src/lib/shared-report.ts`), not from the scanning poster.
-So the `corridor_map` shows the event's own cell. Per-placement geography reaches
-a report only through `poster_attribution`, which carries the deployment's
-`h3_res9` and is K-floored (see §5).
+ADR-011 (Accepted): a scan's place is the poster it was scanned at. Every scan
+comes in through a poster (`GET /q/:qr_token`), so the nightly job counts scans
+at each **poster's own res9 cell** in `scan_cell_aggregates` (OSE-1459,
+migration 0087). A poster at the venue sits in the venue's cell; one across
+town sits in its own. The `corridor_map` reads that table, so each lit cell is a
+poster cell and its value is **scans** there. A cell under the K-floor is
+dropped, never drawn: its res9 is a poster's location, so it is not published
+at all (the same rule as `poster_attribution`). If every cell is under the
+floor, the report shows the map as hidden rather than the venue preview.
+
+It is a scan count, not distinct people. Doctrine rule 6 (OSE-798) keeps any
+session-derived value off a row that carries a place, and the two halves of a
+scan share no key. `scan_aggregates` stays event-level: its
+`distinct_agent_hashes` and `top_country` are per event and hour, and its
+`h3_res9/h3_res7` are the **event's venue** (`backfillH3Cells`), not a scan
+place. Per-poster counts reach a report through `poster_attribution`, also
+K-floored (see §5).
 
 ---
 
@@ -366,23 +378,23 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
 (invariants)**, and worker specs in **T0 Tests (worker-d1-schema)**
 (`.github/workflows/oursharedevents-ci.yml`).
 
-| Rule                                                                              | Gate                                                                                                                                                   |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No table couples a placement id with a session-derived value                      | `tests/e2e/0-architecture/scan-path-split.invariant.spec.ts`. **Main-DB migrations only**, see gap below                                               |
-| Scan/click path reads no device or request geolocation (finer than country)       | `tests/poster-deployments-h3-tagging.spec.ts` 8b. Names its files (`SCAN_CLICK_PATH`), so a new scan-path file is not covered until it is added        |
-| Nothing served asks the browser for its position                                  | same spec, 8b (second test; derives the file list from `src/`)                                                                                         |
-| Scan rows carry no coordinate or cell; placement res9 is the only place           | same spec, 8c                                                                                                                                          |
-| Short links store nothing finer than res7, and no identity column                 | same spec, 8d; `tests/shortlinks.spec.ts` (exact column list + forbidden PII names)                                                                    |
-| No table stores a cell finer than res9                                            | same spec, 8e                                                                                                                                          |
-| Short-link resolver reads no IP, cookie, anon id or Referer                       | `tests/shortlinks.spec.ts` ("zero per-attendee identity reads")                                                                                        |
-| Short-link targets are https-only, validated at creation                          | `tests/shortlinks.spec.ts`, `tests/poster-multi-code.spec.ts`, `tests/poster-codes-parse.spec.ts`                                                      |
-| No h3-js on the `/q/` hot path                                                    | `tests/qr-scan.spec.ts` (STATIC). `tests/h3-tagging.spec.ts` `SCAN_PATH` does **not** list `qr-scan.ts`, although the `qr-scan.ts` header says it does |
-| Scans stored hour-bucketed; `scan_aggregates` has one scheduled writer and no TTL | `tests/e2e/0-architecture/ncr-accumulation.structural.invariant.spec.ts`; `tests/qr-scan.spec.ts`                                                      |
-| K = 5                                                                             | `tests/count-floor.spec.ts`; `tests/e2e/0-architecture/aggregate-only.invariant.spec.ts` (corridor-map suppression, DS-01 `this_event_count`)          |
-| Per-poster counts floored, sub-K dropped                                          | `tests/poster-attribution-kanon-floor.spec.ts`                                                                                                         |
-| Sponsor reach floored; activity never touches WHO side, request or FORMS_DB       | `tests/pre-event-activity.spec.ts`                                                                                                                     |
-| A named (ourWKRP) session never reaches a scan row                                | `tests/forbidden-join-blindness.spec.ts`, `tests/forbidden-join-boundary.spec.ts`                                                                      |
-| SharedReport depth enforced server-side at one point                              | `tests/shared-report-read.spec.ts`, `tests/report-depth.spec.ts` (ADR-017)                                                                             |
+| Rule                                                                                                               | Gate                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No table couples a placement id with a session-derived value                                                       | `tests/e2e/0-architecture/scan-path-split.invariant.spec.ts`. **Main-DB migrations only**, see gap below                                               |
+| Scan/click path reads no device or request geolocation (finer than country)                                        | `tests/poster-deployments-h3-tagging.spec.ts` 8b. Names its files (`SCAN_CLICK_PATH`), so a new scan-path file is not covered until it is added        |
+| Nothing served asks the browser for its position                                                                   | same spec, 8b (second test; derives the file list from `src/`)                                                                                         |
+| Scan rows carry no coordinate or cell; placement res9 is the only place                                            | same spec, 8c                                                                                                                                          |
+| Short links store nothing finer than res7, and no identity column                                                  | same spec, 8d; `tests/shortlinks.spec.ts` (exact column list + forbidden PII names)                                                                    |
+| No table stores a cell finer than res9                                                                             | same spec, 8e                                                                                                                                          |
+| Short-link resolver reads no IP, cookie, anon id or Referer                                                        | `tests/shortlinks.spec.ts` ("zero per-attendee identity reads")                                                                                        |
+| Short-link targets are https-only, validated at creation                                                           | `tests/shortlinks.spec.ts`, `tests/poster-multi-code.spec.ts`, `tests/poster-codes-parse.spec.ts`                                                      |
+| No h3-js on the `/q/` hot path                                                                                     | `tests/qr-scan.spec.ts` (STATIC). `tests/h3-tagging.spec.ts` `SCAN_PATH` does **not** list `qr-scan.ts`, although the `qr-scan.ts` header says it does |
+| Scans stored hour-bucketed; `scan_aggregates` and `scan_cell_aggregates` each have one scheduled writer and no TTL | `tests/e2e/0-architecture/ncr-accumulation.structural.invariant.spec.ts`; `tests/qr-scan.spec.ts`                                                      |
+| K = 5                                                                                                              | `tests/count-floor.spec.ts`; `tests/e2e/0-architecture/aggregate-only.invariant.spec.ts` (corridor-map suppression, DS-01 `this_event_count`)          |
+| Per-poster counts floored, sub-K dropped                                                                           | `tests/poster-attribution-kanon-floor.spec.ts`                                                                                                         |
+| Sponsor reach floored; activity never touches WHO side, request or FORMS_DB                                        | `tests/pre-event-activity.spec.ts`                                                                                                                     |
+| A named (ourWKRP) session never reaches a scan row                                                                 | `tests/forbidden-join-blindness.spec.ts`, `tests/forbidden-join-boundary.spec.ts`                                                                      |
+| SharedReport depth enforced server-side at one point                                                               | `tests/shared-report-read.spec.ts`, `tests/report-depth.spec.ts` (ADR-017)                                                                             |
 
 **Rules with no gate:**
 

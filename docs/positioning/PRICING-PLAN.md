@@ -148,7 +148,7 @@ Day 1 fallback map + logo counts visible → ~day 14-21 first `source:'live'` re
 
 1. <5 scanners/event → `corridor_map: below_min_sample_size` on the venue's OWN cell — **fatal, abort the corridor.**
 2. All-loyal audience, no distinct-anon turnover → `return_rate` never clears min-sample 3 → no differentiated Mid value renders.
-3. Scan-aggregation cron hasn't run / no `scan_aggregates.h3_res9` rows → map stuck `source:'fallback'` → auto-extend, clock never starts.
+3. Scan-aggregation cron hasn't run / no `scan_cell_aggregates` rows (scans at poster cells, OSE-1459) → map stuck `source:'fallback'` → auto-extend, clock never starts.
 4. Live map + return_rate render, still no manager conversion after their 90d = **the real, honest WTP failure** — the map isn't worth $49.
 5. Comp sponsors don't convert at day 90 despite frequency rendering → the $99/mo wrapper is mispriced (independent of any gate).
 
