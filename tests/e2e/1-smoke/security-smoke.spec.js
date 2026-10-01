@@ -99,6 +99,13 @@ function futureDate() {
  * 200 HTML page.
  */
 async function createEvent(request, fields) {
+  // ADR-021 (OSE-906): the production smoke tier is strictly read-only. The
+  // test.skip(IS_PRODUCTION) on each writing describe is the first line; this is
+  // the second, so a write test added without the skip fails here instead of
+  // creating a row in production.
+  if (IS_PRODUCTION) {
+    throw new Error('ADR-021: production smoke is read-only; createEvent refused');
+  }
   const res = await request.post(`${BASE_URL}/api/v2/admin/events`, {
     timeout: TIMEOUT,
     maxRedirects: 0,

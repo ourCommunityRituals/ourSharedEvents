@@ -36,6 +36,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-017](ADR-017-sharedreport-depth-enforcement.md)             | Enforce SharedReport depth server-side, at one point       | Accepted | 2026-08-16 |
 | [ADR-018](ADR-018-declined-regulatory-regimes.md)                | Declined regulatory regimes (HIPAA/COPPA/SOPPA refuse)     | Accepted | 2026-09-10 |
 | [ADR-020](ADR-020-copilot-ci-human-approval-gate.md)             | Keep the human approval gate on Copilot-authored CI        | Accepted | 2026-09-26 |
+| [ADR-021](ADR-021-production-read-only-test-data.md)             | Keep production read-only for every test suite             | Proposed | 2026-10-01 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
