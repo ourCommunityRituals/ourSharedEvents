@@ -12,14 +12,14 @@ poster printed and scanned by a real phone (founder field test).
 
 ## Rungs
 
-| #   | Rung                                       | Ticket(s)                                                                                                                     | Status                        | Evidence                                                                                                                                                                                                                                                                 |
-| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Print gate                                 | [OSE-286](https://linear.app/oursharedevents/issue/OSE-286)                                                                   | ✅ Done (2026-09-10)          | PR #507 (+ #509 brain note). `poster-print-gate.spec.ts`, `poster-print.spec.ts` › Print Gate                                                                                                                                                                            |
-| 2a  | Poster payload — one call                  | [OSE-867](https://linear.app/oursharedevents/issue/OSE-867)                                                                   | 🔄 PR open (2026-09-30)       | `poster-bundle-payload.spec.ts` (9), `poster-multi-code-ui.spec.ts` › OSE-867 one data call, `poster-print.spec.ts` › One Data Call (component tier), Bruno `2. Public Events API/GET -api-v2-events-id-poster-bundle.yml`                                               |
-| 2b  | `showQRSection` backing                    | [OSE-869](https://linear.app/oursharedevents/issue/OSE-869)                                                                   | 🔄 PR open (2026-09-30)       | Migration 0085 `events.settings_json`, `lib/event-settings.ts`; `poster-qr-section-setting.spec.ts` (13), `poster-multi-code-ui.spec.ts` › OSE-869 (poster both branches + admin switch), `poster-print.spec.ts` › showQRSection (component tier, incl. no-gap in print) |
-| 3   | Mobile-viewport coverage                   | [OSE-740](https://linear.app/oursharedevents/issue/OSE-740)                                                                   | ✅ Done (2026-09-23)          | Mobile workability gate (OSE-1236) — 9th CI gate, blocks on PR code                                                                                                                                                                                                      |
-| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | 🟡 Runs today; not yet locked | `qr-roundtrip.spec.ts` (jsQR decode) runs in `T0 Tests (worker-d1-schema)` via `npm test` on every PR. Remaining: a meta-gate so the spec cannot be deleted, skipped or narrowed silently                                                                                |
-| 5   | Capstone: scan → export trace, Eagles cell | [OSE-616](https://linear.app/oursharedevents/issue/OSE-616)                                                                   | 📋 Backlog                    | —                                                                                                                                                                                                                                                                        |
+| #   | Rung                                       | Ticket(s)                                                                                                                     | Status                  | Evidence                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Print gate                                 | [OSE-286](https://linear.app/oursharedevents/issue/OSE-286)                                                                   | ✅ Done (2026-09-10)    | PR #507 (+ #509 brain note). `poster-print-gate.spec.ts`, `poster-print.spec.ts` › Print Gate                                                                                                                                                                                         |
+| 2a  | Poster payload — one call                  | [OSE-867](https://linear.app/oursharedevents/issue/OSE-867)                                                                   | ✅ Done (2026-10-01)    | PR #701 (+ #707 staging latency fix). `poster-bundle-payload.spec.ts`, `poster-multi-code-ui.spec.ts` › one data call, `poster-print.spec.ts` › One Data Call; Bruno poster-bundle request green on staging (main run 36795707694)                                                    |
+| 2b  | `showQRSection` backing                    | [OSE-869](https://linear.app/oursharedevents/issue/OSE-869)                                                                   | ✅ Done (2026-10-01)    | PR #701. Migration 0085 `events.settings_json`, `lib/event-settings.ts`; `poster-qr-section-setting.spec.ts`, `poster-multi-code-ui.spec.ts` › OSE-869, `poster-print.spec.ts` › showQRSection (no-gap print). PO accepted the component-tier spec for negative coverage (2026-10-01) |
+| 3   | Mobile-viewport coverage                   | [OSE-740](https://linear.app/oursharedevents/issue/OSE-740)                                                                   | ✅ Done (2026-09-23)    | Mobile workability gate (OSE-1236) — 9th CI gate, blocks on PR code                                                                                                                                                                                                                   |
+| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | 🔄 PR open (2026-10-01) | [OSE-1439](https://linear.app/oursharedevents/issue/OSE-1439): meta-gate `tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts` in the T0 `invariants` shard over `qr-roundtrip.spec.ts` (jsQR decode, `T0 Tests (worker-d1-schema)`). Red-proof: 10/10 weakenings fail it     |
+| 5   | Capstone: scan → export trace, Eagles cell | [OSE-616](https://linear.app/oursharedevents/issue/OSE-616)                                                                   | 📋 Backlog              | —                                                                                                                                                                                                                                                                                     |
 
 Also in the project (filed 2026-09-30, go-live evidence line, worked on its own
 branch `claude/verify-qr-evidence-tfqtei`): OSE-1420 (In Progress) and follow-ups
@@ -85,5 +85,34 @@ OSE-1425 … OSE-1430.
   a real browser confirmed the poster with the switch off (no QR grid, Print
   enabled).
 
-**Next rung:** 4 — lock the decode matrix so it cannot be deleted, skipped or
-narrowed silently (no dependencies).
+### 2026-10-01 — rungs 2a/2b closed, rung 4 (OSE-1439)
+
+- **Rung 2 closed.** #701 and #707 merged. Main run 36795707694 is green end to
+  end (T0 → T1 staging deploy → T2 Bruno → T3 E2E smoke → T4 functional), so
+  pyramid levels 6–7 ran. OSE-867 had auto-closed at merge (drift tracked in
+  OSE-1443); its Done stands on that evidence. OSE-869 closed by the PO, who
+  accepted `poster-print.spec.ts` (runs in CI) in place of
+  `section-visibility-negative.spec.js` (runs nowhere).
+- **Staging T2 latency (#707).** "GET Registrations" took 16.3 s against a 9 s
+  budget because PBKDF2 ran once per decrypted name. The derived key is now
+  cached per isolate (200 decrypts: 4,265 ms → 30 ms). The unbounded list is
+  OSE-1442.
+- **Rung 4.** `qr-decode-matrix.invariant.spec.ts` is a meta-gate in the
+  `deprecation-lock` pattern. It fails if `qr-roundtrip.spec.ts` is deleted,
+  skipped or focused; stops importing jsQR / the real encoder / the
+  poster-bundle; stops asserting decoded == encoded; loses any of the 21 locked
+  (level, length) cases or stops reaching v1 and v7 at L and M (checked against
+  an independent ISO 18004 capacity table); moves into the node project; or if
+  CI stops running `npm test` in `worker-d1-schema`, jsqr is uninstalled, or
+  the mutation catalog drops below 7 encoder mutants. Wired into the T0
+  `invariants` shard (the OSE-350 placement guard fails without it).
+- **Red-proof:** 10 weakenings (skip sweep, `.only`, drop L@150, narrow H, weaken
+  `toBe(url)` to `not.toBeNull()`, swap the decoder import, delete the spec,
+  move it to the node pool, drop `npm test` from the shard, drop a mutant) each
+  turned the gate red; restored → 8/8 green. Full structural shard 184/184.
+- **Follow-ups filed:** OSE-1440 (rate-limit poster/sponsor bundle), OSE-1441
+  (`/poster` picker race), OSE-1442 (registrations paging), OSE-1443 (Done
+  definition drift); CI install time folded into OSE-1074.
+
+**Next rung:** 5 — OSE-616 capstone (scan → export trace, Eagles cell), after
+the rung-4 PR merges.
