@@ -18,6 +18,7 @@ import {
   checkRateLimit,
   isRateLimited,
   isBucketTripped,
+  parseRateLimitEntry,
   pepperedKeyHash,
   rateLimitKvKey,
   RATE_LIMIT_MAX,
@@ -129,6 +130,25 @@ describe('rate-limit buckets are judged by their own limit', () => {
     [{ count: RATE_LIMIT_MAX }, false],
   ])('isBucketTripped(%o) is %s', (entry, tripped) => {
     expect(isBucketTripped({ resetAt: 0, ...entry })).toBe(tripped);
+  });
+});
+
+describe('stored bucket values are validated before use', () => {
+  it.each(['null', '[]', '7', '"x"', '{"count":"1","resetAt":0}', '{not json', ''])(
+    'parseRateLimitEntry(%j) is null, so a bad value never reaches a scan',
+    (raw) => {
+      expect(parseRateLimitEntry(raw)).toBeNull();
+    }
+  );
+
+  it('a malformed stored value is reset by the limiter, not thrown', async () => {
+    const kv = fakeKv();
+    const env = { RATE_LIMIT_KV: kv, RATE_LIMIT_KEY_PEPPER: PEPPER };
+    await kv.put(await rateLimitKvKey('k', PEPPER), 'null');
+    expect(await checkRateLimit(env, 'k')).toBe(false);
+    expect(parseRateLimitEntry(await kv.get(await rateLimitKvKey('k', PEPPER)))).toMatchObject({
+      count: 1,
+    });
   });
 });
 

@@ -46,6 +46,17 @@ export interface RateLimitEntry {
 }
 
 /** The limit a stored bucket enforces; entries from before `max` existed use the default. */
+/** A stored bucket value, or null when it is missing or not a bucket. */
+export function parseRateLimitEntry(raw: string | null): RateLimitEntry | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as RateLimitEntry | null;
+    return typeof v?.count === 'number' && typeof v.resetAt === 'number' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function bucketLimit(entry: RateLimitEntry): number {
   return entry.max ?? RATE_LIMIT_MAX;
 }
@@ -139,14 +150,8 @@ export async function* scanRateLimitBuckets(
       const batch = page.keys.slice(i, i + 50);
       const values = await Promise.all(batch.map((k) => kv.get(k.name)));
       for (let j = 0; j < batch.length; j++) {
-        let entry: RateLimitEntry;
-        try {
-          if (!values[j]) continue;
-          entry = JSON.parse(values[j]!) as RateLimitEntry;
-        } catch {
-          continue; // malformed value
-        }
-        yield { id: batch[j].name.slice(KEY_PREFIX.length), entry };
+        const entry = parseRateLimitEntry(values[j]);
+        if (entry) yield { id: batch[j].name.slice(KEY_PREFIX.length), entry };
       }
     }
     cursor = page.list_complete ? undefined : (page as { cursor?: string }).cursor;
@@ -182,8 +187,7 @@ export async function checkRateLimit(
   if (!kv) return false;
   const now = Date.now();
   const kvKey = await rateLimitKvKey(key, env.RATE_LIMIT_KEY_PEPPER);
-  const raw = await kv.get(kvKey);
-  const entry = raw ? (JSON.parse(raw) as RateLimitEntry) : null;
+  const entry = parseRateLimitEntry(await kv.get(kvKey));
 
   if (!entry || now >= entry.resetAt) {
     await kv.put(kvKey, JSON.stringify({ count: 1, resetAt: now + windowMs, max }), {

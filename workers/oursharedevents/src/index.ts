@@ -667,14 +667,13 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
         {
           type: 'rate_limit_triggers',
           severity: rateLimitTriggers > RATE_LIMIT_TRIGGER_THRESHOLD * 10 ? 'CRITICAL' : 'HIGH',
-          message: `Rate-limit triggers exceeded threshold: ${rateLimitTriggers} IPs rate-limited (threshold: ${RATE_LIMIT_TRIGGER_THRESHOLD})`,
+          message: `Rate-limit triggers exceeded threshold: ${rateLimitTriggers} rate-limit buckets tripped across all scopes (threshold: ${RATE_LIMIT_TRIGGER_THRESHOLD})`,
           details: {
             count: rateLimitTriggers,
             threshold: RATE_LIMIT_TRIGGER_THRESHOLD,
             kvPrefix: 'ratelimit:',
             date: today,
           },
-          affectedEndpoint: '/api/v2/events/:id/forms/*',
           detectedAt: now,
         },
         alertEnv
