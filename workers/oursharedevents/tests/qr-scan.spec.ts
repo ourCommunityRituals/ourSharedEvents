@@ -252,6 +252,38 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     }
   });
 
+  test('OSE-1459 | UNIT | a scan that fails to store does not block a retry in the same hour', async () => {
+    // The dedup marker is set before the write. If the write fails, nothing
+    // was stored, so the marker must be released: otherwise the hourly dedup
+    // would swallow the retry and the scan would be lost for the hour.
+    const kv = makeInMemoryKV();
+    const anon = 'anon_55555555-5555-5555-5555-555555555555';
+    const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: anon });
+    const db = tenv().DB;
+    let failWrites = true;
+    const flakyDb = new Proxy(db, {
+      get(target, prop) {
+        if (prop === 'batch' && failWrites) {
+          return () => Promise.reject(new Error('D1 unavailable'));
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const failed = await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      expect(failed.status).toBe(302);
+      expect(await countScans(db)).toBe(0);
+
+      failWrites = false;
+      await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      expect(await countScans(db)).toBe(1);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
   test('OSE-625 | UNIT | duplicate scan, no KV available | writes both rows (dedup is best-effort)', async () => {
     // No KV env — dedup guard is skipped; both calls write a row.
     const scanEnv = makeEnv(undefined);

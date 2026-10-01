@@ -129,8 +129,9 @@ export async function handleQrScan(
   // Hour dedup (OSE-1459): same anon + same deployment in the same hour bucket
   // the scan is stored under → skip write. One person, one poster, one hour.
   let isDuplicate = false;
+  let dedupKey: string | null = null;
   if (env.RATE_LIMIT_KV) {
-    const dedupKey = `scan:dedup:${anonId}:${deploymentId}:${scanBucket(nowDate)}`;
+    dedupKey = `scan:dedup:${anonId}:${deploymentId}:${scanBucket(nowDate)}`;
     const existing = await env.RATE_LIMIT_KV.get(dedupKey);
     if (existing !== null) {
       isDuplicate = true;
@@ -185,6 +186,11 @@ export async function handleQrScan(
           error: err instanceof Error ? err.message : String(err),
         })
       );
+      // Nothing was stored, so release this hour's dedup marker: a retry in the
+      // same hour must be able to record the scan, not be taken as a repeat.
+      if (dedupKey && env.RATE_LIMIT_KV) {
+        await env.RATE_LIMIT_KV.delete(dedupKey).catch(() => {});
+      }
     }
   }
 

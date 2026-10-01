@@ -83,6 +83,7 @@ const EVENT_CHILD_TABLES = [
   'scan_placement_events',
   'scan_node_returns',
   'scan_aggregates',
+  'scan_cell_aggregates',
   'sponsor_impressions',
   'sponsor_placement',
   'poster_deployments',
@@ -159,6 +160,34 @@ describe('OSE-982 G1 — happy path: fat-finger event hard-deletes', () => {
     });
     const list = (await listRes.json()) as AdminListResponse;
     expect(list.items.some((i) => i.id === id)).toBe(false);
+  });
+
+  test('OSE-1459: an event with a derived scan_cell_aggregates row still deletes (FK child cleared)', async () => {
+    // scan_cell_aggregates (0087) FKs events(id) and is permanent, so it can
+    // outlive the raw scan rows that the activity guard checks. The cascade
+    // must clear it, or the event row cannot be removed.
+    const id = await seedEvent('cellagg');
+    const tenv = env as unknown as TestEnv;
+    await tenv.DB.prepare(
+      `INSERT INTO scan_cell_aggregates
+         (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count)
+       VALUES (?, ?, '2026-08-31', 19, '892664cdb13ffff', '872664cdbffffff', 0)`
+    )
+      .bind(`cell_${id}`, id)
+      .run();
+
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}`, {
+      method: 'DELETE',
+      headers: ADMIN_HEADERS,
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(await eventExists(id)).toBe(false);
+    const left = await tenv.DB.prepare(
+      'SELECT COUNT(*) AS n FROM scan_cell_aggregates WHERE event_id = ?'
+    )
+      .bind(id)
+      .first<{ n: number }>();
+    expect(left?.n).toBe(0);
   });
 
   test('a second DELETE of the same id is an honest 404 (delete is not idempotently silent)', async () => {
