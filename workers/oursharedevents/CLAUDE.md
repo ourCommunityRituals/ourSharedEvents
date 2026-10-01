@@ -82,9 +82,9 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
   `tests/e2e/0-architecture/*.invariant.spec.ts` and gate **every** PR/push via
   the T0 Gate `invariants` shard (OSE-350). A new structural invariant spec
   must be listed in that step (enforced by `tests/integration/infra-consistency.test.js`).
-- **Done = merged to `main` AND exercised by a named CI job.** A green local
-  `tsc`/vitest run is not done. If you can't name the CI job that goes red on
-  regression, it's written, not done. (See root `CLAUDE.md` §7.2–7.3.)
+- **Merged vs Done:** see root `CLAUDE.md` §5, "Two stages: Merged, then Done"
+  (OSE-1443). That is the only definition, so don't restate it here. A green
+  local `tsc`/vitest run counts as neither.
 
 ### Branch & PR conventions — Linear close-guard (OSE-1250)
 
