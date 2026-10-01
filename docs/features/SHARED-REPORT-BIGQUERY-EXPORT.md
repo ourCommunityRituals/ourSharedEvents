@@ -168,8 +168,10 @@ aggregates only, never `anon_id`, and corridor-level location only
 (`OCR-docs/docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`). It now
 sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
-**When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
-`wrangler.toml`). Each run snapshots events whose day (`end_date`, else
+**When:** once a week. The export runs on the nightly cron (`0 3 * * *` in
+`wrangler.toml`), but a returns snapshot is taken only when one is due (see
+"Rounding and cadence" below). Each due run snapshots events whose day
+(`end_date`, else
 `start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), up to and including today (an event rescheduled into the future is not counted), even when no source
 row is past the watermark, because a rolling window changes as events age out.
 The window is the event's day, not `last_seen_at`, which is when the cron
@@ -211,11 +213,16 @@ no real res7 corridor is withheld, never sent as `'unknown'`.
 with the one before it, so exact counts would show a one-person change between
 two runs (12, then 13). Every published count is rounded down to a multiple of
 5 (`roundForPublish`, `PUBLISH_ROUNDING`) before the floors apply, and the
-returns snapshot is taken weekly, not nightly: a run takes one only when the
-last successful snapshot (`bigquery_export_state` row
-`corridor_returns_snapshot`) is at least 6.5 days old, so a failed run is
-retried the next night. A run that is not due sends nothing and moves no
-watermark. Rounding leaves every gap between published counts at 0 or a
+returns snapshot is taken weekly, not nightly: a run takes one only when both
+the last complete snapshot (`bigquery_export_state` row
+`corridor_returns_snapshot`) and the last run that began publishing (row
+`corridor_returns_snapshot_claim`) are at least 6.5 days old. The claim is
+written just before a run's first BigQuery insert, so a run that fails after
+that point, or whose final state write fails, still uses up its week: some of
+its rows may already be in BigQuery, and a retry the next night would put a
+second snapshot one day after the first. A run that fails before it sends
+anything (a D1 read error) writes no claim and is retried the next night. A run
+that is not due sends nothing and moves no watermark. Rounding leaves every gap between published counts at 0 or a
 multiple of 5, so the chain rule above can no longer be broken by rounded
 values. The corridor baseline export is rounded the same way, but still follows
 the baseline refresh cadence; making it weekly is a follow-up.
@@ -253,7 +260,7 @@ does, so the required-tag contract (`REQUIRED_TAGS`, brain `product-registry.yam
 is unchanged. `assertRequiredTags()` runs on each row before send.
 
 **Grain you can query in OER:** one corridor × event type × pool, a 90-day
-rolling window, with one new snapshot per scheduled run (nightly today). You cannot see
+rolling window, with at most one new snapshot a week. You cannot see
 individual journeys or venues, or anyone's movement between corridors.
 
 **Corridor id for returns (OSE-1460).** A returns group with no real res7

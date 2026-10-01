@@ -318,6 +318,13 @@ export function roundForPublish(n: number): number {
 export const RETURNS_SNAPSHOT_INTERVAL_MS = 7 * 86_400_000 - 12 * 3_600_000;
 /** Export-state row that records when the last returns snapshot succeeded. */
 export const RETURNS_SNAPSHOT_STATE = 'corridor_returns_snapshot';
+/**
+ * Export-state row that records when a returns snapshot last began publishing.
+ * It is written before the first BigQuery insert of a run, so a run that fails
+ * after sending some rows (or whose success write fails) still uses up its week:
+ * the next night must not publish a second snapshot a day after the first.
+ */
+export const RETURNS_SNAPSHOT_CLAIM_STATE = 'corridor_returns_snapshot_claim';
 /** Groups read per page of the snapshot query. */
 export const RETURNS_PAGE_SIZE = 500;
 /** Page bound: a snapshot larger than this fails closed (no marker) rather than run unbounded. */
@@ -369,8 +376,11 @@ export async function exportAnonIdReturns(
   // Weekly cadence: a run that is not due changes nothing, not even the source
   // watermark, so the next due run sees exactly what this one would have.
   const now = limits.now ?? new Date();
+  // The week starts at the later of the last complete snapshot and the last run
+  // that began publishing, finished or not (RETURNS_SNAPSHOT_CLAIM_STATE).
   const lastSnapshot = await getWatermark(env.DB, RETURNS_SNAPSHOT_STATE);
-  const sinceLast = now.getTime() - Date.parse(lastSnapshot);
+  const lastClaim = await getWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE);
+  const sinceLast = now.getTime() - Math.max(Date.parse(lastSnapshot), Date.parse(lastClaim));
   result.snapshotDue = !(sinceLast >= 0 && sinceLast < RETURNS_SNAPSHOT_INTERVAL_MS);
   if (!result.snapshotDue) {
     result.durationMs = Date.now() - start;
@@ -379,9 +389,9 @@ export async function exportAnonIdReturns(
 
   try {
     // A rolling window changes as rows age out even when nothing new was
-    // materialized, so a snapshot is taken on every scheduled run (nightly
-    // today), each with its own computed_at. OER reads the latest snapshot;
-    // a group missing from it has fallen out of the window or under the floor.
+    // materialized, so every due run (weekly, above) takes a whole snapshot
+    // with its own computed_at. OER reads the latest marked snapshot; a group
+    // missing from it has fallen out of the window or under the floor.
     // The watermark only records how far the source has been seen.
     const changed = await env.DB.prepare(
       `SELECT COUNT(*) AS n, MAX(computed_at) AS max_computed_at
@@ -422,6 +432,15 @@ export async function exportAnonIdReturns(
       (row: Record<string, unknown>): string =>
         `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
     const groupsInSnapshot: Record<RegulatoryPool, number> = { general: 0 };
+    // Claim the week before the first row can reach BigQuery. Lazy, so a run
+    // that fails on its D1 reads (nothing sent) is retried the next night; once
+    // anything may have been sent, a failure waits for the next week.
+    let claimed = false;
+    const claimSnapshot = async (): Promise<void> => {
+      if (claimed) return;
+      await advanceWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE, computedAt, 0);
+      claimed = true;
+    };
 
     // The groups are read a page at a time by a stable key (corridor, pool,
     // type), so neither the D1 result nor this Worker ever holds the whole
@@ -547,6 +566,7 @@ export async function exportAnonIdReturns(
         const batch = byPool[pool];
         groupsInSnapshot[pool] += batch.length;
         for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+          await claimSnapshot();
           const res = await bigQueryInsertRowsToDataset(
             env,
             datasetForPool(pool, env.WORKER_ENV),
@@ -584,6 +604,7 @@ export async function exportAnonIdReturns(
         exported_at: now.toISOString(),
       };
       assertCorridorGrainRow(marker);
+      await claimSnapshot();
       await bigQueryInsertRowsToDataset(
         env,
         datasetForPool(pool, env.WORKER_ENV),

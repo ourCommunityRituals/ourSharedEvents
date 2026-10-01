@@ -505,13 +505,47 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows()).toHaveLength(1);
   });
 
-  test('a failed snapshot does not start the week: the next run tries again', async () => {
+  test('a run that fails after publishing began still uses its week: no second snapshot the next night', async () => {
     await seedCorridorEvent('test-evt-exp-wkf');
     await seedPeople('test-evt-exp-wkf', [1, 1, 1, 1, 1]);
+    // The first insert fails, so rows may or may not have landed. Either way the
+    // claim was written before it, and the next night must not publish again.
     bqFailNextN = 1;
     const failed = await exportAnonIdReturns(makeEnv());
     expect(failed.errors).toBe(1);
     bqCalls = [];
+    const tomorrow = await exportAnonIdReturns(makeEnv(), {
+      now: new Date(Date.now() + 86_400_000),
+    });
+    expect(tomorrow.snapshotDue).toBe(false);
+    expect(bqCalls).toHaveLength(0);
+    // A week on, it is due again and completes.
+    const later = await exportAnonIdReturns(makeEnv(), { now: nextWeek() });
+    expect(later.snapshotDue).toBe(true);
+    expect(later.errors).toBe(0);
+    expect(markerRows()).toHaveLength(1);
+  });
+
+  test('a run that fails before sending anything is retried the next night', async () => {
+    await seedCorridorEvent('test-evt-exp-wkd');
+    await seedPeople('test-evt-exp-wkd', [1, 1, 1, 1, 1]);
+    // The group query fails in D1, before any BigQuery insert: no claim is
+    // written, so the week is not used up.
+    const db = tenv().DB;
+    const failingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (sql.includes('FROM anon_id_returns air')) throw new Error('simulated D1 failure');
+            return target.prepare(sql);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    }) as D1Database;
+    const failed = await exportAnonIdReturns({ ...makeEnv(), DB: failingDb });
+    expect(failed.errors).toBe(1);
+    expect(bqCalls).toHaveLength(0);
     const retry = await exportAnonIdReturns(makeEnv(), {
       now: new Date(Date.now() + 86_400_000),
     });
