@@ -91,8 +91,8 @@ CREATE TABLE anon_id_returns (
   -- in user-facing endpoints. Cron-materialized only.
   anon_id_hash    TEXT NOT NULL,    -- HASH(anon_id, pepper) — NEVER raw anon_id
   venue_id        TEXT NOT NULL,    -- which venue / event-series root
-  first_seen_at   TEXT NOT NULL,    -- ISO date, hour-bucket-quantized
-  last_seen_at    TEXT NOT NULL,    -- ISO date, hour-bucket-quantized
+  first_seen_at   TEXT NOT NULL,    -- ISO timestamp of the materializer run (full precision, not bucketed)
+  last_seen_at    TEXT NOT NULL,    -- ISO timestamp of the materializer run (full precision, not bucketed)
   visit_count     INTEGER NOT NULL DEFAULT 1,
   computed_at     TEXT NOT NULL,
   PRIMARY KEY (anon_id_hash, venue_id),

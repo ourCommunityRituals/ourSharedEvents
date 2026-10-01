@@ -425,12 +425,12 @@ const SCAN_CLICK_PATH = [
 /**
  * Device geolocation, in every shape it can arrive: the browser API, the
  * Cloudflare request.cf geo fields (derived from the visitor's IP, timezone
- * included; dot, optional-chain and bracket access), and every CF-IP* header by
- * prefix. OSE-1460 (2026-10-01): CF-IPCountry is no longer allowed —
+ * included; dot, optional-chain, bracket and destructuring access), and every
+ * CF-IP* header by prefix. OSE-1460 (2026-10-01): CF-IPCountry is no longer allowed —
  * the visitor's apparent country is not recorded either.
  */
 const DEVICE_GEO =
-  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\bcf\s*\??\.?\s*\[\s*['"`]\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|cf-ip[a-z-]+/i;
+  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\bcf\s*\??\.?\s*\[\s*['"`]\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\{[^}]*\b(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b[^}]*\}\s*=\s*[\w.?]*\bcf\b|cf-ip[a-z-]+/i;
 
 function sourcesMatching(pred: (p: string) => boolean): Array<[string, string]> {
   const sources: Record<string, string> = JSON.parse(
@@ -454,6 +454,9 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
       'request.cf.country',
       'request.cf?.timezone',
       "request.cf['country']",
+      'const { country } = request.cf',
+      'const { city: c, timezone } = request.cf ?? {}',
+      'const {\n  country,\n} = req.cf;',
       'request.cf?.["city"]',
       "headers.get('CF-IPCountry')",
       "headers.get('cf-ipcity')",

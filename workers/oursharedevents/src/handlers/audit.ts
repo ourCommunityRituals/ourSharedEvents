@@ -22,8 +22,13 @@
  *     (for example another tenant's admin probing this brand's event) is shown
  *     as null, so one brand never learns another brand's operator identities.
  *
- * Every filter is validated (400) before any SQL runs; a D1 error is a 503 with
- * the request id and no SQL text.
+ * Every filter is validated (400) before any SQL runs; a D1 error on the audit
+ * query is a 503 with the request id and no SQL text. Authorization lookups
+ * (who the caller is a member of, who an actor on the page is) fail CLOSED: if
+ * the membership table cannot be read, the caller gets the same 404 as a
+ * non-member and an actor shows as null. That is the shared resolver's contract
+ * (resolveAdminBrandScopeAsync / resolveAdminRoles), and an outage must never
+ * widen what a brand reader sees.
  */
 
 import type { AuditLogEnv } from '../lib/audit-log';
