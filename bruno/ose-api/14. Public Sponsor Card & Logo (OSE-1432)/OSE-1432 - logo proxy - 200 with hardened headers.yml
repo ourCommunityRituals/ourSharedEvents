@@ -1,0 +1,34 @@
+info:
+  name: OSE-1432 | logo proxy | 200 with hardened headers
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_pcard_onshow/logo"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (lib/sponsor-logo.ts fetchAndProxyLogo): the upstream image is re-served from
+        // our origin with its type re-checked and these headers set. The upstream is the org's
+        // GitHub avatar (fixture). A success is edge-cached a day; a cache hit keeps the headers.
+        test('200 for an on-show sponsor with a real logo', function () { expect(res.getStatus()).to.eql(200); });
+        test('Content-Type is the allowlisted image/png', function () { expect(String(res.getHeader('content-type') || '')).to.eql('image/png'); });
+        test('X-Content-Type-Options: nosniff', function () { expect(String(res.getHeader('x-content-type-options') || '')).to.eql('nosniff'); });
+        test("Content-Security-Policy: default-src 'none'", function () { expect(String(res.getHeader('content-security-policy') || '')).to.eql("default-src 'none'"); });
+        test('Referrer-Policy: no-referrer', function () { expect(String(res.getHeader('referrer-policy') || '')).to.eql('no-referrer'); });
+        test('X-Frame-Options: DENY', function () { expect(String(res.getHeader('x-frame-options') || '')).to.eql('DENY'); });
+        test('cached for a day', function () { expect(String(res.getHeader('cache-control') || '')).to.include('max-age=86400'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

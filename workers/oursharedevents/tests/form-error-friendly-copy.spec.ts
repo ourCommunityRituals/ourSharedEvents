@@ -7,7 +7,7 @@
  *
  * Per OCR_STANDARD_perStoryTestPyramid:
  *   - These tests share names byte-for-byte with the matching Postman items
- *     (postman/collections/ose-api.json — `OSE-R-002 | API | ...`).
+ *     (bruno/ose-api — `OSE-R-002 | API | ...`).
  *   - Companion FE tests live in tests/playwright/form-error-friendly-copy.spec.ts.
  *
  * The audit (REFINEMENT-BACKLOG-2026-05-15.md R-002) found that

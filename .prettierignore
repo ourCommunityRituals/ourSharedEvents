@@ -12,7 +12,6 @@ package-lock.json
 # gate is a byte-compare against its own output. Letting prettier reformat them
 # makes that gate fail on every run, forever — verified before it reached CI.
 web/shared/testids.js
-postman/environments/testids.json
 
 # Propagated verbatim from OCR-docs (docs/standards/ -> .ocr-standards/) by the
 # propagate-standards workflow. Upstream does not run prettier, so a local reformat

@@ -34,8 +34,11 @@ request:
        }
 
       // Verify JSON content-type on API responses
-      // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON)
-      const isApiPath = req.getPath().startsWith('/api') || req.getPath() === '/health';
+      // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON),
+      // and the sponsor image routes under /api: the logo proxy and the asset route
+      // serve image bytes, or an empty-bodied 404/502 (OSE-1432).
+      const isImageRoute = /^\/api\/v2\/sponsors\/[^/]+\/(logo|asset\/)/.test(req.getPath());
+      const isApiPath = (req.getPath().startsWith('/api') && !isImageRoute) || req.getPath() === '/health';
       const isCorsOptions = req.getMethod() === 'OPTIONS';
       const ct = (res.getHeader('Content-Type') || '');
       const isCfAccessBlocked = ct.includes('text/html') && !ct.includes('application/json');

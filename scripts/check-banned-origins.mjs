@@ -31,7 +31,6 @@
  *   - Documentation files (*.md) - allowed for historical/migration docs
  *   - Archived files (archive/**) - legacy code not in active use
  *   - Schema files (schemas/**) - JSON Schema examples
- *   - Postman files (postman/**) - API testing collection examples
  *   - .clasp*.json files - Google clasp CLI configuration
  *   - Test files checking for ABSENCE of patterns (negative assertions)
  *   - Comments documenting removal/non-usage of GAS patterns
@@ -210,7 +209,6 @@ const ALLOWLISTED_DIRECTORIES = [
   'node_modules',      // Dependencies
   '.git',              // Git internals
   'schemas',           // JSON Schema examples
-  'postman',           // Postman collection examples
   'docs',              // Documentation
   '.github/workflow-archive', // Archived workflows
 ];
@@ -603,7 +601,6 @@ function main() {
     console.log('  - archive/** (legacy code)');
     console.log('  - *.md (documentation)');
     console.log('  - schemas/** (JSON Schema examples)');
-    console.log('  - postman/** (API testing examples)');
     console.log('  - .clasp*.json (Google clasp config)');
     console.log('  - Comments documenting NON-usage of GAS');
     console.log('');

@@ -2,7 +2,7 @@
 --
 -- Apply before running the T3 Newman OSE-INV5 Sponsor Covenant (ose-api.json §11):
 --   cd workers/oursharedevents
---   npx wrangler d1 execute DB --env staging --remote --file ../../postman/fixtures/covenant-event-geo.sql
+--   npx wrangler d1 execute DB --env staging --remote --file ../../bruno/fixtures/covenant-event-geo.sql
 --
 -- WHY THIS IS A FIXTURE, NOT A MIGRATION
 -- test-event-001 (seeded by tests/ui/smoke/fixtures/test-event-001.sql, OSE-1419)

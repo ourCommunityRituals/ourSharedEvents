@@ -83,8 +83,6 @@
   "_note_archive_gas": "Decommissioned GAS-era scratch files (fetch-admin-keys.js, fix-*.sh/.py/.patch, test-deployment.js) moved to archive/gas/ under OSE-1215; no allowlist entry needed because guard-no-gas already excludes the whole archive/ directory (scripts/guard-no-gas.js EXCLUDED_DIRS).",
 
   "_section_test_fixtures": "Test fixtures and schemas with example data",
-  "postman/environments/mvp-event-toolkit-dev.json": ["*"],
-  "postman/environments/mvp-event-toolkit-local.json": ["*"],
   "schemas/checkpermissions.schema.json": ["*"],
   "schemas/setupcheck.schema.json": ["*"],
 

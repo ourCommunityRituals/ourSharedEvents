@@ -1,0 +1,20 @@
+info:
+  name: Public Sponsor Card & Logo (OSE-1432)
+  type: folder
+request: {}
+docs:
+  content: |-
+    Public sponsor routes added in PR #699: GET /sponsors/:id (card),
+    GET /sponsor-default-logo.svg, GET /api/v2/sponsors/:id/logo[?slot=sidebar].
+
+    Every request is credential-free (X-Test-No-Auth opts out of the collection
+    auth hook): these are public routes, so the test proves it.
+
+    Fixture: bruno/fixtures/sponsor-public-card-seed.sql, applied by CI before
+    this run. One sponsor per case, fixed ids (sb_pcard_*), on their own
+    active-but-unlisted event so the covenant order on test-event-001 is untouched.
+
+    Not here on purpose: 429. Tripping the public-read limiter on shared staging
+    would 429 other requests from the same runner. It is covered offline in the
+    workers pool: tests/sponsor-public-card.spec.ts ("rate-limited").
+  type: text/markdown

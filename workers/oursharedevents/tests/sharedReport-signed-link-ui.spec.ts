@@ -8,7 +8,7 @@
  *
  * Per OCR_STANDARD_perStoryTestPyramid:
  *   - These test names share their shape byte-for-byte with the Postman
- *     items in postman/collections/ose-api.json (`OSE-R-003 | API | ...`).
+ *     items in bruno/ose-api (`OSE-R-003 | API | ...`).
  *   - Format: `<STORY-ID> | <API|FE> | <method + path> (<condition>) | <assertion>`.
  *
  * The audit (REFINEMENT-BACKLOG-2026-05-15.md OSE-R-003) found that the
@@ -251,9 +251,10 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     // the sponsor-class table) are data, not these identifiers, so this stays
     // precise: it forbids the decision machinery, not the words.
     for (const forbidden of ['filterReportByDepth', 'DEPTH_SECTIONS', 'resolveDepth']) {
-      expect(html, `client must not contain depth-decision identifier "${forbidden}"`).not.toContain(
-        forbidden
-      );
+      expect(
+        html,
+        `client must not contain depth-decision identifier "${forbidden}"`
+      ).not.toContain(forbidden);
     }
   });
 
