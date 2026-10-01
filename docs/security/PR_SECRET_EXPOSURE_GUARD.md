@@ -185,7 +185,11 @@ workflow, not only PR-triggered ones.
 - dropping whitespace tolerance in the named `secrets [ 'X' ]` or computed `secrets [ x ]` index, or case-insensitive matching of the `secrets` context name (Copilot review on #743; each of the three was mutation-checked);
 - modelling a PR-sourced run as always `conclusion == 'success'` (Rule W now tries every conclusion GitHub reports plus any literal in the `if:`).
 
-The self-test has 31 fixtures.
+- **(CCR Loop 3 red-team, 2026-10-01)** case-folded string comparison and `startsWith`/`endsWith`/`contains`; status functions answered per upstream outcome (`success`/`failure`/`cancelled`, because the PR author decides whether tests fail) and `needs.<job>.result` following it; head **and** base branch candidates taken from every literal in the workflow's `if:`s on the `pull_request` path too; `pull_request_review` and `pull_request_review_comment` treated as PR triggers; and secrets in a local reusable workflow a PR job calls. Each has a fixture that goes red when its fix is reverted.
+
+**Scope boundary, stated:** the `pull_request` model excludes exactly one head-branch prefix, `full-pipeline/` (`APPROVED_DEPLOY_PREFIX`), because that is ADR-020's approved deploy path. ADR-012 decision 6 would retire it. **Not modelled yet**, tracked in the ADR-012 gate register: unfiltered `push` triggers, `issue_comment` jobs that check out PR code, `merge_group`, and default-`GITHUB_TOKEN` checkouts in jobs with write scopes.
+
+The self-test has 40 fixtures.
 
 ## Born-red proof
 

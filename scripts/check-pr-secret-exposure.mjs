@@ -121,7 +121,12 @@ function truthy(v) {
   return Boolean(v);
 }
 
+// GitHub compares strings ignoring case, and its startsWith/endsWith/contains
+// ignore case too, so the evaluator must as well ('PULL_REQUEST' == 'pull_request').
+const fold = (v) => String(v ?? '').toLowerCase();
+
 function valEquals(a, b) {
+  if (typeof a === 'string' || typeof b === 'string') return fold(a) === fold(b);
   if (typeof a === typeof b) return a === b;
   return String(a) === String(b);
 }
@@ -204,20 +209,23 @@ function makeParser(tokens, env) {
   }
 
   function callFn(name, args) {
-    switch (name) {
+    // The PR author controls whether upstream jobs pass, so each status
+    // function is answered for the outcome world being tried (env.upstream).
+    switch (String(name).toLowerCase()) {
       case 'always':
         return true;
       case 'success':
-        return true; // assume upstream success when testing reachability
+        return env.upstream === 'success';
       case 'failure':
+        return env.upstream === 'failure';
       case 'cancelled':
-        return false;
-      case 'startsWith':
-        return String(args[0] ?? '').startsWith(String(args[1] ?? ''));
-      case 'endsWith':
-        return String(args[0] ?? '').endsWith(String(args[1] ?? ''));
+        return env.upstream === 'cancelled';
+      case 'startswith':
+        return fold(args[0]).startsWith(fold(args[1]));
+      case 'endswith':
+        return fold(args[0]).endsWith(fold(args[1]));
       case 'contains':
-        return String(args[0] ?? '').includes(String(args[1] ?? ''));
+        return fold(args[0]).includes(fold(args[1]));
       default:
         throw new Error(`unsupported function '${name}'`);
     }
@@ -279,17 +287,43 @@ export function normalizeNeeds(needs) {
  * Is `jobName` reachable on a plain (non-full-pipeline) PR? Fail-closed: an `if:`
  * that cannot be evaluated is treated as reachable.
  */
-export function isReachableOnPlainPR(jobName, jobs, memo = {}) {
-  return isReachableUnder(jobName, jobs, memo, PLAIN_PR_ENV);
+export function isReachableOnPlainPR(jobName, jobs, _memo = {}, eventName = 'pull_request') {
+  const allIfs = Object.values(jobs || {})
+    .map((j) => (j && j.if != null ? String(j.if) : ''))
+    .join(' ');
+  return plainPrEnvs(allIfs, eventName).some((env) => isReachableUnder(jobName, jobs, {}, env));
 }
 
-/** A plain same-repo PR from an agent-authorable branch. */
-const PLAIN_PR_ENV = {
-  event_name: 'pull_request',
-  head_ref: 'copilot/x',
-  base_ref: 'main',
-  ref: 'refs/pull/1/merge',
-};
+/**
+ * The approved scope boundary (ADR-020): a `full-pipeline/*` PR is the one
+ * deliberate path to deploy jobs, so a head branch with this prefix is not a
+ * "plain" PR. ADR-012 decision 6 would retire it; until then it is the only
+ * branch the plain-PR model excludes.
+ */
+export const APPROVED_DEPLOY_PREFIX = 'full-pipeline/';
+
+/**
+ * Plain same-repo PRs. The author picks both the head branch and the base
+ * branch, and decides whether upstream jobs pass, so a job is reachable if ANY
+ * combination reaches it: every string literal in the workflow's `if:`s is
+ * tried as a head and a base branch (except the approved deploy prefix), under
+ * success, failure and cancelled upstream outcomes.
+ */
+export function plainPrEnvs(ifStr, eventName = 'pull_request') {
+  const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  const heads = new Set(['copilot/x', 'claude/x', ...literals]);
+  const bases = new Set(['main', ...literals]);
+  const envs = [];
+  for (const head of heads) {
+    if (fold(head).startsWith(APPROVED_DEPLOY_PREFIX)) continue;
+    for (const base of bases) {
+      for (const upstream of ['success', 'failure', 'cancelled']) {
+        envs.push({ event_name: eventName, head_ref: head, base_ref: base, ref: 'refs/pull/1/merge', upstream });
+      }
+    }
+  }
+  return envs;
+}
 
 /**
  * workflow_run runs fired by a run whose SOURCE event was a pull_request. The PR
@@ -331,6 +365,7 @@ const WORKFLOW_RUN_CONCLUSIONS = [
 
 const makeWorkflowRunEnv = (headRepo, headBranch, conclusion = 'success') => ({
   event_name: 'workflow_run',
+  upstream: 'success',
   head_ref: '',
   base_ref: '',
   ref: 'refs/heads/main',
@@ -356,13 +391,16 @@ export function isReachableUnder(jobName, jobs, memo, baseEnv) {
   const env = {
     ...baseEnv,
     sawUnknown: false,
-    needsResult: (n) => (isReachableUnder(n, jobs, memo, baseEnv) ? 'success' : 'skipped'),
+    needsResult: (n) => (isReachableUnder(n, jobs, memo, baseEnv) ? baseEnv.upstream || 'success' : 'skipped'),
   };
   const ifStr = job.if == null ? '' : String(job.if).trim();
   let reachable;
   if (ifStr === '') {
-    // No custom if: default is success() of all needs → runs iff all needs run.
-    reachable = needs.every((n) => isReachableUnder(n, jobs, memo, baseEnv));
+    // No custom if: default is success() of all needs → runs iff all needs run
+    // and succeed (with no needs, it always runs).
+    reachable =
+      needs.length === 0 ||
+      ((baseEnv.upstream || 'success') === 'success' && needs.every((n) => isReachableUnder(n, jobs, memo, baseEnv)));
   } else {
     try {
       reachable = evaluateIf(ifStr, env);
@@ -425,6 +463,28 @@ export function collectSecretsDeep(node, out) {
   }
 }
 
+const PR_EVENTS = ['pull_request', 'pull_request_review', 'pull_request_review_comment'];
+
+/** Secrets referenced by a local reusable workflow a job calls (`uses: ./.github/workflows/x.yml`). */
+export function calledWorkflowSecrets(job, workflowMap, seen = new Set()) {
+  const out = new Set();
+  const uses = job && typeof job.uses === 'string' ? job.uses.trim() : '';
+  const m = /^\.\/\.github\/workflows\/([^@\s]+)$/.exec(uses);
+  if (!m || seen.has(m[1])) return out;
+  seen.add(m[1]);
+  const called = workflowMap[m[1]];
+  if (!called || typeof called !== 'object') {
+    out.add(INHERIT_ALL_SECRETS); // unreadable callee → fail-closed
+    return out;
+  }
+  for (const cj of Object.values(called.jobs || {})) {
+    for (const s of jobSecrets(called, cj)) out.add(s);
+    for (const s of calledWorkflowSecrets(cj, workflowMap, seen)) out.add(s);
+  }
+  out.delete('GITHUB_TOKEN');
+  return out;
+}
+
 function getTriggers(wf) {
   const on = wf && (wf.on ?? wf[true] ?? wf['on']);
   if (!on) return [];
@@ -482,8 +542,8 @@ export function analyzeWorkflows(workflowMap) {
         // a trusted source event explicitly, so a modelling gap cannot pass it.
         const ifText = job && job.if != null ? String(job.if) : '';
         const namesTrustedEvent =
-          /github\.event\.workflow_run\.event\s*==\s*'(push|schedule)'/.test(ifText) &&
-          !/github\.event\.workflow_run\.event\s*==\s*'pull_request/.test(ifText);
+          /github\.event\.workflow_run\.event\s*==\s*'(push|schedule)'/i.test(ifText) &&
+          !/github\.event\.workflow_run\.event\s*==\s*'pull_request/i.test(ifText);
         if (!reachable && (secrets.size === 0 || namesTrustedEvent)) continue;
         for (const sec of secrets) {
           if (!prSourcedWorkflowRunSecrets.has(sec)) prSourcedWorkflowRunSecrets.set(sec, new Set());
@@ -492,12 +552,14 @@ export function analyzeWorkflows(workflowMap) {
       }
     }
 
-    if (!triggers.includes('pull_request')) continue;
+    // pull_request_review and pull_request_review_comment run the PR's own
+    // workflow file, the same exposure as pull_request.
+    const prEvents = PR_EVENTS.filter((e) => triggers.includes(e));
+    if (prEvents.length === 0) continue;
 
     const jobs = wf.jobs || {};
-    const memo = {};
     for (const [jobName, job] of Object.entries(jobs)) {
-      if (!isReachableOnPlainPR(jobName, jobs, memo)) continue;
+      if (!prEvents.some((e) => isReachableOnPlainPR(jobName, jobs, {}, e))) continue;
       // Collect at JOB level (the whole job, incl. step-level `env:` even where a
       // step's own `if:` would skip it on a plain PR). This is DELIBERATE, not a
       // gap: under the tamper model an auto-run PR controls the workflow content
@@ -505,6 +567,9 @@ export function analyzeWorkflows(workflowMap) {
       // anywhere in a plain-PR-reachable job is exfiltratable. Do NOT "optimize"
       // this into step-level `if:` filtering — that would open a real hole.
       const secrets = jobSecrets(wf, job);
+      // A local reusable workflow runs inside this job's reach: count every
+      // secret its jobs reference (fail-closed; it may use environment secrets).
+      for (const s of calledWorkflowSecrets(job, workflowMap)) secrets.add(s);
       for (const s of secrets) {
         if (!prReachableSecrets.has(s)) prReachableSecrets.set(s, new Set());
         prReachableSecrets.get(s).add(`${file}:${jobName}`);
@@ -973,6 +1038,118 @@ function runSelfTest() {
           jobs: {
             rt: {
               if: "github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_repository.full_name == github.repository",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: case-folded event name (event_name == 'PULL_REQUEST')",
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { if: "github.event_name == 'PULL_REQUEST'", steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: failure() after a test job the PR author can fail',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { needs: 'test', if: 'failure()', steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: always() && needs.test.result == 'failure'",
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { needs: 'test', if: "always() && needs.test.result == 'failure'", steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: attacker-chosen head-branch prefix on the pull_request path (release/)',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { if: "startsWith(github.head_ref, 'release/')", steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: attacker-chosen base branch (base_ref == 'develop')",
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { if: "github.base_ref == 'develop'", steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: pull_request_review trigger runs the PR's workflow",
+      wf: {
+        'ci.yml': {
+          on: { pull_request_review: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            d: { if: 'true', steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: PR job calls a local reusable workflow whose job reads a secret',
+      wf: {
+        'ci.yml': { on: { pull_request: {} }, jobs: { call: { uses: './.github/workflows/b.yml' } } },
+        'b.yml': {
+          on: { workflow_call: {} },
+          jobs: { deploy: { environment: 'staging', steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: PR job calls a local reusable workflow that reads no secret',
+      wf: {
+        'ci.yml': { on: { pull_request: {} }, jobs: { call: { uses: './.github/workflows/b.yml' } } },
+        'b.yml': { on: { workflow_call: {} }, jobs: { t: { steps: [{ run: 'npm test' }] } } },
+      },
+      expectViolation: false,
+    },
+    {
+      name: 'leak: workflow_run event == push OR a case-folded PULL_REQUEST',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'PULL_REQUEST'",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
