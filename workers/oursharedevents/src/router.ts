@@ -86,7 +86,7 @@
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
  *   Security Monitoring (auth required — OSE-SEC-1):
- *   GET    /api/v2/admin/security/rate-limit-stats → top-10 rate-limited IPs (last hour, from KV)
+ *   GET    /api/v2/admin/security/rate-limit-stats → top-10 rate-limited buckets (last hour, from KV; keyed ids, not IPs)
  *
  *   QR Verify/Unverify (auth required — OSE-213):
  *   POST   /api/v2/admin/events/:id/verify-qr    → handleV2AdminVerifyQr (READY→ACTIVE)
@@ -1341,7 +1341,9 @@ export async function route(
 
   // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
   // GET /api/v2/admin/security/rate-limit-stats
-  // Returns top-10 rate-limited IPs in the last hour from RATE_LIMIT_KV.
+  // Returns top-10 rate-limited buckets in the last hour from RATE_LIMIT_KV. The
+  // `ip`/`top_ips` field names are the API contract; the values are HMAC bucket
+  // ids under RATE_LIMIT_KEY_PEPPER (OSE-1447), never addresses.
   // Requires admin auth. Read-only — never modifies KV state.
   if (pathname === '/api/v2/admin/security/rate-limit-stats' && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;

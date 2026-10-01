@@ -5,10 +5,9 @@
  *   1. The T2 Smoke → Production job runs only the allowlisted specs. A new spec
  *      on that job has to be added here, in review, after its writes are checked.
  *   2. The two API smoke specs contain no write call at all.
- *   3. security-smoke.spec.js: every describe that creates events skips on
- *      production, createEvent refuses on production, and the only other write
- *      is the rejected-key probe (an invalid key, expected 401, creates nothing).
- *      Its production check must match the URL the job actually passes.
+ *   3. security-smoke.spec.js: every describe that writes skips on production,
+ *      createEvent refuses on production, and production detection is the shared
+ *      isProductionUrl() helper, so the URL the job passes is caught.
  *   4. Writing suites (red-team T5/T6) refuse a production BASE_URL at config load.
  *
  * Run: npx vitest run tests/integration/production-read-only.test.js
@@ -50,14 +49,10 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     }
   });
 
-  test("security-smoke's production check matches the URL the job passes", () => {
+  test("security-smoke's production check is the shared helper and matches the job's URL", () => {
     const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
-    const decl = src.match(/const IS_PRODUCTION = (\/.+\/i?)\.test\(BASE_URL\);/);
-    expect(decl, 'IS_PRODUCTION declaration').not.toBeNull();
-    const [, body, flags] = decl[1].match(/^\/(.+)\/([a-z]*)$/);
-    const isProd = new RegExp(body, flags);
-    expect(isProd.test(workflow.env.PROD_BASE_URL)).toBe(true);
-    expect(isProd.test('https://stg.oursharedevents.com')).toBe(false);
+    expect(src).toMatch(/const IS_PRODUCTION = isProductionUrl\(BASE_URL\);/);
+    expect(isProductionUrl(workflow.env.PROD_BASE_URL)).toBe(true);
   });
 
   test('security-smoke: createEvent refuses on production before it posts', () => {
@@ -70,19 +65,20 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     expect(fn.slice(guard, post)).toMatch(/throw new Error\(/);
   });
 
-  test('security-smoke: every describe that creates events skips on production', () => {
+  test('security-smoke: every describe that writes skips on production', () => {
     const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
     const blocks = src.split(/(?=^test\.describe\()/m).slice(1);
     expect(blocks.length).toBeGreaterThan(0);
     for (const block of blocks) {
       const title = block.match(/test\.describe\((['"`])(.*?)\1/)?.[2];
-      if (/\b(createOk|createEvent|leakedRows)\(/.test(block)) {
+      WRITE_CALL.lastIndex = 0;
+      if (/\b(createOk|createEvent|leakedRows)\(/.test(block) || WRITE_CALL.test(block)) {
         expect(block, title).toMatch(/test\.skip\(IS_PRODUCTION,/);
       }
     }
   });
 
-  test('security-smoke: the only writes are createEvent, cleanup, and the rejected-key probe', () => {
+  test('security-smoke: the only write sites are createEvent, cleanup, and the rejected-key probe (all skipped on production)', () => {
     const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
     const sites = [...src.matchAll(WRITE_CALL)].map((m) => {
       const before = src.slice(0, m.index);

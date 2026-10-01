@@ -45,12 +45,13 @@ It is enforced in three places:
   - the allowlist of specs on `smoke-production`;
   - no write calls in the API smoke specs;
   - the guard, the skips and the write-site inventory in `security-smoke`;
-  - the `IS_PRODUCTION` regex matching `PROD_BASE_URL`;
+  - `IS_PRODUCTION` coming from the shared helper and matching `PROD_BASE_URL`;
   - the red-team refusal.
 
-The one remaining production request with a write method is the rejected-key probe
-(`POST /api/v2/admin/events` with an invalid bearer, expected 401). It cannot create a
-row, and its cleanup is a no-op on production.
+Every `security-smoke` describe that sends a write, including the rejected-key probe
+(an invalid bearer, expected 401), skips on production. A rejected-key POST could still
+create a row if authentication ever regressed, so it does not run there. Production
+detection is the shared `isProductionUrl()` helper, so ports, paths and case are caught.
 
 ## Alternatives Considered
 
@@ -82,10 +83,9 @@ production with no failing check.
 - The production tier cannot prove write paths (register, check-in, scan) end to end.
   Those are proven on staging with the same build (OSE-1217: production deploys only
   after the same-SHA staging chain is green), and in the field (OSE-1252, OSE-1209).
-- Once OSE-1353 puts production `/api/v2/admin/*` behind Cloudflare Access, the
-  rejected-key probe will meet an Access challenge (302) instead of the Worker's 401.
-  That probe should then expect the Access challenge on production, or skip there.
-  This is tracked on OSE-906 and is not changed here.
+- The production tier no longer checks that a wrong admin key is refused on production.
+  That refusal is covered on staging and in the worker suite. On production, OSE-1353's
+  Access app answers first, and the CF Access Canary watches that.
 
 ### Neutral
 

@@ -23,7 +23,9 @@ export interface RateLimitEnv {
   /**
    * HMAC key for rate-limit bucket names (OSE-1447 follow-up). Its own secret,
    * not IP_HASH_PEPPER: separate peppers, separate rotation (OSE-272 Q1).
-   * Rotating it is free: buckets live one window, so a rotation just resets them.
+   * Rotating it is free: rate-limit buckets live one window (60 s) and beacon
+   * dedup keys IMPRESSION_DEDUP_TTL_SECONDS (300 s), so old keys age out within
+   * five minutes and a rotation only resets counts.
    */
   RATE_LIMIT_KEY_PEPPER?: string;
 }

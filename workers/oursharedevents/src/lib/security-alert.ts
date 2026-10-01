@@ -199,15 +199,15 @@ export function buildInvestigationSteps(payload: SecurityAlertPayload, workerEnv
 3. If brute force: add the IP to Cloudflare WAF block list
 4. If credential stuffing: rotate ADMIN_KEY and X_OCR_INTERNAL secrets immediately
 5. Review CF Access logs for failed authentication attempts
-6. Check \`/api/v2/admin/security/rate-limit-stats\` for rate-limit context`;
+6. Check \`/api/v2/admin/security/rate-limit-stats\` for rate-limit context (keyed bucket ids, not IPs; addresses are in Cloudflare Security → Events)`;
 
     case 'rate_limit_triggers':
-      return `1. Check \`GET /api/v2/admin/security/rate-limit-stats\` — returns top-10 rate-limited IPs in the last hour
-2. Identify if triggers come from a single IP (scraping / DDoS) or many IPs (viral event)
-3. For a single abusive IP: add to Cloudflare WAF → Block rule
+      return `1. Check \`GET /api/v2/admin/security/rate-limit-stats\` — top-10 rate-limited buckets in the last hour. The \`ip\` field is an HMAC bucket id (OSE-1447), never an address
+2. Identify if triggers come from one bucket (scraping / DDoS) or many (viral event)
+3. For a single abuser: find its address in Cloudflare Dashboard → Security → Events (or Workers logs), then add a WAF → Block rule
 4. For legitimate traffic spike: raise RATE_LIMIT_MAX env var or add KV namespace capacity
 5. Check which endpoints are hit most by querying the D1 audit log
-6. Review KV keys with prefix \`ratelimit:\` for the worst offenders`;
+6. Review KV keys with prefix \`ratelimit:\` for the worst offenders (keyed hashes; they do not reverse to an IP)`;
 
     case 'error_rate_5xx':
       return `1. Pull recent Worker logs from Cloudflare Dashboard → Workers → Logs
