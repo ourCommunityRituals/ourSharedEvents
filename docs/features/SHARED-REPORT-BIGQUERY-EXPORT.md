@@ -170,7 +170,7 @@ sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Wo
 
 **When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
 `wrangler.toml`). Each run snapshots events whose day (`end_date`, else
-`start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), even when no source
+`start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), up to and including today (an event rescheduled into the future is not counted), even when no source
 row is past the watermark, because a rolling window changes as events age out.
 The window is the event's day, not `last_seen_at`, which is when the cron
 materialized the row (hours after the event, later again on a re-run).

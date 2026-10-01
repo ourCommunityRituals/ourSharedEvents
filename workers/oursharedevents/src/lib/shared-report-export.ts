@@ -362,6 +362,9 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     const floorDay = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000)
       .toISOString()
       .slice(0, 10);
+    // And no later than today: an event rescheduled into the future keeps its
+    // earlier rows, but it has not happened in the window, so it is not counted.
+    const todayDay = now.toISOString().slice(0, 10);
     // The window is the event's own day (COALESCE(end_date, start_date), as the
     // materializer reads it), not last_seen_at: last_seen_at is when the cron
     // materialized the row, hours after the event and later again on a re-run.
@@ -390,12 +393,13 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
              LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
             WHERE air.last_seen_at >= ?
               AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?
+              AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?
               AND air.pepper_epoch = ?
             GROUP BY air.anon_id_hash, 2, 3, 5
          )
         GROUP BY corridor_id, pool_key, uec_code`
     )
-      .bind(`${floorDay}T00:00:00.000Z`, floorDay, epoch ?? '')
+      .bind(`${floorDay}T00:00:00.000Z`, floorDay, todayDay, epoch ?? '')
       .all<CorridorReturnsRow>();
 
     // Each run is its own snapshot, identified by its full timestamp: the

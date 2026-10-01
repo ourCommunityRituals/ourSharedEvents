@@ -623,6 +623,18 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 6 });
   });
 
+  test('an event rescheduled into the future is not counted, even with earlier rows', async () => {
+    await seedCorridorEvent('test-evt-exp-future');
+    await seedPeople('test-evt-exp-future', [2, 2, 2, 2, 2]);
+    await tenv()
+      .DB.prepare(`UPDATE events SET start_date = date('now', '+30 days') WHERE id = ?`)
+      .bind('test-evt-exp-future')
+      .run();
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(groupCalls()).toHaveLength(0);
+  });
+
   test('a group with no real corridor is withheld', async () => {
     await seedCorridorEvent('test-evt-exp-nocorr', 1, null);
     await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);
