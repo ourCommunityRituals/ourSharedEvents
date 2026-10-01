@@ -27,7 +27,11 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
-import { handleSponsorLogo, SPONSOR_LOGO_READ_MAX } from '../src/handlers/sponsors';
+import {
+  handleSponsorLogo,
+  SPONSOR_LOGO_READ_MAX,
+  SPONSOR_LOGO_NEGATIVE_TTL_S,
+} from '../src/handlers/sponsors';
 import { handleSponsorCardPage } from '../src/handlers/sponsor-card';
 import { checkCardField, telHref, sponsorTitle } from '../src/lib/sponsor-card';
 
@@ -610,15 +614,77 @@ describe('CCR PR #699 | logo proxy success path + edge cache', () => {
     expect(new Uint8Array(await again.arrayBuffer())).toEqual(PNG);
   });
 
-  test('a failed upstream is not cached: the next view tries again', async () => {
+  // OSE-1433 replaces the PR #699 rule "a failed upstream is not cached": a
+  // dead host is now remembered for SPONSOR_LOGO_NEGATIVE_TTL_S, so repeated
+  // views do not re-fetch it. Born red against the #699 handler (2 calls).
+  test('OSE-1433: a failed upstream is remembered: a second view within the TTL makes no upstream call', async () => {
     const failing = vi.fn(async () => new Response('nope', { status: 500 }));
     vi.stubGlobal('fetch', failing);
     const id = await onShow({
-      name: 'Flaky Host',
+      name: 'Dead Host',
       logo_url: `https://cdn.example.com/f-${Date.now()}.png`,
     });
     expect((await get(id)).status).toBe(502);
+    const again = await get(id);
+    expect(again.status).toBe(502);
+    expect(again.headers.get('cache-control')).toBe('no-store');
+    expect(failing).toHaveBeenCalledTimes(1);
+    expect(SPONSOR_LOGO_NEGATIVE_TTL_S).toBe(60);
+  });
+
+  test('OSE-1433: a remembered failure does not shadow a later success for a new URL', async () => {
+    const failing = vi.fn(async () => new Response('nope', { status: 500 }));
+    vi.stubGlobal('fetch', failing);
+    const t = Date.now();
+    const id = await onShow({ name: 'Fixed Logo', logo_url: `https://cdn.example.com/x-${t}.png` });
     expect((await get(id)).status).toBe(502);
-    expect(failing).toHaveBeenCalledTimes(2);
+    // The admin fixes the logo: a new URL is a new cache key.
+    expect((await update(id, { logo_url: `https://cdn.example.com/y-${t}.png` })).status).toBe(200);
+    vi.stubGlobal('fetch', upstream);
+    expect((await get(id)).status).toBe(200);
+  });
+
+  test('OSE-1433: a private or local logo host is refused on write', async () => {
+    for (const logo_url of [
+      'http://127.0.0.1/l.png',
+      'http://169.254.169.254/latest/meta-data',
+      'http://localhost:8787/l.png',
+      'http://[::1]/l.png',
+    ]) {
+      const { status, body } = await create({ tier: 'gold', name: 'Sneaky', logo_url });
+      expect(status, logo_url).toBe(400);
+      expect(JSON.stringify(body), logo_url).toContain('INVALID_LOGO_URL');
+    }
+  });
+
+  test('OSE-1433: a logo URL stored before the host rule is refused at fetch, with no request', async () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    const id = await onShow({
+      name: 'Old Row',
+      logo_url: `https://cdn.example.com/o-${Date.now()}.png`,
+    });
+    await env.DB.prepare(
+      "UPDATE sponsor_asset SET url = 'http://10.0.0.5/l.png' WHERE sponsor_business_id = ? AND format = 'logo'"
+    )
+      .bind(id)
+      .run();
+    expect((await get(id)).status).toBe(422);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  test('OSE-1433: an unanswered sponsor request gets no logo (same organizer rule as the card)', async () => {
+    vi.stubGlobal('fetch', upstream);
+    const id = await onShow({
+      name: 'Asked To Join',
+      logo_url: `https://cdn.example.com/r-${Date.now()}.png`,
+    });
+    await env.DB.prepare(
+      "UPDATE sponsor_placement SET source = 'sponsor_request', organizer_accepted = NULL WHERE sponsor_business_id = ?"
+    )
+      .bind(id)
+      .run();
+    expect((await get(id)).status).toBe(404);
+    expect(upstream).not.toHaveBeenCalled();
   });
 });

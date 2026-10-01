@@ -1606,8 +1606,10 @@ export async function handleSponsorLogo(
                AND sp.is_active = 1
                -- CCR PR #699: the same consent gate as the card, the bundle and
                -- the public page — a logo is not served for a sponsor that has
-               -- not accepted, or that the organizer has not accepted.
-               AND COALESCE(sp.organizer_accepted, 1) = 1
+               -- not accepted, or that the organizer has not accepted. OSE-1433:
+               -- source-aware like the card and resolver (ADR-019 amendment), so
+               -- an unanswered sponsor_request is not served.
+               AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                AND sp.sponsor_accepted = 1
           )`
     )
@@ -1632,11 +1634,13 @@ export async function handleSponsorLogo(
   // Edge cache, keyed by the UPSTREAM url — every public surface now loads logos
   // through here, so a page view must not mean a fetch to the sponsor's host.
   // Keying by the stored URL means an admin changing the logo is a cache miss,
-  // not a day of the old image. Only a successful proxy is cached.
+  // not a day of the old image. A success is cached for a day; a failure for
+  // SPONSOR_LOGO_NEGATIVE_TTL_S (OSE-1433), so a dead host is asked at most
+  // once a minute per colo instead of once per page view.
   const cache = typeof caches !== 'undefined' ? caches.default : null;
-  const cacheKey = new Request(
-    `https://sponsor-logo-cache.invalid/?u=${encodeURIComponent(validation.url)}`
-  );
+  const keyUrl = encodeURIComponent(validation.url);
+  const cacheKey = new Request(`https://sponsor-logo-cache.invalid/?u=${keyUrl}`);
+  const failKey = new Request(`https://sponsor-logo-cache.invalid/?failed=1&u=${keyUrl}`);
   if (cache) {
     const hit = await cache.match(cacheKey).catch(() => undefined);
     if (hit) {
@@ -1645,11 +1649,23 @@ export async function handleSponsorLogo(
       res.headers.set('X-Request-Id', rid);
       return res;
     }
+    if (await cache.match(failKey).catch(() => undefined)) {
+      logLogoOutcome('failed_cached', sidebar);
+      return logoUpstreamError(rid);
+    }
   }
 
   // Only a cache MISS reaches the sponsor's host, and misses are rate-limited
   // per caller (OSE-1247 posture) — this route is public and each miss is an
   // outbound fetch. Generous: one page shows several logos.
+  //
+  // OSE-1433 decision: the limiter stays FAIL-OPEN when KV is missing or errors,
+  // like every public read. It is not the control that bounds outbound fetches:
+  // the URL is admin-set (a caller cannot choose what we fetch), and the two
+  // caches above cap upstream calls at one per URL per colo per minute while
+  // failing and per day while healthy. Failing closed would blank every logo on
+  // the platform during a KV outage to protect against a load the caches
+  // already bound.
   if (await isPublicReadLimited(request, env, 'sponsor-logo', SPONSOR_LOGO_READ_MAX)) {
     logLogoOutcome('limited', sidebar);
     return new Response(null, {
@@ -1661,10 +1677,15 @@ export async function handleSponsorLogo(
   const result = await fetchAndProxyLogo(validation.url);
   if (!result.ok || !result.response) {
     logLogoOutcome('upstream_error', sidebar);
-    return new Response(null, {
-      status: 502,
-      headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
-    });
+    if (cache) {
+      // An empty 200: the Cache API stores it (it will not store every status).
+      const marker = new Response('', {
+        status: 200,
+        headers: { 'Cache-Control': `public, max-age=${SPONSOR_LOGO_NEGATIVE_TTL_S}` },
+      });
+      await cache.put(failKey, marker).catch(() => undefined);
+    }
+    return logoUpstreamError(rid);
   }
 
   logLogoOutcome('miss', sidebar);
@@ -1679,7 +1700,7 @@ export async function handleSponsorLogo(
  * never the sponsor id, the URL, or anything about the caller (never-who).
  */
 function logLogoOutcome(
-  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error',
+  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error' | 'failed_cached',
   sidebar: boolean
 ): void {
   console.log(
@@ -1689,6 +1710,17 @@ function logLogoOutcome(
 
 /** Logo-proxy cache misses per caller per minute (a page shows several logos). */
 export const SPONSOR_LOGO_READ_MAX = 300;
+
+/** How long a failed upstream fetch is remembered before it is tried again (OSE-1433). */
+export const SPONSOR_LOGO_NEGATIVE_TTL_S = 60;
+
+/** The 502 a surface sees for a logo that failed; its <img> swaps to the OSE default. */
+function logoUpstreamError(rid: string): Response {
+  return new Response(null, {
+    status: 502,
+    headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
+  });
+}
 
 /**
  * POST /api/v2/events/:id/sponsors/:sid/click
