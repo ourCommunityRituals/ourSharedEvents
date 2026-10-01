@@ -34,7 +34,7 @@
  *     series.
  */
 
-import { hashAnonIdForReturns } from './anon-id-hash';
+import { hashAnonIdForReturns, pepperEpoch } from './anon-id-hash';
 import { phaseTimesFor } from './event-datetime';
 import { isH3Cell } from './export-geography';
 
@@ -185,6 +185,8 @@ export async function materializeAnonIdReturns(
     }),
   };
 
+  // Migration 0090: every row records which pepper hashed it.
+  const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
   for (const row of candidates.results ?? []) {
     result.eventsProcessed++;
     try {
@@ -209,14 +211,16 @@ export async function materializeAnonIdReturns(
         const nowIso = new Date().toISOString();
         await env.DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-           VALUES (?, ?, ?, ?, 1, ?)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+              pepper_epoch)
+           VALUES (?, ?, ?, ?, 1, ?, ?)
            ON CONFLICT(anon_id_hash, venue_id) DO UPDATE SET
              last_seen_at = excluded.last_seen_at,
              visit_count  = visit_count + 1,
-             computed_at  = excluded.computed_at`
+             computed_at  = excluded.computed_at,
+             pepper_epoch = excluded.pepper_epoch`
         )
-          .bind(hash, row.id, nowIso, nowIso, nowIso)
+          .bind(hash, row.id, nowIso, nowIso, nowIso, epoch)
           .run();
         result.rowsUpserted++;
       }

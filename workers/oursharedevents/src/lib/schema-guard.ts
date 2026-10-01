@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0089_anon_id_returns_last_seen_index.sql */
-export const REQUIRED_DB_MIGRATION = 89;
+/** Highest migration in migrations/ — currently 0090_anon_id_returns_pepper_epoch.sql */
+export const REQUIRED_DB_MIGRATION = 90;
 
 /** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
 export const REQUIRED_FORMS_MIGRATION = 15;

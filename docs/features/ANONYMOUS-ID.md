@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS scan_node_returns (
 );
 ```
 
-**What's explicitly excluded:** email, name, IP address, country, cookies, device fingerprint. Two honest caveats: `created_at` is the row's insert time to the second (it is kept for retention and ordering and never leaves the Worker; reports and exports use `scan_bucket`, the hour), and `anonymous_id` is a pseudonymous cookie id, so inside OSE one browser's scans at different events can be linked. That link is used only to count returns, and it leaves OSE only as k-floored corridor counts (OSE-1460).
+**What's explicitly excluded:** email, name, IP address, country, device fingerprint, and any cookie other than the `ose_anon` id below. Two honest caveats: `created_at` is the row's insert time to the second (it is kept for retention and ordering and never leaves the Worker; reports and exports use `scan_bucket`, the hour), and `anonymous_id` is a pseudonymous cookie id, so inside OSE one browser's scans at different events can be linked. That link is used only to count returns, and it leaves OSE only as k-floored corridor counts (OSE-1460).
 
 ### `poster_deployments` table
 

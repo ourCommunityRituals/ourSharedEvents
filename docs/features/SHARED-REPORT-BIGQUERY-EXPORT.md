@@ -173,7 +173,11 @@ sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Wo
 `start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), even when no source
 row is past the watermark, because a rolling window changes as events age out.
 The window is the event's day, not `last_seen_at`, which is when the cron
-materialized the row (hours after the event, later again on a re-run). The watermark then records the newest source row seen. Each run
+materialized the row (hours after the event, later again on a re-run).
+Only rows hashed under the current `ANON_ID_HASH_PEPPER` count (`pepper_epoch`,
+migration 0090): after a rotation the same browser has a second hash, so mixing
+peppers could count three people as six and lift them over the floor. A rotation
+resets the return counts; with no pepper configured, every group is empty. The watermark then records the newest source row seen. Each run
 is its own snapshot, identified by its full `computed_at` timestamp; retries
 inside one run reuse it, so their insertIds dedupe.
 

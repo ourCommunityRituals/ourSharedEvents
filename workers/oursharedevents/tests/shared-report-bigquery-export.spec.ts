@@ -46,6 +46,7 @@ import {
   DECLINED_REGIMES,
 } from '../src/lib/pool-contract';
 import corridorReturnsSchema from '../bigquery/corridor_returns_export.schema.json';
+import { pepperEpoch } from '../src/lib/anon-id-hash';
 
 interface TestEnv {
   DB: D1Database;
@@ -69,8 +70,13 @@ const BQ_ENV_CONFIGURED = {
   WORKER_ENV: 'production',
 };
 
-function makeEnv(): SharedReportExportEnv {
-  return { DB: tenv().DB, ...BQ_ENV_CONFIGURED } as SharedReportExportEnv;
+const TEST_PEPPER = 'ose-1460-export-pepper';
+function makeEnv(pepper: string = TEST_PEPPER): SharedReportExportEnv {
+  return {
+    DB: tenv().DB,
+    ...BQ_ENV_CONFIGURED,
+    ANON_ID_HASH_PEPPER: pepper,
+  } as SharedReportExportEnv;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -320,15 +326,22 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
   async function seedPeople(
     venueId: string,
     visits: number[],
-    opts: { prefix?: string; lastSeen?: string; computedAt?: string } = {}
+    opts: {
+      prefix?: string;
+      lastSeen?: string;
+      computedAt?: string;
+      pepper?: string | null;
+    } = {}
   ): Promise<void> {
+    const epoch = opts.pepper === null ? null : await pepperEpoch(opts.pepper ?? TEST_PEPPER);
     for (let i = 0; i < visits.length; i++) {
       const seen = opts.lastSeen ?? recent(2);
       await tenv()
         .DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+              pepper_epoch)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .bind(
           `${opts.prefix ?? 'p'}${i}`.padEnd(32, '0'),
@@ -336,7 +349,8 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
           seen,
           seen,
           visits[i],
-          opts.computedAt ?? recent(1)
+          opts.computedAt ?? recent(1),
+          epoch
         )
         .run();
     }
@@ -433,10 +447,10 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .prepare(
         `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500),
                        p(j) AS (SELECT 0 UNION ALL SELECT j + 1 FROM p WHERE j < 4)
-         INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-         SELECT printf('%032d', i * 10 + j), 'test-evt-exp-chunk-' || i, ?, ?, 1, ? FROM n, p`
+         INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at, pepper_epoch)
+         SELECT printf('%032d', i * 10 + j), 'test-evt-exp-chunk-' || i, ?, ?, 1, ?, ? FROM n, p`
       )
-      .bind(seen, seen, seen)
+      .bind(seen, seen, seen, await pepperEpoch(TEST_PEPPER))
       .run();
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
@@ -574,6 +588,27 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
         if (mode === 'REQUIRED') expect(row[name] ?? null, name).not.toBeNull();
       }
     }
+  });
+
+  test('after a pepper rotation, one browser under two hashes never lifts a group over the floor', async () => {
+    // Three real people, seen at two events: once hashed under the old pepper,
+    // once under the new. Mixed, the corridor would read six people.
+    await seedCorridorEvent('test-evt-exp-rot-1');
+    await seedCorridorEvent('test-evt-exp-rot-2');
+    await seedPeople('test-evt-exp-rot-1', [1, 1, 1], { prefix: 'old', pepper: 'retired-pepper' });
+    await seedPeople('test-evt-exp-rot-2', [1, 1, 1], { prefix: 'new' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(groupCalls()).toHaveLength(0);
+  });
+
+  test('rows of an unknown pepper (pre-0090) and runs with no pepper count nobody', async () => {
+    await seedCorridorEvent('test-evt-exp-nopep');
+    await seedPeople('test-evt-exp-nopep', [2, 2, 2, 2, 2], { pepper: null });
+    await seedPeople('test-evt-exp-nopep', [2, 2, 2, 2, 2], { prefix: 'q' });
+    expect((await exportAnonIdReturns(makeEnv(''))).errors).toBe(0);
+    expect(groupCalls()).toHaveLength(0);
+    expect(markerRows().length).toBeGreaterThan(0);
   });
 
   test('a group with no real corridor is withheld', async () => {

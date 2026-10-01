@@ -191,32 +191,32 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
     'geographic baseline input; the output is never-who anon-return aggregates. ' +
     'Not request-reachable.',
-  'lib/shared-report.ts:294':
+  'lib/shared-report.ts:298':
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts:480':
+  'lib/shared-report.ts:484':
     'detectEventSeriesClusters cron — venue/day/hour event-count baseline across ' +
     'brands, count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
-  'lib/shared-report.ts:515':
+  'lib/shared-report.ts:519':
     'Same cron — subselect `venue_id IN (SELECT id FROM events WHERE location=?)` ' +
     '(a venue-geography key) for the confirmed/rejected series check. Cross-brand ' +
     'geographic by design; never-who.',
-  'lib/shared-report.ts:539':
+  'lib/shared-report.ts:543':
     'Same cron, the `state=pending` twin of :515. Same venue-geography rationale.',
-  'lib/shared-report.ts:673':
+  'lib/shared-report.ts:677':
     // 666→673 by OSE-1460 (country cleanup statement added above; the
     // country-code twin query at :687 was removed with top_country).
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
     '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
     'Never-who scan aggregate; not request-reachable.',
-  'lib/shared-report.ts:769':
+  'lib/shared-report.ts:773':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:770':
+  'lib/shared-report.ts:774':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:773':
+  'lib/shared-report.ts:777':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→335 and 729→742 by OSE-616 (corridorKeyOf helper above; the key is
@@ -234,12 +234,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // legacy-keyed baseline rows + duplicate canonical key check +
   // whole-timestamp-group baseline read). 303→368 and 611→708 by OSE-1460 (the
   // returns phase now aggregates to k-floored corridor counts before export).
-  'lib/shared-report-export.ts:377':
+  'lib/shared-report-export.ts:387':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:718':
+  'lib/shared-report-export.ts:729':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

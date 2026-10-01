@@ -88,8 +88,11 @@ const BQ_ENV = {
   BIGQUERY_DATASET_ID: 'oureventring_general',
   WORKER_ENV: 'staging',
 };
+// The export counts only rows hashed under the current pepper (migration 0090),
+// so it runs with the same pepper the nightly materializer used below.
+const TRACE_PEPPER = 'ose-616-trace-pepper';
 const exportEnv = (): SharedReportExportEnv =>
-  ({ DB: tenv().DB, ...BQ_ENV }) as SharedReportExportEnv;
+  ({ DB: tenv().DB, ...BQ_ENV, ANON_ID_HASH_PEPPER: TRACE_PEPPER }) as SharedReportExportEnv;
 
 // ── BigQuery recorder ────────────────────────────────────────────────────────
 
@@ -314,7 +317,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
   test('hops 2–4 — the nightly job aggregates at the venue node and keys the corridor at res7', async () => {
     const run = await runSharedReportMaterialization({
       DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+      ANON_ID_HASH_PEPPER: TRACE_PEPPER,
     });
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 

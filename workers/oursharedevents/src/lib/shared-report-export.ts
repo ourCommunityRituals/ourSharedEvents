@@ -42,6 +42,7 @@
  *     to events for pool routing; streams to per-pool dataset.
  */
 
+import { pepperEpoch } from './anon-id-hash';
 import {
   bigQueryInsertRowsToDataset,
   isBigQueryConfigured,
@@ -64,7 +65,11 @@ import {
   UNKNOWN_CORRIDOR,
 } from './export-geography';
 
-export type SharedReportExportEnv = BigQueryEnv & { DB: D1Database };
+export type SharedReportExportEnv = BigQueryEnv & {
+  DB: D1Database;
+  /** Migration 0090: the returns export counts only rows hashed under this pepper. */
+  ANON_ID_HASH_PEPPER?: string;
+};
 
 export interface ExportResult {
   phase: string;
@@ -347,6 +352,11 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     const nextWatermark = changed?.max_computed_at ?? watermark;
 
     const now = new Date();
+    // One pepper only (migration 0090): after a rotation the same browser has a
+    // second hash, so mixing peppers would count one person twice and could lift
+    // a group of fewer than five people over the floor. Rows of an older or
+    // unknown pepper are not counted; with no pepper configured, nothing is.
+    const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
     // The window's first day, whole: the last_seen_at pre-filter starts at that
     // day's midnight, so a row materialized early on the floor day is not dropped.
     const floorDay = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000)
@@ -378,11 +388,12 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
              LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
             WHERE air.last_seen_at >= ?
               AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?
+              AND air.pepper_epoch = ?
             GROUP BY air.anon_id_hash, 2, 3, 5
          )
         GROUP BY corridor_id, pool_key, uec_code`
     )
-      .bind(`${floorDay}T00:00:00.000Z`, floorDay)
+      .bind(`${floorDay}T00:00:00.000Z`, floorDay, epoch ?? '')
       .all<CorridorReturnsRow>();
 
     // Each run is its own snapshot, identified by its full timestamp: the
