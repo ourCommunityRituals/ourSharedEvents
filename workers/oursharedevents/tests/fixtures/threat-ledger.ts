@@ -1197,17 +1197,17 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-057',
     layer: 'worker_surface',
     threat:
-      'Public form endpoints accept unlimited submissions: the anonymous check-in and survey handlers have no rate limit, enabling unbounded spam of checkin_counts and form_surveys for any event_id. Registration, self-delete and email-signup (the PII handlers) ARE per-IP limited (isFormRateLimited, 10/min per ip:event); the anonymous handlers are deliberately exempt from IP-based limiting because they must not read the visitor IP (never-who, see form-rate-limit.spec.ts).',
-    severity: 'HIGH',
+      'Public check-in and survey forms have no per-event cap: every public form POST is behind the router\'s KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).',
+    severity: 'MEDIUM',
     target_invariant: null, // resource abuse / input handling, not PII retention (#8)
-    mitigation_story: 'OSE-599',
+    mitigation_story: 'OSE-1465',
     test_ref:
-      'tests/form-rate-limit.spec.ts > SR-16 | Rate limiting | Integration gate (registration + email-signup only; check-in and survey unlimited)',
+      'tests/form-rate-limit.spec.ts > TL-057 | route-level limit covers the anonymous form handlers',
     status: 'open',
     red_birth: null,
     last_run_green: null,
     notes:
-      'Reclassified 2026-10-01 (conformance refresh review): was marked tested on the strength of A1-A9 injection tests and an always-passing A10 placeholder. The injection coverage now has its own entry, TL-070. This entry stays open until check-in and survey get a limiter that does not read the visitor IP.',
+      'Reclassified 2026-10-01 (conformance refresh review): was marked tested on the strength of A1-A9 injection tests and an always-passing A10 placeholder; the injection coverage now has its own entry, TL-070. Narrowed and lowered from HIGH the same day: the earlier text said check-in and survey had no rate limit at all, but the router limits every public form POST per IP. The test_ref pins that per-IP limit (red when the router check is removed); it does not mitigate the per-event gap, which stays open until OSE-1465.',
   },
   {
     id: 'TL-058',
