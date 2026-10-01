@@ -122,7 +122,7 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
       const testDir = src.match(/testDir:\s*['"]\.\/(.+?)['"]/)[1];
       resolved.push(...specs.map((s) => `${testDir}/${s}`));
       // Narrowed before export, and applied as testMatch.
-      const call = src.search(new RegExp(`productionTestMatch\\('${cfg.replace(/\./g, '\\.')}'`));
+      const call = src.indexOf(`productionTestMatch('${cfg}'`);
       const exp = src.search(/^export default/m);
       expect(call, `${cfg}: productionTestMatch call`).toBeGreaterThan(-1);
       expect(call, `${cfg}: before export`).toBeLessThan(exp);
