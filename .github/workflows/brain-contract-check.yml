@@ -42,6 +42,8 @@ jobs:
           path: ocr-docs
           ref: main
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          # ADR-012 0.1: never leave the token where later steps can read it.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7

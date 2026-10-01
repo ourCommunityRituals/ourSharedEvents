@@ -145,6 +145,13 @@ function makeParser(tokens, env) {
     if (path === 'github.base_ref') return env.base_ref;
     if (path === 'github.ref') return env.ref;
     if (path.startsWith('github.event.inputs.')) return ''; // dispatch inputs absent on PR (modeled)
+    // workflow_run context (ADR-012 / Standard §4.2): modeled only in the
+    // PR-sourced workflow_run environment; elsewhere these are unknown refs.
+    if (env.workflow_run && path.startsWith('github.event.workflow_run.')) {
+      const key = path.slice('github.event.workflow_run.'.length);
+      if (key in env.workflow_run) return env.workflow_run[key];
+    }
+    if (env.workflow_run && path === 'github.repository') return env.repository;
     const m = /^needs\.(.+)\.result$/.exec(path);
     if (m) return env.needsResult(m[1]);
     // UNKNOWN context ref (e.g. github.event.pull_request.draft, github.actor,
@@ -273,23 +280,66 @@ export function normalizeNeeds(needs) {
  * that cannot be evaluated is treated as reachable.
  */
 export function isReachableOnPlainPR(jobName, jobs, memo = {}) {
+  return isReachableUnder(jobName, jobs, memo, PLAIN_PR_ENV);
+}
+
+/** A plain same-repo PR from an agent-authorable branch. */
+const PLAIN_PR_ENV = {
+  event_name: 'pull_request',
+  head_ref: 'copilot/x',
+  base_ref: 'main',
+  ref: 'refs/pull/1/merge',
+};
+
+/**
+ * workflow_run runs fired by a run whose SOURCE event was a pull_request. The PR
+ * author chooses the branch name, and a fork can open a PR from its own `main`,
+ * so the job is tested under each of these and counts as reachable if ANY
+ * reaches it. workflow_run runs with the default branch as its ref, so
+ * environment branch rules do not stop it, and a head_repository check stops
+ * only forks (ADR-012, Standard §4.2).
+ */
+const PR_SOURCED_WORKFLOW_RUN_ENVS = [
+  ['org/repo', 'full-pipeline/x'],
+  ['org/repo', 'copilot/x'],
+  ['org/repo', 'claude/x'],
+  ['org/repo', 'dependabot/npm/x'],
+  ['org/repo', 'feature/x'],
+  ['fork/repo', 'main'],
+].map(([headRepo, headBranch]) => ({
+  event_name: 'workflow_run',
+  head_ref: '',
+  base_ref: '',
+  ref: 'refs/heads/main',
+  repository: 'org/repo',
+  workflow_run: {
+    event: 'pull_request',
+    conclusion: 'success',
+    head_branch: headBranch,
+    'head_repository.full_name': headRepo,
+  },
+}));
+
+/**
+ * Is `jobName` reachable under `baseEnv`? Fail-closed: an `if:` that cannot be
+ * evaluated, or a "not reachable" verdict built on an unmodeled ref, counts as
+ * reachable.
+ */
+export function isReachableUnder(jobName, jobs, memo, baseEnv) {
   if (jobName in memo) return memo[jobName];
   memo[jobName] = false; // cycle guard
   const job = jobs[jobName] || {};
   const needs = normalizeNeeds(job.needs);
   const env = {
-    event_name: 'pull_request',
-    head_ref: 'copilot/x',
-    base_ref: 'main',
-    ref: 'refs/pull/1/merge',
+    ...baseEnv,
     sawUnknown: false,
-    needsResult: (n) => (isReachableOnPlainPR(n, jobs, memo) ? 'success' : 'skipped'),
+    needsResult: (n) => (isReachableUnder(n, jobs, memo, baseEnv) ? 'success' : 'skipped'),
   };
   const ifStr = job.if == null ? '' : String(job.if).trim();
   let reachable;
   if (ifStr === '') {
     // No custom if: default is success() of all needs → runs iff all needs run.
-    reachable = needs.every((n) => isReachableOnPlainPR(n, jobs, memo));
+    reachable = needs.every((n) => isReachableUnder(n, jobs, memo, baseEnv));
   } else {
     try {
       reachable = evaluateIf(ifStr, env);
@@ -342,11 +392,49 @@ function getTriggers(wf) {
 export function analyzeWorkflows(workflowMap) {
   const prReachableSecrets = new Map();
   const pullRequestTargetFiles = [];
+  const persistedTokenCheckouts = [];
+  const prSourcedWorkflowRunSecrets = new Map();
 
   for (const [file, wf] of Object.entries(workflowMap)) {
     if (!wf || typeof wf !== 'object') continue;
     const triggers = getTriggers(wf);
     if (triggers.includes('pull_request_target')) pullRequestTargetFiles.push(file);
+
+    // Rule P (ADR-012 Phase 0.1): a checkout handed a token keeps it for every
+    // later step (in .git/config, or with checkout v6+ a credentials file under
+    // $RUNNER_TEMP) unless persist-credentials is false. Later steps include PR
+    // code and PR-lockfile installs, so a persisted token is a read path.
+    for (const [jobName, job] of Object.entries(wf.jobs || {})) {
+      (job && Array.isArray(job.steps) ? job.steps : []).forEach((step, i) => {
+        if (!step || typeof step.uses !== 'string' || !/^actions\/checkout@/.test(step.uses)) return;
+        const w = step.with || {};
+        if (w.token == null || String(w.token).trim() === '') return;
+        if (String(w['persist-credentials']).trim().toLowerCase() === 'false') return;
+        persistedTokenCheckouts.push(`${file}:${jobName}:step${i + 1}${step.name ? ` (${step.name})` : ''}`);
+      });
+    }
+
+    // Rule W (ADR-012 Phase 0.2): a workflow_run job may hold no secret when the
+    // source run was a pull_request. Fail-closed: every workflow_run is assumed
+    // PR-sourceable unless the job's if: excludes it.
+    if (triggers.includes('workflow_run')) {
+      const jobs = wf.jobs || {};
+      const memo = {};
+      for (const [jobName, job] of Object.entries(jobs)) {
+        const reachable = PR_SOURCED_WORKFLOW_RUN_ENVS.some((env, k) =>
+          isReachableUnder(jobName, jobs, (memo[k] = memo[k] || {}), env)
+        );
+        if (!reachable) continue;
+        const secrets = new Set();
+        collectSecretsDeep(job, secrets);
+        secrets.delete('GITHUB_TOKEN');
+        for (const sec of secrets) {
+          if (!prSourcedWorkflowRunSecrets.has(sec)) prSourcedWorkflowRunSecrets.set(sec, new Set());
+          prSourcedWorkflowRunSecrets.get(sec).add(`${file}:${jobName}`);
+        }
+      }
+    }
+
     if (!triggers.includes('pull_request')) continue;
 
     const jobs = wf.jobs || {};
@@ -367,7 +455,7 @@ export function analyzeWorkflows(workflowMap) {
       }
     }
   }
-  return { prReachableSecrets, pullRequestTargetFiles };
+  return { prReachableSecrets, pullRequestTargetFiles, persistedTokenCheckouts, prSourcedWorkflowRunSecrets };
 }
 
 // ---------------------------------------------------------------------------
@@ -507,13 +595,181 @@ function runSelfTest() {
       wf: { 'evil.yml': { on: { pull_request_target: {} }, jobs: { j: { steps: [] } } } },
       expectViolation: true,
     },
+    // Rule P — persisted token checkouts (ADR-012 Phase 0.1)
+    {
+      name: 'leak: checkout with a token and no persist-credentials:false',
+      wf: {
+        'b.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            j: {
+              steps: [
+                {
+                  uses: 'actions/checkout@v7',
+                  with: { repository: 'o/brain', token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' },
+                },
+              ],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: checkout with a token and persist-credentials:false',
+      wf: {
+        'b.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            j: {
+              steps: [
+                {
+                  uses: 'actions/checkout@v7',
+                  with: {
+                    repository: 'o/brain',
+                    token: '${{ secrets.OCR_PROPAGATE_TOKEN }}',
+                    'persist-credentials': false,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      expectViolation: false,
+    },
+    {
+      name: 'leak: persisted token checkout on a push-only workflow too (later steps still read it)',
+      wf: {
+        'p.yml': {
+          on: { push: {} },
+          jobs: {
+            j: { steps: [{ uses: 'actions/checkout@v4', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    // Rule W — PR-sourced workflow_run (ADR-012 Phase 0.2)
+    {
+      name: 'leak: workflow_run job accepts a pull_request source and holds a secret',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if:
+                "github.event.workflow_run.conclusion == 'success' && " +
+                "(github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'push') && " +
+                "(startsWith(github.event.workflow_run.head_branch, 'full-pipeline/') || github.event.workflow_run.head_branch == 'main')",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: a same-repo check alone does not close a PR-sourced workflow_run',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: 'github.event.workflow_run.head_repository.full_name == github.repository',
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: workflow_run job limited to push runs on main',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if:
+                "github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && " +
+                'github.event.workflow_run.head_repository.full_name == github.repository',
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: false,
+    },
+    {
+      name: 'leak: workflow_run job gated on an unmodeled ref fails closed',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.actor.login == 'someone'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run job gated only on an attacker-choosable branch prefix',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if:
+                "github.event.workflow_run.event == 'pull_request' && " +
+                "startsWith(github.event.workflow_run.head_branch, 'copilot/')",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run job trusting head_branch == main without a repo check (fork PR from main)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.head_branch == 'main'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: workflow_run job with no secrets at all',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { steps: [{ run: 'echo hi' }] } },
+        },
+      },
+      expectViolation: false,
+    },
   ];
 
   let failures = 0;
   for (const fx of fixtures) {
-    const { prReachableSecrets, pullRequestTargetFiles } = analyzeWorkflows(fx.wf);
+    const { prReachableSecrets, pullRequestTargetFiles, persistedTokenCheckouts, prSourcedWorkflowRunSecrets } =
+      analyzeWorkflows(fx.wf);
     const extras = [...prReachableSecrets.keys()].filter((s) => !TEST_ALLOW.has(s));
-    const violated = extras.length > 0 || pullRequestTargetFiles.length > 0;
+    const violated =
+      extras.length > 0 ||
+      pullRequestTargetFiles.length > 0 ||
+      persistedTokenCheckouts.length > 0 ||
+      prSourcedWorkflowRunSecrets.size > 0;
     const ok = violated === fx.expectViolation;
     console.log(`${ok ? '  ✅' : '  ❌'} ${fx.name}`);
     if (!ok) {
@@ -538,7 +794,8 @@ function main() {
   if (arg === '--self-test') return runSelfTest();
 
   const workflows = readWorkflowsFromDisk();
-  const { prReachableSecrets, pullRequestTargetFiles } = analyzeWorkflows(workflows);
+  const { prReachableSecrets, pullRequestTargetFiles, persistedTokenCheckouts, prSourcedWorkflowRunSecrets } =
+    analyzeWorkflows(workflows);
 
   if (arg === '--report') {
     console.log('PR-reachable secrets (plain, non-full-pipeline PR):');
@@ -547,6 +804,12 @@ function main() {
     }
     if (pullRequestTargetFiles.length) {
       console.log(`\npull_request_target workflows: ${pullRequestTargetFiles.join(', ')}`);
+    }
+    if (persistedTokenCheckouts.length) {
+      console.log(`\nToken checkouts without persist-credentials: false:\n  ${persistedTokenCheckouts.join('\n  ')}`);
+    }
+    for (const [secret, where] of [...prSourcedWorkflowRunSecrets.entries()].sort()) {
+      console.log(`\nPR-sourced workflow_run holds ${secret}  ← ${[...where].sort().join(', ')}`);
     }
     process.exit(0);
   }
@@ -563,6 +826,18 @@ function main() {
   for (const f of pullRequestTargetFiles) {
     violations.push(
       `  workflow ${f} uses pull_request_target — forbidden (runs base-branch code with secrets on PR)`
+    );
+  }
+  for (const c of persistedTokenCheckouts) {
+    violations.push(
+      `  checkout ${c} is given a token without persist-credentials: false — later steps can read it (ADR-012 0.1)`
+    );
+  }
+  for (const [secret, where] of prSourcedWorkflowRunSecrets.entries()) {
+    violations.push(
+      `  secret ${secret} is held by a workflow_run job that a pull_request source run can trigger — via ${[...where]
+        .sort()
+        .join(', ')} (ADR-012 0.2: require workflow_run.event != 'pull_request')`
     );
   }
 

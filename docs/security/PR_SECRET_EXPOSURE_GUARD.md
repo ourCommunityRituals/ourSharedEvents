@@ -147,6 +147,39 @@ Add the secret name to `scripts/check-pr-secret-exposure.allowlist.json` under
 `approved` **with a reason**. The file is CODEOWNERS-locked (`@mzdano`), so the
 addition is reviewed as a security decision.
 
+## Rules P and W (ADR-012 Phase 0.1 and 0.2, added 2026-10-01)
+
+The guard also enforces two credential-isolation rules from OCR-docs ADR-012
+(`docs/standards/OCR_STANDARD_secretsAndTokens.md` §4.2). They apply to every
+workflow, not only PR-triggered ones.
+
+**Rule P: no persisted token checkouts.**
+
+- What it requires: an `actions/checkout` step that receives a `token:` must set `persist-credentials: false`.
+- Why: without it, the token stays readable by every later step in the job, from `.git/config` or, with checkout v6+, from a credentials file under `$RUNNER_TEMP`. Those later steps include PR test code and dependencies installed from the PR's lockfile.
+- The one legitimate exception is a job that must `git push` with that token, an org-automation (Z4) job. None exists in this repo.
+
+**Rule W: no secrets in a `workflow_run` started by a pull request.**
+
+- What it requires: a job in a `workflow_run` workflow may hold no secret (other than `GITHUB_TOKEN`) if a source run whose event was `pull_request` can trigger it.
+- Why: `workflow_run` runs with the default branch as its ref, so environment branch rules do not stop it. A `head_repository` check stops forks, but not same-repo agent branches.
+- How it is checked: each job is tested against several attacker-chosen source runs (same-repo branches `full-pipeline/x`, `copilot/x`, `claude/x`, `dependabot/npm/x`, `feature/x`, and a fork PR from its own `main`), and it fails if any of them reaches a secret.
+- Unmodeled refs fail closed.
+- The fix is to require `github.event.workflow_run.event == 'push'` on `main` (plus the same-repo check), or to read the PR's files as data without running them.
+
+**Evidence (2026-10-01):** against `main` at `565fb78`, the extended guard failed on:
+
+- the three persisted brain checkouts (`brain-contract-check`, `inv22-cross-repo-gate`, `oursharedevents-ci.yml` `gate-tests-sub`);
+- `red-team-adversarial` / `security-finale` holding `ADMIN_KEY`, `CF_ACCESS_*` and `OCR_PROPAGATE_TOKEN` for `full-pipeline/*` PR source runs.
+
+**Mutation checks:** each of these turns the guard or its self-test red:
+
+- reverting any fix;
+- restoring the original red-team `if:`;
+- allowing PR sources together with attacker-chosen branch prefixes;
+- disabling either rule;
+- dropping the fork-from-`main` case.
+
 ## Born-red proof
 
 Revert the `security-regression.yml` PR-gate (or add a Cloudflare token to the S0
