@@ -31,7 +31,9 @@
  * page and the materializer use (phaseTimesFor).
  *
  * Hop 7 (OSE-1459): a scan at a second poster across town is counted at that
- * poster's own res9 cell (scan_cell_aggregates), not the venue's.
+ * poster's own res9 cell (scan_cell_aggregates), not the venue's, once that
+ * poster-hour reaches the K-floor. Hop 8: one person scanning several posters
+ * in one cell does not add up to a published cell.
  *
  * Not traced here, and why: corridor registry ids + definition_version
  * (OSE-613 / OSE-603, not built).
@@ -82,6 +84,7 @@ const EAGLES_RES7 = '872664544ffffff'; // the corridor
 const BEVERLY = { lat: 41.7203, lon: -87.672 };
 const BEVERLY_RES9 = '892664cdb13ffff';
 const BEVERLY_RES7 = '872664cdbffffff';
+const MORGAN_PARK = { lat: 41.6895, lon: -87.6667 };
 
 const BQ_ENV = {
   WIF_PRIVATE_KEY_PEM:
@@ -429,8 +432,12 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(placed.status, await placed.clone().text()).toBe(201);
     const away = (await placed.json()) as { qr_token: string };
 
-    const scan = await SELF.fetch(`https://t.test/q/${away.qr_token}`, { redirect: 'manual' });
-    expect(scan.status).toBe(302);
+    // Five different people (no cookie, so each is a new anonymous visitor):
+    // the K-floor (CORRIDOR_MAP_MIN_COUNT = 5) is met at this poster this hour.
+    for (let i = 0; i < 5; i++) {
+      const scan = await SELF.fetch(`https://t.test/q/${away.qr_token}`, { redirect: 'manual' });
+      expect(scan.status).toBe(302);
+    }
 
     const run = await runSharedReportMaterialization({
       DB: tenv().DB,
@@ -438,8 +445,9 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     });
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
-    // The place-side rollup: each scan at its own poster's cell. The Eagles
-    // poster's scan (hop 1) at the venue node; the Beverly scan at Beverly.
+    // The place-side rollup: scans at their own poster's cell. Beverly's five
+    // are counted at Beverly. The Eagles poster's single scan (hop 1) is under
+    // the floor for its poster-hour, so it never reaches the table.
     const cells = await tenv()
       .DB.prepare(
         `SELECT h3_res9, h3_res7, SUM(scan_count) AS scans
@@ -448,20 +456,15 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       )
       .bind(eventId)
       .all<{ h3_res9: string; h3_res7: string; scans: number }>();
-    expect(cells.results).toEqual(
-      [
-        { h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7, scans: 1 },
-        { h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 1 },
-      ].sort((a, b) => a.h3_res9.localeCompare(b.h3_res9))
-    );
+    expect(cells.results).toEqual([{ h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 5 }]);
 
-    // The event-level rollup is unchanged in kind: both scans, one event,
+    // The event-level rollup is unchanged in kind: every scan, one event,
     // labelled with the event's venue (it is not a statement of scan place).
     const agg = await tenv()
       .DB.prepare('SELECT SUM(total_scans) AS n FROM scan_aggregates WHERE event_id = ?')
       .bind(eventId)
       .first<{ n: number }>();
-    expect(agg?.n).toBe(2);
+    expect(agg?.n).toBe(6);
 
     // Running the job again changes nothing: the window is recomputed, not added to.
     // And the rollup is ONE two-statement batch (DELETE + INSERT ... SELECT),
@@ -477,7 +480,65 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       .DB.prepare('SELECT SUM(scan_count) AS n FROM scan_cell_aggregates WHERE event_id = ?')
       .bind(eventId)
       .first<{ n: number }>();
-    expect(again?.n).toBe(2);
+    expect(again?.n).toBe(5);
+  });
+
+  test('hop 8 (OSE-1459) — one person scanning five posters in one cell does not publish it', async () => {
+    // Five posters hung at one spot (one res9 cell), all scanned by the SAME
+    // visitor within the hour. Dedup is per poster, so that is five scans in
+    // the cell, but one person: the cell must not reach the table.
+    const tokens: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const placed = await SELF.fetch(
+        `https://t.test/api/v2/admin/events/${eventId}/poster-deployments`,
+        {
+          method: 'POST',
+          headers: ADMIN,
+          body: JSON.stringify({
+            placement_label: `OSE-1459 Trace — Morgan Park wall ${i + 1}`,
+            latitude: MORGAN_PARK.lat,
+            longitude: MORGAN_PARK.lon,
+          }),
+        }
+      );
+      expect(placed.status, await placed.clone().text()).toBe(201);
+      tokens.push(((await placed.json()) as { qr_token: string }).qr_token);
+    }
+
+    let cookie = '';
+    for (const token of tokens) {
+      const scan = await SELF.fetch(`https://t.test/q/${token}`, {
+        redirect: 'manual',
+        headers: cookie ? { Cookie: cookie } : {},
+      });
+      expect(scan.status).toBe(302);
+      if (!cookie) cookie = (scan.headers.get('Set-Cookie') ?? '').split(';')[0];
+    }
+    expect(cookie).toMatch(/^ose_anon=/);
+    const placedRows = await tenv()
+      .DB.prepare(
+        `SELECT COUNT(*) AS n FROM scan_placement_events spe
+           JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+          WHERE pd.placement_label LIKE 'OSE-1459 Trace — Morgan Park%'`
+      )
+      .first<{ n: number }>();
+    expect(placedRows?.n).toBe(5);
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const cells = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, SUM(scan_count) AS scans
+           FROM scan_cell_aggregates WHERE event_id = ?
+          GROUP BY h3_res9 ORDER BY h3_res9`
+      )
+      .bind(eventId)
+      .all<{ h3_res9: string; scans: number }>();
+    expect(cells.results).toEqual([{ h3_res9: BEVERLY_RES9, scans: 5 }]);
   });
 });
 

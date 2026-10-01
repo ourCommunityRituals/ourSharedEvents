@@ -199,6 +199,9 @@ the SharedReport corridor map shows **scans per poster cell**.
   corrected poster location never double-counts.
 - The corridor map reads it, K-floored per cell. `scan_aggregates` stays
   event-level (distinct hashes, top country, venue cells).
-- Trace hop 7: a scan at a Beverly poster lands at Beverly's cell, the Eagles
-  scan at the venue's. Gates: NCR structural (no TTL, no placement id, no
+- Trace hop 7: five people scanning a Beverly poster land at Beverly's cell;
+  the single Eagles scan stays under the floor and is not counted.
+- Review fix: the K-floor applies to each poster-hour before it is added into
+  its cell, so one person scanning five posters in one cell does not publish
+  that cell (trace hop 8). Gates: NCR structural (no TTL, no placement id, no
   session value, one writer), schema Gate 4, tenant-isolation exemptions.

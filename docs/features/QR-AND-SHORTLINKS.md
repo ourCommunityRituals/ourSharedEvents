@@ -132,7 +132,10 @@ town sits in its own. The `corridor_map` reads that table, so each lit cell is a
 poster cell and its value is **scans** there. Scans are deduplicated per
 person per poster per hour, so an hourly poster count is a count of people
 (best effort: without KV, and for a visitor with no cookie, repeats get
-through). A cell is built only from hours that clear the K-floor. A cell under the K-floor is
+through). The K-floor is applied to each **poster-hour** before poster-hours are
+added into their cell, because dedup is per poster: one person scanning five
+posters in one cell is five scans but one person. A cell is built only from
+poster-hours that clear the floor, and then from hours that clear it. A cell under the K-floor is
 dropped, never drawn: its res9 is a poster's location, so it is not published
 at all (the same rule as `poster_attribution`). If every cell is under the
 floor, the report shows the map as hidden rather than the venue preview.

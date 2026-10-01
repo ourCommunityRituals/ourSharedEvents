@@ -205,26 +205,26 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Never-who scan aggregate; not request-reachable.',
   'lib/shared-report.ts:687': 'Same cron, the country-code bucket twin of :666. Same rationale.',
   // OSE-1459: aggregateScanCells (scans at the poster's own res9 cell). Same
-  // cron class as :666/:687; 788/789/792 re-keyed 865/866/869 by it.
-  'lib/shared-report.ts:789':
+  // cron class as :666/:687; 788/789/792 re-keyed 883/884/887 by it.
+  'lib/shared-report.ts:793':
     'aggregateScanCells cron — COUNT of scans at posters with no cell yet (skipped, ' +
     'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
     '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
     'request-reachable.',
-  'lib/shared-report.ts:801':
+  'lib/shared-report.ts:811':
     'Same cron — DELETE of the window before the atomic re-insert, so a corrected ' +
     'poster location never double-counts. Same time window, same rationale.',
-  'lib/shared-report.ts:818':
+  'lib/shared-report.ts:834':
     'Same cron — the single INSERT ... SELECT that rebuilds the window: ' +
     'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
     'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
-  'lib/shared-report.ts:865':
+  'lib/shared-report.ts:883':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:866':
+  'lib/shared-report.ts:884':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:869':
+  'lib/shared-report.ts:887':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→776 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
