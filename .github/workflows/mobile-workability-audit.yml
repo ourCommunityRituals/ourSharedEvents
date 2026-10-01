@@ -62,7 +62,7 @@ on:
     paths:
       # ALL specs this job runs (playwright.mobile.config.ts testMatch:
       # mobile-workability | admin-wizard-isolation | admin-csp-controls |
-      # sponsor-home-flow | landing-theme), plus the global setup + helpers. The
+      # admin-sponsor-form | sponsor-home-flow | landing-theme), plus the global setup + helpers. The
       # list previously named only mobile-workability.spec.ts, so a change to
       # either admin spec — two of the three specs the config actually executes
       # — did not trigger the job that runs it, and the change merged green
@@ -70,6 +70,7 @@ on:
       - 'tests/playwright/mobile-workability.spec.ts'
       - 'tests/playwright/admin-wizard-isolation.spec.ts'
       - 'tests/playwright/admin-csp-controls.spec.ts'
+      - 'tests/playwright/admin-sponsor-form.spec.ts'
       - 'tests/playwright/sponsor-home-flow.spec.ts'
       - 'tests/playwright/landing-theme.spec.ts'
       - 'tests/playwright/mobile.global-setup.ts'

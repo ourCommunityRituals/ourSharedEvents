@@ -145,9 +145,12 @@ describe('admin | Create Sponsor form', () => {
   test('header logo and sidebar logo are two separate fields with their own aspect guidance', async () => {
     const { w, $, doc, open, submit, posts } = await mountCard();
     await open();
-    expect(doc.querySelector('label[for="spon-logo"]')!.textContent).toMatch(/header logo/i);
+    // OSE-1434: plain labels that say where each logo shows.
+    expect(doc.querySelector('label[for="spon-logo"]')!.textContent).toMatch(
+      /wide logo \(top banner\)/i
+    );
     expect(doc.querySelector('label[for="spon-sidebar-logo"]')!.textContent).toMatch(
-      /sidebar logo/i
+      /square logo \(side rail\)/i
     );
     expect(doc.querySelector('[data-testid="spon-logo-hint"]')!.textContent).toMatch(/wide/i);
     expect(doc.querySelector('[data-testid="spon-sidebar-logo-hint"]')!.textContent).toMatch(
