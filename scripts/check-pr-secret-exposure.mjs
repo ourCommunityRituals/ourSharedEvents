@@ -127,11 +127,18 @@ function tokenize(src) {
 const UNKNOWN = Symbol('unknown');
 
 /** An attacker-chosen string, with the few things it is known NOT to be. */
-const sym = ({ notEqual = [], notPrefix = [] } = {}) => ({
+const sym = ({ notEqual = [], notPrefix = [], notSelf = false } = {}) => ({
   sym: true,
+  notSelf,
   notEqual: notEqual.map((s) => s.toLowerCase()),
   notPrefix: notPrefix.map((s) => s.toLowerCase()),
 });
+/**
+ * This repository. Its real name is not modelled (a fixture or a fork of the
+ * guard could run anywhere), so comparing it with a string literal is UNKNOWN;
+ * it equals only itself, and a fork's repo is known NOT to equal it.
+ */
+const THIS_REPO = { sym: true, self: true, notSelf: false, notEqual: [], notPrefix: [] };
 const isSym = (v) => v != null && typeof v === 'object' && v.sym === true;
 const isUnknown = (v) => v === UNKNOWN || isSym(v);
 
@@ -150,7 +157,11 @@ const fold = (v) => String(v ?? '').toLowerCase();
 
 function valEquals(a, b) {
   if (a === UNKNOWN || b === UNKNOWN) return UNKNOWN;
-  if (isSym(a) && isSym(b)) return UNKNOWN;
+  if (isSym(a) && isSym(b)) {
+    if (a.self && b.self) return true;
+    if ((a.self && b.notSelf) || (b.self && a.notSelf)) return false;
+    return UNKNOWN;
+  }
   if (isSym(a) || isSym(b)) {
     const s = isSym(a) ? a : b;
     const other = fold(isSym(a) ? b : a);
@@ -355,7 +366,7 @@ export function prSourcedWorkflowRunEnvs(ifStr) {
   const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
   const conclusions = new Set([...WORKFLOW_RUN_CONCLUSIONS, ...literals]);
   const envs = [];
-  for (const headRepo of ['org/repo', sym({ notEqual: ['org/repo'] })]) {
+  for (const headRepo of [THIS_REPO, sym({ notSelf: true })]) {
     for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, conclusion));
   }
   return envs;
@@ -370,7 +381,7 @@ const makeWorkflowRunEnv = (headRepo, conclusion) => ({
   head_ref: '',
   base_ref: '',
   ref: 'refs/heads/main',
-  repository: 'org/repo',
+  repository: THIS_REPO,
   workflow_run: {
     event: 'pull_request',
     conclusion,
@@ -1352,6 +1363,21 @@ function runSelfTest() {
         },
       },
       expectViolation: false,
+    },
+    {
+      name: 'leak: workflow_run gate names the real repo by literal (not a placeholder)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' || (github.event.workflow_run.event != 'push' && github.event.workflow_run.head_repository.full_name == 'ourCommunityRituals/ourSharedEvents' && github.event.workflow_run.head_repository.full_name == github.repository)",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
     },
     {
       name: 'safe: workflow_run job with no secrets at all',
