@@ -89,7 +89,7 @@ Attendees arrive at venue
         │
         ├── BLUE QR → Sponsor placement scanned
         │               Tracked via poster_deployment_id + scan_bucket
-        │               Anonymous presence signal → scans table
+        │               Anonymous presence signal → scan_placement_events + scan_node_returns (0062)
         │
         ├── CORAL QR → Live event content (real-time scoring, brackets)
         │

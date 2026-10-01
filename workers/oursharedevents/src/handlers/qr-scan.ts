@@ -9,8 +9,8 @@
  *   - Only scan_bucket (hour-granularity UTC) is stored — no exact timestamp.
  *   - user_agent_hash is SHA-256 truncated to 16 hex chars — not reversible.
  *   - anonymous_id from HttpOnly cookie — no PII, no IP.
- *   - country_code and region_code from Cloudflare headers (aggregated geo,
- *     not exact IP location).
+ *   - No visitor location: the Cloudflare country header is never read, so country_code stays
+ *     NULL (OSE-1460). Place comes only from the poster's corridor.
  *   - No referrer logged.
  *
  * Dedup:
@@ -40,7 +40,7 @@ export interface QrScanEnv {
   SCAN_QUEUE?: Queue<ScanMessage>;
 }
 
-/** Hour-bucketed UTC timestamp string — privacy invariant for scans.anonymous_id. */
+/** Hour-bucketed UTC timestamp string — privacy invariant for scan_node_returns.anonymous_id. */
 function scanBucket(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:00`;
@@ -145,7 +145,6 @@ export async function handleQrScan(
     const bucket = scanBucket(nowDate);
     const ua = request.headers.get('User-Agent') ?? '';
     const uaHash = await hashUserAgent(ua);
-    const countryCode = request.headers.get('CF-IPCountry') ?? null;
 
     try {
       // OSE-798: the placement event (WHERE) and the node return (WHO) are
@@ -162,7 +161,6 @@ export async function handleQrScan(
         deployment_id: deploymentId,
         anon_id: anonId,
         ua_hash: uaHash,
-        country: countryCode,
         scan_bucket: bucket,
       });
 
@@ -172,7 +170,6 @@ export async function handleQrScan(
           deployment_id: deploymentId,
           event_id: eventId,
           scan_bucket: bucket,
-          country_code: countryCode,
           is_new_anon: isNew,
         })
       );

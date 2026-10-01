@@ -22,16 +22,18 @@ What the system captures is **signal of presence** — that someone was there, t
 ```
 What we store:                     What we never store:
 ─────────────────                  ──────────────────────
-scan_bucket (hourly window)        exact timestamps
+scan_bucket (hourly window)        exact times in any report or export
 user_agent_hash (device class)     IP addresses
-country_code, region_code          names, emails (raw)
-poster_deployment_id               individual tracking
+(no location, OSE-1460)            names, emails (raw)
+poster_deployment_id               a person's trail in any export
 aggregate counts                   behavioral profiles
 ```
 
+Stated plainly: scan rows keep an insert `created_at` to the second, and a pseudonymous cookie id lets OSE count a return visit. Neither leaves the Worker; returns leave only as k-floored corridor counts (OSE-1460).
+
 **Why this matters for customers:** You can scan any QR code at any event knowing that no personal data is being collected. Your email, if you voluntarily provide one, is immediately hashed or encrypted and auto-deleted on a schedule. Your presence is counted. Your identity is not.
 
-**Why this matters for sponsors:** The data you receive is honest. It's aggregate signal — how many people engaged with your placement, when during the event, from what region. It's not inflated by bots, not enriched with purchased data, not tracking individuals across events. It's real presence at real events.
+**Why this matters for sponsors:** The data you receive is honest. It's aggregate signal — how many people engaged with your placement, when during the event (to the hour), and in which corridor (from the poster's address; the visitor's own location is never read). Repeat scans by one person at one poster are counted once an hour, though automated traffic is not otherwise filtered. It's not enriched with purchased data, not tracking individuals across events. It's real presence at real events.
 
 **Why this matters for the platform:** By removing PII from the data layer by design, the platform can scale across thousands of events without becoming a surveillance system. The `scans` table schema enforces this at the database level — there is no column for email, name, or IP address. This isn't a policy. It's architecture.
 

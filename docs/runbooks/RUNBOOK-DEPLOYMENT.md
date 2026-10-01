@@ -284,6 +284,72 @@ SELECT email, brand_id, role FROM admin_brand_memberships WHERE brand_id = 'ose-
 
 Then, signed in through Access: `GET /briefing` returns 200 for the founder, and a brand-only identity gets 404 (`tests/platform-scope-tenant-writes.invariant.spec.ts`, `tests/briefing.spec.ts`).
 
+### Re-run the 0088 audit brand backfill once after deploy (AUD-3, OSE-1447)
+
+**Why:** CI applies migrations before it deploys the Worker. In that gap the old Worker can still write `admin_audit_log` rows without `brand_id`, and 0088's backfill has already run, so those rows stay NULL. NULL means platform-only, which is fail closed: no brand ever sees a row it should not. But the brand owner then misses those few rows. The Worker deliberately has no runtime `UPDATE admin_audit_log` path (TL-042, append-only), so this is a one-time operator step instead.
+
+**When:** once per environment, after the deploy that carries 0088 is live (staging, then production).
+
+**Apply** (idempotent: it touches only rows whose `brand_id` is still NULL, and re-running it changes nothing):
+
+```bash
+ENV=staging   # then ENV=production after the production deploy
+cd workers/oursharedevents
+sed -n '/^UPDATE/,$p' migrations/0088_admin_audit_log_brand_id.sql > /tmp/0088-backfill.sql  # the five UPDATEs only
+npx wrangler d1 execute DB --env "$ENV" --remote --file /tmp/0088-backfill.sql
+```
+
+**Verify** (same `ENV`):
+
+```bash
+npx wrangler d1 execute DB --env "$ENV" --remote \
+  --command "SELECT brand_id IS NOT NULL AS resolved, COUNT(*) FROM admin_audit_log GROUP BY 1;"
+```
+
+The visitor-country cleanup (0089) needs no such step: the nightly roll-up clears any `country_code` a Worker wrote in the deploy window (`aggregateScanBuckets`, OSE-1460).
+
+### Create the corridor-returns BigQuery table before the first export (OSE-1460)
+
+**Why:** the nightly export streams rows with `tabledata.insertAll`, which fails if the table does not exist; BigQuery does not create it on first insert. `corridor_returns_export` is new in OSE-1460. Its schema is checked in at `workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, and `tests/shared-report-bigquery-export.spec.ts` fails if the export sends a field the schema lacks.
+
+**When:** once per environment, before the deploy that carries OSE-1460 runs its first nightly export (`0 3 * * *` UTC).
+
+**Datasets:** staging writes `oureventring_general_stg`, which exists (US, read 2026-10-01). Production writes `oureventring_general`, which does **not** exist yet, so production creates the dataset first.
+
+```bash
+PROJECT=project-7cc9adcd-ed55-47aa-958
+DATASET=oureventring_general_stg   # production: DATASET=oureventring_general
+cd workers/oursharedevents
+bq --project_id="$PROJECT" show "$DATASET" >/dev/null 2>&1 \
+  || bq --project_id="$PROJECT" mk --dataset --location=US "$DATASET"   # production only, first time
+bq --project_id="$PROJECT" mk --table "$DATASET.corridor_returns_export" bigquery/corridor_returns_export.schema.json
+```
+
+**Verify:** `bq --project_id="$PROJECT" show --schema "$DATASET.corridor_returns_export"` lists the 15 fields.
+
+**Not covered here:** `corridor_density_baseline_export` and `event_series_export` predate OSE-1460 and also have no checked-in schema; they were never created either (staging's dataset held no tables on 2026-10-01). Creating them is separate work.
+
+### Purge return rows after migration 0091 and after any `ANON_ID_HASH_PEPPER` rotation (OSE-1460)
+
+**Why:** `anon_id_returns.anon_id_hash` is keyed by `ANON_ID_HASH_PEPPER`. Erasure (`handlers/data-subject.ts`) can only re-derive the hash under the current pepper, so rows written under any other pepper, or before 0091 (`pepper_epoch` NULL), cannot be found for a person who asks to be erased. The export never counts them. The nightly materializer deletes them, but at most 50,000 rows a run; past that it logs `ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE` and continues the next night. This step removes them all at once.
+
+**When:**
+- once per environment, right after the deploy that applies 0091;
+- after every `ANON_ID_HASH_PEPPER` rotation, straight after the secret is changed and before the next nightly run (`0 3 * * *` UTC).
+
+A rotation resets return counts by design, so after a rotation every row is from the old pepper and the whole table goes.
+
+```bash
+ENV=staging   # then ENV=production
+cd workers/oursharedevents
+# After the 0091 deploy: rows of unknown pepper.
+npx wrangler d1 execute DB --env "$ENV" --remote --command "DELETE FROM anon_id_returns WHERE pepper_epoch IS NULL;"
+# After a pepper rotation: every row is from the old pepper.
+npx wrangler d1 execute DB --env "$ENV" --remote --command "DELETE FROM anon_id_returns;"
+```
+
+**Verify:** `SELECT pepper_epoch IS NULL AS unknown, COUNT(*) FROM anon_id_returns GROUP BY 1;` shows no `unknown = 1` row after the 0091 step, and `0` rows in total straight after a rotation.
+
 ### Turn on production monitoring (OSE-1418)
 
 **When:** launch day, right after the first production deploy passes its smoke checks.

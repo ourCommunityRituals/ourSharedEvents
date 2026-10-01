@@ -14,13 +14,14 @@ This isn't a privacy policy bolted on after the fact. The database schema itself
 ```
 FORMS_DB (opt-in personal data)     DB (anonymous presence signal)
 ───────────────────────────────     ────────────────────────────
-Registrations (name, email hash)    Scans (scan_bucket, agent_hash)
+Registrations (name, email hash)    Scans (placement row + return row)
 Surveys (responses, PII-scrubbed)   Poster deployments (qr_token, lat/lng)
 Email signups (encrypted, 30d TTL)  Scan aggregates (counts by hour)
 Check-in counts (aggregate only)    Sponsors (click/impression tokens)
                                     Events (the core entity)
     ↓                                   ↓
-  Auto-deleted on schedule          Permanent anonymous signal
+  Auto-deleted on schedule          Placements kept; cookie-id return
+                                    rows kept until erased (see below)
   Customer opted in voluntarily     No opt-in needed — no PII exists
 ```
 
@@ -32,7 +33,7 @@ Check-in counts (aggregate only)    Sponsors (click/impression tokens)
 
 ## The Two Data Systems
 
-### System 1: Anonymous Scan Signal (DB — permanent)
+### System 1: Anonymous Scan Signal (DB — placements kept, return rows retention-bound)
 
 The scan system stores **presence signal only**. By schema design, no PII can enter:
 
@@ -40,12 +41,14 @@ The scan system stores **presence signal only**. By schema design, no PII can en
 | ----------------------------- | --------------------------- | ----------------------------- |
 | `scan_bucket`                 | Hourly time window          | When (approximate)            |
 | `user_agent_hash`             | SHA-256 of user agent       | Device class (not individual) |
-| `country_code`, `region_code` | From CF headers             | Where (approximate)           |
+| _no location_                 | Never read (OSE-1460)       | Place comes only from the poster's corridor; the visitor's IP country is not recorded |
 | `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
 
-**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint.
+**What's explicitly excluded:** email, name, IP address, any request-derived location (country, region, city; `CF-IPCountry` is never read since OSE-1460, and migration 0089 cleared what was recorded), device fingerprint.
 
-This data is **permanent** — it's safe to keep forever because it contains no personal information. It becomes the foundation for geo-spatial intelligence at scale.
+**What is held, stated plainly:** scan rows still carry an operational `created_at` at full precision (`src/lib/scan-buffer.ts`); only `scan_bucket` and everything exposed are hourly. That at-rest precision is an open decision ([QR-AND-SHORTLINKS.md](./QR-AND-SHORTLINKS.md) §4). `scan_node_returns` stores the pseudonymous `ose_anon` value from a one-year first-party cookie: no name and no email. No SQL join reaches `FORMS_DB`; the same value is stored there, and erasure uses it to delete a person's scan rows.
+
+**How long it is kept.** Placement rows (`scan_placement_events`) carry no person-derived value and are kept as the foundation for corridor-level intelligence. `scan_node_returns` and `anon_id_returns` carry the pseudonymous cookie id, so they are not "safe forever": a visitor can erase them through the data-subject route, and `SCAN_RETURNS_RETENTION_DAYS` (`src/lib/scan-returns-retention.ts`, OSE-1351) bounds them once it is set. It is off by default, so today they are kept until erased; choosing the window is an open decision.
 
 ### System 2: Opt-In Form Data (FORMS_DB — temporary)
 

@@ -35,9 +35,10 @@ memo reconciles them.
 
 The ability to **attribute a scan to an individual** — to learn "person _X_ was
 at event _E_, at poster _Y_, around time _Z_." Scans are already pseudonymous
-(hashed `anonymous_id`, no PII, `user_agent_hash`, coarse `country_code`). The
-residual risk is **re-identification via quasi-identifiers**
-(`time-bucket × H3/corridor × country × ua_hash × sponsor`) combined with
+(hashed `anonymous_id`, no PII, `user_agent_hash`; the coarse `country_code`
+was removed by OSE-1460 on 2026-10-01). The residual risk is
+**re-identification via quasi-identifiers**
+(`time-bucket × H3/corridor × ua_hash × sponsor`) combined with
 **auxiliary knowledge** (who was physically present).
 
 ### 1.2 Adversaries
@@ -52,7 +53,7 @@ residual risk is **re-identification via quasi-identifiers**
 ### 1.3 Attack surfaces (named by CCR)
 
 - **S1 — Temporal cross-rung differencing.** Reader sees 1h _and_ 6h of the same series; 6h − Σ(shown 1h) recovers suppressed cells.
-- **S2 — Cross-dimensional sub-K cells.** A day total ≥ K, but a `day × sponsor × country` cell < K is exposed → individual re-identifiable on the combination.
+- **S2 — Cross-dimensional sub-K cells.** A day total ≥ K, but a `day × sponsor × corridor` cell < K is exposed → individual re-identifiable on the combination.
 - **S3 — Cross-report longitudinal.** A reader watches an **open** bucket cross the K threshold (4→5) and learns the marginal scan occurred → correlates to a person arriving.
 - **S4 — At-rest.** Raw rows finer than the exposed floor widen the A3 surface.
 
@@ -116,7 +117,7 @@ counts accumulate — the intended behavior, now differencing-safe.
 Every **exposed cell**, at any rung _and_ any dimensional breakdown, must have
 `count ≥ K` over its **full** `(rung × all-exposed-dimensions)` tuple — not K on
 time alone. The count floor is applied to **each** dimensional cross-section the
-report renders (corridor, country, sponsor, …). A breakdown is only offered where
+report renders (corridor, sponsor, …; country is no longer recorded, OSE-1460). A breakdown is only offered where
 every such cell clears K; otherwise it coarsens or is withheld.
 
 > **Verify in code:** confirm the sponsor path (`shared-report-builder.ts:~394`,

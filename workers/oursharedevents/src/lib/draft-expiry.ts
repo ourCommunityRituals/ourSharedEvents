@@ -29,7 +29,8 @@
  *
  * AUDIT. Every run writes one admin_audit_log row (action DRAFT_EXPIRY, actor
  * 'system:lifecycle') carrying the count, the window, and the ids archived, so
- * "where did my event go?" is answerable from the log. Never-who: the row
+ * "where did my event go?" is answerable from the log. Each archived event also
+ * gets its own DRAFT_EXPIRED row, attributed to the event's brand (AUD-3 B). Never-who: the row
  * carries event ids only, no operator identity beyond the system actor.
  */
 
@@ -42,6 +43,9 @@ export const DEFAULT_DRAFT_EXPIRY_DAYS = 30;
 
 /** Upper bound on ids echoed into one audit row's details (keeps the row small). */
 const AUDIT_ID_CAP = 200;
+
+/** Drafts archived per statement (well under D1's 100 bound-parameter limit). */
+const ARCHIVE_CHUNK = 90;
 
 export interface DraftExpiryResult {
   enabled: boolean;
@@ -87,6 +91,9 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
 
   const window = `-${days} days`;
   let ids: string[] = [];
+  // What this run actually archived (RETURNING), never the candidate list: a
+  // draft edited between the SELECT and the UPDATE is a candidate that stayed.
+  const archivedIds: string[] = [];
   try {
     // Select first, then update by id: the audit row names what moved, and a
     // draft edited between the two statements (updated_at bumped) is skipped by
@@ -113,15 +120,41 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
       .first<{ n: number }>();
     result.skippedFutureDated = Number(future?.n ?? 0);
 
-    for (const id of ids) {
-      const res = await env.DB.prepare(
+    // Set-based, in chunks, to stay well inside D1's per-invocation query
+    // budget (a 500-draft sweep is 2 statements per chunk, not 2 per draft).
+    // RETURNING gives exactly the drafts this run archived; a draft edited
+    // between the SELECT and here is skipped by the WHERE.
+    for (let i = 0; i < ids.length; i += ARCHIVE_CHUNK) {
+      const chunk = ids.slice(i, i + ARCHIVE_CHUNK);
+      const marks = chunk.map(() => '?').join(', ');
+      const archived = await env.DB.prepare(
         `UPDATE events
             SET status = 'archived', updated_at = datetime('now')
-          WHERE id = ? AND status = 'draft' AND updated_at < datetime('now', ?)`
+          WHERE id IN (${marks}) AND status = 'draft' AND updated_at < datetime('now', ?)
+          RETURNING id`
       )
-        .bind(id, window)
-        .run();
-      result.archived += res.meta?.changes ?? 0;
+        .bind(...chunk, window)
+        .all<{ id: string }>();
+      const changed = (archived.results ?? []).map((r) => r.id);
+      result.archived += changed.length;
+      archivedIds.push(...changed);
+      if (changed.length === 0) continue;
+      // AUD-3 Phase B: one row per archived event, carrying that event's brand,
+      // so it shows in the brand owner's audit view. One INSERT per chunk.
+      try {
+        await env.DB.prepare(
+          `INSERT INTO admin_audit_log
+             (id, action, actor, resource_type, resource_id, request_id, outcome, details, brand_id)
+           SELECT lower(hex(randomblob(16))), 'DRAFT_EXPIRED', 'system:lifecycle', 'event',
+                  e.id, ?, 'success', ?, e.brand_id
+             FROM events e
+            WHERE e.id IN (${changed.map(() => '?').join(', ')})`
+        )
+          .bind(`draft-expiry:${now}`, JSON.stringify({ days }), ...changed)
+          .run();
+      } catch {
+        // Audit failures must never break the lifecycle job.
+      }
     }
   } catch (err) {
     result.errors = 1;
@@ -145,7 +178,7 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
       timestamp: now,
     })
   );
-  await audit(env, 'success', result, ids);
+  await audit(env, 'success', result, archivedIds);
   return result;
 }
 

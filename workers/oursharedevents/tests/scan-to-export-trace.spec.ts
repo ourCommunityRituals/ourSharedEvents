@@ -96,8 +96,11 @@ const BQ_ENV = {
   BIGQUERY_DATASET_ID: 'oureventring_general',
   WORKER_ENV: 'staging',
 };
+// The export counts only rows hashed under the current pepper (migration 0091),
+// so it runs with the same pepper the nightly materializer used below.
+const TRACE_PEPPER = 'ose-616-trace-pepper';
 const exportEnv = (): SharedReportExportEnv =>
-  ({ DB: tenv().DB, ...BQ_ENV }) as SharedReportExportEnv;
+  ({ DB: tenv().DB, ...BQ_ENV, ANON_ID_HASH_PEPPER: TRACE_PEPPER }) as SharedReportExportEnv;
 
 // ── BigQuery recorder ────────────────────────────────────────────────────────
 
@@ -323,7 +326,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
   test('hops 2–4 — the nightly job aggregates at the venue node and keys the corridor at res7', async () => {
     const run = await runSharedReportMaterialization({
       DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+      ANON_ID_HASH_PEPPER: TRACE_PEPPER,
     });
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
@@ -349,21 +352,47 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(base.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 1 }]);
   });
 
-  test('hop 5 — the export carries the res7 corridor and nothing finer', async () => {
+  test('hop 5 — one scanner crosses nothing; ten would cross at the res7 corridor, nothing finer', async () => {
     installBqMock();
     const run = await runSharedReportBigQueryExport(exportEnv());
-    vi.restoreAllMocks();
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
-    expect(Object.keys(byTable).sort()).toEqual([
-      'anon_id_returns_export',
-      'corridor_density_baseline_export',
+    // OSE-1460: one scanner is a group of one, under the k-floor. The return
+    // counts withhold it (the returns table gets only its snapshot marker),
+    // and so does the corridor baseline: its counts are distinct people, and
+    // one person is under CORRIDOR_BASELINE_MIN_SAMPLE. Nothing about the
+    // lone scanner crosses.
+    expect(Object.keys(byTable).sort()).toEqual(['corridor_returns_export']);
+    const returnRows = byTable.corridor_returns_export.rows.map((r) => r.json);
+    expect(returnRows).toEqual([
+      expect.objectContaining({ row_type: 'snapshot', groups_in_snapshot: 0 }),
     ]);
+    const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
+    expect(returns?.rowsExported).toBe(0);
+    expect(returns?.rowsSkipped).toBe(1);
+    const baseline = run.phases.find((p) => p.phase === 'corridor_density_baseline');
+    expect(baseline?.rowsExported).toBe(0);
+    expect(baseline?.rowsSkipped).toBe(1);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
+    // The same baseline row, as if ten more people had scanned that hour
+    // (counts raised in place, a newer computed_at so it is past the
+    // watermark), crosses keyed by the res7 corridor node and nothing finer.
+    await tenv()
+      .DB.prepare(
+        `UPDATE corridor_density_baseline
+            SET window_30d_count = 12, window_90d_count = 12, computed_at = ?`
+      )
+      .bind(new Date(Date.now() + 1000).toISOString())
+      .run();
+    bqCalls.length = 0;
+    const raised = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+    expect(raised.errors).toBe(0);
+    expect(raised.rowsExported).toBe(1);
     const rows = bqCalls.flatMap((c) => c.rows.map((r) => r.json));
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toHaveLength(1);
     for (const row of rows) {
       // The corridor is the res7 node — before OSE-616 the event-joined tables
       // sent corridor_id 'unknown' (events.corridor_id has no writer).
@@ -399,14 +428,17 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       'event_series',
     ]);
     expect(byPhase.event_series.rows_exported).toBe(0);
+    // OSE-1460: the returns phase writes counts to corridor_returns_export.
+    expect(JSON.parse(byPhase.anon_id_returns.details).table).toBe('corridor_returns_export');
     expect(JSON.parse(byPhase.event_series.details).rows_read).toBe(0);
     for (const [phase, r] of Object.entries(byPhase)) {
       expect(r.actor).toBe('cron:scheduler');
       expect(r.outcome).toBe('success');
       const d = JSON.parse(r.details);
-      const expected = phase === 'event_series' ? 0 : 1;
-      expect(r.rows_exported).toBe(expected);
-      expect(d.corridor_id_present).toBe(expected);
+      // Nothing crosses: event_series had nothing new, and the lone scanner is
+      // under the floor for both the returns and the baseline (OSE-1460).
+      expect(r.rows_exported).toBe(0);
+      expect(d.corridor_id_present).toBe(0);
       expect(d.corridor_id_unknown).toBe(0);
       // Counts, routing and coverage only: no hash, no cell, no event row.
       expect(r.details).not.toContain(EAGLES_RES9);
@@ -621,7 +653,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7, new Date().toISOString())
       .run();
@@ -651,7 +683,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7.toUpperCase(), new Date().toISOString())
       .run();
@@ -672,7 +704,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, 1, 18, 3, 3, ?)`
+           VALUES (?, 1, 18, 12, 30, ?)`
         )
         .bind(key, at)
         .run();
@@ -701,7 +733,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7, new Date().toISOString())
       .run();
@@ -732,7 +764,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, ?, ?, 1, 1, ?)`
+           VALUES (?, ?, ?, 12, 30, ?)`
         )
         .bind(cell, Math.floor(bucket / 24), bucket % 24, at)
         .run();
@@ -771,7 +803,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 0, 0, 1, 1, ?)`
+         VALUES (?, 0, 0, 12, 30, ?)`
       )
       .bind(EAGLES_RES7.toUpperCase(), at)
       .run();
@@ -797,7 +829,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, 1, 18, 3, 3, ?)
+           VALUES (?, 1, 18, 12, 30, ?)
            ON CONFLICT(corridor_id, bucket_dow, bucket_hour) DO UPDATE SET computed_at = excluded.computed_at`
         )
         .bind(cell, at)
@@ -849,7 +881,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES9, new Date().toISOString())
       .run();

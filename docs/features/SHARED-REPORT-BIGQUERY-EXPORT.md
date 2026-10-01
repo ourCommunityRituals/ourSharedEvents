@@ -89,7 +89,12 @@ CREATE TABLE IF NOT EXISTS bigquery_export_state (
 
 ### Helper: `phaseToPool(phase)` in `src/lib/pool-contract.ts`
 
-Maps `events.legal_clearance_tier` (1-5) to `RegulatoryPool` (`general` / `hipaa` / `coppa`):
+> **Superseded (OSE-1220 / OSE-380).** HIPAA and COPPA are declined regimes. `phaseToPool`
+> now maps tiers 1-3 and null/undefined to `general` and **throws** for 4, 5 or any value it
+> cannot classify; there is no `hipaa` or `coppa` dataset to route to. The original design
+> sketch is kept below for history only.
+
+Original design (no longer the code):
 
 ```typescript
 export function phaseToPool(phase: number): RegulatoryPool {
@@ -154,48 +159,94 @@ Calls the three exporters in sequence. Failure isolation per phase (S4-Q4). Logs
 
 ## Per-table export procedure (detailed)
 
-### `anon_id_returns` export
+### `anon_id_returns` export → corridor return counts (OSE-1460)
 
-**Source:** `anon_id_returns` (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+**Changed 2026-10-01 (OSE-1460, PO decision).** This phase used to send one row per
+`(anon_id_hash, venue_id)` with first/last seen and a visit count. That is a
+pseudonymous, per-person record, and it crossed the OER boundary, which allows
+aggregates only, never `anon_id`, and corridor-level location only
+(`OCR-docs/docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`). It now
+sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Worker.
 
-**Routing:** Per row, look up `events.legal_clearance_tier` via `venue_id` (which IS the event_id). Map to pool. Stream to that pool's dataset.
+**When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
+`wrangler.toml`). Each run snapshots events whose day (`end_date`, else
+`start_date`) falls in the last `RETURNS_WINDOW_DAYS` (90), up to and including today (an event rescheduled into the future is not counted), even when no source
+row is past the watermark, because a rolling window changes as events age out.
+The window is the event's day, not `last_seen_at`, which is when the cron
+materialized the row (hours after the event, later again on a re-run).
+Only rows hashed under the current `ANON_ID_HASH_PEPPER` count (`pepper_epoch`,
+migration 0091): after a rotation the same browser has a second hash, so mixing
+peppers could count three people as six and lift them over the floor. A rotation
+resets the return counts; with no pepper configured, every group is empty. The watermark then records the newest source row seen. Each run
+is its own snapshot, identified by its full `computed_at` timestamp; retries
+inside one run reuse it, so their insertIds dedupe.
 
-**Query:**
+**Reading it:** every run writes one **snapshot marker** row per pool, with
+`row_type = 'snapshot'`, `corridor_id = 'unknown'` and `groups_in_snapshot` set
+to the number of groups. Data rows have `row_type = 'group'`. The current
+snapshot is the latest marker's `computed_at`. Read the `group` rows with that
+`computed_at`; there may be none. A group missing from it has aged out of the
+window or fallen under the floor. Without the marker, a run in which every group
+disappeared would write nothing, and the previous snapshot would look current.
+Markers are not counted as exported rows. Runs are also recorded in the D1
+`export_manifest`, but OER cannot see that table, so the marker is what OER uses.
 
-```sql
-SELECT
-  air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
-  air.visit_count, air.computed_at,
-  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
-  etr.uec_code
-FROM anon_id_returns air
-JOIN events e ON e.id = air.venue_id
-LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-WHERE air.computed_at > ?  -- watermark
-ORDER BY air.computed_at ASC
-LIMIT 500;  -- max BQ batch size
-```
+**Grouping:** a person is counted once per (corridor, event type, pool). A return
+means they were seen at 2 or more distinct events there. `visit_count` is not
+used, because the materializer bumps it on every re-run. Tiers that share a pool
+(NULL and 1–3 are `general`) are one group before the floor applies
+(`RETURNS_POOL_KEY_SQL`). A declined regime is withheld (OSE-1220).
 
-**BQ row shape (per required tags):**
+**Floor:** a group with fewer than `RETURNS_MIN_COUNT` people (5, the same
+floor as `CORRIDOR_MAP_MIN_COUNT`) is not exported. Inside an exported group,
+the counts are nested (`people_count` ⊇ `returned_2plus` ⊇ `returned_3plus` ⊇
+`returned_5plus`) and are floored as one chain (`floorNestedCounts`,
+`lib/count-floor.ts`): a count is sent only if it is at least 5 **and** it is
+equal to, or at least 5 below, the last count sent before it. Otherwise it is
+`null`, meaning suppressed. Without the second rule, `people_count` 12 and
+`returned_2plus` 9 would tell a reader that 3 people came once. A group with
+no real res7 corridor is withheld, never sent as `'unknown'`.
+
+**Paging:** the grouped query is read 500 groups at a time
+(`RETURNS_PAGE_SIZE`), keyed by (corridor, pool, type), and each page is
+sent as it arrives, so the snapshot is never held whole in D1's result or
+the Worker. The marker is written last; a run that stops part-way writes no
+marker, so OER keeps reading the previous complete snapshot. A snapshot over
+`RETURNS_MAX_PAGES` (200) pages fails closed.
+
+**BQ row shape:**
 
 ```json
 {
-  "anon_id_hash": "...32 hex...",
-  "venue_id": "evt_...",
-  "first_seen_at": "ISO",
-  "last_seen_at": "ISO",
-  "visit_count": 1,
-  "computed_at": "ISO",
-  "corridor_id": "the event's lowercase res7-or-coarser H3 cell (e.g. 872664544ffffff), or 'unknown'",
+  "corridor_id": "the event's lowercase res7-or-coarser H3 cell",
+  "venue_id": "corridor-aggregate",
   "event_type": "etr.uec_code or 'unknown'",
-  "uec_code": "etr.uec_code",
-  "regulatory_pool": "general|hipaa|coppa",
+  "uec_code": "etr.uec_code or 'unknown'",
+  "regulatory_pool": "general",
   "product_id": "ose",
+  "window_days": 90,
+  "people_count": 42,
+  "returned_2plus": 17,
+  "returned_3plus": 6,
+  "returned_5plus": null,
+  "row_type": "group",
+  "computed_at": "the run's snapshot timestamp, ISO (full precision)",
   "exported_at": "ISO (now)"
 }
 ```
 
-`assertRequiredTags()` runs on each row before send.
+`venue_id` carries the `'corridor-aggregate'` sentinel, as the corridor baseline
+does, so the required-tag contract (`REQUIRED_TAGS`, brain `product-registry.yaml`)
+is unchanged. `assertRequiredTags()` runs on each row before send.
+
+**Grain you can query in OER:** one corridor × event type × pool, a 90-day
+rolling window, with one new snapshot per scheduled run (nightly today). You cannot see
+individual journeys or venues, or anyone's movement between corridors.
+
+**Corridor id for returns (OSE-1460).** A returns group with no real res7
+corridor is **withheld**, never exported as `'unknown'`. Only the snapshot
+marker carries `corridor_id = 'unknown'`. The paragraph below describes the
+shared rule the other phases follow.
 
 **Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The
 exported `corridor_id` is the event's `h3_res7`; a legacy non-H3
@@ -207,11 +258,17 @@ neither a valid res7-or-coarser cell nor `'unknown'` **throws**, and the phase
 fails closed (watermark held). Rows are rejected, never trimmed and shipped. The
 event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 
-**BQ table:** `anon_id_returns_export` in the pool's dataset.
+**BQ table:** `corridor_returns_export` in the pool's dataset (it replaces `anon_id_returns_export`, which was never created in any environment: BigQuery read 2026-10-01).
 
 ### `corridor_density_baseline` export
 
 **Source:** `corridor_density_baseline` (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+
+**Floor:** both windows count distinct people. Each is sent only at or above
+`CORRIDOR_BASELINE_MIN_SAMPLE` (10), the rule the SharedReport read path uses,
+and the pair is floored as a chain (90d ⊇ 30d): the 30-day count is `null`
+when it sits 1–4 below the 90-day count, so `90d − 30d` never names fewer than
+5 people. A row with both windows `null` is withheld.
 
 **Routing:** Baselines are cross-event aggregates. **Default to `general` pool** for v1 — these are corridor-level density signals that don't encode per-attendee state. If a corridor's events span multiple pools, the baseline is intentionally less-precise on routing (it's a baseline; it summarizes mixed traffic). This is a deliberate v1 simplification documented for revisit if a HIPAA/COPPA corridor surfaces a routing issue.
 
@@ -320,9 +377,9 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 
 - Rows BigQuery already accepted stay there.
 - The watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
+- Next tick retries from the watermark. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `anon_id_returns_export`: `(anon_id_hash, venue_id, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`
@@ -334,20 +391,23 @@ manifested as exported, and the watermark does not advance (OSE-616).
 
 ## Tests
 
+Every line below names a test in `workers/oursharedevents/tests/shared-report-bigquery-export.spec.ts`.
+
 **Unit (no BQ; mocked client):**
 
-- Watermark advancement on success
-- Watermark NOT advanced on failure
-- Phase-to-pool mapping correctness (phase 1-3 → general, 4 → hipaa, 5 → coppa)
+- Phase-to-pool mapping: phases 1-3 → general; null/undefined → general (the Phase-1 default); tiers 4 (HIPAA) and 5 (COPPA) are **refused**, never routed (OSE-1220); an unrecognized phase fails closed (OSE-380)
 - Required-tag assertion (every exported row carries all 6 required tags)
-- Empty source table → graceful no-op, zero rows exported
-- Source table with no rows past watermark → zero rows exported, watermark unchanged
+- Graceful no-op when BigQuery is not configured
 
 **Integration (vitest-pool-workers, D1 + mocked BQ):**
 
-- Seed Session 3 materialization rows → run export → verify state row updated, mocked BQ received correct rows
-- Seed a HIPAA-pool event + its anon_id_returns rows → verify those rows route to `oureventring_hipaa` dataset (mock asserts)
-- Inject BQ failure on the 2nd batch of 3 → assert first batch's watermark advancement, second batch retry on next tick
+- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; no two published counts subtract to a group under the floor; a group under the floor is withheld; a group with no real corridor is withheld; events before the 90-day window are not counted, even when materialized recently
+- Every run writes one snapshot marker per pool, even with no groups, so an empty run is distinguishable from a missing run
+- More than 500 groups go in chunks of at most 500
+- Watermark advances to the newest source row on success and is **not** advanced when BigQuery rejects the insert (S4-Q4)
+- A tier-4 group is quarantined, never routed or leaked
+- On staging the export lands in `oureventring_general_stg`, never the production dataset (OSE-1416)
+- Orchestrator: a failure in one phase does not abort the others
 
 **Gate (static-invariant test):**
 
@@ -357,13 +417,13 @@ manifested as exported, and the watermark does not advance (OSE-616).
 
 ## Anonymity invariants (preserved by construction)
 
-| Invariant                       | How it's preserved in Session 4                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| No raw `anon_id` to BQ          | Source table `anon_id_returns` only stores `anon_id_hash`; export passes through unchanged.                 |
-| No cross-DB join with FORMS_DB  | Export library reads main DB only (Gate 1 carries over from Session 3).                                     |
-| No user-facing surface          | Cron-only by static-source gate (Gate 5, new).                                                              |
-| Anon hash determinism preserved | Session 4 doesn't re-hash; passes existing hashes through.                                                  |
-| Pool isolation                  | `assertRequiredTags` + `phaseToPool` guarantee no HIPAA event's aggregate row lands in the general dataset. |
+| Invariant                            | How it's preserved in Session 4                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `anon_id` or `anon_id_hash` to BQ | Since OSE-1460 the returns phase sends only k-floored corridor counts; the hash is used inside the Worker to count people and never leaves. |
+| No cross-DB join with FORMS_DB       | Export library reads main DB only (Gate 1 carries over from Session 3).                                                                     |
+| No user-facing surface               | Cron-only by static-source gate (Gate 5, new).                                                                                              |
+| No re-hashing                        | Session 4 never re-hashes; the returns phase counts hashed ids in SQL and exports counts only.                                              |
+| Pool isolation                       | `assertRequiredTags` + `phaseToPool` guarantee no HIPAA event's aggregate row lands in the general dataset.                                 |
 
 ---
 
@@ -372,7 +432,7 @@ manifested as exported, and the watermark does not advance (OSE-616).
 - **Read API for the BQ exports.** Session 5 ships the read API (`GET /api/v2/events/:id/shared-report` + WKRP batch). Session 4 is write-only.
 - **WKRP batch endpoint.** Session 5 (ratified).
 - **Historical backfill of pre-Session-3 data.** First export pass uses the epoch watermark — picks up everything in D1 at the time. No special backfill needed.
-- **BQ table schema management (DDL).** BQ tables are auto-created on first insert by the BigQuery streaming API. Schema management is handled out-of-band via Terraform / GCP console; not Worker code's concern.
+- **BQ table creation.** _Corrected 2026-10-01:_ this line said tables are auto-created on first insert. They are not: `tabledata.insertAll` fails when the table is missing. `corridor_returns_export` now has a checked-in schema (`workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, kept in step with the code by a test) and a creation step in `docs/runbooks/RUNBOOK-DEPLOYMENT.md`. `corridor_density_baseline_export` and `event_series_export` still have neither.
 - **Cross-pool baseline routing.** Corridor baselines default to `general` in v1. Documented for revisit if a HIPAA/COPPA corridor surfaces a need.
 - **Sponsor impression export.** Sponsor impressions are already exported via the existing `runBigQueryBackup`. No change in Session 4.
 - **Real-time export.** Cron-only, daily. No real-time streaming.

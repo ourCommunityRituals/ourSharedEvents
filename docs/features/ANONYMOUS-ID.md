@@ -18,8 +18,8 @@ Most event platforms collect personal data first and worry about privacy later. 
 │  - No email in the scan system                                  │
 │  - No name in the scan system                                   │
 │  - No IP address in the scan system                             │
-│  - No exact timestamps (hourly buckets only)                    │
-│  - No cross-event individual tracking                           │
+│  - Reports and exports show hourly buckets, never exact times   │
+│  - Returns leave OSE only as k-floored corridor counts          │
 │  - No behavioral profiles                                       │
 │                                                                 │
 │  This is enforced by schema, not by policy.                     │
@@ -39,32 +39,32 @@ You can scan any QR code at any event knowing no personal data is captured. If y
 - Survey comments → PII-scrubbed by daily job
 - Email signup → encrypted, auto-deleted after 30 days
 
-The scan system and the forms system are **completely separate databases with no cross-linking**.
+The scan system and the forms system are **separate databases with no SQL or foreign-key join between them**. Both store the same pseudonymous `ose_anon` value; the only code that uses it across the two is erasure, which reads it from `FORMS_DB` to delete the matching scan rows.
 
 ### For Sponsors
 
-The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, from what region. Not inflated by bots, not enriched with purchased data, not tracking individuals across events. Real presence at real events.
+The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, and in which corridor (from the poster's address; the visitor's own location is never read). Repeat scans by one person at one poster count once an hour; automated traffic is not otherwise filtered. Not enriched with purchased data, not tracking individuals across events. Real presence at real events.
 
 ### For the Platform
 
-By removing PII from the data layer by design, the platform can scale across thousands of events without becoming a surveillance system. The data becomes **more valuable** over time (NCR geo-spatial intelligence) precisely because it's safe to keep forever.
+By removing PII from the data layer by design, the platform can scale across thousands of events without becoming a surveillance system. The data becomes **more valuable** over time (NCR geo-spatial intelligence) because its durable part, placement and aggregate counts, holds no PII. Rows that carry the pseudonymous cookie id are not kept forever: they are erasable, and a retention window bounds them once set.
 
 ---
 
 ## Two-Database Architecture
 
-The most critical design decision: **two separate D1 databases with no cross-linking**.
+The most critical design decision: **two separate D1 databases, with no SQL join, foreign key or analytics join between them**. They do share one pseudonymous key, `anonymous_id` (the `ose_anon` cookie value), which erasure uses to find a person's scan rows.
 
 ```
 FORMS_DB (opt-in personal data)          DB (anonymous presence signal)
 ───────────────────────────────          ──────────────────────────────
-form_registrations                       scans
+form_registrations                       scan_placement_events (WHERE)
+  anonymous_id  (ose_anon, shared key)     poster_deployment_id (FK)
   name          (plain text)               scan_bucket      (hourly window)
-  email_hash    (SHA-256)                  user_agent_hash  (device class)
-  expires_at    (90-day TTL)               country_code     (from CF headers)
-                                           region_code      (from CF headers)
-form_surveys                               poster_deployment_id (FK)
-  responses_json (scrubbed)
+  email_hash    (SHA-256)
+  expires_at    (90-day TTL)             scan_node_returns (WHO came back)
+form_surveys                               anonymous_id     (pseudonymous)
+  responses_json (scrubbed)                user_agent_hash  (device class)
   pii_scrubbed   (boolean)              scan_aggregates
                                            bucket_date     (daily rollup)
 email_signups                              bucket_hour     (hourly rollup)
@@ -76,33 +76,44 @@ checkin_counts                             qr_token        (unique)
   count (aggregate integer only)           latitude        (placement)
                                            longitude       (placement)
 
-  ↓ AUTO-DELETED on schedule               ↓ PERMANENT — no PII exists
-  ↓ Customer opted in voluntarily          ↓ No opt-in needed
+  ↓ AUTO-DELETED on schedule               ↓ placements kept; rows with the
+  ↓ Customer opted in voluntarily            cookie id kept until erased (no
+                                             retention window set by default)
 ```
 
-**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases make this architecturally impossible.
+**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases rule out that join in SQL. The shared `anonymous_id` is still a pseudonymous key across the two, and application code uses it for one purpose only: erasure.
 
 ---
 
 ## Schema-Level Privacy (DB — Scan System)
 
-### `scans` table
+### Scan tables (`scan_placement_events` + `scan_node_returns`, migration 0062)
+
+Migration 0062 (OSE-798) dropped the old combined `scans` table and split each scan into two rows with no shared key, so no stored row holds both *where* (the placement) and *who* (the cookie id):
 
 ```sql
-CREATE TABLE IF NOT EXISTS scans (
-  id                    TEXT PRIMARY KEY,
-  event_id              TEXT NOT NULL,
-  poster_deployment_id  TEXT NOT NULL,
-  scan_bucket           TEXT NOT NULL,        -- hourly window, not exact time
-  user_agent_hash       TEXT,                 -- device class, not individual
-  referrer_domain       TEXT,
-  country_code          TEXT,                 -- from CF headers, not IP
-  region_code           TEXT,                 -- from CF headers, not IP
-  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+-- WHERE: which poster placement was scanned. No person-derived value.
+CREATE TABLE IF NOT EXISTS scan_placement_events (
+  id                   TEXT PRIMARY KEY,
+  event_id             TEXT NOT NULL,
+  poster_deployment_id TEXT NOT NULL,
+  scan_bucket          TEXT NOT NULL,        -- hourly window
+  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- WHO came back: the pseudonymous cookie id. No placement id, ever.
+CREATE TABLE IF NOT EXISTS scan_node_returns (
+  id              TEXT PRIMARY KEY,
+  event_id        TEXT NOT NULL,
+  anonymous_id    TEXT,                     -- pseudonymous ose_anon cookie value
+  user_agent_hash TEXT,                     -- device class, not individual
+  country_code    TEXT,                     -- always NULL since OSE-1460 (CF-IPCountry is not read; 0089 cleared it)
+  scan_bucket     TEXT NOT NULL,            -- hourly window
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
-**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint, any column that could identify an individual.
+**What's explicitly excluded:** email, name, IP address, country, device fingerprint, and any cookie other than the `ose_anon` id below. Two honest caveats: `created_at` is the row's insert time to the second (it is kept for retention and ordering and never leaves the Worker; reports and exports use `scan_bucket`, the hour), and `anonymous_id` is a pseudonymous cookie id, so inside OSE one browser's scans at different events can be linked. That link is used only to count returns, and it leaves OSE only as k-floored corridor counts (OSE-1460).
 
 ### `poster_deployments` table
 
@@ -133,7 +144,7 @@ CREATE TABLE IF NOT EXISTS scan_aggregates (
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,
+  top_country     TEXT,                       -- always NULL since OSE-1460
   top_region      TEXT,
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -149,7 +160,7 @@ The Anonymous ID contract is enforced at multiple layers — not just one:
 
 ### Layer 1: Schema (database structure)
 
-No PII columns exist in the scan system tables. You cannot `INSERT` an email into the `scans` table because there's no column for it.
+No PII columns exist in the scan system tables. You cannot `INSERT` an email into `scan_placement_events` or `scan_node_returns` because there's no column for it.
 
 ### Layer 2: Hashing (form submissions)
 
@@ -244,9 +255,9 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 | **Database breach of scan system**  | No PII to leak — schema has no PII columns                              |
 | **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted                  |
 | **Cross-database correlation**      | Separate D1 databases, no foreign keys between them                     |
-| **Timing correlation**              | Hour-bucketed timestamps prevent exact-time matching                    |
+| **Timing correlation**              | Reports and exports use hour buckets only; the second-level `created_at` stays inside the Worker |
 | **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual            |
-| **IP logging**                      | IP never stored; country/region derived from CF headers at request time |
+| **IP logging**                      | IP never stored; no location is derived from the request either (country removed by OSE-1460) |
 | **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                      |
 | **Admin data access**               | Admin APIs return hashes, counts, and scrubbed data — never raw PII     |
 
@@ -256,7 +267,7 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 
 The Anonymous ID architecture creates a dataset that becomes **more valuable** over time:
 
-1. **Safe to keep forever** — no PII means no retention liability
+1. **Durable where it is aggregate** — placement and count rows hold no PII; cookie-id rows are erasable and retention-bound
 2. **Safe to aggregate** — cross-event analysis doesn't create surveillance
 3. **Safe to share** — sponsor reports contain aggregate signal, not individual data
 4. **Foundation for NCR** — geo-spatial intelligence from lat/lng + scan aggregates

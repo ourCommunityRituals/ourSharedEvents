@@ -424,12 +424,30 @@ const SCAN_CLICK_PATH = [
 
 /**
  * Device geolocation, in every shape it can arrive: the browser API, the
- * Cloudflare request.cf geo fields (derived from the visitor's IP), and the
- * CF-IP* geo headers finer than a country. CF-IPCountry stays allowed — a
- * country is the documented coarse aggregate qr-scan.ts already records.
+ * Cloudflare request.cf geo fields (derived from the visitor's IP, timezone
+ * included; dot, optional-chain, bracket and destructuring access), and every
+ * CF-IP* header by prefix. OSE-1460 (2026-10-01): CF-IPCountry is no longer allowed —
+ * the visitor's apparent country is not recorded either. Any read of `request.cf`
+ * itself is forbidden on these paths too (`x.cf`, `x?.cf`, `x['cf']`, and
+ * destructuring `{ cf }` / `{ cf: edge }`), so an alias (`const edge = request.cf;
+ * edge.country`) cannot slip past the field list.
  */
 const DEVICE_GEO =
-  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode)\b|cf-ip(city|latitude|longitude|postal-code|region)/i;
+  /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition|\bcf\s*\??\.\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\bcf\s*\??\.?\s*\[\s*['"`]\s*(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b|\{[^}]*\b(latitude|longitude|city|postalCode|metroCode|region|regionCode|country|continent|timezone|isEUCountry)\b[^}]*\}\s*=\s*[\w.?]*\bcf\b|cf-ip[a-z-]+|[\w)\]]\s*\??\.\s*cf\b(?!-)|\b(?:const|let|var)\s*\{[^{}]*\bcf\b(?!-)[^{}]*\}\s*=|\(\s*\{[^{}]*\bcf\b(?!-)[^{}]*\}\s*[:)]|\[\s*['"`]cf['"`]\s*\]/i;
+
+/**
+ * Token rule, the structural backstop to DEVICE_GEO: on a scan/click path the
+ * identifier `cf` (Cloudflare's request.cf, where all request geography lives)
+ * may not appear in code at all, in any syntax: property access, an alias,
+ * plain, renamed or nested destructuring (`const { cf: { country } } = request`).
+ * Comments are stripped first. Case-sensitive, and a following `-` or word
+ * character does not count, so `'cf-turnstile-response'`, `CF-Connecting-IP` and
+ * prose such as "CF edge" are not hits.
+ */
+const CF_IDENT = /\bcf\b(?![-\w])/;
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\"'`])\/\/[^\n]*/g, '$1');
+}
 
 function sourcesMatching(pred: (p: string) => boolean): Array<[string, string]> {
   const sources: Record<string, string> = JSON.parse(
@@ -448,12 +466,64 @@ async function columnsOf(table: string): Promise<string[]> {
 }
 
 describe('8b–8e. attribution rule gate — physical res9, digital res7, no device geo (OSE-1357)', () => {
+  test('8b. the geolocation pattern catches every access form (self-check)', () => {
+    for (const read of [
+      'request.cf.country',
+      'request.cf?.timezone',
+      "request.cf['country']",
+      'const { country } = request.cf',
+      'const { city: c, timezone } = request.cf ?? {}',
+      'const {\n  country,\n} = req.cf;',
+      'request.cf?.["city"]',
+      "headers.get('CF-IPCountry')",
+      "headers.get('cf-ipcity')",
+      'navigator.geolocation',
+      'const edge = request.cf; edge.country',
+      'const edge = req?.cf',
+      "request['cf']",
+      '(r as unknown as { cf?: unknown }).cf',
+      'const { cf: edge } = request; edge.country',
+      'const { cf } = req',
+      'const {\n  headers,\n  cf: geo,\n} = request;',
+      '({ cf }: Request) => cf',
+    ]) {
+      expect(DEVICE_GEO.test(read), read).toBe(true);
+    }
+    for (const read of [
+      'const { cf: { country } } = request',
+      'const {\n  cf: {\n    timezone: tz,\n  },\n} = req;',
+      'const edge = request.cf; edge.country',
+      'function f({ cf }: Request) { return cf; }',
+    ]) {
+      expect(CF_IDENT.test(stripComments(read)), read).toBe(true);
+    }
+    for (const fine of [
+      "body['cf-turnstile-response']",
+      "headers.get('CF-Connecting-IP')",
+      '// Rate limit by CF edge IP only\nconst ip = 1;',
+      '/* request.cf is never read here */ const x = 1;',
+    ]) {
+      expect(CF_IDENT.test(stripComments(fine)), fine).toBe(false);
+    }
+    // The rate-limit key is an IP header, not geography.
+    expect(DEVICE_GEO.test("headers.get('CF-Connecting-IP')")).toBe(false);
+    // The Turnstile token field is not request.cf.
+    expect(DEVICE_GEO.test("body['cf-turnstile-response']")).toBe(false);
+    expect(DEVICE_GEO.test("const { 'cf-turnstile-response': token } = body")).toBe(false);
+  });
+
   test('8b. no scan/click path reads device geolocation', () => {
     for (const rel of SCAN_CLICK_PATH) {
       const hit = sourcesMatching((p) => p.endsWith(rel));
       expect(hit.length, `${rel} missing from TEST_SOURCE_FILES_JSON`).toBe(1);
       const m = hit[0][1].match(DEVICE_GEO);
       expect(m, `${rel} reads device geolocation: "${m?.[0]}"`).toBeNull();
+      const code = stripComments(hit[0][1]);
+      const t = code.match(CF_IDENT);
+      expect(
+        t,
+        `${rel} touches request.cf: "${t ? code.slice(Math.max(0, t.index! - 40), t.index! + 20) : ''}"`
+      ).toBeNull();
     }
   });
 

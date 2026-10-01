@@ -350,7 +350,8 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(row!.scan_bucket).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/);
   });
 
-  test('OSE-625 | UNIT | scan row values | country_code stored from CF-IPCountry header', async () => {
+  // OSE-1460 (PO 2026-10-01): inverted. The visitor's IP country is never recorded.
+  test('OSE-1460 | UNIT | scan row values | country_code is never stored, even with CF-IPCountry', async () => {
     const kv = makeInMemoryKV();
     await handleQrScan(makeRequest(VALID_QR_TOKEN, { country: 'US' }), makeEnv(kv), VALID_QR_TOKEN);
 
@@ -359,7 +360,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
       .bind(TEST_EVENT_ID)
       .first<{ country_code: string }>();
 
-    expect(row!.country_code).toBe('US');
+    expect(row!.country_code).toBeNull();
   });
 
   test('OSE-625 | UNIT | scan row values | anonymous_id stored (not null)', async () => {

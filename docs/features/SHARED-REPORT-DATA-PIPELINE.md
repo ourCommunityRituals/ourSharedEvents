@@ -21,7 +21,7 @@ The SharedReport is the **product SKU** OSE sells per BEACHHEAD-ICP — the data
 
 This document captures the data pipeline that produces those fields: what exists, what's missing, what gets added, where it lives, and the anonymity invariants that gate every step.
 
-**The architectural commitment that gates everything below:** no data primitive in this pipeline ever resolves an anon_id to attendee identity. Aggregates are computed FROM anon_ids but never expose them; all retention is governed by the 15-min time bucket + anonymous-id contract (ADR-001).
+**The architectural commitment that gates everything below:** no data primitive in this pipeline ever resolves an anon_id to attendee identity. Aggregates are computed FROM anon_ids but never expose them; all retention is governed by the hourly time bucket + anonymous-id contract (ADR-001). Since OSE-1460 only k-floored corridor counts of returns are exported to OER, never a per-person row.
 
 ---
 
@@ -39,8 +39,8 @@ CREATE TABLE scan_aggregates (
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,
-  top_region      TEXT,
+  top_country     TEXT,   -- always NULL since OSE-1460 (0089 cleared it)
+  top_region      TEXT,   -- never written
   computed_at     TEXT NOT NULL,
   FOREIGN KEY (event_id) REFERENCES events(id)
 );
@@ -91,8 +91,8 @@ CREATE TABLE anon_id_returns (
   -- in user-facing endpoints. Cron-materialized only.
   anon_id_hash    TEXT NOT NULL,    -- HASH(anon_id, pepper) — NEVER raw anon_id
   venue_id        TEXT NOT NULL,    -- which venue / event-series root
-  first_seen_at   TEXT NOT NULL,    -- ISO date, 15-min bucket-quantized
-  last_seen_at    TEXT NOT NULL,    -- ISO date, 15-min bucket-quantized
+  first_seen_at   TEXT NOT NULL,    -- ISO timestamp of the materializer run (full precision, not bucketed)
+  last_seen_at    TEXT NOT NULL,    -- ISO timestamp of the materializer run (full precision, not bucketed)
   visit_count     INTEGER NOT NULL DEFAULT 1,
   computed_at     TEXT NOT NULL,
   PRIMARY KEY (anon_id_hash, venue_id),

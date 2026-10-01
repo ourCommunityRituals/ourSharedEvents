@@ -13,7 +13,7 @@
  *   4. queue unbound     → direct D1 batch (dark-launch parity with today's code)
  *
  * never-who: the message carries only the same anonymized fields the rows already
- * store (pseudonymous anon id, ua hash, country, hour-bucket) plus two separate
+ * store (pseudonymous anon id, ua hash, hour-bucket; never a country, OSE-1460) plus two separate
  * opaque row ids for retry idempotency — asserted below.
  */
 
@@ -66,7 +66,6 @@ const MSG: ScanMessage = {
   deployment_id: 'pd_1',
   anon_id: 'anon_abc',
   ua_hash: 'deadbeefdeadbeef',
-  country: 'US',
   scan_bucket: '2026-09-16T20:00',
 };
 

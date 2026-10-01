@@ -71,11 +71,11 @@ latitude   REAL,   -- node location of the deployment
 longitude  REAL,
 qr_token   TEXT NOT NULL UNIQUE
 
--- scans (migration 0004) — each scan record is a SIGNAL_PRESENCE event
+-- scan_placement_events (migration 0062, which retired `scans`) — each row is a
+-- SIGNAL_PRESENCE event. Geography comes only from the placement's node; the
+-- visitor's own location is never read or stored (OSE-1460).
 poster_deployment_id  TEXT,   -- links scan back to node via poster_deployments
-scan_bucket           TEXT,   -- time window (privacy — no exact timestamp stored)
-user_agent_hash       TEXT,   -- anonymous probe identifier
-region_code           TEXT    -- geographic resolution
+scan_bucket           TEXT    -- hourly window; reports and exports never see a finer time
 ```
 
 **Analytical value:** `SIGNAL_PRESENCE` scans capture the **awareness pool** — people in a node's orbit who have been exposed to the platform but have not yet attended an event. This is the denominator for the Conversion Rate Model (§1.2). A node with zero presence scans and strong behavioral signals is a different analytical situation than a node with 400 presence scans and the same behavioral signal count. The ratio matters as much as either count alone.

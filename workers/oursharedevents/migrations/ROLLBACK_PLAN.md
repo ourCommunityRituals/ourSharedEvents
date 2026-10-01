@@ -107,6 +107,26 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0091: anon_id_returns.pepper_epoch (OSE-1460). Additive column; SQLite
+-- 3.35+ can drop it. Rolling back means the export again mixes peppers after a
+-- rotation, so roll the Worker back first.
+ALTER TABLE anon_id_returns DROP COLUMN pepper_epoch;
+
+-- 0090: anon_id_returns indexes for the returns export (rolling window + watermark probe).
+DROP INDEX IF EXISTS idx_anon_id_returns_last_seen;
+DROP INDEX IF EXISTS idx_anon_id_returns_computed_at;
+
+-- 0089: clear the visitor's IP country (OSE-1460). Data-only: sets
+-- scan_node_returns.country_code and scan_aggregates.top_country to NULL. Not
+-- reversible and not meant to be: the values are deliberately gone. The partial
+-- index can be dropped:
+DROP INDEX IF EXISTS idx_snr_country_nonnull;
+
+-- 0088: admin_audit_log.brand_id (AUD-3 Phase B, OSE-1447). Additive column +
+-- index. Never DROP the table (append-only, deprecation-lock). To roll back,
+-- drop the index and leave the nullable column: the writer tolerates either.
+DROP INDEX IF EXISTS idx_admin_audit_log_brand_created;
+
 -- 0086: remove 0013's test-event-001 where nothing references it (OSE-1419).
 -- Data-only, no schema change. Rollback is not needed and not wanted: the row
 -- is a test fixture, and production should not hold it. To put it back on a

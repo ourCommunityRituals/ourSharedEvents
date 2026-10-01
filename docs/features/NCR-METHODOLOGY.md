@@ -30,7 +30,7 @@ The current state. Individual events generate anonymous scan data. Each event is
 
 - Scan counts by hourly bucket
 - Unique device classes (user agent hash)
-- Country/region from CF headers
+- No visitor location: country and region are never read or stored (OSE-1460); place comes only from the poster's address
 - Poster deployment locations (lat/lng)
 - Form submission counts (registrations, check-ins, surveys, emails)
 - Sponsor placement attribution
@@ -109,22 +109,33 @@ CREATE TABLE poster_deployments (
 
 Every physical QR code placement is a **geo-spatial anchor**. The lat/lng tells us exactly where in the physical world engagement happened. At scale, these anchors become a map of community gathering points.
 
-### `scans` — The Signal Layer
+### `scan_placement_events` + `scan_node_returns` — The Signal Layer
+
+Migration 0062 (OSE-798) retired the combined `scans` table and split each scan into two rows with no shared key. Since OSE-1460 no visitor location is stored: `country_code` is always NULL, and no region is ever written.
 
 ```sql
-CREATE TABLE scans (
-  id                    TEXT PRIMARY KEY,
-  event_id              TEXT NOT NULL,
-  poster_deployment_id  TEXT NOT NULL,    -- links to physical location
-  scan_bucket           TEXT NOT NULL,    -- hourly time window
-  user_agent_hash       TEXT,             -- device class (not individual)
-  country_code          TEXT,
-  region_code           TEXT,
-  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+-- WHERE: which placement was scanned, in which hour. No person-derived value.
+CREATE TABLE scan_placement_events (
+  id                   TEXT PRIMARY KEY,
+  event_id             TEXT NOT NULL,
+  poster_deployment_id TEXT NOT NULL,   -- links to physical location
+  scan_bucket          TEXT NOT NULL,   -- hourly time window
+  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- WHO came back: the pseudonymous cookie id. No placement id.
+CREATE TABLE scan_node_returns (
+  id              TEXT PRIMARY KEY,
+  event_id        TEXT NOT NULL,
+  anonymous_id    TEXT,               -- pseudonymous ose_anon value
+  user_agent_hash TEXT,               -- device class (not individual)
+  country_code    TEXT,               -- always NULL since OSE-1460
+  scan_bucket     TEXT NOT NULL,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
-Each scan is an anonymous interaction event linked to a physical location via `poster_deployment_id`. The `scan_bucket` provides temporal resolution. Together, they answer: "how many interactions happened at this spot during this hour?"
+Each placement row is an anonymous interaction linked to a physical location via `poster_deployment_id`, and `scan_bucket` gives the hour. Together they answer: "how many interactions happened at this spot during this hour?" Geography comes only from the placement (the poster's address), never from the visitor.
 
 ### `scan_aggregates` — The Intelligence Layer
 
@@ -136,8 +147,8 @@ CREATE TABLE scan_aggregates (
   bucket_hour     INTEGER,               -- 0-23
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,
-  top_region      TEXT,
+  top_country     TEXT,                  -- always NULL since OSE-1460 (0089 cleared it)
+  top_region      TEXT,                  -- never written
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```

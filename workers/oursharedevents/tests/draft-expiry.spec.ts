@@ -164,6 +164,54 @@ describe('runDraftExpiry', () => {
     expect(JSON.parse(audit!.details).outcomeRaw).toBe('noop');
   });
 
+  test('AUD-3 B: each archived draft gets its own DRAFT_EXPIRED row, attributed to its brand', async () => {
+    await seed('dx-brand-a', 'draft', OLD);
+    await seed('dx-brand-keep', 'draft', new Date().toISOString());
+    await runDraftExpiry(expiryEnv());
+    const rows = await db()
+      .prepare(
+        "SELECT resource_id, brand_id, actor FROM admin_audit_log WHERE action = 'DRAFT_EXPIRED' AND resource_id LIKE 'dx-brand-%'"
+      )
+      .all<{ resource_id: string; brand_id: string | null; actor: string }>();
+    expect(rows.results).toEqual([
+      { resource_id: 'dx-brand-a', brand_id: BRAND, actor: 'system:lifecycle' },
+    ]);
+  });
+
+  test('a 200-draft sweep stays far inside the D1 per-invocation query budget', async () => {
+    await db()
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 199)
+         INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         SELECT 'dx-bulk-' || i, ?, 'Bulk ' || i, 'slug-dx-bulk-' || i, 'draft', ?, ? FROM n`
+      )
+      .bind(BRAND, OLD, OLD)
+      .run();
+    let prepares = 0;
+    const counted = new Proxy(db(), {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            prepares++;
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const r = await runDraftExpiry({ ...expiryEnv(), DB: counted } as never);
+    expect(r.archived).toBeGreaterThanOrEqual(200);
+    expect(prepares).toBeLessThan(20); // 2 reads + 2 per 90-draft chunk + 1 summary
+    const audited = await db()
+      .prepare(
+        "SELECT COUNT(*) AS n FROM admin_audit_log WHERE action = 'DRAFT_EXPIRED' AND resource_id LIKE 'dx-bulk-%' AND brand_id = ?"
+      )
+      .bind(BRAND)
+      .first<{ n: number }>();
+    expect(audited?.n).toBe(200);
+  });
+
   test('one audit row per run names the archived ids (never-who: system actor only)', async () => {
     await seed('dx-audit-a', 'draft', OLD);
     await seed('dx-audit-b', 'draft', OLD);
@@ -182,6 +230,50 @@ describe('runDraftExpiry', () => {
     expect(details.archived).toBe(2);
     expect(details.days).toBe(30);
     expect([...details.ids].sort()).toEqual(['dx-audit-a', 'dx-audit-b']);
+  });
+
+  test('the summary names only drafts actually archived, not one edited mid-run', async () => {
+    await seed('dx-race-a', 'draft', OLD);
+    await seed('dx-race-b', 'draft', OLD);
+    // Edit dx-race-b between the SELECT and the UPDATE: the UPDATE's WHERE
+    // skips it, so it must not appear in the audit as archived.
+    const racing = new Proxy(db(), {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (/^\s*UPDATE events/.test(sql)) {
+              return {
+                bind: (...args: unknown[]) => ({
+                  all: async () => {
+                    await target
+                      .prepare(
+                        "UPDATE events SET updated_at = datetime('now') WHERE id = 'dx-race-b'"
+                      )
+                      .run();
+                    return target
+                      .prepare(sql)
+                      .bind(...args)
+                      .all();
+                  },
+                }),
+              };
+            }
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const r = await runDraftExpiry({ ...expiryEnv(), DB: racing } as never);
+    expect(r.archived).toBe(1);
+    expect(await statusOf('dx-race-b')).toBe('draft');
+    const row = await db()
+      .prepare(
+        "SELECT details FROM admin_audit_log WHERE action = 'DRAFT_EXPIRY' ORDER BY rowid DESC LIMIT 1"
+      )
+      .first<{ details: string }>();
+    expect(JSON.parse(row!.details).ids).toEqual(['dx-race-a']);
   });
 
   test('the archived draft can be reopened — expiry is reversible', async () => {

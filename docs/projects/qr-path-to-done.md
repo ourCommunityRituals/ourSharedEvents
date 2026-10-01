@@ -162,7 +162,9 @@ Not in this slice: corridor registry + `definition_version` (OSE-613/603);
 per-placement scan aggregation (a pre-event poster scan is aggregated at the
 venue node, not the poster's); doctrine conflicts the review found (export
 sends `anon_id_hash` + `venue_id`; 15-min vs hourly time grain; CF-IPCountry
-on scans).
+on scans). *Resolved 2026-10-01 (OSE-1460, PR #737): the export sends
+k-floored corridor counts only, the grain is hourly (PO-confirmed), and the
+visitor's country is no longer read.*
 
 **Next:** merge slice 1, record the H3 ADR, then OSE-613 (registry) and the
 per-placement aggregation follow-up; the founder field test (print + phone scan)

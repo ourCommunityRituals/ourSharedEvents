@@ -14,7 +14,7 @@
 > line "GDPR / BIPA / HIPAA / COPPA are all satisfied or improved by the
 > separation" should be read as: HIPAA/COPPA are satisfied by being **declined**,
 > not by being routed. **The rest of this ADR still stands** — the two-DB
-> (`DB` ↔ `FORMS_DB`) separation, the anon_id contract, 15-minute bucketing, and
+> (`DB` ↔ `FORMS_DB`) separation, the anon_id contract, hourly bucketing, and
 > the static gates are unchanged and remain the architectural floor.
 
 ## Context
@@ -49,17 +49,17 @@ We separate OSE's data into **two distinct D1 databases**, bound at the Worker r
   - The forms-DB utility module (`lib/forms-db.ts`) MUST NOT reference any main-DB table.
   - The lifecycle/retention cron job MUST only write to `FORMS_DB`.
 
-The correlation key between an attendee's actions across time is the **`anonymous_id`**, an HTTP-only / Secure / SameSite=Lax cookie set per visitor (see `src/lib/anonymous-id.ts`). It is opaque, unguessable, never linked to any real-world identifier, and **never looked up** — only the holder of the cookie can correlate their own actions, and only within FORMS_DB.
+The correlation key between an attendee's actions across time is the **`anonymous_id`**, an HTTP-only / Secure / SameSite=Lax cookie set per visitor (see `src/lib/anonymous-id.ts`). It is opaque, unguessable and never linked to any real-world identifier: nothing in OSE can **resolve** it to a person. It is not, however, unlinkable inside OSE. The Worker reads it server-side and hashes it, so OSE can tell that the same browser came back to another event (pseudonymous correlation); that link is used only to count returns and never leaves OSE except as k-floored corridor counts. *Reconciled 2026-10-01: since migration 0062 (OSE-798) the main `DB` also holds the pseudonymous `anonymous_id` on `scan_node_returns`, kept in a separate table from the placement (WHERE) row. There is no SQL or foreign-key join to `FORMS_DB`, but the same `ose_anon` value is stored there too, and erasure (`handlers/data-subject.ts`) reads it from `FORMS_DB` to delete the matching `scan_node_returns` rows: application-level correlation, for erasure only; the nightly job hashes it into `anon_id_returns`, and since OSE-1460 only k-floored corridor counts of those hashes leave for OER.*
 
-Time is **bucketed to 15-minute tranches** at submission time (`bucketTimestamp()` in `lib/forms-db.ts`). This quantization is the temporal complement to the anon_id correlation: an attendee's exact submission time cannot be inferred from group-aggregate logs, only the bucket they fell into.
+Time is **bucketed to the hour** at submission time (`bucketTimestamp()` in `lib/forms-db.ts` returns `toISOString().slice(0, 13)`). *Reconciled 2026-10-01 (OSE-1460): this ADR said 15-minute tranches; the code has always bucketed hourly, which is coarser, so the anonymity guarantee is unchanged.* This quantization is the temporal complement to the anon_id correlation: an attendee's exact submission time cannot be inferred from group-aggregate logs, only the bucket they fell into.
 
-Regulatory tier compliance is implemented as a **routing concern, not a correlation concern**. `src/lib/pool-contract.ts` declares `REGULATORY_POOLS = ['general', 'hipaa', 'coppa']` and maps each to its dedicated BigQuery dataset. Per-event regulatory pool determines which dataset the form-submission row is forwarded to. The pools are physically separate at the BigQuery layer; cross-pool joins are not possible at the platform.
+Regulatory tier compliance is implemented as a **routing concern, not a correlation concern**. `src/lib/pool-contract.ts` declares the regulatory pools and maps each to its dedicated BigQuery dataset. *Reconciled 2026-10-01: today the only pool is `general`; HIPAA and COPPA are declined regimes (OSE-1220), so `phaseToPool` refuses tiers 4–5 and those rows are withheld, never routed.* Per-event regulatory pool determines which dataset the form-submission row is forwarded to. The pools are physically separate at the BigQuery layer; cross-pool joins are not possible at the platform.
 
 PII-bearing columns use one of three patterns:
 
 - **Hashed** (peppered SHA-256): `subscribers.ip_hash`, `form_registrations.attendee_email_hash`, `email_signups.email_hash`. The pepper rotates per OSE-203 lifecycle.
 - **Encrypted** (AES-GCM with retention TTL): `email_signups.email_encrypted`. Decryptable only with the server-side key + within the retention window.
-- **Aggregated** (counter + 15-min bucket, no individual rows): `checkin_counts`, `scan_aggregates`. The unit of record is the bucket, not the visit.
+- **Aggregated** (counter + hour bucket, no individual rows): `checkin_counts`, `scan_aggregates`. The unit of record is the bucket, not the visit.
 
 The **`pii-invariant.spec.ts`** gate (OSE-207) asserts that no table in either database carries a raw network identifier column (`ip_address`, `client_ip`, `cf_connecting_ip`, `x_forwarded_for`, etc.).
 
@@ -98,7 +98,7 @@ Use a deterministic hash of the user's email as the primary correlation key acro
 - The same person can be re-identified across events without their consent, defeating the per-event opt-in model OSE relies on.
 - Email-as-identity also breaks for attendees who use different emails per context (work vs. personal) — they get partial re-identification.
 
-### Alternative D (the chosen path): Two distinct databases + anon_id cookie + 15-minute buckets + static-gate enforcement
+### Alternative D (the chosen path): Two distinct databases + anon_id cookie + hourly buckets + static-gate enforcement
 
 Described above under [Decision](#decision). Accepted.
 
@@ -118,8 +118,8 @@ Described above under [Decision](#decision). Accepted.
 - **Two migration paths.** Schema changes to forms-side data require a separate migration file in `migrations-forms/` from event-side changes in `migrations/`. Slight ongoing cost; absorbed by the canonical migration-smoke spec which validates both sets.
 - **Two backup strategies.** Each database needs its own retention, restore, and rotation policy. Currently both rely on D1's default backup; if either needs custom logic, the work doesn't compose.
 - **Handler classification onboarding cost.** Every new handler must be consciously placed in `forms.ts` or elsewhere before the static gate accepts it. A contributor who doesn't internalize the dichotomy will get bounced at CI and have to refactor.
-- **Cross-database analytics requires explicit consent.** Analytics across the people-graph and the location-graph (e.g., "is event density correlated with corridor reverb?") cannot be done with a row-level JOIN. The analytics layer (downstream BigQuery) must perform the correlation only via the explicit anon_id + 15-min-bucket key, never via row identity. This is a feature, not a bug, but it means analytics work is more deliberate.
-- **15-minute bucketing reduces temporal resolution for the platform's own diagnostics.** Operational issues that depend on sub-15-minute event ordering (e.g., scan-rate spikes) are observable only via aggregates, not via individual submission times. Acceptable trade-off for the anonymity guarantee.
+- **Cross-database analytics requires explicit consent.** Analytics across the people-graph and the location-graph (e.g., "is event density correlated with corridor reverb?") cannot be done with a row-level JOIN. The analytics layer (downstream BigQuery) must perform the correlation only through aggregates (corridor × hour; since OSE-1460 no anon_id or anon_id hash is exported at all), never through row identity. This is a feature, not a bug, but it means analytics work is more deliberate.
+- **Hourly bucketing reduces temporal resolution for the platform's own diagnostics.** Operational issues that depend on sub-hour event ordering (e.g., scan-rate spikes) are observable only via aggregates, not via individual submission times. Acceptable trade-off for the anonymity guarantee.
 
 ### Neutral
 

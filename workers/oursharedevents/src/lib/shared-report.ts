@@ -34,7 +34,7 @@
  *     series.
  */
 
-import { hashAnonIdForReturns } from './anon-id-hash';
+import { hashAnonIdForReturns, pepperEpoch } from './anon-id-hash';
 import { phaseTimesFor } from './event-datetime';
 import { isH3Cell } from './export-geography';
 
@@ -95,9 +95,9 @@ const SERIES_DETECTOR_LOOKBACK_DAYS = 56;
 
 // Materialization lookback window for post-event aggregation:
 // events whose end_date is between 2 hours and 26 hours ago.
-// Per design doc — 2h floor avoids materializing while attendees are still
-// arriving; 26h ceiling lets a single hourly cron pick up an event missed
-// by a transient failure on the prior hour.
+// The 2h floor avoids materializing while attendees are still arriving. The
+// cron is nightly (03:00 UTC), so the 26h ceiling covers the day since the
+// last run plus a 2h overlap; a whole missed night is not caught up.
 const MATERIALIZATION_FLOOR_HOURS = 2;
 const MATERIALIZATION_CEILING_HOURS = 26;
 
@@ -105,16 +105,20 @@ const MATERIALIZATION_CEILING_HOURS = 26;
  * Phase 1 — materialize anon_id_returns for events that recently ended.
  *
  * For each candidate event:
- *   1. Read distinct `anonymous_id` from `scans` for the event
+ *   1. Read distinct `anonymous_id` from `scan_node_returns` for the event
  *   2. Hash each with ANON_ID_HASH_PEPPER (skip if pepper missing → null hash)
  *   3. Upsert `anon_id_returns(anon_id_hash, venue_id=event_id, ...)`:
  *      - INSERT a new row on first sight
  *      - UPDATE last_seen_at + visit_count on repeat
  *
- * The (anon_id_hash, venue_id) PK ensures one row per (anon, event). Multiple
- * scans of the same event by the same anon increment visit_count on the
- * single row; scans at different events produce separate rows.
+ * The (anon_id_hash, venue_id) PK ensures one row per (anon, event). Each run
+ * re-reads the event's distinct ids, so visit_count counts runs, not scans:
+ * nothing may read it as a visit count (the export counts distinct events).
  */
+/** Old-pepper rows deleted per statement, and the most statements per run. */
+const PEPPER_PURGE_CHUNK = 1000;
+const PEPPER_PURGE_MAX_CHUNKS = 50;
+
 export async function materializeAnonIdReturns(
   env: SharedReportMaterializeEnv
 ): Promise<MaterializationResult> {
@@ -144,6 +148,67 @@ export async function materializeAnonIdReturns(
     );
     result.durationMs = Date.now() - start;
     return result;
+  }
+
+  // Migration 0091: every row records which pepper hashed it. Rows of an older
+  // or unknown pepper are deleted here: the export never counts them, and after
+  // a rotation erasure (data-subject.ts) can only re-derive the current hash, so
+  // it could never find them. A rotation is a reset, not a second identity.
+  // This is the bounded safety net (PEPPER_PURGE_CHUNK x PEPPER_PURGE_MAX_CHUNKS
+  // rows a run, then ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE); the complete
+  // purge is the rotation step in docs/runbooks/RUNBOOK-DEPLOYMENT.md.
+  const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
+  try {
+    let purged = 0;
+    let complete = false;
+    for (let i = 0; i < PEPPER_PURGE_MAX_CHUNKS; i++) {
+      const res = await env.DB.prepare(
+        `DELETE FROM anon_id_returns WHERE rowid IN (
+           SELECT rowid FROM anon_id_returns
+            WHERE pepper_epoch IS NULL OR pepper_epoch <> ?
+            LIMIT ${PEPPER_PURGE_CHUNK})`
+      )
+        .bind(epoch)
+        .run();
+      const n = res.meta?.changes ?? 0;
+      purged += n;
+      if (n < PEPPER_PURGE_CHUNK) {
+        complete = true;
+        break;
+      }
+    }
+    if (purged > 0) {
+      console.log(JSON.stringify({ type: 'ANON_ID_RETURNS_PEPPER_PURGE', rows: purged }));
+    }
+    if (!complete) {
+      // Every chunk came back full: rows may remain, or the last chunk took the
+      // last of them. Look before raising the alert.
+      const left = await env.DB.prepare(
+        `SELECT 1 FROM anon_id_returns WHERE pepper_epoch IS NULL OR pepper_epoch <> ? LIMIT 1`
+      )
+        .bind(epoch)
+        .first();
+      complete = left === null;
+    }
+    if (!complete) {
+      // Rows erasure cannot reach are still there; the next run continues. The
+      // rotation runbook purges the table in full, so this is the safety net.
+      console.error(
+        JSON.stringify({
+          type: 'ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE',
+          rows_deleted: purged,
+          note: 'Old-pepper anon_id_returns rows remain. Run the full purge in RUNBOOK-DEPLOYMENT.md.',
+        })
+      );
+    }
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
   }
 
   // Find events that ended in the materialization window.
@@ -209,14 +274,16 @@ export async function materializeAnonIdReturns(
         const nowIso = new Date().toISOString();
         await env.DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-           VALUES (?, ?, ?, ?, 1, ?)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+              pepper_epoch)
+           VALUES (?, ?, ?, ?, 1, ?, ?)
            ON CONFLICT(anon_id_hash, venue_id) DO UPDATE SET
              last_seen_at = excluded.last_seen_at,
              visit_count  = visit_count + 1,
-             computed_at  = excluded.computed_at`
+             computed_at  = excluded.computed_at,
+             pepper_epoch = excluded.pepper_epoch`
         )
-          .bind(hash, row.id, nowIso, nowIso, nowIso)
+          .bind(hash, row.id, nowIso, nowIso, nowIso, epoch)
           .run();
         result.rowsUpserted++;
       }
@@ -621,7 +688,7 @@ function formatHour(hour: number): string {
  * start_date falls within the last 90 days. Computes:
  *   - total_scans   = COUNT(*) of scan rows in the bucket
  *   - distinct_agent_hashes = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
- *   - top_country   = most frequent non-null country_code in the bucket
+ *   - top_country   = always NULL (OSE-1460: the visitor's country is not recorded)
  *
  * IDs are deterministic — `agg_{event_id}_{bucket_date}_{bucket_hour}` — so
  * INSERT OR REPLACE is safe and the operation is fully idempotent.
@@ -652,6 +719,13 @@ export async function aggregateScanBuckets(
   const nowIso = new Date(nowMs).toISOString();
 
   try {
+    // OSE-1460: the visitor's country is never held. Migration 0089 cleared it,
+    // but a Worker version still reading the header can write one in the deploy
+    // window after that migration ran; this roll-up clears any such row.
+    await env.DB.prepare(
+      `UPDATE scan_node_returns SET country_code = NULL WHERE country_code IS NOT NULL`
+    ).run();
+
     // Aggregate totals per (event_id, bucket_date, bucket_hour).
     // scan_bucket format: YYYY-MM-DDTHH:00 → date = first 10 chars, hour = chars 12-13.
     const buckets = await env.DB.prepare(
@@ -676,37 +750,11 @@ export async function aggregateScanBuckets(
         distinct_agent_hashes: number;
       }>();
 
-    // Fetch top_country per (event_id, scan_bucket) — separate query to avoid
-    // correlated-subquery fan-out inside the main GROUP BY.
-    const topCountries = await env.DB.prepare(
-      `SELECT event_id, substr(scan_bucket, 1, 13) AS bucket_prefix, country_code
-       FROM (
-         SELECT event_id, scan_bucket, country_code, COUNT(*) AS cnt
-         FROM scan_node_returns
-         WHERE country_code IS NOT NULL
-           AND event_id IN (SELECT id FROM events WHERE start_date >= ?)
-         GROUP BY event_id, scan_bucket, country_code
-       ) ranked
-       GROUP BY event_id, bucket_prefix
-       HAVING COUNT(*) = MAX(cnt) OR 1=1`
-    )
-      .bind(floor90dIso)
-      .all<{ event_id: string; bucket_prefix: string; country_code: string }>();
-
-    // Build a lookup: "{event_id}:{YYYY-MM-DDTHH}" → top country_code
-    const countryMap = new Map<string, string>();
-    for (const row of topCountries.results ?? []) {
-      const key = `${row.event_id}:${row.bucket_prefix}`;
-      if (!countryMap.has(key)) countryMap.set(key, row.country_code);
-    }
-
     const seenEvents = new Set<string>();
 
     for (const b of buckets.results ?? []) {
       seenEvents.add(b.event_id);
       const id = `agg_${b.event_id}_${b.bucket_date}_${b.bucket_hour}`;
-      const bucketPrefix = `${b.bucket_date}T${String(b.bucket_hour).padStart(2, '0')}`;
-      const topCountry = countryMap.get(`${b.event_id}:${bucketPrefix}`) ?? null;
 
       try {
         await env.DB.prepare(
@@ -722,7 +770,7 @@ export async function aggregateScanBuckets(
             b.bucket_hour,
             b.total_scans,
             b.distinct_agent_hashes,
-            topCountry,
+            null, // top_country: OSE-1460, a visitor's IP country is not recorded
             nowIso
           )
           .run();
