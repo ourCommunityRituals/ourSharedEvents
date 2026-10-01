@@ -18,7 +18,7 @@ poster printed and scanned by a real phone (founder field test).
 | 2a  | Poster payload — one call                  | [OSE-867](https://linear.app/oursharedevents/issue/OSE-867)                                                                   | ✅ Done (2026-10-01)    | PR #701 (+ #707 staging latency fix). `poster-bundle-payload.spec.ts`, `poster-multi-code-ui.spec.ts` › one data call, `poster-print.spec.ts` › One Data Call; Bruno poster-bundle request green on staging (main run 36795707694)                                                    |
 | 2b  | `showQRSection` backing                    | [OSE-869](https://linear.app/oursharedevents/issue/OSE-869)                                                                   | ✅ Done (2026-10-01)    | PR #701. Migration 0085 `events.settings_json`, `lib/event-settings.ts`; `poster-qr-section-setting.spec.ts`, `poster-multi-code-ui.spec.ts` › OSE-869, `poster-print.spec.ts` › showQRSection (no-gap print). PO accepted the component-tier spec for negative coverage (2026-10-01) |
 | 3   | Mobile-viewport coverage                   | [OSE-740](https://linear.app/oursharedevents/issue/OSE-740)                                                                   | ✅ Done (2026-09-23)    | Mobile workability gate (OSE-1236) — 9th CI gate, blocks on PR code                                                                                                                                                                                                                   |
-| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | 🔄 PR open (2026-10-01) | [OSE-1439](https://linear.app/oursharedevents/issue/OSE-1439): meta-gate `tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts` in the T0 `invariants` shard over `qr-roundtrip.spec.ts` (jsQR decode, `T0 Tests (worker-d1-schema)`). Red-proof: 13/13 weakenings fail it     |
+| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | 🔄 PR open (2026-10-01) | [OSE-1439](https://linear.app/oursharedevents/issue/OSE-1439): meta-gate `tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts` in the T0 `invariants` shard over `qr-roundtrip.spec.ts` (jsQR decode, `T0 Tests (worker-d1-schema)`). Red-proof: 16/16 weakenings fail it     |
 | 5   | Capstone: scan → export trace, Eagles cell | [OSE-616](https://linear.app/oursharedevents/issue/OSE-616)                                                                   | 📋 Backlog              | —                                                                                                                                                                                                                                                                                     |
 
 Also in the project (filed 2026-09-30, go-live evidence line, worked on its own
@@ -106,14 +106,16 @@ OSE-1425 … OSE-1430.
   CI stops running `npm test` in `worker-d1-schema`, jsqr is uninstalled, or
   the mutation catalog drops below 7 encoder mutants. Wired into the T0
   `invariants` shard (the OSE-350 placement guard fails without it).
-- **Red-proof:** 13 weakenings each turned the gate red: skip the sweep,
+- **Red-proof:** 16 weakenings each turned the gate red: skip the sweep,
   `.only`, drop L@150, narrow H, weaken `toBe(url)` to `not.toBeNull()`, swap
   the decoder import, delete the spec, move it to the node pool (by name and by
   glob), add a `tests/qr-*.spec.ts` glob to the workers exclude list, remove the
   real poster-bundle fetch (a comment naming it no longer satisfies the gate),
-  drop `npm test` from the shard, drop a mutant. Restored: 8/8 green. Full
-  structural shard 184/184. The two glob/comment cases came from Copilot review
-  on the PR.
+  drop `npm test` from the shard, drop a mutant, and hide each of the last three
+  behind a comment (an inline `// SELF.fetch(...)`, a YAML `# npm test`, a
+  commented-out mutant). Restored: 8/8 green. Full structural shard 184/184. The
+  glob and comment cases came from Copilot review on the PR; source is now read
+  through a comment-stripping lexer and the workflow through js-yaml.
 - **Follow-ups filed:** OSE-1440 (rate-limit poster/sponsor bundle), OSE-1441
   (`/poster` picker race), OSE-1442 (registrations paging), OSE-1443 (Done
   definition drift); CI install time folded into OSE-1074.

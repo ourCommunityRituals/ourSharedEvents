@@ -43,6 +43,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import picomatch from 'picomatch';
+import yaml from 'js-yaml';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const WORKER = join(REPO_ROOT, 'workers', 'oursharedevents');
@@ -104,15 +105,103 @@ function read(path: string): string {
 }
 
 /**
- * Source with comments removed, so a shape assertion is satisfied by code and
- * never by the spec's own explanatory header (which names `/poster-bundle`,
- * `jsQR` and the rest). Only whole-line `//` comments are dropped: a `//` inside
- * a string (`https://…`) must survive.
+ * Source with every comment removed, so a shape assertion is satisfied by code
+ * and never by a comment — a header that names `/poster-bundle`, or an inline
+ * `x = 0; // SELF.fetch(...)` left behind after the real call was deleted.
+ *
+ * A small lexer rather than a regex: it tracks string, template (with `${}`
+ * nesting) and regex literals, so `//` inside `'https://…'` or a regex is code,
+ * not a comment. No parser dependency: the T0 shard runs this with root deps only.
  */
+function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  let lastSignificant = ''; // last non-space code char, for regex-vs-divide
+  const braceStack: number[] = []; // brace depth at each open `${`
+  let depth = 0;
+  const regexMayFollow = () =>
+    lastSignificant === '' || '(,=:[!&|?{};+-*%<>~^'.includes(lastSignificant);
+  const copyQuoted = (q: string) => {
+    out += src[i++];
+    while (i < src.length && src[i] !== q) {
+      if (src[i] === '\\') out += src[i++];
+      out += src[i++];
+    }
+    out += src[i++] ?? '';
+  };
+  const copyTemplate = (): boolean => {
+    // returns true if we stopped at `${` (entering code), false at closing backtick
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '\\') {
+        out += src[i++] + (src[i++] ?? '');
+      } else if (c === '`') {
+        out += src[i++];
+        return false;
+      } else if (c === '$' && src[i + 1] === '{') {
+        out += '${';
+        i += 2;
+        braceStack.push(depth);
+        depth++;
+        return true;
+      } else {
+        out += src[i++];
+      }
+    }
+    return false;
+  };
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === '/' && n === '/') {
+      while (i < src.length && src[i] !== '\n') i++;
+    } else if (c === '/' && n === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end === -1 ? src.length : end + 2;
+      out += ' ';
+    } else if (c === "'" || c === '"') {
+      copyQuoted(c);
+      lastSignificant = c;
+    } else if (c === '`') {
+      out += src[i++];
+      copyTemplate();
+      lastSignificant = '`';
+    } else if (c === '/' && regexMayFollow()) {
+      out += src[i++];
+      let inClass = false;
+      while (i < src.length && (inClass || src[i] !== '/')) {
+        if (src[i] === '\\') out += src[i++];
+        else if (src[i] === '[') inClass = true;
+        else if (src[i] === ']') inClass = false;
+        out += src[i++] ?? '';
+      }
+      out += src[i++] ?? '';
+      while (i < src.length && /[a-z]/i.test(src[i])) out += src[i++];
+      lastSignificant = '/';
+    } else if (c === '{') {
+      depth++;
+      out += src[i++];
+      lastSignificant = c;
+    } else if (c === '}') {
+      depth--;
+      out += src[i++];
+      if (braceStack.length && braceStack[braceStack.length - 1] === depth) {
+        braceStack.pop();
+        copyTemplate();
+        lastSignificant = '`';
+      } else {
+        lastSignificant = c;
+      }
+    } else {
+      out += src[i++];
+      if (!/\s/.test(c)) lastSignificant = /[\w$)\]]/.test(c) ? 'w' : c;
+    }
+  }
+  return out;
+}
+
 function code(path: string): string {
-  return read(path)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  return stripComments(read(path));
 }
 
 /** String literals in a config array, plus `...NODE_SPECS` expanded. */
@@ -258,19 +347,32 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
       'jsqr must be installed (root or worker package.json) — without it the decode spec cannot load'
     ).toBeTruthy();
 
-    const wf = read(CI_WORKFLOW);
-    const shard = wf.match(
-      /- section: worker-d1-schema\s+workdir: workers\/oursharedevents\s+command: ([^\n]+)/
+    // Parsed, not pattern-matched: a YAML comment or a disabled copy of the
+    // shard must not satisfy this.
+    const wf = yaml.load(read(CI_WORKFLOW)) as {
+      jobs?: Record<
+        string,
+        { strategy?: { matrix?: { include?: Array<Record<string, string>> } } }
+      >;
+    };
+    const shards = Object.values(wf.jobs ?? {}).flatMap(
+      (job) => job?.strategy?.matrix?.include ?? []
     );
+    const shard = shards.find((entry) => entry.section === 'worker-d1-schema');
     expect(
       shard,
       'the T0 worker-d1-schema shard must exist in oursharedevents-ci.yml'
-    ).not.toBeNull();
-    expect(shard![1], 'the worker-d1-schema shard must run `npm test`').toMatch(/npm test/);
+    ).toBeTruthy();
+    expect(shard!.workdir, 'the worker-d1-schema shard must run in the worker').toBe(
+      'workers/oursharedevents'
+    );
+    expect(shard!.command, 'the worker-d1-schema shard must run `npm test`').toMatch(
+      /(^|\s)npm test(\s|$)/
+    );
   });
 
   test('OSE-1439 | the encoder mutants it kills stay in the mutation catalog', () => {
-    const catalog = read(MUTATION_CATALOG);
+    const catalog = code(MUTATION_CATALOG);
     const qrMutants = [
       ...catalog.matchAll(/id:\s*'(qr-[a-z0-9-]+)'[^}]*specs:\s*\[[^\]]*qr-roundtrip\.spec\.ts/g),
     ].map((m) => m[1]);
