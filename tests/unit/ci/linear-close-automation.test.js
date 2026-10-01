@@ -76,6 +76,71 @@ describe('OSE-1250 — PR close-guard (evaluate)', () => {
       true
     );
   });
+
+  // OSE-1443 — a squash merge copies commit messages onto main, so a closing
+  // word left in a commit closes the story even when the body says "Part of".
+  test('THE BUG (#701): body "Part of", commit "Closes" → commit violation', () => {
+    const r = evaluate({
+      branch: 'claude/funny-hypatia-27i7vp',
+      title: 'feat(poster): one-call poster bundle',
+      body: 'Part of OSE-867\nPart of OSE-869',
+      commits: 'feat(poster): one call\n\nCloses OSE-867\nfeat(poster): switch\n\nCloses OSE-869',
+    });
+    expect(r.ok).toBe(false);
+    expect(r.violations).toEqual([]);
+    expect(r.commitViolations).toEqual(['OSE-867', 'OSE-869']);
+  });
+
+  test('commit "Closes" matched by body "Closes" → OK (declared close)', () => {
+    expect(
+      evaluate({
+        branch: 'ci/x',
+        title: 't',
+        body: 'Closes OSE-867',
+        commits: 'feat: x\n\nCloses OSE-867',
+      }).ok
+    ).toBe(true);
+  });
+
+  test('commit with only a non-closing word → OK', () => {
+    expect(
+      evaluate({
+        branch: 'ci/x',
+        title: 't',
+        body: 'Part of OSE-867',
+        commits: 'feat: x\n\nPart of OSE-867\nRefs OSE-12',
+      }).ok
+    ).toBe(true);
+  });
+
+  test('commit closes an id the body never mentions → commit violation', () => {
+    const r = evaluate({ branch: 'ci/x', title: 't', body: 'docs', commits: 'Fixes OSE-42' });
+    expect(r.ok).toBe(false);
+    expect(r.commitViolations).toEqual(['OSE-42']);
+  });
+
+  test('THE BUG (#701 body): "Part of" + "before closing" prose → contradiction', () => {
+    const r = evaluate({
+      branch: 'claude/funny-hypatia-27i7vp',
+      title: 'feat(poster): one-call poster bundle',
+      body: '**After merge, before closing OSE-867 / OSE-869:**\n\nPart of OSE-867\nPart of OSE-869',
+    });
+    expect(r.ok).toBe(false);
+    // Only OSE-867 has the closing word directly before it — matching what Linear closed.
+    expect(r.bodyContradictions).toEqual(['OSE-867']);
+  });
+
+  test('body "Part of" one id and "Closes" a different id → OK', () => {
+    const r = evaluate({ branch: 'ci/x', title: 't', body: 'Part of OSE-1\nCloses OSE-2' });
+    expect(r.ok).toBe(true);
+    expect(r.bodyContradictions).toEqual([]);
+  });
+
+  test('commits omitted → only branch/title are judged (backward compatible)', () => {
+    const r = evaluate({ branch: 'ci/x', title: 't', body: 'Part of OSE-1' });
+    expect(r.ok).toBe(true);
+    expect(r.commitViolations).toEqual([]);
+  });
 });
 
 describe('OSE-1250 — premature-close detector (classify)', () => {
