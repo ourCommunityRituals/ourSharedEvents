@@ -716,7 +716,7 @@ jobs:
 
       - name: Restore Playwright browser cache
         if: matrix.shard == 'invariants' || matrix.shard == 'component'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -778,7 +778,8 @@ jobs:
             tests/e2e/0-architecture/edge-token-verification.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-signal-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts \
-            tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts
+            tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts \
+            tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
       # Real browser engine, no deploy. The webServer in
@@ -1252,7 +1253,7 @@ jobs:
 
       - name: Restore Playwright browser cache
         if: matrix.installBrowser == true
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -1281,9 +1282,13 @@ jobs:
           name: smoke-staging-${{ matrix.section }}-${{ github.run_number }}
           path: |
             playwright-report-smoke/
+            playwright-report-e2e-smoke/
             .test-results/
             test-results/
           retention-days: 14
+          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
+          # default, which silently dropped every JUnit/JSON result uploaded here.
+          include-hidden-files: true
 
       # Surface per-test Playwright smoke results as a GitHub Check (visible in
       # the PR/Checks tab), matching the T4 functional reporter.
@@ -1520,6 +1525,9 @@ jobs:
           name: contract-staging-${{ matrix.section }}-${{ github.run_number }}
           path: .test-results/
           retention-days: 14
+          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
+          # default, which silently dropped every JUnit/JSON result uploaded here.
+          include-hidden-files: true
 
       # Surface per-assertion Bruno results as a GitHub Check (visible in the
       # PR/Checks tab), so a contract failure shows the failing request + message
@@ -1620,7 +1628,7 @@ jobs:
           fi
 
       - name: Restore Playwright browser cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -1972,10 +1980,14 @@ jobs:
           name: functional-staging-${{ github.run_number }}
           path: |
             playwright-report-smoke/
+            playwright-report-e2e-smoke/
             playwright-report-ui-smoke/
             .test-results/
             test-results/
           retention-days: 14
+          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
+          # default, which silently dropped every JUnit/JSON result uploaded here.
+          include-hidden-files: true
 
       - name: Report results
         if: always()
@@ -2324,6 +2336,9 @@ jobs:
             playwright-report-smoke/
             .test-results/
           retention-days: 30
+          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
+          # default, which silently dropped every JUnit/JSON result uploaded here.
+          include-hidden-files: true
 
       - name: Fail check
         if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'

@@ -39,6 +39,10 @@ export default defineConfig({
   // CI — env-var-wins was wrong), so the guard cannot override it from outside;
   // wiring it here makes the config value BE the env var when the guard sets it,
   // and fall back to the stable artifact path otherwise (non-guarded T4b/T4c).
+  //
+  // `junit` feeds the dorny/test-reporter Check on T3 security smoke and T4
+  // functional (both glob `.test-results/*junit.xml`). Without it the T3 report
+  // step found no file and annotated the run "No test report files were found".
   reporter: process.env.CI
     ? [
         ['html', { outputFolder: 'playwright-report-e2e-smoke', open: 'never' }],
@@ -49,6 +53,7 @@ export default defineConfig({
               process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || '.test-results/e2e-smoke-results.json',
           },
         ],
+        ['junit', { outputFile: '.test-results/e2e-smoke-junit.xml' }],
         ['line'],
       ]
     : [['list']],
