@@ -181,9 +181,10 @@ workflow, not only PR-triggered ones.
 - allowing PR sources together with attacker-chosen branch prefixes;
 - disabling either rule;
 - dropping the fork-from-`main` case;
-- dropping the literal-derived branch candidates, the workflow-level `env:` scan, the `secrets: inherit` or `toJSON(secrets)` sentinel, the structural backstop, or case-insensitive matching.
+- dropping the literal-derived branch candidates, the workflow-level `env:` scan, the `secrets: inherit` or `toJSON(secrets)` sentinel, the structural backstop, or case-insensitive matching;
+- dropping whitespace tolerance in the named `secrets [ 'X' ]` or computed `secrets [ x ]` index, or case-insensitive matching of the `secrets` context name (Copilot review on #743; each of the three was mutation-checked).
 
-The self-test has 26 fixtures.
+The self-test has 29 fixtures.
 
 ## Born-red proof
 

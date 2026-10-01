@@ -386,7 +386,9 @@ export function jobSecrets(wf, job) {
   }
   // `toJSON(secrets)` or a computed `secrets[...]` index reaches every secret
   // without naming one; same fail-closed sentinel.
-  if (/toJSON\(\s*secrets\s*\)|(?<![\w-])secrets\[\s*[^'"\s]/i.test(JSON.stringify([wf && wf.env, job]))) {
+  // Whitespace is legal around the index (`secrets [ x ]`), and context names
+  // are case-insensitive, so both patterns allow it.
+  if (/toJSON\(\s*secrets\s*\)|(?<![\w-])secrets\s*\[\s*[^'"\s]/i.test(JSON.stringify([wf && wf.env, job]))) {
     out.add(INHERIT_ALL_SECRETS);
   }
   return out;
@@ -398,7 +400,9 @@ export function collectSecretsDeep(node, out) {
     // Lookbehind excludes filename-like matches (e.g. `set-secrets.sh`) —
     // only a `secrets.` / `secrets['…']` reference not preceded by a word char
     // or hyphen counts as a real secret reference.
-    const re = /(?<![\w-])secrets\.([A-Za-z0-9_]+)|(?<![\w-])secrets\[['"]([A-Za-z0-9_]+)['"]\]/g;
+    // Case-insensitive, with optional whitespace around `.` and inside `[ ]`,
+    // matching what the GitHub expression parser accepts.
+    const re = /(?<![\w-])secrets\s*\.\s*([A-Za-z0-9_]+)|(?<![\w-])secrets\s*\[\s*['"]([A-Za-z0-9_]+)['"]\s*\]/gi;
     let m;
     while ((m = re.exec(node)) !== null) out.add(m[1] || m[2]);
     return;
@@ -886,6 +890,36 @@ function runSelfTest() {
         'ci.yml': {
           on: { pull_request: {} },
           jobs: { j: { steps: [{ env: { ALL: '${{ toJSON(secrets) }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: whitespace inside a named secrets index (secrets [ \'X\' ])',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ env: { A: "${{ secrets [ 'ADMIN_KEY' ] }}" } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: whitespace before a computed secrets index (secrets [ x ])',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ env: { A: '${{ secrets [ matrix.name ] }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: mixed-case context name (Secrets.X)',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ env: { A: '${{ Secrets.ADMIN_KEY }}' } }] } },
         },
       },
       expectViolation: true,
