@@ -36,6 +36,7 @@ import {
   validateProxiedLogoUrl,
   readCapped,
   LOGO_FETCH_TIMEOUT_MS,
+  LOGO_MAX_IN_FLIGHT,
   LOGO_MAX_BYTES,
   LOGO_MAX_REDIRECTS,
 } from '../src/lib/sponsor-logo';
@@ -496,5 +497,39 @@ describe('OSE-1433 | a slow upstream is cut off at LOGO_FETCH_TIMEOUT_MS (Copilo
     await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
     expect(await pending).toEqual({ ok: false, error: 'aborted' });
     expect(calls).toBe(2);
+  });
+});
+
+describe('OSE-1433 | the in-flight cap lives in the shared fetcher (Copilot review on #721)', () => {
+  test(`over ${LOGO_MAX_IN_FLIGHT} in flight → BUSY with no request; slots are released after`, async () => {
+    const release: Array<() => void> = [];
+    const held = vi.fn(
+      () =>
+        new Promise<Response>((resolve) =>
+          release.push(() =>
+            resolve(new Response(new Uint8Array([1]), { headers: { 'content-type': 'image/png' } }))
+          )
+        )
+    );
+    vi.stubGlobal('fetch', held);
+    const pending = Array.from({ length: LOGO_MAX_IN_FLIGHT }, (_, i) =>
+      fetchAndProxyLogo(`https://cdn.example.com/hold-${i}.png`)
+    );
+    await Promise.resolve();
+    expect(held).toHaveBeenCalledTimes(LOGO_MAX_IN_FLIGHT);
+    expect(await fetchAndProxyLogo('https://cdn.example.com/extra.png')).toEqual({
+      ok: false,
+      error: 'BUSY',
+    });
+    expect(held).toHaveBeenCalledTimes(LOGO_MAX_IN_FLIGHT);
+    release.forEach((r) => r());
+    for (const r of await Promise.all(pending)) expect(r.ok).toBe(true);
+    // The slots are given back: the next fetch is made.
+    const after = vi.fn(
+      async () => new Response(new Uint8Array([1]), { headers: { 'content-type': 'image/png' } })
+    );
+    vi.stubGlobal('fetch', after);
+    expect((await fetchAndProxyLogo('https://cdn.example.com/after.png')).ok).toBe(true);
+    expect(after).toHaveBeenCalledTimes(1);
   });
 });

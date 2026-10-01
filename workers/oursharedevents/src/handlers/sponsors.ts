@@ -31,7 +31,12 @@ import {
   type Surface,
   type SponsorRow,
 } from '../lib/sponsor-resolver';
-import { validateProxiedLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import {
+  validateProxiedLogoUrl,
+  validateHttpsUrl,
+  fetchAndProxyLogo,
+  LOGO_MAX_IN_FLIGHT,
+} from '../lib/sponsor-logo';
 import { CARD_FIELDS, checkCardField, type CardField } from '../lib/sponsor-card';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import {
@@ -1661,14 +1666,16 @@ export async function handleSponsorLogo(
   //
   // OSE-1433 decision: the limiter stays FAIL-OPEN when KV is missing or errors,
   // like every public read. What bounds outbound fetches without it:
-  //   - the URL is admin-set: a caller cannot choose what we fetch, and each
-  //     request makes at most one upstream fetch (no amplification);
+  //   - the URL is admin-set: a caller cannot choose what we fetch;
+  //   - one request makes at most 1 + LOGO_MAX_REDIRECTS (= 4) SEQUENTIAL
+  //     upstream fetches, all inside one LOGO_FETCH_TIMEOUT_MS budget;
   //   - the caches dedupe REPEAT views (a day while healthy, a minute while
   //     failing). They do not coalesce CONCURRENT cold misses — Workers cannot
   //     share one in-flight fetch across requests without a Durable Object;
-  //   - so this isolate also caps upstream logo fetches in flight at
-  //     SPONSOR_LOGO_MAX_IN_FLIGHT, each cut off at LOGO_FETCH_TIMEOUT_MS. A miss
-  //     over the cap gets a 503 and the page shows the OSE default image.
+  //   - so the shared fetcher caps logo fetches in flight per isolate at
+  //     LOGO_MAX_IN_FLIGHT (lib/sponsor-logo.ts), across every route that
+  //     proxies a logo. A miss over the cap gets a 503 here (the page shows the
+  //     OSE default image) and a monogram on the asset route.
   // Failing closed would blank every logo on the platform during a KV outage.
   if (await isPublicReadLimited(request, env, 'sponsor-logo', SPONSOR_LOGO_READ_MAX)) {
     logLogoOutcome('limited', sidebar);
@@ -1678,19 +1685,14 @@ export async function handleSponsorLogo(
     });
   }
 
-  if (logoFetchesInFlight >= SPONSOR_LOGO_MAX_IN_FLIGHT) {
+  const result = await fetchAndProxyLogo(validation.url);
+  if (result.error === 'BUSY') {
+    // Over the per-isolate cap: nothing was fetched, so nothing is remembered.
     logLogoOutcome('busy', sidebar);
     return new Response(null, {
       status: 503,
       headers: { 'X-Request-Id': rid, 'Retry-After': '5', 'Cache-Control': 'no-store' },
     });
-  }
-  logoFetchesInFlight++;
-  let result: Awaited<ReturnType<typeof fetchAndProxyLogo>>;
-  try {
-    result = await fetchAndProxyLogo(validation.url);
-  } finally {
-    logoFetchesInFlight--;
   }
   if (!result.ok || !result.response) {
     logLogoOutcome('upstream_error', sidebar);
@@ -1731,13 +1733,8 @@ export const SPONSOR_LOGO_READ_MAX = 300;
 /** How long a failed upstream fetch is remembered before it is tried again (OSE-1433). */
 export const SPONSOR_LOGO_NEGATIVE_TTL_S = 60;
 
-/**
- * Upstream logo fetches allowed in flight per isolate (OSE-1433). The hard bound
- * on concurrent outbound fetches, independent of KV: the caches dedupe repeat
- * views but cannot coalesce simultaneous cold misses.
- */
-export const SPONSOR_LOGO_MAX_IN_FLIGHT = 16;
-let logoFetchesInFlight = 0;
+/** The per-isolate in-flight cap, enforced in the shared fetcher (OSE-1433). */
+export const SPONSOR_LOGO_MAX_IN_FLIGHT = LOGO_MAX_IN_FLIGHT;
 
 /** The 502 a surface sees for a logo that failed; its <img> swaps to the OSE default. */
 function logoUpstreamError(rid: string): Response {
