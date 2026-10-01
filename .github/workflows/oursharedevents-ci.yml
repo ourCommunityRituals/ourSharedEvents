@@ -73,7 +73,7 @@
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
 #   |--------------------|----------|------|--------|-------|----------|------------|
 #   | PR to main         | ✅ *     | ✅   | ❌     | ❌    | ❌       | ❌         |
-#   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ❌         |
+#   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ✅         |
 #   | Tag vX.Y.Z         | ✅       | ✅   | stg→prod | stg→prod | ✅       | ✅         |
 #   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅†   | ✅†      | ❌         |
 #   | Dispatch           | ✅       | ✅   | opt    | opt   | opt      | opt        |
@@ -81,8 +81,11 @@
 #     Gate/Deploy/Smoke still skip on non-code PRs via their own paths conditions (see push trigger).
 #   † Nightly: runs against live staging without redeploying (environmental drift detection)
 #
-# Cost control: Functional (Tier 4) only runs when you check the box.
-# Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
+# Functional (Tier 4) runs on every push to main (and tag), after T1 Deploy and the
+# T2 → T3 chain are green, so every merge shows the full test scope on staging.
+# That is the "Done" bar in CLAUDE.md §5 (T1–T4 green for the merge SHA). It costs
+# more runner minutes than the old dispatch-only setup; that is accepted. Nightly
+# skips it (no deploy). On dispatch, tick run_functional to run it without deploying.
 #
 # Required GitHub Secrets:
 #   - CLOUDFLARE_API_TOKEN_OSE      (Cloudflare API token)
@@ -730,7 +733,7 @@ jobs:
       # so they gate EVERY PR + push here in T0 Gate.
       #
       # Why this exists: before OSE-350 the entire 0-architecture suite ran
-      # only in T4 Functional, which is dispatch-only. That meant the brain's
+      # only in T4 Functional, which was then dispatch-only. That meant the brain's
       # "CI-enforced contracts" were NOT enforced on normal development — a PR
       # could break an invariant's code shape and nothing caught it unless
       # someone manually dispatched T4. This shard closes that
@@ -1568,7 +1571,7 @@ jobs:
           fi
 
   # ============================================================================
-  # TIER 4: FUNCTIONAL — Playwright API + UI (on-demand only)
+  # TIER 4: FUNCTIONAL — Playwright API + UI (push to main, tag, or dispatch)
   # ============================================================================
   functional-staging:
     name: 'T4 Functional → Staging'
