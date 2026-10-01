@@ -92,22 +92,8 @@ export function __resetJwksCacheForTests(): void {
 const _pad = (s: string) => s + '='.repeat((4 - (s.length % 4)) % 4);
 const _decodeB64 = (s: string) => atob(_pad(s.replace(/-/g, '+').replace(/_/g, '/')));
 
-/** RSA-verify a split JWT's signature against the team JWKS (the costly step). */
-async function _signatureValid(parts: string[], teamDomain: string): Promise<boolean> {
-  const sigInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-  const sig = Uint8Array.from(_decodeB64(parts[2]), (c) => c.charCodeAt(0));
-  const keys = await _getJwks(teamDomain);
-  const results = await Promise.all(
-    keys.map((k) =>
-      // Stryker disable next-line ArrowFunction,BooleanLiteral: equivalent/defensive — `()=>undefined` is falsy-identical to `false` under `results.some(Boolean)`; the `true` arm guards a verify() throw that well-formed key+sig inputs never trigger. A real verify failure (wrong key) IS covered. OSE-1278.
-      crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, sig, sigInput).catch(() => false)
-    )
-  );
-  return results.some(Boolean);
-}
-
 /**
- * Per-REQUEST memo of the signature result. The router pre-flight and
+ * Per-REQUEST memo of the signature verdict. The router pre-flight and
  * requireAdmin both verify the same token on one admin request; this makes the
  * RSA work happen once. Deliberately narrow:
  *   - keyed by the Request object (WeakMap): nothing survives the request, so
@@ -116,25 +102,25 @@ async function _signatureValid(parts: string[], teamDomain: string): Promise<boo
  *   - caches ONLY the signature verdict: exp, iss and the aud pin are re-checked
  *     on every call by verifyCfAccessJWT;
  *   - a rejected verification (JWKS fetch failure) is evicted, never reused.
+ * The RSA check itself stays inside verifyCfAccessJWT (edge-token-verification
+ * invariant reads it there); this helper only decides whether to run it.
  */
 const _signatureMemo = new WeakMap<Request, Map<string, Promise<boolean>>>();
 
-function _signatureValidOnce(
+function _signatureOncePerRequest(
   request: Request | undefined,
-  jwt: string,
-  parts: string[],
-  teamDomain: string
+  key: string,
+  check: () => Promise<boolean>
 ): Promise<boolean> {
-  if (!request) return _signatureValid(parts, teamDomain);
+  if (!request) return check();
   let memo = _signatureMemo.get(request);
   if (!memo) {
     memo = new Map();
     _signatureMemo.set(request, memo);
   }
-  const key = `${teamDomain}\n${jwt}`;
   const hit = memo.get(key);
   if (hit) return hit;
-  const pending = _signatureValid(parts, teamDomain);
+  const pending = check();
   memo.set(key, pending);
   const owner = memo;
   pending.catch(() => owner.delete(key));
@@ -168,7 +154,22 @@ export async function verifyCfAccessJWT(
     };
     if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
 
-    if (!(await _signatureValidOnce(opts?.request, jwt, parts, teamDomain))) {
+    // The costly step: RSA-verify against the team JWKS. Runs at most once per
+    // (request, domain, token) when opts.request is given; claims below run always.
+    const checkSignature = async (): Promise<boolean> => {
+      const sigInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+      const sig = Uint8Array.from(_decodeB64(parts[2]), (c) => c.charCodeAt(0));
+      const keys = await _getJwks(teamDomain);
+      const results = await Promise.all(
+        keys.map((k) =>
+          // Stryker disable next-line ArrowFunction,BooleanLiteral: equivalent/defensive — `()=>undefined` is falsy-identical to `false` under `results.some(Boolean)`; the `true` arm guards a verify() throw that well-formed key+sig inputs never trigger. A real verify failure (wrong key) IS covered. OSE-1278.
+          crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, sig, sigInput).catch(() => false)
+        )
+      );
+      return results.some(Boolean);
+    };
+    const sigKey = `${teamDomain}\n${jwt}`;
+    if (!(await _signatureOncePerRequest(opts?.request, sigKey, checkSignature))) {
       return { valid: false };
     }
 
