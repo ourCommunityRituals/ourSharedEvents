@@ -33,12 +33,23 @@ function assertNotProduction(url, suite) {
 }
 
 /**
- * Refuse at config load when any URL a suite may target is production: the
- * config's own base plus BASE_URL and STAGING_URL, because many specs read those
- * env vars directly instead of the config's baseURL.
+ * Env vars that specs read directly as their target URL, instead of the
+ * config's baseURL. The gate re-derives this from the specs, so a spec that
+ * starts reading a new *URL var fails CI until it is listed here.
  */
+const TARGET_URL_ENV_VARS = ['BASE_URL', 'STAGING_URL', 'PLAYWRIGHT_BASE_URL', 'APP_URL'];
+
+/** Every target a suite may reach: the given URLs plus the env-var targets. */
+function targetUrls(urls) {
+  const out = [...urls, ...TARGET_URL_ENV_VARS.map((k) => process.env[k])];
+  // config/environments.js getBaseUrl() switches to production on this flag.
+  if (process.env.USE_PRODUCTION === 'true') out.push('https://oursharedevents.com');
+  return out;
+}
+
+/** Refuse at config load when any target a suite may reach is production. */
 function refuseProductionTargets(suite, ...urls) {
-  for (const url of [...urls, process.env.BASE_URL, process.env.STAGING_URL]) {
+  for (const url of targetUrls(urls)) {
     assertNotProduction(url, suite);
   }
 }
@@ -64,8 +75,7 @@ const PRODUCTION_READ_ONLY_CONFIGS = Object.keys(PRODUCTION_SMOKE_SPECS);
 function productionTestMatch(config, ...urls) {
   const specs = PRODUCTION_SMOKE_SPECS[config];
   if (!specs) throw new Error(`ADR-021: ${config} is not a production-smoke config`);
-  const targets = [...urls, process.env.BASE_URL, process.env.STAGING_URL];
-  if (!targets.some(isProductionUrl)) return undefined;
+  if (!targetUrls(urls).some(isProductionUrl)) return undefined;
   return specs.map(
     (rel) =>
       new RegExp(
@@ -83,6 +93,7 @@ module.exports = {
   PRODUCTION_HOSTS,
   PRODUCTION_READ_ONLY_CONFIGS,
   PRODUCTION_SMOKE_SPECS,
+  TARGET_URL_ENV_VARS,
   isProductionUrl,
   productionTestMatch,
   assertNotProduction,

@@ -33,9 +33,15 @@ export interface RateLimitEnv {
 /** Shorter peppers are ignored, matching the other hash peppers (min 32 chars). */
 export const RATE_LIMIT_PEPPER_MIN_LENGTH = 32;
 
-interface RateLimitEntry {
+export interface RateLimitEntry {
   count: number;
   resetAt: number;
+  /**
+   * The limit this bucket enforces (10 mint, 30 batch, 60 default, 120 public
+   * reads). Stored so rate-limit-stats can tell which buckets are actually
+   * blocked; absent on entries written before this field existed (≤ 60 s old).
+   */
+  max?: number;
 }
 
 /**
@@ -139,14 +145,14 @@ export async function checkRateLimit(
   const entry = raw ? (JSON.parse(raw) as RateLimitEntry) : null;
 
   if (!entry || now >= entry.resetAt) {
-    await kv.put(kvKey, JSON.stringify({ count: 1, resetAt: now + windowMs }), {
+    await kv.put(kvKey, JSON.stringify({ count: 1, resetAt: now + windowMs, max }), {
       expirationTtl: Math.ceil(windowMs / 1000),
     });
     return false;
   }
 
   const newCount = entry.count + 1;
-  await kv.put(kvKey, JSON.stringify({ count: newCount, resetAt: entry.resetAt }), {
+  await kv.put(kvKey, JSON.stringify({ count: newCount, resetAt: entry.resetAt, max }), {
     expirationTtl: Math.max(60, Math.ceil((entry.resetAt - now) / 1000)),
   });
   return newCount > max;

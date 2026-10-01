@@ -25,6 +25,7 @@ const {
   productionTestMatch,
   PRODUCTION_READ_ONLY_CONFIGS,
   PRODUCTION_SMOKE_SPECS,
+  TARGET_URL_ENV_VARS,
 } = require('../../config/production-read-only');
 
 const ROOT = join(__dirname, '..', '..');
@@ -174,18 +175,46 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     }
   });
 
-  test('the refusal catches production in BASE_URL, STAGING_URL or the config base', () => {
-    const saved = { BASE_URL: process.env.BASE_URL, STAGING_URL: process.env.STAGING_URL };
+  test('every *URL env var a spec reads as its target is checked', () => {
+    // Derived from the specs: a spec that starts reading a new *URL var fails
+    // here until the var is added to TARGET_URL_ENV_VARS.
+    const NOT_TARGETS = new Set(['GOOGLE_SCRIPT_URL']); // retired GAS endpoint, not an OSE host
+    const found = new Set();
+    const walk = (dir) => {
+      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) {
+          if (e.name !== 'node_modules') walk(rel);
+        } else if (/\.(ts|js|mjs|cjs)$/.test(e.name)) {
+          for (const m of read(rel).matchAll(/process\.env\.([A-Z_]*URL[A-Z_]*)/g)) found.add(m[1]);
+        }
+      }
+    };
+    walk('tests');
+    for (const name of found) {
+      if (NOT_TARGETS.has(name)) continue;
+      expect(TARGET_URL_ENV_VARS, name).toContain(name);
+    }
+    expect(found.has('BASE_URL')).toBe(true);
+  });
+
+  test('the refusal catches production in any target env var, USE_PRODUCTION, or the config base', () => {
+    const keys = [...TARGET_URL_ENV_VARS, 'USE_PRODUCTION'];
+    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    const clear = () => keys.forEach((k) => delete process.env[k]);
     try {
-      delete process.env.BASE_URL;
-      delete process.env.STAGING_URL;
+      clear();
       expect(() => refuseProductionTargets('t', 'https://stg.oursharedevents.com')).not.toThrow();
       expect(() => refuseProductionTargets('t', 'https://oursharedevents.com')).toThrow(/ADR-021/);
-      process.env.BASE_URL = 'https://www.oursharedevents.com';
+      for (const k of TARGET_URL_ENV_VARS) {
+        clear();
+        process.env[k] = 'https://www.oursharedevents.com:443/';
+        expect(() => refuseProductionTargets('t'), k).toThrow(/ADR-021/);
+      }
+      clear();
+      process.env.USE_PRODUCTION = 'true';
       expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
-      delete process.env.BASE_URL;
-      process.env.STAGING_URL = 'https://oursharedevents.com:443/';
-      expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
+      expect(productionTestMatch('playwright.smoke.config.ts')).toBeDefined();
     } finally {
       for (const [k, v] of Object.entries(saved)) {
         if (v === undefined) delete process.env[k];

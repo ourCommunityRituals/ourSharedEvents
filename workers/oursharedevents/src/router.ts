@@ -274,7 +274,9 @@ import {
   RATE_LIMIT_ADMIN_MAX,
   RATE_LIMIT_BATCH_MAX,
   RATE_LIMIT_MINT_MAX,
+  RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_MS,
+  type RateLimitEntry,
   type RateLimitEnv,
 } from './lib/rate-limit';
 import {
@@ -1896,7 +1898,8 @@ export async function route(
 //
 // Returns the top-10 currently rate-limited buckets: windows still active now
 // (each RATE_LIMIT_WINDOW_MS, 60 s). There is no hourly rollup; for history, use
-// Cloudflare Security → Events. "Rate-limited" means count > RATE_LIMIT_MAX (60).
+// Cloudflare Security → Events. "Rate-limited" means count > the bucket's own
+// stored limit (`max`: 10 mint, 30 batch, 60 default, 120 public reads).
 //
 // KV key format: ratelimit:{hmac} (OSE-1447: keyed id, never an address)
 // KV value format: { count: number, resetAt: number }
@@ -1914,11 +1917,6 @@ export async function route(
 //   top_ips: [{ ip: string, count: number, reset_at: ISO string }]
 // }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
 async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<Response> {
   const corsOriginHeader = corsOrigin(request);
   const headers: Record<string, string> = {
@@ -1928,7 +1926,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
   };
 
   const now = Date.now();
-  const ipEntries: Array<{ ip: string; count: number; resetAt: number }> = [];
+  const ipEntries: Array<{ ip: string; count: number; resetAt: number; limit: number }> = [];
   let totalRateLimited = 0;
 
   try {
@@ -1954,9 +1952,12 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
             // Only include active (non-expired) windows
             if (entry.resetAt <= now) continue;
             // Only entries that have actually been rate-limited (count > max)
-            if (entry.count <= 60) continue;
+            // Each bucket stores its own limit (mint 10, batch 30, 60, public
+            // reads 120); entries from before that field default to 60.
+            const limit = entry.max ?? RATE_LIMIT_MAX;
+            if (entry.count <= limit) continue;
             const ip = batch[j].name.slice('ratelimit:'.length);
-            ipEntries.push({ ip, count: entry.count, resetAt: entry.resetAt });
+            ipEntries.push({ ip, count: entry.count, resetAt: entry.resetAt, limit });
             totalRateLimited++;
           } catch {
             // malformed KV value — skip
@@ -1985,6 +1986,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
   const top10 = ipEntries.slice(0, 10).map((e) => ({
     ip: e.ip,
     count: e.count,
+    limit: e.limit,
     reset_at: new Date(e.resetAt).toISOString(),
   }));
 
@@ -1993,7 +1995,9 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
       ok: true,
       generated_at: new Date(now).toISOString(),
       window: '60s (active rate-limit windows)',
-      rate_limit_max: 60,
+      // Kept for the response contract: the default limit. Each top_ips entry
+      // carries its own bucket `limit`.
+      rate_limit_max: RATE_LIMIT_MAX,
       total_rate_limited_ips: totalRateLimited,
       top_ips: top10,
     },
