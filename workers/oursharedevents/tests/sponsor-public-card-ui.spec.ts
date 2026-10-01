@@ -227,8 +227,123 @@ describe('admin | the public card fields', () => {
     $('spon-phone').value = 'call us';
     await submit();
     expect($('spon-phone').getAttribute('aria-invalid')).toBe('true');
+    // OSE-1434: the phone field lives in the collapsed "Public card details"
+    // section, which must open so the focused field is actually on screen.
+    expect(($('spon-card-details') as unknown as HTMLDetailsElement).open).toBe(true);
     expect(doc.activeElement).toBe($('spon-phone'));
     expect($('spon-form-msg').textContent).toMatch(/phone/i);
+  });
+});
+
+// ── OSE-1434: the form reads in sections, required fields first ─────────────
+
+describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
+  const details = (doc: Document) =>
+    doc.querySelector('[data-testid="spon-card-details"]') as HTMLDetailsElement;
+
+  test('fields run Name → Tier → Event → Image → logos → Website, then the card section', async () => {
+    const { doc } = await mountCard();
+    const form = doc.getElementById('spon-create-form')!;
+    const order = Array.from(form.querySelectorAll('input:not([type="hidden"]), select')).map(
+      (el) => el.id
+    );
+    expect(order).toEqual([
+      'spon-name',
+      'spon-tier',
+      'spon-event',
+      'spon-image-choice',
+      'spon-logo',
+      'spon-sidebar-logo',
+      'spon-website',
+      'spon-display-name',
+      'spon-address',
+      'spon-phone',
+      'spon-email',
+    ]);
+  });
+
+  test('the four public card fields sit in one collapsed "Public card details" section', async () => {
+    const { doc, open } = await mountCard();
+    await open();
+    const d = details(doc);
+    expect(d, 'no spon-card-details section').not.toBeNull();
+    expect(d.tagName).toBe('DETAILS');
+    expect(d.open, 'collapsed by default').toBe(false);
+    expect(d.querySelector('summary')!.textContent).toMatch(/public card details/i);
+    for (const id of ['spon-display-name', 'spon-address', 'spon-phone', 'spon-email']) {
+      expect(d.contains(doc.getElementById(id)), id).toBe(true);
+    }
+    for (const id of [
+      'spon-name',
+      'spon-tier',
+      'spon-event',
+      'spon-image-choice',
+      'spon-website',
+    ]) {
+      expect(d.contains(doc.getElementById(id)), `${id} must stay outside`).toBe(false);
+    }
+  });
+
+  test('the image choice uses plain words for the standard image', async () => {
+    const { $ } = await mountCard();
+    const opts = Array.from($('spon-image-choice').options).map((o) => [o.value, o.textContent]);
+    expect(opts).toEqual([
+      ['default', 'Standard image (OurSharedEvents mark)'],
+      ['own', 'Our own logo'],
+    ]);
+  });
+
+  test('choosing "own" announces the two logo fields through a polite live region', async () => {
+    const { $, choose, open } = await mountCard();
+    await open();
+    const hint = $('spon-image-choice-hint');
+    expect(hint.getAttribute('aria-live')).toBe('polite');
+    expect(hint.textContent).not.toMatch(/below/i);
+    choose('own');
+    expect(hint.textContent).toMatch(/wide logo.*square logo.*below/i);
+    choose('default');
+    expect(hint.textContent).not.toMatch(/below/i);
+  });
+
+  test('editing a sponsor that has card details opens the section; one without stays collapsed', async () => {
+    const withCard = await mountCard();
+    await (withCard.w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(
+      EXISTING.id
+    );
+    await flush();
+    expect(details(withCard.doc).open).toBe(true);
+
+    const bare = await mountCard((url, init) =>
+      url === `/api/v2/admin/sponsors/${EXISTING.id}` && !init?.method
+        ? {
+            body: {
+              ok: true,
+              item: {
+                ...EXISTING,
+                display_name: null,
+                address_line: null,
+                contact_phone: null,
+                contact_email: null,
+              },
+            },
+          }
+        : undefined
+    );
+    await (bare.w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(
+      EXISTING.id
+    );
+    await flush();
+    expect(details(bare.doc).open).toBe(false);
+  });
+
+  test('closing the form collapses the section again', async () => {
+    const { w, doc, $ } = await mountCard();
+    await (w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(EXISTING.id);
+    await flush();
+    expect(details(doc).open).toBe(true);
+    (w as unknown as { _doCloseForm(): void })._doCloseForm();
+    expect(details(doc).open).toBe(false);
+    expect($('spon-display-name').value).toBe('');
   });
 });
 
