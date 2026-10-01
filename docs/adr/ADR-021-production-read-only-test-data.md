@@ -42,6 +42,10 @@ It is enforced in three places:
   (`e2e-smoke`, `smoke`, listed in `PRODUCTION_READ_ONLY_CONFIGS`). It checks the
   config's own base URL plus `BASE_URL` and `STAGING_URL`, since many specs read those
   directly. A suite that can write fails before any request if pointed at production.
+- The two production-smoke configs, when they target production, narrow discovery with
+  `productionTestMatch()` to the approved read-only specs (`PRODUCTION_SMOKE_SPECS`). So
+  `USE_PRODUCTION=true npm run test:api:smoke`, or naming a writing spec on the command
+  line, finds nothing else to run.
 - The CI gate `tests/integration/production-read-only.test.js` (root vitest, so it runs
   on every PR) locks all of the following:
   - the allowlist of specs on `smoke-production`;

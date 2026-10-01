@@ -22,7 +22,9 @@ const {
   isProductionUrl,
   assertNotProduction,
   refuseProductionTargets,
+  productionTestMatch,
   PRODUCTION_READ_ONLY_CONFIGS,
+  PRODUCTION_SMOKE_SPECS,
 } = require('../../config/production-read-only');
 
 const ROOT = join(__dirname, '..', '..');
@@ -109,6 +111,44 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     // The probe only ever sends keys that must be refused.
     const probe = src.slice(src.indexOf("test.describe('🔒 SECURITY: Admin key validation'"));
     expect(probe.slice(0, probe.indexOf('\n});'))).toMatch(/toBe\(401\)/);
+  });
+
+  test('the production-smoke configs can discover only the approved specs on production', () => {
+    // One list: the helper's per-config specs, resolved against each testDir,
+    // are exactly the specs the smoke-production job runs.
+    const resolved = [];
+    for (const [cfg, specs] of Object.entries(PRODUCTION_SMOKE_SPECS)) {
+      const src = read(cfg);
+      const testDir = src.match(/testDir:\s*['"]\.\/(.+?)['"]/)[1];
+      resolved.push(...specs.map((s) => `${testDir}/${s}`));
+      // Narrowed before export, and applied as testMatch.
+      const call = src.search(new RegExp(`productionTestMatch\\('${cfg.replace(/\./g, '\\.')}'`));
+      const exp = src.search(/^export default/m);
+      expect(call, `${cfg}: productionTestMatch call`).toBeGreaterThan(-1);
+      expect(call, `${cfg}: before export`).toBeLessThan(exp);
+      expect(src, cfg).toMatch(
+        /\.\.\.\(PRODUCTION_ONLY \? \{ testMatch: PRODUCTION_ONLY \} : \{\}\)/
+      );
+    }
+    expect(resolved.sort()).toEqual([...PROD_SMOKE_SPECS].sort());
+
+    const saved = process.env.BASE_URL;
+    try {
+      delete process.env.BASE_URL;
+      expect(
+        productionTestMatch(PRODUCTION_READ_ONLY_CONFIGS[0], 'https://stg.oursharedevents.com')
+      ).toBeUndefined();
+      const m = productionTestMatch('playwright.smoke.config.ts', 'https://oursharedevents.com');
+      const hits = (p) => m.some((r) => r.test(p));
+      expect(hits('/r/tests/api/smoke/api-health.spec.ts')).toBe(true);
+      expect(hits('C:\\r\\tests\\api\\smoke\\fail-fast-gates.spec.ts')).toBe(true);
+      expect(hits('/r/tests/api/smoke/form-endpoints.spec.ts')).toBe(false);
+      expect(hits('/r/tests/api/smoke/xapi-health.spec.ts')).toBe(false);
+      expect(() => productionTestMatch('playwright.e2e.config.ts', 'x')).toThrow(/ADR-021/);
+    } finally {
+      if (saved === undefined) delete process.env.BASE_URL;
+      else process.env.BASE_URL = saved;
+    }
   });
 
   test('every Playwright config outside the allowlist refuses production at load', () => {
