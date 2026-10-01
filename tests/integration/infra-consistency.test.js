@@ -796,7 +796,7 @@ describe('Playwright browser installs use cache on staging and PR gates', () => 
   const assertCacheStep = (steps, name, expectedIf) => {
     const cacheStep = steps.find((step) => step && step.name === name);
     expect(cacheStep, `${name} step must exist`).toBeDefined();
-    expect(cacheStep.uses).toBe('actions/cache@v4');
+    expect(cacheStep.uses).toBe('actions/cache@v6');
     expect(cacheStep.with && cacheStep.with.path).toBe('~/.cache/ms-playwright');
     expect(cacheStep.with && cacheStep.with.key).toContain('playwright');
     if (expectedIf) expect(cacheStep.if).toBe(expectedIf);

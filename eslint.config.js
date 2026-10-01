@@ -234,6 +234,23 @@ module.exports = [
     },
   },
 
+  // Test/tooling environment config (Node.js CommonJS). Read by the Playwright
+  // configs and specs, never bundled into the Worker; its console output is
+  // the debug surface (printBrandConfigSummary, printEnvironmentInfo).
+  {
+    files: ['config/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2021,
+      sourceType: 'script',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // Config files
   {
     files: ['*.config.js', '*.config.mjs', 'playwright*.config.*'],
