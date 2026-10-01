@@ -4,8 +4,11 @@
 #
 #   bash scripts/ci/trace-scan-staging.sh            # from the repo root
 #
-# Needs: STG_BASE_URL (default https://stg.oursharedevents.com), and wrangler
-# credentials for the staging D1 (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID).
+# Needs: STG_BASE_URL (default https://stg.oursharedevents.com), wrangler
+# credentials for the staging D1 (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID),
+# and the Cloudflare Access service token (CF_ACCESS_CLIENT_ID,
+# CF_ACCESS_CLIENT_SECRET). Staging sits behind Access, so a request without
+# the token is refused at the edge (403) before it reaches the Worker.
 # The poster comes from tests/ui/smoke/fixtures/trace-eagles-poster.sql.
 #
 # What it proves, on the deployed Worker:
@@ -38,12 +41,29 @@ before=$(d1 "SELECT COUNT(*) AS n FROM scan_placement_events WHERE poster_deploy
   node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[0].results[0].n))')
 echo "scans recorded for the Eagles test poster before: $before"
 
-status=$(curl -sS -o /dev/null -w '%{http_code}' --max-redirs 0 "$BASE/q/$TOKEN")
+if [ -z "${CF_ACCESS_CLIENT_ID:-}" ] || [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+  echo "::error::CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET are not set; staging is behind Cloudflare Access"
+  exit 1
+fi
+
+# The Worker answers a scan with 302 to /events/<id>. Access also answers with
+# a 302 (to its login page), so check where the redirect goes, not only the code.
+read -r status location < <(curl -sS -o /dev/null --max-redirs 0 \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  -w '%{http_code} %{redirect_url}\n' "$BASE/q/$TOKEN")
 if [ "$status" != "302" ]; then
   echo "::error::GET /q/$TOKEN returned $status, expected 302"
   exit 1
 fi
-echo "scan sent: GET /q/$TOKEN -> 302"
+case "$location" in
+  "$BASE"/events/*) ;;
+  *)
+    echo "::error::GET /q/$TOKEN redirected to '$location', expected $BASE/events/..."
+    exit 1
+    ;;
+esac
+echo "scan sent: GET /q/$TOKEN -> 302 $location"
 
 # Staging writes scans through a queue, so the row lands a little later.
 deadline=$((SECONDS + WAIT_SECONDS))
