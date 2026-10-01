@@ -1,0 +1,97 @@
+# Access Control, Audit Log, Tenant Isolation, ETag — CCR (5 loops, extended scrum team)
+
+**Date:** 2026-09-30 · **Branch:** `claude/access-control-data-isolation-2228ff` @ `d8c82f7`
+**Artifact under review:** the access-control / audit / isolation assessment and its remediation plan (assessment only — no code changed).
+**Classification:** Security + compliance surface → 5 loops, human gate. Environment modifier: production + PII (×1.25).
+**Team POVs:** PO, Lead BE, Lead FE Integration, Sr Design FE, Sr Automation QA, SRE/SDET, DevOps + Dr of Security, Sr SDET/SRE, DevOps Mgr, Sr Data Scientist.
+
+## Verdict
+
+**Loop 5 score: 85%. NOT CCR-verified (< 95%). Human gate.**
+The plan holds direction for direction, and every finding has `file:line` evidence. Two base items stay Partial because closing them needs staging or a full workers-pool run, which this worktree can't do (see "Human gate").
+
+| Loop               | Score        | Key finding                                                                                                                                                                                                           |
+| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Surface          | 32.5%        | Two of my own earlier claims were wrong (IP capture, denial logging); cross-tenant probes are never logged                                                                                                            |
+| 2 Pressure         | 0% (floored) | **Systemic: no split between platform and tenant privilege.** Any brand admin can change global flags/tiers and read platform PII and every brand's audit log. Two proposed fixes were wrong-sized or a false closure |
+| 3 Confirmation     | 70%          | The fixes are feasible and break no existing tests; launch preconditions found (founder platform role, `CF_ACCESS_AUD` empty)                                                                                         |
+| 4 Pressure (roles) | 71.5%        | SRE: audit writes are lost silently with no alert. QA: authz red-team runs in the gating pool. Design: no audit viewer                                                                                                |
+| 5 Confirmation     | 85%          | No new findings. Two environment Partials remain                                                                                                                                                                      |
+
+## Findings (system), verified
+
+| #   | Severity                                      | Finding                                                                                                                                                                                                                         | Evidence                                                                                                                                                                           |
+| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | **Security Critical** (systemic, 5 surfaces)  | Any brand-scoped admin can mutate **platform-global** state: `POST /admin/flags/:key` writes scope `'global'`; `POST /admin/flags/apply-tier` sets the platform tier. Neither route checks role or scope beyond `requireAdmin`. | `src/handlers/feature-flags.ts:143-173` (`setFlag(..., 'global')`), `:176`; `src/router.ts:1141-1200`                                                                              |
+| S2  | **Security Critical** (same root cause as S1) | Any brand admin reads platform data that belongs to no brand: decrypted `subscribers` emails (table has no `brand_id`), the IPs of rate-limited **public visitors**, and every brand's `admin_audit_log` (incl. IPs).           | `src/handlers/subscribers.ts:56-64`; `migrations/0008_create_subscribers.sql`; `src/router.ts:1210-1214, 1220-1224, 1760-1800`; `src/handlers/audit.ts:30-80` (no brand predicate) |
+| S3  | High                                          | Roles exist in data but are enforced nowhere. `resolveAdminRoles` has **zero callers in `src/`** (only `tests/admin-brand-membership.spec.ts:110`).                                                                             | `src/lib/admin-brand-scope.ts:36,135`                                                                                                                                              |
+| S4  | High                                          | Cross-tenant object probes (scoped 404) are **not audited**. That is the denial that matters most for insider detection.                                                                                                        | `src/lib/admin-object-scope.ts:182-192` (no audit call)                                                                                                                            |
+| S5  | High                                          | Audit log is not immutable. No triggers in any migration, so it is append-only by convention only. `ROLLBACK_PLAN.md` drops both audit tables.                                                                                  | `grep "CREATE TRIGGER"` = 0; `migrations/ROLLBACK_PLAN.md:309,448`                                                                                                                 |
+| S6  | Medium                                        | Audit writes are fire-and-forget; failures are swallowed to `console.warn`, and no alert consumes `AUDIT_LOG_WRITE_FAILURE`.                                                                                                    | `src/lib/audit-log.ts:27-55`; grep for consumers = 0                                                                                                                               |
+| S7  | Medium                                        | Audit log shares the app database (`DB`) and has no retention policy (IPs kept indefinitely).                                                                                                                                   | `wrangler.toml` `DB` binding; no DELETE/retention for `admin_audit_log` in `src/`                                                                                                  |
+| S8  | Medium                                        | Admin read denials and most admin GETs are not audited (exceptions: `READ_FORMS_DATA`, subscribers).                                                                                                                            | 12 admin GET routes, `src/router.ts:616-1230`; `_audit` sites listed below                                                                                                         |
+| S9  | Medium                                        | No optimistic concurrency. Admin `PUT` has no `If-Match`/version check (last write wins). ETag exists only on `/ui.css`.                                                                                                        | `src/handlers/events.ts:1131`; `src/router.ts:461-473`                                                                                                                             |
+| S10 | Medium (tracked OSE-1377)                     | `CF_ACCESS_AUD = ""` in the env var blocks, so an Access token for any same-team app verifies. Prod Access app not yet created (OSE-1353).                                                                                      | `wrangler.toml` env vars; `src/auth/admin.ts` doc on `CF_ACCESS_AUD`                                                                                                               |
+| S11 | Low                                           | No audit-log viewer in the admin UI (API only).                                                                                                                                                                                 | `grep -c audit-log src/templates/admin.html` = 0                                                                                                                                   |
+
+**Confirmed strengths:** 45 router `_audit()` points across 24 action types, with actor + `CF-Connecting-IP` + request id. 19 of them record `outcome='denied'` on authN failure (`src/router.ts:355-374`). Object-level brand scoping on `/api/v2/admin/events/:id/**` fails closed and answers 404, not 403 (`src/lib/admin-object-scope.ts`). List-level brand scoping on events, sponsors and portfolio. PII sits in a separate encrypted `FORMS_DB`. Staging and production resources are fully separate. The authz red-team spec runs in the gating workers pool (`vitest.workers.config.mts:366` includes `tests/**/*.spec.ts`).
+
+## Corrections applied between loops (to my earlier answer)
+
+- **L1→2:** "1 of 9 writers fills the IP" → **wrong**; the router `_audit()` helper records the IP at 45 sites (`router.ts:355`). "Rejected logins go to the console only" → **wrong for mutations** (19 denied audit points); still true for most admin reads and for every cross-tenant probe (S4, S8).
+- **L2→3:** "Brand-filter the audit endpoint; small change" → **wrong-sized**; `admin_audit_log` has no `brand_id`. Corrected: restrict the endpoint to platform operators (closes the leak now); add a brand-filtered view later via a `brand_id` column. "Add triggers to make it immutable" → **false closure, proven** (node:sqlite: triggers block UPDATE/DELETE, then `DROP TRIGGER` succeeds and DELETE goes through). Corrected: triggers are app-level defense only; immutability comes from an export to an R2 bucket with a **bucket lock** plus a hash chain, with lock changes visible in Cloudflare account audit logs (18-month retention).
+- **L3→4:** Added two launch preconditions: the founder needs a platform-role row in prod (prod has no `ADMIN_SCOPE_ALL`), and `CF_ACCESS_AUD` must be pinned (OSE-1377).
+- **L4→5:** Added an SRE alert on audit-write failure; security-relevant audit writes (denied, cross-tenant, platform) should be awaited, not fire-and-forget.
+
+## Remediation plan (corrected), in commit order
+
+1. **Platform-operator gate (S1, S2, S3).** Add `requirePlatformOperator()`: allow scope mode `'all'` (key actors, CI) **or** a membership row with a new role `platform_admin`. Apply it to the 4 flag mutations plus `flags` GETs, `subscribers`, `rate-limit-stats` and `audit-log`. Fail closed. Blast radius verified: all 15 test files touching these routes authenticate as key actors with `ADMIN_SCOPE_ALL` (`vitest.workers.config.mts:328`), so they stay green. **Born-red test:** a brand-scoped email admin gets 404 on each of the 8 routes.
+2. **Audit cross-tenant probes (S4)** in `guardAdminObjectScope` → `CROSS_TENANT_PROBE` / `denied`, with actor + IP.
+3. **Enforce per-brand roles (S3)** via `resolveAdminRoles` on destructive actions (delete, apply tier, mint links), or delete the column. Needs a PO decision on the role → action matrix.
+4. **Tamper evidence (S5, S7):** migration adds BEFORE UPDATE/DELETE `RAISE(ABORT)` triggers plus `prev_hash`/`row_hash` columns; a cron exports daily batches to an R2 bucket under an indefinite or long-retention **bucket lock**; fix `ROLLBACK_PLAN.md` so it archives instead of dropping; define retention (e.g. 400 days hot, then R2).
+5. **Reliability (S6):** await security-class audit writes; alert on `AUDIT_LOG_WRITE_FAILURE` (pairs with the "zero alerting" SRE gap).
+6. **Read auditing (S8)** for PII-bearing and platform reads.
+7. **Concurrency (S9):** add an `events.version` integer, emit `ETag: "v<n>"` on admin GET, require `If-Match` on PUT → 412 on mismatch. Use an integer, not `updated_at`, to avoid same-second collisions.
+
+**Pre-conditions before the first non-founder admin (Harbor County Bocce, Oct 24):** #1 merged; founder `platform_admin` row added to the RUNBOOK first-launch data step; OSE-1377 `CF_ACCESS_AUD` pinned after OSE-1353.
+
+## Scoring worksheet — Loop 5
+
+| Item                                                  | Tier     | Severity | State | Evidence                                                                                                                                                             | Deduction     |
+| ----------------------------------------------------- | -------- | -------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| Environmental assumptions verified                    | Base     | —        | **P** | Trigger semantics proven on node:sqlite only, **not on D1**; R2 lock removability by an account admin not tested; prod Access app does not exist yet                 | 7.5           |
+| Full surface mapped                                   | Base     | —        | **P** | All 12 admin GETs classified; 45 audit sites counted; **per-ID sponsor/poster mutation scope (OSE-710/1080) not re-run here** (worktree cannot run the workers pool) | 7.5           |
+| Partial-fix risk assessed                             | Base     | —        | V     | Trigger false closure caught and corrected; gate blast radius = 0 test files                                                                                         | 0             |
+| Chunk scope defined                                   | Base     | —        | V     | Admin surface + audit + isolation + ETag; public surfaces out of scope by design                                                                                     | 0             |
+| Human gate not bypassed                               | Base     | —        | V     | Score < 95 surfaced below; no fix implemented                                                                                                                        | 0             |
+| S1–S11 represented in the plan with verified evidence | Variable | —        | V     | Table above                                                                                                                                                          | 0             |
+| **Total**                                             |          |          |       |                                                                                                                                                                      | **−15 → 85%** |
+
+### Loop 1–4 arithmetic (summary)
+
+- **L1:** base 7.5 + 15 + 10; F1 Critical 15, F2 High 10, F3 High 10 → 100 − 67.5 = **32.5%**
+- **L2 (×1.25):** S1/S2 Security Critical 15 × 1.25 × log₂(6) = 2.58 × env 1.25 = 60.5, correlated with the mis-sized audit fix 12.5 → (73) × 1.5 = 109.5; trigger false closure 12.5; S5/S7 Medium 6.25 + 6.25; base 15 → **floored at 0%**
+- **L3 (×1.5):** base 15 + `CF_ACCESS_AUD` omission 7.5 + founder-role precondition 7.5 → **70%**
+- **L4 (×1.5):** base 15 + audit-loss alerting 7.5 + T5 `continue-on-error` 3 + no UI viewer 3 → **71.5%**
+- **L5:** base 15 → **85%**
+
+## Post-gate update (same day, after the PO's human-gate answers)
+
+**Corrections (reactive, after Loop 5):**
+
+- **Fix #1 withdrawn as designed.** The proposed `platform_admin` human role contradicts the documented Feature G decision (OSE-832): "there is deliberately no human super-admin" (Invariant #9). Corrected design: platform-global mutations and platform-owned reads are `key:`-actor only, or go through a reserved platform brand. See AUD-3 (OSE-1447) and R-5 (OSE-850).
+- **Audit export must not use Logpush** (Enterprise-only, per the OSE-1377 CCR). AUD-4 uses a Worker cron to an R2 bucket with a lock.
+
+**Base item "Full surface mapped" → Verified for existing guarantees.** The full workers pool ran on a full dependency set (node_modules junctioned from the main checkout, code at `main@d8c82f7`): **238/238 files, 3210 passed, 2 skipped (brain-absent drift checks), exit 0**. The node pool: **84/84 files, 1307 passed**. The per-ID authz specs (object-scope 22, api-authz 30, sponsor-scope-per-id 11, sub-resources 8, sponsor-scope invariant 13, brand-scope 10, tenant-isolation 4, audit-log 20) all ran in the blocking pool. S1/S2 have no refusal tests yet, so green here does **not** mean they are closed.
+
+**Re-score:** environmental assumptions remain Partial (7.5) until the AUD-1 staging spike (OSE-1445) → **92.5%. Still below the gate**, now with exactly one bounded, ticketed gap.
+
+**PO decisions recorded:** roles are decided by the extended scrum team (R-0, OSE-1446); retention is derived from SOC 2 (AUD-6, OSE-1451); no client admin before the gate (AUD-11, OSE-1456); **security controls are never tier-gated** (epic OSE-1444 doctrine, locked by AUD-7, OSE-1452).
+
+**Linear:** epic OSE-1444; children OSE-1445 … OSE-1457 (AUD-1 … AUD-12); R-0 OSE-1446 under Feature G OSE-832.
+
+## Human gate — what closes the last 15 points (original)
+
+1. **Staging (DevOps Mgr):** apply the trigger migration to staging D1, then confirm UPDATE/DELETE abort; on a scratch bucket, confirm whether an R2 bucket lock can be removed early by an account admin and that its removal appears in account audit logs v2.
+2. **Full workers pool (QA):** run `tests/red-team/api-authz.spec.ts` and the OSE-710/1080 per-ID specs on a full checkout to re-verify per-ID mutation scope.
+3. **PO decisions:** (a) role → action matrix for #3; (b) SOC 2 target scope and retention period; (c) whether Bocce organizers get `/admin` before #1 lands. If they do, S1/S2 go live on day one.
