@@ -26,7 +26,7 @@ import { logExportManifest } from '../lib/audit-log';
 
 /** BigQuery table each phase writes, for the manifest's provenance record. */
 const PHASE_TABLE: Record<string, string> = {
-  anon_id_returns: 'anon_id_returns_export',
+  anon_id_returns: 'corridor_returns_export', // OSE-1460: counts, not per-person rows
   corridor_density_baseline: 'corridor_density_baseline_export',
   event_series: 'event_series_export',
 };

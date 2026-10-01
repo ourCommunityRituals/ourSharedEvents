@@ -353,8 +353,13 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
   });
 
   test('exports one floored count row per corridor and type, with no person or venue in it', async () => {
+    // Six people; five came to two events, three of them to a third.
     await seedCorridorEvent('test-evt-exp-1');
-    await seedPeople('test-evt-exp-1', [1, 2, 2, 3, 5, 6]);
+    await seedCorridorEvent('test-evt-exp-1b');
+    await seedCorridorEvent('test-evt-exp-1c');
+    await seedPeople('test-evt-exp-1', [1, 1, 1, 1, 1, 1], { prefix: 'm' });
+    await seedPeople('test-evt-exp-1b', [1, 1, 1, 1, 1], { prefix: 'm' });
+    await seedPeople('test-evt-exp-1c', [1, 1, 1], { prefix: 'm' });
 
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
@@ -378,7 +383,55 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const wire = JSON.stringify(bqCalls[0].rows);
     expect(wire).not.toContain('anon_id_hash');
     expect(wire).not.toContain('test-evt-exp-1');
-    expect(wire).not.toMatch(/p\d0{20,}/); // no seeded hash value
+    expect(wire).not.toMatch(/m\d0{20,}/); // no seeded hash value
+  });
+
+  test('visit_count is not a return: repeat materialization at one event counts zero returns', async () => {
+    // materializeAnonIdReturns bumps visit_count on every re-run over the same
+    // scans, so a high visit_count at ONE event must not make anyone a returner.
+    await seedCorridorEvent('test-evt-exp-vc');
+    await seedPeople('test-evt-exp-vc', [9, 9, 9, 9, 9]);
+    await exportAnonIdReturns(makeEnv());
+    const row = bqCalls[0].rows[0].json;
+    expect(row.people_count).toBe(5);
+    expect(row.returned_2plus).toBeNull();
+  });
+
+  test('more than 500 groups are sent in chunks of at most 500', async () => {
+    const db = tenv().DB;
+    await db
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500)
+         INSERT INTO event_type_registry (id, uec_code, name, phase, legal_clearance_tier)
+         SELECT 'et-chunk-' || i, 'UEC-CHUNK-' || i, 'Chunk ' || i, 1, 1 FROM n`
+      )
+      .run();
+    await db
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500)
+         INSERT INTO events (id, brand_id, title, slug, status, location, event_type_id,
+                             legal_clearance_tier, h3_res7, start_date, created_at, updated_at)
+         SELECT 'test-evt-exp-chunk-' || i, 'test-brand', 'Chunk ' || i, 'test-evt-exp-chunk-' || i,
+                'active', 'Test Venue', 'et-chunk-' || i, 1, ?, datetime('now'), datetime('now'), datetime('now')
+           FROM n`
+      )
+      .bind(RES7_A)
+      .run();
+    const seen = new Date(Date.now() - 7_200_000).toISOString();
+    await db
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500),
+                       p(j) AS (SELECT 0 UNION ALL SELECT j + 1 FROM p WHERE j < 4)
+         INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         SELECT printf('%032d', i * 10 + j), 'test-evt-exp-chunk-' || i, ?, ?, 1, ? FROM n, p`
+      )
+      .bind(seen, seen, seen)
+      .run();
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(r.rowsExported).toBe(501);
+    expect(bqCalls.length).toBe(2);
+    expect(Math.max(...bqCalls.map((c) => c.rows.length))).toBeLessThanOrEqual(500);
   });
 
   test('a group under the floor is withheld, not exported', async () => {
@@ -390,7 +443,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(bqCalls).toHaveLength(0);
   });
 
-  test('one person at two venues in a corridor counts once, with visits summed', async () => {
+  test('one person at two events in a corridor counts once, as a return', async () => {
     await seedCorridorEvent('test-evt-exp-v1');
     await seedCorridorEvent('test-evt-exp-v2');
     await seedPeople('test-evt-exp-v1', [1, 1, 1, 1, 1], { prefix: 'x' });
@@ -450,15 +503,19 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(row.product_id).toBe('ose');
   });
 
-  test('watermark advances to the newest source row; a re-run with no change exports nothing', async () => {
+  test('watermark advances to the newest source row; a re-run still snapshots, same hour → same insertId', async () => {
+    // A rolling window moves as rows age out, so every run re-snapshots. In the
+    // same hour the insertIds repeat, so BigQuery dedupes the copy.
     await seedCorridorEvent('test-evt-exp-w1');
     await seedPeople('test-evt-exp-w1', [1, 1, 1, 1, 1], {
       computedAt: '2026-09-30T15:00:00.000Z',
     });
     await exportAnonIdReturns(makeEnv());
-    const callsAfterFirst = bqCalls.length;
+    const first = bqCalls.map((c) => c.rows.map((r) => r.insertId)).flat();
+    bqCalls = [];
     await exportAnonIdReturns(makeEnv());
-    expect(bqCalls.length).toBe(callsAfterFirst);
+    const second = bqCalls.map((c) => c.rows.map((r) => r.insertId)).flat();
+    expect(second).toEqual(first);
     const state = await tenv()
       .DB.prepare(
         `SELECT last_export_status, last_exported_at FROM bigquery_export_state WHERE table_name = ?`
@@ -467,6 +524,22 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .first<{ last_export_status: string; last_exported_at: string }>();
     expect(state!.last_export_status).toBe('success');
     expect(state!.last_exported_at).toBe('2026-09-30T15:00:00.000Z');
+  });
+
+  test('a group that ages out of the window is absent from the next snapshot', async () => {
+    await seedCorridorEvent('test-evt-exp-age');
+    await seedPeople('test-evt-exp-age', [1, 1, 1, 1, 1]);
+    await exportAnonIdReturns(makeEnv());
+    expect(bqCalls).toHaveLength(1);
+    // Nothing new is materialized; the rows simply get old.
+    await tenv()
+      .DB.prepare(`UPDATE anon_id_returns SET last_seen_at = ?`)
+      .bind(new Date(Date.now() - 100 * 86_400_000).toISOString())
+      .run();
+    bqCalls = [];
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(bqCalls).toHaveLength(0);
   });
 
   test('watermark NOT advanced on BQ failure (S4-Q4)', async () => {

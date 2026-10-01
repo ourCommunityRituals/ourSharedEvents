@@ -274,8 +274,8 @@ async function prepareExport(
 // corridor-level location only). It now sends counts per corridor, event type
 // and pool over a rolling window, and nothing below RETURNS_MIN_COUNT.
 //
-// One person is counted once per (corridor, event type, clearance tier): their
-// visits at every venue in that corridor are summed first. The venue never
+// One person is counted once per (corridor, event type, clearance tier), and a
+// return means they were seen at 2+ distinct events there. The venue never
 // leaves: venue_id carries the 'corridor-aggregate' sentinel, the same one the
 // corridor baseline uses, so the required-tag contract is unchanged.
 
@@ -321,7 +321,11 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
   const { watermark, result } = prep;
 
   try {
-    // Only take a snapshot when something was materialized since the last one.
+    // A rolling window changes as rows age out even when nothing new was
+    // materialized, so a snapshot is taken on every run (one per hour: the
+    // insertId is keyed by the snapshot hour). OER reads the latest snapshot;
+    // a group missing from it has fallen out of the window or under the floor.
+    // The watermark only records how far the source has been seen.
     const changed = await env.DB.prepare(
       `SELECT COUNT(*) AS n, MAX(computed_at) AS max_computed_at
          FROM anon_id_returns WHERE computed_at > ?`
@@ -329,26 +333,25 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       .bind(watermark)
       .first<{ n: number; max_computed_at: string | null }>();
     result.rowsRead = changed?.n ?? 0;
-    if (!changed || changed.n === 0 || !changed.max_computed_at) {
-      await advanceWatermark(env.DB, 'anon_id_returns', watermark, 0);
-      result.durationMs = Date.now() - start;
-      return result;
-    }
+    const nextWatermark = changed?.max_computed_at ?? watermark;
 
     const now = new Date();
     const since = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000).toISOString();
+    // A return is a person seen at 2+ distinct events in the corridor. This
+    // counts events, not visit_count: the materializer bumps visit_count on
+    // every re-run over the same scans, so it is not a return signal.
     const rows = await env.DB.prepare(
       `SELECT corridor_id, legal_clearance_tier, uec_code,
-              COUNT(*)                     AS people,
-              SUM(CASE WHEN visits >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
-              SUM(CASE WHEN visits >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
-              SUM(CASE WHEN visits >= 5 THEN 1 ELSE 0 END) AS returned_5plus
+              COUNT(*)                                       AS people,
+              SUM(CASE WHEN events_seen >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
+              SUM(CASE WHEN events_seen >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
+              SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
          FROM (
            SELECT air.anon_id_hash,
                   COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
                   e.legal_clearance_tier,
                   etr.uec_code,
-                  SUM(air.visit_count) AS visits
+                  COUNT(DISTINCT air.venue_id) AS events_seen
              FROM anon_id_returns air
              JOIN events e ON e.id = air.venue_id
              LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
@@ -403,18 +406,20 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       if (batch.length === 0) continue;
       const insertIdFn = (row: Record<string, unknown>): string =>
         `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
-      const res = await bigQueryInsertRowsToDataset(
-        env,
-        datasetForPool(pool, env.WORKER_ENV),
-        BQ_TABLE_CORRIDOR_RETURNS,
-        batch,
-        insertIdFn
-      );
-      result.rowsExported += res.rowCount;
-      result.perPool[pool] = res.rowCount;
+      for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+        const res = await bigQueryInsertRowsToDataset(
+          env,
+          datasetForPool(pool, env.WORKER_ENV),
+          BQ_TABLE_CORRIDOR_RETURNS,
+          batch.slice(i, i + BQ_INSERT_CHUNK),
+          insertIdFn
+        );
+        result.rowsExported += res.rowCount;
+        result.perPool[pool] += res.rowCount;
+      }
     }
 
-    await advanceWatermark(env.DB, 'anon_id_returns', changed.max_computed_at, result.rowsExported);
+    await advanceWatermark(env.DB, 'anon_id_returns', nextWatermark, result.rowsExported);
   } catch (err) {
     result.errors++;
     const msg = err instanceof Error ? err.message : String(err);

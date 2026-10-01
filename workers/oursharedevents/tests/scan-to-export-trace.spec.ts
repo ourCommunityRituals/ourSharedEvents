@@ -392,6 +392,8 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       'event_series',
     ]);
     expect(byPhase.event_series.rows_exported).toBe(0);
+    // OSE-1460: the returns phase writes counts to corridor_returns_export.
+    expect(JSON.parse(byPhase.anon_id_returns.details).table).toBe('corridor_returns_export');
     expect(JSON.parse(byPhase.event_series.details).rows_read).toBe(0);
     for (const [phase, r] of Object.entries(byPhase)) {
       expect(r.actor).toBe('cron:scheduler');

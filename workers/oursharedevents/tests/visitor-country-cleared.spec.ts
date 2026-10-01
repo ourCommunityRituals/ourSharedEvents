@@ -77,5 +77,11 @@ describe('OSE-1460 — migration 0088 clears the recorded visitor country', () =
       `SELECT COUNT(*) AS n FROM scan_aggregates WHERE event_id = 'evt-vcc' AND top_country IS NOT NULL`
     ).first<{ n: number }>();
     expect(row?.n).toBe(0);
+    // A country written after 0088 ran (an older Worker in the deploy window)
+    // is cleared by the roll-up itself.
+    const snr = await tenv.DB.prepare(
+      `SELECT country_code FROM scan_node_returns WHERE id = 'snr-vcc-2'`
+    ).first<{ country_code: string | null }>();
+    expect(snr?.country_code).toBeNull();
   });
 });

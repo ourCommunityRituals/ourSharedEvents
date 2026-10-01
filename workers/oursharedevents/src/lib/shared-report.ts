@@ -652,6 +652,13 @@ export async function aggregateScanBuckets(
   const nowIso = new Date(nowMs).toISOString();
 
   try {
+    // OSE-1460: the visitor's country is never held. Migration 0088 cleared it,
+    // but a Worker version still reading the header can write one in the deploy
+    // window after that migration ran; this roll-up clears any such row.
+    await env.DB.prepare(
+      `UPDATE scan_node_returns SET country_code = NULL WHERE country_code IS NOT NULL`
+    ).run();
+
     // Aggregate totals per (event_id, bucket_date, bucket_hour).
     // scan_bucket format: YYYY-MM-DDTHH:00 → date = first 10 chars, hour = chars 12-13.
     const buckets = await env.DB.prepare(

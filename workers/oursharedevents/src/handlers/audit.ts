@@ -3,7 +3,8 @@
  *
  * GET /api/v2/admin/audit-log
  *   ?limit=<1–100, default 50>
- *   ?cursor=<ISO timestamp — page backward past this point>
+ *   ?cursor=<nextCursor from the previous page: `<created_at>~<id>`; a bare ISO
+ *            timestamp also works>
  *   ?action=<exact action filter, e.g. CREATE_EVENT>
  *   ?actor=<exact actor filter, e.g. admin@example.com>
  *   ?outcome=success|denied
@@ -74,13 +75,23 @@ const FILTER_SHAPES: Record<'action' | 'actor' | 'resource_type', RegExp> = {
 const CURSOR_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /**
- * The cursor must be a real instant in the stored form: the right shape, and a
- * value that parses and round-trips to itself (so 2026-02-30 or hour 99 fail).
+ * A page cursor: `<created_at>` or `<created_at>~<id>`. Rows can share a
+ * created_at to the millisecond, so pages are ordered by (created_at, id) and the
+ * cursor carries both; a bare timestamp still works. The timestamp must be a real
+ * instant in the stored form: the right shape, and it must parse and round-trip
+ * to itself (so 2026-02-30 or hour 99 fail).
  */
-function isCanonicalCursor(cursor: string): boolean {
-  if (!CURSOR_SHAPE.test(cursor)) return false;
-  const t = Date.parse(cursor);
-  return Number.isFinite(t) && new Date(t).toISOString() === cursor;
+const CURSOR_ID_SHAPE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+function parseCursor(raw: string): { at: string; id: string | null } | null {
+  const sep = raw.indexOf('~');
+  const at = sep === -1 ? raw : raw.slice(0, sep);
+  const id = sep === -1 ? null : raw.slice(sep + 1);
+  if (!CURSOR_SHAPE.test(at)) return null;
+  const t = Date.parse(at);
+  if (!Number.isFinite(t) || new Date(t).toISOString() !== at) return null;
+  if (id !== null && !CURSOR_ID_SHAPE.test(id)) return null;
+  return { at, id };
 }
 
 /**
@@ -168,8 +179,9 @@ export async function handleListAuditLog(
   const rawLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 100);
 
-  const cursor = url.searchParams.get('cursor');
-  if (cursor !== null && !isCanonicalCursor(cursor)) {
+  const rawCursor = url.searchParams.get('cursor');
+  const cursor = rawCursor === null ? null : parseCursor(rawCursor);
+  if (rawCursor !== null && cursor === null) {
     return errorResponse(
       'INVALID_CURSOR',
       'cursor must be an ISO-8601 UTC timestamp',
@@ -220,9 +232,12 @@ export async function handleListAuditLog(
       bindings.push(...brandIds);
     }
   }
-  if (cursor) {
+  if (cursor && cursor.id !== null) {
+    conditions.push('(created_at < ? OR (created_at = ? AND id < ?))');
+    bindings.push(cursor.at, cursor.at, cursor.id);
+  } else if (cursor) {
     conditions.push('created_at < ?');
-    bindings.push(cursor);
+    bindings.push(cursor.at);
   }
   if (filters.action) {
     conditions.push('action = ?');
@@ -249,7 +264,7 @@ export async function handleListAuditLog(
            request_id, outcome, ip, details, brand_id
     FROM   admin_audit_log
     ${where}
-    ORDER  BY created_at DESC
+    ORDER  BY created_at DESC, id DESC
     LIMIT  ?`;
 
   let rows: AuditRow[];
@@ -270,7 +285,8 @@ export async function handleListAuditLog(
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? page[page.length - 1].created_at : null;
+  const last = page[page.length - 1];
+  const nextCursor = hasMore ? `${last.created_at}~${last.id}` : null;
 
   if (view.kind === 'platform') {
     return Response.json({

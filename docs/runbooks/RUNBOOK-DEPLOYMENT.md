@@ -284,6 +284,24 @@ SELECT email, brand_id, role FROM admin_brand_memberships WHERE brand_id = 'ose-
 
 Then, signed in through Access: `GET /briefing` returns 200 for the founder, and a brand-only identity gets 404 (`tests/platform-scope-tenant-writes.invariant.spec.ts`, `tests/briefing.spec.ts`).
 
+### Re-run the 0087 audit brand backfill once after deploy (AUD-3, OSE-1447)
+
+**Why:** CI applies migrations before it deploys the Worker. In that gap the old Worker can still write `admin_audit_log` rows without `brand_id`, and 0087's backfill has already run, so those rows stay NULL. NULL means platform-only, which is fail closed: no brand ever sees a row it should not. But the brand owner then misses those few rows. The Worker deliberately has no runtime `UPDATE admin_audit_log` path (TL-042, append-only), so this is a one-time operator step instead.
+
+**When:** once per environment, after the deploy that carries 0087 is live (staging, then production).
+
+**Apply** (idempotent: it touches only rows whose `brand_id` is still NULL, and re-running it changes nothing):
+
+```bash
+cd workers/oursharedevents
+sed -n '/^UPDATE/,$p' migrations/0087_admin_audit_log_brand_id.sql > /tmp/0087-backfill.sql  # the five UPDATEs only
+npx wrangler d1 execute DB --env staging --remote --file /tmp/0087-backfill.sql
+```
+
+**Verify:** `SELECT brand_id IS NOT NULL AS resolved, COUNT(*) FROM admin_audit_log GROUP BY 1;`
+
+The visitor-country cleanup (0088) needs no such step: the nightly roll-up clears any `country_code` a Worker wrote in the deploy window (`aggregateScanBuckets`, OSE-1460).
+
 ### Turn on production monitoring (OSE-1418)
 
 **When:** launch day, right after the first production deploy passes its smoke checks.

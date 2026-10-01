@@ -583,6 +583,49 @@ describe('AUD-3 B — no leak through pagination, no N+1, creates and deletes at
   });
 });
 
+describe('AUD-3 B — pagination never skips rows that share a timestamp', () => {
+  test('three rows at the same millisecond come back across three pages', async () => {
+    for (const id of ['alb-tie-a', 'alb-tie-b', 'alb-tie-c']) {
+      await seedRow(id, {
+        action: 'UPDATE_EVENT',
+        actor: OWNER_A,
+        resource_type: 'event',
+        resource_id: EVT_A,
+        ip: '203.0.113.7',
+        created_at: '2018-06-01T12:00:00.000Z',
+      });
+    }
+    const seen: string[] = [];
+    let cursor = '2018-06-02T00:00:00.000Z';
+    for (let i = 0; i < 4; i++) {
+      const res = await call(
+        'GET',
+        `/api/v2/admin/audit-log?scope=brand&limit=1&cursor=${encodeURIComponent(cursor)}`,
+        asEmail(OWNER_A)
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as ListBody;
+      seen.push(...body.entries.map((e) => e.id));
+      if (!body.pagination.nextCursor) break;
+      cursor = body.pagination.nextCursor;
+    }
+    expect(seen.filter((id) => id.startsWith('alb-tie-')).sort()).toEqual([
+      'alb-tie-a',
+      'alb-tie-b',
+      'alb-tie-c',
+    ]);
+  });
+
+  test('a cursor with a malformed id part is refused', async () => {
+    const res = await call(
+      'GET',
+      `/api/v2/admin/audit-log?scope=brand&cursor=${encodeURIComponent("2018-06-02T00:00:00.000Z~x' OR 1=1")}`,
+      asEmail(OWNER_A)
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
 // ── Every tier: security is never tier-gated (OSE-1444 doctrine) ─────────────
 
 describe('AUD-3 B — identical results under every tier preset', () => {
