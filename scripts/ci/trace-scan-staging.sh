@@ -48,12 +48,32 @@ fi
 
 # The Worker answers a scan with 302 to /events/<id>. Access also answers with
 # a 302 (to its login page), so check where the redirect goes, not only the code.
-read -r status location < <(curl -sS -o /dev/null --max-redirs 0 \
+resp_headers=$(mktemp)
+resp_body=$(mktemp)
+trap 'rm -f "$resp_headers" "$resp_body"' EXIT
+read -r status location < <(curl -sS -D "$resp_headers" -o "$resp_body" --max-redirs 0 \
   -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
   -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
   -w '%{http_code} %{redirect_url}\n' "$BASE/q/$TOKEN")
 if [ "$status" != "302" ]; then
-  echo "::error::GET /q/$TOKEN returned $status, expected 302"
+  # Say who answered, so the fix goes to the right place. Every Worker response
+  # carries X-Monetization-Inert (invariant #6); a Cloudflare WAF / bot rule sets
+  # cf-mitigated; anything else came from the edge in front of the Worker
+  # (Access). The one Worker reply without the header is the schema-drift 503,
+  # whose JSON body (printed below) says so. Response headers and body only:
+  # the request's token never prints.
+  answered_by="the Cloudflare edge in front of the Worker (likely Access)"
+  if grep -qi '^x-monetization-inert:' "$resp_headers"; then
+    answered_by="the OSE Worker"
+  elif grep -qi '^cf-mitigated:' "$resp_headers"; then
+    answered_by="a Cloudflare WAF / bot rule (cf-mitigated)"
+  fi
+  echo "Response headers that identify the responder:"
+  grep -iE '^(server|cf-ray|cf-mitigated|content-type|x-monetization-inert|www-authenticate|location):' "$resp_headers" | tr -d '\r' | sed 's/^/  /' || true
+  echo "First 400 bytes of the body:"
+  head -c 400 "$resp_body" | tr -d '\r' | tr '\n' ' ' | sed 's/^/  /'
+  echo
+  echo "::error::GET /q/$TOKEN returned $status, expected 302 (answered by $answered_by)"
   exit 1
 fi
 case "$location" in
