@@ -52,7 +52,11 @@ export type LeagueLinks = Partial<Record<LeagueLinkKind, string>>;
 export const DWELL_MIN_SECONDS = 5;
 export const DWELL_MAX_SECONDS = 120;
 export const DWELL_DEFAULT_SECONDS = 15;
-const MAX_LINK_LENGTH = 500;
+// A league link is shown on the TV as a scan-to-open QR. The QR encoder
+// (lib/qr.ts) holds at most 154 bytes (version 7, error correction L), so a
+// longer link would be accepted but could never be scanned. The cap is that
+// capacity, measured in UTF-8 bytes of the normalised URL.
+export const MAX_LINK_BYTES = 154;
 
 export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
   displayPanes?: DisplayPane[];
@@ -73,7 +77,7 @@ const LINK_KINDS = new Set<string>(LEAGUE_LINK_KINDS);
 
 /** An https URL with a host and no credentials, or null. */
 function cleanLink(v: unknown): string | null {
-  if (typeof v !== 'string' || v.length === 0 || v.length > MAX_LINK_LENGTH) return null;
+  if (typeof v !== 'string' || v.length === 0 || v.length > MAX_LINK_BYTES * 4) return null;
   let u: URL;
   try {
     u = new URL(v);
@@ -81,7 +85,8 @@ function cleanLink(v: unknown): string | null {
     return null;
   }
   if (u.protocol !== 'https:' || !u.hostname || u.username || u.password) return null;
-  return u.toString();
+  const href = u.toString();
+  return new TextEncoder().encode(href).length <= MAX_LINK_BYTES ? href : null;
 }
 
 function isDwell(v: unknown): v is number {
@@ -220,7 +225,7 @@ export function validateSettingsPatch(
         if (!clean) {
           return {
             ok: false,
-            error: `settings.leagueLinks.${kind} must be an https:// link (${MAX_LINK_LENGTH} characters at most)`,
+            error: `settings.leagueLinks.${kind} must be an https:// link of at most ${MAX_LINK_BYTES} characters, so it fits in a QR code (try the sheet's share link or a short link)`,
           };
         }
         links[kind as LeagueLinkKind] = clean;

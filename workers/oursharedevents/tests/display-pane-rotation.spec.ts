@@ -248,6 +248,7 @@ async function bootPage(
     sponsors = SPONSOR_BUNDLE as unknown,
     config = DEFAULT_CONFIG as DisplayConfig,
     etag = '"c1"',
+    seed = undefined as undefined | ((server: Record<string, any>) => void), // eslint-disable-line @typescript-eslint/no-explicit-any
   } = {}
 ) {
   const dom = new JSDOM(DISPLAY_HTML, {
@@ -278,19 +279,38 @@ async function bootPage(
     /** Sponsor bundle per event id; falls back to `sponsors` for any event. */
     bundles: {} as Record<string, unknown>,
     bundleFetches: [] as string[],
+    /** GET /api/v2/events/:id answers, for events not in the public list. */
+    single: {} as Record<string, unknown>,
+    /** Display config per event id; falls back to `config`. */
+    configs: {} as Record<string, DisplayConfig>,
+    /** Event ids whose display-config request never answers (in flight). */
+    holdConfig: new Set<string>(),
     impressions: [] as string[],
   };
   w.fetch = (async (url: string) => {
     const u = String(url);
     if (u.includes('/display-config')) {
+      const id = /\/events\/([^/]+)\/display-config/.exec(u)![1];
+      if (server.holdConfig.has(id)) return new Promise<Response>(() => {});
+      const cfg = server.configs[id] ?? server.config;
       return {
         ok: true,
         status: 200,
-        headers: new w.Headers({ ETag: server.etag }),
+        headers: new w.Headers({ ETag: server.configs[id] ? `"${id}"` : server.etag }),
         json: async () => {
           server.configBodiesRead++;
-          return server.config;
+          return cfg;
         },
+      } as unknown as Response;
+    }
+    const single = /\/api\/v2\/events\/([^/?]+)$/.exec(u);
+    if (single) {
+      const item = server.single[single[1]];
+      return {
+        ok: !!item,
+        status: item ? 200 : 403,
+        headers: new w.Headers(),
+        json: async () => (item ? { ok: true, item } : { ok: false }),
       } as unknown as Response;
     }
     const m = /\/api\/v2\/events\/([^/]+)\/(sponsor-bundle|sponsors\/([^/]+)\/impression)/.exec(u);
@@ -309,6 +329,7 @@ async function bootPage(
       json: async () => body,
     } as unknown as Response;
   }) as typeof fetch;
+  if (seed) seed(server);
   // The page's scripts, found by a parser (jsdom does not run them here) rather
   // than by a regex over the raw HTML, which CodeQL rightly flags.
   for (const el of new JSDOM(DISPLAY_HTML).window.document.querySelectorAll('script')) {
@@ -604,5 +625,64 @@ describe('display page: sponsors follow the featured event across refreshes', ()
     expect(doc.querySelector('[data-testid="display-pane-sponsors"]')).toBeNull();
     expect(doc.querySelector('[data-testid="display-sponsor-item"]')).toBeNull();
     expect(doc.querySelector('[data-testid="display-sponsor-rotate"]')).toBeNull();
+  });
+});
+
+describe('display page: the right event and its own config (review fixes)', () => {
+  const LEAGUE_CFG: DisplayConfig = {
+    ok: true,
+    panes: ['league', 'event'],
+    dwell_seconds: 30,
+    league: [{ kind: 'schedule', label: 'Schedule', url: 'https://old.example/s', qr: null }],
+  };
+
+  test('?event= for a live event missing from the public list is fetched by id and featured', async () => {
+    const unlisted = { id: 'evt-9', name: 'Unlisted Bocce', startDateISO: '2026-11-01' };
+    const { doc } = await bootPage('?event=evt-9', {
+      seed: (server) => {
+        server.single['evt-9'] = unlisted;
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Unlisted Bocce'
+    );
+  });
+
+  test('?event= for a draft (refused by id) keeps the existing fallback', async () => {
+    const { doc } = await bootPage('?event=evt-draft');
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Bocce Night'
+    );
+  });
+
+  test("when the featured event changes, the old event's league links are not shown", async () => {
+    const { doc, server, refreshEvents } = await bootPage('', { config: LEAGUE_CFG });
+    expect(doc.querySelector('[data-testid="display-pane-league"]')).not.toBeNull();
+    // The new event's own config is still in flight: the old one must not stand in.
+    server.holdConfig.add('evt-2');
+    server.events = [EVENTS[1]];
+    await refreshEvents();
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Trivia <b>Tuesday</b>'
+    );
+    expect(doc.querySelector('[data-testid="display-pane-league"]')).toBeNull();
+    expect(doc.body.textContent).not.toContain('old.example');
+  });
+
+  test('a sponsor with only a compact logo shows it on the sponsors pane, not the default', async () => {
+    const { doc } = await bootPage('', {
+      sponsors: {
+        ok: true,
+        bundle: {
+          surface_sponsors: {
+            tvTop: [],
+            tvSide: [{ id: 'sp-c', name: 'Compact Co', sidebar_logo_url: 'https://x.test/c.png' }],
+          },
+        },
+      },
+    });
+    expect(
+      doc.querySelector('[data-testid="display-wall-sponsor-logo"]')?.getAttribute('src')
+    ).toBe('/api/v2/sponsors/sp-c/logo?slot=sidebar');
   });
 });

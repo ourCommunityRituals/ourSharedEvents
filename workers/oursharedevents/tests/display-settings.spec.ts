@@ -5,6 +5,7 @@ import {
   resolveEventSettings,
   validateSettingsPatch,
 } from '../src/lib/event-settings';
+import { generateQrCode } from '../src/lib/qr';
 
 // OSE-851 (X-14) second slice: the TV display's saved order, seconds per
 // screen and league links live in events.settings_json beside showQRSection,
@@ -108,9 +109,34 @@ describe('display settings: a write is strict', () => {
     [{ leagueLinks: { schedule: 'javascript:alert(1)' } }],
     [{ leagueLinks: { schedule: 'https://user:pw@league.example/' } }],
     [{ leagueLinks: { schedule: 'https://league.example/' + 'x'.repeat(500) } }],
+    // One byte over what the TV's QR code can hold (154 bytes, version 7 / L).
+    [{ leagueLinks: { schedule: 'https://league.example/' + 'x'.repeat(154 - 23 + 1) } }],
     [{ leagueLinks: { scores: 'https://league.example/' } }],
     [{ leagueLinks: ['https://league.example/'] }],
   ])('refuses %j', (patch) => {
     expect(validateSettingsPatch(patch).ok).toBe(false);
+  });
+});
+
+describe('league links must fit in the QR code the TV shows', () => {
+  test('exactly 154 bytes is accepted; 155 is refused with a reason', () => {
+    const fits = 'https://league.example/' + 'x'.repeat(154 - 23);
+    expect(fits).toHaveLength(154);
+    expect(validateSettingsPatch({ leagueLinks: { schedule: fits } }).ok).toBe(true);
+    // ...and the TV's encoder (same options as handlers/display-config.ts) takes it.
+    expect(() =>
+      generateQrCode(fits, { errorCorrection: 'L', scale: 6, fgColor: '#2A2A3A' })
+    ).not.toThrow();
+    expect(() =>
+      generateQrCode(fits + 'x', { errorCorrection: 'L', scale: 6, fgColor: '#2A2A3A' })
+    ).toThrow();
+    const r = validateSettingsPatch({ leagueLinks: { schedule: fits + 'x' } });
+    expect(r.ok).toBe(false);
+    expect(r.ok ? '' : r.error).toContain('QR code');
+  });
+
+  test('the reader drops a stored link too long to encode', () => {
+    const long = 'https://league.example/' + 'x'.repeat(200);
+    expect(parseEventSettings(JSON.stringify({ leagueLinks: { schedule: long } }))).toEqual({});
   });
 });

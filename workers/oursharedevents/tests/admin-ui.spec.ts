@@ -546,7 +546,7 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
     // (e.g. mint-link-btn, mint-copy-btn); only surface-card static buttons count.
     const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
     const copyBtns = htmlNoScripts.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
-    expect(copyBtns.length).toBe(8); // +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2)
+    expect(copyBtns.length).toBe(9); // +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2); +1: TV display Save
   });
 });
 

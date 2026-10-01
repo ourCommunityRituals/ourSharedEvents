@@ -544,6 +544,9 @@
         const featuredIdx = Math.max(requestedEventIndex(items), 0);
         const featured = items[featuredIdx];
         const rest = items.filter((_, i) => i !== featuredIdx);
+        // The saved TV config applies only to the event it was loaded for; while
+        // the featured event's own config is on its way, the defaults are shown.
+        const cfg = board.config && board.configFor === featured.id ? board.config : null;
         const paneHtml = {};
         paneHtml.event = '<section data-pane="event" data-testid="display-pane-event" aria-label="Featured event" hidden>' +
           '<div class="event-card" data-testid="display-featured-card">' +
@@ -573,7 +576,7 @@
         }
         // League: the links the organiser saved (the league keeps its own
         // tools; we link out). Each card: label, scan-to-open QR, short link.
-        const league = (board.config && Array.isArray(board.config.league) ? board.config.league : [])
+        const league = (cfg && Array.isArray(cfg.league) ? cfg.league : [])
           .filter(l => l && typeof l.url === 'string');
         if (league.length) {
           paneHtml.league = '<section data-pane="league" data-testid="display-pane-league" aria-label="League" hidden>' +
@@ -584,7 +587,7 @@
               '<span data-testid="display-league-url">' + escAttr(shortUrl(l.url)) + '</span></div>').join('') +
             '</div></div></section>';
         }
-        const rot = effectiveRotation(ROTATION, board.config);
+        const rot = effectiveRotation(ROTATION, cfg);
         const panes = rot.order.filter(type => paneHtml[type]);
         // The featured event always exists, so a narrowed ?panes= that matches
         // nothing renderable still shows it rather than a blank TV.
@@ -609,7 +612,18 @@
         try {
           const res = await fetch('/api/v2/events');
           const data = await res.json();
-          const items = (data.ok && data.items) ? data.items : [];
+          let items = (data.ok && data.items) ? data.items : [];
+          // A ?event=<id> that is live but not in the public list (unlisted, or
+          // another brand's) is fetched by id, so the TV shows THAT event and
+          // loads its config. Drafts are not public: the list falls back as before.
+          const wanted = new URLSearchParams(location.search).get('event');
+          if (wanted && requestedEventIndex(items) === -1) {
+            try {
+              const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted));
+              const oneData = one.ok ? await one.json() : null;
+              if (oneData && oneData.ok && oneData.item && oneData.item.id === wanted) items = [oneData.item].concat(items);
+            } catch { /* fall back to the list */ }
+          }
           if (!items.length) {
             if (board.rotation) board.rotation.stop();
             board.rotation = null;
@@ -656,16 +670,24 @@
       async function loadDisplayConfig() {
         const items = board.items;
         if (!items || !items.length || document.hidden) return;
-        const featured = items[Math.max(requestedEventIndex(items), 0)];
-        const id = featured && featured.id;
+        const featuredId = () => {
+          const list = board.items || [];
+          const f = list[Math.max(requestedEventIndex(list), 0)];
+          return f && f.id;
+        };
+        const id = featuredId();
         if (!id) return;
+        // Overlapping checks: only the newest may write, and only if the
+        // featured event is still the one it asked about.
+        const seq = (board.configSeq = (board.configSeq || 0) + 1);
+        const current = () => seq === board.configSeq && featuredId() === id;
         try {
           const res = await fetch('/api/v2/events/' + encodeURIComponent(id) + '/display-config', { cache: 'no-cache' });
-          if (!res.ok) return;
+          if (!current() || !res.ok) return;
           const etag = res.headers.get('ETag');
           if (etag && etag === board.configEtag && board.configFor === id) return;
           const data = await res.json();
-          if (!data || !data.ok) return;
+          if (!current() || !data || !data.ok) return;
           board.config = data;
           board.configEtag = etag;
           board.configFor = id;
@@ -729,7 +751,9 @@
           // slots is one tile), same proxy + default-logo rule as the banner.
           const seen = new Set();
           board.sponsors = tvTop.concat(tvSide).filter(s => s && s.id && !seen.has(s.id) && seen.add(s.id))
-            .map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO }));
+            // The header logo, else the compact one (the proxy's slot=sidebar
+            // serves compact-or-header), else the OSE default.
+            .map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : logoSrc(s, 'sidebar') }));
           renderBoard();
           if (banner && tvTop.length) {
             banner.innerHTML = tvTop.map(s => {
