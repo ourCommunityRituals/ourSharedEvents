@@ -100,16 +100,17 @@ export async function promoteSponsorDraft(
     .first<DraftRow>();
   if (!draft) return { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 };
 
-  // OSE-1433: a draft captured before the logo host rule could carry a URL the
-  // proxy refuses (localhost, an IP literal, an intranet name). Refuse before any
-  // write, like admin create, rather than copy it into sponsor_asset.
-  if (!validateProxiedLogoUrl(draft.logo_url).valid) {
-    return { ok: false, code: 'INVALID_LOGO_URL', status: 400 };
-  }
-
   // FIX 2 — double-promote guard.
   if (draft.status === 'promoted' || draft.promoted_sponsor_id) {
     return { ok: false, code: 'ALREADY_PROMOTED', status: 409 };
+  }
+
+  // OSE-1433: a draft captured before the logo host rule could carry a URL the
+  // proxy refuses (localhost, an IP literal, an intranet name). Checked after the
+  // double-promote guard (an already-promoted draft keeps its 409) and before any
+  // write, like admin create, rather than copy it into sponsor_asset.
+  if (!validateProxiedLogoUrl(draft.logo_url).valid) {
+    return { ok: false, code: 'INVALID_LOGO_URL', status: 400 };
   }
 
   // Covenant gate — a live sponsor cannot exist without an acknowledged covenant.

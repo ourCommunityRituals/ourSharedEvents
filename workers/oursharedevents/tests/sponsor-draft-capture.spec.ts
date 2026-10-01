@@ -279,4 +279,16 @@ describe('OSE-1433 | the draft path applies the logo host rule', () => {
     ).first<{ c: number }>();
     expect(assets?.c).toBe(0);
   });
+
+  test('promotion: an already-promoted draft keeps its 409, even with a now-refused logo', async () => {
+    await env.DB.prepare(
+      `INSERT INTO sponsor_business_draft
+         (draft_token, brand_id, event_id, name, logo_url, category_selections,
+          covenant_acknowledged_at, status, free_tier_eligible, eligibility_source)
+       VALUES ('d_1433_done', 'brand-1433p', 'evt-1433', 'Done Draft', 'http://10.0.0.5/l.png',
+               '[]', '2026-08-12T00:00:00Z', 'promoted', 1, 'community_benefit')`
+    ).run();
+    const res = await promoteSponsorDraft(env as unknown as PromotionEnv, 'd_1433_done');
+    expect(res).toEqual({ ok: false, code: 'ALREADY_PROMOTED', status: 409 });
+  });
 });

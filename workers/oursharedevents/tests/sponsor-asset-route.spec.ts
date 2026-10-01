@@ -10,9 +10,10 @@
  */
 
 import { env } from 'cloudflare:test';
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, vi } from 'vitest';
 import { handleSponsorAsset, generateMonogramSvg } from '../src/handlers/sponsor-asset-route';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
+import { fetchAndProxyLogo, LOGO_MAX_IN_FLIGHT } from '../src/lib/sponsor-logo';
 
 interface RawEnv {
   DB: D1Database;
@@ -123,5 +124,44 @@ describe('OSE-735 — error cases + monogram shape', () => {
     const svg = generateMonogramSvg('x', '<script>alert(1)</script>');
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&lt;script&gt;');
+  });
+});
+
+// OSE-1433 (Copilot review on #721): this route proxies the logo through the
+// same shared fetcher as /logo, so it shares the per-isolate in-flight cap.
+// With the cap full, it falls through to the monogram without a fetch.
+describe('OSE-1433 | the asset route shares the logo in-flight cap', () => {
+  test('cap full → monogram (200) and no upstream request', async () => {
+    await seedSplitSponsor(env.DB, {
+      id: 'spn_logo_cap',
+      eventId: 'evt_asset',
+      name: 'Logo Cap Co',
+      logoUrl: 'https://cdn.example.com/cap.png',
+    });
+    const release: Array<() => void> = [];
+    const held = vi.fn(
+      () =>
+        new Promise<Response>((resolve) =>
+          release.push(() =>
+            resolve(new Response(PNG, { headers: { 'content-type': 'image/png' } }))
+          )
+        )
+    );
+    vi.stubGlobal('fetch', held);
+    try {
+      const pending = Array.from({ length: LOGO_MAX_IN_FLIGHT }, (_, i) =>
+        fetchAndProxyLogo(`https://cdn.example.com/hold-${i}.png`)
+      );
+      await Promise.resolve();
+      expect(held).toHaveBeenCalledTimes(LOGO_MAX_IN_FLIGHT);
+      const res = await handleSponsorAsset(new Request('https://x'), e(), 'spn_logo_cap', 'poster');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toMatch(/svg/);
+      expect(held).toHaveBeenCalledTimes(LOGO_MAX_IN_FLIGHT);
+      release.forEach((r) => r());
+      await Promise.all(pending);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

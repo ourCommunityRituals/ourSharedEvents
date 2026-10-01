@@ -36,6 +36,16 @@ export const LOGO_FETCH_TIMEOUT_MS = 5_000;
 export const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 export const LOGO_MAX_REDIRECTS = 3;
 
+/**
+ * Upstream logo fetches allowed in flight per isolate (OSE-1433). Enforced HERE,
+ * in the one shared fetcher, so every route that proxies a logo (the logo proxy
+ * and the asset route) shares one bound. Edge caches dedupe repeat views but
+ * cannot coalesce simultaneous cold misses; this is the hard cap, independent
+ * of KV. Over the cap the fetcher returns `BUSY` without any request.
+ */
+export const LOGO_MAX_IN_FLIGHT = 16;
+let logoFetchesInFlight = 0;
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
 export interface LogoUrlValidation {
@@ -137,6 +147,10 @@ export interface LogoProxyResult {
 }
 
 export async function fetchAndProxyLogo(externalUrl: string): Promise<LogoProxyResult> {
+  if (logoFetchesInFlight >= LOGO_MAX_IN_FLIGHT) return { ok: false, error: 'BUSY' };
+  logoFetchesInFlight++;
+  // One timer for the whole chain: at most 1 + LOGO_MAX_REDIRECTS sequential
+  // fetches plus the body read, all inside LOGO_FETCH_TIMEOUT_MS.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LOGO_FETCH_TIMEOUT_MS);
   try {
@@ -145,6 +159,7 @@ export async function fetchAndProxyLogo(externalUrl: string): Promise<LogoProxyR
     return { ok: false, error: err instanceof Error ? err.message : 'FETCH_FAILED' };
   } finally {
     clearTimeout(timer);
+    logoFetchesInFlight--;
   }
 }
 
