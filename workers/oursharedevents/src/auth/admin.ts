@@ -88,26 +88,78 @@ export function __resetJwksCacheForTests(): void {
   _jwksCache = null;
 }
 
+// Stryker disable next-line StringLiteral,ArithmeticOperator: equivalent mutants — atob() is forgiving-base64 (ignores padding, only rejects length%4===1), so removing/zeroing the '=' padding does not change decoding of real CF Access segments. OSE-1278.
+const _pad = (s: string) => s + '='.repeat((4 - (s.length % 4)) % 4);
+const _decodeB64 = (s: string) => atob(_pad(s.replace(/-/g, '+').replace(/_/g, '/')));
+
+/** RSA-verify a split JWT's signature against the team JWKS (the costly step). */
+async function _signatureValid(parts: string[], teamDomain: string): Promise<boolean> {
+  const sigInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const sig = Uint8Array.from(_decodeB64(parts[2]), (c) => c.charCodeAt(0));
+  const keys = await _getJwks(teamDomain);
+  const results = await Promise.all(
+    keys.map((k) =>
+      // Stryker disable next-line ArrowFunction,BooleanLiteral: equivalent/defensive — `()=>undefined` is falsy-identical to `false` under `results.some(Boolean)`; the `true` arm guards a verify() throw that well-formed key+sig inputs never trigger. A real verify failure (wrong key) IS covered. OSE-1278.
+      crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, sig, sigInput).catch(() => false)
+    )
+  );
+  return results.some(Boolean);
+}
+
+/**
+ * Per-REQUEST memo of the signature result. The router pre-flight and
+ * requireAdmin both verify the same token on one admin request; this makes the
+ * RSA work happen once. Deliberately narrow:
+ *   - keyed by the Request object (WeakMap): nothing survives the request, so
+ *     no cross-request, cross-tenant or post-JWKS-refresh reuse is possible;
+ *   - keyed by team domain + exact token bytes inside that request;
+ *   - caches ONLY the signature verdict: exp, iss and the aud pin are re-checked
+ *     on every call by verifyCfAccessJWT;
+ *   - a rejected verification (JWKS fetch failure) is evicted, never reused.
+ */
+const _signatureMemo = new WeakMap<Request, Map<string, Promise<boolean>>>();
+
+function _signatureValidOnce(
+  request: Request | undefined,
+  jwt: string,
+  parts: string[],
+  teamDomain: string
+): Promise<boolean> {
+  if (!request) return _signatureValid(parts, teamDomain);
+  let memo = _signatureMemo.get(request);
+  if (!memo) {
+    memo = new Map();
+    _signatureMemo.set(request, memo);
+  }
+  const key = `${teamDomain}\n${jwt}`;
+  const hit = memo.get(key);
+  if (hit) return hit;
+  const pending = _signatureValid(parts, teamDomain);
+  memo.set(key, pending);
+  const owner = memo;
+  pending.catch(() => owner.delete(key));
+  return pending;
+}
+
 /**
  * Cryptographically verify a CF Access JWT against the team's public JWKS.
  * Returns the decoded payload on success, null on any failure (invalid sig,
  * expired, malformed). Call this ONCE per request before requireAdmin —
  * requireAdmin continues to decode the payload for the allowlist check.
+ *
+ * Pass `opts.request` to share the signature verdict with later checks on the
+ * same request (see _signatureMemo); claims are always re-validated.
  */
 export async function verifyCfAccessJWT(
   jwt: string,
   teamDomain: string,
-  opts?: { expectedAud?: string }
+  opts?: { expectedAud?: string; request?: Request }
 ): Promise<{ valid: true; email?: string } | { valid: false }> {
   try {
     const parts = jwt.split('.');
     if (parts.length !== 3) return { valid: false };
 
-    // Stryker disable next-line StringLiteral,ArithmeticOperator: equivalent mutants — atob() is forgiving-base64 (ignores padding, only rejects length%4===1), so removing/zeroing the '=' padding does not change decoding of real CF Access segments. OSE-1278.
-    const pad = (s: string) => s + '='.repeat((4 - (s.length % 4)) % 4);
-    const decodeB64 = (s: string) => atob(pad(s.replace(/-/g, '+').replace(/_/g, '/')));
-
-    const payload = JSON.parse(decodeB64(parts[1])) as {
+    const payload = JSON.parse(_decodeB64(parts[1])) as {
       exp?: number;
       iat?: number;
       email?: string;
@@ -116,17 +168,9 @@ export async function verifyCfAccessJWT(
     };
     if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
 
-    const sigInput = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-    const sig = Uint8Array.from(decodeB64(parts[2]), (c) => c.charCodeAt(0));
-
-    const keys = await _getJwks(teamDomain);
-    const results = await Promise.all(
-      keys.map((k) =>
-        // Stryker disable next-line ArrowFunction,BooleanLiteral: equivalent/defensive — `()=>undefined` is falsy-identical to `false` under `results.some(Boolean)`; the `true` arm guards a verify() throw that well-formed key+sig inputs never trigger. A real verify failure (wrong key) IS covered. OSE-1278.
-        crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, sig, sigInput).catch(() => false)
-      )
-    );
-    if (!results.some(Boolean)) return { valid: false };
+    if (!(await _signatureValidOnce(opts?.request, jwt, parts, teamDomain))) {
+      return { valid: false };
+    }
 
     // OSE-1377: audience + issuer pin. The team JWKS signs tokens for EVERY Access
     // app in the tenant, so a valid signature proves only "some app in this team",
@@ -276,6 +320,9 @@ export async function requireAdmin(
     if (env.CF_ACCESS_TEAM_DOMAIN) {
       const verification = await verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN, {
         expectedAud: env.CF_ACCESS_AUD?.trim() || undefined,
+        // Reuses the router pre-flight's signature verdict for this request;
+        // exp/iss/aud are still re-checked here.
+        request,
       });
       if (!verification.valid) {
         return new Response(JSON.stringify({ ok: false, status: 401, code: 'UNAUTH', requestId }), {

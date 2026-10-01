@@ -13,6 +13,9 @@
 
 # Node modules
 node_modules/
+# A worktree may link node_modules to the main checkout
+# (scripts/worktree-link-deps.mjs); `node_modules/` does not match a symlink.
+node_modules
 yarn.lock
 
 # Environment variables

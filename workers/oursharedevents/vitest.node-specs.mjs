@@ -109,6 +109,13 @@ export const NODE_SPECS = [
   // Date faked with toFake:['Date'] only. Drives admin.ts mutation to break:95.
   'tests/red-team/auth-guard-mutation.spec.ts',
 
+  // Architecture review 2026-10-01 — per-request CF Access signature memo in
+  // src/auth/admin.ts (one RSA pass per admin request). Node-clean: hand-built
+  // Requests, stubbed JWKS fetch, a spy on crypto.subtle.verify. Kills the memo
+  // mutants for Stryker; the route() wiring half stays in the workers pool
+  // (tests/admin-jwt-verify-memo.spec.ts).
+  'tests/red-team/auth-jwt-verify-memo.spec.ts',
+
   // OSE-1273 (G1 follow-on) — node-clean L2 crypto coverage for src/lib/pii.ts
   // (hashEmail/encryptEmail/decryptEmail), so Stryker mutation runs on the PII
   // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both
