@@ -35,6 +35,7 @@
  */
 
 import { hashAnonIdForReturns } from './anon-id-hash';
+import { phaseTimesFor } from './event-datetime';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
@@ -150,17 +151,38 @@ export async function materializeAnonIdReturns(
   const nowMs = Date.now();
   const floorMs = nowMs - MATERIALIZATION_CEILING_HOURS * 60 * 60 * 1000;
   const ceilingMs = nowMs - MATERIALIZATION_FLOOR_HOURS * 60 * 60 * 1000;
-  const floorIso = new Date(floorMs).toISOString();
-  const ceilingIso = new Date(ceilingMs).toISOString();
 
-  const candidates = await env.DB.prepare(
-    `SELECT id FROM events
+  // OSE-616: events.end_date is a CALENDAR DAY ("YYYY-MM-DD", the API's only
+  // accepted shape) that ends at local 23:59:59.999 in the event's zone — not
+  // an instant. Comparing the raw string against ISO instants only ever caught
+  // a date-only event on the one cron tick where the string happened to sort
+  // inside the window. Select by calendar day (padded two days each side, so
+  // every zone is covered), then keep only events whose real end instant
+  // (phaseTimesFor — the same rule the public event page uses) is in window.
+  const dayPad = 2 * 86_400_000;
+  const fromDay = new Date(floorMs - dayPad).toISOString().slice(0, 10);
+  const toDay = new Date(ceilingMs + dayPad).toISOString().slice(0, 10);
+  const dayRows = await env.DB.prepare(
+    `SELECT id, start_date, end_date, starts_at, timezone FROM events
        WHERE status = 'active'
          AND end_date IS NOT NULL
-         AND end_date BETWEEN ? AND ?`
+         AND substr(end_date, 1, 10) BETWEEN ? AND ?`
   )
-    .bind(floorIso, ceilingIso)
-    .all<{ id: string }>();
+    .bind(fromDay, toDay)
+    .all<{
+      id: string;
+      start_date: string | null;
+      end_date: string | null;
+      starts_at: string | null;
+      timezone: string | null;
+    }>();
+  const candidates = {
+    results: (dayRows.results ?? []).filter((e) => {
+      const endIso = phaseTimesFor(e).end_date;
+      const endMs = endIso ? Date.parse(endIso) : NaN;
+      return Number.isFinite(endMs) && endMs >= floorMs && endMs <= ceilingMs;
+    }),
+  };
 
   for (const row of candidates.results ?? []) {
     result.eventsProcessed++;

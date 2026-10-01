@@ -166,7 +166,7 @@ Append `runSharedReportBigQueryExport(env)` to the existing `Promise.all` in `sc
 SELECT
   air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
   air.visit_count, air.computed_at,
-  e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
   etr.uec_code
 FROM anon_id_returns air
 JOIN events e ON e.id = air.venue_id
@@ -186,7 +186,7 @@ LIMIT 500;  -- max BQ batch size
   "last_seen_at": "ISO",
   "visit_count": 1,
   "computed_at": "ISO",
-  "corridor_id": "corr_... or 'unknown' if NULL",
+  "corridor_id": "the event's res7 H3 cell (e.g. 872664544ffffff), or 'unknown'",
   "event_type": "etr.uec_code or 'unknown'",
   "uec_code": "etr.uec_code",
   "regulatory_pool": "general|hipaa|coppa",
@@ -196,6 +196,16 @@ LIMIT 500;  -- max BQ batch size
 ```
 
 `assertRequiredTags()` runs on each row before send.
+
+**Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The
+exported `corridor_id` is the event's `h3_res7`; a legacy non-H3
+`events.corridor_id` (or none at all) exports as the explicit `'unknown'`
+(`canonicalCorridorId` in `src/lib/export-geography.ts`). Every row then passes
+`assertCorridorGrainRow`: a sub-corridor column (res9, coordinate, address,
+placement reference), any H3 value finer than res7, or a `corridor_id` that is
+neither a valid res7-or-coarser cell nor `'unknown'` **throws**, and the phase
+fails closed (watermark held). Rows are rejected, never trimmed and shipped. The
+event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 
 **BQ table:** `anon_id_returns_export` in the pool's dataset.
 
@@ -221,7 +231,7 @@ LIMIT 500;
 
 ```json
 {
-  "corridor_id": "corr_...",
+  "corridor_id": "the res7 H3 cell the baseline is keyed by, or 'unknown'",
   "bucket_dow": 4,
   "bucket_hour": 19,
   "window_30d_count": 42,
@@ -252,7 +262,7 @@ For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the
 SELECT
   es.id, es.venue_id, es.series_name, es.cadence,
   es.day_of_week, es.hour_of_day, es.state, es.confirmed_at, es.updated_at,
-  e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
   etr.uec_code
 FROM event_series es
 JOIN events e ON e.id = es.venue_id
@@ -288,6 +298,12 @@ Watermark advancement happens **per row** at end of successful export, not per-b
 - Next tick retries from the watermark; duplicate-row attempts are silent no-ops because BQ deduplicates on `insertId` (we use `${tableId}-${computed_at}-${anon_id_hash}` pattern).
 
 Idempotency guarantee: re-running on the same source data is safe. Crash recovery is automatic on next tick.
+
+**Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
+per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`
+treats any `insertErrors` as a failed insert (`BigQueryError INSERT_FAILED`,
+"rejected N/M rows"), so the phase is marked failed, nothing is counted or
+manifested as exported, and the watermark does not advance (OSE-616).
 
 ---
 

@@ -489,6 +489,9 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
     const row = bqCalls[0].rows[0].json;
     expect(row.venue_id).toBe('corridor-aggregate');
     expect(row.regulatory_pool).toBe('general');
+    // ADR-011: a legacy named corridor key is not a res7 node — it exports as
+    // 'unknown', never as an opaque id the warehouse would read as a corridor.
+    expect(row.corridor_id).toBe('unknown');
   });
 
   test('watermark advances on success', async () => {

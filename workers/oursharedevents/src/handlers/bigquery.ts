@@ -18,6 +18,7 @@ import {
   type BigQueryEnv,
 } from '../cloud/bigquery';
 import { logExportManifest } from '../lib/audit-log';
+import { assertCorridorGrainRow, canonicalCorridorId } from '../lib/export-geography';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import {
   PRODUCT_ID,
@@ -56,6 +57,9 @@ const BACKUP_EVENT_COLUMNS = [
   'legal_clearance_tier',
   'event_type_id',
   'corridor_id',
+  // ADR-011: the corridor is the res7 node. Read to derive corridor_id only —
+  // never copied into the exported row under its own name.
+  'h3_res7',
 ] as const;
 
 const BACKUP_SELECT_COLUMNS = BACKUP_EVENT_COLUMNS.map((c) => `e.${c}`).join(', ');
@@ -74,6 +78,7 @@ interface BackupEventJoinRow {
   legal_clearance_tier: number | null;
   event_type_id: string | null;
   corridor_id: string | null;
+  h3_res7: string | null;
   uec_code: string | null;
 }
 
@@ -130,7 +135,9 @@ async function backupEventsPooled(
     }
 
     const tags = {
-      corridor_id: r.corridor_id ?? 'unknown',
+      // ADR-011: the event's res7 node is its corridor (events.corridor_id has
+      // no writer; a legacy non-H3 value exports as 'unknown').
+      corridor_id: canonicalCorridorId(r.h3_res7 ?? r.corridor_id),
       venue_id: r.id,
       event_type: r.uec_code ?? 'unknown',
       uec_code: r.uec_code ?? 'unknown',
@@ -139,7 +146,7 @@ async function backupEventsPooled(
     };
     assertRequiredTags(tags); // throws if any required tag is missing
 
-    byPool[pool].push({
+    const row = {
       // tags spread first; explicit fields below win for overlap-free keys.
       ...tags,
       id: r.id,
@@ -154,7 +161,12 @@ async function backupEventsPooled(
       updated_at: r.updated_at,
       legal_clearance_tier: r.legal_clearance_tier,
       backed_up_at: exportedAt,
-    });
+    };
+    // OSE-616 / ADR-011: the same corridor-grain guard as the SharedReport
+    // export. A row finer than res7 throws, and the caller records the backup
+    // as failed instead of shipping it.
+    assertCorridorGrainRow(row);
+    byPool[pool].push(row);
   }
 
   let rowsExported = 0;

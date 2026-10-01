@@ -15,6 +15,8 @@
 // that would leak is a bug, and the phase fails closed (no watermark advance)
 // instead of shipping a quietly trimmed row.
 
+import { getResolution, isValidCell } from 'h3-js';
+
 /** Column names that carry sub-corridor geography. */
 const SUB_CORRIDOR_KEY =
   /^(h3(_res\d+)?|cell|lat|lon|lng|latitude|longitude|where_address|address|poster_deployment_id|placement_id|placement_label|qr_token)$/i;
@@ -42,9 +44,33 @@ export class ExportGeographyError extends Error {
   }
 }
 
+/** The exported corridor id when an event or bucket has no corridor node. */
+export const UNKNOWN_CORRIDOR = 'unknown';
+
+/** True when a corridor id is a real corridor: a valid H3 cell at res7 or coarser. */
+export function isCorridorId(value: unknown): boolean {
+  if (typeof value !== 'string' || !H3_CELL.test(value)) return false;
+  const cell = value.toLowerCase();
+  return isValidCell(cell) && getResolution(cell) <= CORRIDOR_H3_RESOLUTION;
+}
+
+/**
+ * The corridor id to export for a stored value (ADR-011: the corridor is the
+ * res7 node). A value shaped like an H3 cell is passed through untouched, so
+ * the row guard judges it (a res9 or malformed cell fails the phase closed).
+ * Anything else is not geography at all — absent, or a legacy named id such as
+ * the pre-H3 `corridors.id` — and becomes the explicit 'unknown' sentinel
+ * rather than an opaque string the warehouse would treat as a corridor.
+ */
+export function canonicalCorridorId(value: unknown): string {
+  if (typeof value === 'string' && H3_CELL.test(value)) return value;
+  return UNKNOWN_CORRIDOR;
+}
+
 /**
  * Throw if a row bound for BigQuery carries anything finer than a corridor:
- * a sub-corridor column name, or any value that is an H3 cell finer than res7.
+ * a sub-corridor column name, any value that is an H3 cell finer than res7, or
+ * a corridor_id that is neither a valid res7-or-coarser H3 cell nor 'unknown'.
  */
 export function assertCorridorGrainRow(row: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(row)) {
@@ -58,10 +84,13 @@ export function assertCorridorGrainRow(row: Record<string, unknown>): void {
       );
     }
   }
-}
-
-/** True when a corridor id is a real corridor (an H3 node at res7 or coarser). */
-export function isCorridorId(value: unknown): boolean {
-  const res = h3Resolution(value);
-  return res !== null && res <= CORRIDOR_H3_RESOLUTION;
+  if (
+    'corridor_id' in row &&
+    row.corridor_id !== UNKNOWN_CORRIDOR &&
+    !isCorridorId(row.corridor_id)
+  ) {
+    throw new ExportGeographyError(
+      `export row corridor_id ${JSON.stringify(row.corridor_id)} is not a res${CORRIDOR_H3_RESOLUTION}-or-coarser H3 cell or '${UNKNOWN_CORRIDOR}'`
+    );
+  }
 }

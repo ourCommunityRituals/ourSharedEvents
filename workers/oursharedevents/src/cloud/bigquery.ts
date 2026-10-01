@@ -164,6 +164,24 @@ export async function bigQueryInsertRowsToDataset(
         `BQ insertAll failed (dataset=${datasetId} table=${tableId}): ${res.status} ${text}`
       );
     }
+    // tabledata.insertAll reports per-row rejections inside an HTTP 200
+    // (`insertErrors`). Treating 2xx as full success would let the caller count
+    // and manifest rows BigQuery never stored, and advance past them.
+    const result = (await res.json().catch(() => ({}))) as {
+      insertErrors?: Array<{
+        index?: number;
+        errors?: Array<{ reason?: string; message?: string }>;
+      }>;
+    };
+    const rejected = result.insertErrors ?? [];
+    if (rejected.length > 0) {
+      const first = rejected[0]?.errors?.[0];
+      throw new BigQueryError(
+        'INSERT_FAILED',
+        `BQ insertAll rejected ${rejected.length}/${rows.length} rows (dataset=${datasetId} table=${tableId})` +
+          (first ? `: ${first.reason ?? ''} ${first.message ?? ''}`.trimEnd() : '')
+      );
+    }
     return { rowCount: rows.length };
   } catch (err) {
     if (err instanceof BigQueryError) throw err;

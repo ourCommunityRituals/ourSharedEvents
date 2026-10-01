@@ -53,7 +53,7 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { assertCorridorGrainRow, isCorridorId } from './export-geography';
+import { assertCorridorGrainRow, canonicalCorridorId, isCorridorId } from './export-geography';
 
 export type SharedReportExportEnv = BigQueryEnv & { DB: D1Database };
 
@@ -323,7 +323,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.venue_id ?? null, result);
       if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
-        corridor_id: r.corridor_id ?? 'unknown',
+        corridor_id: canonicalCorridorId(r.corridor_id),
         venue_id: r.venue_id,
         event_type: r.uec_code ?? 'unknown',
         uec_code: r.uec_code ?? 'unknown',
@@ -448,7 +448,7 @@ export async function exportCorridorDensityBaseline(
       const tags = {
         // Sentinel values for required tags that don't apply to corridor
         // aggregates. assertRequiredTags accepts any non-empty string.
-        corridor_id: r.corridor_id,
+        corridor_id: canonicalCorridorId(r.corridor_id),
         venue_id: 'corridor-aggregate',
         event_type: 'corridor-aggregate',
         uec_code: 'corridor-aggregate',
@@ -579,7 +579,7 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
       const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.id ?? null, result);
       if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
-        corridor_id: r.corridor_id ?? 'unknown',
+        corridor_id: canonicalCorridorId(r.corridor_id),
         venue_id: r.venue_id,
         event_type: r.uec_code ?? 'unknown',
         uec_code: r.uec_code ?? 'unknown',

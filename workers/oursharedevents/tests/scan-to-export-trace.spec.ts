@@ -23,9 +23,12 @@
  *
  * The cron phases run in-process (runSharedReportMaterialization →
  * runSharedReportBigQueryExport), exactly as scheduled() calls them; BigQuery is
- * a recording fetch mock. The one fixture adjustment is the event's dates: the
- * return-rate phase only reads events that ENDED 2–26 hours ago, so the test
- * moves start/end into that window after creating the event through the API.
+ * a recording fetch mock. The event is created exactly as the API stores one:
+ * a calendar-day start_date/end_date ("YYYY-MM-DD") plus an IANA timezone, no
+ * hand-written ISO instants. The return-rate phase only reads events that
+ * ENDED 2–26 hours ago, so the test picks a zone whose end-of-day falls inside
+ * that window right now (dateOnlyFixture) — the same day-end rule the public
+ * page and the materializer use (phaseTimesFor).
  *
  * Not traced here, and why: corridor registry ids + definition_version
  * (OSE-613 / OSE-603, not built); per-placement scan aggregation (scan_aggregates
@@ -48,10 +51,12 @@ import {
 } from '../src/lib/shared-report-export';
 import {
   assertCorridorGrainRow,
+  canonicalCorridorId,
   ExportGeographyError,
   h3Resolution,
   isCorridorId,
 } from '../src/lib/export-geography';
+import { phaseTimesFor } from '../src/lib/event-datetime';
 
 interface TestEnv {
   DB: D1Database;
@@ -93,7 +98,7 @@ interface InsertCall {
 }
 let bqCalls: InsertCall[] = [];
 
-function installBqMock(): void {
+function installBqMock(insertResponse: Record<string, unknown> = {}): void {
   bqCalls = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -109,7 +114,10 @@ function installBqMock(): void {
       if (m) {
         const body = init?.body ? JSON.parse(init.body as string) : { rows: [] };
         bqCalls.push({ dataset: m[1], table: m[2], rows: body.rows ?? [] });
-        return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(insertResponse), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       return new Response('', { status: 404 });
     }
@@ -146,6 +154,33 @@ async function clearPipeline(): Promise<void> {
   }
 }
 
+/**
+ * A (calendar day, IANA zone) pair whose local end-of-day is 4–24h ago — well
+ * inside the materializer's 2–26h window. A zone's day-ends are 24h apart, so
+ * across these offsets (+14 … −11) one always lands in a 20h window.
+ */
+function dateOnlyFixture(): { day: string; zone: string } {
+  const now = Date.now();
+  const zones = [
+    'Pacific/Kiritimati',
+    'Asia/Tokyo',
+    'Asia/Kolkata',
+    'Europe/London',
+    'America/Chicago',
+    'Pacific/Honolulu',
+    'Pacific/Pago_Pago',
+  ];
+  for (const zone of zones) {
+    for (let back = -1; back <= 2; back++) {
+      const day = new Date(now - back * 86_400_000).toISOString().slice(0, 10);
+      const end = phaseTimesFor({ start_date: day, end_date: day, timezone: zone }).end_date;
+      const endMs = end ? Date.parse(end) : NaN;
+      if (endMs >= now - 24 * 3600_000 && endMs <= now - 4 * 3600_000) return { day, zone };
+    }
+  }
+  throw new Error('no (day, zone) pair ends 4–24h ago — widen the zone list');
+}
+
 let eventId = '';
 let deploymentId = '';
 let qrToken = '';
@@ -154,6 +189,9 @@ beforeAll(async () => {
   await applyMigrations(tenv().DB, tenv().TEST_MIGRATION_STATEMENTS);
   await applyMigrations(tenv().FORMS_DB, tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   await clearPipeline();
+
+  // Time fixture (see header): a date-only event whose day ended in the window.
+  const when = dateOnlyFixture();
 
   // The event, created the way an organiser creates it (admin API), at the
   // Eagles Hall venue — the API tags it with the venue's res9 + res7.
@@ -165,18 +203,13 @@ beforeAll(async () => {
       status: 'active',
       lat: EAGLES.lat,
       lon: EAGLES.lon,
+      start_date: when.day,
+      end_date: when.day,
+      timezone: when.zone,
     }),
   });
   expect(created.status, await created.clone().text()).toBe(201);
   eventId = ((await created.json()) as { id: string }).id;
-
-  // Time fixture (see header): the event started 5h ago and ended 3h ago.
-  const startIso = new Date(Date.now() - 5 * 3600_000).toISOString();
-  const endIso = new Date(Date.now() - 3 * 3600_000).toISOString();
-  await tenv()
-    .DB.prepare('UPDATE events SET start_date = ?, end_date = ? WHERE id = ?')
-    .bind(startIso, endIso, eventId)
-    .run();
 
   // The poster, placed at the venue address through the admin API.
   const placed = await SELF.fetch(
@@ -405,6 +438,55 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(`SELECT COUNT(*) AS n FROM export_manifest WHERE event_id = 'cron:shared-report'`)
       .first<{ n: number }>();
     expect(n?.n).toBe(0);
+  });
+
+  test('corridor_id is a valid res7-or-coarser H3 cell or the explicit unknown — nothing else', () => {
+    // H3-shaped but not a real cell (res7 with its unused digits not set to 7).
+    const malformed = '870000000000000';
+    expect(h3Resolution(malformed)).toBe(7);
+    expect(isCorridorId(malformed)).toBe(false);
+    expect(() => assertCorridorGrainRow({ corridor_id: malformed })).toThrow(ExportGeographyError);
+    // A legacy named id is not geography: guard rejects it raw, the canonical
+    // mapping turns it into 'unknown' before it reaches a row.
+    expect(() => assertCorridorGrainRow({ corridor_id: 'corr_blue_island' })).toThrow(
+      ExportGeographyError
+    );
+    expect(canonicalCorridorId('corr_blue_island')).toBe('unknown');
+    expect(canonicalCorridorId(null)).toBe('unknown');
+    expect(canonicalCorridorId(EAGLES_RES7)).toBe(EAGLES_RES7);
+    // An H3-shaped value passes through so the guard judges it (res9 fails).
+    expect(canonicalCorridorId(EAGLES_RES9)).toBe(EAGLES_RES9);
+    expect(isCorridorId(EAGLES_RES7.toUpperCase())).toBe(true);
+  });
+
+  test('BigQuery rejecting rows inside an HTTP 200 fails the phase: watermark held', async () => {
+    await clearPipeline();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 1, 18, 3, 3, ?)`
+      )
+      .bind(EAGLES_RES7, new Date().toISOString())
+      .run();
+
+    installBqMock({
+      insertErrors: [{ index: 0, errors: [{ reason: 'invalid', message: 'no such field' }] }],
+    });
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(bqCalls).toHaveLength(1);
+    expect(result.errors).toBe(1);
+    expect(result.rowsExported).toBe(0);
+    const state = await tenv()
+      .DB.prepare(
+        `SELECT last_export_status, last_exported_at, last_error FROM bigquery_export_state WHERE table_name = 'corridor_density_baseline'`
+      )
+      .first<{ last_export_status: string; last_exported_at: string; last_error: string }>();
+    expect(state?.last_export_status).toBe('failed');
+    expect(state?.last_error).toMatch(/rejected 1\/1 rows/);
+    expect(state?.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
   });
 
   test('a res9 corridor key in the baseline fails the phase closed: nothing sent, watermark held', async () => {
