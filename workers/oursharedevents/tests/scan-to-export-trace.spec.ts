@@ -634,6 +634,45 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(bqCalls).toEqual([]);
   });
 
+  test('a cell missing from one refresh (e.g. its upsert failed) is exported after the next refresh', async () => {
+    // A failed upsert writes nothing at that refresh's computed_at: the cell
+    // keeps its older, already-exported row. The next refresh writes it with
+    // a NEWER computed_at, above the watermark, so nothing is skipped for good.
+    await clearPipeline();
+    const cells = gridDisk(EAGLES_RES7, 1);
+    const t1 = '2026-10-01T03:00:00.000Z';
+    const t2 = '2026-10-02T03:00:00.000Z';
+    const upsert = (cell: string, at: string) =>
+      tenv()
+        .DB.prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 1, 18, 3, 3, ?)
+           ON CONFLICT(corridor_id, bucket_dow, bucket_hour) DO UPDATE SET computed_at = excluded.computed_at`
+        )
+        .bind(cell, at)
+        .run();
+
+    // Refresh 1: the second cell's upsert "failed" — only the first is written.
+    await upsert(cells[0], t1);
+    installBqMock();
+    const first = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+    expect(first.rowsExported).toBe(1);
+
+    // Refresh 2 writes both cells with its own, later computed_at.
+    await upsert(cells[0], t2);
+    await upsert(cells[1], t2);
+    installBqMock();
+    const second = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(second.errors).toBe(0);
+    expect(bqCalls.flatMap((c) => c.rows.map((r) => r.json.corridor_id)).sort()).toEqual(
+      [cells[0], cells[1]].sort()
+    );
+  });
+
   test('the legacy insertAll client also fails on rows rejected inside an HTTP 200', async () => {
     installBqMock({
       insertErrors: [{ index: 0, errors: [{ reason: 'invalid', message: 'bad' }] }],

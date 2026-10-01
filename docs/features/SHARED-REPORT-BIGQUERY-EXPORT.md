@@ -316,10 +316,10 @@ try {
 }
 ```
 
-Watermark advancement happens **per row** at end of successful export, not per-batch. If a batch of 500 rows fails mid-stream:
+The watermark advances only after the **whole batch** is accepted (for the baseline phase, the whole `computed_at` group). If an insert fails partway:
 
-- Rows that DID get inserted to BQ are already there (BQ insertAll is per-row idempotent via `insertId`).
-- Watermark is NOT advanced past the failed batch.
+- Rows BigQuery already accepted stay there.
+- The watermark is NOT advanced past the failed batch.
 - Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
 Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `anon_id_returns_export`: `(anon_id_hash, venue_id, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).

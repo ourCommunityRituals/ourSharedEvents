@@ -177,12 +177,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'brand by design, not request-reachable.',
   'lib/shared-report.ts:167':
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
-    'AND substr(end_date,1,10) BETWEEN ? AND ?` (calendar-day window, then the real ' +
+    'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
+    'window incl. start-only events, then the real ' +
     'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
     'geographic baseline input; the output is never-who anon-return aggregates. ' +
     'Not request-reachable.',
   'lib/shared-report.ts:294':
-    'refreshCorridorBaselines cron — aggregates by `COALESCE(h3_res7, ' +
+    'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
   'lib/shared-report.ts:480':
