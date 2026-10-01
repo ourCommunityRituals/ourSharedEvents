@@ -369,36 +369,27 @@ export function isReachableOnPlainPR(jobName, jobs, _memo = {}, eventName = 'pul
  * workflow_run runs with the default branch as its ref, so environment branch
  * rules do not stop it, and a head_repository check stops only forks
  * (ADR-012, Standard §4.2). The head branch is symbolic; the source repo is
- * either this repo or a fork (which is known not to equal this repo); the
- * conclusion is any value GitHub reports, plus any literal in the condition.
+ * either this repo or a fork (which is known not to equal this repo). The
+ * conclusion and status are symbolic: a requested or in-progress source run
+ * has a null conclusion, and the author decides how a completed one ends.
  */
-export function prSourcedWorkflowRunEnvs(ifStr) {
-  const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
-  const conclusions = new Set([...WORKFLOW_RUN_CONCLUSIONS, ...literals]);
+export function prSourcedWorkflowRunEnvs() {
   const envs = [];
-  for (const headRepo of [THIS_REPO, sym({ notSelf: true })]) {
-    for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, conclusion));
-  }
+  for (const headRepo of [THIS_REPO, sym({ notSelf: true })]) envs.push(makeWorkflowRunEnv(headRepo));
   // A push to any branch other than main is author-controlled too (Standard
   // §1 Z1): its code and artifacts are unreviewed, and the environment rule
   // checks the triggered workflow's ref, not the source run's. Only this repo
   // can push (fork pushes do not trigger workflow_run here).
-  for (const conclusion of conclusions) {
-    envs.push(makeWorkflowRunEnv(THIS_REPO, conclusion, 'push', sym({ notEqual: ['main'] })));
-  }
+  envs.push(makeWorkflowRunEnv(THIS_REPO, 'push', sym({ notEqual: ['main'] })));
   return envs;
 }
-
-const WORKFLOW_RUN_CONCLUSIONS = [
-  'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale',
-];
 
 // Any source event the author can cause (pull_request, its review variants,
 // issue_comment, merge_group, a dispatch on any ref …) is symbolic: it is only
 // known NOT to be push or schedule. Push sources are modelled separately below.
 const UNTRUSTED_SOURCE_EVENT = () => sym({ notEqual: ['push', 'schedule'] });
 
-const makeWorkflowRunEnv = (headRepo, conclusion, event = UNTRUSTED_SOURCE_EVENT(), headBranch = sym()) => ({
+const makeWorkflowRunEnv = (headRepo, event = UNTRUSTED_SOURCE_EVENT(), headBranch = sym()) => ({
   event_name: 'workflow_run',
   head_ref: '',
   base_ref: '',
@@ -406,7 +397,8 @@ const makeWorkflowRunEnv = (headRepo, conclusion, event = UNTRUSTED_SOURCE_EVENT
   repository: THIS_REPO,
   workflow_run: {
     event,
-    conclusion,
+    conclusion: sym(), // any terminal value, or null while requested / in progress
+    status: sym(),
     head_branch: headBranch,
     'head_repository.full_name': headRepo,
   },
@@ -587,10 +579,7 @@ export function analyzeWorkflows(workflowMap, resolveAction = () => null) {
     if (triggers.includes('workflow_run')) {
       const jobs = wf.jobs || {};
       for (const [jobName, job] of Object.entries(jobs)) {
-        const allIfs = Object.values(jobs)
-          .map((j) => (j && j.if != null ? String(j.if) : ''))
-          .join(' ');
-        const reachable = prSourcedWorkflowRunEnvs(allIfs).some((env) =>
+        const reachable = prSourcedWorkflowRunEnvs().some((env) =>
           isReachableUnder(jobName, jobs, {}, env)
         );
         const secrets = jobSecrets(wf, job);
@@ -1524,6 +1513,21 @@ function runSelfTest() {
         },
       },
       expectViolation: false,
+    },
+    {
+      name: 'leak: trusted main push OR a requested source run (null conclusion)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['requested', 'completed'] } },
+          jobs: {
+            rt: {
+              if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || (github.event.workflow_run.status == 'requested' && !github.event.workflow_run.conclusion)",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
     },
     {
       name: 'safe: workflow_run job with no secrets at all',
