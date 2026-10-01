@@ -39,6 +39,7 @@ NNNN_<snake_case_description>.sql
 4. **`datetime('now')` defaults** — all `created_at` / `updated_at` columns
 5. **Foreign keys declared** — referential integrity enforced at the schema level
 6. **Privacy by schema** — use bucketed timestamps (`scan_bucket`, `registration_bucket`) instead of exact times for anonymous behavioral data. Use hashed values (`email_hash`) instead of raw PII.
+   - **Known drift (2026-10-01, unresolved):** ourSharedEvents scan rows carry `scan_bucket` **and** a `created_at` defaulting to `datetime('now')` (second precision). The exact value is never shown or exported, but it is stored. Either the code drops/coarsens it or this rule gains an exception; that is a decision for a human, not settled here.
 7. **Separate databases for PII** — if the worker handles both anonymous and personally identifiable data, use separate D1 bindings (e.g., `DB` for core, `FORMS_DB` for PII). This enables independent retention and scrubbing policies.
 
 ## wrangler.toml configuration
