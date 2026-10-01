@@ -113,7 +113,30 @@ function tokenize(src) {
   return tokens;
 }
 
+// ---------------------------------------------------------------------------
+// Three-valued evaluation (true / false / UNKNOWN).
+//
+// A value the PR author controls (a branch name, a fork name, an upstream job's
+// result) is not enumerated: it is SYMBOLIC, and any test on it whose answer
+// the author could pick is UNKNOWN. `&&`, `||` and `!` follow Kleene logic, and
+// a job whose `if:` comes out true OR unknown counts as reachable. Witness lists
+// kept losing to compound predicates (prefix AND suffix, prefix AND not-equal,
+// mixed upstream results); a symbolic value cannot be out-guessed.
+// ---------------------------------------------------------------------------
+
+const UNKNOWN = Symbol('unknown');
+
+/** An attacker-chosen string, with the few things it is known NOT to be. */
+const sym = ({ notEqual = [], notPrefix = [] } = {}) => ({
+  sym: true,
+  notEqual: notEqual.map((s) => s.toLowerCase()),
+  notPrefix: notPrefix.map((s) => s.toLowerCase()),
+});
+const isSym = (v) => v != null && typeof v === 'object' && v.sym === true;
+const isUnknown = (v) => v === UNKNOWN || isSym(v);
+
 function truthy(v) {
+  if (isUnknown(v)) return UNKNOWN;
   if (v === true) return true;
   if (v === false || v == null) return false;
   if (typeof v === 'string') return v.length > 0;
@@ -126,10 +149,23 @@ function truthy(v) {
 const fold = (v) => String(v ?? '').toLowerCase();
 
 function valEquals(a, b) {
+  if (a === UNKNOWN || b === UNKNOWN) return UNKNOWN;
+  if (isSym(a) && isSym(b)) return UNKNOWN;
+  if (isSym(a) || isSym(b)) {
+    const s = isSym(a) ? a : b;
+    const other = fold(isSym(a) ? b : a);
+    if (s.notEqual.includes(other)) return false;
+    if (s.notPrefix.some((p) => other.startsWith(p))) return false;
+    return UNKNOWN;
+  }
   if (typeof a === 'string' || typeof b === 'string') return fold(a) === fold(b);
   if (typeof a === typeof b) return a === b;
   return String(a) === String(b);
 }
+
+const not = (v) => (v === UNKNOWN ? UNKNOWN : !v);
+const and3 = (a, b) => (a === false || b === false ? false : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : true);
+const or3 = (a, b) => (a === true || b === true ? true : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : false);
 
 function makeParser(tokens, env) {
   let pos = 0;
@@ -142,29 +178,25 @@ function makeParser(tokens, env) {
   };
 
   function resolveRef(path) {
-    if (path === 'true') return true;
-    if (path === 'false') return false;
-    if (path === 'null') return '';
-    if (path === 'github.event_name') return env.event_name;
-    if (path === 'github.head_ref') return env.head_ref;
-    if (path === 'github.base_ref') return env.base_ref;
-    if (path === 'github.ref') return env.ref;
-    if (path.startsWith('github.event.inputs.')) return ''; // dispatch inputs absent on PR (modeled)
-    // workflow_run context (ADR-012 / Standard §4.2): modeled only in the
-    // PR-sourced workflow_run environment; elsewhere these are unknown refs.
-    if (env.workflow_run && path.startsWith('github.event.workflow_run.')) {
-      const key = path.slice('github.event.workflow_run.'.length);
+    const p = path.toLowerCase(); // context names are case-insensitive
+    if (p === 'true') return true;
+    if (p === 'false') return false;
+    if (p === 'null') return '';
+    if (p === 'github.event_name') return env.event_name;
+    if (p === 'github.head_ref') return env.head_ref;
+    if (p === 'github.base_ref') return env.base_ref;
+    if (p === 'github.ref') return env.ref;
+    if (p.startsWith('github.event.inputs.')) return ''; // dispatch inputs absent on PR
+    if (env.workflow_run && p.startsWith('github.event.workflow_run.')) {
+      const key = p.slice('github.event.workflow_run.'.length);
       if (key in env.workflow_run) return env.workflow_run[key];
     }
-    if (env.workflow_run && path === 'github.repository') return env.repository;
-    const m = /^needs\.(.+)\.result$/.exec(path);
+    if (env.workflow_run && p === 'github.repository') return env.repository;
+    const m = /^needs\.(.+)\.result$/.exec(p);
     if (m) return env.needsResult(m[1]);
-    // UNKNOWN context ref (e.g. github.event.pull_request.draft, github.actor,
-    // steps.*, env.*). We cannot model its value, so record that the verdict is
-    // built on an unmodeled input — isReachableOnPlainPR fail-closes to reachable
-    // if such a verdict comes out "not reachable" (never miss an exposure).
-    env.sawUnknown = true;
-    return '';
+    // Any other context (github.actor, github.event.pull_request.*, steps.*,
+    // env.*, vars.*) is unmodelled, so its tests are UNKNOWN.
+    return UNKNOWN;
   }
 
   function parsePrimary() {
@@ -178,7 +210,7 @@ function makeParser(tokens, env) {
     }
     if (tok.t === '!') {
       next();
-      return !truthy(parseComparison());
+      return not(truthy(parseComparison()));
     }
     if (tok.t === 'str') {
       next();
@@ -186,13 +218,12 @@ function makeParser(tokens, env) {
     }
     if (tok.t === 'id') {
       next();
-      // function call?
       if (peek() && peek().t === '(') {
         next(); // (
         const args = [];
-        // Args parse at VALUE level (parseComparison), NOT parseOr — parseOr
+        // Args parse at VALUE level (parseComparison), NOT parseOr: parseOr
         // coerces to boolean, which would turn startsWith(github.head_ref, …)
-        // into startsWith(true, true) and silently pass the full-pipeline gate.
+        // into startsWith(true, true).
         if (peek() && peek().t !== ')') {
           args.push(parseComparison());
           while (peek() && peek().t === ',') {
@@ -208,37 +239,44 @@ function makeParser(tokens, env) {
     throw new Error(`unexpected token '${tok.t}'`);
   }
 
+  function strFn(args, test) {
+    const [a, b] = args;
+    if (a === UNKNOWN || b === UNKNOWN || isSym(b)) return UNKNOWN;
+    if (isSym(a)) return test === 'startsWith' && a.notPrefix.some((p) => fold(b).startsWith(p)) ? false : UNKNOWN;
+    if (test === 'startsWith') return fold(a).startsWith(fold(b));
+    if (test === 'endsWith') return fold(a).endsWith(fold(b));
+    return fold(a).includes(fold(b));
+  }
+
   function callFn(name, args) {
-    // The PR author controls whether upstream jobs pass, so each status
-    // function is answered for the outcome world being tried (env.upstream).
     switch (String(name).toLowerCase()) {
       case 'always':
         return true;
       case 'success':
-        return env.upstream === 'success';
       case 'failure':
-        return env.upstream === 'failure';
       case 'cancelled':
-        return env.upstream === 'cancelled';
+        // The PR author decides whether reachable upstream jobs pass, fail or
+        // get cancelled, so these are known only when no need can run.
+        return env.statusFn(String(name).toLowerCase());
       case 'startswith':
-        return fold(args[0]).startsWith(fold(args[1]));
+        return strFn(args, 'startsWith');
       case 'endswith':
-        return fold(args[0]).endsWith(fold(args[1]));
+        return strFn(args, 'endsWith');
       case 'contains':
-        return fold(args[0]).includes(fold(args[1]));
+        return strFn(args, 'contains');
       default:
         throw new Error(`unsupported function '${name}'`);
     }
   }
 
   function parseComparison() {
-    let left = parsePrimary();
+    const left = parsePrimary();
     const tok = peek();
     if (tok && (tok.t === '==' || tok.t === '!=')) {
       next();
       const right = parsePrimary();
       const eq = valEquals(left, right);
-      return tok.t === '==' ? eq : !eq;
+      return tok.t === '==' ? eq : not(eq);
     }
     return left;
   }
@@ -247,8 +285,7 @@ function makeParser(tokens, env) {
     let v = truthy(parseComparison());
     while (peek() && peek().t === '&&') {
       next();
-      const r = truthy(parseComparison());
-      v = v && r;
+      v = and3(v, truthy(parseComparison()));
     }
     return v;
   }
@@ -257,19 +294,20 @@ function makeParser(tokens, env) {
     let v = parseAnd();
     while (peek() && peek().t === '||') {
       next();
-      const r = parseAnd();
-      v = truthy(v) || truthy(r);
+      v = or3(v, parseAnd());
     }
-    return truthy(v);
+    return v;
   }
 
   return { run: () => truthy(parseOr()) };
 }
 
-/** Evaluate a job `if:` under a plain-PR environment. Throws on unparseable input. */
+/** Evaluate a job `if:`. Returns true, false or UNKNOWN; throws on unparseable input. */
 export function evaluateIf(ifStr, env) {
-  const tokens = tokenize(String(ifStr));
-  return makeParser(tokens, env).run();
+  let src = String(ifStr).trim();
+  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(src);
+  if (wrapped) src = wrapped[1];
+  return makeParser(tokenize(src), env).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -284,77 +322,41 @@ export function normalizeNeeds(needs) {
 }
 
 /**
- * Is `jobName` reachable on a plain (non-full-pipeline) PR? Fail-closed: an `if:`
- * that cannot be evaluated is treated as reachable.
- */
-export function isReachableOnPlainPR(jobName, jobs, _memo = {}, eventName = 'pull_request') {
-  const allIfs = Object.values(jobs || {})
-    .map((j) => (j && j.if != null ? String(j.if) : ''))
-    .join(' ');
-  return plainPrEnvs(allIfs, eventName).some((env) => isReachableUnder(jobName, jobs, {}, env));
-}
-
-/**
  * The approved scope boundary (ADR-020): a `full-pipeline/*` PR is the one
- * deliberate path to deploy jobs, so a head branch with this prefix is not a
- * "plain" PR. ADR-012 decision 6 would retire it; until then it is the only
- * branch the plain-PR model excludes.
+ * deliberate path to deploy jobs, so a plain PR's head branch is known NOT to
+ * start with it. ADR-012 decision 6 would retire it. Every other test on the
+ * head or base branch is UNKNOWN.
  */
 export const APPROVED_DEPLOY_PREFIX = 'full-pipeline/';
 
-/**
- * Plain same-repo PRs. The author picks both the head branch and the base
- * branch, and decides whether upstream jobs pass, so a job is reachable if ANY
- * combination reaches it: every string literal in the workflow's `if:`s is
- * tried as a head and a base branch (except the approved deploy prefix), under
- * success, failure and cancelled upstream outcomes.
- */
-export function plainPrEnvs(ifStr, eventName = 'pull_request') {
-  const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
-  const heads = new Set(['copilot/x', 'claude/x', ...literals]);
-  const bases = new Set(['main', ...literals]);
-  const envs = [];
-  for (const head of heads) {
-    if (fold(head).startsWith(APPROVED_DEPLOY_PREFIX)) continue;
-    for (const base of bases) {
-      for (const upstream of ['success', 'failure', 'cancelled']) {
-        envs.push({ event_name: eventName, head_ref: head, base_ref: base, ref: 'refs/pull/1/merge', upstream });
-      }
-    }
-  }
-  return envs;
+/** A plain same-repo PR: the author picks both branch names. */
+export function plainPrEnv(eventName = 'pull_request') {
+  return {
+    event_name: eventName,
+    head_ref: sym({ notPrefix: [APPROVED_DEPLOY_PREFIX] }),
+    base_ref: sym(),
+    ref: 'refs/pull/1/merge',
+  };
+}
+
+export function isReachableOnPlainPR(jobName, jobs, _memo = {}, eventName = 'pull_request') {
+  return isReachableUnder(jobName, jobs, {}, plainPrEnv(eventName));
 }
 
 /**
- * workflow_run runs fired by a run whose SOURCE event was a pull_request. The PR
- * author chooses the branch name, and a fork can open a PR from its own `main`,
- * so the job is tested under each of these and counts as reachable if ANY
- * reaches it. workflow_run runs with the default branch as its ref, so
- * environment branch rules do not stop it, and a head_repository check stops
- * only forks (ADR-012, Standard §4.2).
- */
-const SAMPLE_PR_BRANCHES = ['full-pipeline/x', 'copilot/x', 'claude/x', 'dependabot/npm/x', 'feature/x'];
-
-/**
- * The PR author picks the branch name, so a sample list is not enough: a job
- * gated on `head_branch == 'release/x'` would pass every sample. Candidates
- * therefore include every string literal in the workflow's `if:` conditions as a
- * branch name. An exact literal also satisfies startsWith, endsWith and contains
- * on itself, so no prefix/suffix variants are needed. Each candidate is tried
- * from this repo and from a fork.
+ * workflow_run runs fired by a run whose SOURCE event was a pull_request.
+ * workflow_run runs with the default branch as its ref, so environment branch
+ * rules do not stop it, and a head_repository check stops only forks
+ * (ADR-012, Standard §4.2). The head branch is symbolic; the source repo is
+ * either this repo or a fork (which is known not to equal this repo); the
+ * conclusion is any value GitHub reports, plus any literal in the condition.
  */
 export function prSourcedWorkflowRunEnvs(ifStr) {
   const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
-  const branches = new Set([...SAMPLE_PR_BRANCHES, 'main']);
-  for (const lit of literals) branches.add(lit);
-  // A PR run can end in any conclusion, so a job gated on
-  // `conclusion == 'neutral'` (or any other literal) is tried under it too.
   const conclusions = new Set([...WORKFLOW_RUN_CONCLUSIONS, ...literals]);
   const envs = [];
-  for (const headRepo of ['org/repo', 'fork/repo']) {
-    for (const headBranch of branches) {
-      for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, headBranch, conclusion));
-    }
+  for (const headRepo of ['org/repo', sym({ notEqual: ['org/repo'] })]) {
+    for (const conclusion of conclusions) envs.push(makeWorkflowRunEnv(headRepo, conclusion));
   }
   return envs;
 }
@@ -363,9 +365,8 @@ const WORKFLOW_RUN_CONCLUSIONS = [
   'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale',
 ];
 
-const makeWorkflowRunEnv = (headRepo, headBranch, conclusion = 'success') => ({
+const makeWorkflowRunEnv = (headRepo, conclusion) => ({
   event_name: 'workflow_run',
-  upstream: 'success',
   head_ref: '',
   base_ref: '',
   ref: 'refs/heads/main',
@@ -373,42 +374,41 @@ const makeWorkflowRunEnv = (headRepo, headBranch, conclusion = 'success') => ({
   workflow_run: {
     event: 'pull_request',
     conclusion,
-    head_branch: headBranch,
+    head_branch: sym(),
     'head_repository.full_name': headRepo,
   },
 });
 
 /**
- * Is `jobName` reachable under `baseEnv`? Fail-closed: an `if:` that cannot be
- * evaluated, or a "not reachable" verdict built on an unmodeled ref, counts as
- * reachable.
+ * Is `jobName` reachable under `baseEnv`? A job is reachable when its `if:` is
+ * true or UNKNOWN. Fail-closed: an `if:` that cannot be parsed is reachable.
  */
 export function isReachableUnder(jobName, jobs, memo, baseEnv) {
   if (jobName in memo) return memo[jobName];
   memo[jobName] = false; // cycle guard
   const job = jobs[jobName] || {};
   const needs = normalizeNeeds(job.needs);
+  const live = needs.filter((n) => isReachableUnder(n, jobs, memo, baseEnv));
   const env = {
     ...baseEnv,
-    sawUnknown: false,
-    needsResult: (n) => (isReachableUnder(n, jobs, memo, baseEnv) ? baseEnv.upstream || 'success' : 'skipped'),
+    // A need that cannot run is 'skipped'; one that can run ends however the
+    // PR author makes it end.
+    needsResult: (n) => (live.includes(n) ? UNKNOWN : 'skipped'),
+    statusFn: (fn) => {
+      if (needs.length === 0) return fn === 'success';
+      if (live.length < needs.length) return false; // a skipped need: none of the three is true
+      return UNKNOWN;
+    },
   };
   const ifStr = job.if == null ? '' : String(job.if).trim();
   let reachable;
   if (ifStr === '') {
-    // No custom if: default is success() of all needs → runs iff all needs run
-    // and succeed (with no needs, it always runs).
-    reachable =
-      needs.length === 0 ||
-      ((baseEnv.upstream || 'success') === 'success' && needs.every((n) => isReachableUnder(n, jobs, memo, baseEnv)));
+    // Default if: success(). Runs iff every need can run (and the author lets it pass).
+    reachable = live.length === needs.length;
   } else {
     try {
-      reachable = evaluateIf(ifStr, env);
-      // Fail-closed on UNMODELED inputs: if the "not reachable" verdict was built
-      // on an unknown context ref (github.event.pull_request.*, github.actor,
-      // steps.*, env.*, …), we cannot trust it — assume reachable so a
-      // secret-bearing job gated by an if: we don't understand is never missed.
-      if (!reachable && env.sawUnknown) reachable = true;
+      const v = evaluateIf(ifStr, env);
+      reachable = v === true || v === UNKNOWN;
     } catch {
       reachable = true; // unparseable → fail-closed (assume exposed)
     }
@@ -536,6 +536,7 @@ export function analyzeWorkflows(workflowMap) {
           isReachableUnder(jobName, jobs, {}, env)
         );
         const secrets = jobSecrets(wf, job);
+        for (const sec of calledWorkflowSecrets(job, workflowMap)) secrets.add(sec);
         secrets.delete('GITHUB_TOKEN');
         // Structural backstop (2026-10-01 security review): even when the model
         // finds the job unreachable, a secret-holding workflow_run job must name
@@ -1156,6 +1157,83 @@ function runSelfTest() {
         },
       },
       expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run branch prefix AND suffix together (release/…-rc)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' || (github.event.workflow_run.event != 'push' && startsWith(github.event.workflow_run.head_branch, 'release/') && endsWith(github.event.workflow_run.head_branch, '-rc'))",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: "leak: PR head prefix AND not-equal (startsWith 'release/' && != 'release/')",
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            d: {
+              if: "startsWith(github.head_ref, 'release/') && github.head_ref != 'release/'",
+              steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: mixed upstream results (needs.a success AND needs.b failure)',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            a: { steps: [{ run: 'npm test' }] },
+            b: { steps: [{ run: 'npm run lint' }] },
+            d: {
+              needs: ['a', 'b'],
+              if: "always() && needs.a.result == 'success' && needs.b.result == 'failure'",
+              steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: PR-sourced workflow_run job calls a local reusable workflow that reads a secret',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { uses: './.github/workflows/deploy.yml' } },
+        },
+        'deploy.yml': {
+          on: { workflow_call: {} },
+          jobs: { d: { environment: 'staging', steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: approved full-pipeline/ gate still excludes a plain PR, even combined with a suffix',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            d: {
+              if: "startsWith(github.head_ref, 'full-pipeline/') && endsWith(github.head_ref, '-x')",
+              steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: false,
     },
     {
       name: 'safe: workflow_run job with no secrets at all',

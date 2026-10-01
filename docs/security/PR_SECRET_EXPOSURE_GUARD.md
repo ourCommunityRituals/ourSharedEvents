@@ -189,7 +189,9 @@ workflow, not only PR-triggered ones.
 
 **Scope boundary, stated:** the `pull_request` model excludes exactly one head-branch prefix, `full-pipeline/` (`APPROVED_DEPLOY_PREFIX`), because that is ADR-020's approved deploy path. ADR-012 decision 6 would retire it. **Not modelled yet**, tracked in the ADR-012 gate register: unfiltered `push` triggers, `issue_comment` jobs that check out PR code, `merge_group`, and default-`GITHUB_TOKEN` checkouts in jobs with write scopes.
 
-The self-test has 40 fixtures.
+**Three-valued model (2026-10-01, second Copilot round):** witness lists lost to compound predicates (a prefix AND a suffix, a prefix AND a not-equal, mixed upstream results). The evaluator now treats every value the PR author controls as **symbolic**: the head and base branch, the `workflow_run` head branch, a fork's name, and each reachable upstream job's result. Any test whose answer the author could pick is UNKNOWN; `&&`, `||` and `!` follow Kleene logic; a job whose `if:` is true **or** unknown is reachable. The only facts the model keeps are the ones the author cannot change: the event name, `github.ref`'s shape, a fork never equals this repo, and a plain PR's head does not start with `full-pipeline/`. Rule W also follows local reusable workflows. The four new leak fixtures were missed by the previous guard and are caught now; weakening any part of the model (unknown counted as unreachable, unknown counted as false under `&&`, upstream results fixed to success, Rule W not following callees, the symbolic value made concrete) turns the self-test red, and dropping the approved prefix turns the live repo red.
+
+The self-test has 45 fixtures.
 
 ## Born-red proof
 
