@@ -63,8 +63,12 @@ export function isBlockedLogoHost(hostname: string): boolean {
   return false;
 }
 
-/** Scheme, length and parse checks shared by the logo and outbound-link validators. */
-function validateHttpUrl(raw: unknown): LogoUrlValidation {
+/**
+ * http(s) URL check: scheme allowlist, ≤500 chars, parseable. Used for URLs a
+ * VISITOR'S BROWSER loads or follows (event images and video links, the WHAT
+ * link), so it has no host rule: a browser fetch is not a Worker fetch.
+ */
+export function validateLogoUrl(raw: unknown): LogoUrlValidation {
   if (raw === null || raw === undefined || raw === '') {
     return { valid: true, url: null };
   }
@@ -86,9 +90,13 @@ function validateHttpUrl(raw: unknown): LogoUrlValidation {
   return { valid: true, url: raw };
 }
 
-/** A logo URL: http(s), parseable, ≤500 chars, and a public host (OSE-1433). */
-export function validateLogoUrl(raw: unknown): LogoUrlValidation {
-  const base = validateHttpUrl(raw);
+/**
+ * A sponsor logo URL the Worker itself will fetch through the proxy: everything
+ * validateLogoUrl checks, plus a public host (OSE-1433). Used where sponsor
+ * logos are written and in the proxy before every request and redirect hop.
+ */
+export function validateProxiedLogoUrl(raw: unknown): LogoUrlValidation {
+  const base = validateLogoUrl(raw);
   if (!base.valid || base.url === null) return base;
   if (isBlockedLogoHost(new URL(base.url).hostname)) {
     return { valid: false, url: null, error: 'INVALID_HOST' };
@@ -102,11 +110,11 @@ export function validateLogoUrl(raw: unknown): LogoUrlValidation {
  * proxied server-side; an outbound link is followed by the visitor's own
  * browser, so plain http:// is a mixed-content / downgrade risk and is rejected.
  * Empty/null is still valid (the field is optional). Shares the length + parse +
- * scheme-allowlist checks, then narrows to https. The host rule is the logo's
- * (a server-side fetch); a visitor's browser following a link is not one.
+ * scheme-allowlist checks, then narrows to https. No host rule: a visitor's
+ * browser follows this link, not the Worker (see validateProxiedLogoUrl).
  */
 export function validateHttpsUrl(raw: unknown): LogoUrlValidation {
-  const base = validateHttpUrl(raw);
+  const base = validateLogoUrl(raw);
   if (!base.valid || base.url === null) return base;
   if (!/^https:\/\//i.test(base.url)) {
     return { valid: false, url: null, error: 'INVALID_SCHEME' };
@@ -147,7 +155,7 @@ async function fetchLogo(externalUrl: string, signal: AbortSignal): Promise<Logo
   let url = externalUrl;
   let upstream: Response | null = null;
   for (let hop = 0; hop <= LOGO_MAX_REDIRECTS; hop++) {
-    const check = validateLogoUrl(url);
+    const check = validateProxiedLogoUrl(url);
     if (!check.valid || !check.url) return { ok: false, error: 'BLOCKED_HOST' };
     const res = await fetch(check.url, {
       signal,

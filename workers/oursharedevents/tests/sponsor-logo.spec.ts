@@ -33,7 +33,9 @@ import {
   sponsorLogoPath,
   fetchAndProxyLogo,
   isBlockedLogoHost,
+  validateProxiedLogoUrl,
   readCapped,
+  LOGO_FETCH_TIMEOUT_MS,
   LOGO_MAX_BYTES,
   LOGO_MAX_REDIRECTS,
 } from '../src/lib/sponsor-logo';
@@ -262,18 +264,36 @@ describe('OSE-1433 | a logo host must be a public DNS name', () => {
     'http://db.internal/l.png',
     'http://nas.home.arpa/l.png',
   ])('refuses %s on write (INVALID_HOST)', (u) => {
-    const r = validateLogoUrl(u);
+    const r = validateProxiedLogoUrl(u);
     expect(r.valid).toBe(false);
     expect(r.error).toBe('INVALID_HOST');
   });
 
   test.each(['https://cdn.example.com/l.png', 'http://images.shop.example.org/logo.svg'])(
     'accepts a public name: %s',
-    (u) => expect(validateLogoUrl(u).valid).toBe(true)
+    (u) => expect(validateProxiedLogoUrl(u).valid).toBe(true)
   );
 
-  test('the outbound-link validator is unchanged (a browser follows it, not the Worker)', () => {
-    // validateHttpsUrl shares the scheme/parse/length checks but not the host rule.
+  test('the proxied validator keeps every base check (scheme, parse, length)', () => {
+    expect(validateProxiedLogoUrl('javascript:alert(1)').error).toBe('INVALID_SCHEME');
+    expect(validateProxiedLogoUrl('not a url').error).toBe('INVALID_URL');
+    expect(validateProxiedLogoUrl('https://a.example.com/' + 'x'.repeat(500)).error).toBe(
+      'TOO_LONG'
+    );
+    expect(validateProxiedLogoUrl(null)).toEqual({ valid: true, url: null });
+  });
+
+  // Copilot review on #721: validateLogoUrl also guards event media
+  // (who_image_url, what_video_url) and the WHAT link, which the visitor's
+  // browser loads. The host rule must not change those.
+  test('browser-loaded URLs keep the old rule: no host check on validateLogoUrl / validateHttpsUrl', () => {
+    for (const u of [
+      'http://203.0.113.7/photo.jpg',
+      'https://intranet/page',
+      'http://localhost/x',
+    ]) {
+      expect(validateLogoUrl(u).valid, u).toBe(true);
+    }
     expect(validateHttpsUrl('https://intranet/page').valid).toBe(true);
   });
 
@@ -411,5 +431,70 @@ describe('OSE-1433 | an oversized body is cut off while streaming', () => {
     const bytes = new Uint8Array(1000).fill(7);
     const out = await readCapped(new Response(bytes), LOGO_MAX_BYTES);
     expect(out).toEqual(bytes);
+  });
+});
+
+describe('OSE-1433 | a slow upstream is cut off at LOGO_FETCH_TIMEOUT_MS (Copilot review on #721)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A fetch stub that honours the abort signal, as the runtime does. */
+  function abortable(make: (signal: AbortSignal) => Promise<Response>) {
+    return vi.fn((_url: string, init?: RequestInit) => make(init!.signal!));
+  }
+  const onAbort = (signal: AbortSignal, reject: (e: unknown) => void) =>
+    signal.addEventListener('abort', () => reject(new Error('aborted')));
+
+  test('a fetch that never answers fails after the timeout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      abortable((signal) => new Promise<Response>((_, reject) => onAbort(signal, reject)))
+    );
+    const pending = fetchAndProxyLogo('https://slow.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+  });
+
+  test('a body that stalls mid-stream fails after the timeout (the signal stays armed while reading)', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      abortable(async (signal) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new Uint8Array(10)); // a first chunk, then nothing
+            signal.addEventListener('abort', () => c.error(new Error('aborted')));
+          },
+        });
+        return new Response(body, { headers: { 'content-type': 'image/png' } });
+      })
+    );
+    const pending = fetchAndProxyLogo('https://trickle.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+  });
+
+  test('a redirect hop that stalls fails after the timeout, on the shared signal', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      abortable(async (signal) => {
+        calls++;
+        if (calls === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: 'https://next.example.com/l.png' },
+          });
+        }
+        return new Promise<Response>((_, reject) => onAbort(signal, reject));
+      })
+    );
+    const pending = fetchAndProxyLogo('https://first.example.com/l.png');
+    await vi.advanceTimersByTimeAsync(LOGO_FETCH_TIMEOUT_MS);
+    expect(await pending).toEqual({ ok: false, error: 'aborted' });
+    expect(calls).toBe(2);
   });
 });

@@ -31,7 +31,7 @@ import {
   type Surface,
   type SponsorRow,
 } from '../lib/sponsor-resolver';
-import { validateLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { validateProxiedLogoUrl, validateHttpsUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import { CARD_FIELDS, checkCardField, type CardField } from '../lib/sponsor-card';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import {
@@ -466,21 +466,21 @@ export async function handleAdminCreateSponsor(
   // Two logos, both optional: the header logo (wide) stays format 'logo' so every
   // existing reader keeps working; the sidebar logo (square/compact) is its own
   // format 'logo_compact' (migration 0081). No logo → surfaces render the name.
-  const logoValidation = validateLogoUrl(body.logo_url ?? null);
+  const logoValidation = validateProxiedLogoUrl(body.logo_url ?? null);
   if (!logoValidation.valid) {
     return errorResponse(
       'INVALID_LOGO_URL',
-      'Header logo must be a valid http:// or https:// URL (max 500 chars)',
+      'Header logo must be an http:// or https:// URL on a public web host (max 500 chars)',
       400,
       rid
     );
   }
   const logoUrl = logoValidation.url;
-  const compactValidation = validateLogoUrl(body.sidebar_logo_url ?? null);
+  const compactValidation = validateProxiedLogoUrl(body.sidebar_logo_url ?? null);
   if (!compactValidation.valid) {
     return errorResponse(
       'INVALID_SIDEBAR_LOGO_URL',
-      'Sidebar logo must be a valid http:// or https:// URL (max 500 chars)',
+      'Sidebar logo must be an http:// or https:// URL on a public web host (max 500 chars)',
       400,
       rid
     );
@@ -807,11 +807,11 @@ export async function handleAdminUpdateSponsor(
     if (val === null || val === '') {
       logoUpdates.push({ format, url: null });
     } else if (typeof val === 'string') {
-      const logoValidation = validateLogoUrl(val);
+      const logoValidation = validateProxiedLogoUrl(val);
       if (!logoValidation.valid) {
         return errorResponse(
           format === 'logo' ? 'INVALID_LOGO_URL' : 'INVALID_SIDEBAR_LOGO_URL',
-          `${label} must be a valid http:// or https:// URL (max 500 chars)`,
+          `${label} must be an http:// or https:// URL on a public web host (max 500 chars)`,
           400,
           rid
         );
@@ -1626,7 +1626,7 @@ export async function handleSponsorLogo(
   }
 
   const logoUrl = row.logo_url as string;
-  const validation = validateLogoUrl(logoUrl);
+  const validation = validateProxiedLogoUrl(logoUrl);
   if (!validation.valid || !validation.url) {
     return new Response(null, { status: 422, headers: { 'X-Request-Id': rid } });
   }
