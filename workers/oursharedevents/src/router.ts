@@ -1909,7 +1909,7 @@ export async function route(
 // {
 //   ok: true,
 //   generated_at: ISO string,
-//   window: "1h (KV TTL)",
+//   window: "60s (active rate-limit windows)",
 //   total_rate_limited_ips: number,
 //   top_ips: [{ ip: string, count: number, reset_at: ISO string }]
 // }
@@ -1992,7 +1992,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
     {
       ok: true,
       generated_at: new Date(now).toISOString(),
-      window: '1h (KV TTL)',
+      window: '60s (active rate-limit windows)',
       rate_limit_max: 60,
       total_rate_limited_ips: totalRateLimited,
       top_ips: top10,
