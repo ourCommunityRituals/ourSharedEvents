@@ -116,13 +116,14 @@ export async function runSharedReportBigQueryExport(
   const totalDurationMs = Date.now() - start;
   const ok = totalErrors === 0;
 
-  // OSE-556 / OSE-616: every phase that crossed (or tried to cross) the D1 →
-  // BigQuery boundary leaves a manifest row: counts, routing and corridor
-  // coverage only, never row-level data. A phase that read nothing is a no-op
-  // (BigQuery unconfigured, or nothing past the watermark) and is not logged.
+  // OSE-556 / OSE-616: every phase that ran against the D1 → BigQuery
+  // boundary leaves a manifest row, including a configured run with nothing
+  // past its watermark (rows 0) and a phase that threw. Counts, routing and
+  // corridor coverage only, never row-level data. The one thing not logged is
+  // a phase that never ran because BigQuery is not configured here.
   const runId = crypto.randomUUID();
   for (const p of phases) {
-    if (p.rowsRead === 0 && p.errors === 0) continue;
+    if (!p.ran && p.errors === 0) continue;
     await logExportManifest(env, {
       export_type: 'BIGQUERY',
       event_id: 'cron:shared-report',

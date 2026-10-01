@@ -69,6 +69,13 @@ export interface ExportResult {
   corridorIdPresent?: number;
   /** OSE-616: rows exported with corridor_id 'unknown' (event has no res7 node). */
   corridorIdUnknown?: number;
+  /**
+   * OSE-616: true when the phase actually ran against BigQuery (configured),
+   * even if nothing was past the watermark. A configured zero-row run still
+   * gets a manifest row, so "ran, nothing new" is distinguishable from "did
+   * not run".
+   */
+  ran?: boolean;
 }
 
 /**
@@ -234,6 +241,7 @@ async function prepareExport(
   return {
     watermark,
     result: {
+      ran: true,
       phase: phaseLabel,
       rowsRead: 0,
       rowsExported: 0,

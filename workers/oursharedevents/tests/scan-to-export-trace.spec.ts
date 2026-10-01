@@ -345,13 +345,22 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     const byPhase = Object.fromEntries(
       (rows.results ?? []).map((r) => [JSON.parse(r.details).phase as string, r])
     );
-    expect(Object.keys(byPhase).sort()).toEqual(['anon_id_returns', 'corridor_density_baseline']);
-    for (const r of Object.values(byPhase)) {
+    // Every phase that ran is on record — including event_series, which ran
+    // with nothing past its watermark ("ran, nothing new" ≠ "did not run").
+    expect(Object.keys(byPhase).sort()).toEqual([
+      'anon_id_returns',
+      'corridor_density_baseline',
+      'event_series',
+    ]);
+    expect(byPhase.event_series.rows_exported).toBe(0);
+    expect(JSON.parse(byPhase.event_series.details).rows_read).toBe(0);
+    for (const [phase, r] of Object.entries(byPhase)) {
       expect(r.actor).toBe('cron:scheduler');
       expect(r.outcome).toBe('success');
-      expect(r.rows_exported).toBe(1);
       const d = JSON.parse(r.details);
-      expect(d.corridor_id_present).toBe(1);
+      const expected = phase === 'event_series' ? 0 : 1;
+      expect(r.rows_exported).toBe(expected);
+      expect(d.corridor_id_present).toBe(expected);
       expect(d.corridor_id_unknown).toBe(0);
       // Counts, routing and coverage only: no hash, no cell, no event row.
       expect(r.details).not.toContain(EAGLES_RES9);
@@ -375,6 +384,8 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       { poster_deployment_id: 'pd_1' },
       { corridor_id: EAGLES_RES9 },
       { note: EAGLES_RES9 },
+      { corridor_id: EAGLES_RES9.toUpperCase() },
+      { note: '89266454447FFFF' },
     ]) {
       expect(() => assertCorridorGrainRow(bad), JSON.stringify(bad)).toThrow(ExportGeographyError);
     }
@@ -383,6 +394,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(isCorridorId(EAGLES_RES7)).toBe(true);
     expect(isCorridorId(EAGLES_RES9)).toBe(false);
     expect(isCorridorId('unknown')).toBe(false);
+    expect(h3Resolution(EAGLES_RES9.toUpperCase())).toBe(9);
   });
 
   test('a res9 corridor key in the baseline fails the phase closed: nothing sent, watermark held', async () => {

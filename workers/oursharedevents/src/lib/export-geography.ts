@@ -22,8 +22,12 @@ const SUB_CORRIDOR_KEY =
 /** Finest H3 resolution allowed out of the boundary (the corridor node). */
 export const CORRIDOR_H3_RESOLUTION = 7;
 
-/** H3 index (cell mode) as stored in D1: 15 lowercase hex chars, mode nibble 8. */
-const H3_CELL = /^8[0-9a-f]{14}$/;
+/**
+ * H3 index (cell mode): 15 hex chars, mode nibble 8. Case-insensitive: h3-js
+ * writes lowercase, but nothing in D1 constrains case, so an imported
+ * uppercase cell must not slip past the guard as "not an H3 value".
+ */
+const H3_CELL = /^8[0-9a-f]{14}$/i;
 
 /** The resolution of an H3 cell string, or null when the value is not one. */
 export function h3Resolution(value: unknown): number | null {
