@@ -54,7 +54,7 @@
  */
 
 import { allocateShares, sovTierOf } from './sponsor-allocation';
-import { sponsorTitle, sponsorCardPath } from './sponsor-card';
+import { sponsorTitle, sponsorCardPath, SPONSOR_ON_SHOW_SQL } from './sponsor-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -166,6 +166,9 @@ export function publicWebsiteUrl(raw: string | null | undefined): string | null 
   }
 }
 
+/** A resolver row before the public seam: has_card is SPONSOR_ON_SHOW_SQL (0/1). */
+type CardableRow = SponsorRow & { has_card: number };
+
 // ─── Core Resolution ────────────────────────────────────────────────────────────
 
 /**
@@ -222,7 +225,8 @@ export async function resolveSponsorsForEvent(
     sp.is_active AS is_active,
     COALESCE(sp.locality_band, 0) AS is_local,
     sp.created_at AS created_at,
-    sp.updated_at AS updated_at`;
+    sp.updated_at AS updated_at,
+    ${SPONSOR_ON_SHOW_SQL} AS has_card`;
 
   // Path 1: Direct placements for this event (source organizer|corridor_covenant|
   // platform_seed). ORDER BY sb.id: stable, deterministic input for the
@@ -241,7 +245,7 @@ export async function resolveSponsorsForEvent(
        ORDER BY sb.id`
     )
     .bind(eventId)
-    .all<SponsorRow>();
+    .all<CardableRow>();
 
   const directSponsors = directResult.results ?? [];
 
@@ -253,7 +257,7 @@ export async function resolveSponsorsForEvent(
   // the sponsor's tier — the tier of the business's most recent real placement
   // (falling back to 'standard' for a business that has none yet). Materializing
   // these as real placement rows is tracked separately — see OSE-799 follow-up.
-  let templateGeoSponsors: SponsorRow[] = [];
+  let templateGeoSponsors: CardableRow[] = [];
 
   // Path 2 is DARK-AT-LAUNCH (ADR-019 / CCR-PR567 M4): it renders a business that
   // only SUBSCRIBED to the event's template, with NO per-event accepted placement
@@ -267,6 +271,7 @@ export async function resolveSponsorsForEvent(
         `SELECT sb.id AS id, sb.name AS name, sb.display_name AS display_name,
                 sb.address_line AS address_line, sb.website_url AS website_url,
                 sb.h3_res7 AS h3_res7, la.url AS logo_url,
+                ${SPONSOR_ON_SHOW_SQL} AS has_card,
                 (SELECT lc.url FROM sponsor_asset lc WHERE lc.sponsor_business_id = sb.id
                   AND lc.format = 'logo_compact') AS sidebar_logo_url,
                 COALESCE((SELECT sp2.tier FROM sponsor_placement sp2
@@ -297,10 +302,11 @@ export async function resolveSponsorsForEvent(
         logo_url: string | null;
         sidebar_logo_url: string | null;
         tier: string | null;
+        has_card: number;
       }>();
 
     // Derive an implicit placement SponsorRow per template-matched business.
-    const candidateSponsors: SponsorRow[] = (templateResult.results ?? []).map((b) => ({
+    const candidateSponsors: CardableRow[] = (templateResult.results ?? []).map((b) => ({
       id: b.id,
       event_id: eventId,
       name: b.name,
@@ -318,6 +324,7 @@ export async function resolveSponsorsForEvent(
       is_local: b.h3_res7 && event.h3_res7 && b.h3_res7 === event.h3_res7 ? 1 : 0,
       created_at: '',
       updated_at: '',
+      has_card: b.has_card,
     }));
 
     // Geo filter: each candidate must have at least one matching area
@@ -378,11 +385,16 @@ export async function resolveSponsorsForEvent(
       // is normalised here, at the one seam every public surface reads through.
       // 0083: the public title and the no-website tap target are decided here
       // too, once, so no surface re-derives them.
+      // OSE-1438: card_url only when the card will render (SPONSOR_ON_SHOW_SQL,
+      // the card page's own gate). A Path 2 match with no accepted placement on
+      // any active event has no card, so it gets no card_url and renders unlinked
+      // when it has no website. has_card is internal and never leaves the seam.
+      const { has_card, ...row } = s;
       all.push({
-        ...s,
+        ...row,
         website_url: publicWebsiteUrl(s.website_url),
         title: sponsorTitle(s),
-        card_url: sponsorCardPath(s.id),
+        ...(Number(has_card) === 1 ? { card_url: sponsorCardPath(s.id) } : {}),
       });
     }
   }

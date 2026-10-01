@@ -293,8 +293,21 @@ describe('/events | sponsor banner', () => {
     const link = doc.querySelector('[data-testid="public-sponsor-link"]')!;
     expect(link.getAttribute('href')).toBe('https://site.example');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    // Missing card_url (e.g. the mock fallback) still builds a card path.
+    // A website wins: no card link even though a card may exist.
     expect(doc.querySelector('[data-testid="public-sponsor-card-link"]')).toBeNull();
+  });
+
+  test('OSE-1438: no website and no card_url → the name shows unlinked, never a guessed card path', async () => {
+    // The resolver omits card_url when the card would 404 (a Path 2 match with
+    // no accepted placement anywhere, or the mock fixtures). The banner used to
+    // build /sponsors/:id itself, which is exactly the 404 link.
+    const doc = await mountBanner([
+      { id: 'sp_pool', name: 'Pool Co', title: 'Pool Co', logo_url: null, website_url: null },
+    ]);
+    const card = doc.querySelector('[data-testid="public-sponsor-card"]')!;
+    expect(card.querySelector('a')).toBeNull();
+    expect(doc.querySelector('[data-testid="public-sponsor-card-link"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="public-sponsor-name"]')!.textContent).toBe('Pool Co');
   });
 
   test('a quote in the title cannot break out of the alt attribute', async () => {
