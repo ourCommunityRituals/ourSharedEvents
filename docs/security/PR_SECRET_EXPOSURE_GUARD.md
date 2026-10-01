@@ -163,7 +163,9 @@ workflow, not only PR-triggered ones.
 
 - What it requires: a job in a `workflow_run` workflow may hold no secret (other than `GITHUB_TOKEN`) if a source run whose event was `pull_request` can trigger it.
 - Why: `workflow_run` runs with the default branch as its ref, so environment branch rules do not stop it. A `head_repository` check stops forks, but not same-repo agent branches.
-- How it is checked: each job is tested against several attacker-chosen source runs (same-repo branches `full-pipeline/x`, `copilot/x`, `claude/x`, `dependabot/npm/x`, `feature/x`, and a fork PR from its own `main`), and it fails if any of them reaches a secret.
+- How it is checked: the PR author chooses the branch name, so the guard does not rely on a sample list. Every string literal in the workflow's `if:` conditions is tried as the source branch, along with sample names (`full-pipeline/x`, `copilot/x`, `claude/x`, `dependabot/npm/x`, `feature/x`, `main`). Each is tried from this repo and from a fork. The job fails if any of them reaches a secret.
+- **Structural backstop:** a secret-holding `workflow_run` job must also name `github.event.workflow_run.event == 'push'` (or `'schedule'`) in its `if:` and never `'pull_request'`, so a gap in the model cannot pass it.
+- **Inherited secrets count:** for both rules, workflow-level `env:` secrets count for every job. `secrets: inherit`, `toJSON(secrets)` and computed `secrets[...]` indexes fail closed as "all secrets". Checkout matching is case-insensitive.
 - Unmodeled refs fail closed.
 - The fix is to require `github.event.workflow_run.event == 'push'` on `main` (plus the same-repo check), or to read the PR's files as data without running them.
 
@@ -178,7 +180,10 @@ workflow, not only PR-triggered ones.
 - restoring the original red-team `if:`;
 - allowing PR sources together with attacker-chosen branch prefixes;
 - disabling either rule;
-- dropping the fork-from-`main` case.
+- dropping the fork-from-`main` case;
+- dropping the literal-derived branch candidates, the workflow-level `env:` scan, the `secrets: inherit` or `toJSON(secrets)` sentinel, the structural backstop, or case-insensitive matching.
+
+The self-test has 26 fixtures.
 
 ## Born-red proof
 

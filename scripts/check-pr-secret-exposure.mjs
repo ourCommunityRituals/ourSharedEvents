@@ -299,14 +299,28 @@ const PLAIN_PR_ENV = {
  * environment branch rules do not stop it, and a head_repository check stops
  * only forks (ADR-012, Standard §4.2).
  */
-const PR_SOURCED_WORKFLOW_RUN_ENVS = [
-  ['org/repo', 'full-pipeline/x'],
-  ['org/repo', 'copilot/x'],
-  ['org/repo', 'claude/x'],
-  ['org/repo', 'dependabot/npm/x'],
-  ['org/repo', 'feature/x'],
-  ['fork/repo', 'main'],
-].map(([headRepo, headBranch]) => ({
+const SAMPLE_PR_BRANCHES = ['full-pipeline/x', 'copilot/x', 'claude/x', 'dependabot/npm/x', 'feature/x'];
+
+/**
+ * The PR author picks the branch name, so a sample list is not enough: a job
+ * gated on `head_branch == 'release/x'` would pass every sample. Candidates
+ * therefore include every string literal in the workflow's `if:` conditions as a
+ * branch name. An exact literal also satisfies startsWith, endsWith and contains
+ * on itself, so no prefix/suffix variants are needed. Each candidate is tried
+ * from this repo and from a fork.
+ */
+export function prSourcedWorkflowRunEnvs(ifStr) {
+  const literals = [...String(ifStr || '').matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  const branches = new Set([...SAMPLE_PR_BRANCHES, 'main']);
+  for (const lit of literals) branches.add(lit);
+  const envs = [];
+  for (const headRepo of ['org/repo', 'fork/repo']) {
+    for (const headBranch of branches) envs.push(makeWorkflowRunEnv(headRepo, headBranch));
+  }
+  return envs;
+}
+
+const makeWorkflowRunEnv = (headRepo, headBranch) => ({
   event_name: 'workflow_run',
   head_ref: '',
   base_ref: '',
@@ -318,7 +332,7 @@ const PR_SOURCED_WORKFLOW_RUN_ENVS = [
     head_branch: headBranch,
     'head_repository.full_name': headRepo,
   },
-}));
+});
 
 /**
  * Is `jobName` reachable under `baseEnv`? Fail-closed: an `if:` that cannot be
@@ -354,6 +368,28 @@ export function isReachableUnder(jobName, jobs, memo, baseEnv) {
   }
   memo[jobName] = reachable;
   return reachable;
+}
+
+/**
+ * Secrets a job can read: its own references, the workflow-level `env:` (inherited
+ * by every job), and, for a reusable-workflow call with `secrets: inherit`, every
+ * secret the caller can see. That last case cannot be enumerated, so it is
+ * reported as one sentinel that no allowlist contains (fail-closed).
+ */
+export const INHERIT_ALL_SECRETS = 'ALL_SECRETS (secrets: inherit)';
+export function jobSecrets(wf, job) {
+  const out = new Set();
+  collectSecretsDeep(job, out);
+  if (wf && wf.env) collectSecretsDeep(wf.env, out);
+  if (job && typeof job.secrets === 'string' && job.secrets.trim().toLowerCase() === 'inherit') {
+    out.add(INHERIT_ALL_SECRETS);
+  }
+  // `toJSON(secrets)` or a computed `secrets[...]` index reaches every secret
+  // without naming one; same fail-closed sentinel.
+  if (/toJSON\(\s*secrets\s*\)|(?<![\w-])secrets\[\s*[^'"\s]/i.test(JSON.stringify([wf && wf.env, job]))) {
+    out.add(INHERIT_ALL_SECRETS);
+  }
+  return out;
 }
 
 export function collectSecretsDeep(node, out) {
@@ -406,7 +442,7 @@ export function analyzeWorkflows(workflowMap) {
     // code and PR-lockfile installs, so a persisted token is a read path.
     for (const [jobName, job] of Object.entries(wf.jobs || {})) {
       (job && Array.isArray(job.steps) ? job.steps : []).forEach((step, i) => {
-        if (!step || typeof step.uses !== 'string' || !/^actions\/checkout@/.test(step.uses)) return;
+        if (!step || typeof step.uses !== 'string' || !/^actions\/checkout@/i.test(step.uses.trim())) return;
         const w = step.with || {};
         if (w.token == null || String(w.token).trim() === '') return;
         if (String(w['persist-credentials']).trim().toLowerCase() === 'false') return;
@@ -419,15 +455,23 @@ export function analyzeWorkflows(workflowMap) {
     // PR-sourceable unless the job's if: excludes it.
     if (triggers.includes('workflow_run')) {
       const jobs = wf.jobs || {};
-      const memo = {};
       for (const [jobName, job] of Object.entries(jobs)) {
-        const reachable = PR_SOURCED_WORKFLOW_RUN_ENVS.some((env, k) =>
-          isReachableUnder(jobName, jobs, (memo[k] = memo[k] || {}), env)
+        const allIfs = Object.values(jobs)
+          .map((j) => (j && j.if != null ? String(j.if) : ''))
+          .join(' ');
+        const reachable = prSourcedWorkflowRunEnvs(allIfs).some((env) =>
+          isReachableUnder(jobName, jobs, {}, env)
         );
-        if (!reachable) continue;
-        const secrets = new Set();
-        collectSecretsDeep(job, secrets);
+        const secrets = jobSecrets(wf, job);
         secrets.delete('GITHUB_TOKEN');
+        // Structural backstop (2026-10-01 security review): even when the model
+        // finds the job unreachable, a secret-holding workflow_run job must name
+        // a trusted source event explicitly, so a modelling gap cannot pass it.
+        const ifText = job && job.if != null ? String(job.if) : '';
+        const namesTrustedEvent =
+          /github\.event\.workflow_run\.event\s*==\s*'(push|schedule)'/.test(ifText) &&
+          !/github\.event\.workflow_run\.event\s*==\s*'pull_request/.test(ifText);
+        if (!reachable && (secrets.size === 0 || namesTrustedEvent)) continue;
         for (const sec of secrets) {
           if (!prSourcedWorkflowRunSecrets.has(sec)) prSourcedWorkflowRunSecrets.set(sec, new Set());
           prSourcedWorkflowRunSecrets.get(sec).add(`${file}:${jobName}`);
@@ -447,8 +491,7 @@ export function analyzeWorkflows(workflowMap) {
       // and can flip any step's `if:` (or add a new step), so a secret referenced
       // anywhere in a plain-PR-reachable job is exfiltratable. Do NOT "optimize"
       // this into step-level `if:` filtering — that would open a real hole.
-      const secrets = new Set();
-      collectSecretsDeep(job, secrets);
+      const secrets = jobSecrets(wf, job);
       for (const s of secrets) {
         if (!prReachableSecrets.has(s)) prReachableSecrets.set(s, new Set());
         prReachableSecrets.get(s).add(`${file}:${jobName}`);
@@ -741,6 +784,122 @@ function runSelfTest() {
           jobs: {
             rt: {
               if: "github.event.workflow_run.head_branch == 'main'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run job gated on an arbitrary branch literal (release/x)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if:
+                "github.event.workflow_run.event == 'pull_request' && " +
+                "github.event.workflow_run.head_branch == 'release/x' && " +
+                'github.event.workflow_run.head_repository.full_name == github.repository',
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run job gated on an arbitrary suffix (endsWith)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if:
+                "github.event.workflow_run.event == 'pull_request' && " +
+                "endsWith(github.event.workflow_run.head_branch, '-rc')",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow-level env secret inherited by a reachable workflow_run job',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          env: { K: '${{ secrets.ADMIN_KEY }}' },
+          jobs: { rt: { steps: [{ run: 'echo' }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: reusable-workflow call with secrets: inherit from a reachable workflow_run job',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { uses: './.github/workflows/x.yml', secrets: 'inherit' } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow-level env secret on a PR-triggered workflow',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          env: { K: '${{ secrets.ADMIN_KEY }}' },
+          jobs: { j: { steps: [{ run: 'echo' }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: secrets: inherit on a PR-reachable reusable-workflow call',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { uses: './.github/workflows/x.yml', secrets: 'inherit' } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: mixed-case Actions/Checkout with a persisted token',
+      wf: {
+        'b.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            j: { steps: [{ uses: 'Actions/Checkout@v7', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } }] },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: toJSON(secrets) in a PR-reachable job',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ env: { ALL: '${{ toJSON(secrets) }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: secret-holding workflow_run job that never names a trusted source event',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              // Unreachable under the model (no PR run concludes 'neutral' here),
+              // but it names no trusted event, so the structural rule fails it.
+              if: "github.event.workflow_run.conclusion == 'neutral' && github.event.workflow_run.event != 'pull_request'",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
