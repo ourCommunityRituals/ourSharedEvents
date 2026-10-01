@@ -84,12 +84,15 @@ async function seedEvent(id: string, timezone: string | null, startDate: string)
 /**
  * One poster deployment whose placement scans land at the given UTC instants
  * (SQLite `datetime` shape, exactly what `datetime('now')` stores). The builder
- * reduces them to MIN/MAX and buckets those to the hour.
+ * reduces them to MIN/MAX and buckets those to the hour. Each instant is
+ * scanned by `people` visitors (default K): the builder floors each
+ * poster-hour (OSE-1459), so an hour needs K scans to count.
  */
 async function seedPoster(
   eventId: string,
   posterId: string,
-  scanTimesUtc: string[]
+  scanTimesUtc: string[],
+  people: number = CORRIDOR_MAP_MIN_COUNT
 ): Promise<void> {
   const db = tenv().DB;
   await db
@@ -101,19 +104,21 @@ async function seedPoster(
     .run();
   for (let i = 0; i < scanTimesUtc.length; i++) {
     const t = scanTimesUtc[i]!;
-    await db
-      .prepare(
-        `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
-         VALUES (?, ?, ?, ?, ?)`
-      )
-      .bind(
-        `spe-1376-${posterId}-${i}`,
-        eventId,
-        posterId,
-        `${t.slice(0, 13).replace(' ', 'T')}:00`,
-        t
-      )
-      .run();
+    for (let j = 0; j < people; j++) {
+      await db
+        .prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .bind(
+          `spe-1376-${posterId}-${i}-${j}`,
+          eventId,
+          posterId,
+          `${t.slice(0, 13).replace(' ', 'T')}:00`,
+          t
+        )
+        .run();
+    }
   }
 }
 
@@ -204,7 +209,7 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
     expect(pc.first_scan_label).not.toBe(pb.first_scan_label);
 
     // Identical numbers and identical UTC cells — only the words changed.
-    expect(pc.scan_count).toBe(EVENING_SCANS.length);
+    expect(pc.scan_count).toBe(EVENING_SCANS.length * CORRIDOR_MAP_MIN_COUNT);
     expect(pb.scan_count).toBe(pc.scan_count);
     expect(pc.first_scan_at).toBe('2026-10-25T00:00:00Z');
     expect(pc.last_scan_at).toBe('2026-10-25T02:00:00Z');
@@ -333,7 +338,7 @@ describe('OSE-1376 — floors and never-who are unchanged by the zone', () => {
     for (const tz of ['America/Chicago', 'Europe/Berlin', 'Asia/Kolkata', null]) {
       const id = `evt-1376-floor-${tz ? tz.split('/')[1]!.toLowerCase() : 'none'}`;
       await seedEvent(id, tz, '2026-10-24');
-      await seedPoster(id, `pd-1376-small-${id}`, EVENING_SCANS.slice(0, 4)); // 4 < K
+      await seedPoster(id, `pd-1376-small-${id}`, EVENING_SCANS.slice(0, 4), 1); // 4 < K
       await seedPoster(id, `pd-1376-big-${id}`, EVENING_SCANS); // 6 >= K
       await seedAggregates(id, [
         ['2026-10-25', 0, 4], // sub-K

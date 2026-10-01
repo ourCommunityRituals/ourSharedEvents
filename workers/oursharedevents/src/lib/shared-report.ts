@@ -752,8 +752,115 @@ export async function aggregateScanBuckets(
     );
   }
 
+  await aggregateScanCells(env, floor90dIso, nowIso, result);
+
   result.durationMs = Date.now() - start;
   return result;
+}
+
+/**
+ * OSE-1459 / ADR-011 — scans counted at the poster's own res9 cell.
+ *
+ * Every scan comes in through a poster (GET /q/:qr_token), so a scan's place
+ * is its poster's placement cell: the venue's cell for a poster at the venue,
+ * the poster's own cell for one across town. Counted from the placement side
+ * only (scan_placement_events × poster_deployments): doctrine rule 6 keeps any
+ * session-derived value out, so this is a SCAN count, and no poster id is
+ * stored — the cell is the place.
+ *
+ * Only poster-hours with at least CORRIDOR_MAP_MIN_COUNT scans are counted:
+ * dedup is per person per poster per hour, so a floored poster-hour is K
+ * people, while a cell summed from raw scans could be one person at K posters.
+ * A cell-hour whose poster-hours are all under the floor is stored as 0.
+ *
+ * Recomputed from scratch for every event in the 90-day window and swapped in
+ * with one atomic batch (DELETE the window, INSERT the fresh rows), so a
+ * poster whose location was corrected never leaves its scans counted in two
+ * cells. Scans at a poster with no cell yet are skipped (rowsSkipped) and
+ * counted on a later run, once the poster is geocoded.
+ */
+async function aggregateScanCells(
+  env: SharedReportMaterializeEnv,
+  floor90dIso: string,
+  nowIso: string,
+  result: MaterializationResult
+): Promise<void> {
+  // events.start_date is usually a bare 'YYYY-MM-DD'; compared as text with an
+  // ISO timestamp it would drop every event on the cutoff day. Bind the
+  // cutoff as a date so all three statements use the same inclusive window.
+  const floorDate = floor90dIso.slice(0, 10);
+  try {
+    const uncelled = await env.DB.prepare(
+      `SELECT COUNT(*) AS n
+         FROM scan_placement_events spe
+         JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+        WHERE pd.h3_res9 IS NULL
+          AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)`
+    )
+      .bind(floorDate)
+      .first<{ n: number }>();
+    result.rowsSkipped += uncelled?.n ?? 0;
+
+    // Two statements, however busy the window: D1 counts every batched
+    // statement toward the per-invocation query limit, so the rollup is one
+    // INSERT ... SELECT ... GROUP BY rather than one INSERT per row.
+    //
+    // The K-floor is applied per poster-hour BEFORE poster-hours are summed
+    // into their cell. /q/ dedup is one scan per person per poster per hour,
+    // so a poster-hour of >= K scans is >= K people; a cell-hour summed from
+    // raw scans is not (one person scanning K posters in one cell is K
+    // scans). A sub-K poster-hour adds 0, so a cell-hour with activity but no
+    // poster-hour at the floor is kept as a 0 row: the report then reads the
+    // map as 'suppressed' (activity withheld), not as 'no scans'.
+    //
+    // Rows are keyed by the res9 cell alone (the id has no res7), so the outer
+    // GROUP BY must be too: poster_deployments.h3_res7 is nullable, and grouping
+    // by it would split one cell into two rows with the same id and fail the
+    // whole batch. The res7 is the cell's parent, so MAX keeps whichever poster
+    // has it.
+    const [, inserted] = await env.DB.batch([
+      env.DB.prepare(
+        `DELETE FROM scan_cell_aggregates
+           WHERE event_id IN (SELECT id FROM events WHERE start_date >= ?)`
+      ).bind(floorDate),
+      env.DB.prepare(
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         SELECT 'cell_' || ph.event_id || '_' || ph.bucket_date || '_' ||
+                  ph.bucket_hour || '_' || ph.h3_res9,
+                ph.event_id,
+                ph.bucket_date,
+                ph.bucket_hour,
+                ph.h3_res9,
+                MAX(ph.h3_res7),
+                SUM(CASE WHEN ph.scans >= ? THEN ph.scans ELSE 0 END),
+                ?
+           FROM (SELECT spe.event_id AS event_id,
+                        substr(spe.scan_bucket, 1, 10) AS bucket_date,
+                        CAST(substr(spe.scan_bucket, 12, 2) AS INTEGER) AS bucket_hour,
+                        LOWER(pd.h3_res9) AS h3_res9,
+                        LOWER(pd.h3_res7) AS h3_res7,
+                        COUNT(*) AS scans
+                   FROM scan_placement_events spe
+                   JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+                  WHERE pd.h3_res9 IS NOT NULL
+                    AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)
+                  GROUP BY spe.event_id, substr(spe.scan_bucket, 1, 13), spe.poster_deployment_id) ph
+          GROUP BY ph.event_id, ph.bucket_date, ph.bucket_hour, ph.h3_res9`
+      ).bind(CORRIDOR_MAP_MIN_COUNT, nowIso, floorDate),
+    ]);
+    result.rowsUpserted += inserted?.meta?.changes ?? 0;
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+        phase: 'scan_aggregation',
+        step: 'scan_cell_aggregates',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
 }
 
 /**

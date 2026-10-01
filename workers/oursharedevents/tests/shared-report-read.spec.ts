@@ -18,6 +18,8 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
+import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 
 interface TestEnv {
@@ -60,6 +62,7 @@ async function clearReadTables(): Promise<void> {
   await db.prepare(`DELETE FROM anon_id_returns`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM scan_aggregates`).run();
+  await db.prepare(`DELETE FROM scan_cell_aggregates`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
   // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
@@ -815,16 +818,18 @@ describe('H3 corridor map + open-question resolutions', () => {
   });
 
   // Q8 — corridor_map.source field
-  test('Q8: corridor_map.source is "live" when scan_aggregates h3_res9 data exists', async () => {
+  test('Q8: corridor_map.source is "live" when poster-cell scan data exists (OSE-1459)', async () => {
     await seedEvent({
       id: 'test-evt-read-q8-live',
       start_date: '2026-05-07T19:00:00Z',
     });
-    // Seed scan_aggregates with an h3_res9 cell (Eagles Hall res9)
+    // Scans counted at a poster's res9 cell (Eagles Hall res9), place side only.
     await tenv()
       .DB.prepare(
-        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
-       VALUES ('sa-q8-live', 'test-evt-read-q8-live', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         VALUES ('cell-q8-live', 'test-evt-read-q8-live', '2026-05-07', 19,
+                 '89266454447ffff', '872664544ffffff', 30, datetime('now'))`
       )
       .run();
 
@@ -833,6 +838,256 @@ describe('H3 corridor map + open-question resolutions', () => {
     if (!r.ok) return;
     expect(r.report.corridor_map).not.toBeNull();
     expect(r.report.corridor_map?.source).toBe('live');
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+  });
+
+  test('OSE-1459: a poster cell under the K-floor is dropped from the map, its id never published', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-subk', start_date: '2026-05-07T19:00:00Z' });
+    const busy = '89266454447ffff';
+    const quiet = '892664cdb13ffff';
+    for (const [id, cell, n] of [
+      ['cell-subk-busy', busy, 30],
+      ['cell-subk-quiet', quiet, 2],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_cell_aggregates
+             (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+           VALUES (?, 'test-evt-read-q8-subk', '2026-05-07', 19, ?, NULL, ?, datetime('now'))`
+        )
+        .bind(id, cell, n)
+        .run();
+    }
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-subk');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.source).toBe('live');
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+    // The quiet poster's location appears nowhere in the report.
+    expect(JSON.stringify(r.report)).not.toContain(quiet);
+    expect(r.report.corridor_map?.svg).toContain(busy);
+  });
+
+  test('OSE-683 drop-before-sum: sub-K hours in one poster cell never add up to a published count', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-dbs', start_date: '2026-05-07T19:00:00Z' });
+    const sumOnly = '892664cdb13ffff'; // 3 + 3: no hour clears K, so not 6
+    const mixed = '89266454447ffff'; // 3 + 6: only the 6 counts
+    for (const [id, cell, hour, n] of [
+      ['cell-dbs-a1', sumOnly, 18, 3],
+      ['cell-dbs-a2', sumOnly, 19, 3],
+      ['cell-dbs-b1', mixed, 18, 3],
+      ['cell-dbs-b2', mixed, 19, 6],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_cell_aggregates
+             (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+           VALUES (?, 'test-evt-read-q8-dbs', '2026-05-07', ?, ?, NULL, ?, datetime('now'))`
+        )
+        .bind(id, hour, cell, n)
+        .run();
+    }
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-dbs');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+    expect(r.report.corridor_map?.svg).toContain(`data-cell="${mixed}" data-count="6"`);
+    expect(JSON.stringify(r.report)).not.toContain(sumOnly);
+  });
+
+  test('OSE-1459: when every poster cell is under the K-floor, no map and no cell id is published', async () => {
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+         VALUES ('test-evt-read-q8-allsubk', 'test-brand', 'All sub-K', 'test-evt-read-q8-allsubk',
+                 'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
+                 datetime('now'), datetime('now'))`
+      )
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_cell_aggregates
+           (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+         VALUES ('cell-allsubk', 'test-evt-read-q8-allsubk', '2026-05-07', 19,
+                 '892664cdb13ffff', '872664cdbffffff', 3, datetime('now'))`
+      )
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-allsubk');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Not the venue fallback: that would read as "no scans yet".
+    expect(r.report.corridor_map).toEqual({
+      svg: '',
+      suppressed: [],
+      cell_count: 0,
+      source: 'suppressed',
+    });
+    expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
+  });
+
+  test('OSE-1459 writer → builder: an event with only sub-K poster activity reads suppressed, not fallback', async () => {
+    // End to end through the nightly writer: four scans at one poster in one
+    // hour (under K). The writer keeps a 0 row for that cell-hour, so the
+    // builder reports the map as withheld rather than as the venue preview.
+    const today = new Date().toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+         VALUES ('test-evt-read-q8-e2e', 'test-brand', 'Quiet poster', 'test-evt-read-q8-e2e',
+                 'active', 'Eagles Hall', ?, '89266454447ffff', '872664544ffffff',
+                 datetime('now'), datetime('now'))`
+      )
+      .bind(today)
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+         VALUES ('test-pd-read-q8-e2e', 'test-evt-read-q8-e2e', 'qr-test-pd-read-q8-e2e',
+                 'Beverly window', '892664cdb13ffff', '872664cdbffffff')`
+      )
+      .run();
+    for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT - 1; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+           VALUES (?, 'test-evt-read-q8-e2e', 'test-pd-read-q8-e2e', ?)`
+        )
+        .bind(`spe-read-q8-e2e-${i}`, `${today}T19:00`)
+        .run();
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-e2e');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map).toEqual({
+      svg: '',
+      suppressed: [],
+      cell_count: 0,
+      source: 'suppressed',
+    });
+    expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
+  });
+
+  test('OSE-1459 writer: two posters in one cell, one with no res7, roll up into one row', async () => {
+    // The row id is keyed by the res9 cell, so the rollup must group by it
+    // alone. A poster with a NULL h3_res7 beside one with its parent res7 must
+    // not split the cell into two rows with one id (a UNIQUE violation that
+    // would roll back the whole batch for every event).
+    const today = new Date().toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
+         VALUES ('test-evt-read-q8-nullres7', 'test-brand', 'Two posters', 'test-evt-read-q8-nullres7',
+                 'active', 'Beverly', ?, datetime('now'), datetime('now'))`
+      )
+      .bind(today)
+      .run();
+    for (const [pd, res7] of [
+      ['test-pd-read-q8-withres7', '872664cdbffffff'],
+      ['test-pd-read-q8-nores7', null],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+           VALUES (?, 'test-evt-read-q8-nullres7', ?, 'Beverly wall', '892664cdb13ffff', ?)`
+        )
+        .bind(pd, `qr-${pd}`, res7)
+        .run();
+      for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT; i++) {
+        await tenv()
+          .DB.prepare(
+            `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+             VALUES (?, 'test-evt-read-q8-nullres7', ?, ?)`
+          )
+          .bind(`spe-${pd}-${i}`, pd, `${today}T19:00`)
+          .run();
+      }
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const rows = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, h3_res7, scan_count FROM scan_cell_aggregates
+          WHERE event_id = 'test-evt-read-q8-nullres7'`
+      )
+      .all<{ h3_res9: string; h3_res7: string | null; scan_count: number }>();
+    expect(rows.results).toEqual([
+      {
+        h3_res9: '892664cdb13ffff',
+        h3_res7: '872664cdbffffff',
+        scan_count: 2 * CORRIDOR_MAP_MIN_COUNT,
+      },
+    ]);
+  });
+
+  test('OSE-1459 writer: an event dated exactly 90 days ago is inside the rollup window', async () => {
+    // start_date is a bare date. Compared as text with the ISO cutoff
+    // timestamp, the cutoff day itself fell outside the window.
+    const boundary = new Date(Date.now() - 90 * 86400 * 1000).toISOString().slice(0, 10);
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
+         VALUES ('test-evt-read-q8-boundary', 'test-brand', 'Boundary', 'test-evt-read-q8-boundary',
+                 'archived', 'Beverly', ?, datetime('now'), datetime('now'))`
+      )
+      .bind(boundary)
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, h3_res9, h3_res7)
+         VALUES ('test-pd-read-q8-boundary', 'test-evt-read-q8-boundary', 'qr-test-pd-read-q8-boundary',
+                 'Beverly wall', '892664cdb13ffff', '872664cdbffffff')`
+      )
+      .run();
+    for (let i = 0; i < CORRIDOR_MAP_MIN_COUNT; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+           VALUES (?, 'test-evt-read-q8-boundary', 'test-pd-read-q8-boundary', ?)`
+        )
+        .bind(`spe-read-q8-boundary-${i}`, `${boundary}T19:00`)
+        .run();
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'read-spec-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const row = await tenv()
+      .DB.prepare(
+        `SELECT SUM(scan_count) AS n FROM scan_cell_aggregates
+          WHERE event_id = 'test-evt-read-q8-boundary'`
+      )
+      .first<{ n: number | null }>();
+    expect(row?.n).toBe(CORRIDOR_MAP_MIN_COUNT);
+  });
+
+  test('OSE-1459: the map ignores event-level scan_aggregates cells (the venue tag is not a scan place)', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-venueonly', start_date: '2026-05-07T19:00:00Z' });
+    // An event-level row tagged with the venue's cell: not where scans happened.
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
+       VALUES ('sa-q8-venueonly', 'test-evt-read-q8-venueonly', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+      )
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-venueonly');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.source ?? null).not.toBe('live');
   });
 
   test('Q8: corridor_map.source is "fallback" when no h3_res9 scan data but event has h3_res7', async () => {
@@ -849,7 +1104,7 @@ describe('H3 corridor map + open-question resolutions', () => {
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-fallback');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // No h3_res9 in scan_aggregates → falls back to res7 ring
+    // No poster-cell scans → falls back to res7 ring
     expect(r.report.corridor_map?.source).toBe('fallback');
   });
 

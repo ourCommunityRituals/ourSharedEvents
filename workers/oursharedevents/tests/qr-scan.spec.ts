@@ -10,7 +10,7 @@
  *     ?deployment= params for the event-page CTA
  *   - New visitor gets Set-Cookie header with ose_anon cookie
  *   - Returning visitor does NOT get Set-Cookie header
- *   - Duplicate within 5-min window is suppressed (no second scan row)
+ *   - Duplicate within the same hour bucket is suppressed (no second scan row; OSE-1459)
  *   - Invalid token shape redirects to homepage, no DB write
  *   - Unknown/inactive token redirects to homepage, no DB write
  *   - Scan row values match privacy invariants (scan_bucket format, no PII)
@@ -24,9 +24,10 @@
  * Format: `OSE-625 | UNIT | <description> | <assertion>`.
  */
 
-import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { vi, describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
+import { SCAN_QUEUE_MAX_RETRIES } from '../src/lib/scan-buffer';
 
 interface TestEnv {
   DB: D1Database;
@@ -214,7 +215,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(setCookie).toBeNull();
   });
 
-  test('OSE-625 | UNIT | duplicate scan within 5-min window | second call does NOT write a second row', async () => {
+  test('OSE-625 | UNIT | duplicate scan in the same hour | second call does NOT write a second row', async () => {
     const kv = makeInMemoryKV();
     const existingAnonId = 'anon_22222222-2222-2222-2222-222222222222';
     const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId });
@@ -226,6 +227,73 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
     const scanCount = await countScans(tenv().DB);
     expect(scanCount).toBe(1);
+  });
+
+  test('OSE-1459 | UNIT | one person counts once per poster per hour, again the next hour', async () => {
+    // The dedup window is the scan's hour bucket, not 5 minutes, so an hourly
+    // poster count is a count of people and the K-floor means K people.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const kv = makeInMemoryKV();
+      const anon = 'anon_44444444-4444-4444-4444-444444444444';
+      const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: anon });
+      const scanEnv = makeEnv(kv);
+
+      vi.setSystemTime(new Date('2026-10-03T19:05:00Z'));
+      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      vi.setSystemTime(new Date('2026-10-03T19:45:00Z')); // 40 min later, same hour
+      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      expect(await countScans(tenv().DB)).toBe(1);
+
+      vi.setSystemTime(new Date('2026-10-03T20:02:00Z')); // next hour bucket
+      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      expect(await countScans(tenv().DB)).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('OSE-1459 | UNIT | a scan that fails to store does not block a retry in the same hour', async () => {
+    // The dedup marker is set before the write. If the write fails, nothing
+    // was stored, so the marker must be released: otherwise the hourly dedup
+    // would swallow the retry and the scan would be lost for the hour.
+    const kv = makeInMemoryKV();
+    const anon = 'anon_55555555-5555-5555-5555-555555555555';
+    const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: anon });
+    const db = tenv().DB;
+    let failWrites = true;
+    const flakyDb = new Proxy(db, {
+      get(target, prop) {
+        if (prop === 'batch' && failWrites) {
+          return () => Promise.reject(new Error('D1 unavailable'));
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const failed = await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      expect(failed.status).toBe(302);
+      expect(await countScans(db)).toBe(0);
+
+      failWrites = false;
+      await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      expect(await countScans(db)).toBe(1);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1459 | CONFIG | SCAN_QUEUE_MAX_RETRIES matches the staging scan consumer max_retries', () => {
+    // The consumer releases a dropped scan's dedup marker on the last delivery,
+    // which it recognises by this constant. It must track wrangler.toml.
+    const toml = (env as Record<string, unknown>).TEST_WRANGLER_TOML as string;
+    expect(typeof toml).toBe('string');
+    const block =
+      toml.match(/\[\[env\.staging\.queues\.consumers\]\][\s\S]*?(?=\n\[|$)/)?.[0] ?? '';
+    const retries = Number(block.match(/max_retries\s*=\s*(\d+)/)?.[1]);
+    expect(retries).toBe(SCAN_QUEUE_MAX_RETRIES);
   });
 
   test('OSE-625 | UNIT | duplicate scan, no KV available | writes both rows (dedup is best-effort)', async () => {

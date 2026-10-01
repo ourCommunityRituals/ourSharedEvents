@@ -1362,6 +1362,7 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM scan_placement_events WHERE event_id = ?'),
       delChild('DELETE FROM scan_node_returns     WHERE event_id = ?'),
       delChild('DELETE FROM scan_aggregates       WHERE event_id = ?'),
+      delChild('DELETE FROM scan_cell_aggregates  WHERE event_id = ?'),
       delChild('DELETE FROM sponsor_impressions   WHERE event_id = ?'),
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),

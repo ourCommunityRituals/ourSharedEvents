@@ -214,8 +214,12 @@ export interface SharedReport {
     svg: string;
     suppressed: string[]; // cell IDs under privacy floor — also in _meta.suppression_reasons
     cell_count: number;
-    /** Q8: 'live' = per-cell res9 scan data; 'fallback' = res7 neighborhood hex on launch day. */
-    source: 'live' | 'fallback';
+    /**
+     * Q8: 'live' = per-cell res9 scan data; 'fallback' = res7 neighborhood hex
+     * on launch day; 'suppressed' = poster cells exist but none clears the
+     * K-floor, so no map (and no cell id) is published (OSE-1459).
+     */
+    source: 'live' | 'fallback' | 'suppressed';
   } | null;
 
   _meta: {
@@ -574,23 +578,37 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // 6. poster_attribution — per poster_deployment_id
+  //    OSE-1459: the K-floor is applied per poster-HOUR before the hours are
+  //    summed. /q/ dedup is one scan per person per poster per hour, so only a
+  //    poster-hour of >= K scans is >= K people; a total over all hours is
+  //    not (one person scanning once in each of K hours is K scans). A sub-K
+  //    hour adds nothing, including to first/last scan times. Those times
+  //    come from scan_bucket (the hour /q/ recorded), not created_at, which a
+  //    queued scan gets when the consumer writes it, possibly an hour later.
   const posters = await db
     .prepare(
       `SELECT
          pd.id                  AS poster_deployment_id,
          COALESCE(pd.location_desc, pd.placement_label, '(no label)') AS location,
          pd.h3_res9             AS h3_res9,
-         COUNT(s.id)            AS scan_count,
-         MIN(s.created_at)      AS first_scan_at,
-         MAX(s.created_at)      AS last_scan_at
+         COALESCE(SUM(CASE WHEN ph.n >= ? THEN ph.n ELSE 0 END), 0) AS scan_count,
+         MIN(CASE WHEN ph.n >= ? THEN ph.first_at END) AS first_scan_at,
+         MAX(CASE WHEN ph.n >= ? THEN ph.last_at END)  AS last_scan_at
        FROM poster_deployments pd
-       LEFT JOIN scan_placement_events s ON s.poster_deployment_id = pd.id AND s.event_id = ?
+       LEFT JOIN (SELECT poster_deployment_id,
+                         COUNT(*)        AS n,
+                         MIN(scan_bucket) AS first_at,
+                         MAX(scan_bucket) AS last_at
+                    FROM scan_placement_events
+                   WHERE event_id = ?
+                   GROUP BY poster_deployment_id, substr(scan_bucket, 1, 13)) ph
+         ON ph.poster_deployment_id = pd.id
        WHERE pd.event_id = ?
        GROUP BY pd.id, pd.location_desc, pd.placement_label, pd.h3_res9
        HAVING scan_count > 0
        ORDER BY scan_count DESC`
     )
-    .bind(eventId, eventId)
+    .bind(CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, eventId, eventId)
     .all<{
       poster_deployment_id: string;
       location: string;
@@ -628,7 +646,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
 
   // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
-  //    Source: scan_aggregates.h3_res9 rows for this event.
+  //    Source: scan_cell_aggregates — scans per poster res9 cell (OSE-1459).
   //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
   //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
   //    day one IS the product" (ring gives the saturation promise context).
@@ -636,7 +654,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     svg: string;
     suppressed: string[];
     cell_count: number;
-    source: 'live' | 'fallback';
+    source: 'live' | 'fallback' | 'suppressed';
   } | null = null;
 
   // Q10: integrity check — if stored H3 tags are inconsistent (res9 parent ≠ stored res7),
@@ -675,23 +693,53 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     }
   }
 
+  // OSE-1459 / ADR-011: a scan's place is the poster it was scanned at, so
+  // each cell is a poster's res9 and its value is the SCANS there
+  // (scan_cell_aggregates, place-side only). It is not distinct people:
+  // doctrine rule 6 keeps any session-derived value off a placement. The
+  // per-cell K-floor (CORRIDOR_MAP_MIN_COUNT) still applies in renderCorridorMap.
   const cellRows = await db
     .prepare(
-      `SELECT h3_res9 AS cell, SUM(distinct_agent_hashes) AS count
-         FROM scan_aggregates
-         WHERE event_id = ? AND h3_res9 IS NOT NULL
+      `SELECT h3_res9 AS cell,
+              SUM(CASE WHEN scan_count >= ? THEN scan_count ELSE 0 END) AS count
+         FROM scan_cell_aggregates
+         WHERE event_id = ?
          GROUP BY h3_res9`
     )
-    .bind(eventId)
+    // OSE-683 drop-before-sum: an hourly bucket under K never joins the cell's
+    // sum, so sub-K hours can't add up to a published count (3 + 3 is not 6).
+    // A cell made only of sub-K hours stays as a 0 row, so it is dropped below
+    // and an all-sub-K event still reads as 'suppressed', not 'no scans'.
+    .bind(CORRIDOR_MAP_MIN_COUNT, eventId)
     .all<{ cell: string; count: number }>();
 
   const cellData = cellRows.results ?? [];
+  // OSE-1459: these cells are poster locations. A cell under the K-floor is
+  // DROPPED before rendering, never drawn as a suppressed outline: the
+  // renderer would still serialize its res9 (data-cell + geometry), and "a
+  // poster at this hex drew a small crowd" is the same small-cohort leak
+  // poster_attribution drops (OSE-711). Only cells at or above the floor exist
+  // on the map.
+  const shownCells = cellData.filter((r) => r.count >= CORRIDOR_MAP_MIN_COUNT);
+  const hiddenCells = cellData.length - shownCells.length;
+  if (hiddenCells > 0) {
+    suppression.push({
+      field: 'corridor_map',
+      reason: 'below_min_sample_size',
+      detail: `${hiddenCells} area${hiddenCells === 1 ? '' : 's'} not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
+    });
+  }
 
-  if (cellData.length > 0) {
+  if (shownCells.length > 0) {
     buildCorridorMap(
-      cellData.map((r) => ({ cell: r.cell, count: r.count })),
+      shownCells.map((r) => ({ cell: r.cell, count: r.count })),
       'live'
     );
+  } else if (cellData.length > 0) {
+    // Poster cells exist but none clears the floor: publish no map at all
+    // (the page shows its "hidden to keep things anonymous" note), rather than
+    // falling back to the venue preview as if there were no scans.
+    corridorMap = { svg: '', suppressed: [], cell_count: 0, source: 'suppressed' };
   } else if (event.h3_res7 && !h3TagsCorrupt) {
     // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
