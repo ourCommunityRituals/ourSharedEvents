@@ -396,8 +396,11 @@ export function isReachableUnder(jobName, jobs, memo, baseEnv) {
     needsResult: (n) => (live.includes(n) ? UNKNOWN : 'skipped'),
     statusFn: (fn) => {
       if (needs.length === 0) return fn === 'success';
-      if (live.length < needs.length) return false; // a skipped need: none of the three is true
-      return UNKNOWN;
+      // success() needs every need to succeed, so one skipped need makes it
+      // false. failure() and cancelled() need only ONE need to end that way,
+      // so any need that can run leaves them to the PR author.
+      if (fn === 'success') return live.length < needs.length ? false : UNKNOWN;
+      return live.length > 0 ? UNKNOWN : false;
     },
   };
   const ifStr = job.if == null ? '' : String(job.if).trim();
@@ -498,7 +501,32 @@ function getTriggers(wf) {
  * Analyze { filename: parsedWorkflowObject }.
  * Returns { prReachableSecrets: Map<secret, Set<"file:job">>, pullRequestTargetFiles: string[] }.
  */
-export function analyzeWorkflows(workflowMap) {
+/**
+ * Rule P over a step list, following local composite actions (`uses: ./path`)
+ * recursively with a cycle guard: a checkout inside a composite action
+ * persists its token for the caller's later steps just the same.
+ */
+function persistedCheckouts(steps, label, resolveAction, out, seen = new Set()) {
+  (Array.isArray(steps) ? steps : []).forEach((step, i) => {
+    if (!step || typeof step.uses !== 'string') return;
+    const uses = step.uses.trim();
+    const where = `${label}:step${i + 1}${step.name ? ` (${step.name})` : ''}`;
+    if (/^actions\/checkout@/i.test(uses)) {
+      const w = step.with || {};
+      if (w.token == null || String(w.token).trim() === '') return;
+      if (String(w['persist-credentials']).trim().toLowerCase() === 'false') return;
+      out.push(where);
+      return;
+    }
+    const local = /^\.\/(.+?)\/?$/.exec(uses);
+    if (!local || /\.ya?ml$/i.test(local[1]) || seen.has(local[1])) return;
+    const action = resolveAction(local[1]);
+    if (!action || !action.runs || String(action.runs.using).toLowerCase() !== 'composite') return;
+    persistedCheckouts(action.runs.steps, `${where} → ./${local[1]}`, resolveAction, out, new Set([...seen, local[1]]));
+  });
+}
+
+export function analyzeWorkflows(workflowMap, resolveAction = () => null) {
   const prReachableSecrets = new Map();
   const pullRequestTargetFiles = [];
   const persistedTokenCheckouts = [];
@@ -514,13 +542,7 @@ export function analyzeWorkflows(workflowMap) {
     // $RUNNER_TEMP) unless persist-credentials is false. Later steps include PR
     // code and PR-lockfile installs, so a persisted token is a read path.
     for (const [jobName, job] of Object.entries(wf.jobs || {})) {
-      (job && Array.isArray(job.steps) ? job.steps : []).forEach((step, i) => {
-        if (!step || typeof step.uses !== 'string' || !/^actions\/checkout@/i.test(step.uses.trim())) return;
-        const w = step.with || {};
-        if (w.token == null || String(w.token).trim() === '') return;
-        if (String(w['persist-credentials']).trim().toLowerCase() === 'false') return;
-        persistedTokenCheckouts.push(`${file}:${jobName}:step${i + 1}${step.name ? ` (${step.name})` : ''}`);
-      });
+      persistedCheckouts(job && job.steps, `${file}:${jobName}`, resolveAction, persistedTokenCheckouts);
     }
 
     // Rule W (ADR-012 Phase 0.2): a workflow_run job may hold no secret when the
@@ -591,6 +613,22 @@ function loadAllowlist() {
   }
   const parsed = JSON.parse(readFileSync(ALLOWLIST_PATH, 'utf8'));
   return new Set(Object.keys((parsed && parsed.approved) || {}));
+}
+
+/** Load `./<path>/action.yml` (or `.yaml`) from the repo; null if absent. */
+function readLocalAction(relPath) {
+  for (const name of ['action.yml', 'action.yaml']) {
+    const f = join(REPO_ROOT, relPath, name);
+    if (existsSync(f)) {
+      try {
+        return yaml.load(readFileSync(f, 'utf8'));
+      } catch (err) {
+        console.error(`[pr-secret-guard] ERROR: failed to parse ${relPath}/${name}: ${err.message}`);
+        process.exit(1);
+      }
+    }
+  }
+  return null;
 }
 
 function readWorkflowsFromDisk() {
@@ -1236,6 +1274,86 @@ function runSelfTest() {
       expectViolation: false,
     },
     {
+      name: 'leak: failure() with one need skipped and one that can fail',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            deploy: { if: "github.event_name == 'push'", steps: [{ run: 'echo deploy' }] },
+            notify: {
+              needs: ['test', 'deploy'],
+              if: 'failure()',
+              steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: success() with a need that can never run',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            test: { steps: [{ run: 'npm test' }] },
+            deploy: { if: "github.event_name == 'push'", steps: [{ run: 'echo deploy' }] },
+            after: {
+              needs: ['test', 'deploy'],
+              if: 'success()',
+              steps: [{ env: { T: '${{ secrets.CLOUDFLARE_API_TOKEN }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: false,
+    },
+    {
+      name: 'leak: local composite action checks out with inputs.token and keeps it',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: {
+            j: {
+              steps: [
+                { uses: './.github/actions/fetch-brain', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } },
+                { run: 'npm ci' },
+              ],
+            },
+          },
+        },
+      },
+      actions: {
+        '.github/actions/fetch-brain': {
+          inputs: { token: { required: true } },
+          runs: {
+            using: 'composite',
+            steps: [{ uses: 'actions/checkout@v4', with: { repository: 'org/brain', token: '${{ inputs.token }}' } }],
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'safe: local composite action checks out with persist-credentials: false',
+      wf: {
+        'ci.yml': {
+          on: { pull_request: {} },
+          jobs: { j: { steps: [{ uses: './.github/actions/fetch-brain', with: { token: '${{ secrets.OCR_PROPAGATE_TOKEN }}' } }] } },
+        },
+      },
+      actions: {
+        '.github/actions/fetch-brain': {
+          runs: {
+            using: 'composite',
+            steps: [{ uses: 'actions/checkout@v4', with: { token: '${{ inputs.token }}', 'persist-credentials': 'false' } }],
+          },
+        },
+      },
+      expectViolation: false,
+    },
+    {
       name: 'safe: workflow_run job with no secrets at all',
       wf: {
         'rt.yml': {
@@ -1250,7 +1368,7 @@ function runSelfTest() {
   let failures = 0;
   for (const fx of fixtures) {
     const { prReachableSecrets, pullRequestTargetFiles, persistedTokenCheckouts, prSourcedWorkflowRunSecrets } =
-      analyzeWorkflows(fx.wf);
+      analyzeWorkflows(fx.wf, (rel) => (fx.actions || {})[rel] || null);
     const extras = [...prReachableSecrets.keys()].filter((s) => !TEST_ALLOW.has(s));
     const violated =
       extras.length > 0 ||
@@ -1282,7 +1400,7 @@ function main() {
 
   const workflows = readWorkflowsFromDisk();
   const { prReachableSecrets, pullRequestTargetFiles, persistedTokenCheckouts, prSourcedWorkflowRunSecrets } =
-    analyzeWorkflows(workflows);
+    analyzeWorkflows(workflows, readLocalAction);
 
   if (arg === '--report') {
     console.log('PR-reachable secrets (plain, non-full-pipeline PR):');

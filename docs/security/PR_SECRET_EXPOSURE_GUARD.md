@@ -155,7 +155,7 @@ workflow, not only PR-triggered ones.
 
 **Rule P: no persisted token checkouts.**
 
-- What it requires: an `actions/checkout` step that receives a `token:` must set `persist-credentials: false`.
+- What it requires: an `actions/checkout` step that receives a `token:` must set `persist-credentials: false`. This includes checkouts inside local composite actions (`uses: ./path`), followed recursively, because they persist the token for the calling job's later steps just the same.
 - Why: without it, the token stays readable by every later step in the job, from `.git/config` or, with checkout v6+, from a credentials file under `$RUNNER_TEMP`. Those later steps include PR test code and dependencies installed from the PR's lockfile.
 - The one legitimate exception is a job that must `git push` with that token, an org-automation (Z4) job. None exists in this repo.
 
@@ -163,7 +163,7 @@ workflow, not only PR-triggered ones.
 
 - What it requires: a job in a `workflow_run` workflow may hold no secret (other than `GITHUB_TOKEN`) if a source run whose event was `pull_request` can trigger it.
 - Why: `workflow_run` runs with the default branch as its ref, so environment branch rules do not stop it. A `head_repository` check stops forks, but not same-repo agent branches.
-- How it is checked: the PR author chooses the branch name, so the guard does not rely on a sample list. Every string literal in the workflow's `if:` conditions is tried as the source branch, along with sample names (`full-pipeline/x`, `copilot/x`, `claude/x`, `dependabot/npm/x`, `feature/x`, `main`). Each is tried from this repo and from a fork. The job fails if any of them reaches a secret.
+- How it is checked: the PR author chooses the source branch, so the guard does not enumerate branch names. The `workflow_run` head branch is a **symbolic** value: any test on it is UNKNOWN, and a job whose `if:` is true or UNKNOWN counts as reachable (see "Three-valued model" below). The source repo is tried as this repo and as a fork (which never equals this repo), and the conclusion as every value GitHub reports plus any literal in the condition.
 - **Structural backstop:** a secret-holding `workflow_run` job must also name `github.event.workflow_run.event == 'push'` (or `'schedule'`) in its `if:` and never `'pull_request'`, so a gap in the model cannot pass it.
 - **Inherited secrets count:** for both rules, workflow-level `env:` secrets count for every job. `secrets: inherit`, `toJSON(secrets)` and computed `secrets[...]` indexes fail closed as "all secrets". Checkout matching is case-insensitive.
 - Unmodeled refs fail closed.
@@ -189,9 +189,9 @@ workflow, not only PR-triggered ones.
 
 **Scope boundary, stated:** the `pull_request` model excludes exactly one head-branch prefix, `full-pipeline/` (`APPROVED_DEPLOY_PREFIX`), because that is ADR-020's approved deploy path. ADR-012 decision 6 would retire it. **Not modelled yet**, tracked in the ADR-012 gate register: unfiltered `push` triggers, `issue_comment` jobs that check out PR code, `merge_group`, and default-`GITHUB_TOKEN` checkouts in jobs with write scopes.
 
-**Three-valued model (2026-10-01, second Copilot round):** witness lists lost to compound predicates (a prefix AND a suffix, a prefix AND a not-equal, mixed upstream results). The evaluator now treats every value the PR author controls as **symbolic**: the head and base branch, the `workflow_run` head branch, a fork's name, and each reachable upstream job's result. Any test whose answer the author could pick is UNKNOWN; `&&`, `||` and `!` follow Kleene logic; a job whose `if:` is true **or** unknown is reachable. The only facts the model keeps are the ones the author cannot change: the event name, `github.ref`'s shape, a fork never equals this repo, and a plain PR's head does not start with `full-pipeline/`. Rule W also follows local reusable workflows. The four new leak fixtures were missed by the previous guard and are caught now; weakening any part of the model (unknown counted as unreachable, unknown counted as false under `&&`, upstream results fixed to success, Rule W not following callees, the symbolic value made concrete) turns the self-test red, and dropping the approved prefix turns the live repo red.
+**Three-valued model (2026-10-01, second Copilot round):** witness lists lost to compound predicates (a prefix AND a suffix, a prefix AND a not-equal, mixed upstream results). The evaluator now treats every value the PR author controls as **symbolic**: the head and base branch, the `workflow_run` head branch, a fork's name, and each reachable upstream job's result. Any test whose answer the author could pick is UNKNOWN; `&&`, `||` and `!` follow Kleene logic; a job whose `if:` is true **or** unknown is reachable. The only facts the model keeps are the ones the author cannot change: the event name, `github.ref`'s shape, a fork never equals this repo, and a plain PR's head does not start with `full-pipeline/`. Rule W also follows local reusable workflows. Upstream status functions: `success()` is false when any need is skipped; `failure()` and `cancelled()` are UNKNOWN whenever at least one need can run, because one failed or cancelled need is enough. The four new leak fixtures were missed by the previous guard and are caught now; weakening any part of the model (unknown counted as unreachable, unknown counted as false under `&&`, upstream results fixed to success, Rule W not following callees, the symbolic value made concrete) turns the self-test red, and dropping the approved prefix turns the live repo red.
 
-The self-test has 45 fixtures.
+The self-test has 49 fixtures.
 
 ## Born-red proof
 
