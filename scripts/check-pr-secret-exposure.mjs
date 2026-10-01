@@ -411,9 +411,15 @@ export function workflowRunPushSource(wf, workflowMap) {
   const names = wr && Array.isArray(wr.workflows) ? wr.workflows : null;
   if (!names || names.length === 0) return 'unpinned';
   let sawPush = false;
+  // Workflow names are not unique, so EVERY workflow carrying the name is a
+  // possible source; one unpinned match makes the result unpinned.
+  const sources = [];
   for (const name of names) {
-    const src = Object.values(workflowMap).find((w) => w && typeof w === 'object' && w.name === name);
-    if (!src) return 'unpinned';
+    const matches = Object.values(workflowMap).filter((w) => w && typeof w === 'object' && w.name === name);
+    if (matches.length === 0) return 'unpinned';
+    sources.push(...matches);
+  }
+  for (const src of sources) {
     const sOn = src.on ?? src[true];
     if (sOn === 'push' || (Array.isArray(sOn) && sOn.includes('push'))) return 'unpinned';
     if (!sOn || typeof sOn !== 'object' || !('push' in sOn)) continue;
@@ -465,11 +471,13 @@ export function isReachableUnder(jobName, jobs, memo, baseEnv) {
   const job = jobs[jobName] || {};
   const needs = normalizeNeeds(job.needs);
   const live = needs.filter((n) => isReachableUnder(n, jobs, memo, baseEnv));
+  // Context lookups are case-insensitive: needs.BuildJob.result is buildjob.
+  const liveIds = new Set(live.map((n) => n.toLowerCase()));
   const env = {
     ...baseEnv,
     // A need that cannot run is 'skipped'; one that can run ends however the
     // PR author makes it end.
-    needsResult: (n) => (live.includes(n) ? UNKNOWN : 'skipped'),
+    needsResult: (n) => (liveIds.has(String(n).toLowerCase()) ? UNKNOWN : 'skipped'),
     statusFn: (fn) => {
       if (needs.length === 0) return fn === 'success';
       // success() needs every need to succeed, so one skipped need makes it
@@ -1638,6 +1646,36 @@ function runSelfTest() {
         },
       },
       expectViolation: false,
+    },
+    {
+      name: 'leak: two source workflows share a name; the second runs on every push',
+      wf: {
+        'ci.yml': { name: 'CI', on: { push: { branches: ['main'] } }, jobs: {} },
+        'ci-other.yml': { name: 'CI', on: { push: {} }, jobs: {} },
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: { rt: { if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)", steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }] } },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: mixed-case job id in needs.<job>.result (BuildJob)',
+      wf: {
+        'ci.yml': { name: 'CI', on: { push: { branches: ['main'] } }, jobs: {} },
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            BuildJob: { steps: [{ run: 'echo build' }] },
+            rt: {
+              needs: ['BuildJob'],
+              if: "always() && ((github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || needs.BuildJob.result == 'failure')",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
     },
     {
       name: 'safe: workflow_run job with no secrets at all',
