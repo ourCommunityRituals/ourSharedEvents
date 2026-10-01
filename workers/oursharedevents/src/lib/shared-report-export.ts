@@ -491,6 +491,21 @@ export async function exportCorridorDensityBaseline(
     if (batch.length > 0) {
       const insertIdFn = (row: Record<string, unknown>): string =>
         `cdb-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.bucket_dow)}-${String(row.bucket_hour)}`;
+      // Two source rows that canonicalize to one corridor (e.g. a legacy
+      // uppercase spelling beside the lowercase key) would share an insertId,
+      // and BigQuery would keep one while this phase counted both. Fail the
+      // phase closed instead (no watermark advance). The next baseline refresh
+      // regroups by the lowercased cell and deletes the other spelling.
+      const seen = new Set<string>();
+      for (const row of batch) {
+        const id = insertIdFn(row);
+        if (seen.has(id)) {
+          throw new Error(
+            `duplicate canonical corridor baseline key ${id}: two source rows map to one corridor`
+          );
+        }
+        seen.add(id);
+      }
       const res = await bigQueryInsertRowsToDataset(
         env,
         dataset,

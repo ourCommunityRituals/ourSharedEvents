@@ -567,6 +567,53 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     expect(row!.corridor_id).toBe('872664544ffffff');
   });
 
+  test('OSE-616: one cell in two spellings is ONE lowercase baseline row; stale uppercase rows are removed', async () => {
+    const db = tenv().DB;
+    const cell = '872664544ffffff';
+    // Same start instant → same (dow, hour) bucket; one event stores the cell uppercased.
+    const startIso = new Date(Date.now() - 24 * 10 * 3600_000).toISOString();
+    for (const [id, spelling, anon] of [
+      ['test-evt-mat-case-lo', cell, 'b'],
+      ['test-evt-mat-case-up', cell.toUpperCase(), 'c'],
+    ] as const) {
+      await seedEvent({ id, start_offset_hours: -24 * 10 });
+      await db
+        .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
+        .bind(spelling, startIso, id)
+        .run();
+      const nowIso = new Date().toISOString();
+      await db
+        .prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           VALUES (?, ?, ?, ?, 1, ?)`
+        )
+        .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
+        .run();
+    }
+    // A stale row left under the uppercase spelling by an earlier run.
+    await db
+      .prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 0, 0, 1, 1, '2026-01-01T00:00:00.000Z')`
+      )
+      .bind(cell.toUpperCase())
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+
+    const rows = await db
+      .prepare(
+        `SELECT corridor_id, window_90d_count FROM corridor_density_baseline
+           WHERE LOWER(corridor_id) = ?`
+      )
+      .bind(cell)
+      .all<{ corridor_id: string; window_90d_count: number }>();
+    expect(rows.results).toEqual([{ corridor_id: cell, window_90d_count: 2 }]);
+  });
+
   test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {
     const db = tenv().DB;
     await db

@@ -511,6 +511,37 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(bqCalls.flatMap((c) => c.rows.map((r) => r.json.corridor_id))).toEqual([EAGLES_RES7]);
   });
 
+  test('two spellings of one corridor in a bucket fail the phase closed: nothing sent, watermark held', async () => {
+    await clearPipeline();
+    const at = new Date().toISOString();
+    for (const key of [EAGLES_RES7, EAGLES_RES7.toUpperCase()]) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 1, 18, 3, 3, ?)`
+        )
+        .bind(key, at)
+        .run();
+    }
+
+    installBqMock();
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(result.errors).toBe(1);
+    expect(result.rowsExported).toBe(0);
+    expect(bqCalls).toEqual([]);
+    const state = await tenv()
+      .DB.prepare(
+        `SELECT last_export_status, last_exported_at, last_error FROM bigquery_export_state WHERE table_name = 'corridor_density_baseline'`
+      )
+      .first<{ last_export_status: string; last_exported_at: string; last_error: string }>();
+    expect(state?.last_export_status).toBe('failed');
+    expect(state?.last_error).toMatch(/duplicate canonical corridor baseline key/);
+    expect(state?.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
+  });
+
   test('the legacy insertAll client also fails on rows rejected inside an HTTP 200', async () => {
     installBqMock({
       insertErrors: [{ index: 0, errors: [{ reason: 'invalid', message: 'bad' }] }],

@@ -272,13 +272,16 @@ export async function refreshCorridorBaselines(
   const floor90dIso = new Date(nowMs - 90 * 86400 * 1000).toISOString();
 
   // For each (corridor_id, dow, hour), compute window distinct-hash counts.
+  // The corridor key is the res7 cell, lowercased (ADR-011 / OSE-616): H3 is
+  // case-insensitive but this key is not, so one cell stored in two spellings
+  // must group into ONE baseline row, never two that collide at export.
   // We use the SQLite-friendly strftime to extract day-of-week + hour.
   // SQLite's `strftime('%w', ts)` returns 0-6 (Sunday=0); `strftime('%H', ts)`
   // returns 00-23. Both match the schema's bucket_dow/bucket_hour expectations.
   try {
     const cells = await env.DB.prepare(
       `SELECT
-         COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
+         COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
          CAST(strftime('%w', e.start_date) AS INTEGER) AS bucket_dow,
          CAST(strftime('%H', e.start_date) AS INTEGER) AS bucket_hour,
          COUNT(DISTINCT
@@ -292,7 +295,7 @@ export async function refreshCorridorBaselines(
        WHERE (e.h3_res7 IS NOT NULL OR e.corridor_id IS NOT NULL)
          AND e.start_date IS NOT NULL
          AND e.start_date >= ?
-       GROUP BY COALESCE(e.h3_res7, e.corridor_id), bucket_dow, bucket_hour`
+       GROUP BY COALESCE(LOWER(e.h3_res7), e.corridor_id), bucket_dow, bucket_hour`
     )
       .bind(floor30dIso, floor90dIso, floor90dIso)
       .all<{
@@ -302,6 +305,16 @@ export async function refreshCorridorBaselines(
         window_30d_count: number;
         window_90d_count: number;
       }>();
+
+    // Reconcile: drop baseline rows stored under a non-lowercase spelling of
+    // an H3 cell. This run re-derives them under the lowercase key above, so
+    // nothing is lost and the export never sees two spellings of one corridor.
+    await env.DB.prepare(
+      `DELETE FROM corridor_density_baseline
+         WHERE length(corridor_id) = 15
+           AND corridor_id GLOB '8*'
+           AND corridor_id <> LOWER(corridor_id)`
+    ).run();
 
     for (const c of cells.results ?? []) {
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {

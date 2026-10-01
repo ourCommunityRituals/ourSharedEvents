@@ -252,6 +252,12 @@ manifest), not exported as `'unknown'`. It is not a corridor baseline under
 ADR-011, and several such rows in one bucket would share an insertId and be
 silently deduplicated by BigQuery.
 
+H3 is case-insensitive but the baseline key is not, so `refreshCorridorBaselines`
+groups by the **lowercased** res7 cell and deletes any baseline row stored under
+another spelling of an H3 cell. If two rows in one export batch still map to the
+same insertId, the phase fails closed (no watermark advance) rather than letting
+BigQuery drop one while the phase counts both.
+
 For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the required-tag values are sentinel strings (`"corridor-aggregate"`). `assertRequiredTags` checks presence + non-empty, so sentinels pass — and the data is honest about being an aggregate.
 
 **BQ table:** `corridor_density_baseline_export` in the `oureventring_general` dataset.
