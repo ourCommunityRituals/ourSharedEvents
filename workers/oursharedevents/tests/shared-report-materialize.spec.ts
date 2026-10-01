@@ -304,7 +304,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     await seedScan('test-evt-mat-rot', 'anon_rotated');
     await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: 'retired-pepper' });
     const oldHash = await hashAnonIdForReturns('anon_rotated', 'retired-pepper');
-    // A pre-0090 row: its pepper is unknown.
+    // A pre-0091 row: its pepper is unknown.
     await tenv()
       .DB.prepare(
         `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)

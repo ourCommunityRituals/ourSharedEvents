@@ -15,7 +15,7 @@
 --
 -- Applied by CI after covenant-sponsors-reset.sql, before the Bruno contract run:
 --   npx wrangler d1 execute DB --env staging --remote \
---     --file ../../postman/fixtures/covenant-sponsors-seed.sql
+--     --file ../../bruno/fixtures/covenant-sponsors-seed.sql
 --
 -- Names match 'Covenant %' so covenant-sponsors-reset.sql still cleans them; ids are
 -- fixed so the assert can reference them directly. Idempotent: delete-by-id then

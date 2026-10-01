@@ -43,7 +43,7 @@ The scan system and the forms system are **separate databases with no SQL or for
 
 ### For Sponsors
 
-The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, and in which corridor (from the poster's address; the visitor's own location is never read). Not inflated by bots, not enriched with purchased data, not tracking individuals across events. Real presence at real events.
+The analytics you receive are honest. Aggregate signal — how many people engaged with your placement, when during the event, and in which corridor (from the poster's address; the visitor's own location is never read). Repeat scans by one person at one poster count once an hour; automated traffic is not otherwise filtered. Not enriched with purchased data, not tracking individuals across events. Real presence at real events.
 
 ### For the Platform
 
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS scan_node_returns (
   event_id        TEXT NOT NULL,
   anonymous_id    TEXT,                     -- pseudonymous ose_anon cookie value
   user_agent_hash TEXT,                     -- device class, not individual
-  country_code    TEXT,                     -- always NULL since OSE-1460 (CF-IPCountry is not read; 0088 cleared it)
+  country_code    TEXT,                     -- always NULL since OSE-1460 (CF-IPCountry is not read; 0089 cleared it)
   scan_bucket     TEXT NOT NULL,            -- hourly window
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );

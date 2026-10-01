@@ -57,7 +57,8 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
+import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
+import { floorNestedCounts } from './count-floor';
 import {
   assertCorridorGrainRow,
   canonicalCorridorId,
@@ -67,7 +68,7 @@ import {
 
 export type SharedReportExportEnv = BigQueryEnv & {
   DB: D1Database;
-  /** Migration 0090: the returns export counts only rows hashed under this pepper. */
+  /** Migration 0091: the returns export counts only rows hashed under this pepper. */
   ANON_ID_HASH_PEPPER?: string;
 };
 
@@ -315,11 +316,6 @@ interface CorridorReturnsRow {
   returned_5plus: number;
 }
 
-/** A floored count: the value at or above the floor, else null (suppressed). */
-function floorCount(n: number): number | null {
-  return n >= RETURNS_MIN_COUNT ? n : null;
-}
-
 export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<ExportResult> {
   const start = Date.now();
   const prep = await prepareExport(env, 'anon_id_returns', 'anon_id_returns');
@@ -352,7 +348,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     const nextWatermark = changed?.max_computed_at ?? watermark;
 
     const now = new Date();
-    // One pepper only (migration 0090): after a rotation the same browser has a
+    // One pepper only (migration 0091): after a rotation the same browser has a
     // second hash, so mixing peppers would count one person twice and could lift
     // a group of fewer than five people over the floor. Rows of an older or
     // unknown pepper are not counted; with no pepper configured, nothing is.
@@ -369,7 +365,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     // materializer reads it), not last_seen_at: last_seen_at is when the cron
     // materialized the row, hours after the event and later again on a re-run.
     // The last_seen_at bound stays because it can only be later than the event
-    // day, so it is a safe, indexed pre-filter (0089) and never drops a row.
+    // day, so it is a safe, indexed pre-filter (0090) and never drops a row.
     // A return is a person seen at 2+ distinct events in the corridor. This
     // counts events, not visit_count: the materializer bumps visit_count on
     // every re-run over the same scans, so it is not a return signal.
@@ -417,6 +413,14 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
         result.rowsSkipped++;
         continue;
       }
+      // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
+      // published counts reveals a group under the floor (people 12, 2+ 9
+      // would say 3 came once). The group floor above already holds people.
+      const [, ret2, ret3, ret5] = floorNestedCounts(
+        [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
+        RETURNS_MIN_COUNT,
+        RETURNS_MIN_COUNT
+      );
       const uec = r.uec_code ?? 'unknown';
       const tags = {
         corridor_id: corridorId,
@@ -434,9 +438,9 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
           row_type: 'group',
           window_days: RETURNS_WINDOW_DAYS,
           people_count: r.people,
-          returned_2plus: floorCount(r.returned_2plus),
-          returned_3plus: floorCount(r.returned_3plus),
-          returned_5plus: floorCount(r.returned_5plus),
+          returned_2plus: ret2,
+          returned_3plus: ret3,
+          returned_5plus: ret5,
           computed_at: computedAt,
           exported_at: now.toISOString(),
         },
@@ -600,6 +604,19 @@ export async function exportCorridorDensityBaseline(
         result.rowsSkipped++;
         continue;
       }
+      // The counts are distinct people. Publish them on the read path's rule
+      // (a window under CORRIDOR_BASELINE_MIN_SAMPLE is suppressed), and as a
+      // chain (90d ⊇ 30d), so 90d − 30d never names a group under K. A row
+      // with nothing left to say is withheld.
+      const [w90, w30] = floorNestedCounts(
+        [r.window_90d_count, r.window_30d_count],
+        CORRIDOR_BASELINE_MIN_SAMPLE,
+        CORRIDOR_MAP_MIN_COUNT
+      );
+      if (w90 === null && w30 === null) {
+        result.rowsSkipped++;
+        continue;
+      }
       const tags = {
         // Sentinel values for required tags that don't apply to corridor
         // aggregates. assertRequiredTags accepts any non-empty string.
@@ -617,8 +634,8 @@ export async function exportCorridorDensityBaseline(
           ...tags,
           bucket_dow: r.bucket_dow,
           bucket_hour: r.bucket_hour,
-          window_30d_count: r.window_30d_count,
-          window_90d_count: r.window_90d_count,
+          window_30d_count: w30,
+          window_90d_count: w90,
           computed_at: r.computed_at,
           exported_at: new Date().toISOString(),
         },

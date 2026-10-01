@@ -1,0 +1,32 @@
+info:
+  name: OSE-1432 | default sponsor image | 200 locked-down SVG
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/sponsor-default-logo.svg"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (lib/sponsor-card.ts sponsorDefaultLogoResponse): a static SVG, locked down like /ui.css.
+        const body = String(res.getBody() || '');
+        test('200', function () { expect(res.getStatus()).to.eql(200); });
+        test('Content-Type is image/svg+xml', function () { expect(String(res.getHeader('content-type') || '')).to.match(/^image\/svg\+xml/); });
+        test('X-Content-Type-Options: nosniff', function () { expect(String(res.getHeader('x-content-type-options') || '')).to.eql('nosniff'); });
+        test('Cross-Origin-Resource-Policy: same-origin', function () { expect(String(res.getHeader('cross-origin-resource-policy') || '')).to.eql('same-origin'); });
+        test("CSP starts with default-src 'none'", function () { expect(String(res.getHeader('content-security-policy') || '')).to.match(/^default-src 'none'/); });
+        test('no script, link or external reference in the SVG', function () { expect(body).to.not.match(/<script|href=|url\(/i); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

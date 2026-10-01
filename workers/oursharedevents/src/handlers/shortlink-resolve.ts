@@ -4,10 +4,10 @@
  * Looks up the code in the shortlinks table, increments the (anonymous)
  * click counter, and 302-redirects to the canonical event URL.
  *
- * Today's redirect target is `/api/v2/events/:id` (the existing JSON
- * endpoint). When OSE-243 lands a lifecycle-aware public page, the
- * router's `/events/:id` HTML route becomes the better target; the
- * change is a single string in this file.
+ * The redirect goes to the admin-set https:// destination when one is
+ * stored, else to an internal page built from the stored event id: the
+ * public event page `/events/:id` (OSE-243a) or the check-in form. The JSON
+ * endpoint `/api/v2/events/:id` was the target before OSE-243a.
  *
  * Anonymity-principle compliance (reinforced 2026-05-14):
  *   - No IP read. No anon_id read. No session cookie set/read.

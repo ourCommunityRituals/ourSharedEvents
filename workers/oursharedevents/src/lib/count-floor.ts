@@ -39,3 +39,36 @@ export function applyCountFloor(raw: number, floor: number = CORRIDOR_MAP_MIN_CO
   if (n < floor) return { count: null, suppressed: true, floor };
   return { count: n, suppressed: false, floor };
 }
+
+/**
+ * Floor a chain of nested counts, largest first (each one counts a subset of
+ * the one before: people ⊇ returned twice ⊇ returned three times …).
+ *
+ * Flooring each count alone is not enough. With people = 12 and
+ * returned_2plus = 9 both published, a reader subtracts and learns that 3
+ * people came once: a group under the floor. So a count is published only if
+ * it is at or above `floor` AND its difference from the last published count
+ * in the chain is 0 or at least `diffFloor`. Otherwise it is null. Any two
+ * published counts then differ by 0 or at least `diffFloor`, because every
+ * gap between them is a sum of such differences.
+ *
+ * `floor` may be stricter than `diffFloor` (the corridor baseline publishes a
+ * count only from 10 up, but a difference of 5 is already a K-safe group).
+ */
+export function floorNestedCounts(
+  chain: readonly number[],
+  floor: number = CORRIDOR_MAP_MIN_COUNT,
+  diffFloor: number = CORRIDOR_MAP_MIN_COUNT
+): (number | null)[] {
+  let last: number | null = null;
+  return chain.map((raw) => {
+    const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    if (n < floor) return null;
+    if (last !== null) {
+      const gap = last - n;
+      if (gap !== 0 && gap < diffFloor) return null;
+    }
+    last = n;
+    return n;
+  });
+}

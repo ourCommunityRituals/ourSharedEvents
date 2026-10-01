@@ -1,7 +1,7 @@
 /**
  * OSE-1460 — the visitor's IP country is not held (PO decision 2026-10-01).
  *
- * Migration 0088 clears scan_node_returns.country_code and
+ * Migration 0089 clears scan_node_returns.country_code and
  * scan_aggregates.top_country, and nothing writes them again: the scan path no
  * longer reads the country header (qr-scan.spec.ts) and the roll-up writes NULL.
  *
@@ -41,7 +41,7 @@ beforeAll(async () => {
 const clears = (): string[] =>
   statements().filter((s) => /SET\s+(country_code|top_country)\s*=\s*NULL/i.test(s));
 
-describe('OSE-1460 — migration 0088 clears the recorded visitor country', () => {
+describe('OSE-1460 — migration 0089 clears the recorded visitor country', () => {
   test('both columns are cleared, and a re-run is a no-op', async () => {
     await tenv.DB.prepare(
       `INSERT INTO scan_node_returns (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
@@ -85,7 +85,7 @@ describe('OSE-1460 — migration 0088 clears the recorded visitor country', () =
       `SELECT COUNT(*) AS n FROM scan_aggregates WHERE event_id = 'evt-vcc' AND top_country IS NOT NULL`
     ).first<{ n: number }>();
     expect(row?.n).toBe(0);
-    // A country written after 0088 ran (an older Worker in the deploy window)
+    // A country written after 0089 ran (an older Worker in the deploy window)
     // is cleared by the roll-up itself.
     const snr = await tenv.DB.prepare(
       `SELECT country_code FROM scan_node_returns WHERE id = 'snr-vcc-2'`

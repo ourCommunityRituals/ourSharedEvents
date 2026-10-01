@@ -7,7 +7,7 @@
  *
  * Per OCR_STANDARD_perStoryTestPyramid: tests share names byte-for-byte with
  * the matching Playwright FE spec at tests/playwright/public-event-error-pages.spec.ts
- * and Postman items in postman/collections/ose-pages.json.
+ * and Bruno requests in bruno/ose-pages.
  *
  * Format: `OSE-R-004 | API | <method + path> (<condition>) | <assertion>`.
  *

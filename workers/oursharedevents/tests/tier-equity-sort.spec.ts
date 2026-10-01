@@ -196,7 +196,7 @@ describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
 
   test('#25 | OSE-INV5 covenant twin: local-bronze survives vs nonlocal-title (floor, NOT a locals-first rank)', async () => {
     // OSE-891: the RUNNABLE in-process twin of the Newman OSE-INV5 covenant
-    // section (postman/collections/ose-api.json). Same 4 fixtures + the same
+    // section (bruno/ose-api). Same 4 fixtures + the same
     // adversarial case (lowest-tier local vs highest-tier non-local), asserted
     // against the real resolver via SELF.fetch so the covenant is proven WITHOUT
     // staging/admin creds. The Newman L3 layer proves the same thing over the

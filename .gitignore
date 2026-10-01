@@ -102,8 +102,6 @@ dependabot-alerts.json
 npm-audit.json
 
 # Postman desktop sync artifacts
-postman/.postman/
-postman/postman/
 
 # Python bytecode
 __pycache__/

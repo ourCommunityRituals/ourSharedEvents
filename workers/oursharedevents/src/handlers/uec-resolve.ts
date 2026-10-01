@@ -35,7 +35,7 @@
  *
  * Per OCR_STANDARD_perStoryTestPyramid.md: customer-facing HTTP endpoint
  * → all 3 layers required. See tests/uec-resolve-endpoint.spec.ts
- * (vitest), postman/collections/ose-api.json group "10. UEC Resolve"
+ * (vitest), bruno/ose-api folder "10. UEC Resolve"
  * (Postman), tests/playwright/uec-resolve-endpoint.spec.ts.
  */
 

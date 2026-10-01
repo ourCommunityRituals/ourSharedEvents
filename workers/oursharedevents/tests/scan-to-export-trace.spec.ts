@@ -30,10 +30,13 @@
  * that window right now (dateOnlyFixture) — the same day-end rule the public
  * page and the materializer use (phaseTimesFor).
  *
+ * Hop 7 (OSE-1459): a scan at a second poster across town is counted at that
+ * poster's own res9 cell (scan_cell_aggregates), not the venue's, once that
+ * poster-hour reaches the K-floor. Hop 8: one person scanning several posters
+ * in one cell does not add up to a published cell (the cell-hour holds 0).
+ *
  * Not traced here, and why: corridor registry ids + definition_version
- * (OSE-613 / OSE-603, not built); per-placement scan aggregation (scan_aggregates
- * tags every scan with the venue's cells, so a pre-event scan at a poster is not
- * yet aggregated at the poster's node — follow-up ticket).
+ * (OSE-613 / OSE-603, not built).
  */
 
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -77,6 +80,11 @@ const ADMIN = {
 const EAGLES = { lat: 41.6571, lon: -87.6798 };
 const EAGLES_RES9 = '89266454447ffff'; // physical node (poster + venue)
 const EAGLES_RES7 = '872664544ffffff'; // the corridor
+// OSE-1459: a second poster across town, in Beverly (its own node and corridor).
+const BEVERLY = { lat: 41.7203, lon: -87.672 };
+const BEVERLY_RES9 = '892664cdb13ffff';
+const BEVERLY_RES7 = '872664cdbffffff';
+const MORGAN_PARK = { lat: 41.6895, lon: -87.6667 };
 
 const BQ_ENV = {
   WIF_PRIVATE_KEY_PEM:
@@ -88,7 +96,7 @@ const BQ_ENV = {
   BIGQUERY_DATASET_ID: 'oureventring_general',
   WORKER_ENV: 'staging',
 };
-// The export counts only rows hashed under the current pepper (migration 0090),
+// The export counts only rows hashed under the current pepper (migration 0091),
 // so it runs with the same pepper the nightly materializer used below.
 const TRACE_PEPPER = 'ose-616-trace-pepper';
 const exportEnv = (): SharedReportExportEnv =>
@@ -153,6 +161,7 @@ async function clearPipeline(): Promise<void> {
     'corridor_density_baseline',
     'corridor_density_snapshots',
     'scan_aggregates',
+    'scan_cell_aggregates',
     'scan_placement_events',
     'scan_node_returns',
     'export_manifest',
@@ -343,20 +352,18 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(base.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 1 }]);
   });
 
-  test('hop 5 — the export carries the res7 corridor and nothing finer', async () => {
+  test('hop 5 — one scanner crosses nothing; ten would cross at the res7 corridor, nothing finer', async () => {
     installBqMock();
     const run = await runSharedReportBigQueryExport(exportEnv());
-    vi.restoreAllMocks();
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
-    // OSE-1460: one scanner is a group of one, under the k-floor, so the
-    // corridor return counts withhold it. No per-person row crosses; the
-    // returns table gets only its snapshot marker (no groups).
-    expect(Object.keys(byTable).sort()).toEqual([
-      'corridor_density_baseline_export',
-      'corridor_returns_export',
-    ]);
+    // OSE-1460: one scanner is a group of one, under the k-floor. The return
+    // counts withhold it (the returns table gets only its snapshot marker),
+    // and so does the corridor baseline: its counts are distinct people, and
+    // one person is under CORRIDOR_BASELINE_MIN_SAMPLE. Nothing about the
+    // lone scanner crosses.
+    expect(Object.keys(byTable).sort()).toEqual(['corridor_returns_export']);
     const returnRows = byTable.corridor_returns_export.rows.map((r) => r.json);
     expect(returnRows).toEqual([
       expect.objectContaining({ row_type: 'snapshot', groups_in_snapshot: 0 }),
@@ -364,12 +371,28 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
     expect(returns?.rowsExported).toBe(0);
     expect(returns?.rowsSkipped).toBe(1);
+    const baseline = run.phases.find((p) => p.phase === 'corridor_density_baseline');
+    expect(baseline?.rowsExported).toBe(0);
+    expect(baseline?.rowsSkipped).toBe(1);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
-    const rows = bqCalls
-      .flatMap((c) => c.rows.map((r) => r.json))
-      .filter((j) => j.row_type !== 'snapshot');
-    expect(rows.length).toBeGreaterThan(0);
+    // The same baseline row, as if ten more people had scanned that hour
+    // (counts raised in place, a newer computed_at so it is past the
+    // watermark), crosses keyed by the res7 corridor node and nothing finer.
+    await tenv()
+      .DB.prepare(
+        `UPDATE corridor_density_baseline
+            SET window_30d_count = 12, window_90d_count = 12, computed_at = ?`
+      )
+      .bind(new Date(Date.now() + 1000).toISOString())
+      .run();
+    bqCalls.length = 0;
+    const raised = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+    expect(raised.errors).toBe(0);
+    expect(raised.rowsExported).toBe(1);
+    const rows = bqCalls.flatMap((c) => c.rows.map((r) => r.json));
+    expect(rows).toHaveLength(1);
     for (const row of rows) {
       // The corridor is the res7 node — before OSE-616 the event-joined tables
       // sent corridor_id 'unknown' (events.corridor_id has no writer).
@@ -412,16 +435,156 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       expect(r.actor).toBe('cron:scheduler');
       expect(r.outcome).toBe('success');
       const d = JSON.parse(r.details);
-      // Only the corridor baseline crosses: event_series had nothing new, and
-      // the lone scanner's return group is under the floor (OSE-1460).
-      const expected = phase === 'corridor_density_baseline' ? 1 : 0;
-      expect(r.rows_exported).toBe(expected);
-      expect(d.corridor_id_present).toBe(expected);
+      // Nothing crosses: event_series had nothing new, and the lone scanner is
+      // under the floor for both the returns and the baseline (OSE-1460).
+      expect(r.rows_exported).toBe(0);
+      expect(d.corridor_id_present).toBe(0);
       expect(d.corridor_id_unknown).toBe(0);
       // Counts, routing and coverage only: no hash, no cell, no event row.
       expect(r.details).not.toContain(EAGLES_RES9);
       expect(r.details).not.toMatch(/anon_id_hash|anonymous_id/);
     }
+  });
+
+  test("hop 7 (OSE-1459) — a scan at a poster across town is counted at THAT poster's cell", async () => {
+    // A second poster for the same event, hung in Beverly: its own res9 node,
+    // in a different res7 corridor from the venue.
+    const placed = await SELF.fetch(
+      `https://t.test/api/v2/admin/events/${eventId}/poster-deployments`,
+      {
+        method: 'POST',
+        headers: ADMIN,
+        body: JSON.stringify({
+          placement_label: 'OSE-1459 Trace — Beverly window',
+          latitude: BEVERLY.lat,
+          longitude: BEVERLY.lon,
+        }),
+      }
+    );
+    expect(placed.status, await placed.clone().text()).toBe(201);
+    const away = (await placed.json()) as { qr_token: string };
+
+    // Five different people (no cookie, so each is a new anonymous visitor):
+    // the K-floor (CORRIDOR_MAP_MIN_COUNT = 5) is met at this poster this hour.
+    for (let i = 0; i < 5; i++) {
+      const scan = await SELF.fetch(`https://t.test/q/${away.qr_token}`, { redirect: 'manual' });
+      expect(scan.status).toBe(302);
+    }
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    // The place-side rollup: scans at their own poster's cell. Beverly's five
+    // are counted at Beverly. The Eagles poster's single scan (hop 1) is under
+    // the floor for its poster-hour, so its cell-hour is kept at 0.
+    const cells = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, h3_res7, SUM(scan_count) AS scans
+           FROM scan_cell_aggregates WHERE event_id = ?
+          GROUP BY h3_res9, h3_res7 ORDER BY h3_res9`
+      )
+      .bind(eventId)
+      .all<{ h3_res9: string; h3_res7: string; scans: number }>();
+    expect(cells.results).toEqual(
+      [
+        { h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7, scans: 0 },
+        { h3_res9: BEVERLY_RES9, h3_res7: BEVERLY_RES7, scans: 5 },
+      ].sort((a, b) => a.h3_res9.localeCompare(b.h3_res9))
+    );
+
+    // The event-level rollup is unchanged in kind: every scan, one event,
+    // labelled with the event's venue (it is not a statement of scan place).
+    const agg = await tenv()
+      .DB.prepare('SELECT SUM(total_scans) AS n FROM scan_aggregates WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ n: number }>();
+    expect(agg?.n).toBe(6);
+
+    // Running the job again changes nothing: the window is recomputed, not added to.
+    // And the rollup is ONE two-statement batch (DELETE + INSERT ... SELECT),
+    // whatever the row count: D1 caps statements per invocation.
+    const batchSpy = vi.spyOn(tenv().DB, 'batch');
+    await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(batchSpy.mock.calls.map((c) => (c[0] as unknown[]).length)).toEqual([2]);
+    batchSpy.mockRestore();
+    const again = await tenv()
+      .DB.prepare('SELECT SUM(scan_count) AS n FROM scan_cell_aggregates WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ n: number }>();
+    expect(again?.n).toBe(5);
+  });
+
+  test('hop 8 (OSE-1459) — one person scanning five posters in one cell does not publish it', async () => {
+    // Five posters hung at one spot (one res9 cell), all scanned by the SAME
+    // visitor within the hour. Dedup is per poster, so that is five scans in
+    // the cell, but one person: the cell must hold 0, never a publishable count.
+    const tokens: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const placed = await SELF.fetch(
+        `https://t.test/api/v2/admin/events/${eventId}/poster-deployments`,
+        {
+          method: 'POST',
+          headers: ADMIN,
+          body: JSON.stringify({
+            placement_label: `OSE-1459 Trace — Morgan Park wall ${i + 1}`,
+            latitude: MORGAN_PARK.lat,
+            longitude: MORGAN_PARK.lon,
+          }),
+        }
+      );
+      expect(placed.status, await placed.clone().text()).toBe(201);
+      tokens.push(((await placed.json()) as { qr_token: string }).qr_token);
+    }
+
+    let cookie = '';
+    for (const token of tokens) {
+      const scan = await SELF.fetch(`https://t.test/q/${token}`, {
+        redirect: 'manual',
+        headers: cookie ? { Cookie: cookie } : {},
+      });
+      expect(scan.status).toBe(302);
+      if (!cookie) cookie = (scan.headers.get('Set-Cookie') ?? '').split(';')[0];
+    }
+    expect(cookie).toMatch(/^ose_anon=/);
+    const placedRows = await tenv()
+      .DB.prepare(
+        `SELECT COUNT(*) AS n FROM scan_placement_events spe
+           JOIN poster_deployments pd ON pd.id = spe.poster_deployment_id
+          WHERE pd.placement_label LIKE 'OSE-1459 Trace — Morgan Park%'`
+      )
+      .first<{ n: number }>();
+    expect(placedRows?.n).toBe(5);
+
+    const run = await runSharedReportMaterialization({
+      DB: tenv().DB,
+      ANON_ID_HASH_PEPPER: 'ose-616-trace-pepper',
+    });
+    expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
+
+    const cells = await tenv()
+      .DB.prepare(
+        `SELECT h3_res9, SUM(scan_count) AS scans
+           FROM scan_cell_aggregates WHERE event_id = ?
+          GROUP BY h3_res9 HAVING SUM(scan_count) > 0 ORDER BY h3_res9`
+      )
+      .bind(eventId)
+      .all<{ h3_res9: string; scans: number }>();
+    expect(cells.results).toEqual([{ h3_res9: BEVERLY_RES9, scans: 5 }]);
+    // The Morgan Park cell-hour exists (activity happened) but counts 0.
+    const zero = await tenv()
+      .DB.prepare(
+        `SELECT COUNT(*) AS n FROM scan_cell_aggregates
+          WHERE event_id = ? AND scan_count = 0 AND h3_res9 NOT IN (?, ?)`
+      )
+      .bind(eventId, EAGLES_RES9, BEVERLY_RES9)
+      .first<{ n: number }>();
+    expect(zero?.n).toBe(1);
   });
 });
 
@@ -490,7 +653,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7, new Date().toISOString())
       .run();
@@ -520,7 +683,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7.toUpperCase(), new Date().toISOString())
       .run();
@@ -541,7 +704,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, 1, 18, 3, 3, ?)`
+           VALUES (?, 1, 18, 12, 30, ?)`
         )
         .bind(key, at)
         .run();
@@ -570,7 +733,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES7, new Date().toISOString())
       .run();
@@ -601,7 +764,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, ?, ?, 1, 1, ?)`
+           VALUES (?, ?, ?, 12, 30, ?)`
         )
         .bind(cell, Math.floor(bucket / 24), bucket % 24, at)
         .run();
@@ -640,7 +803,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 0, 0, 1, 1, ?)`
+         VALUES (?, 0, 0, 12, 30, ?)`
       )
       .bind(EAGLES_RES7.toUpperCase(), at)
       .run();
@@ -666,7 +829,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, 1, 18, 3, 3, ?)
+           VALUES (?, 1, 18, 12, 30, ?)
            ON CONFLICT(corridor_id, bucket_dow, bucket_hour) DO UPDATE SET computed_at = excluded.computed_at`
         )
         .bind(cell, at)
@@ -718,7 +881,7 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 1, 18, 3, 3, ?)`
+         VALUES (?, 1, 18, 12, 30, ?)`
       )
       .bind(EAGLES_RES9, new Date().toISOString())
       .run();

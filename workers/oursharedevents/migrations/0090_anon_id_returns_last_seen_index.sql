@@ -1,4 +1,4 @@
--- Migration 0089: index anon_id_returns for the corridor-returns export (OSE-1460 review).
+-- Migration 0090: index anon_id_returns for the corridor-returns export (OSE-1460 review).
 --
 -- The export (lib/shared-report-export.ts) runs two reads on every scheduled run:
 --   1. the watermark probe, `WHERE computed_at > ?` (COUNT + MAX), and

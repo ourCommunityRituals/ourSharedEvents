@@ -175,7 +175,7 @@ row is past the watermark, because a rolling window changes as events age out.
 The window is the event's day, not `last_seen_at`, which is when the cron
 materialized the row (hours after the event, later again on a re-run).
 Only rows hashed under the current `ANON_ID_HASH_PEPPER` count (`pepper_epoch`,
-migration 0090): after a rotation the same browser has a second hash, so mixing
+migration 0091): after a rotation the same browser has a second hash, so mixing
 peppers could count three people as six and lift them over the floor. A rotation
 resets the return counts; with no pepper configured, every group is empty. The watermark then records the newest source row seen. Each run
 is its own snapshot, identified by its full `computed_at` timestamp; retries
@@ -199,8 +199,13 @@ used, because the materializer bumps it on every re-run. Tiers that share a pool
 
 **Floor:** a group with fewer than `RETURNS_MIN_COUNT` people (5, the same
 floor as `CORRIDOR_MAP_MIN_COUNT`) is not exported. Inside an exported group,
-each `returned_*` count below 5 is sent as `null`, meaning suppressed. A group
-with no real res7 corridor is withheld, never sent as `'unknown'`.
+the counts are nested (`people_count` ⊇ `returned_2plus` ⊇ `returned_3plus` ⊇
+`returned_5plus`) and are floored as one chain (`floorNestedCounts`,
+`lib/count-floor.ts`): a count is sent only if it is at least 5 **and** it is
+equal to, or at least 5 below, the last count sent before it. Otherwise it is
+`null`, meaning suppressed. Without the second rule, `people_count` 12 and
+`returned_2plus` 9 would tell a reader that 3 people came once. A group with
+no real res7 corridor is withheld, never sent as `'unknown'`.
 
 **BQ row shape:**
 
@@ -251,6 +256,12 @@ event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 ### `corridor_density_baseline` export
 
 **Source:** `corridor_density_baseline` (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+
+**Floor:** both windows count distinct people. Each is sent only at or above
+`CORRIDOR_BASELINE_MIN_SAMPLE` (10), the rule the SharedReport read path uses,
+and the pair is floored as a chain (90d ⊇ 30d): the 30-day count is `null`
+when it sits 1–4 below the 90-day count, so `90d − 30d` never names fewer than
+5 people. A row with both windows `null` is withheld.
 
 **Routing:** Baselines are cross-event aggregates. **Default to `general` pool** for v1 — these are corridor-level density signals that don't encode per-attendee state. If a corridor's events span multiple pools, the baseline is intentionally less-precise on routing (it's a baseline; it summarizes mixed traffic). This is a deliberate v1 simplification documented for revisit if a HIPAA/COPPA corridor surfaces a routing issue.
 
@@ -383,7 +394,7 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 
 **Integration (vitest-pool-workers, D1 + mocked BQ):**
 
-- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; a group under the floor is withheld; a group with no real corridor is withheld; events before the 90-day window are not counted, even when materialized recently
+- Returns phase: one k-floored count row per corridor × event type × pool, with no person or venue in it; no two published counts subtract to a group under the floor; a group under the floor is withheld; a group with no real corridor is withheld; events before the 90-day window are not counted, even when materialized recently
 - Every run writes one snapshot marker per pool, even with no groups, so an empty run is distinguishable from a missing run
 - More than 500 groups go in chunks of at most 500
 - Watermark advances to the newest source row on success and is **not** advanced when BigQuery rejects the insert (S4-Q4)
@@ -399,13 +410,13 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 
 ## Anonymity invariants (preserved by construction)
 
-| Invariant                       | How it's preserved in Session 4                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Invariant                            | How it's preserved in Session 4                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | No `anon_id` or `anon_id_hash` to BQ | Since OSE-1460 the returns phase sends only k-floored corridor counts; the hash is used inside the Worker to count people and never leaves. |
-| No cross-DB join with FORMS_DB  | Export library reads main DB only (Gate 1 carries over from Session 3).                                     |
-| No user-facing surface          | Cron-only by static-source gate (Gate 5, new).                                                              |
-| No re-hashing                   | Session 4 never re-hashes; the returns phase counts hashed ids in SQL and exports counts only.              |
-| Pool isolation                  | `assertRequiredTags` + `phaseToPool` guarantee no HIPAA event's aggregate row lands in the general dataset. |
+| No cross-DB join with FORMS_DB       | Export library reads main DB only (Gate 1 carries over from Session 3).                                                                     |
+| No user-facing surface               | Cron-only by static-source gate (Gate 5, new).                                                                                              |
+| No re-hashing                        | Session 4 never re-hashes; the returns phase counts hashed ids in SQL and exports counts only.                                              |
+| Pool isolation                       | `assertRequiredTags` + `phaseToPool` guarantee no HIPAA event's aggregate row lands in the general dataset.                                 |
 
 ---
 
@@ -414,7 +425,7 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 - **Read API for the BQ exports.** Session 5 ships the read API (`GET /api/v2/events/:id/shared-report` + WKRP batch). Session 4 is write-only.
 - **WKRP batch endpoint.** Session 5 (ratified).
 - **Historical backfill of pre-Session-3 data.** First export pass uses the epoch watermark — picks up everything in D1 at the time. No special backfill needed.
-- **BQ table creation.** *Corrected 2026-10-01:* this line said tables are auto-created on first insert. They are not: `tabledata.insertAll` fails when the table is missing. `corridor_returns_export` now has a checked-in schema (`workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, kept in step with the code by a test) and a creation step in `docs/runbooks/RUNBOOK-DEPLOYMENT.md`. `corridor_density_baseline_export` and `event_series_export` still have neither.
+- **BQ table creation.** _Corrected 2026-10-01:_ this line said tables are auto-created on first insert. They are not: `tabledata.insertAll` fails when the table is missing. `corridor_returns_export` now has a checked-in schema (`workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, kept in step with the code by a test) and a creation step in `docs/runbooks/RUNBOOK-DEPLOYMENT.md`. `corridor_density_baseline_export` and `event_series_export` still have neither.
 - **Cross-pool baseline routing.** Corridor baselines default to `general` in v1. Documented for revisit if a HIPAA/COPPA corridor surfaces a need.
 - **Sponsor impression export.** Sponsor impressions are already exported via the existing `runBigQueryBackup`. No change in Session 4.
 - **Real-time export.** Cron-only, daily. No real-time streaming.

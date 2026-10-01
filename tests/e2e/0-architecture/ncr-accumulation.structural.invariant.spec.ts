@@ -105,6 +105,31 @@ test.describe('Invariant 4: NCR Data Accumulation — structural code-shape lock
     ).not.toMatch(/\b(expires_at|expiry|ttl|delete_after|purge_at)\b/i);
   });
 
+  test('OSE-INV4 | permanence | 0087 scan_cell_aggregates: no TTL, no placement id, no session value', () => {
+    // OSE-1459 / ADR-011: scans counted at the poster's own res9 cell. Same
+    // permanence as scan_aggregates (no expiry column), and the place-side
+    // half of doctrine rule 6 (OSE-798): a row that carries a place must carry
+    // no session-derived value, and the cell is the place — no poster id.
+    const migration = join(MIGRATIONS_DIR, '0087_scan_cell_aggregates.sql');
+    expect(existsSync(migration), '0087_scan_cell_aggregates.sql must exist').toBe(true);
+    const sql = readFileSync(migration, 'utf8');
+    const create = sql.match(/CREATE TABLE[^;]*scan_cell_aggregates[^;]*;/i)?.[0] ?? '';
+    expect(create, '0087 must create scan_cell_aggregates').not.toBe('');
+    expect(create, 'scan_cell_aggregates must NOT declare an expiry/TTL column').not.toMatch(
+      /\b(expires_at|expiry|ttl|delete_after|purge_at)\b/i
+    );
+    expect(
+      create,
+      'scan_cell_aggregates must not store a placement id — the cell is the place'
+    ).not.toMatch(/\b(poster_deployment_id|placement_id|qr_token)\b/i);
+    expect(
+      create,
+      'scan_cell_aggregates must not carry a session-derived value (doctrine rule 6)'
+    ).not.toMatch(
+      /\b(anonymous_id|anon_id\w*|user_agent_hash|distinct_agent_hashes|country_code|top_country)\b/i
+    );
+  });
+
   test('OSE-INV4 | schema | 0022 sponsor_impressions capture surface + placement', () => {
     const migration = join(MIGRATIONS_DIR, '0022_create_sponsor_impressions.sql');
     expect(existsSync(migration), '0022_create_sponsor_impressions.sql must exist').toBe(true);
@@ -168,6 +193,22 @@ test.describe('Invariant 4: NCR Data Accumulation — structural code-shape lock
       'exactly one file may write scan_aggregates (the scheduled aggregation lib). ' +
         'A second writer — especially in handlers/ — means a user-facing path can ' +
         'mutate the rollup, breaking "written by scheduled worker only".\nfound: ' +
+        writers.join(', ')
+    ).toEqual(['lib/shared-report.ts']);
+  });
+
+  test('OSE-INV4 | pipeline | scan_cell_aggregates is WRITTEN by exactly one file — the aggregation lib', () => {
+    // OSE-1459: the place-side rollup is held to the same rule as
+    // scan_aggregates — written by the scheduled aggregation lib only.
+    const writers = walkTs(SRC_DIR)
+      .filter((f) =>
+        /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+scan_cell_aggregates/i.test(readFileSync(f, 'utf8'))
+      )
+      .map((f) => f.slice(SRC_DIR.length + 1).replace(/\\/g, '/'))
+      .sort();
+    expect(
+      writers,
+      'exactly one file may write scan_cell_aggregates (the scheduled aggregation lib).\nfound: ' +
         writers.join(', ')
     ).toEqual(['lib/shared-report.ts']);
   });

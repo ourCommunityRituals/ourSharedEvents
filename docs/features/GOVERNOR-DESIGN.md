@@ -125,7 +125,7 @@ Standard:    5(1) = 5 units
 **Mitigation:**
 
 - Scans are anonymous — `user_agent_hash` + `scan_bucket` — but repeated identical hashes in a short window are detectable
-- In-memory rate limiting already exists on subscribe endpoint; same pattern applies to scan recording
+- In-memory rate limiting exists on the subscribe endpoint. Scan recording (`/q/`) and short links (`/s/`) have no rate limit today (reconciliation 2026-10-01); adding one is a separate story
 - Governor threshold (default 5 scans per 15-min window) is per-event, not per-sponsor — gaming requires broad QR code access
 - QR tokens (`qr_token` UNIQUE in `poster_deployments`) are per physical placement — attacker needs physical access to poster
 

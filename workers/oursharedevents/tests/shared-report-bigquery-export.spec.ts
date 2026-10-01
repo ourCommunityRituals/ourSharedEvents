@@ -154,6 +154,8 @@ async function seedEvent(opts: SeedEventOpts): Promise<void> {
 // Real res7 corridor cells (ADR-011): Eagles Hall's corridor and a neighbour.
 const RES7_A = '872664544ffffff';
 const RES7_B = '872664546ffffff';
+const RES7_C = '872664540ffffff';
+const RES7_D = '872664545ffffff';
 
 async function seedCorridor(id: string): Promise<void> {
   const db = tenv().DB;
@@ -344,7 +346,8 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
            VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .bind(
-          `${opts.prefix ?? 'p'}${i}`.padEnd(32, '0'),
+          // Two-digit index: 'p1' and 'p10' would pad to the same hash.
+          `${opts.prefix ?? 'p'}${String(i).padStart(2, '0')}`.padEnd(32, '0'),
           venueId,
           seen,
           seen,
@@ -378,11 +381,11 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
   });
 
   test('exports one floored count row per corridor and type, with no person or venue in it', async () => {
-    // Six people; five came to two events, three of them to a third.
+    // Ten people; five came to two events, three of them to a third.
     await seedCorridorEvent('test-evt-exp-1');
     await seedCorridorEvent('test-evt-exp-1b');
     await seedCorridorEvent('test-evt-exp-1c');
-    await seedPeople('test-evt-exp-1', [1, 1, 1, 1, 1, 1], { prefix: 'm' });
+    await seedPeople('test-evt-exp-1', [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], { prefix: 'm' });
     await seedPeople('test-evt-exp-1b', [1, 1, 1, 1, 1], { prefix: 'm' });
     await seedPeople('test-evt-exp-1c', [1, 1, 1], { prefix: 'm' });
 
@@ -400,7 +403,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       regulatory_pool: 'general',
       product_id: 'ose',
       window_days: 90,
-      people_count: 6,
+      people_count: 10,
       returned_2plus: 5,
       returned_3plus: null, // 3 people: under the floor, suppressed
       returned_5plus: null,
@@ -408,7 +411,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const wire = JSON.stringify(groupCalls()[0].rows);
     expect(wire).not.toContain('anon_id_hash');
     expect(wire).not.toContain('test-evt-exp-1');
-    expect(wire).not.toMatch(/m\d0{20,}/); // no seeded hash value
+    expect(wire).not.toMatch(/m\d\d0{20,}/); // no seeded hash value
   });
 
   test('visit_count is not a return: repeat materialization at one event counts zero returns', async () => {
@@ -516,6 +519,37 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(r2.rowsExported).toBe(0); // a marker is not data
   });
 
+  test('no two published counts subtract to a group under the floor', async () => {
+    // 12 people, 9 came twice: publishing both says 3 people came once.
+    await seedCorridorEvent('test-evt-exp-c1');
+    await seedCorridorEvent('test-evt-exp-c2');
+    await seedPeople('test-evt-exp-c1', Array(12).fill(1), { prefix: 'c' });
+    await seedPeople('test-evt-exp-c2', Array(9).fill(1), { prefix: 'c' });
+    await exportAnonIdReturns(makeEnv());
+    const row = groupCalls()[0].rows[0].json;
+    expect(row.people_count).toBe(12);
+    expect(row.returned_2plus).toBeNull();
+  });
+
+  test('a chain count is compared with the last published count, not the suppressed one', async () => {
+    // people 15, 2+ 10 (gap 5, published), 3+ 7 (gap 3 from 10, suppressed),
+    // 5+ 5 (gap 5 from 10, published): every published pair differs by >= 5.
+    for (let i = 1; i <= 5; i++) await seedCorridorEvent(`test-evt-exp-k${i}`);
+    await seedPeople('test-evt-exp-k1', Array(15).fill(1), { prefix: 'k' });
+    await seedPeople('test-evt-exp-k2', Array(10).fill(1), { prefix: 'k' });
+    await seedPeople('test-evt-exp-k3', Array(7).fill(1), { prefix: 'k' });
+    await seedPeople('test-evt-exp-k4', Array(5).fill(1), { prefix: 'k' });
+    await seedPeople('test-evt-exp-k5', Array(5).fill(1), { prefix: 'k' });
+    await exportAnonIdReturns(makeEnv());
+    const row = groupCalls()[0].rows[0].json;
+    expect([row.people_count, row.returned_2plus, row.returned_3plus, row.returned_5plus]).toEqual([
+      15,
+      10,
+      null,
+      5,
+    ]);
+  });
+
   test('a group under the floor is withheld, not exported', async () => {
     await seedCorridorEvent('test-evt-exp-small');
     await seedPeople('test-evt-exp-small', [3, 3, 3, 3]);
@@ -602,7 +636,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(groupCalls()).toHaveLength(0);
   });
 
-  test('rows of an unknown pepper (pre-0090) and runs with no pepper count nobody', async () => {
+  test('rows of an unknown pepper (pre-0091) and runs with no pepper count nobody', async () => {
     await seedCorridorEvent('test-evt-exp-nopep');
     await seedPeople('test-evt-exp-nopep', [2, 2, 2, 2, 2], { pepper: null });
     await seedPeople('test-evt-exp-nopep', [2, 2, 2, 2, 2], { prefix: 'q' });
@@ -746,7 +780,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       `cr-${String(group.json.computed_at)}-${RES7_A}-UEC-TRIVIA-general`
     );
     expect(String(marker.computed_at)).toBe(String(group.json.computed_at));
-    expect(group.insertId).not.toMatch(/test-evt-exp|p\d0{20,}/);
+    expect(group.insertId).not.toMatch(/test-evt-exp|p\d\d0{20,}/);
   });
 });
 
@@ -791,7 +825,7 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
         .DB.prepare(
           `INSERT INTO corridor_density_baseline
              (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-           VALUES (?, 4, 19, 5, 9, '2026-05-10T18:00:00.000Z')`
+           VALUES (?, 4, 19, 12, 30, '2026-05-10T18:00:00.000Z')`
         )
         .bind(key)
         .run();
@@ -804,6 +838,38 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
     expect(r.rowsExported).toBe(1);
     const sent = bqCalls.flatMap((c) => c.rows.map((x) => x.json.corridor_id));
     expect(sent).toEqual([RES7_A]);
+  });
+
+  test('counts are floored like the read path, and 90d - 30d never names a group under K', async () => {
+    const rows: Array<[string, number, number]> = [
+      [RES7_A, 4, 9], // both under 10 → the row is withheld
+      [RES7_B, 12, 30], // both published
+      [RES7_C, 27, 30], // 30d under no floor alone, but 30 - 27 = 3 people
+      [RES7_D, 3, 11], // 30d under 10 → null, 90d published
+    ];
+    for (const [key, w30, w90] of rows) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 2, 18, ?, ?, '2026-05-10T18:00:00.000Z')`
+        )
+        .bind(key, w30, w90)
+        .run();
+    }
+    const r = await exportCorridorDensityBaseline(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(r.rowsSkipped).toBe(1);
+    const sent = Object.fromEntries(
+      bqCalls.flatMap((c) =>
+        c.rows.map((x) => [x.json.corridor_id, [x.json.window_30d_count, x.json.window_90d_count]])
+      )
+    );
+    expect(sent).toEqual({
+      [RES7_B]: [12, 30],
+      [RES7_C]: [null, 30],
+      [RES7_D]: [null, 11],
+    });
   });
 
   test('watermark advances on success', async () => {

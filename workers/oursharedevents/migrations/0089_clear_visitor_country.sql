@@ -1,4 +1,4 @@
--- Migration 0088: stop holding the visitor's country (OSE-1460, PO decision 2026-10-01).
+-- Migration 0089: stop holding the visitor's country (OSE-1460, PO decision 2026-10-01).
 --
 -- scan_node_returns.country_code came from the CF-IPCountry request header: where
 -- the visitor's IP (or their VPN) appeared to be, not where the event was. The

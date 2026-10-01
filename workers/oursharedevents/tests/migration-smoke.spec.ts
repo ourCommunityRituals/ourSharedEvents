@@ -62,6 +62,7 @@ const DB_TABLES = [
   'poster_deployments', // 0003
   'report_access_log', // 0043 (OSE-557 SharedReport access logging)
   'scan_aggregates', // 0006
+  'scan_cell_aggregates', // 0087 (OSE-1459 — scans counted at each poster res9 cell)
   'scan_node_returns', // 0062 (OSE-798 A1 — session side of the split scan path; no placement id)
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side; no session-derived column)
   'security_alerts', // 0042 (OSE-558 security observability)

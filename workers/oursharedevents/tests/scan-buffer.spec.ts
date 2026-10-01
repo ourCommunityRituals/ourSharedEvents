@@ -18,7 +18,13 @@
  */
 
 import { describe, test, expect, vi } from 'vitest';
-import { enqueueOrWriteScan, handleScanBatch, type ScanMessage } from '../src/lib/scan-buffer';
+import {
+  enqueueOrWriteScan,
+  handleScanBatch,
+  scanDedupKey,
+  SCAN_QUEUE_MAX_RETRIES,
+  type ScanMessage,
+} from '../src/lib/scan-buffer';
 
 /** Records every prepare()/bind()/batch() so tests can assert what would hit D1. */
 function fakeDb() {
@@ -131,5 +137,61 @@ describe('handleScanBatch (queue consumer)', () => {
       expect(m.ack).toHaveBeenCalledTimes(1);
       expect(m.retry).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('handleScanBatch — a dropped scan releases its dedup marker (OSE-1459)', () => {
+  function failingDb() {
+    return {
+      prepare: () => ({ bind: (...args: unknown[]) => ({ args }) }),
+      batch: async () => {
+        throw new Error('D1 unavailable');
+      },
+    } as unknown as D1Database;
+  }
+  function fakeKv(keys: string[]) {
+    const store = new Set(keys);
+    return {
+      store,
+      kv: {
+        delete: async (k: string) => {
+          store.delete(k);
+        },
+      } as unknown as KVNamespace,
+    };
+  }
+  const key = scanDedupKey(MSG.anon_id, MSG.deployment_id, MSG.scan_bucket);
+
+  test('a failed write on an early attempt keeps the marker (Queues will retry)', async () => {
+    const { store, kv } = fakeKv([key]);
+    const message = { body: MSG, attempts: 1, ack: vi.fn(), retry: vi.fn() };
+    const batch = {
+      queue: 'ose-scans',
+      messages: [message],
+    } as unknown as MessageBatch<ScanMessage>;
+
+    await handleScanBatch(batch, { DB: failingDb(), RATE_LIMIT_KV: kv });
+
+    expect(message.retry).toHaveBeenCalledTimes(1);
+    expect(store.has(key)).toBe(true);
+  });
+
+  test('a failed write on the last attempt (about to dead-letter) deletes the marker', async () => {
+    const { store, kv } = fakeKv([key]);
+    const message = {
+      body: MSG,
+      attempts: SCAN_QUEUE_MAX_RETRIES + 1,
+      ack: vi.fn(),
+      retry: vi.fn(),
+    };
+    const batch = {
+      queue: 'ose-scans',
+      messages: [message],
+    } as unknown as MessageBatch<ScanMessage>;
+
+    await handleScanBatch(batch, { DB: failingDb(), RATE_LIMIT_KV: kv });
+
+    expect(message.retry).toHaveBeenCalledTimes(1);
+    expect(store.has(key)).toBe(false);
   });
 });

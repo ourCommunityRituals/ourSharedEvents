@@ -36,7 +36,7 @@ export interface AuditEntry {
  * resource_type, ?5 is resource_id. Anything not listed (platform routes,
  * global flags, erase, retention jobs, scope refusals) and any target that no
  * longer exists resolves to NULL, which a brand-scoped read never returns: an
- * unresolvable row fails closed. Migration 0087 backfills with the same mapping.
+ * unresolvable row fails closed. Migration 0088 backfills with the same mapping.
  */
 export const AUDIT_BRAND_RESOLVE_SQL = `CASE
     WHEN ?4 IN ('event', 'forms', 'forms-export', 'shared-report')
@@ -75,7 +75,7 @@ export async function logAdminAction(env: AuditLogEnv, entry: AuditEntry): Promi
         .bind(...values, entry.brand_id ?? null)
         .run();
     } catch (e: unknown) {
-      // A database that has not applied 0087 yet (the deploy window) has no
+      // A database that has not applied 0088 yet (the deploy window) has no
       // brand_id column. Write the row without it rather than lose it: a row
       // with no brand is platform-only, which is the fail-closed reading.
       if (!/no such column: brand_id|has no column named brand_id/i.test(String(e))) throw e;

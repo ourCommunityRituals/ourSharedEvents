@@ -38,6 +38,7 @@ const EXPECTED_TABLES = [
   'node_hierarchy',
   'poster_deployments',
   'scan_aggregates',
+  'scan_cell_aggregates', // 0087 (OSE-1459 — scans counted at the poster's own res9 cell)
   'scan_node_returns', // 0062 (OSE-798 A1 — session side of the split scan path)
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side of the split scan path)
   'shortlinks', // OSE-240 (migration 0030)
@@ -68,6 +69,7 @@ const EXPECTED_INDEXES = [
   'idx_spe_event_poster',
   'idx_snr_event_bucket',
   'idx_scan_aggregates_event_date',
+  'idx_scan_cell_aggregates_event_cell', // 0087 (OSE-1459)
   // NCR v2 hierarchy (migration 0010)
   'idx_node_hierarchy_brand_level',
   'idx_node_hierarchy_parent',
@@ -102,10 +104,10 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_created_at',
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
-  'idx_admin_audit_log_brand_created', // 0087 (AUD-3 Phase B brand-scoped audit view)
-  'idx_snr_country_nonnull', // 0088 (OSE-1460 bounded country cleanup)
-  'idx_anon_id_returns_last_seen', // 0089 (OSE-1460 rolling-window export)
-  'idx_anon_id_returns_computed_at', // 0089 (OSE-1460 watermark probe)
+  'idx_admin_audit_log_brand_created', // 0088 (AUD-3 Phase B brand-scoped audit view)
+  'idx_snr_country_nonnull', // 0089 (OSE-1460 bounded country cleanup)
+  'idx_anon_id_returns_last_seen', // 0090 (OSE-1460 rolling-window export)
+  'idx_anon_id_returns_computed_at', // 0090 (OSE-1460 watermark probe)
   'idx_admin_brand_memberships_email', // 0050 (OSE-666/B2 membership scope lookup)
   'idx_events_data_class', // 0052 (OSE-606/608 demo data-class filtering)
   // OSE-240 (migration 0030)
@@ -163,6 +165,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // scan_aggregates: 9 (pre-OSE-450) + 2 (migration 0038: h3_res9, h3_res7,
   // OSE-450 S-6.1.2 — denormalized NCR cells for density queries) = 11.
   scan_aggregates: 11,
+  // scan_cell_aggregates (0087, OSE-1459): id, event_id, bucket_date, bucket_hour,
+  //   h3_res9, h3_res7, scan_count, computed_at = 8.
+  scan_cell_aggregates: 8,
   // subscribers: 5 (pre-0071) − plaintext email + email_hash + email_encrypted
   // (migration 0071, A-5 data-at-rest doctrine) = 6.
   subscribers: 6,
@@ -292,6 +297,10 @@ describe('Gate 4: scan_aggregates write protection', () => {
       expect(content, `${path} must not INSERT into scan_aggregates`).not.toMatch(
         /INSERT\s+.*scan_aggregates/i
       );
+      // OSE-1459: the place-side rollup has the same single cron writer.
+      expect(content, `${path} must not INSERT into scan_cell_aggregates`).not.toMatch(
+        /INSERT\s+.*scan_cell_aggregates/i
+      );
     }
   });
 
@@ -304,13 +313,14 @@ describe('Gate 4: scan_aggregates write protection', () => {
     );
     expect(entry, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').toBeDefined();
     expect(entry![1]).toMatch(/INSERT\s+.*scan_aggregates/i);
+    expect(entry![1]).toMatch(/INSERT\s+INTO\s+scan_cell_aggregates/i);
   });
 });
 
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 77 custom indexes exist', async () => {
+  test('all 78 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -343,7 +353,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(77); // +2 0089 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0088 idx_snr_country_nonnull; +1 0087 idx_admin_audit_log_brand_created; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(78); // +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

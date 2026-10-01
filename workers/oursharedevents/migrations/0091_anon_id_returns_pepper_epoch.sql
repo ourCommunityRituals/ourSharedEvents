@@ -1,4 +1,4 @@
--- Migration 0090: anon_id_returns.pepper_epoch (OSE-1460 review).
+-- Migration 0091: anon_id_returns.pepper_epoch (OSE-1460 review).
 --
 -- anon_id_hash is SHA-256(anon_id | ANON_ID_HASH_PEPPER). When the pepper is
 -- rotated, the same browser gets a new hash, so a window that mixes both peppers

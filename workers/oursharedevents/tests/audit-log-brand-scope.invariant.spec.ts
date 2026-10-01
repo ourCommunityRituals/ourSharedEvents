@@ -6,7 +6,7 @@
  * brand's history without reopening that leak:
  *
  *   - every row records brand_id, resolved at insert from its target
- *     (migration 0087 adds the column and backfills older rows the same way);
+ *     (migration 0088 adds the column and backfills older rows the same way);
  *   - `?scope=brand` returns only rows of brands the caller owns, never a row
  *     with a NULL brand (platform actions and unresolvable targets);
  *   - IPs are masked (/24, /48) for every caller except a `key:` actor;
@@ -307,9 +307,9 @@ describe('AUD-3 B — logAdminAction records the target brand', () => {
   });
 });
 
-// ── Migration 0087 backfill ─────────────────────────────────────────────────
+// ── Migration 0088 backfill ─────────────────────────────────────────────────
 
-describe('AUD-3 B — migration 0087 backfill', () => {
+describe('AUD-3 B — migration 0088 backfill', () => {
   const backfill = (): string[] =>
     (JSON.parse(tenv.TEST_MIGRATION_STATEMENTS) as string[]).filter((s) =>
       /UPDATE\s+admin_audit_log\s+SET\s+brand_id/i.test(s)

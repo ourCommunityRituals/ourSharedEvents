@@ -84,7 +84,7 @@ Everything in sections 2 through 5 fits inside what is already ratified:
 
 ## 8. What this rewards that we do not want, and the guards
 
-- **Fake scans.** Pay-per-scan invites them. Existing defenses: node dedup, rate limits, hour buckets, count floors. Add: a per-night cap set by the anchor, and settlement from the k-floored report rather than raw scans, so gaming the count means gaming the report and the floor eats small manipulation.
+- **Fake scans.** Pay-per-scan invites them. Existing defenses: per-poster hourly dedup (keyed on the visitor cookie, so a cookie-less client is not deduplicated), hour buckets, count floors. `/q/` and `/s/` have no rate limit today (reconciliation 2026-10-01). Add: a per-night cap set by the anchor, and settlement from the k-floored report rather than raw scans, so gaming the count means gaming the report and the floor eats small manipulation.
 - **Coupon drift.** Offers pull toward tracking. Guard: time-and-place keyed, show-the-page, no per-person codes, no redemption table, lint the public-page templates for anything that looks like a unique code.
 - **Regulated advertisers.** Who may be on a parish-hall check-in card, who decides, and what happens when the organizer objects. Unanswered in every prior document. Must be answered before a card ships.
 - **"Near" that isn't.** A strip that shows a business a twenty-minute drive away breaks the promise in one glance. Ratify a radius per venue type; the resolver already has the machinery.

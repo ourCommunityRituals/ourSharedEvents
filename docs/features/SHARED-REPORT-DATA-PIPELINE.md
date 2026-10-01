@@ -39,8 +39,8 @@ CREATE TABLE scan_aggregates (
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,
-  top_region      TEXT,
+  top_country     TEXT,   -- always NULL since OSE-1460 (0089 cleared it)
+  top_region      TEXT,   -- never written
   computed_at     TEXT NOT NULL,
   FOREIGN KEY (event_id) REFERENCES events(id)
 );

@@ -26,7 +26,7 @@ OSE gives those events three things they have never had: a measurable voice (eve
 
 1. **Adults-only Phase 1 collapses regulatory overreach.** Bar venues are 21+ by definition. No COPPA, no HIPAA exposure for the foreseeable rollout. Regulatory tier expansion (physically-isolated databases for each regulated tier) is architectural readiness, not current-defensibility marketing. Each expansion is a future physically-separate database; ADR-003 names them when they land.
 
-2. **Weekly recurring cadence is the architecture's archetype.** Anonymous ID + 15-minute time buckets + multi-year corridor density signal was built for _recurring_ hyperlocal events. Thursday trivia at the same bar for 52 weeks is the literal use case.
+2. **Weekly recurring cadence is the architecture's archetype.** Anonymous ID + hourly time buckets (15 minutes in the original design; hourly confirmed 2026-10-01) + multi-year corridor density signal was built for _recurring_ hyperlocal events. Thursday trivia at the same bar for 52 weeks is the literal use case.
 
 3. **The buyer is the sponsor.** Bar owner _is_ the sponsor — no advertiser intermediary, no two-sided marketplace bootstrapping. One conversation, one payment relationship.
 

@@ -27,7 +27,7 @@
  *   - Pepper rotation invalidates all historical hashes — same as
  *     IP_HASH_PEPPER rotation behavior. SharedReport return-rate signal
  *     "resets" at pepper rotation, which is the intended semantics for
- *     defense in depth. Since migration 0090 each row records pepperEpoch()
+ *     defense in depth. Since migration 0091 each row records pepperEpoch()
  *     and the corridor-returns export counts only the current epoch, so the
  *     reset is enforced, not assumed.
  *   - The pepper itself is a Wrangler secret (Doppler-managed per
@@ -47,7 +47,7 @@ export async function hashAnonIdForReturns(
 }
 
 /**
- * One-way fingerprint of the pepper that hashed a row (migration 0090). Rows
+ * One-way fingerprint of the pepper that hashed a row (migration 0091). Rows
  * written under a rotated-out pepper carry a different epoch, so a count can be
  * limited to one pepper and never sees the same browser under two hashes. The
  * fingerprint cannot be reversed to the pepper and is not a key for anything else.

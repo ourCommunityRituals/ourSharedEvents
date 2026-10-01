@@ -44,7 +44,7 @@ The scan system stores **presence signal only**. By schema design, no PII can en
 | _no location_                 | Never read (OSE-1460)       | Place comes only from the poster's corridor; the visitor's IP country is not recorded |
 | `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
 
-**What's explicitly excluded:** email, name, IP address, any request-derived location (country, region, city; `CF-IPCountry` is never read since OSE-1460, and migration 0088 cleared what was recorded), device fingerprint.
+**What's explicitly excluded:** email, name, IP address, any request-derived location (country, region, city; `CF-IPCountry` is never read since OSE-1460, and migration 0089 cleared what was recorded), device fingerprint.
 
 **What is held, stated plainly:** scan rows still carry an operational `created_at` at full precision (`src/lib/scan-buffer.ts`); only `scan_bucket` and everything exposed are hourly. That at-rest precision is an open decision ([QR-AND-SHORTLINKS.md](./QR-AND-SHORTLINKS.md) §4). `scan_node_returns` stores the pseudonymous `ose_anon` value from a one-year first-party cookie: no name and no email. No SQL join reaches `FORMS_DB`; the same value is stored there, and erasure uses it to delete a person's scan rows.
 

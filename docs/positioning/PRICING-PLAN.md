@@ -99,7 +99,7 @@ The 3-month flip above is a Mid/Premier mechanism. Local business sponsors pay t
 
 The draft proposed "90-day floor + Gate A′ ∧ Gate B." **Two corrections make this the single biggest change from the draft:**
 
-1. **Gate A′ is re-scoped: drop `corridor_density` ratio from the in-window value entirely.** The ratio's `window_30d_count >= 10` is **distinct returning attendees over a 30-DAY ROLLING window** (`shared-report.ts:244-249,231`), NOT 10 event firings. It saturates at ~4 weekly instances' worth of distinct anons and is _perversely hardest for high-retention corridors_ — if the same loyal people return each week, `COUNT(DISTINCT hash)` stops climbing. The draft's "day 70 ratio publishes" is arithmetically wrong. **Gate A′ fires only on: `corridor_map.source === 'live'` (real `scan_aggregates.h3_res9` rows, reachable ~2-3 events) AND `return_rate` un-suppressed (min-sample 3). The density ratio is a month-4+ upsell, never an in-window billed section.**
+1. **Gate A′ is re-scoped: drop `corridor_density` ratio from the in-window value entirely.** The ratio's `window_30d_count >= 10` is **distinct returning attendees over a 30-DAY ROLLING window** (`shared-report.ts:244-249,231`), NOT 10 event firings. It saturates at ~4 weekly instances' worth of distinct anons and is _perversely hardest for high-retention corridors_ — if the same loyal people return each week, `COUNT(DISTINCT hash)` stops climbing. The draft's "day 70 ratio publishes" is arithmetically wrong. **Gate A′ fires only on: `corridor_map.source === 'live'` (a poster cell in `scan_cell_aggregates` with at least one hour of ≥5 scans — OSE-1459 + the OSE-683 drop-before-sum floor) AND `return_rate` un-suppressed (min-sample 3). The density ratio is a month-4+ upsell, never an in-window billed section.**
 
 2. **Redefine when "3 months" begins (Critic 1 Fix 2b, adopted).** The manager clock does not start at first report pull (that shows the _fallback_ map). It starts at the **first `source:'live'` report pull for that organizer.** This structurally guarantees you never invoice a fallback map and makes the founder's "3 months" honest by anchoring it to first rendered value. Below that: **auto-extend free** with an honest banner ("Corridor map is in preview — it runs live once your events accumulate scans"). Reads only already-computed `corridorMap.source` (builder:576) — invariant-clean, no new flag.
 
@@ -115,22 +115,22 @@ The window closes **ONE ring in ONE corridor.** Compression forces engineered ig
 
 ### Governing thresholds (verified)
 
-| Constant                          | Value              | Gates                                                                       | In-window?               |
-| --------------------------------- | ------------------ | --------------------------------------------------------------------------- | ------------------------ |
-| `CORRIDOR_MAP_MIN_COUNT` (K-anon) | **5**              | a map cell renders only at ≥5 unique agents                                 | YES (per event)          |
-| `RETURN_RATE_MIN_SAMPLE`          | **3**              | return_rate publishes at ≥3 distinct anons across ≥2 instances              | YES (~2-3 events)        |
-| `CORRIDOR_BASELINE_MIN_SAMPLE`    | **10**             | density **ratio** — 10 distinct return-anons in a **30-day rolling** bucket | **NO — month-4+ upsell** |
-| fallback map                      | res7 cell + ring-1 | renders on the **first single event**                                       | Day 1                    |
+| Constant                          | Value              | Gates                                                                                                              | In-window?               |
+| --------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| `CORRIDOR_MAP_MIN_COUNT` (K-anon) | **5**              | a map cell is a poster's res9; it renders only from hours with ≥5 scans there (sub-K hours dropped before the sum) | YES (per event)          |
+| `RETURN_RATE_MIN_SAMPLE`          | **3**              | return_rate publishes at ≥3 distinct anons across ≥2 instances                                                     | YES (~2-3 events)        |
+| `CORRIDOR_BASELINE_MIN_SAMPLE`    | **10**             | density **ratio** — 10 distinct return-anons in a **30-day rolling** bucket                                        | **NO — month-4+ upsell** |
+| fallback map                      | res7 cell + ring-1 | renders on the **first single event**                                                                              | Day 1                    |
 
 ### First-corridor choice criteria (select by CADENCE, not geography)
 
 1. **Event cadence ≥ weekly in a single (dow, hour) slot** — maximizes distinct-attendee accrual toward `source:'live'` + `return_rate`, keeps the rolling 30-day bucket occupied. It does NOT "clear 10 events."
-2. **≥5 unique _scanners_ per event** — below K=5 even the fallback cell suppresses (`CORRIDOR_MAP_MIN_COUNT`).
+2. **≥5 people scanning one poster within one hour** (scans are deduplicated per person per poster per hour, OSE-1459) — the live map counts scans per poster per hour, drops any poster-hour under K=5 before adding it to its cell, and drops any cell-hour under K=5 before summing (`CORRIDOR_MAP_MIN_COUNT`, OSE-683). Thinly spread scans never light a cell; posters at the door during the event do.
 3. **NEW-attendee turnover, not just loyal returners** — the corridor needs a stream of _distinct_ anons to ever cross return_rate's min-sample cleanly.
 4. **A confirmable recurring `event_series`** so headcount_trend teaser can light (Premium visible-not-given demo).
 5. **Defensibly geo-derivable `is_local`** at the promotion seam (`draft.h3_res7 === ev.h3_res7`, sponsor-promotion.ts:166-168) — pick a corridor where locality is NOT contested (OSE-662 hazard).
 
-_Auto-disqualify:_ monthly cadence, scattered dow/hour, <5 scanners, all-loyal-zero-turnover, no series, contested locality.
+_Auto-disqualify:_ monthly cadence, scattered dow/hour, no poster reaching 5 scans in an hour, all-loyal-zero-turnover, no series, contested locality.
 
 ### Comp-anchor footprint (all in ONE corridor)
 
@@ -142,13 +142,13 @@ _Auto-disqualify:_ monthly cadence, scattered dow/hour, <5 scanners, all-loyal-z
 
 ### Timeline (weekly anchor, best case — CORRECTED per Critic 1)
 
-Day 1 fallback map + logo counts visible → ~day 14-21 first `source:'live'` render (once scan-aggregation cron runs over an event with ≥5 unique scanners; **note the baseline/aggregate refresh is nightly cron, `shared-report-materialize.ts:81-89`, not read-time — accrual is cron-cadence-bound**) → ~day 21-30 `return_rate` clears min-sample 3 → **manager clock STARTS here (first live pull), not at signup** → day 90 (sponsor side, own anniversary): 2–3 comp sponsors convert to paid frequency SKU via Payment Link. **Revenue inside the founder's 90 days = the sponsors only, collected manually. The ~1 manager conversion the draft booked lands ~90 days AFTER first live render (≈ calendar day 110-120), i.e. outside the founder's window.**
+Day 1 fallback map + logo counts visible → ~day 14-21 first `source:'live'` render (once scan-aggregation cron runs over an event where a poster drew ≥5 scans in one hour; **note the baseline/aggregate refresh is nightly cron, `shared-report-materialize.ts:81-89`, not read-time — accrual is cron-cadence-bound**) → ~day 21-30 `return_rate` clears min-sample 3 → **manager clock STARTS here (first live pull), not at signup** → day 90 (sponsor side, own anniversary): 2–3 comp sponsors convert to paid frequency SKU via Payment Link. **Revenue inside the founder's 90 days = the sponsors only, collected manually. The ~1 manager conversion the draft booked lands ~90 days AFTER first live render (≈ calendar day 110-120), i.e. outside the founder's window.**
 
 ### Failure tripwires (each code-grounded)
 
-1. <5 scanners/event → `corridor_map: below_min_sample_size` on the venue's OWN cell — **fatal, abort the corridor.**
+1. No poster reaches 5 scans in any hour → every poster cell is dropped and `corridor_map.source` is `'suppressed'` ("Map hidden to keep things anonymous") — **fatal, abort the corridor.**
 2. All-loyal audience, no distinct-anon turnover → `return_rate` never clears min-sample 3 → no differentiated Mid value renders.
-3. Scan-aggregation cron hasn't run / no `scan_aggregates.h3_res9` rows → map stuck `source:'fallback'` → auto-extend, clock never starts.
+3. Scan-aggregation cron hasn't run / no `scan_cell_aggregates` rows (scans at poster cells, OSE-1459) → map stuck `source:'fallback'` → auto-extend, clock never starts.
 4. Live map + return_rate render, still no manager conversion after their 90d = **the real, honest WTP failure** — the map isn't worth $49.
 5. Comp sponsors don't convert at day 90 despite frequency rendering → the $99/mo wrapper is mispriced (independent of any gate).
 

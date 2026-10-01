@@ -1,0 +1,29 @@
+info:
+  name: OSE-1432 | logo proxy | 502 when the upstream is unreachable
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_pcard_deadlogo/logo"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // The stored host is logo.invalid: a named host, so it passes the public-DNS rule
+        // (isBlockedLogoHost), and RFC 2606 guarantees it never resolves. A first view fails
+        // the fetch; a repeat within 60 s is the remembered failure. Both are 502, no-store.
+        test('502 for an unreachable upstream', function () { expect(res.getStatus()).to.eql(502); });
+        test('the failure is not cached', function () { expect(String(res.getHeader('cache-control') || '')).to.eql('no-store'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

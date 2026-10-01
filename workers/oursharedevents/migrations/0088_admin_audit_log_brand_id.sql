@@ -1,4 +1,4 @@
--- Migration 0087: admin_audit_log.brand_id (AUD-3 Phase B, OSE-1447).
+-- Migration 0088: admin_audit_log.brand_id (AUD-3 Phase B, OSE-1447).
 --
 -- Each audit row records the tenant its target belongs to, so a brand owner can
 -- read their own brand's history (GET /api/v2/admin/audit-log?scope=brand)

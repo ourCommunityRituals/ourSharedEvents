@@ -9,7 +9,7 @@
 | **Vitest (Workers)** | `workers/oursharedevents/vitest.config.ts` | `tests/**/*.spec.ts`                                 | Worker D1 unit/e2e tests (real miniflare) |
 | **Jest**             | `jest.config.js`                           | `tests/unit/**`, `tests/contract/**`, `tests/api/**` | GAS-era unit + contract tests             |
 | **Playwright (UI)**  | `playwright.config.ts`                     | `tests/playwright/**`, `tests/e2e/**`, `tests/ui/**` | Browser E2E + smoke                       |
-| **Newman**           | `tests/postman/`                           | `*.collection.json`                                  | API contract collections                  |
+| **Bruno**            | `bruno/*/opencollection.yml`               | `bruno/ose-*/**/*.yml`, seeds in `bruno/fixtures/`   | API + pages contract collections (T2)     |
 | **k6**               | `tests/load/`                              | `*.js`                                               | Load / performance scenarios              |
 
 ## Excluded Paths

@@ -16,8 +16,6 @@ paths = [
   '''vitest\.config\.a11y\.mts''',
   # Test spec files that assert on expected key shapes
   '''workers/oursharedevents/tests/.*\.spec\.ts''',
-  # Postman/Newman test collections
-  '''postman/.*''',
   # Wrangler local dev config (non-production, dev-only values)
   '''\.(dev|local)\.vars''',
   # Package lock (checksums, not secrets)

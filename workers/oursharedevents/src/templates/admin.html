@@ -3874,23 +3874,9 @@
                 aria-required="true"
               />
             </div>
-            <!-- 0083: the public card. A sponsor is complete with only a name;
-                 everything below the tier is optional and shown publicly. -->
-            <div>
-              <label for="spon-display-name">Display name (optional)</label>
-              <input
-                type="text"
-                id="spon-display-name"
-                name="display_name"
-                data-testid="spon-display-name"
-                placeholder="Joe's Pizza — Beverly"
-                maxlength="80"
-                aria-describedby="spon-display-name-hint"
-              />
-              <p class="spon-covenant-note" id="spon-display-name-hint" data-testid="spon-display-name-hint">
-                The title people see. Leave blank to show the name above.
-              </p>
-            </div>
+            <!-- OSE-1434: the required fields come first (Name, Tier), then what
+                 the sponsor shows (Event, Image, Website), then the optional
+                 public card in its own collapsed section. -->
             <!-- OSE-1316/1317: tier is the only hard gate. The six stored tiers
                  share out as Premium / Mid / Base (sovTierOf). -->
             <div>
@@ -3943,15 +3929,18 @@
                 data-testid="spon-image-choice"
                 aria-describedby="spon-image-choice-hint"
               >
-                <option value="default">OSE default image</option>
+                <option value="default">Standard image (OurSharedEvents mark)</option>
                 <option value="own">Our own logo</option>
               </select>
-              <p class="spon-covenant-note" id="spon-image-choice-hint" data-testid="spon-image-choice-hint">
-                Every sponsor shows an image. No logo? The OSE default is used, at every tier.
+              <!-- aria-live: choosing "Our own logo" reveals two fields below;
+                   the hint says so out loud rather than moving focus away from
+                   the select (OSE-1434). -->
+              <p class="spon-covenant-note" id="spon-image-choice-hint" data-testid="spon-image-choice-hint" aria-live="polite">
+                Every sponsor shows an image. No logo? The standard image is used, at every tier.
               </p>
             </div>
             <div id="spon-logo-field" hidden data-testid="spon-logo-field">
-              <label for="spon-logo">Header logo URL (optional)</label>
+              <label for="spon-logo">Wide logo (top banner)</label>
               <input
                 type="text"
                 inputmode="url"
@@ -3963,11 +3952,11 @@
                 aria-describedby="spon-logo-hint"
               />
               <p class="spon-covenant-note" id="spon-logo-hint" data-testid="spon-logo-hint">
-                Wide, about 3:1 (e.g. 600&times;200), for the top of the page.
+                Optional. Wide, about 3:1 (e.g. 600&times;200), for the top of the page.
               </p>
             </div>
             <div id="spon-sidebar-logo-field" hidden data-testid="spon-sidebar-logo-field">
-              <label for="spon-sidebar-logo">Sidebar logo URL (optional)</label>
+              <label for="spon-sidebar-logo">Square logo (side rail)</label>
               <input
                 type="text"
                 inputmode="url"
@@ -3979,7 +3968,7 @@
                 aria-describedby="spon-sidebar-logo-hint"
               />
               <p class="spon-covenant-note" id="spon-sidebar-logo-hint" data-testid="spon-sidebar-logo-hint">
-                Square or compact (e.g. 300&times;300), for the side rail. Blank uses the header logo, then the OSE default.
+                Square or compact (e.g. 300&times;300), for the side rail. Optional. Blank uses the wide logo, then the standard image.
               </p>
             </div>
             <div class="full-width">
@@ -3998,46 +3987,72 @@
                 Must start with https://. Leave blank and a tap opens the sponsor's card instead.
               </p>
             </div>
-            <div class="full-width">
-              <label for="spon-address">Location (optional)</label>
-              <input
-                type="text"
-                id="spon-address"
-                name="address_line"
-                data-testid="spon-address"
-                placeholder="10255 S Western Ave, Chicago — or just Beverly"
-                maxlength="200"
-                autocomplete="street-address"
-                aria-describedby="spon-address-hint"
-              />
-              <p class="spon-covenant-note" id="spon-address-hint" data-testid="spon-address-hint">
-                Shown publicly, where your business wants to be found. A neighborhood is fine.
-              </p>
-            </div>
-            <div>
-              <label for="spon-phone">Phone (optional)</label>
-              <input
-                type="tel"
-                id="spon-phone"
-                name="contact_phone"
-                data-testid="spon-phone"
-                placeholder="(773) 555-0100"
-                maxlength="32"
-                autocomplete="tel"
-              />
-            </div>
-            <div>
-              <label for="spon-email">Email (optional)</label>
-              <input
-                type="email"
-                id="spon-email"
-                name="contact_email"
-                data-testid="spon-email"
-                placeholder="hello@acme.com"
-                maxlength="254"
-                autocomplete="email"
-              />
-            </div>
+            <!-- 0083: the public card. A sponsor is complete with a name and a
+                 tier; these four are optional and shown publicly. Collapsed so
+                 the short path stays short on a phone (OSE-1434). `.pd-advanced`
+                 gives the summary its 44px target — no new CSS. The script opens
+                 it on an edit that has card details and before focusing a field
+                 the server rejected. -->
+            <details class="pd-advanced full-width" id="spon-card-details" data-testid="spon-card-details">
+              <summary data-testid="spon-card-details-summary">Public card details (optional)</summary>
+              <div class="create-form">
+                <div class="full-width">
+                  <label for="spon-display-name">Display name (optional)</label>
+                  <input
+                    type="text"
+                    id="spon-display-name"
+                    name="display_name"
+                    data-testid="spon-display-name"
+                    placeholder="Joe's Pizza — Beverly"
+                    maxlength="80"
+                    aria-describedby="spon-display-name-hint"
+                  />
+                  <p class="spon-covenant-note" id="spon-display-name-hint" data-testid="spon-display-name-hint">
+                    The title people see. Leave blank to show the name above.
+                  </p>
+                </div>
+                <div class="full-width">
+                  <label for="spon-address">Location (optional)</label>
+                  <input
+                    type="text"
+                    id="spon-address"
+                    name="address_line"
+                    data-testid="spon-address"
+                    placeholder="10255 S Western Ave, Chicago — or just Beverly"
+                    maxlength="200"
+                    autocomplete="street-address"
+                    aria-describedby="spon-address-hint"
+                  />
+                  <p class="spon-covenant-note" id="spon-address-hint" data-testid="spon-address-hint">
+                    Shown publicly, where your business wants to be found. A neighborhood is fine.
+                  </p>
+                </div>
+                <div>
+                  <label for="spon-phone">Phone (optional)</label>
+                  <input
+                    type="tel"
+                    id="spon-phone"
+                    name="contact_phone"
+                    data-testid="spon-phone"
+                    placeholder="(773) 555-0100"
+                    maxlength="32"
+                    autocomplete="tel"
+                  />
+                </div>
+                <div>
+                  <label for="spon-email">Email (optional)</label>
+                  <input
+                    type="email"
+                    id="spon-email"
+                    name="contact_email"
+                    data-testid="spon-email"
+                    placeholder="hello@acme.com"
+                    maxlength="254"
+                    autocomplete="email"
+                  />
+                </div>
+              </div>
+            </details>
             <div class="full-width">
               <label id="spon-placement-label">Placement &amp; share</label>
               <!--
@@ -4255,7 +4270,10 @@
         // 0083: the image choice reveals the two logo fields only for "own".
         // "default" is not stored — it is simply "no logo", so choosing it on
         // an edit clears both logos (see the submit handler).
-        const SPON_IMAGE_HINT = 'Every sponsor shows an image. No logo? The OSE default is used, at every tier.';
+        const SPON_IMAGE_HINT = 'Every sponsor shows an image. No logo? The standard image is used, at every tier.';
+        // The hint is aria-live, so this is what a screen reader hears when the
+        // two logo fields appear (OSE-1434).
+        const SPON_IMAGE_HINT_OWN = 'Add a wide logo and a square logo below. Both are optional.';
         function syncImageChoice() {
           const own = document.getElementById('spon-image-choice').value === 'own';
           document.getElementById('spon-logo-field').hidden = !own;
@@ -4266,12 +4284,19 @@
           const hasLogo = !!(document.getElementById('spon-logo').value.trim() ||
                              document.getElementById('spon-sidebar-logo').value.trim());
           document.getElementById('spon-image-choice-hint').textContent =
-            !own && editing && hasLogo
-              ? 'Saving will remove this sponsor’s saved logos and show the OSE default image.'
-              : SPON_IMAGE_HINT;
+            own
+              ? SPON_IMAGE_HINT_OWN
+              : editing && hasLogo
+                ? 'Saving will remove this sponsor’s saved logos and show the standard image.'
+                : SPON_IMAGE_HINT;
         }
         document.getElementById('spon-image-choice').addEventListener('change', syncImageChoice);
         const SPON_CARD_FIELDS = ['spon-display-name', 'spon-address', 'spon-phone', 'spon-email'];
+        // The four card fields live in a collapsed <details>; open it whenever
+        // one of them has to be seen (an edit with values, a rejected field).
+        function showCardDetails(open) {
+          document.getElementById('spon-card-details').open = !!open;
+        }
 
         function openForm() {
           const wrap = document.getElementById('spon-form-wrap');
@@ -4288,6 +4313,7 @@
           document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
           document.getElementById('spon-edit-id').value = '';
           document.getElementById('spon-create-form').reset();
+          showCardDetails(false);
           syncImageChoice();
           ['spon-name', 'spon-tier', 'spon-website', 'spon-logo', 'spon-sidebar-logo'].concat(SPON_CARD_FIELDS).forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
           const msg = document.getElementById('spon-form-msg');
@@ -4361,6 +4387,7 @@
             document.getElementById('spon-address').value = s.address_line || '';
             document.getElementById('spon-phone').value = s.contact_phone || '';
             document.getElementById('spon-email').value = s.contact_email || '';
+            showCardDetails(SPON_CARD_FIELDS.some(function(fid) { return !!document.getElementById(fid).value; }));
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
             const localPill = document.getElementById('spon-is-local-pill');
@@ -4542,7 +4569,11 @@
                 INVALID_SIDEBAR_LOGO_URL: 'spon-sidebar-logo', MISSING_TIER: 'spon-tier', INVALID_TIER: 'spon-tier'
               }[data.code];
               const fieldEl = fieldFor ? document.getElementById(fieldFor) : null;
-              if (fieldEl) { fieldEl.setAttribute('aria-invalid', 'true'); fieldEl.focus(); }
+              if (fieldEl) {
+                if (SPON_CARD_FIELDS.indexOf(fieldFor) !== -1) showCardDetails(true);
+                fieldEl.setAttribute('aria-invalid', 'true');
+                fieldEl.focus();
+              }
               throw new Error(data.error || 'Save failed');
             }
             msg.className = 'create-msg success';

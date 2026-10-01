@@ -12,14 +12,14 @@ poster printed and scanned by a real phone (founder field test).
 
 ## Rungs
 
-| #   | Rung                                       | Ticket(s)                                                                                                                     | Status                                                          | Evidence                                                                                                                                                                                                                                                                              |
-| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Print gate                                 | [OSE-286](https://linear.app/oursharedevents/issue/OSE-286)                                                                   | ✅ Done (2026-09-10)                                            | PR #507 (+ #509 brain note). `poster-print-gate.spec.ts`, `poster-print.spec.ts` › Print Gate                                                                                                                                                                                         |
-| 2a  | Poster payload — one call                  | [OSE-867](https://linear.app/oursharedevents/issue/OSE-867)                                                                   | ✅ Done (2026-10-01)                                            | PR #701 (+ #707 staging latency fix). `poster-bundle-payload.spec.ts`, `poster-multi-code-ui.spec.ts` › one data call, `poster-print.spec.ts` › One Data Call; Bruno poster-bundle request green on staging (main run 36795707694)                                                    |
-| 2b  | `showQRSection` backing                    | [OSE-869](https://linear.app/oursharedevents/issue/OSE-869)                                                                   | ✅ Done (2026-10-01)                                            | PR #701. Migration 0085 `events.settings_json`, `lib/event-settings.ts`; `poster-qr-section-setting.spec.ts`, `poster-multi-code-ui.spec.ts` › OSE-869, `poster-print.spec.ts` › showQRSection (no-gap print). PO accepted the component-tier spec for negative coverage (2026-10-01) |
-| 3   | Mobile-viewport coverage                   | [OSE-740](https://linear.app/oursharedevents/issue/OSE-740)                                                                   | ✅ Done (2026-09-23)                                            | Mobile workability gate (OSE-1236) — 9th CI gate, blocks on PR code                                                                                                                                                                                                                   |
-| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | ✅ Done (2026-10-01)                                            | PR #713 ([OSE-1439](https://linear.app/oursharedevents/issue/OSE-1439)). Meta-gate `tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts` in the T0 `invariants` shard over `qr-roundtrip.spec.ts`. Red-proof 26/26; green on main                                             |
-| 5   | Capstone: scan → export trace, Eagles cell | [OSE-616](https://linear.app/oursharedevents/issue/OSE-616)                                                                   | 🔄 Slice 1 merged (#720); review follow-up PR open (2026-10-01) | `tests/scan-to-export-trace.spec.ts` (Eagles scan → aggregate → res7 corridor → export, res9 stripped; T0), `scripts/ci/trace-scan-staging.sh` (T4). Registry + definition_version wait on OSE-613 / OSE-603                                                                          |
+| #   | Rung                                       | Ticket(s)                                                                                                                     | Status                                                                                  | Evidence                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Print gate                                 | [OSE-286](https://linear.app/oursharedevents/issue/OSE-286)                                                                   | ✅ Done (2026-09-10)                                                                    | PR #507 (+ #509 brain note). `poster-print-gate.spec.ts`, `poster-print.spec.ts` › Print Gate                                                                                                                                                                                         |
+| 2a  | Poster payload — one call                  | [OSE-867](https://linear.app/oursharedevents/issue/OSE-867)                                                                   | ✅ Done (2026-10-01)                                                                    | PR #701 (+ #707 staging latency fix). `poster-bundle-payload.spec.ts`, `poster-multi-code-ui.spec.ts` › one data call, `poster-print.spec.ts` › One Data Call; Bruno poster-bundle request green on staging (main run 36795707694)                                                    |
+| 2b  | `showQRSection` backing                    | [OSE-869](https://linear.app/oursharedevents/issue/OSE-869)                                                                   | ✅ Done (2026-10-01)                                                                    | PR #701. Migration 0085 `events.settings_json`, `lib/event-settings.ts`; `poster-qr-section-setting.spec.ts`, `poster-multi-code-ui.spec.ts` › OSE-869, `poster-print.spec.ts` › showQRSection (no-gap print). PO accepted the component-tier spec for negative coverage (2026-10-01) |
+| 3   | Mobile-viewport coverage                   | [OSE-740](https://linear.app/oursharedevents/issue/OSE-740)                                                                   | ✅ Done (2026-09-23)                                                                    | Mobile workability gate (OSE-1236) — 9th CI gate, blocks on PR code                                                                                                                                                                                                                   |
+| 4   | Decode matrix as a permanent CI gate       | [OSE-1127](https://linear.app/oursharedevents/issue/OSE-1127) / [OSE-1128](https://linear.app/oursharedevents/issue/OSE-1128) | ✅ Done (2026-10-01)                                                                    | PR #713 ([OSE-1439](https://linear.app/oursharedevents/issue/OSE-1439)). Meta-gate `tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts` in the T0 `invariants` shard over `qr-roundtrip.spec.ts`. Red-proof 26/26; green on main                                             |
+| 5   | Capstone: scan → export trace, Eagles cell | [OSE-616](https://linear.app/oursharedevents/issue/OSE-616)                                                                   | 🔄 Slice 1 merged (#720, #726); poster-cell aggregation (OSE-1459) PR open (2026-10-01) | `tests/scan-to-export-trace.spec.ts` (Eagles scan → aggregate → res7 corridor → export, res9 stripped; T0), `scripts/ci/trace-scan-staging.sh` (T4). Registry + definition_version wait on OSE-613 / OSE-603                                                                          |
 
 Also in the project (filed 2026-09-30, go-live evidence line, worked on its own
 branch `claude/verify-qr-evidence-tfqtei`): OSE-1420 (In Progress) and follow-ups
@@ -162,7 +162,9 @@ Not in this slice: corridor registry + `definition_version` (OSE-613/603);
 per-placement scan aggregation (a pre-event poster scan is aggregated at the
 venue node, not the poster's); doctrine conflicts the review found (export
 sends `anon_id_hash` + `venue_id`; 15-min vs hourly time grain; CF-IPCountry
-on scans).
+on scans). *Resolved 2026-10-01 (OSE-1460, PR #737): the export sends
+k-floored corridor counts only, the grain is hourly (PO-confirmed), and the
+visitor's country is no longer read.*
 
 **Next:** merge slice 1, record the H3 ADR, then OSE-613 (registry) and the
 per-placement aggregation follow-up; the founder field test (print + phone scan)
@@ -182,3 +184,30 @@ were real and are fixed in a follow-up PR (Part of OSE-616):
   now checks each event's real end time. The trace test creates its event
   through the API with calendar dates and a timezone.
 - `SHARED-REPORT-BIGQUERY-EXPORT.md` describes the res7 corridor id.
+
+### 2026-10-01 — rung 5, poster-cell aggregation (OSE-1459)
+
+#726 merged. PO rulings this session: ADR-011 is **Accepted** (OCR-docs #148);
+OSE-1462 (exactly-once BigQuery delivery) waits until something reads BigQuery;
+the SharedReport corridor map shows **scans per poster cell**.
+
+- Every scan comes in through a poster (`GET /q/:qr_token`), so every scan has a
+  place: its poster's res9. No separate "live scan" rule is needed; a poster at
+  the venue is in the venue's cell.
+- New place-side rollup `scan_cell_aggregates` (migration 0087): scans per
+  (event, hour, poster res9 cell), from `scan_placement_events` ×
+  `poster_deployments` only. Doctrine rule 6 keeps it a scan count with no
+  poster id and no session value. Recomputed per run in one atomic batch, so a
+  corrected poster location never double-counts.
+- The corridor map reads it, K-floored per cell. `scan_aggregates` stays
+  event-level (distinct hashes, top country, venue cells).
+- Trace hop 7: five people scanning a Beverly poster land at Beverly's cell;
+  the single Eagles scan stays under the floor and is not counted.
+- Review fix: the K-floor applies to each poster-hour before it is added into
+  its cell, so one person scanning five posters in one cell does not publish
+  that cell (trace hop 8).
+- Second review fix: `poster_attribution` floors each poster-hour too (one
+  scan in each of five hours can be one person), and a cell-hour with only
+  sub-K activity is stored as 0, so a quiet event's map reads "hidden", not the
+  venue preview (writer → builder test in `shared-report-read.spec.ts`). Gates: NCR structural (no TTL, no placement id, no
+  session value, one writer), schema Gate 4, tenant-isolation exemptions.

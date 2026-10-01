@@ -38,11 +38,28 @@ export interface ScanMessage {
   scan_bucket: string;
 }
 
-/** Env surface the buffer needs: the anonymous DB, and the optional scan queue. */
+/** Env surface the buffer needs: the anonymous DB, the optional scan queue and dedup KV. */
 export interface ScanBufferEnv {
   DB: D1Database;
   SCAN_QUEUE?: Queue<ScanMessage>;
+  RATE_LIMIT_KV?: KVNamespace;
 }
+
+/**
+ * The /q/ dedup marker for one person at one poster in one hour bucket
+ * (OSE-1459). Shared by the hot path, which sets it, and the queue consumer,
+ * which releases it when a scan is finally dropped.
+ */
+export function scanDedupKey(anonId: string, deploymentId: string, scanBucket: string): string {
+  return `scan:dedup:${anonId}:${deploymentId}:${scanBucket}`;
+}
+
+/**
+ * Must equal `max_retries` on the scan queue consumer in wrangler.toml (pinned
+ * by a test). Queues delivers a message at most max_retries + 1 times, then
+ * dead-letters it.
+ */
+export const SCAN_QUEUE_MAX_RETRIES = 3;
 
 /**
  * The two INSERTs for one scan — split so no durable row carries both a placement
@@ -112,6 +129,17 @@ export async function handleScanBatch(
     for (const message of batch.messages) message.ack();
   } catch {
     // Let Queues retry the batch (→ DLQ after max_retries). Do not ack.
-    for (const message of batch.messages) message.retry();
+    for (const message of batch.messages) {
+      // On the last delivery the scan is about to be dead-lettered, not
+      // stored. Release its hour's dedup marker so the person's next scan in
+      // that hour is recorded instead of being taken as a repeat.
+      if (message.attempts > SCAN_QUEUE_MAX_RETRIES && env.RATE_LIMIT_KV) {
+        const m = message.body;
+        await env.RATE_LIMIT_KV.delete(
+          scanDedupKey(m.anon_id, m.deployment_id, m.scan_bucket)
+        ).catch(() => {});
+      }
+      message.retry();
+    }
   }
 }

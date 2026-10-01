@@ -70,7 +70,6 @@ config/deployment-ids.js
 # =============================================================================
 # The following directories are automatically excluded:
 #   - schemas/**    (JSON Schema examples)
-#   - postman/**    (Postman collection examples)
 
 # =============================================================================
 # TEST FILES WITH NEGATIVE ASSERTIONS

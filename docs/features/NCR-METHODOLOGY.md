@@ -30,7 +30,7 @@ The current state. Individual events generate anonymous scan data. Each event is
 
 - Scan counts by hourly bucket
 - Unique device classes (user agent hash)
-- Country/region from CF headers
+- No visitor location: country and region are never read or stored (OSE-1460); place comes only from the poster's address
 - Poster deployment locations (lat/lng)
 - Form submission counts (registrations, check-ins, surveys, emails)
 - Sponsor placement attribution
@@ -147,7 +147,7 @@ CREATE TABLE scan_aggregates (
   bucket_hour     INTEGER,               -- 0-23
   total_scans     INTEGER NOT NULL DEFAULT 0,
   distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
-  top_country     TEXT,                  -- always NULL since OSE-1460 (0088 cleared it)
+  top_country     TEXT,                  -- always NULL since OSE-1460 (0089 cleared it)
   top_region      TEXT,                  -- never written
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );

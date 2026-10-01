@@ -8,7 +8,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { applyCountFloor } from '../src/lib/count-floor';
+import { applyCountFloor, floorNestedCounts } from '../src/lib/count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 
 describe('applyCountFloor — uniform K-anon floor', () => {
@@ -47,5 +47,40 @@ describe('applyCountFloor — uniform K-anon floor', () => {
   test('a custom floor is honored and echoed', () => {
     expect(applyCountFloor(7, 10)).toEqual({ count: null, suppressed: true, floor: 10 });
     expect(applyCountFloor(10, 10)).toEqual({ count: 10, suppressed: false, floor: 10 });
+  });
+});
+
+describe('floorNestedCounts — a chain of nested counts never subtracts to a small group', () => {
+  test('each count alone must clear the floor', () => {
+    expect(floorNestedCounts([20, 4, 0])).toEqual([20, null, null]);
+  });
+
+  test('a gap under the floor suppresses the smaller count (12 − 9 = 3 people)', () => {
+    expect(floorNestedCounts([12, 9])).toEqual([12, null]);
+  });
+
+  test('a gap of exactly the floor, or of zero, is published', () => {
+    expect(floorNestedCounts([10, 5])).toEqual([10, 5]);
+    expect(floorNestedCounts([7, 7])).toEqual([7, 7]);
+  });
+
+  test('the gap is measured from the last PUBLISHED count', () => {
+    // 10 published; 7 is 3 short of it → null; 5 is 5 short of 10 → published.
+    expect(floorNestedCounts([15, 10, 7, 5])).toEqual([15, 10, null, 5]);
+  });
+
+  test('a stricter value floor than gap floor (the corridor baseline: 10 and 5)', () => {
+    expect(floorNestedCounts([30, 12], 10, 5)).toEqual([30, 12]);
+    expect(floorNestedCounts([30, 27], 10, 5)).toEqual([30, null]);
+    expect(floorNestedCounts([9, 4], 10, 5)).toEqual([null, null]);
+    expect(floorNestedCounts([11, 3], 10, 5)).toEqual([11, null]);
+  });
+
+  test('a chain that is not nested (a later count larger) fails closed', () => {
+    expect(floorNestedCounts([10, 12])).toEqual([10, null]);
+  });
+
+  test('non-finite and fractional inputs are treated like applyCountFloor treats them', () => {
+    expect(floorNestedCounts([Number.NaN, Infinity, 5.9])).toEqual([null, null, 5]);
   });
 });
