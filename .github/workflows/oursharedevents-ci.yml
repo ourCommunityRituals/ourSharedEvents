@@ -1415,7 +1415,8 @@ jobs:
       # migration guarantees. The api, pages and sharedreport collections all target it.
       # Seed it here on purpose. NOT continue-on-error: a missing event fails at
       # this step, by name, not as a 404 in a later tier.
-      # INSERT OR IGNORE, so staging's existing row is never overwritten.
+      # Upsert keyed on the id: an existing row only gets data_class='synthetic';
+      # any other conflict (e.g. a slug clash) fails the step.
       - name: 'Seed test-event-001 (OSE-1419 fixture)'
         timeout-minutes: 2
         env:
@@ -1654,7 +1655,8 @@ jobs:
       # migration guarantees. The T4c form E2E and the journey reset target it.
       # Seed it here on purpose. NOT continue-on-error: a missing event fails at
       # this step, by name, not as a 404 in a later tier.
-      # INSERT OR IGNORE, so staging's existing row is never overwritten.
+      # Upsert keyed on the id: an existing row only gets data_class='synthetic';
+      # any other conflict (e.g. a slug clash) fails the step.
       - name: 'Seed test-event-001 for T4 (OSE-1419 fixture)'
         timeout-minutes: 2
         env:

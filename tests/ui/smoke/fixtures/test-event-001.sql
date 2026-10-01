@@ -17,10 +17,13 @@
 --
 -- Same id, title and venue as 0013, so every existing assertion keeps its target.
 -- data_class='synthetic' marks it as CI test data (events CHECK, migration 0052).
--- Idempotent: INSERT OR IGNORE never overwrites the row staging already holds.
--- Never apply to production.
+-- Upsert keyed on the id only: if the row exists (staging's copy from 0013, which
+-- 0052 defaulted to 'production'), the only change is data_class -> 'synthetic';
+-- title, dates and geo stay as they are. Any other conflict, such as another
+-- event holding the slug, is NOT swallowed: the statement fails and so does the
+-- CI step that applies it. Idempotent. Never apply to production.
 
-INSERT OR IGNORE INTO events (
+INSERT INTO events (
   id, brand_id, title, slug, status,
   description, location, start_date, end_date, timezone, data_class
 ) VALUES (
@@ -35,4 +38,5 @@ INSERT OR IGNORE INTO events (
   '2026-05-01',
   'America/Chicago',
   'synthetic'
-);
+)
+ON CONFLICT(id) DO UPDATE SET data_class = 'synthetic';
