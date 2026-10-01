@@ -1199,7 +1199,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     threat:
       'Public form endpoints accept unlimited submissions: the anonymous check-in and survey handlers have no rate limit, enabling unbounded spam of checkin_counts and form_surveys for any event_id. Registration, self-delete and email-signup (the PII handlers) ARE per-IP limited (isFormRateLimited, 10/min per ip:event); the anonymous handlers are deliberately exempt from IP-based limiting because they must not read the visitor IP (never-who, see form-rate-limit.spec.ts).',
     severity: 'HIGH',
-    target_invariant: { number: 8, name: 'bounded_pii_retention' },
+    target_invariant: null, // resource abuse / input handling, not PII retention (#8)
     mitigation_story: 'OSE-599',
     test_ref:
       'tests/form-rate-limit.spec.ts > SR-16 | Rate limiting | Integration gate (registration + email-signup only; check-in and survey unlimited)',
@@ -1479,9 +1479,9 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
     id: 'TL-070',
     layer: 'worker_surface',
     threat:
-      'Injection and malformed-body handling on the public form endpoints (register, check-in, survey, email-signup): SQL metacharacters, oversized fields, null and array bodies, and path-segment injection must not escape parameterisation, crash the handler, or silently truncate stored PII.',
+      'Injection and malformed input on the public form endpoints (register, check-in, survey, email-signup): SQL metacharacters in fields and in the event-id path segment, null and array bodies, control and zero-width characters, and over-length emails must not escape parameterisation or crash the handler (no 500).',
     severity: 'HIGH',
-    target_invariant: { number: 8, name: 'bounded_pii_retention' },
+    target_invariant: null, // resource abuse / input handling, not PII retention (#8)
     mitigation_story: 'OSE-599',
     test_ref: 'tests/forms-adversarial.spec.ts > A1-A9 injection/boundary coverage',
     status: 'tested',
@@ -1492,6 +1492,24 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
         'Split out of TL-057 on 2026-10-01. Fleet sweep: A1-A9 adversarial tests confirmed injection resistance; null-body 500 and array-body 200 bugs found and fixed (parseJsonBody + email-over-320 silent truncation).',
     },
     last_run_green: '2026-08-03',
+    notes:
+      'Scope narrowed 2026-10-01 to what the tests prove (no SQL escape, no 500). Not covered: the A3 homoglyph test sends ASCII twice, so homoglyph email handling is untested; silent name truncation (A4) and nonexistent-event acceptance (A9) are open as TL-071.',
+  },
+  {
+    id: 'TL-071',
+    layer: 'worker_surface',
+    threat:
+      'Public form endpoints accept a submission for an event id that does not exist (A9), and silently truncate a name over 200 characters instead of rejecting it (A4). Both let junk or altered data into the forms tables without an error the submitter can see.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: null,
+    test_ref:
+      'tests/forms-adversarial.spec.ts > A4 name over 200 chars is silently truncated; A9 submitting to non-existent event succeeds (both document current behaviour)',
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Opened 2026-10-01 from the conformance-refresh review: these behaviours were counted as tested coverage under TL-057, but the tests assert the gap, not a mitigation.',
   },
 ];
 

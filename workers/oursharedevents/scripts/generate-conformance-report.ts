@@ -579,11 +579,11 @@ function severityBadge(s: string): string {
   return '⚪';
 }
 
-function shortCommit(commit: string): string {
+export function shortCommit(commit: string): string {
   return commit === 'local' ? 'local' : commit.slice(0, 8);
 }
 
-function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): string {
+export function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): string {
   const counts = { enforced: 0, partial: 0, gap: 0, retired: 0 };
   for (const r of rows) counts[r.enforcement_status]++;
 
@@ -711,7 +711,7 @@ function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): s
 
 // ─── JSON renderer ─────────────────────────────────────────────────────────────
 
-function renderJson(rows: ConformanceRow[], meta: Record<string, string>): string {
+export function renderJson(rows: ConformanceRow[], meta: Record<string, string>): string {
   const output = {
     generated_at: meta.run_date,
     // The same 8-character short SHA the Markdown shows. A full 40-character
