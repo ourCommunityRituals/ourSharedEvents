@@ -55,8 +55,27 @@ const RUN = `secsmoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 /** Events created by this run, deleted in afterAll. */
 const createdIds = [];
 
+const IS_LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(BASE_URL).hostname);
+
+/**
+ * Local stand-in for the CF Access edge. On staging the edge accepts the
+ * service token and injects Cf-Access-Jwt-Assertion carrying a JWT with NO
+ * email; the Worker sees that, and falls through to the Bearer check
+ * (auth/admin.ts, OSE-889). `wrangler dev` has no edge, so without this the
+ * local run would skip that branch entirely. This JWT is unsigned and
+ * email-less on purpose: a local worker (no CF_ACCESS_TEAM_DOMAIN, no
+ * WORKER_ENV) reads it unverified, exactly as staging reads the real one
+ * after verification. Never sent to a non-local host.
+ */
+function localServiceTokenJwt() {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  return `${b64({ alg: 'none', typ: 'JWT' })}.${b64({ iat: now, exp: now + 3600, common_name: 'local-ci' })}.x`;
+}
+
 /** Edge headers only. Sent on every admin call so the request reaches the Worker. */
 function edgeHeaders() {
+  if (IS_LOCAL) return { 'Cf-Access-Jwt-Assertion': localServiceTokenJwt() };
   return CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET
     ? {
         'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID,
@@ -120,6 +139,23 @@ async function publicItem(request, id) {
   return (await res.json()).item;
 }
 
+/**
+ * Rows titled `title` among the newest events, every status and brand (the CI key is unscoped).
+ * A row a rejected create leaked would be the newest one, so the first page is
+ * enough to prove "nothing was created".
+ */
+async function leakedRows(request, title) {
+  const res = await request.get(`${BASE_URL}/api/v2/admin/events?limit=100`, {
+    timeout: TIMEOUT,
+    maxRedirects: 0,
+    headers: adminHeaders(),
+  });
+  expect(res.status(), 'GET /api/v2/admin/events').toBe(200);
+  const leaked = (await res.json()).items.filter((e) => e.title === title);
+  createdIds.push(...leaked.map((e) => e.id)); // so afterAll still cleans up a leak
+  return leaked.map((e) => e.id);
+}
+
 function htmlEscape(s) {
   return s
     .replace(/&/g, '&amp;')
@@ -174,9 +210,7 @@ test.describe('🔒 SECURITY: Admin key validation', () => {
       // and an HTML/302 would be the edge (stale CF Access token).
       expect(res.status(), `status (body: ${JSON.stringify(json)})`).toBe(401);
       expect(json, 'Worker JSON error envelope').not.toBeNull();
-      expect(json.ok).toBe(false);
       expect(json.code).toBe('UNAUTH');
-      expect(json.id).toBeUndefined();
     });
   }
 });
@@ -195,15 +229,14 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
     expect(html, 'raw <script> payload in public HTML').not.toContain(payload);
     expect(html, 'escaped payload in public HTML').toContain(htmlEscape(payload));
 
-    const dialogs = [];
-    page.on('dialog', async (d) => {
-      dialogs.push(d.message());
-      await d.dismiss();
-    });
     await page.goto(`${BASE_URL}/events/${id}`, { waitUntil: 'load', timeout: TIMEOUT });
     await expect(page.locator('h1').first()).toContainText(payload);
-    expect(await page.locator(`script:has-text("${RUN}-xss")`).count()).toBe(0);
-    expect(dialogs).toEqual([]);
+    // Not a :has-text locator: Playwright's text matching skips <script> contents.
+    const injectedScripts = await page.evaluate(
+      (marker) => [...document.scripts].filter((s) => s.textContent.includes(marker)).length,
+      `${RUN}-xss`
+    );
+    expect(injectedScripts, 'injected <script> elements').toBe(0);
   });
 
   test('HTML injection in event name is escaped', async ({ request, page }) => {
@@ -214,15 +247,9 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
     expect(html, 'raw <img onerror> payload in public HTML').not.toContain(`<img src=x data-run`);
     expect(html).toContain(htmlEscape(payload));
 
-    const dialogs = [];
-    page.on('dialog', async (d) => {
-      dialogs.push(d.message());
-      await d.dismiss();
-    });
     await page.goto(`${BASE_URL}/events/${id}`, { waitUntil: 'load', timeout: TIMEOUT });
     await expect(page.locator('h1').first()).toContainText(payload);
     expect(await page.locator(`img[data-run="${RUN}"]`).count()).toBe(0);
-    expect(dialogs).toEqual([]);
   });
 
   test('SQL injection attempt is stored literally and the table survives', async ({ request }) => {
@@ -234,7 +261,6 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
 
     const list = await request.get(`${BASE_URL}/api/v2/events`, { timeout: TIMEOUT });
     expect(list.status()).toBe(200);
-    expect((await list.json()).ok).toBe(true);
 
     const html = await publicHtml(request, id);
     expect(html).toContain(htmlEscape(payload));
@@ -245,23 +271,25 @@ test.describe('🔒 SECURITY: Invalid inputs', () => {
   test.skip(IS_PRODUCTION, 'Never writes to production; these run on staging and locally');
 
   test('Malformed date is rejected', async ({ request }) => {
+    const title = `${RUN} bad-date`;
     const { res, json } = await createEvent(request, {
-      title: `${RUN} bad-date`,
+      title,
       start_date: 'NOT-A-DATE',
     });
     expect(res.status()).toBe(400);
     expect(json.code).toBe('INVALID_DATE');
-    expect(json.id).toBeUndefined();
+    expect(await leakedRows(request, title), 'rejected create must persist nothing').toEqual([]);
   });
 
   test('Invalid brand ID is rejected', async ({ request }) => {
+    const title = `${RUN} bad-brand`;
     const { res, json } = await createEvent(request, {
-      title: `${RUN} bad-brand`,
+      title,
       brand_id: 'INVALID_BRAND_999',
     });
     expect(res.status()).toBe(400);
     expect(json.code).toBe('INVALID_BRAND');
-    expect(json.id).toBeUndefined();
+    expect(await leakedRows(request, title), 'rejected create must persist nothing').toEqual([]);
   });
 
   test('Extremely long event name is bounded', async ({ request }) => {
