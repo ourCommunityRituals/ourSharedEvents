@@ -241,7 +241,7 @@ The design system has one home: `@ocr/ui` in the hub monorepo (`ourCommunityRitu
 
 **Containment (ratified 2026-08-24, OSE-999): Ring ⊃ Corridor ⊃ Node ⊃ Event.** A corridor (res7) contains many nodes (res9); a node hosts events. This is what the **code already enforces** — `sponsor_impressions.h3_res7` is stamped at write time (OSE-635), so every anonymous datum carries its corridor cell, and `is_local` is a res7 corridor-cell match. (NCR was informally spoken early as "Node ⊃ Corridor"; H3 geometry canonicalizes the reverse — the corridor is the region that contains nodes.)
 
-**Resolution by signal (Proposed, ADR-011).** res9 is for physical places only: a poster's placement, and live QR scans at the venue during the event. A shortlink click has no place of its own; it counts toward its event at the venue's res7. The corridor id that leaves for BigQuery/OER is the res7 cell string, and every export is res7 or coarser: a finer row is rejected, never trimmed. Named corridors (`blue_island`) are labels over sets of res7 cells. Device location is never an input.
+**Resolution by signal (Accepted — implementation in flight, ADR-011).** res9 is for physical places only: a poster's placement, and live QR scans at the venue during the event. A shortlink click has no place of its own; it counts toward its event at the venue's res7. The corridor id that leaves for BigQuery/OER is the res7 cell string, and every export is res7 or coarser: a finer row is rejected, never trimmed. Named corridors (`blue_island`) are labels over sets of res7 cells. Device location is never an input.
 
 A Ring closes when the corridor economy no longer depends on outside investment.
 
