@@ -12,6 +12,14 @@
  *     path does. This eliminates the entire class of external-URL injection.
  *   - The proxy validates Content-Type before forwarding, caps response size,
  *     and enforces a fetch timeout so a slow CDN cannot hold a request open.
+ *   - OSE-1433: a logo host must be a public DNS name — never localhost, an IP
+ *     literal or a single-label name — on write AND at fetch time (a row stored
+ *     before this rule is refused when served). Redirects are followed by hand,
+ *     at most LOGO_MAX_REDIRECTS, and every hop is re-checked. The body is read
+ *     as a stream and cut off at LOGO_MAX_BYTES instead of buffered first.
+ *     A DNS name that resolves to a private address cannot be checked here
+ *     (Workers have no resolver); Cloudflare's fetch does not route to private
+ *     ranges from the edge, which is the backstop for that case.
  */
 
 export const ALLOWED_LOGO_SCHEMES = new Set(['https:', 'http:']);
@@ -26,15 +34,40 @@ export const ALLOWED_LOGO_CONTENT_TYPES = new Set([
 
 export const LOGO_FETCH_TIMEOUT_MS = 5_000;
 export const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+export const LOGO_MAX_REDIRECTS = 3;
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
 export interface LogoUrlValidation {
   valid: boolean;
   url: string | null;
-  error?: 'INVALID_URL' | 'INVALID_SCHEME' | 'TOO_LONG';
+  error?: 'INVALID_URL' | 'INVALID_SCHEME' | 'TOO_LONG' | 'INVALID_HOST';
 }
 
+/**
+ * Is this hostname one a server-side fetch must never reach? (OSE-1433)
+ *
+ * `hostname` is WHATWG-normalized by `new URL`, so decimal/hex/short IPv4 forms
+ * ("2130706433", "0x7f.1", "127.1") already arrive as dotted quads and IPv6
+ * literals arrive bracketed. Any IP literal is refused, not just private ones:
+ * a sponsor's logo lives on a named host, and refusing all literals removes
+ * the whole private/link-local/metadata-address class without a range table.
+ */
+export function isBlockedLogoHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '');
+  if (h === '' || h === 'localhost' || h.endsWith('.localhost')) return true;
+  if (h.startsWith('[') || h.includes(':')) return true; // IPv6 literal
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true; // IPv4 literal
+  if (!h.includes('.')) return true; // single-label (intranet) name
+  if (h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.home.arpa')) return true;
+  return false;
+}
+
+/**
+ * http(s) URL check: scheme allowlist, ≤500 chars, parseable. Used for URLs a
+ * VISITOR'S BROWSER loads or follows (event images and video links, the WHAT
+ * link), so it has no host rule: a browser fetch is not a Worker fetch.
+ */
 export function validateLogoUrl(raw: unknown): LogoUrlValidation {
   if (raw === null || raw === undefined || raw === '') {
     return { valid: true, url: null };
@@ -58,12 +91,27 @@ export function validateLogoUrl(raw: unknown): LogoUrlValidation {
 }
 
 /**
+ * A sponsor logo URL the Worker itself will fetch through the proxy: everything
+ * validateLogoUrl checks, plus a public host (OSE-1433). Used where sponsor
+ * logos are written and in the proxy before every request and redirect hop.
+ */
+export function validateProxiedLogoUrl(raw: unknown): LogoUrlValidation {
+  const base = validateLogoUrl(raw);
+  if (!base.valid || base.url === null) return base;
+  if (isBlockedLogoHost(new URL(base.url).hostname)) {
+    return { valid: false, url: null, error: 'INVALID_HOST' };
+  }
+  return base;
+}
+
+/**
  * https-only variant for PUBLIC OUTBOUND links (events.what_url) — a link the
  * page sends a visitor OUT to. validateLogoUrl accepts http(s) because logos are
  * proxied server-side; an outbound link is followed by the visitor's own
  * browser, so plain http:// is a mixed-content / downgrade risk and is rejected.
- * Empty/null is still valid (the field is optional). Reuses validateLogoUrl for
- * the length + parse + scheme-allowlist checks, then narrows to https.
+ * Empty/null is still valid (the field is optional). Shares the length + parse +
+ * scheme-allowlist checks, then narrows to https. No host rule: a visitor's
+ * browser follows this link, not the Worker (see validateProxiedLogoUrl).
  */
 export function validateHttpsUrl(raw: unknown): LogoUrlValidation {
   const base = validateLogoUrl(raw);
@@ -91,34 +139,64 @@ export interface LogoProxyResult {
 export async function fetchAndProxyLogo(externalUrl: string): Promise<LogoProxyResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LOGO_FETCH_TIMEOUT_MS);
-
-  let upstream: Response;
   try {
-    upstream = await fetch(externalUrl, {
-      signal: controller.signal,
-      redirect: 'follow',
+    return await fetchLogo(externalUrl, controller.signal);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'FETCH_FAILED' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchLogo(externalUrl: string, signal: AbortSignal): Promise<LogoProxyResult> {
+  // Redirects are followed by hand so every hop meets the same host rule as the
+  // stored URL (OSE-1433); `redirect: 'follow'` would let a public host bounce
+  // the fetch to one we refuse.
+  let url = externalUrl;
+  let upstream: Response | null = null;
+  for (let hop = 0; hop <= LOGO_MAX_REDIRECTS; hop++) {
+    const check = validateProxiedLogoUrl(url);
+    if (!check.valid || !check.url) return { ok: false, error: 'BLOCKED_HOST' };
+    const res = await fetch(check.url, {
+      signal,
+      redirect: 'manual',
       headers: { 'User-Agent': 'OSE-LogoProxy/1.0 (oursharedevents.com)' },
     });
-  } catch (err) {
-    clearTimeout(timer);
-    return { ok: false, error: err instanceof Error ? err.message : 'FETCH_FAILED' };
+    if (res.status < 300 || res.status >= 400) {
+      upstream = res;
+      break;
+    }
+    const location = res.headers.get('location');
+    await res.body?.cancel();
+    if (!location) return { ok: false, error: `UPSTREAM_${res.status}` };
+    try {
+      url = new URL(location, url).toString();
+    } catch {
+      return { ok: false, error: 'BAD_REDIRECT' };
+    }
   }
-  clearTimeout(timer);
+  if (!upstream) return { ok: false, error: 'TOO_MANY_REDIRECTS' };
 
   if (!upstream.ok) {
+    await upstream.body?.cancel();
     return { ok: false, error: `UPSTREAM_${upstream.status}` };
   }
 
   const rawCt = upstream.headers.get('content-type') ?? '';
   const ct = rawCt.split(';')[0].trim().toLowerCase();
   if (!ALLOWED_LOGO_CONTENT_TYPES.has(ct)) {
+    await upstream.body?.cancel();
     return { ok: false, error: 'CONTENT_TYPE_NOT_ALLOWED' };
   }
 
-  const bytes = await upstream.arrayBuffer();
-  if (bytes.byteLength > LOGO_MAX_BYTES) {
+  const declared = Number(upstream.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > LOGO_MAX_BYTES) {
+    await upstream.body?.cancel();
     return { ok: false, error: 'RESPONSE_TOO_LARGE' };
   }
+
+  const bytes = await readCapped(upstream, LOGO_MAX_BYTES);
+  if (!bytes) return { ok: false, error: 'RESPONSE_TOO_LARGE' };
 
   return {
     ok: true,
@@ -135,4 +213,33 @@ export async function fetchAndProxyLogo(externalUrl: string): Promise<LogoProxyR
       },
     }),
   };
+}
+
+/**
+ * Read a body as a stream, stopping as soon as it passes `max` bytes, so an
+ * oversized (or lying Content-Length) upstream is never fully buffered.
+ * Returns null when the cap is exceeded.
+ */
+export async function readCapped(res: Response, max: number): Promise<Uint8Array | null> {
+  if (!res.body) return new Uint8Array(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
 }

@@ -25,6 +25,7 @@
  */
 
 import { resolveAllowedMaxTier, type ClearanceEnv } from './template-clearance';
+import { validateProxiedLogoUrl } from './sponsor-logo';
 import { ASSET_FORMATS } from './sponsor-asset';
 import { resolveSponsorEligibility, type EligibilitySource } from './sponsor-eligibility';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from './sponsor-invite';
@@ -98,6 +99,13 @@ export async function promoteSponsorDraft(
     .bind(draftToken)
     .first<DraftRow>();
   if (!draft) return { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 };
+
+  // OSE-1433: a draft captured before the logo host rule could carry a URL the
+  // proxy refuses (localhost, an IP literal, an intranet name). Refuse before any
+  // write, like admin create, rather than copy it into sponsor_asset.
+  if (!validateProxiedLogoUrl(draft.logo_url).valid) {
+    return { ok: false, code: 'INVALID_LOGO_URL', status: 400 };
+  }
 
   // FIX 2 — double-promote guard.
   if (draft.status === 'promoted' || draft.promoted_sponsor_id) {

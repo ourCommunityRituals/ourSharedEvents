@@ -21,6 +21,7 @@ import { type MapsEnv } from '../lib/maps';
 import { tagCoordinates } from '../lib/h3-tagging';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
 import { parseJsonBody, errorResponse, jsonResponse } from '../lib/form-validation';
+import { validateProxiedLogoUrl } from '../lib/sponsor-logo';
 import { promoteSponsorDraft, type PromotionEnv } from '../lib/sponsor-promotion';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -159,7 +160,19 @@ export async function handleCreateSponsorDraft(
   const campaignId =
     claim.campaign_id ?? (typeof body.campaign_id === 'string' ? body.campaign_id : null);
   const websiteUrl = typeof body.website_url === 'string' ? body.website_url : null;
-  const logoUrl = typeof body.logo_url === 'string' ? body.logo_url : null;
+  // OSE-1433: the same rule as admin create/update — a logo the proxy will fetch
+  // must be http(s) on a public host. Checked here AND at promotion (a draft
+  // captured before this rule must not reach sponsor_asset).
+  const logoCheck = validateProxiedLogoUrl(body.logo_url ?? null);
+  if (!logoCheck.valid) {
+    return errorResponse(
+      'INVALID_LOGO_URL',
+      'logo_url must be an http:// or https:// URL on a public web host (max 500 chars)',
+      400,
+      request
+    );
+  }
+  const logoUrl = logoCheck.url;
   const businessType = typeof body.business_type === 'string' ? body.business_type : null;
   const covenantAt = body.covenant_acknowledged === true ? new Date().toISOString() : null;
 

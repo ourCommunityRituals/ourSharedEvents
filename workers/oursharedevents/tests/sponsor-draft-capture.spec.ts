@@ -16,6 +16,7 @@ import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { handleCreateSponsorDraft, type SponsorDraftEnv } from '../src/handlers/sponsors-draft';
 import { mintSponsorInviteToken } from '../src/lib/sponsor-invite';
+import { promoteSponsorDraft, type PromotionEnv } from '../src/lib/sponsor-promotion';
 
 interface TestEnv {
   DB: D1Database;
@@ -214,5 +215,68 @@ describe('OSE-732 — cross-tenant + resolver-invisibility', () => {
     );
     expect(entry).toBeTruthy();
     expect(entry![1]).not.toMatch(/sponsor-resolver|sponsor-allocation/);
+  });
+});
+
+// OSE-1433 (Copilot review on #721): the draft path is a sponsor-logo write too.
+// Capture applies the same host rule as admin create/update, and promotion
+// refuses a draft captured before the rule rather than copying its logo into
+// sponsor_asset. Born red against main: capture returned 200 and stored the
+// URL verbatim; promotion copied it.
+describe('OSE-1433 | the draft path applies the logo host rule', () => {
+  test('capture: a private or local logo host → 400 INVALID_LOGO_URL, nothing stored', async () => {
+    const token = await mint('brand-logo-1433');
+    for (const logo_url of [
+      'http://127.0.0.1/l.png',
+      'http://169.254.169.254/x',
+      'http://intranet/l.png',
+    ]) {
+      const res = await handleCreateSponsorDraft(req(token, { name: 'Logo Co', logo_url }), denv());
+      expect(res.status, logo_url).toBe(400);
+      expect(((await res.json()) as { code?: string }).code, logo_url).toBe('INVALID_LOGO_URL');
+    }
+    const stored = await env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM sponsor_business_draft WHERE brand_id = 'brand-logo-1433'"
+    ).first<{ c: number }>();
+    expect(stored?.c).toBe(0);
+  });
+
+  test('capture: a public logo host is accepted and stored', async () => {
+    const token = await mint('brand-logo-1433b');
+    const res = await handleCreateSponsorDraft(
+      req(token, { name: 'Logo Co', logo_url: 'https://cdn.example.com/l.png' }),
+      denv()
+    );
+    expect(res.status).toBe(200);
+    const row = await env.DB.prepare(
+      "SELECT logo_url FROM sponsor_business_draft WHERE brand_id = 'brand-logo-1433b'"
+    ).first<{ logo_url: string }>();
+    expect(row?.logo_url).toBe('https://cdn.example.com/l.png');
+  });
+
+  test('promotion: a draft captured before the rule is refused before any write', async () => {
+    await env.DB.prepare(
+      "INSERT INTO events (id, brand_id, title, slug, status) VALUES ('evt-1433','brand-1433p','P','slug-1433','active') ON CONFLICT(id) DO NOTHING"
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO sponsor_business_draft
+         (draft_token, brand_id, event_id, name, logo_url, category_selections,
+          covenant_acknowledged_at, status, free_tier_eligible, eligibility_source)
+       VALUES ('d_1433', 'brand-1433p', 'evt-1433', 'Old Draft', 'http://10.0.0.5/l.png',
+               '[]', '2026-08-12T00:00:00Z', 'draft', 1, 'community_benefit')`
+    ).run();
+    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
+    const res = await promoteSponsorDraft(env as unknown as PromotionEnv, 'd_1433');
+    expect(res).toEqual({ ok: false, code: 'INVALID_LOGO_URL', status: 400 });
+    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
+    expect(after?.c).toBe(before?.c);
+    const assets = await env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM sponsor_asset WHERE url = 'http://10.0.0.5/l.png'"
+    ).first<{ c: number }>();
+    expect(assets?.c).toBe(0);
   });
 });
