@@ -185,6 +185,28 @@ describe('OSE-272 Gate 5: SharedReport BigQuery export is cron-only', () => {
     expect(callIdx).toBeGreaterThan(scheduledIdx);
   });
 
+  test('OSE-616: the export runs AFTER materialization, never concurrently with it', () => {
+    // A refresh stamps all its baseline rows with one computed_at and writes
+    // them one by one; the export's watermark is that timestamp alone. Run
+    // side by side, the export could read part of a group and advance past
+    // the rest for good. So scheduled() must not start both in Promise.all;
+    // runSharedReportPipeline awaits materialization, then exports.
+    const src = loadSource('src/index.ts');
+    expect(src, 'index.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    const all = src!.slice(
+      src!.indexOf('Promise.all(['),
+      src!.indexOf('])', src!.indexOf('Promise.all(['))
+    );
+    expect(all, 'export must not be a sibling of materialization in Promise.all').not.toMatch(
+      /runSharedReportBigQueryExport\(env\)/
+    );
+    expect(all).not.toMatch(/runSharedReportMaterialization\(env\)/);
+    expect(all).toMatch(/runSharedReportPipeline\(env\)/);
+    expect(src!).toMatch(
+      /async function runSharedReportPipeline[\s\S]*?try\s*\{\s*await runSharedReportMaterialization\(env\);\s*\}\s*finally\s*\{\s*await runSharedReportBigQueryExport\(env\);/
+    );
+  });
+
   test('export handler does not export a route handler shape', () => {
     const src = loadSource('src/handlers/shared-report-export.ts');
     expect(src, 'shared-report-export.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();

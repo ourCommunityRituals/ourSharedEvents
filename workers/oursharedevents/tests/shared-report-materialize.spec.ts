@@ -24,6 +24,7 @@ import {
   type SharedReportMaterializeEnv,
 } from '../src/lib/shared-report';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
+import { phaseTimesFor } from '../src/lib/event-datetime';
 
 interface TestEnv {
   DB: D1Database;
@@ -197,6 +198,50 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       .bind('test-evt-mat-1')
       .all();
     expect(rows.results).toHaveLength(2);
+  });
+
+  test('OSE-616: a date-only event with no end_date ends with its start day and is materialized', async () => {
+    // The API stores calendar days and end_date is optional: such an event
+    // ends at local end-of-day of start_date (phaseTimesFor). Pick a zone
+    // where that instant is 4–24h ago, inside the 2–26h window.
+    const now = Date.now();
+    let pick: { day: string; zone: string } | null = null;
+    for (const zone of [
+      'Pacific/Kiritimati',
+      'Asia/Tokyo',
+      'Asia/Kolkata',
+      'Europe/London',
+      'America/Chicago',
+      'Pacific/Honolulu',
+      'Pacific/Pago_Pago',
+    ]) {
+      for (let back = -1; back <= 2 && !pick; back++) {
+        const day = new Date(now - back * 86_400_000).toISOString().slice(0, 10);
+        const end = phaseTimesFor({ start_date: day, end_date: null, timezone: zone }).end_date;
+        const endMs = end ? Date.parse(end) : NaN;
+        if (endMs >= now - 24 * 3600_000 && endMs <= now - 4 * 3600_000) pick = { day, zone };
+      }
+      if (pick) break;
+    }
+    expect(pick, 'a (day, zone) pair ending 4–24h ago').not.toBeNull();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events
+           (id, brand_id, title, slug, status, location, start_date, end_date, timezone, created_at, updated_at)
+         VALUES ('test-evt-mat-startonly', 'test-brand', 'Start only', 'test-evt-mat-startonly',
+                 'active', 'Test Venue', ?, NULL, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(pick!.day, pick!.zone)
+      .run();
+    await seedScan('test-evt-mat-startonly', 'anon_startonly');
+
+    const r = await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
+    expect(r.errors).toBe(0);
+    const rows = await tenv()
+      .DB.prepare(`SELECT COUNT(*) AS n FROM anon_id_returns WHERE venue_id = ?`)
+      .bind('test-evt-mat-startonly')
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(1);
   });
 
   test('never persists raw anonymous_id — only the hash', async () => {
@@ -520,6 +565,65 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .first<{ corridor_id: string }>();
     expect(row).not.toBeNull();
     expect(row!.corridor_id).toBe('872664544ffffff');
+  });
+
+  test('OSE-616: one cell in two spellings is ONE lowercase baseline row; stale uppercase rows are removed', async () => {
+    const db = tenv().DB;
+    const cell = '872664544ffffff';
+    // Same start instant → same (dow, hour) bucket; one event stores the cell uppercased.
+    const startIso = new Date(Date.now() - 24 * 10 * 3600_000).toISOString();
+    for (const [id, spelling, anon] of [
+      ['test-evt-mat-case-lo', cell, 'b'],
+      ['test-evt-mat-case-up', cell.toUpperCase(), 'c'],
+    ] as const) {
+      await seedEvent({ id, start_offset_hours: -24 * 10 });
+      await db
+        .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
+        .bind(spelling, startIso, id)
+        .run();
+      const nowIso = new Date().toISOString();
+      await db
+        .prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           VALUES (?, ?, ?, ?, 1, ?)`
+        )
+        .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
+        .run();
+    }
+    // A stale row left under the uppercase spelling by an earlier run, and a
+    // legacy key that only LOOKS H3-shaped (15 chars, leading 8, not lowercase).
+    for (const key of [cell.toUpperCase(), '8NORTH-CORRIDOR']) {
+      await db
+        .prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 0, 0, 1, 1, '2026-01-01T00:00:00.000Z')`
+        )
+        .bind(key)
+        .run();
+    }
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+
+    const rows = await db
+      .prepare(
+        `SELECT corridor_id, window_90d_count FROM corridor_density_baseline
+           WHERE LOWER(corridor_id) = ?`
+      )
+      .bind(cell)
+      .all<{ corridor_id: string; window_90d_count: number }>();
+    expect(rows.results).toEqual([{ corridor_id: cell, window_90d_count: 2 }]);
+    // Not a real cell → not ours to delete; the export withholds it instead.
+    const legacy = await db
+      .prepare(`SELECT COUNT(*) AS n FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('8NORTH-CORRIDOR')
+      .first<{ n: number }>();
+    expect(legacy?.n).toBe(1);
+    await db
+      .prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = '8NORTH-CORRIDOR'`)
+      .run();
   });
 
   test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {

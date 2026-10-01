@@ -35,6 +35,8 @@
  */
 
 import { hashAnonIdForReturns } from './anon-id-hash';
+import { phaseTimesFor } from './event-datetime';
+import { isH3Cell } from './export-geography';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
@@ -145,22 +147,43 @@ export async function materializeAnonIdReturns(
   }
 
   // Find events that ended in the materialization window.
-  // We use end_date as the trigger; if end_date is null, fall back to
-  // start_date + 6h as a sane default for the "recently ended" check.
   const nowMs = Date.now();
   const floorMs = nowMs - MATERIALIZATION_CEILING_HOURS * 60 * 60 * 1000;
   const ceilingMs = nowMs - MATERIALIZATION_FLOOR_HOURS * 60 * 60 * 1000;
-  const floorIso = new Date(floorMs).toISOString();
-  const ceilingIso = new Date(ceilingMs).toISOString();
 
-  const candidates = await env.DB.prepare(
-    `SELECT id FROM events
+  // OSE-616: events.end_date is a CALENDAR DAY ("YYYY-MM-DD", the API's only
+  // accepted shape) that ends at local 23:59:59.999 in the event's zone — not
+  // an instant. Comparing the raw string against ISO instants only ever caught
+  // a date-only event on the one cron tick where the string happened to sort
+  // inside the window. Select by calendar day (padded two days each side, so
+  // every zone is covered), then keep only events whose real end instant
+  // (phaseTimesFor — the same rule the public event page uses) is in window.
+  // A date-only event may have no end_date at all: it ends with its start
+  // day, so the prefilter reads COALESCE(end_date, start_date).
+  const dayPad = 2 * 86_400_000;
+  const fromDay = new Date(floorMs - dayPad).toISOString().slice(0, 10);
+  const toDay = new Date(ceilingMs + dayPad).toISOString().slice(0, 10);
+  const dayRows = await env.DB.prepare(
+    `SELECT id, start_date, end_date, starts_at, timezone FROM events
        WHERE status = 'active'
-         AND end_date IS NOT NULL
-         AND end_date BETWEEN ? AND ?`
+         AND COALESCE(end_date, start_date) IS NOT NULL
+         AND substr(COALESCE(end_date, start_date), 1, 10) BETWEEN ? AND ?`
   )
-    .bind(floorIso, ceilingIso)
-    .all<{ id: string }>();
+    .bind(fromDay, toDay)
+    .all<{
+      id: string;
+      start_date: string | null;
+      end_date: string | null;
+      starts_at: string | null;
+      timezone: string | null;
+    }>();
+  const candidates = {
+    results: (dayRows.results ?? []).filter((e) => {
+      const endIso = phaseTimesFor(e).end_date;
+      const endMs = endIso ? Date.parse(endIso) : NaN;
+      return Number.isFinite(endMs) && endMs >= floorMs && endMs <= ceilingMs;
+    }),
+  };
 
   for (const row of candidates.results ?? []) {
     result.eventsProcessed++;
@@ -250,13 +273,16 @@ export async function refreshCorridorBaselines(
   const floor90dIso = new Date(nowMs - 90 * 86400 * 1000).toISOString();
 
   // For each (corridor_id, dow, hour), compute window distinct-hash counts.
+  // The corridor key is the res7 cell, lowercased (ADR-011 / OSE-616): H3 is
+  // case-insensitive but this key is not, so one cell stored in two spellings
+  // must group into ONE baseline row, never two that collide at export.
   // We use the SQLite-friendly strftime to extract day-of-week + hour.
   // SQLite's `strftime('%w', ts)` returns 0-6 (Sunday=0); `strftime('%H', ts)`
   // returns 00-23. Both match the schema's bucket_dow/bucket_hour expectations.
   try {
     const cells = await env.DB.prepare(
       `SELECT
-         COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
+         COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
          CAST(strftime('%w', e.start_date) AS INTEGER) AS bucket_dow,
          CAST(strftime('%H', e.start_date) AS INTEGER) AS bucket_hour,
          COUNT(DISTINCT
@@ -270,7 +296,7 @@ export async function refreshCorridorBaselines(
        WHERE (e.h3_res7 IS NOT NULL OR e.corridor_id IS NOT NULL)
          AND e.start_date IS NOT NULL
          AND e.start_date >= ?
-       GROUP BY COALESCE(e.h3_res7, e.corridor_id), bucket_dow, bucket_hour`
+       GROUP BY COALESCE(LOWER(e.h3_res7), e.corridor_id), bucket_dow, bucket_hour`
     )
       .bind(floor30dIso, floor90dIso, floor90dIso)
       .all<{
@@ -280,6 +306,24 @@ export async function refreshCorridorBaselines(
         window_30d_count: number;
         window_90d_count: number;
       }>();
+
+    // Reconcile: drop baseline rows stored under a non-lowercase spelling of
+    // an H3 cell. This run re-derives them under the lowercase key above, so
+    // nothing is lost and the export never sees two spellings of one corridor.
+    // Only keys proven to be real cells (isH3Cell) are touched: a legacy or
+    // malformed key that merely looks H3-shaped is left for the export to
+    // withhold or fail on, never silently deleted here.
+    const caseVariants = await env.DB.prepare(
+      `SELECT DISTINCT corridor_id FROM corridor_density_baseline
+         WHERE length(corridor_id) = 15
+           AND corridor_id <> LOWER(corridor_id)`
+    ).all<{ corridor_id: string }>();
+    for (const { corridor_id } of caseVariants.results ?? []) {
+      if (!isH3Cell(corridor_id)) continue;
+      await env.DB.prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = ?`)
+        .bind(corridor_id)
+        .run();
+    }
 
     for (const c of cells.results ?? []) {
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {

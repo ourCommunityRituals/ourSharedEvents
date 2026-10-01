@@ -452,4 +452,39 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
       }
     }
   });
+
+  // OSE-616 / ADR-011: the event backup is a second D1 → BigQuery route, so it
+  // carries the same corridor rule as the SharedReport export.
+  test('OSE-616: the backup row carries the event res7 node as corridor_id, nothing finer', async () => {
+    const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+    await seedEvent('ose616-evt-res7', 1);
+    await tenvDb()
+      .DB.prepare(`UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?`)
+      .bind('89266454447ffff', '872664544ffffff', 'ose616-evt-res7')
+      .run();
+
+    await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+    const row = bqCalls
+      .flatMap((c) => c.rows.map((r) => r.json))
+      .find((j) => j.id === 'ose616-evt-res7');
+    expect(row, 'the event should be backed up').toBeDefined();
+    expect(row?.corridor_id).toBe('872664544ffffff');
+    expect(JSON.stringify(row)).not.toContain('89266454447ffff');
+    expect(Object.keys(row ?? {})).not.toContain('h3_res7');
+  });
+
+  test('OSE-616: a res9 cell stored as the corridor fails the backup closed — nothing sent', async () => {
+    const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+    await seedEvent('ose616-evt-bad', 1);
+    await tenvDb()
+      .DB.prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('89266454447ffff', 'ose616-evt-bad')
+      .run();
+
+    await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+    expect(bqCalls, 'no insertAll may run when a row is finer than res7').toEqual([]);
+    await tenvDb().DB.prepare(`DELETE FROM events WHERE id LIKE 'ose616-evt-%'`).run();
+  });
 });

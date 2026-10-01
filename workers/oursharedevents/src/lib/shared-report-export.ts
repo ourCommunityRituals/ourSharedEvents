@@ -53,7 +53,12 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { assertCorridorGrainRow, isCorridorId } from './export-geography';
+import {
+  assertCorridorGrainRow,
+  canonicalCorridorId,
+  isCorridorId,
+  UNKNOWN_CORRIDOR,
+} from './export-geography';
 
 export type SharedReportExportEnv = BigQueryEnv & { DB: D1Database };
 
@@ -103,6 +108,8 @@ function emitRow(
 // match. Smaller than the limit (200 vs 500) leaves headroom for retries
 // and keeps individual batches under ~256KB serialized.
 const EXPORT_BATCH_SIZE = 200;
+/** BigQuery tabledata.insertAll rows per request (cloud/bigquery.ts MAX_ROWS_PER_BATCH). */
+const BQ_INSERT_CHUNK = 500;
 
 // BQ table names per source. Names are stable across pool datasets —
 // each pool's dataset has its own copy of these tables.
@@ -323,7 +330,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.venue_id ?? null, result);
       if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
-        corridor_id: r.corridor_id ?? 'unknown',
+        corridor_id: canonicalCorridorId(r.corridor_id),
         venue_id: r.venue_id,
         event_type: r.uec_code ?? 'unknown',
         uec_code: r.uec_code ?? 'unknown',
@@ -416,14 +423,26 @@ export async function exportCorridorDensityBaseline(
   const { watermark, result } = prep;
 
   try {
+    // Read WHOLE computed_at groups (OSE-616). refreshCorridorBaselines stamps
+    // every row of a run with one timestamp, and the watermark is that
+    // timestamp alone, so a plain LIMIT that cut a group would advance past
+    // the unread rest of it — those rows were never exported, and the
+    // duplicate-key check below could not see them. Take at least
+    // EXPORT_BATCH_SIZE rows, extended to the end of the last timestamp
+    // group they reach; the insert below is chunked to BigQuery's batch limit.
     const rows = await env.DB.prepare(
       `SELECT corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at
        FROM corridor_density_baseline
-       WHERE computed_at > ?
-       ORDER BY computed_at ASC
-       LIMIT ?`
+       WHERE computed_at > ?1
+         AND computed_at <= COALESCE(
+           (SELECT computed_at FROM corridor_density_baseline
+             WHERE computed_at > ?1
+             ORDER BY computed_at ASC
+             LIMIT 1 OFFSET ?2),
+           '9999-12-31T23:59:59.999Z')
+       ORDER BY computed_at ASC`
     )
-      .bind(watermark, EXPORT_BATCH_SIZE)
+      .bind(watermark, EXPORT_BATCH_SIZE - 1)
       .all<CorridorBaselineRow>();
 
     const sourceRows = rows.results ?? [];
@@ -445,10 +464,22 @@ export async function exportCorridorDensityBaseline(
     const batch: Record<string, unknown>[] = [];
     for (const r of sourceRows) {
       if (r.computed_at > maxComputedAt) maxComputedAt = r.computed_at;
+      // ADR-011: a corridor baseline is keyed by the corridor, the res7 node.
+      // A row keyed by anything that is not H3-shaped (a legacy named
+      // corridors.id) is not a corridor baseline. Withhold it, never export
+      // it as 'unknown': several such rows in one bucket would all become
+      // 'unknown' with the same computed_at, collide on insertId and be
+      // silently deduplicated by BigQuery while counted here as exported.
+      // An H3-shaped key still goes through, so the row guard judges it.
+      const corridorId = canonicalCorridorId(r.corridor_id);
+      if (corridorId === UNKNOWN_CORRIDOR) {
+        result.rowsSkipped++;
+        continue;
+      }
       const tags = {
         // Sentinel values for required tags that don't apply to corridor
         // aggregates. assertRequiredTags accepts any non-empty string.
-        corridor_id: r.corridor_id,
+        corridor_id: corridorId,
         venue_id: 'corridor-aggregate',
         event_type: 'corridor-aggregate',
         uec_code: 'corridor-aggregate',
@@ -474,15 +505,41 @@ export async function exportCorridorDensityBaseline(
     if (batch.length > 0) {
       const insertIdFn = (row: Record<string, unknown>): string =>
         `cdb-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.bucket_dow)}-${String(row.bucket_hour)}`;
-      const res = await bigQueryInsertRowsToDataset(
-        env,
-        dataset,
-        BQ_TABLE_CORRIDOR_DENSITY,
-        batch,
-        insertIdFn
-      );
-      result.rowsExported = res.rowCount;
-      result.perPool[pool] = res.rowCount;
+      // Two source rows that canonicalize to one corridor (e.g. a legacy
+      // uppercase spelling beside the lowercase key) would share an insertId,
+      // and BigQuery would keep one while this phase counted both. Fail the
+      // phase closed instead (no watermark advance). The next baseline refresh
+      // regroups by the lowercased cell and deletes the other spelling.
+      const seen = new Set<string>();
+      for (const row of batch) {
+        const id = insertIdFn(row);
+        if (seen.has(id)) {
+          throw new Error(
+            `duplicate canonical corridor baseline key ${id}: two source rows map to one corridor`
+          );
+        }
+        seen.add(id);
+      }
+      // A whole timestamp group can exceed one insertAll call, so chunk it.
+      // Delivery is AT-LEAST-ONCE: after a mid-group failure the watermark is
+      // held and the next run re-sends the whole group. insertIds are
+      // content-derived, but BigQuery's insertId de-duplication is best-effort
+      // (about a minute), so a later retry can land duplicate rows. Readers
+      // dedupe on the natural key (corridor_id, bucket_dow, bucket_hour,
+      // computed_at); exactly-once delivery is a separate story (OSE-1462).
+      let exported = 0;
+      for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+        const res = await bigQueryInsertRowsToDataset(
+          env,
+          dataset,
+          BQ_TABLE_CORRIDOR_DENSITY,
+          batch.slice(i, i + BQ_INSERT_CHUNK),
+          insertIdFn
+        );
+        exported += res.rowCount;
+      }
+      result.rowsExported = exported;
+      result.perPool[pool] = exported;
     }
 
     await advanceWatermark(env.DB, 'corridor_density_baseline', maxComputedAt, result.rowsExported);
@@ -579,7 +636,7 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
       const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.id ?? null, result);
       if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
-        corridor_id: r.corridor_id ?? 'unknown',
+        corridor_id: canonicalCorridorId(r.corridor_id),
         venue_id: r.venue_id,
         event_type: r.uec_code ?? 'unknown',
         uec_code: r.uec_code ?? 'unknown',

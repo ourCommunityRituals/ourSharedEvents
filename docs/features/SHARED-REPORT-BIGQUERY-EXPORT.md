@@ -148,7 +148,7 @@ Calls the three exporters in sequence. Failure isolation per phase (S4-Q4). Logs
 
 ### `scheduled()` wiring (`index.ts`)
 
-Append `runSharedReportBigQueryExport(env)` to the existing `Promise.all` in `scheduled()`. Runs same tick as materialization (S4-Q1). Order doesn't matter — exports read aggregate tables that were just written; if materialization writes after export reads, those rows just get picked up on the next tick (idempotent watermark advancement).
+`scheduled()` runs `runSharedReportPipeline(env)`: materialization, **then** `runSharedReportBigQueryExport(env)`, in the same tick (S4-Q1). The order matters (OSE-616). A baseline refresh stamps every row with one `computed_at` and writes them one by one, and the export's watermark is that timestamp alone. An export running beside the refresh could ship part of a group and advance past the rest for good. The export still runs (in a `finally`) when materialization throws. Gate: `shared-report-pipeline-invariants.spec.ts`.
 
 ---
 
@@ -166,7 +166,7 @@ Append `runSharedReportBigQueryExport(env)` to the existing `Promise.all` in `sc
 SELECT
   air.anon_id_hash, air.venue_id, air.first_seen_at, air.last_seen_at,
   air.visit_count, air.computed_at,
-  e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
   etr.uec_code
 FROM anon_id_returns air
 JOIN events e ON e.id = air.venue_id
@@ -186,7 +186,7 @@ LIMIT 500;  -- max BQ batch size
   "last_seen_at": "ISO",
   "visit_count": 1,
   "computed_at": "ISO",
-  "corridor_id": "corr_... or 'unknown' if NULL",
+  "corridor_id": "the event's lowercase res7-or-coarser H3 cell (e.g. 872664544ffffff), or 'unknown'",
   "event_type": "etr.uec_code or 'unknown'",
   "uec_code": "etr.uec_code",
   "regulatory_pool": "general|hipaa|coppa",
@@ -196,6 +196,16 @@ LIMIT 500;  -- max BQ batch size
 ```
 
 `assertRequiredTags()` runs on each row before send.
+
+**Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The
+exported `corridor_id` is the event's `h3_res7`; a legacy non-H3
+`events.corridor_id` (or none at all) exports as the explicit `'unknown'`
+(`canonicalCorridorId` in `src/lib/export-geography.ts`). Every row then passes
+`assertCorridorGrainRow`: a sub-corridor column (res9, coordinate, address,
+placement reference), any H3 value finer than res7, or a `corridor_id` that is
+neither a valid res7-or-coarser cell nor `'unknown'` **throws**, and the phase
+fails closed (watermark held). Rows are rejected, never trimmed and shipped. The
+event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 
 **BQ table:** `anon_id_returns_export` in the pool's dataset.
 
@@ -221,7 +231,7 @@ LIMIT 500;
 
 ```json
 {
-  "corridor_id": "corr_...",
+  "corridor_id": "the lowercase H3 cell (res7 or coarser) the baseline is keyed by — never 'unknown' (non-H3 keys are withheld)",
   "bucket_dow": 4,
   "bucket_hour": 19,
   "window_30d_count": 42,
@@ -235,6 +245,31 @@ LIMIT 500;
   "exported_at": "ISO"
 }
 ```
+
+A baseline row whose key is not H3-shaped (a legacy named `corridors.id`) is
+**withheld** (counted in `rowsSkipped`, reported as `rows_withheld` in the
+manifest), not exported as `'unknown'`. It is not a corridor baseline under
+ADR-011, and several such rows in one bucket would share an insertId and be
+silently deduplicated by BigQuery.
+
+H3 is case-insensitive but the baseline key is not, so `refreshCorridorBaselines`
+groups by the **lowercased** res7 cell and deletes any baseline row stored under
+another spelling of an H3 cell. If two rows in one export batch still map to the
+same insertId, the phase fails closed (no watermark advance) rather than letting
+BigQuery drop one while the phase counts both. The reconciliation deletes a key
+only when `isValidCell` proves it is a real H3 cell; a legacy key that merely
+looks H3-shaped is left for the export to withhold.
+
+**Whole timestamp groups.** One refresh stamps every baseline row with the same
+`computed_at`, and the watermark is that timestamp alone. So the baseline export
+reads at least 200 rows **extended to the end of the last `computed_at` group it
+reaches**, never a cut group, and inserts in chunks of 500. A plain `LIMIT`
+would advance the watermark past the unread rest of a group, so those rows
+would never be exported.
+
+**Unreadable responses.** An insertAll response body that is not valid JSON
+fails the insert (`INSERT_FAILED`): a 200 that BigQuery's result cannot be read
+from has not confirmed anything.
 
 For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the required-tag values are sentinel strings (`"corridor-aggregate"`). `assertRequiredTags` checks presence + non-empty, so sentinels pass — and the data is honest about being an aggregate.
 
@@ -252,7 +287,7 @@ For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the
 SELECT
   es.id, es.venue_id, es.series_name, es.cadence,
   es.day_of_week, es.hour_of_day, es.state, es.confirmed_at, es.updated_at,
-  e.legal_clearance_tier, e.corridor_id, e.event_type_id,
+  e.legal_clearance_tier, COALESCE(e.h3_res7, e.corridor_id) AS corridor_id, e.event_type_id,
   etr.uec_code
 FROM event_series es
 JOIN events e ON e.id = es.venue_id
@@ -281,13 +316,19 @@ try {
 }
 ```
 
-Watermark advancement happens **per row** at end of successful export, not per-batch. If a batch of 500 rows fails mid-stream:
+The watermark advances only after the **whole batch** is accepted (for the baseline phase, the whole `computed_at` group). If an insert fails partway:
 
-- Rows that DID get inserted to BQ are already there (BQ insertAll is per-row idempotent via `insertId`).
-- Watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark; duplicate-row attempts are silent no-ops because BQ deduplicates on `insertId` (we use `${tableId}-${computed_at}-${anon_id_hash}` pattern).
+- Rows BigQuery already accepted stay there.
+- The watermark is NOT advanced past the failed batch.
+- Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
-Idempotency guarantee: re-running on the same source data is safe. Crash recovery is automatic on next tick.
+Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `anon_id_returns_export`: `(anon_id_hash, venue_id, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+
+**Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
+per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`
+treats any `insertErrors` as a failed insert (`BigQueryError INSERT_FAILED`,
+"rejected N/M rows"), so the phase is marked failed, nothing is counted or
+manifested as exported, and the watermark does not advance (OSE-616).
 
 ---
 

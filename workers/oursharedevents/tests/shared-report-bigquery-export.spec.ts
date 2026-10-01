@@ -143,6 +143,10 @@ async function seedEvent(opts: SeedEventOpts): Promise<void> {
     .run();
 }
 
+// Real res7 corridor cells (ADR-011): Eagles Hall's corridor and a neighbour.
+const RES7_A = '872664544ffffff';
+const RES7_B = '872664546ffffff';
+
 async function seedCorridor(id: string): Promise<void> {
   const db = tenv().DB;
   await db
@@ -470,14 +474,13 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
   });
 
   test('routes to general pool only (v1 simplification)', async () => {
-    await seedCorridor('test-corr-exp-A');
     await tenv()
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .bind('test-corr-exp-A', 4, 19, 42, 120, '2026-05-10T18:00:00.000Z')
+      .bind(RES7_A, 4, 19, 42, 120, '2026-05-10T18:00:00.000Z')
       .run();
 
     const r = await exportCorridorDensityBaseline(makeEnv());
@@ -489,17 +492,42 @@ describe('OSE-272 Session 4 Phase 2: exportCorridorDensityBaseline', () => {
     const row = bqCalls[0].rows[0].json;
     expect(row.venue_id).toBe('corridor-aggregate');
     expect(row.regulatory_pool).toBe('general');
+    expect(row.corridor_id).toBe(RES7_A);
+  });
+
+  test('ADR-011: legacy-keyed baseline rows are withheld, never collapsed onto "unknown"', async () => {
+    // Two legacy named keys in the same bucket with one computed_at: exported
+    // as 'unknown' they would share an insertId and BigQuery would keep one.
+    await seedCorridor('test-corr-exp-A');
+    await seedCorridor('test-corr-exp-B');
+    for (const key of ['test-corr-exp-A', 'test-corr-exp-B', RES7_A]) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 4, 19, 5, 9, '2026-05-10T18:00:00.000Z')`
+        )
+        .bind(key)
+        .run();
+    }
+
+    const r = await exportCorridorDensityBaseline(makeEnv());
+    expect(r.errors).toBe(0);
+    expect(r.rowsRead).toBe(3);
+    expect(r.rowsSkipped).toBe(2);
+    expect(r.rowsExported).toBe(1);
+    const sent = bqCalls.flatMap((c) => c.rows.map((x) => x.json.corridor_id));
+    expect(sent).toEqual([RES7_A]);
   });
 
   test('watermark advances on success', async () => {
-    await seedCorridor('test-corr-exp-B');
     await tenv()
       .DB.prepare(
         `INSERT INTO corridor_density_baseline
            (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .bind('test-corr-exp-B', 3, 20, 10, 30, '2026-05-10T19:00:00.000Z')
+      .bind(RES7_B, 3, 20, 10, 30, '2026-05-10T19:00:00.000Z')
       .run();
     await exportCorridorDensityBaseline(makeEnv());
     const state = await tenv()

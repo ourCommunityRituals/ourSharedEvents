@@ -86,8 +86,13 @@ export default {
     //   detector) run regardless — they don't need the pepper.
     // runSharedReportBigQueryExport (OSE-272 Session 4) reads main DB only
     //   AND streams to BigQuery; off by default (BQ config unset → no-op).
-    //   Same cron tick as materialization (S4-Q1 ratified). Per-phase
-    //   failure-isolated (S4-Q4); materialization never blocks on export.
+    //   Same cron tick as materialization (S4-Q1 ratified), but SEQUENCED
+    //   after it (runSharedReportPipeline, OSE-616): a refresh stamps all its
+    //   baseline rows with one computed_at and writes them one by one, so an
+    //   export reading mid-refresh would ship part of the group and advance its
+    //   timestamp-only watermark past the rest for good. Per-phase
+    //   failure-isolated (S4-Q4); the export still runs if materialization
+    //   throws.
     // runSecurityMetricsCron (OSE-SEC-1): reads DB.admin_audit_log + RATE_LIMIT_KV;
     //   writes to DB.security_metrics + DB.security_alerts. Opens Linear issues
     //   for anomalies. Off-by-default guard: skips gracefully if tables don't exist.
@@ -111,8 +116,7 @@ export default {
         runFormDataLifecycle(env),
         runBigQueryBackup(env),
         runSubscribersRetentionLifecycle(env),
-        runSharedReportMaterialization(env),
-        runSharedReportBigQueryExport(env),
+        runSharedReportPipeline(env),
         runSecurityMetricsCron(env),
         runDraftExpiry(env),
         runCorridorLatch(env),
@@ -133,6 +137,21 @@ export default {
     await handleScanBatch(batch, env);
   },
 };
+
+/**
+ * Materialize, THEN export (OSE-616). Never concurrently: the export's
+ * timestamp-only watermark would otherwise advance past rows of a refresh
+ * group that were not yet written. `finally` keeps the export running when
+ * materialization throws (it then ships what is already complete); the
+ * materialization error still propagates to the scheduler.
+ */
+async function runSharedReportPipeline(env: RouterEnv): Promise<void> {
+  try {
+    await runSharedReportMaterialization(env);
+  } finally {
+    await runSharedReportBigQueryExport(env);
+  }
+}
 
 /**
  * Safe key patterns — keys in survey responses that are behavioral/rating data

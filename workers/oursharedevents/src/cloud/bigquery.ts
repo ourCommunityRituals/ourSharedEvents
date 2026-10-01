@@ -45,6 +45,31 @@ export function isBigQueryConfigured(env: BigQueryEnv): boolean {
 }
 
 /**
+ * tabledata.insertAll reports per-row rejections inside an HTTP 200
+ * (`insertErrors`). Treating 2xx as full success would let a caller count and
+ * manifest rows BigQuery never stored, and advance past them. Both insertAll
+ * clients below call this after the status check (OSE-616).
+ */
+async function assertNoInsertErrors(res: Response, rowCount: number, where: string): Promise<void> {
+  // No catch: an unreadable 200 body has not confirmed anything. The parse
+  // error reaches the caller's catch and becomes INSERT_FAILED (fail closed).
+  const result = (await res.json()) as {
+    insertErrors?: Array<{
+      index?: number;
+      errors?: Array<{ reason?: string; message?: string }>;
+    }>;
+  };
+  const rejected = result.insertErrors ?? [];
+  if (rejected.length === 0) return;
+  const first = rejected[0]?.errors?.[0];
+  throw new BigQueryError(
+    'INSERT_FAILED',
+    `BQ insertAll rejected ${rejected.length}/${rowCount} rows (${where})` +
+      (first ? `: ${first.reason ?? ''} ${first.message ?? ''}`.trimEnd() : '')
+  );
+}
+
+/**
  * Stream rows into a BigQuery table via the insertAll API.
  * Max 500 rows per batch (BQ limit).
  */
@@ -95,6 +120,7 @@ export async function bigQueryInsertRows(
       const text = await res.text().catch(() => '');
       throw new BigQueryError('INSERT_FAILED', `BQ insertAll failed: ${res.status} ${text}`);
     }
+    await assertNoInsertErrors(res, rows.length, `dataset=${datasetId} table=${tableId}`);
     return { rowCount: rows.length };
   } catch (err) {
     if (err instanceof BigQueryError) throw err;
@@ -164,6 +190,7 @@ export async function bigQueryInsertRowsToDataset(
         `BQ insertAll failed (dataset=${datasetId} table=${tableId}): ${res.status} ${text}`
       );
     }
+    await assertNoInsertErrors(res, rows.length, `dataset=${datasetId} table=${tableId}`);
     return { rowCount: rows.length };
   } catch (err) {
     if (err instanceof BigQueryError) throw err;
