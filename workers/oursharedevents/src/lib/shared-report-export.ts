@@ -378,7 +378,9 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
               SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
          FROM (
            SELECT air.anon_id_hash,
-                  COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
+                  -- Lower-cased before grouping: H3 cells are case-insensitive, and
+                  -- one cell stored in two cases must be one group under the floor.
+                  COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
                   ${RETURNS_POOL_KEY_SQL} AS pool_key,
                   MIN(e.legal_clearance_tier) AS legal_clearance_tier,
                   etr.uec_code,

@@ -12,6 +12,8 @@
 -- Existing rows stay NULL: their pepper is unknown, so they are not counted.
 -- The nightly materializer deletes rows of any pepper other than the current one
 -- (NULL included): erasure re-derives only the current hash, so it could never
--- reach them. A rotation is a reset, not a second identity.
+-- reach them. A rotation is a reset, not a second identity. That nightly purge is
+-- bounded; the complete one is the RUNBOOK-DEPLOYMENT.md step run after this
+-- migration and after every pepper rotation.
 
 ALTER TABLE anon_id_returns ADD COLUMN pepper_epoch TEXT;

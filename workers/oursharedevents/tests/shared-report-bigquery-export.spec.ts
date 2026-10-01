@@ -611,6 +611,18 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows().length).toBeGreaterThan(0);
   });
 
+  test('one corridor stored in two letter cases is one group: 3 + 3 people export as 6', async () => {
+    await seedCorridorEvent('test-evt-exp-case-lo', 1, RES7_A);
+    await seedCorridorEvent('test-evt-exp-case-up', 1, RES7_A.toUpperCase());
+    await seedPeople('test-evt-exp-case-lo', [1, 1, 1], { prefix: 'lo' });
+    await seedPeople('test-evt-exp-case-up', [1, 1, 1], { prefix: 'up' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 6 });
+  });
+
   test('a group with no real corridor is withheld', async () => {
     await seedCorridorEvent('test-evt-exp-nocorr', 1, null);
     await seedPeople('test-evt-exp-nocorr', [2, 2, 2, 2, 2]);

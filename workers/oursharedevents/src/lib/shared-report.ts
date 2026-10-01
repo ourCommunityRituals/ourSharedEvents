@@ -154,9 +154,13 @@ export async function materializeAnonIdReturns(
   // or unknown pepper are deleted here: the export never counts them, and after
   // a rotation erasure (data-subject.ts) can only re-derive the current hash, so
   // it could never find them. A rotation is a reset, not a second identity.
+  // This is the bounded safety net (PEPPER_PURGE_CHUNK x PEPPER_PURGE_MAX_CHUNKS
+  // rows a run, then ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE); the complete
+  // purge is the rotation step in docs/runbooks/RUNBOOK-DEPLOYMENT.md.
   const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
   try {
     let purged = 0;
+    let complete = false;
     for (let i = 0; i < PEPPER_PURGE_MAX_CHUNKS; i++) {
       const res = await env.DB.prepare(
         `DELETE FROM anon_id_returns WHERE rowid IN (
@@ -168,10 +172,24 @@ export async function materializeAnonIdReturns(
         .run();
       const n = res.meta?.changes ?? 0;
       purged += n;
-      if (n < PEPPER_PURGE_CHUNK) break;
+      if (n < PEPPER_PURGE_CHUNK) {
+        complete = true;
+        break;
+      }
     }
     if (purged > 0) {
       console.log(JSON.stringify({ type: 'ANON_ID_RETURNS_PEPPER_PURGE', rows: purged }));
+    }
+    if (!complete) {
+      // Rows erasure cannot reach are still there; the next run continues. The
+      // rotation runbook purges the table in full, so this is the safety net.
+      console.error(
+        JSON.stringify({
+          type: 'ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE',
+          rows_deleted: purged,
+          note: 'Old-pepper anon_id_returns rows remain. Run the full purge in RUNBOOK-DEPLOYMENT.md.',
+        })
+      );
     }
   } catch (err) {
     result.errors++;

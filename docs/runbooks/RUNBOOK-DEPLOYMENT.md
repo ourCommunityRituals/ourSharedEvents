@@ -329,6 +329,27 @@ bq --project_id="$PROJECT" mk --table "$DATASET.corridor_returns_export" bigquer
 
 **Not covered here:** `corridor_density_baseline_export` and `event_series_export` predate OSE-1460 and also have no checked-in schema; they were never created either (staging's dataset held no tables on 2026-10-01). Creating them is separate work.
 
+### Purge return rows after migration 0090 and after any `ANON_ID_HASH_PEPPER` rotation (OSE-1460)
+
+**Why:** `anon_id_returns.anon_id_hash` is keyed by `ANON_ID_HASH_PEPPER`. Erasure (`handlers/data-subject.ts`) can only re-derive the hash under the current pepper, so rows written under any other pepper, or before 0090 (`pepper_epoch` NULL), cannot be found for a person who asks to be erased. The export never counts them. The nightly materializer deletes them, but at most 50,000 rows a run; past that it logs `ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE` and continues the next night. This step removes them all at once.
+
+**When:**
+- once per environment, right after the deploy that applies 0090;
+- after every `ANON_ID_HASH_PEPPER` rotation, straight after the secret is changed and before the next nightly run (`0 3 * * *` UTC).
+
+A rotation resets return counts by design, so after a rotation every row is from the old pepper and the whole table goes.
+
+```bash
+ENV=staging   # then ENV=production
+cd workers/oursharedevents
+# After the 0090 deploy: rows of unknown pepper.
+npx wrangler d1 execute DB --env "$ENV" --remote --command "DELETE FROM anon_id_returns WHERE pepper_epoch IS NULL;"
+# After a pepper rotation: every row is from the old pepper.
+npx wrangler d1 execute DB --env "$ENV" --remote --command "DELETE FROM anon_id_returns;"
+```
+
+**Verify:** `SELECT pepper_epoch IS NULL AS unknown, COUNT(*) FROM anon_id_returns GROUP BY 1;` shows no `unknown = 1` row after the 0090 step, and `0` rows in total straight after a rotation.
+
 ### Turn on production monitoring (OSE-1418)
 
 **When:** launch day, right after the first production deploy passes its smoke checks.
