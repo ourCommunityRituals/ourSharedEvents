@@ -27,6 +27,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   close-guard:
@@ -48,11 +49,26 @@ jobs:
       - name: Self-test the guard logic (born-red cases incl. #466)
         run: node scripts/check-pr-linear-close.mjs --self-test
 
-      # Level 2: judge this PR. Fails if an OSE id in branch/title is not
-      # explicitly closed in the body (i.e. an undeclared auto-close on merge).
-      - name: Check PR branch/title/body for undeclared auto-close
+      # Level 2: judge this PR. Fails if an OSE id in branch/title, or one closed
+      # by a commit message, is not explicitly closed in the body (i.e. an
+      # undeclared auto-close on merge). Commit messages matter because a squash
+      # merge copies them onto main (OSE-1443: #701 closed OSE-867 that way).
+      # If the commit fetch fails, the step fails — the guard never passes blind.
+      - name: Check PR branch/title/body/commits for undeclared auto-close
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: node scripts/check-pr-linear-close.mjs
+        run: |
+          COUNT="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq 'length' | awk '{s+=$1} END {print s+0}')"
+          echo "Fetched $COUNT commit(s) for PR #$PR_NUMBER"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::Fetched 0 commits for PR #$PR_NUMBER — refusing to pass without examining commit messages."
+            exit 1
+          fi
+          PR_COMMITS="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[].commit.message')"
+          export PR_COMMITS
+          node scripts/check-pr-linear-close.mjs

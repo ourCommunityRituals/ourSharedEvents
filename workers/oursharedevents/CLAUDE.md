@@ -105,6 +105,13 @@ of the PR body). This silently closed multi-part stories 3× in one day
   matching `Closes OSE-###` in the body (an undeclared auto-close). It is the real
   traceability gate — earlier revisions of this file claimed one that did not
   exist (drift now closed).
+- **Prose and commit messages count too (OSE-1443).** Linear reads magic words
+  anywhere in the body, prose included. #701 said `Part of OSE-867` but also
+  "before closing OSE-867", and OSE-867 closed on merge. The guard fails an id
+  that the body both calls `Part of` and puts a closing word in front of. A squash
+  merge also copies every commit message onto `main`, so the guard fails any PR
+  where a commit message closes an id that the body does not. To fix it, reword
+  the prose or the commit.
 
 ## Where the rest lives
 
