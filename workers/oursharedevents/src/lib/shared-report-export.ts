@@ -53,7 +53,12 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { assertCorridorGrainRow, canonicalCorridorId, isCorridorId } from './export-geography';
+import {
+  assertCorridorGrainRow,
+  canonicalCorridorId,
+  isCorridorId,
+  UNKNOWN_CORRIDOR,
+} from './export-geography';
 
 export type SharedReportExportEnv = BigQueryEnv & { DB: D1Database };
 
@@ -445,10 +450,21 @@ export async function exportCorridorDensityBaseline(
     const batch: Record<string, unknown>[] = [];
     for (const r of sourceRows) {
       if (r.computed_at > maxComputedAt) maxComputedAt = r.computed_at;
+      // ADR-011: a corridor baseline is keyed by the corridor, the res7 node.
+      // A row keyed by anything that is not H3-shaped (a legacy named
+      // corridors.id) is not a corridor baseline. Withhold it, never export
+      // it as 'unknown': several such rows in one bucket would all become
+      // 'unknown' with the same computed_at, collide on insertId and be
+      // silently deduplicated by BigQuery while counted here as exported.
+      // An H3-shaped key still goes through, so the row guard judges it.
+      if (canonicalCorridorId(r.corridor_id) === UNKNOWN_CORRIDOR) {
+        result.rowsSkipped++;
+        continue;
+      }
       const tags = {
         // Sentinel values for required tags that don't apply to corridor
         // aggregates. assertRequiredTags accepts any non-empty string.
-        corridor_id: canonicalCorridorId(r.corridor_id),
+        corridor_id: r.corridor_id,
         venue_id: 'corridor-aggregate',
         event_type: 'corridor-aggregate',
         uec_code: 'corridor-aggregate',

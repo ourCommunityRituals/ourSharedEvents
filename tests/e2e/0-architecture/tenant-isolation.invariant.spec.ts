@@ -217,12 +217,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
-  'lib/shared-report-export.ts:296':
+  // 296→301 and 554→570 by the PR #726 follow-up (import list + withheld
+  // legacy-keyed baseline rows).
+  'lib/shared-report-export.ts:301':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata, keyed by `computed_at > ?` ' +
     'watermark across ALL brands. OER ingests every brand by design; never-who ' +
     'anon hashes; not request-reachable.',
-  'lib/shared-report-export.ts:554':
+  'lib/shared-report-export.ts:570':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

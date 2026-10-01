@@ -24,6 +24,7 @@ import {
   type SharedReportMaterializeEnv,
 } from '../src/lib/shared-report';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
+import { phaseTimesFor } from '../src/lib/event-datetime';
 
 interface TestEnv {
   DB: D1Database;
@@ -197,6 +198,50 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       .bind('test-evt-mat-1')
       .all();
     expect(rows.results).toHaveLength(2);
+  });
+
+  test('OSE-616: a date-only event with no end_date ends with its start day and is materialized', async () => {
+    // The API stores calendar days and end_date is optional: such an event
+    // ends at local end-of-day of start_date (phaseTimesFor). Pick a zone
+    // where that instant is 4–24h ago, inside the 2–26h window.
+    const now = Date.now();
+    let pick: { day: string; zone: string } | null = null;
+    for (const zone of [
+      'Pacific/Kiritimati',
+      'Asia/Tokyo',
+      'Asia/Kolkata',
+      'Europe/London',
+      'America/Chicago',
+      'Pacific/Honolulu',
+      'Pacific/Pago_Pago',
+    ]) {
+      for (let back = -1; back <= 2 && !pick; back++) {
+        const day = new Date(now - back * 86_400_000).toISOString().slice(0, 10);
+        const end = phaseTimesFor({ start_date: day, end_date: null, timezone: zone }).end_date;
+        const endMs = end ? Date.parse(end) : NaN;
+        if (endMs >= now - 24 * 3600_000 && endMs <= now - 4 * 3600_000) pick = { day, zone };
+      }
+      if (pick) break;
+    }
+    expect(pick, 'a (day, zone) pair ending 4–24h ago').not.toBeNull();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events
+           (id, brand_id, title, slug, status, location, start_date, end_date, timezone, created_at, updated_at)
+         VALUES ('test-evt-mat-startonly', 'test-brand', 'Start only', 'test-evt-mat-startonly',
+                 'active', 'Test Venue', ?, NULL, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(pick!.day, pick!.zone)
+      .run();
+    await seedScan('test-evt-mat-startonly', 'anon_startonly');
+
+    const r = await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
+    expect(r.errors).toBe(0);
+    const rows = await tenv()
+      .DB.prepare(`SELECT COUNT(*) AS n FROM anon_id_returns WHERE venue_id = ?`)
+      .bind('test-evt-mat-startonly')
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(1);
   });
 
   test('never persists raw anonymous_id — only the hash', async () => {

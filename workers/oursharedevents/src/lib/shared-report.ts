@@ -146,8 +146,6 @@ export async function materializeAnonIdReturns(
   }
 
   // Find events that ended in the materialization window.
-  // We use end_date as the trigger; if end_date is null, fall back to
-  // start_date + 6h as a sane default for the "recently ended" check.
   const nowMs = Date.now();
   const floorMs = nowMs - MATERIALIZATION_CEILING_HOURS * 60 * 60 * 1000;
   const ceilingMs = nowMs - MATERIALIZATION_FLOOR_HOURS * 60 * 60 * 1000;
@@ -159,14 +157,16 @@ export async function materializeAnonIdReturns(
   // inside the window. Select by calendar day (padded two days each side, so
   // every zone is covered), then keep only events whose real end instant
   // (phaseTimesFor — the same rule the public event page uses) is in window.
+  // A date-only event may have no end_date at all: it ends with its start
+  // day, so the prefilter reads COALESCE(end_date, start_date).
   const dayPad = 2 * 86_400_000;
   const fromDay = new Date(floorMs - dayPad).toISOString().slice(0, 10);
   const toDay = new Date(ceilingMs + dayPad).toISOString().slice(0, 10);
   const dayRows = await env.DB.prepare(
     `SELECT id, start_date, end_date, starts_at, timezone FROM events
        WHERE status = 'active'
-         AND end_date IS NOT NULL
-         AND substr(end_date, 1, 10) BETWEEN ? AND ?`
+         AND COALESCE(end_date, start_date) IS NOT NULL
+         AND substr(COALESCE(end_date, start_date), 1, 10) BETWEEN ? AND ?`
   )
     .bind(fromDay, toDay)
     .all<{

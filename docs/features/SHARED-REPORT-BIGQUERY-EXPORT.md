@@ -246,6 +246,12 @@ LIMIT 500;
 }
 ```
 
+A baseline row whose key is not H3-shaped (a legacy named `corridors.id`) is
+**withheld** (counted in `rowsSkipped`, reported as `rows_withheld` in the
+manifest), not exported as `'unknown'`. It is not a corridor baseline under
+ADR-011, and several such rows in one bucket would share an insertId and be
+silently deduplicated by BigQuery.
+
 For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the required-tag values are sentinel strings (`"corridor-aggregate"`). `assertRequiredTags` checks presence + non-empty, so sentinels pass — and the data is honest about being an aggregate.
 
 **BQ table:** `corridor_density_baseline_export` in the `oureventring_general` dataset.
