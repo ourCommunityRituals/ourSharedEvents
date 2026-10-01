@@ -57,6 +57,7 @@ const LOCAL_URL = 'http://localhost:3000';
  * @see config/brand-config.js
  */
 const { BRANDS: VALID_BRANDS, DEFAULT_BRAND } = require('./brand-config');
+const { isProductionUrl } = require('./production-hosts');
 
 // =============================================================================
 // Environment Definitions
@@ -146,7 +147,7 @@ function detectEnvironmentFromUrl(url) {
       return { ...ENVIRONMENTS.staging, baseUrl: url };
     }
 
-    if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') {
+    if (isProductionUrl(url)) {
       return { ...ENVIRONMENTS.production, baseUrl: url };
     }
 
@@ -268,13 +269,7 @@ function isOurSharedEvents() {
  * @returns {boolean} True if testing against production
  */
 function isProduction() {
-  const env = getEnvironment();
-  try {
-    const url = new URL(env.baseUrl);
-    return url.hostname === 'oursharedevents.com' || url.hostname === 'www.oursharedevents.com';
-  } catch {
-    return false;
-  }
+  return isProductionUrl(getEnvironment().baseUrl);
 }
 
 /**
@@ -364,6 +359,7 @@ module.exports = {
 
   // Environment detection helpers
   isProduction,
+  isProductionUrl,
   isStaging,
   isOurSharedEvents,
   detectEnvironmentFromUrl,

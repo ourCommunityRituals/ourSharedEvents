@@ -51,12 +51,9 @@
 // bounded, and correctable; under-counting is neither. Bot classification is
 // header-only and so keeps working regardless.
 
-import { checkRateLimit, clientIp, pepperedKeyHash, RATE_LIMIT_WINDOW_MS } from './rate-limit';
+import { checkRateLimit, clientIp, pepperedKeyHash, type RateLimitEnv } from './rate-limit';
 
-export interface InvalidTrafficEnv {
-  RATE_LIMIT_KV?: KVNamespace;
-  RATE_LIMIT_KEY_PEPPER?: string;
-}
+export type InvalidTrafficEnv = Partial<RateLimitEnv>;
 
 /** Why a beacon was not counted. Server-side only — never returned to callers. */
 export type IvtReason = 'bot' | 'duplicate' | 'flood';
@@ -175,16 +172,16 @@ export interface BeaconDescriptor {
  * Has this exact beacon already been counted for this caller, in this window?
  *
  * The KV key is a peppered hash of caller + beacon identity (OSE-1447: event
- * and sponsor ids are public, so a bare SHA-256 would reverse to the IP), so
- * the stored key reveals neither the IP nor which sponsor was seen, and it
- * expires on its own.
+ * and sponsor ids are public, so a bare SHA-256 would reverse to the IP), so the
+ * stored key reveals neither the IP nor which sponsor was seen, and it expires
+ * on its own.
  */
 async function isDuplicateBeacon(
   request: Request,
-  kv: KVNamespace,
-  beacon: BeaconDescriptor,
-  pepper?: string
+  env: RateLimitEnv,
+  beacon: BeaconDescriptor
 ): Promise<boolean> {
+  const kv = env.RATE_LIMIT_KV;
   const fingerprint = await pepperedKeyHash(
     [
       clientIp(request),
@@ -194,7 +191,7 @@ async function isDuplicateBeacon(
       beacon.placement,
       beacon.kind,
     ].join('|'),
-    pepper
+    env.RATE_LIMIT_KEY_PEPPER
   );
   const key = `ivt:dedup:${fingerprint}`;
   if ((await kv.get(key)) !== null) return true;
@@ -220,19 +217,17 @@ export async function classifyBeacon(
 ): Promise<IvtVerdict> {
   if (isAutomatedClient(request)) return { counted: false, reason: 'bot' };
 
-  const kv = env.RATE_LIMIT_KV;
-  if (!kv) return { counted: true }; // fail open — see the header
+  if (!env.RATE_LIMIT_KV) return { counted: true }; // fail open — see the header
+  const store = env as RateLimitEnv; // KV checked just above
 
   try {
-    if (await isDuplicateBeacon(request, kv, beacon, env.RATE_LIMIT_KEY_PEPPER)) {
+    if (await isDuplicateBeacon(request, store, beacon)) {
       return { counted: false, reason: 'duplicate' };
     }
     const flooded = await checkRateLimit(
+      store,
       `ivt:${beacon.kind}:${beacon.eventId}:${clientIp(request)}`,
-      kv,
-      IMPRESSION_WRITE_MAX,
-      RATE_LIMIT_WINDOW_MS,
-      env.RATE_LIMIT_KEY_PEPPER
+      IMPRESSION_WRITE_MAX
     );
     if (flooded) return { counted: false, reason: 'flood' };
   } catch {

@@ -50,29 +50,29 @@ describe('OSE-576 | per-endpoint limits', () => {
 describe('OSE-576 | checkRateLimit enforces each endpoint max', () => {
   test('mint key: allows 10, blocks the 11th', async () => {
     const key = 'mint:test-actor:evt_mint_unit';
-    await _deleteRateLimitKey(key, tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), key);
     for (let i = 0; i < RATE_LIMIT_MINT_MAX; i++) {
-      expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)).toBe(false);
+      expect(await checkRateLimit(tenv(), key, RATE_LIMIT_MINT_MAX)).toBe(false);
     }
-    expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)).toBe(true);
+    expect(await checkRateLimit(tenv(), key, RATE_LIMIT_MINT_MAX)).toBe(true);
   });
 
   test('batch key: allows 30, blocks the 31st', async () => {
     const key = 'batch:test-token-unit';
-    await _deleteRateLimitKey(key, tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), key);
     for (let i = 0; i < RATE_LIMIT_BATCH_MAX; i++) {
-      expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX)).toBe(false);
+      expect(await checkRateLimit(tenv(), key, RATE_LIMIT_BATCH_MAX)).toBe(false);
     }
-    expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX)).toBe(true);
+    expect(await checkRateLimit(tenv(), key, RATE_LIMIT_BATCH_MAX)).toBe(true);
   });
 
   test('admin key: allows 60, blocks the 61st', async () => {
     const key = 'admin:9.9.9.9';
-    await _deleteRateLimitKey(key, tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), key);
     for (let i = 0; i < RATE_LIMIT_ADMIN_MAX; i++) {
-      expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_ADMIN_MAX)).toBe(false);
+      expect(await checkRateLimit(tenv(), key, RATE_LIMIT_ADMIN_MAX)).toBe(false);
     }
-    expect(await checkRateLimit(key, tenv().RATE_LIMIT_KV, RATE_LIMIT_ADMIN_MAX)).toBe(true);
+    expect(await checkRateLimit(tenv(), key, RATE_LIMIT_ADMIN_MAX)).toBe(true);
   });
 });
 

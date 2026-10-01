@@ -19,6 +19,7 @@
  */
 
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 // Import canonical environment configuration (Story 1.2)
 // Single source of truth for BASE_URL resolution
@@ -49,12 +50,7 @@ function adminExtraHeaders(): Record<string, string> {
   return h;
 }
 
-const { refuseProductionTargets } = require('./config/production-read-only');
-
-// ADR-021 (OSE-906): this suite can write, so it never targets production.
-refuseProductionTargets('playwright.ui-smoke.config.ts', getBaseUrl());
-
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/ui/smoke',
 
   // Archived smoke specs (tests/ui/smoke/archive/**) are retired and some no
@@ -164,3 +160,6 @@ export default defineConfig({
 
   // No webServer - tests run against deployed URLs
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

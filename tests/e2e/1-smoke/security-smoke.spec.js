@@ -40,7 +40,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../../config/environments');
-const { isProductionUrl } = require('../../../config/production-read-only');
+const { isProductionUrl } = require('../../../config/production-hosts');
 
 const BASE_URL = getBaseUrl().replace(/\/+$/, '');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';

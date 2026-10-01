@@ -22,7 +22,7 @@ import {
   normalizeOperation,
   emitOperationCost,
 } from './lib/cost-metric';
-import { isBucketTripped, type RateLimitEntry } from './lib/rate-limit';
+import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 
 export type { RouterEnv as Env };
 
@@ -508,38 +508,14 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
   }
 
   // ── Phase 2: Rate-limit triggers from KV ────────────────────────────────
-  // KV keys have the form ratelimit:{hmac}; value = { count, resetAt, max }.
-  // A bucket counts as tripped when count > its own stored limit (`max`: mint
-  // 10, batch 30, default 60, public reads 120); entries without `max` predate
-  // that field and use the default RATE_LIMIT_MAX (60).
-  // NOTE: KV list is eventually consistent; exact counts are best-effort.
+  // A bucket counts when it has tripped its own stored limit (isBucketTripped).
+  // KV list is eventually consistent; exact counts are best-effort.
   try {
-    let cursor: string | undefined;
     let listed = 0;
-    do {
-      const result = await env.RATE_LIMIT_KV.list({
-        prefix: 'ratelimit:',
-        limit: 1000,
-        cursor,
-      });
-      listed += result.keys.length;
-      // Fetch values in parallel batches of 50 to avoid fan-out explosion
-      const BATCH = 50;
-      for (let i = 0; i < result.keys.length; i += BATCH) {
-        const batch = result.keys.slice(i, i + BATCH);
-        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
-        for (const raw of values) {
-          if (!raw) continue;
-          try {
-            const entry = JSON.parse(raw) as RateLimitEntry;
-            if (isBucketTripped(entry)) rateLimitTriggers++;
-          } catch {
-            // malformed entry — skip
-          }
-        }
-      }
-      cursor = result.list_complete ? undefined : (result as { cursor?: string }).cursor;
-    } while (cursor);
+    for await (const { entry } of scanRateLimitBuckets(env.RATE_LIMIT_KV)) {
+      listed++;
+      if (isBucketTripped(entry)) rateLimitTriggers++;
+    }
 
     console.log(
       JSON.stringify({

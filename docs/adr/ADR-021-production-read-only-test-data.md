@@ -38,31 +38,28 @@ coverage is on staging. A schema-version assert (OSE-803 pattern) and public GET
 contract shapes are allowed under this ADR but are not in that list yet. Adding them is
 a follow-up, and the gate requires any spec added to the list to be read-only.
 
-It is enforced in three places:
+It is enforced in three places, all keyed on one host rule
+(`config/production-hosts.js` `isProductionUrl()`, also used by `config/environments.js`
+and `config/feature-flags.js`):
 
-- `security-smoke.spec.js` `createEvent()` throws on production before it posts. This
-  is the second line behind each describe's `test.skip(IS_PRODUCTION)`.
-- `config/production-read-only.js` `refuseProductionTargets()` runs at load in every
-  `playwright*.config.*` except the two the production smoke job uses
-  (`e2e-smoke`, `smoke`, listed in `PRODUCTION_READ_ONLY_CONFIGS`). It checks the
-  config's own base URL plus `BASE_URL` and `STAGING_URL`, since many specs read those
-  directly. A suite that can write fails before any request if pointed at production.
-- The two production-smoke configs, when they target production, narrow discovery with
-  `productionTestMatch()` to the approved read-only specs (`PRODUCTION_SMOKE_SPECS`). So
-  `USE_PRODUCTION=true npm run test:api:smoke`, or naming a writing spec on the command
-  line, finds nothing else to run.
-- Every Bruno collection (`bruno/*/opencollection.yml`) has a collection-level
+- **Playwright.** Every `playwright*.config.*` exports
+  `guardProduction(__filename, config)` (`config/production-read-only.js`). At load it
+  collects every target the suite can reach: the config's own `baseURL`s, the env vars
+  specs read directly (`TARGET_URL_ENV_VARS`), and `getBaseUrl()` (so `TEST_ENV`,
+  `USE_PRODUCTION` and `APP_URL` count too). If any is production, the two production
+  smoke configs (`PRODUCTION_SMOKE_SPECS`) are narrowed to their approved read-only specs,
+  and every other config throws before a request is sent. Inside
+  `security-smoke.spec.js`, every group that writes also skips on production and
+  `createEvent()` throws there.
+- **Bruno.** Every collection (`bruno/*/opencollection.yml`) has a collection-level
   before-request script that throws on any method other than GET, HEAD or OPTIONS when
-  the target is production. A thrown pre-request script means Bruno never sends the
-  request, so `bru run --env ose` cannot write to production.
-- The CI gate `tests/integration/production-read-only.test.js` (root vitest, so it runs
-  on every PR) locks all of the following:
-  - the allowlist of specs on `smoke-production`;
-  - no write calls in the API smoke specs;
-  - the guard, the skips and the write-site inventory in `security-smoke`;
-  - `IS_PRODUCTION` coming from the shared helper and matching `PROD_BASE_URL`;
-  - the production refusal in every Playwright config outside the allowlist;
-  - the Bruno write refusal, by running each collection's own script.
+  the target host is production (exact hostname, so userinfo, port, case or a trailing
+  dot cannot hide it). A thrown pre-request script means Bruno never sends the request.
+- **CI gate.** `tests/integration/production-read-only.test.js` (root vitest, every PR)
+  locks the approved specs and configs on `smoke-production`, the read-only API smoke
+  specs, the wrapper on every config, the guard's behaviour over a table of targets
+  and env vars, the env vars specs read, the `security-smoke` skips, and each Bruno
+  collection's own script.
 
 Every `security-smoke` describe that sends a write, including the rejected-key probe
 (an invalid bearer, expected 401), skips on production. A rejected-key POST could still
@@ -116,11 +113,13 @@ production with no failing check.
 
 ## Implementation Notes
 
-- Code: `config/production-read-only.js`, `playwright.red-team.config.ts`,
-  `tests/e2e/1-smoke/security-smoke.spec.js` (`createEvent`)
-- CI gate: `tests/integration/production-read-only.test.js`. Mutation-checked: removing
-  the createEvent guard, dropping one skip, removing the red-team refusal, adding a spec
-  to `smoke-production`, or adding an unlisted write each turns it red.
+- Code: `config/production-read-only.js` (`guardProduction`), `config/production-hosts.js`,
+  every `playwright*.config.*`, `bruno/*/opencollection.yml`,
+  `tests/e2e/1-smoke/security-smoke.spec.js`
+- CI gate: `tests/integration/production-read-only.test.js`. Mutation-checked: an
+  unwrapped config, a guard that ignores `getBaseUrl()` or project base URLs, a smoke
+  config that is not narrowed, a Bruno collection that allows PUT, or a writing group
+  without its skip each turns it red.
 - Related: OSE-905 (production tier), OSE-1418 (`RED_TEAM_BASE_URL`), OSE-1251 (gate)
 
 ## References

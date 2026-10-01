@@ -13,6 +13,7 @@
  */
 
 const { defineConfig, devices } = require('@playwright/test');
+const { guardProduction } = require('./config/production-read-only');
 const { STAGING_URL } = require('./tests/config/environments');
 
 // Staging-specific environment settings
@@ -21,12 +22,7 @@ const stagingEnv = {
   qaBrand: process.env.QA_BRAND_ID || 'qa-testing',
 };
 
-const { refuseProductionTargets } = require('./config/production-read-only');
-
-// ADR-021 (OSE-906): this suite can write, so it never targets production.
-refuseProductionTargets('playwright.staging.config.js', stagingEnv.baseUrl);
-
-module.exports = defineConfig({
+const config = defineConfig({
   testDir: './tests/e2e',
 
   // Parallelization: Sequential in staging for stability
@@ -143,3 +139,6 @@ module.exports = defineConfig({
     configVersion: '3.5.0',
   },
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+module.exports = guardProduction(__filename, config);

@@ -115,13 +115,14 @@ describe('it fails open, and that is the design', () => {
 });
 
 describe('the limiter does not become a place an address is kept', () => {
-  test('the KV key holds only a count and a reset time — never the address', async () => {
+  test('the KV value holds only a count, a reset time and its limit — never the address', async () => {
     const k = kv();
     await publicReadLimited('t', ok)(req('203.0.113.10'), { RATE_LIMIT_KV: k.RATE_LIMIT_KV });
     const values = [...k.store.values()].join(' ');
     expect(values).not.toContain('203.0.113.10');
     const parsed = JSON.parse([...k.store.values()][0]!);
-    expect(Object.keys(parsed).sort()).toEqual(['count', 'resetAt']);
+    // `max` is the bucket's own limit (PR #744): a number, not an identifier.
+    expect(Object.keys(parsed).sort()).toEqual(['count', 'max', 'resetAt']);
   });
 
   test('the bucket key is a hash — the raw address never appears in it either', async () => {

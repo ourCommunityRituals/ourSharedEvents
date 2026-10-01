@@ -43,16 +43,12 @@
  * caught it. It stays out until its host mapping is decided.
  */
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 const PORT = Number(process.env.COMPONENT_PORT ?? 8787);
 const BASE = `http://127.0.0.1:${PORT}`;
 
-const { refuseProductionTargets } = require('./config/production-read-only');
-
-// ADR-021 (OSE-906): this suite can write, so it never targets production.
-refuseProductionTargets('playwright.component.config.ts', BASE);
-
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/e2e',
 
   // Deliberately no testMatch. Batches are passed explicitly on the CLI so a
@@ -122,3 +118,6 @@ export default defineConfig({
     stderr: 'pipe',
   },
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

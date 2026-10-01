@@ -1,294 +1,219 @@
 /**
- * ADR-021 (OSE-906): production is strictly read-only for every test suite.
+ * ADR-021 (OSE-906): production is read-only for every test suite.
  *
  * Locks the decision so it cannot drift:
- *   1. The T2 Smoke → Production job runs only the allowlisted specs. A new spec
- *      on that job has to be added here, in review, after its writes are checked.
- *   2. The two API smoke specs contain no write call at all.
- *   3. security-smoke.spec.js: every describe that writes skips on production,
- *      createEvent refuses on production, and production detection is the shared
- *      isProductionUrl() helper, so the URL the job passes is caught.
- *   4. Every Playwright config except the two production-smoke ones refuses a
- *      production target at config load.
+ *   1. T2 Smoke → Production runs exactly the approved specs, and the API smoke
+ *      specs make no write call.
+ *   2. Every Playwright config exports guardProduction(__filename, config), and
+ *      the guard refuses (or, for the two smoke configs, narrows) whenever any
+ *      target is production: config base URLs, the env vars specs read, or
+ *      getBaseUrl() (TEST_ENV / USE_PRODUCTION / APP_URL).
+ *   3. security-smoke.spec.js: createEvent refuses on production, and every
+ *      block that writes skips there.
+ *   4. Every Bruno collection refuses writes to production before sending.
  *
  * Run: npx vitest run tests/integration/production-read-only.test.js
  */
 
-const { readFileSync } = require('fs');
+const { existsSync, readdirSync, readFileSync } = require('fs');
 const { join } = require('path');
 const yaml = require('js-yaml');
-const { readdirSync } = require('fs');
 const {
-  isProductionUrl,
-  assertNotProduction,
-  refuseProductionTargets,
-  productionTestMatch,
-  PRODUCTION_READ_ONLY_CONFIGS,
   PRODUCTION_SMOKE_SPECS,
   TARGET_URL_ENV_VARS,
+  guardProduction,
 } = require('../../config/production-read-only');
+const { isProductionUrl } = require('../../config/production-hosts');
 
 const ROOT = join(__dirname, '..', '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
+const listFiles = (dir) =>
+  readdirSync(join(ROOT, dir), { recursive: true }).map((rel) => `${dir}/${rel}`);
 
-const PROD_SMOKE_SPECS = [
-  'tests/e2e/1-smoke/security-smoke.spec.js',
-  'tests/api/smoke/api-health.spec.ts',
-  'tests/api/smoke/fail-fast-gates.spec.ts',
-];
+const PROD = 'https://oursharedevents.com';
+const STG = 'https://stg.oursharedevents.com';
 const WRITE_CALL =
-  /\b(?:request|page\.request|context\.request|api)\.(post|put|patch|delete)\(|method:\s*['"`](POST|PUT|PATCH|DELETE)['"`]/g;
+  /\b(?:request|page\.request|context\.request|api)\.(post|put|patch|delete)\(|method:\s*['"`](POST|PUT|PATCH|DELETE)['"`]/;
 
 const workflow = yaml.load(read('.github/workflows/oursharedevents-ci.yml'));
-const job = workflow.jobs['smoke-production'];
+const prodJob = workflow.jobs['smoke-production'];
+const prodJobRuns = prodJob.steps.map((s) => String(s.run ?? '')).join('\n');
+const SECURITY_SMOKE = read('tests/e2e/1-smoke/security-smoke.spec.js');
+
+/** Run fn with exactly these target env vars set (all others cleared). */
+function withEnv(vars, fn) {
+  const keys = [...TARGET_URL_ENV_VARS, 'APP_URL', 'TEST_ENV', 'USE_PRODUCTION'];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  keys.forEach((k) => delete process.env[k]);
+  Object.assign(process.env, vars);
+  try {
+    return fn();
+  } finally {
+    keys.forEach((k) =>
+      saved[k] === undefined ? delete process.env[k] : (process.env[k] = saved[k])
+    );
+  }
+}
 
 describe('ADR-021: production is read-only for tests (OSE-906)', () => {
-  test('T2 Smoke → Production runs only the allowlisted specs', () => {
-    expect(job, 'smoke-production job exists').toBeTruthy();
-    const specs = new Set();
-    for (const step of job.steps) {
-      for (const m of String(step.run ?? '').matchAll(/\btests\/\S+\.spec\.[jt]s\b/g))
-        specs.add(m[0]);
-    }
-    expect([...specs].sort()).toEqual([...PROD_SMOKE_SPECS].sort());
-  });
-
-  test('the API smoke specs make no write calls', () => {
-    for (const rel of PROD_SMOKE_SPECS.filter((p) => p.startsWith('tests/api/'))) {
-      expect(read(rel).match(WRITE_CALL), rel).toBeNull();
-    }
-  });
-
-  test("security-smoke's production check is the shared helper and matches the job's URL", () => {
-    const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
-    expect(src).toMatch(/const IS_PRODUCTION = isProductionUrl\(BASE_URL\);/);
-    expect(isProductionUrl(workflow.env.PROD_BASE_URL)).toBe(true);
-  });
-
-  test('security-smoke: createEvent refuses on production before it posts', () => {
-    const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
-    const fn = src.slice(src.indexOf('async function createEvent('));
-    const guard = fn.indexOf('if (IS_PRODUCTION)');
-    const post = fn.indexOf('request.post(');
-    expect(guard, 'IS_PRODUCTION guard in createEvent').toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(post);
-    expect(fn.slice(guard, post)).toMatch(/throw new Error\(/);
-  });
-
-  test('security-smoke: every describe that writes skips on production', () => {
-    const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
-    const blocks = src.split(/(?=^test\.describe\()/m).slice(1);
-    expect(blocks.length).toBeGreaterThan(0);
-    for (const block of blocks) {
-      const title = block.match(/test\.describe\((['"`])(.*?)\1/)?.[2];
-      WRITE_CALL.lastIndex = 0;
-      if (/\b(createOk|createEvent|leakedRows)\(/.test(block) || WRITE_CALL.test(block)) {
-        expect(block, title).toMatch(/test\.skip\(IS_PRODUCTION,/);
-      }
-    }
-  });
-
-  test('security-smoke: the only write sites are createEvent, cleanup, and the rejected-key probe (all skipped on production)', () => {
-    const src = read('tests/e2e/1-smoke/security-smoke.spec.js');
-    const sites = [...src.matchAll(WRITE_CALL)].map((m) => {
-      const before = src.slice(0, m.index);
-      const fn = before.lastIndexOf('async function createEvent(');
-      const after = before.lastIndexOf('test.afterAll(');
-      const probe = before.lastIndexOf("test.describe('🔒 SECURITY: Admin key validation'");
-      const latest = Math.max(fn, after, probe);
-      if (latest === -1) return 'unknown';
-      // The nearest enclosing marker must not have been closed by another top-level block.
-      const between = src.slice(latest, m.index);
-      if (
-        /^(test\.describe|async function|function|test\.(beforeAll|afterAll))\b/m.test(
-          between.slice(1)
-        )
-      ) {
-        return 'unknown';
-      }
-      return latest === fn ? 'createEvent' : latest === after ? 'cleanup' : 'rejected-key-probe';
+  test('T2 Smoke → Production runs exactly the approved specs, through the approved configs', () => {
+    const approved = Object.entries(PRODUCTION_SMOKE_SPECS).flatMap(([cfg, specs]) => {
+      const testDir = read(cfg).match(/testDir:\s*['"]\.\/(.+?)['"]/)[1];
+      return specs.map((s) => `${testDir}/${s}`);
     });
-    expect(sites.sort()).toEqual(['cleanup', 'createEvent', 'rejected-key-probe']);
-    // The probe only ever sends keys that must be refused.
-    const probe = src.slice(src.indexOf("test.describe('🔒 SECURITY: Admin key validation'"));
-    expect(probe.slice(0, probe.indexOf('\n});'))).toMatch(/toBe\(401\)/);
+    const ran = [...new Set(prodJobRuns.match(/\btests\/\S+\.spec\.[jt]s\b/g))];
+    expect(ran.sort()).toEqual(approved.sort());
+    const configs = [...new Set([...prodJobRuns.matchAll(/--config=(\S+)/g)].map((m) => m[1]))];
+    expect(configs.sort()).toEqual(Object.keys(PRODUCTION_SMOKE_SPECS).sort());
   });
 
-  test('the production-smoke configs can discover only the approved specs on production', () => {
-    // One list: the helper's per-config specs, resolved against each testDir,
-    // are exactly the specs the smoke-production job runs.
-    const resolved = [];
-    for (const [cfg, specs] of Object.entries(PRODUCTION_SMOKE_SPECS)) {
-      const src = read(cfg);
-      const testDir = src.match(/testDir:\s*['"]\.\/(.+?)['"]/)[1];
-      resolved.push(...specs.map((s) => `${testDir}/${s}`));
-      // Narrowed before export, and applied as testMatch.
-      const call = src.indexOf(`productionTestMatch('${cfg}'`);
-      const exp = src.search(/^export default/m);
-      expect(call, `${cfg}: productionTestMatch call`).toBeGreaterThan(-1);
-      expect(call, `${cfg}: before export`).toBeLessThan(exp);
-      expect(src, cfg).toMatch(
-        /\.\.\.\(PRODUCTION_ONLY \? \{ testMatch: PRODUCTION_ONLY \} : \{\}\)/
-      );
-    }
-    expect(resolved.sort()).toEqual([...PROD_SMOKE_SPECS].sort());
-
-    const saved = process.env.BASE_URL;
-    try {
-      delete process.env.BASE_URL;
-      expect(
-        productionTestMatch(PRODUCTION_READ_ONLY_CONFIGS[0], 'https://stg.oursharedevents.com')
-      ).toBeUndefined();
-      const m = productionTestMatch('playwright.smoke.config.ts', 'https://oursharedevents.com');
-      const hits = (p) => m.some((r) => r.test(p));
-      expect(hits('/r/tests/api/smoke/api-health.spec.ts')).toBe(true);
-      expect(hits('C:\\r\\tests\\api\\smoke\\fail-fast-gates.spec.ts')).toBe(true);
-      expect(hits('/r/tests/api/smoke/form-endpoints.spec.ts')).toBe(false);
-      expect(hits('/r/tests/api/smoke/xapi-health.spec.ts')).toBe(false);
-      expect(() => productionTestMatch('playwright.e2e.config.ts', 'x')).toThrow(/ADR-021/);
-    } finally {
-      if (saved === undefined) delete process.env.BASE_URL;
-      else process.env.BASE_URL = saved;
+  test('the API smoke specs on the production job make no write call', () => {
+    for (const spec of prodJobRuns.match(/\btests\/api\/\S+\.spec\.ts\b/g)) {
+      expect(read(spec), spec).not.toMatch(WRITE_CALL);
     }
   });
 
-  test('every Playwright config outside the allowlist refuses production at load', () => {
+  test('every Playwright config exports guardProduction(__filename, config)', () => {
     const configs = readdirSync(ROOT).filter((f) =>
       /^playwright\..*config\.(ts|js|mjs|cjs)$/.test(f)
     );
-    expect(configs.length).toBeGreaterThan(PRODUCTION_READ_ONLY_CONFIGS.length);
-    // The allowlist is exactly the configs the production smoke job runs.
-    const prodJobConfigs = new Set();
-    for (const step of job.steps) {
-      for (const m of String(step.run ?? '').matchAll(/--config=(\S+)/g)) prodJobConfigs.add(m[1]);
-    }
-    expect([...prodJobConfigs].sort()).toEqual([...PRODUCTION_READ_ONLY_CONFIGS].sort());
+    expect(configs.length).toBeGreaterThan(Object.keys(PRODUCTION_SMOKE_SPECS).length);
     for (const cfg of configs) {
-      const src = read(cfg);
-      if (PRODUCTION_READ_ONLY_CONFIGS.includes(cfg)) continue;
-      expect(src, cfg).toMatch(/\brefuseProductionTargets\(/);
-      // Called before the config is exported, so it runs at load.
-      const call = src.search(/^refuseProductionTargets\(/m);
-      const exp = src.search(/^(export default|module\.exports)/m);
-      expect(call, `${cfg}: refusal call`).toBeGreaterThan(-1);
-      expect(call, `${cfg}: refusal before export`).toBeLessThan(exp);
+      expect(read(cfg), cfg).toMatch(
+        /^(export default|module\.exports =) guardProduction\(__filename, config\);$/m
+      );
     }
   });
 
-  test('every *URL env var a spec reads as its target is checked', () => {
+  // [name, config file, config, env vars, expected: 'allow' | 'refuse' | narrowed globs]
+  const SMOKE = 'playwright.smoke.config.ts';
+  const OTHER = 'playwright.e2e.config.ts';
+  const SMOKE_GLOBS = PRODUCTION_SMOKE_SPECS[SMOKE].map((s) => `**/${s}`);
+  test.each([
+    ['staging is allowed', OTHER, { use: { baseURL: STG } }, {}, 'allow'],
+    ['local is allowed', OTHER, { use: { baseURL: 'http://127.0.0.1:8787' } }, {}, 'allow'],
+    ['config base = production', OTHER, { use: { baseURL: PROD } }, {}, 'refuse'],
+    [
+      'a project base = production',
+      OTHER,
+      { projects: [{ use: { baseURL: PROD } }] },
+      {},
+      'refuse',
+    ],
+    ['BASE_URL = production', OTHER, {}, { BASE_URL: PROD }, 'refuse'],
+    ['STAGING_URL = production', OTHER, {}, { STAGING_URL: `${PROD}:443/` }, 'refuse'],
+    [
+      'PLAYWRIGHT_BASE_URL = www',
+      OTHER,
+      {},
+      { PLAYWRIGHT_BASE_URL: 'https://WWW.oursharedevents.com.' },
+      'refuse',
+    ],
+    [
+      'userinfo cannot hide production',
+      OTHER,
+      {},
+      { BASE_URL: 'https://u:p@oursharedevents.com/' },
+      'refuse',
+    ],
+    ['TEST_ENV=production', OTHER, {}, { TEST_ENV: 'production' }, 'refuse'],
+    ['USE_PRODUCTION=true', OTHER, {}, { USE_PRODUCTION: 'true' }, 'refuse'],
+    ['APP_URL = production', OTHER, {}, { APP_URL: PROD }, 'refuse'],
+    ['TEST_ENV=staging', OTHER, {}, { TEST_ENV: 'staging' }, 'allow'],
+    ['lookalike host is not production', OTHER, {}, { BASE_URL: `${PROD}.evil.example` }, 'allow'],
+    ['smoke config on staging', SMOKE, { use: { baseURL: STG } }, {}, 'allow'],
+    ['smoke config on production narrows', SMOKE, {}, { USE_PRODUCTION: 'true' }, SMOKE_GLOBS],
+  ])('%s', (_name, file, config, env, expected) => {
+    withEnv(env, () => {
+      const run = () => guardProduction(`/repo/${file}`, config);
+      if (expected === 'refuse') return expect(run).toThrow(/ADR-021/);
+      if (expected === 'allow') return expect(run()).toBe(config);
+      expect(run().testMatch).toEqual(expected);
+    });
+  });
+
+  test('every *URL env var a spec reads as its target is one the guard checks', () => {
     // Derived from the specs: a spec that starts reading a new *URL var fails
     // here until the var is added to TARGET_URL_ENV_VARS.
     const NOT_TARGETS = new Set(['GOOGLE_SCRIPT_URL']); // retired GAS endpoint, not an OSE host
     const found = new Set();
-    const walk = (dir) => {
-      for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
-        const rel = `${dir}/${e.name}`;
-        if (e.isDirectory()) {
-          if (e.name !== 'node_modules') walk(rel);
-        } else if (/\.(ts|js|mjs|cjs)$/.test(e.name)) {
-          for (const m of read(rel).matchAll(/process\.env\.([A-Z_]*URL[A-Z_]*)/g)) found.add(m[1]);
-        }
-      }
-    };
-    walk('tests');
-    for (const name of found) {
-      if (NOT_TARGETS.has(name)) continue;
-      expect(TARGET_URL_ENV_VARS, name).toContain(name);
+    for (const rel of listFiles('tests').filter((f) => /\.(ts|js|mjs|cjs)$/.test(f))) {
+      for (const m of read(rel).matchAll(/process\.env\.([A-Z_]*URL[A-Z_]*)/g)) found.add(m[1]);
     }
     expect(found.has('BASE_URL')).toBe(true);
+    for (const name of found) {
+      if (!NOT_TARGETS.has(name)) expect(TARGET_URL_ENV_VARS, name).toContain(name);
+    }
   });
 
-  test('the refusal catches production in any target env var, USE_PRODUCTION, TEST_ENV, or the config base', () => {
-    const keys = [...TARGET_URL_ENV_VARS, 'USE_PRODUCTION', 'TEST_ENV'];
-    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
-    const clear = () => keys.forEach((k) => delete process.env[k]);
-    try {
-      clear();
-      expect(() => refuseProductionTargets('t', 'https://stg.oursharedevents.com')).not.toThrow();
-      expect(() => refuseProductionTargets('t', 'https://oursharedevents.com')).toThrow(/ADR-021/);
-      for (const k of TARGET_URL_ENV_VARS) {
-        clear();
-        process.env[k] = 'https://www.oursharedevents.com:443/';
-        expect(() => refuseProductionTargets('t'), k).toThrow(/ADR-021/);
-      }
-      clear();
-      process.env.USE_PRODUCTION = 'true';
-      expect(() => refuseProductionTargets('t')).toThrow(/ADR-021/);
-      // getBaseUrl() gives TEST_ENV top priority; the guard asks the resolver.
-      clear();
-      process.env.TEST_ENV = 'production';
-      expect(() => refuseProductionTargets('t', 'http://127.0.0.1:8787')).toThrow(/ADR-021/);
-      clear();
-      process.env.TEST_ENV = 'staging';
-      expect(() => refuseProductionTargets('t', 'http://127.0.0.1:8787')).not.toThrow();
-      clear();
-      process.env.TEST_ENV = 'production';
-      expect(productionTestMatch('playwright.smoke.config.ts')).toBeDefined();
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
+  test('security-smoke: production is the shared host rule; createEvent refuses before it posts', () => {
+    expect(SECURITY_SMOKE).toMatch(/const IS_PRODUCTION = isProductionUrl\(BASE_URL\);/);
+    const fn = SECURITY_SMOKE.slice(SECURITY_SMOKE.indexOf('async function createEvent('));
+    const guard = fn.indexOf('if (IS_PRODUCTION)');
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(fn.indexOf('request.post('));
+    expect(fn.slice(guard, fn.indexOf('request.post('))).toMatch(/throw new Error\(/);
+  });
+
+  test('security-smoke: every top-level block that writes is createEvent, cleanup, or skips on production', () => {
+    const blocks = SECURITY_SMOKE.split(
+      /(?=^(?:test\.describe\(|test\.afterAll\(|async function |function ))/m
+    );
+    // A block writes when it calls the HTTP write API directly or a helper that does.
+    const writes = (b) => WRITE_CALL.test(b) || /\b(createOk|createEvent|leakedRows)\(/.test(b);
+    for (const block of blocks.filter(writes)) {
+      const ok =
+        // The write helpers themselves (createEvent refuses on production)…
+        /^async function (createEvent|createOk|leakedRows)\(/.test(block) ||
+        block.startsWith('test.afterAll(') ||
+        // …and every describe that uses them skips there.
+        (block.startsWith('test.describe(') && /test\.skip\(IS_PRODUCTION,/.test(block));
+      expect(ok, block.split('\n')[0]).toBe(true);
     }
   });
 
   test('every Bruno collection refuses writes to production before sending', () => {
-    const collections = readdirSync(join(ROOT, 'bruno'), { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => `bruno/${d.name}/opencollection.yml`)
-      .filter((p) => {
-        try {
-          return !!read(p);
-        } catch {
-          return false;
-        }
-      });
+    const collections = readdirSync(join(ROOT, 'bruno'))
+      .map((d) => `bruno/${d}/opencollection.yml`)
+      .filter((p) => existsSync(join(ROOT, p)));
     expect(collections.length).toBeGreaterThanOrEqual(3);
     for (const rel of collections) {
-      const doc = yaml.load(read(rel));
-      const pre = (doc.request?.scripts ?? []).find((s) => s.type === 'before-request');
-      expect(pre?.code, `${rel}: before-request script`).toMatch(/ADR-021/);
+      const pre = (yaml.load(read(rel)).request?.scripts ?? []).find(
+        (s) => s.type === 'before-request'
+      );
+      expect(pre?.code, rel).toMatch(/ADR-021/);
       // Run the collection's own script with a fake bru/req: a write to
       // production throws (Bruno then never sends it); reads and staging pass.
-      const run = (baseUrl, method) => {
-        const bru = {
-          getEnvVar: (k) => (k === 'baseUrl' ? baseUrl : ''),
-          setVar() {},
-          getVar() {},
-        };
-        const req = {
-          getUrl: () => '{{baseUrl}}/api/x',
-          getMethod: () => method,
-          getHeader() {},
-          setHeader() {},
-        };
-        new Function('bru', 'req', pre.code)(bru, req);
-      };
-      expect(() => run('https://oursharedevents.com', 'POST'), rel).toThrow(/ADR-021/);
+      const run = (baseUrl, method) =>
+        new Function('bru', 'req', pre.code)(
+          { getEnvVar: (k) => (k === 'baseUrl' ? baseUrl : ''), setVar() {}, getVar() {} },
+          {
+            getUrl: () => '{{baseUrl}}/api/x',
+            getMethod: () => method,
+            getHeader() {},
+            setHeader() {},
+          }
+        );
+      expect(() => run(PROD, 'POST'), rel).toThrow(/ADR-021/);
       expect(() => run('https://www.oursharedevents.com:443', 'DELETE'), rel).toThrow(/ADR-021/);
-      expect(() => run('https://oursharedevents.com', 'GET'), rel).not.toThrow();
-      expect(() => run('https://stg.oursharedevents.com', 'POST'), rel).not.toThrow();
-      expect(() => run('https://oursharedevents.com.evil.example', 'POST'), rel).not.toThrow();
+      expect(() => run('https://user@oursharedevents.com/', 'PUT'), rel).toThrow(/ADR-021/);
+      expect(() => run(PROD, 'GET'), rel).not.toThrow();
+      expect(() => run(STG, 'POST'), rel).not.toThrow();
+      expect(() => run(`${PROD}.evil.example`, 'POST'), rel).not.toThrow();
     }
   });
 
-  test('isProductionUrl matches production hosts only', () => {
-    for (const url of [
-      'https://oursharedevents.com',
-      'https://www.oursharedevents.com/',
-      'https://OURSHAREDEVENTS.COM.:443/admin',
-    ]) {
-      expect(isProductionUrl(url), url).toBe(true);
-      expect(() => assertNotProduction(url, 'test')).toThrow(/ADR-021/);
-    }
-    for (const url of [
-      'https://stg.oursharedevents.com',
-      'https://oursharedevents.com.evil.example',
-      'http://localhost:8787',
-      undefined,
-      'not a url',
-    ]) {
-      expect(isProductionUrl(url), String(url)).toBe(false);
-    }
+  test.each([
+    [PROD, true],
+    ['https://www.oursharedevents.com/', true],
+    ['https://OURSHAREDEVENTS.COM.:443/admin', true],
+    ['https://u:p@oursharedevents.com', true],
+    [STG, false],
+    [`${PROD}.evil.example`, false],
+    ['http://localhost:8787', false],
+    [undefined, false],
+    ['not a url', false],
+  ])('isProductionUrl(%s) is %s', (url, expected) => {
+    expect(isProductionUrl(url)).toBe(expected);
   });
 });

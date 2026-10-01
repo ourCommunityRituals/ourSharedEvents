@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 /**
  * Mobile workability against PR CODE — invariant 14's blocking gate (OSE-1236).
@@ -109,12 +110,7 @@ const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
 // runner AND in each test worker process, so this reaches the spec in both.
 process.env.OSE_ADMIN_BEARER = LOCAL_ADMIN_KEY;
 
-const { refuseProductionTargets } = require('./config/production-read-only');
-
-// ADR-021 (OSE-906): this suite can write, so it never targets production.
-refuseProductionTargets('playwright.mobile.config.ts', BASE);
-
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/playwright',
   // Explicit list, not a directory sweep. tests/playwright/ holds specs written
   // against deployed staging; one that reads seeded rows would go green here
@@ -203,3 +199,6 @@ export default defineConfig({
     stderr: 'pipe',
   },
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

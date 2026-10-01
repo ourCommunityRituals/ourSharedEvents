@@ -62,7 +62,7 @@ describe('rate-limit-stats uses each bucket’s own limit', () => {
   beforeAll(applyMigrations);
 
   test('checkRateLimit stores the limit it enforces', async () => {
-    await checkRateLimit('mint:stored-max', testEnv.RATE_LIMIT_KV, 10);
+    await checkRateLimit(testEnv, 'mint:stored-max', 10);
     const raw = await testEnv.RATE_LIMIT_KV.get(await rateLimitKvKey('mint:stored-max'));
     expect(JSON.parse(raw!).max).toBe(10);
   });

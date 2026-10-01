@@ -10,17 +10,12 @@
  */
 
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 const { getBaseUrl } = require('./config/environments');
-const { productionTestMatch } = require('./config/production-read-only');
 
-// ADR-021 (OSE-906): against production this config may discover only the
-// approved read-only specs, whatever the invocation.
-const PRODUCTION_ONLY = productionTestMatch('playwright.e2e-smoke.config.ts', getBaseUrl());
-
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/e2e',
-  ...(PRODUCTION_ONLY ? { testMatch: PRODUCTION_ONLY } : {}),
 
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -92,3 +87,6 @@ export default defineConfig({
     },
   ],
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

@@ -13,15 +13,21 @@ request:
     - type: before-request
       code: |-
         // ADR-021 (OSE-906): production is read-only for tests. Refuse any write
-        // before it is sent, whichever environment file was chosen.
-        var adr021Target = String(bru.getEnvVar('baseUrl') || '') + ' ' + String(req.getUrl() || '');
-        var adr021Method = String(req.getMethod() || '').toUpperCase();
-        if (
-          /(^|\s|\/\/)(www\.)?oursharedevents\.com\.?(:\d+)?(\/|\s|$)/i.test(adr021Target) &&
-          ['GET', 'HEAD', 'OPTIONS'].indexOf(adr021Method) === -1
-        ) {
-          throw new Error('ADR-021: production is read-only for tests; refusing ' + adr021Method + ' ' + req.getUrl());
-        }
+        // before it is sent, whichever environment file was chosen. Compares exact
+        // hostnames (userinfo, port, case and a trailing dot cannot hide production).
+        (function () {
+          var PRODUCTION_HOSTS = ['oursharedevents.com', 'www.oursharedevents.com'];
+          function host(url) {
+            var m = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i.exec(String(url || ''));
+            return m ? m[1].toLowerCase().replace(/\.$/, '') : '';
+          }
+          var method = String(req.getMethod() || '').toUpperCase();
+          var targets = [host(bru.getEnvVar('baseUrl')), host(req.getUrl())];
+          var isProduction = targets.some(function (h) { return PRODUCTION_HOSTS.indexOf(h) !== -1; });
+          if (isProduction && ['GET', 'HEAD', 'OPTIONS'].indexOf(method) === -1) {
+            throw new Error('ADR-021: production is read-only for tests; refusing ' + method + ' ' + req.getUrl());
+          }
+        })();
 
 docs:
   content: |-

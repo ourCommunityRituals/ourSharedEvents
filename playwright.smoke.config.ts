@@ -18,19 +18,14 @@
  */
 
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 // Import canonical environment configuration (Story 1.2)
 // Single source of truth for BASE_URL resolution
 const { getBaseUrl } = require('./config/environments');
-const { productionTestMatch } = require('./config/production-read-only');
 
-// ADR-021 (OSE-906): against production this config may discover only the
-// approved read-only specs, whatever the invocation.
-const PRODUCTION_ONLY = productionTestMatch('playwright.smoke.config.ts', getBaseUrl());
-
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/api/smoke',
-  ...(PRODUCTION_ONLY ? { testMatch: PRODUCTION_ONLY } : {}),
 
   // Smoke tests run sequentially to avoid overwhelming the API
   fullyParallel: false,
@@ -92,3 +87,6 @@ export default defineConfig({
 
   // No webServer - tests run against deployed URLs
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

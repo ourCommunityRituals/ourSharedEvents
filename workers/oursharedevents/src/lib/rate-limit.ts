@@ -2,7 +2,7 @@
  * KV-backed sliding-window rate limiter (OSE-552 / BE-11)
  *
  * Per-IP state stored in CF KV with TTL — persists across cold starts and
- * isolates. Key: `ratelimit:{ip}`, value: JSON { count, resetAt }.
+ * isolates. Key: `ratelimit:{hmac of the key}`, value: JSON { count, resetAt, max }.
  *
  * Ref: https://developers.cloudflare.com/kv/api/write-key-value-pairs/#expiring-keys
  */
@@ -18,6 +18,10 @@ export const RATE_LIMIT_ADMIN_MAX = 60; // admin mutations: 60 req/min by CF-Ray
 export const RATE_LIMIT_BATCH_MAX = 30; // SharedReport batch: 30 req/min by service token
 export const RATE_LIMIT_MINT_MAX = 10; // mint endpoint: 10 req/min by actor+eventId
 
+/**
+ * What the limiter needs from the Worker env. Callers pass `env` itself, so the
+ * pepper travels with the KV binding and cannot be left out.
+ */
 export interface RateLimitEnv {
   RATE_LIMIT_KV: KVNamespace;
   /**
@@ -30,15 +34,23 @@ export interface RateLimitEnv {
   RATE_LIMIT_KEY_PEPPER?: string;
 }
 
+export interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+  /**
+   * The limit this bucket enforces (10 mint, 30 batch, 60 default, 120 public
+   * reads). Stored so scans can tell which buckets are actually blocked; absent
+   * on entries written before this field existed (≤ 60 s old).
+   */
+  max?: number;
+}
+
 /** The limit a stored bucket enforces; entries from before `max` existed use the default. */
 export function bucketLimit(entry: RateLimitEntry): number {
   return entry.max ?? RATE_LIMIT_MAX;
 }
 
-/**
- * Has this stored bucket tripped its own limit? The single rule for every KV
- * scan (rate-limit-stats, the security-metrics cron), so they cannot drift.
- */
+/** Has this stored bucket tripped its own limit? The one rule for every KV scan. */
 export function isBucketTripped(entry: RateLimitEntry): boolean {
   return entry.count > bucketLimit(entry);
 }
@@ -46,38 +58,20 @@ export function isBucketTripped(entry: RateLimitEntry): boolean {
 /** Shorter peppers are ignored, matching the other hash peppers (min 32 chars). */
 export const RATE_LIMIT_PEPPER_MIN_LENGTH = 32;
 
-export interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-  /**
-   * The limit this bucket enforces (10 mint, 30 batch, 60 default, 120 public
-   * reads). Stored so rate-limit-stats can tell which buckets are actually
-   * blocked; absent on entries written before this field existed (≤ 60 s old).
-   */
-  max?: number;
-}
-
 /**
  * Data-at-rest doctrine (A-5): the rate-limit KV key must NOT contain the raw
- * client IP. Migration 0028 already hashes the same IP in D1; a KV key composed
- * from the dotted-quad/v6 literal would re-introduce the raw network identifier
- * at rest, in a second store, keyed for lookup.
- *
- * The caller-supplied key (which may embed an IP) is hashed before it becomes
- * the KV key. The hash is deterministic, so the same IP always maps to the same
- * bucket and rate-limit semantics are unchanged. Any route/scope prefix
- * (`admin:`, `mint:`, `publicread:…`) is folded into the hashed input, so
- * different scopes for the same IP still land in different buckets.
+ * client IP. The caller-supplied key (which may embed an IP, plus a route/scope
+ * prefix such as `admin:` or `mint:`) is hashed before it becomes the KV key;
+ * the hash is deterministic, so rate-limit semantics are unchanged.
  *
  * OSE-1447: a bare SHA-256 of an IPv4-bearing key reverses offline (2^32
- * guesses), and `GET /security/rate-limit-stats` hands these hashes to platform
- * admins. With `RATE_LIMIT_KEY_PEPPER` set the key is HMAC-SHA256 under that
- * secret, so a stored or listed key cannot be turned back into an IP without
- * it. Unset (or too short) keeps the old SHA-256, so a missing secret degrades
- * privacy to the previous state instead of breaking rate limiting; it is logged
- * once per isolate as RATE_LIMIT_PEPPER_MISSING.
+ * guesses), and `GET /security/rate-limit-stats` lists these keys. With
+ * `RATE_LIMIT_KEY_PEPPER` set the key is HMAC-SHA256 under that secret. Unset
+ * (or too short) keeps the old SHA-256, so a missing secret degrades privacy to
+ * the previous state instead of breaking rate limiting; it is logged once per
+ * isolate as RATE_LIMIT_PEPPER_MISSING. The deploy gates require the secret.
  */
-const hmacKeys = new Map<string, Promise<CryptoKey>>();
+let cachedKey: { pepper: string; key: Promise<CryptoKey> } | undefined;
 let warnedMissingPepper = false;
 
 function toHex(buf: ArrayBuffer): string {
@@ -86,8 +80,27 @@ function toHex(buf: ArrayBuffer): string {
     .join('');
 }
 
-async function hashKey(key: string, pepper?: string): Promise<string> {
-  const data = new TextEncoder().encode(key);
+function hmacKey(pepper: string): Promise<CryptoKey> {
+  if (cachedKey?.pepper !== pepper) {
+    const key = crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(pepper),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    // Never keep a failed import: the next call retries (same rule as lib/pii.ts).
+    key.catch(() => {
+      if (cachedKey?.key === key) cachedKey = undefined;
+    });
+    cachedKey = { pepper, key };
+  }
+  return cachedKey.key;
+}
+
+/** Peppered hash for any IP-bearing KV key (rate-limit buckets, beacon dedup). */
+export async function pepperedKeyHash(input: string, pepper?: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
   if (!pepper || pepper.length < RATE_LIMIT_PEPPER_MIN_LENGTH) {
     if (!warnedMissingPepper) {
       warnedMissingPepper = true;
@@ -100,31 +113,44 @@ async function hashKey(key: string, pepper?: string): Promise<string> {
     }
     return toHex(await crypto.subtle.digest('SHA-256', data));
   }
-  let cryptoKey = hmacKeys.get(pepper);
-  if (!cryptoKey) {
-    cryptoKey = crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(pepper),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    hmacKeys.set(pepper, cryptoKey);
-  }
-  return toHex(await crypto.subtle.sign('HMAC', await cryptoKey, data));
+  return toHex(await crypto.subtle.sign('HMAC', await hmacKey(pepper), data));
+}
+
+const KEY_PREFIX = 'ratelimit:';
+
+/** The KV key a rate-limit `key` is stored under. */
+export async function rateLimitKvKey(key: string, pepper?: string): Promise<string> {
+  return `${KEY_PREFIX}${await pepperedKeyHash(key, pepper)}`;
 }
 
 /**
- * Peppered hash for any IP-bearing KV key (rate-limit buckets, the beacon dedup
- * key in invalid-traffic.ts). Same fallback as above when the pepper is unset.
+ * Every stored bucket as `{ id, entry }` (`id` is the keyed hash after the
+ * prefix). Shared by rate-limit-stats and the security-metrics cron. KV list is
+ * eventually consistent, so results are best-effort. Malformed values are skipped.
  */
-export async function pepperedKeyHash(input: string, pepper?: string): Promise<string> {
-  return hashKey(input, pepper);
-}
-
-/** The KV key a rate-limit `key` is stored under. Exported for tests. */
-export async function rateLimitKvKey(key: string, pepper?: string): Promise<string> {
-  return `ratelimit:${await hashKey(key, pepper)}`;
+export async function* scanRateLimitBuckets(
+  kv: KVNamespace
+): AsyncGenerator<{ id: string; entry: RateLimitEntry }> {
+  let cursor: string | undefined;
+  do {
+    const page = await kv.list({ prefix: KEY_PREFIX, limit: 1000, cursor });
+    // Values in parallel batches of 50 to avoid fan-out explosion.
+    for (let i = 0; i < page.keys.length; i += 50) {
+      const batch = page.keys.slice(i, i + 50);
+      const values = await Promise.all(batch.map((k) => kv.get(k.name)));
+      for (let j = 0; j < batch.length; j++) {
+        let entry: RateLimitEntry;
+        try {
+          if (!values[j]) continue;
+          entry = JSON.parse(values[j]!) as RateLimitEntry;
+        } catch {
+          continue; // malformed value
+        }
+        yield { id: batch[j].name.slice(KEY_PREFIX.length), entry };
+      }
+    }
+    cursor = page.list_complete ? undefined : (page as { cursor?: string }).cursor;
+  } while (cursor);
 }
 
 /**
@@ -141,19 +167,21 @@ export function clientIp(request: Request): string {
 }
 
 /**
- * Core sliding-window rate limit check against an arbitrary KV key.
- * Returns true if the caller has exceeded `max` requests in `windowMs`.
+ * Core sliding-window rate limit check against an arbitrary key. Pass `env`.
+ * Returns true if the caller has exceeded `max` requests in `windowMs`. With no
+ * RATE_LIMIT_KV bound it returns false: the limiter fails open, as every caller
+ * already did.
  */
 export async function checkRateLimit(
+  env: Partial<RateLimitEnv>,
   key: string,
-  kv: KVNamespace,
   max: number = RATE_LIMIT_MAX,
-  windowMs: number = RATE_LIMIT_WINDOW_MS,
-  pepper?: string
+  windowMs: number = RATE_LIMIT_WINDOW_MS
 ): Promise<boolean> {
+  const kv = env.RATE_LIMIT_KV;
+  if (!kv) return false;
   const now = Date.now();
-  // A-5: hash the (possibly IP-bearing) key so no raw IP is stored as a KV key.
-  const kvKey = await rateLimitKvKey(key, pepper);
+  const kvKey = await rateLimitKvKey(key, env.RATE_LIMIT_KEY_PEPPER);
   const raw = await kv.get(kvKey);
   const entry = raw ? (JSON.parse(raw) as RateLimitEntry) : null;
 
@@ -171,20 +199,9 @@ export async function checkRateLimit(
   return newCount > max;
 }
 
-/**
- * Check whether the given IP has exceeded the rate limit.
- * Records the request; returns true if the limit is breached.
- *
- * @param ip  - Client IP address (use clientIp() helper)
- * @param kv  - RATE_LIMIT_KV namespace from env
- * @param pepper - env.RATE_LIMIT_KEY_PEPPER
- */
-export async function isRateLimited(
-  ip: string,
-  kv: KVNamespace,
-  pepper?: string
-): Promise<boolean> {
-  return checkRateLimit(ip, kv, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS, pepper);
+/** Per-IP check at the default limit. Records the request; true if breached. */
+export async function isRateLimited(env: Partial<RateLimitEnv>, ip: string): Promise<boolean> {
+  return checkRateLimit(env, ip);
 }
 
 /**
@@ -213,11 +230,7 @@ export function rateLimitResponse(): Response {
 }
 
 /** Delete the KV entry for a given key (test helper — never call from production paths). */
-export async function _deleteRateLimitKey(
-  key: string,
-  kv: KVNamespace,
-  pepper?: string
-): Promise<void> {
+export async function _deleteRateLimitKey(env: RateLimitEnv, key: string): Promise<void> {
   // Must hash identically to checkRateLimit so the delete targets the real key.
-  await kv.delete(await rateLimitKvKey(key, pepper));
+  await env.RATE_LIMIT_KV.delete(await rateLimitKvKey(key, env.RATE_LIMIT_KEY_PEPPER));
 }
