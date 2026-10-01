@@ -17,8 +17,3 @@
 -- migration and after every pepper rotation.
 
 ALTER TABLE anon_id_returns ADD COLUMN pepper_epoch TEXT;
-
--- The nightly purge finds rows of any other pepper, and the export reads only
--- the current one. Without this index both scan the whole longitudinal table
--- every night, even when there is nothing to purge.
-CREATE INDEX IF NOT EXISTS idx_anon_id_returns_pepper_epoch ON anon_id_returns(pepper_epoch);

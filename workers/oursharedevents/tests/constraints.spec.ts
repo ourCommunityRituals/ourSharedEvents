@@ -131,7 +131,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(79); // +1 (0091: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
+    expect(indexes.results).toHaveLength(79); // +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
   });
 });
 
