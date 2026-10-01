@@ -62,3 +62,47 @@ test('worker CLAUDE.md documents the hot-path import ban + sanctioned seam', () 
     'worker CLAUDE.md must reference the COST-101 runtime-LLM-free invariant'
   ).toBe(true);
 });
+
+// OSE-1443 — one definition of Done. The two brains drifted: the worker file
+// said "Done = merged + a named CI job" while root §5 required all 7 pyramid
+// levels, and the worker pointed at a root "§7.2–7.3" that never existed.
+const ROOT_CLAUDE_MD = join(REPO_ROOT, 'CLAUDE.md');
+const DONE_HEADING = 'Two stages: Merged, then Done';
+
+test('Done is defined once: root §5 holds it, the worker file only points to it', () => {
+  const root = readFileSync(ROOT_CLAUDE_MD, 'utf8');
+  const worker = readFileSync(WORKER_CLAUDE_MD, 'utf8');
+
+  expect(
+    root.includes(`### ${DONE_HEADING}`),
+    `root CLAUDE.md must hold the definition of Done under "### ${DONE_HEADING}" (OSE-1443)`
+  ).toBe(true);
+  expect(
+    worker.includes(DONE_HEADING),
+    `worker CLAUDE.md must point to root "${DONE_HEADING}" instead of defining Done itself`
+  ).toBe(true);
+  expect(
+    /\bDone\s*=/.test(worker),
+    'worker CLAUDE.md must not restate a "Done = …" rule — that is how the two definitions drifted (OSE-1443)'
+  ).toBe(false);
+});
+
+test('every root CLAUDE.md §N the worker file cites actually exists', () => {
+  const root = readFileSync(ROOT_CLAUDE_MD, 'utf8');
+  const worker = readFileSync(WORKER_CLAUDE_MD, 'utf8');
+  const sections = new Set([...root.matchAll(/^## (\d+)\./gm)].map((m) => m[1]));
+  const cited = [...worker.matchAll(/root `CLAUDE\.md` §(\d+)(?:\.(\d+))?/g)];
+
+  expect(cited.length, 'worker CLAUDE.md should cite root sections by §N').toBeGreaterThan(0);
+  for (const [ref, major, minor] of cited) {
+    expect(
+      sections.has(major),
+      `worker cites "${ref}" but root has no "## ${major}." section`
+    ).toBe(true);
+    // Root uses "### " subsections without numbers, so a §N.M citation can never resolve.
+    expect(
+      minor,
+      `worker cites "${ref}" — root has no numbered §${major}.${minor}`
+    ).toBeUndefined();
+  }
+});

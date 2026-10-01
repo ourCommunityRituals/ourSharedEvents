@@ -220,16 +220,40 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 │    3. Contract (API shape, D1 schema parity)        │
 │    4. Unit (mock tests, privacy, validation)        │
 │    5. Integration (Worker D1 + forms security)      │
-│    6. API (Newman collections against live stg)     │
+│    6. API (Bruno collections against live stg)      │
 │    7. E2E (Playwright — full surface flow)          │
 │  - No partial pyramids — all 7 levels or not DONE   │
 │                                                     │
-│ AFTER MERGE                                         │
-│  9. Update STORIES.md     → mark DONE               │
-│ 10. Update CLAUDE.md §3   → new current states      │
-│ 11. Next story begins     → context compounds       │
+│ AFTER MERGE  (MERGED ≠ DONE — see "Two stages")     │
+│  9. Update STORIES.md     → mark MERGED             │
+│ 10. Staging chain green   → mark DONE               │
+│ 11. Update CLAUDE.md §3   → new current states      │
+│ 12. Next story begins     → context compounds       │
 └─────────────────────────────────────────────────────┘
 ```
+
+### Two stages: Merged, then Done (OSE-1443, decided 2026-10-01)
+
+This is the one definition of Done for this repo. `workers/oursharedevents/CLAUDE.md`
+points here and does not restate it.
+
+| Stage      | Means                                                                                                                                                                                                                                                                 | Linear state    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Merged** | On `main`, and a named CI job goes red if it regresses. Levels 1–5 ran on the PR.                                                                                                                                                                                     | **In Progress** |
+| **Done**   | Merged, **and** the post-merge staging chain is green for the merge SHA, or for a later `main` SHA that contains it: `T1 Deploy → Staging`, `T2 Contract → Staging (Bruno)` (level 6), `T3 E2E Smoke → Staging (Playwright)` and `T4 Functional → Staging` (level 7). | **Done**        |
+
+- **Why two stages:** levels 6–7 run against live staging and only run _after_ merge
+  (`OurSharedEvents CI/CD` on push to `main`). They are skipped on PRs, so no story can
+  be Done at merge time.
+- **Staging only, for now:** production has never been deployed (§3 DevOps). Production
+  deploy + smoke join the Done bar after first launch.
+- **A merge never closes a story by itself:** move it to Done once the staging chain is
+  green. The PR close-guard (`scripts/check-pr-linear-close.mjs`) keeps merges from doing
+  that for you: use `Part of OSE-###` in PRs, keep the id out of the branch and title,
+  and keep closing words (close, fix, resolve, complete, implement) away from ids in the
+  description and commit messages.
+- **Check it:** `gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push`, then
+  `gh run view <id> --json jobs` and confirm the four T1–T4 staging jobs are `success`.
 
 ### What this unlocks
 
