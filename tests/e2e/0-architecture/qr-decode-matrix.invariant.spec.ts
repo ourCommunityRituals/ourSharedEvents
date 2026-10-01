@@ -265,7 +265,9 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
   test('OSE-1439 | nothing in it is skipped, focused, todo or expected-to-fail', () => {
     const src = code(DECODE_SPEC);
     const weakeners = src.match(
-      /\b(?:test|it|describe)\s*\.\s*(?:skip|only|todo|fails|skipIf|runIf|concurrent\.skip)\b|\bx(?:it|test|describe)\s*\(/g
+      // Any receiver, dot or bracket: an alias (`const s = describe; s.skip(...)`)
+      // must not get past. The decode spec has no legitimate use of these names.
+      /\.\s*(?:skip|only|todo|fails|skipIf|runIf)\b|\[\s*(['"`])(?:skip|only|todo|fails|skipIf|runIf)\1\s*\]|\bx(?:it|test|describe)\s*\(/g
     );
     expect(
       weakeners ?? [],
@@ -372,9 +374,33 @@ test.describe('QR decode matrix — the decoder gate cannot be weakened silently
         { strategy?: { matrix?: { include?: Array<Record<string, string>> } } }
       >;
     };
-    const shards = Object.values(wf.jobs ?? {}).flatMap(
-      (job) => job?.strategy?.matrix?.include ?? []
+    // Scoped to the job that runs T0 test sections, and its executing step is
+    // locked too: a matrix value nobody runs is not a gate.
+    const job = (wf.jobs ?? {})['gate-tests-sub'] as
+      | {
+          'continue-on-error'?: unknown;
+          if?: unknown;
+          strategy?: { matrix?: { include?: Array<Record<string, string>> } };
+          steps?: Array<Record<string, unknown>>;
+        }
+      | undefined;
+    expect(
+      job,
+      'oursharedevents-ci.yml must have the gate-tests-sub job (T0 test sections)'
+    ).toBeTruthy();
+    expect(job!['continue-on-error'], 'gate-tests-sub must not be continue-on-error').toBeFalsy();
+    expect(job!.if, 'gate-tests-sub must not be conditionally skipped').toBeUndefined();
+    const runStep = (job!.steps ?? []).find((st) => st.name === 'Run T0 test section');
+    expect(runStep, 'gate-tests-sub must have the "Run T0 test section" step').toBeTruthy();
+    expect(runStep!.run, 'the T0 step must execute the matrix command').toBe(
+      '${{ matrix.command }}'
     );
+    expect(runStep!['working-directory'], 'the T0 step must run in the matrix workdir').toBe(
+      '${{ matrix.workdir }}'
+    );
+    expect(runStep!['continue-on-error'], 'the T0 step must not be continue-on-error').toBeFalsy();
+    expect(runStep!.if, 'the T0 step must not be conditional').toBeUndefined();
+    const shards = job!.strategy?.matrix?.include ?? [];
     const shard = shards.find((entry) => entry.section === 'worker-d1-schema');
     expect(
       shard,
