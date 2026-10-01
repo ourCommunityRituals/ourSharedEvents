@@ -147,11 +147,10 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
-  // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // OSE-1438: the card's on-show rule moved out of handlers/sponsor-card.ts
   // (formerly exempt at :64, same reasoning) into one shared SQL fragment, so the
   // card page and the resolver's card_url read the same rule.
-  'lib/sponsor-card.ts:124':
+  'lib/sponsor-card.ts:128':
     'SPONSOR_ON_SHOW_SQL, a boolean fragment, never a query on its own. Its ' +
     '`sponsor_placement sp_show` sub-select is correlated by ' +
     "`sp_show.sponsor_business_id = sb.id` to the caller's outer " +
@@ -159,11 +158,11 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`sb.id = ?` (held sponsor id), the resolver by `sp.event_id = ?` (Path 1) or ' +
     '`sb.brand_id = ?` (Path 2). Asks "is this one sponsor on show"; not ' +
     'enumeration. Line-sensitive: bump on any edit above it in that file.',
-  'lib/sponsor-card.ts:128':
+  'lib/sponsor-card.ts:132':
     'Same fragment: the nested `events e_show` check is keyed by ' +
     '`e_show.id = sp_show.event_id AND e_show.brand_id = sb.brand_id`, so it only ' +
     "reads the one event each placement points at, inside the sponsor's own brand.",
-
+  // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),

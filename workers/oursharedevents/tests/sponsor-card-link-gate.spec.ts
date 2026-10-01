@@ -103,6 +103,23 @@ beforeAll(async () => {
 
   // Path 1: an accepted placement on THIS event → card works.
   await seedSplitSponsor(env.DB, { id: 'sp1438-direct', eventId: EVENT, websiteUrl: null });
+
+  // A sponsor-initiated request (ADR-019 amendment): active, sponsor said yes,
+  // organizer has NOT answered. Silence is not consent for this source, so no
+  // card, matching the resolver and the logo route (Copilot review on #716).
+  await seedSplitSponsor(env.DB, {
+    id: 'sp1438-request',
+    eventId: OTHER,
+    websiteUrl: null,
+    source: 'sponsor_request',
+  });
+  // The seed helper maps organizerAccepted null → 1, so set "not answered" here.
+  await env.DB.prepare(
+    'UPDATE sponsor_placement SET organizer_accepted = NULL WHERE sponsor_business_id = ?'
+  )
+    .bind('sp1438-request')
+    .run();
+  await subscribe('sp1438-request');
 });
 
 describe('OSE-1438 | card_url ⟺ the card renders', () => {
@@ -128,6 +145,12 @@ describe('OSE-1438 | card_url ⟺ the card renders', () => {
     const row = await resolved('sp1438-direct');
     expect(row.card_url).toBe('/sponsors/sp1438-direct');
     expect(await cardStatus('sp1438-direct')).toBe(200);
+  });
+
+  test('a sponsor_request the organizer has not answered: no card_url, and the card is a 404', async () => {
+    const row = await resolved('sp1438-request');
+    expect(row.card_url).toBeUndefined();
+    expect(await cardStatus('sp1438-request')).toBe(404);
   });
 
   test('the internal has_card flag never leaves the resolver', async () => {

@@ -114,6 +114,10 @@ export function sponsorTitle(s: { name: string; display_name?: string | null }):
  * at a card that 404s (OSE-1438: a Path 2 sponsor with no accepted placement
  * anywhere would otherwise get one).
  *
+ * Organizer side uses the same source-aware rule as the resolver and the logo
+ * route (ADR-019 amendment): silence is consent only for a placement the
+ * organizer created; a sponsor_request needs organizer_accepted = 1.
+ *
  * On show = an active placement, accepted by both sides, on an event whose
  * public page renders (RENDERABLE 'public' is 'active' only). A sponsor placed
  * only on a draft, ready or archived event is not on show. Deliberately NOT
@@ -123,7 +127,7 @@ export function sponsorTitle(s: { name: string; display_name?: string | null }):
 export const SPONSOR_ON_SHOW_SQL = `(sb.is_active = 1 AND EXISTS (
   SELECT 1 FROM sponsor_placement sp_show
    WHERE sp_show.sponsor_business_id = sb.id AND sp_show.is_active = 1
-     AND COALESCE(sp_show.organizer_accepted, 1) = 1
+     AND COALESCE(sp_show.organizer_accepted, CASE WHEN sp_show.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
      AND sp_show.sponsor_accepted = 1
      AND EXISTS (SELECT 1 FROM events e_show WHERE e_show.id = sp_show.event_id
                  AND e_show.brand_id = sb.brand_id AND e_show.status = 'active')
