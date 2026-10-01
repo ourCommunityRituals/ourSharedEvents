@@ -108,6 +108,8 @@ function emitRow(
 // match. Smaller than the limit (200 vs 500) leaves headroom for retries
 // and keeps individual batches under ~256KB serialized.
 const EXPORT_BATCH_SIZE = 200;
+/** BigQuery tabledata.insertAll rows per request (cloud/bigquery.ts MAX_ROWS_PER_BATCH). */
+const BQ_INSERT_CHUNK = 500;
 
 // BQ table names per source. Names are stable across pool datasets —
 // each pool's dataset has its own copy of these tables.
@@ -421,14 +423,26 @@ export async function exportCorridorDensityBaseline(
   const { watermark, result } = prep;
 
   try {
+    // Read WHOLE computed_at groups (OSE-616). refreshCorridorBaselines stamps
+    // every row of a run with one timestamp, and the watermark is that
+    // timestamp alone, so a plain LIMIT that cut a group would advance past
+    // the unread rest of it — those rows were never exported, and the
+    // duplicate-key check below could not see them. Take at least
+    // EXPORT_BATCH_SIZE rows, extended to the end of the last timestamp
+    // group they reach; the insert below is chunked to BigQuery's batch limit.
     const rows = await env.DB.prepare(
       `SELECT corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at
        FROM corridor_density_baseline
-       WHERE computed_at > ?
-       ORDER BY computed_at ASC
-       LIMIT ?`
+       WHERE computed_at > ?1
+         AND computed_at <= COALESCE(
+           (SELECT computed_at FROM corridor_density_baseline
+             WHERE computed_at > ?1
+             ORDER BY computed_at ASC
+             LIMIT 1 OFFSET ?2),
+           '9999-12-31T23:59:59.999Z')
+       ORDER BY computed_at ASC`
     )
-      .bind(watermark, EXPORT_BATCH_SIZE)
+      .bind(watermark, EXPORT_BATCH_SIZE - 1)
       .all<CorridorBaselineRow>();
 
     const sourceRows = rows.results ?? [];
@@ -506,15 +520,22 @@ export async function exportCorridorDensityBaseline(
         }
         seen.add(id);
       }
-      const res = await bigQueryInsertRowsToDataset(
-        env,
-        dataset,
-        BQ_TABLE_CORRIDOR_DENSITY,
-        batch,
-        insertIdFn
-      );
-      result.rowsExported = res.rowCount;
-      result.perPool[pool] = res.rowCount;
+      // A whole timestamp group can exceed one insertAll call. Chunk it; the
+      // insertIds are content-derived, so a retry after a mid-group failure
+      // (watermark held) re-sends the earlier chunks as BigQuery no-ops.
+      let exported = 0;
+      for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
+        const res = await bigQueryInsertRowsToDataset(
+          env,
+          dataset,
+          BQ_TABLE_CORRIDOR_DENSITY,
+          batch.slice(i, i + BQ_INSERT_CHUNK),
+          insertIdFn
+        );
+        exported += res.rowCount;
+      }
+      result.rowsExported = exported;
+      result.perPool[pool] = exported;
     }
 
     await advanceWatermark(env.DB, 'corridor_density_baseline', maxComputedAt, result.rowsExported);

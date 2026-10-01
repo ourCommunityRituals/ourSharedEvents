@@ -175,37 +175,37 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   'lib/draft-expiry.ts:107':
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
     'brand by design, not request-reachable.',
-  'lib/shared-report.ts:166':
+  'lib/shared-report.ts:167':
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
     'AND substr(end_date,1,10) BETWEEN ? AND ?` (calendar-day window, then the real ' +
-    'end instant via phaseTimesFor — OSE-616; re-keyed 157→166). Cross-brand ' +
+    'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
     'geographic baseline input; the output is never-who anon-return aggregates. ' +
     'Not request-reachable.',
-  'lib/shared-report.ts:293':
+  'lib/shared-report.ts:294':
     'refreshCorridorBaselines cron — aggregates by `COALESCE(h3_res7, ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts:471':
+  'lib/shared-report.ts:480':
     'detectEventSeriesClusters cron — venue/day/hour event-count baseline across ' +
     'brands, count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
-  'lib/shared-report.ts:506':
+  'lib/shared-report.ts:515':
     'Same cron — subselect `venue_id IN (SELECT id FROM events WHERE location=?)` ' +
     '(a venue-geography key) for the confirmed/rejected series check. Cross-brand ' +
     'geographic by design; never-who.',
-  'lib/shared-report.ts:530':
-    'Same cron, the `state=pending` twin of :506. Same venue-geography rationale.',
-  'lib/shared-report.ts:657':
+  'lib/shared-report.ts:539':
+    'Same cron, the `state=pending` twin of :515. Same venue-geography rationale.',
+  'lib/shared-report.ts:666':
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
     '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
     'Never-who scan aggregate; not request-reachable.',
-  'lib/shared-report.ts:678': 'Same cron, the country-code bucket twin of :657. Same rationale.',
-  'lib/shared-report.ts:779':
+  'lib/shared-report.ts:687': 'Same cron, the country-code bucket twin of :666. Same rationale.',
+  'lib/shared-report.ts:788':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:780':
+  'lib/shared-report.ts:789':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:783':
+  'lib/shared-report.ts:792':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   'lib/shared-report-builder.ts:322':
@@ -217,14 +217,15 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
-  // 296→301 and 554→586 by the PR #726 follow-ups (import list + withheld
-  // legacy-keyed baseline rows + duplicate canonical key check).
-  'lib/shared-report-export.ts:301':
+  // 296→303 and 554→607 by the PR #726 follow-ups (import list + withheld
+  // legacy-keyed baseline rows + duplicate canonical key check +
+  // whole-timestamp-group baseline read).
+  'lib/shared-report-export.ts:303':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata, keyed by `computed_at > ?` ' +
     'watermark across ALL brands. OER ingests every brand by design; never-who ' +
     'anon hashes; not request-reachable.',
-  'lib/shared-report-export.ts:586':
+  'lib/shared-report-export.ts:607':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

@@ -47,6 +47,17 @@ export class ExportGeographyError extends Error {
 /** The exported corridor id when an event or bucket has no corridor node. */
 export const UNKNOWN_CORRIDOR = 'unknown';
 
+/**
+ * True when a stored value is a real H3 cell, in any case spelling. This only
+ * VALIDATES a value already written at capture time (events.ts computes the
+ * cells); it never computes one. It lives here, in the module that owns what a
+ * real corridor cell is, so the SharedReport pipeline lib (shared-report.ts)
+ * keeps no h3-js import of its own (OSE-490 Gate 7).
+ */
+export function isH3Cell(value: unknown): boolean {
+  return typeof value === 'string' && H3_CELL.test(value) && isValidCell(value.toLowerCase());
+}
+
 /** True when a corridor id is a real corridor: a valid H3 cell at res7 or coarser. */
 export function isCorridorId(value: unknown): boolean {
   if (typeof value !== 'string' || !H3_CELL.test(value)) return false;

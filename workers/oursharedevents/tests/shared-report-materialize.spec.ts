@@ -591,15 +591,18 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
         .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
         .run();
     }
-    // A stale row left under the uppercase spelling by an earlier run.
-    await db
-      .prepare(
-        `INSERT INTO corridor_density_baseline
-           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
-         VALUES (?, 0, 0, 1, 1, '2026-01-01T00:00:00.000Z')`
-      )
-      .bind(cell.toUpperCase())
-      .run();
+    // A stale row left under the uppercase spelling by an earlier run, and a
+    // legacy key that only LOOKS H3-shaped (15 chars, leading 8, not lowercase).
+    for (const key of [cell.toUpperCase(), '8NORTH-CORRIDOR']) {
+      await db
+        .prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, 0, 0, 1, 1, '2026-01-01T00:00:00.000Z')`
+        )
+        .bind(key)
+        .run();
+    }
 
     const r = await refreshCorridorBaselines({ DB: db });
     expect(r.errors).toBe(0);
@@ -612,6 +615,15 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .bind(cell)
       .all<{ corridor_id: string; window_90d_count: number }>();
     expect(rows.results).toEqual([{ corridor_id: cell, window_90d_count: 2 }]);
+    // Not a real cell → not ours to delete; the export withholds it instead.
+    const legacy = await db
+      .prepare(`SELECT COUNT(*) AS n FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('8NORTH-CORRIDOR')
+      .first<{ n: number }>();
+    expect(legacy?.n).toBe(1);
+    await db
+      .prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = '8NORTH-CORRIDOR'`)
+      .run();
   });
 
   test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {

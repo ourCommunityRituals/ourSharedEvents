@@ -256,7 +256,20 @@ H3 is case-insensitive but the baseline key is not, so `refreshCorridorBaselines
 groups by the **lowercased** res7 cell and deletes any baseline row stored under
 another spelling of an H3 cell. If two rows in one export batch still map to the
 same insertId, the phase fails closed (no watermark advance) rather than letting
-BigQuery drop one while the phase counts both.
+BigQuery drop one while the phase counts both. The reconciliation deletes a key
+only when `isValidCell` proves it is a real H3 cell; a legacy key that merely
+looks H3-shaped is left for the export to withhold.
+
+**Whole timestamp groups.** One refresh stamps every baseline row with the same
+`computed_at`, and the watermark is that timestamp alone. So the baseline export
+reads at least 200 rows **extended to the end of the last `computed_at` group it
+reaches**, never a cut group, and inserts in chunks of 500. A plain `LIMIT`
+would advance the watermark past the unread rest of a group, so those rows
+would never be exported.
+
+**Unreadable responses.** An insertAll response body that is not valid JSON
+fails the insert (`INSERT_FAILED`): a 200 that BigQuery's result cannot be read
+from has not confirmed anything.
 
 For aggregate rows where individual `venue_id` / `event_type` doesn't apply, the required-tag values are sentinel strings (`"corridor-aggregate"`). `assertRequiredTags` checks presence + non-empty, so sentinels pass — and the data is honest about being an aggregate.
 

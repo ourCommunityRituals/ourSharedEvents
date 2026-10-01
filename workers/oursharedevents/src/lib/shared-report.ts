@@ -36,6 +36,7 @@
 
 import { hashAnonIdForReturns } from './anon-id-hash';
 import { phaseTimesFor } from './event-datetime';
+import { isH3Cell } from './export-geography';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
@@ -309,12 +310,20 @@ export async function refreshCorridorBaselines(
     // Reconcile: drop baseline rows stored under a non-lowercase spelling of
     // an H3 cell. This run re-derives them under the lowercase key above, so
     // nothing is lost and the export never sees two spellings of one corridor.
-    await env.DB.prepare(
-      `DELETE FROM corridor_density_baseline
+    // Only keys proven to be real cells (isH3Cell) are touched: a legacy or
+    // malformed key that merely looks H3-shaped is left for the export to
+    // withhold or fail on, never silently deleted here.
+    const caseVariants = await env.DB.prepare(
+      `SELECT DISTINCT corridor_id FROM corridor_density_baseline
          WHERE length(corridor_id) = 15
-           AND corridor_id GLOB '8*'
            AND corridor_id <> LOWER(corridor_id)`
-    ).run();
+    ).all<{ corridor_id: string }>();
+    for (const { corridor_id } of caseVariants.results ?? []) {
+      if (!isH3Cell(corridor_id)) continue;
+      await env.DB.prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = ?`)
+        .bind(corridor_id)
+        .run();
+    }
 
     for (const c of cells.results ?? []) {
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {

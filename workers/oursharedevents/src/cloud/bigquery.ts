@@ -51,7 +51,9 @@ export function isBigQueryConfigured(env: BigQueryEnv): boolean {
  * clients below call this after the status check (OSE-616).
  */
 async function assertNoInsertErrors(res: Response, rowCount: number, where: string): Promise<void> {
-  const result = (await res.json().catch(() => ({}))) as {
+  // No catch: an unreadable 200 body has not confirmed anything. The parse
+  // error reaches the caller's catch and becomes INSERT_FAILED (fail closed).
+  const result = (await res.json()) as {
     insertErrors?: Array<{
       index?: number;
       errors?: Array<{ reason?: string; message?: string }>;

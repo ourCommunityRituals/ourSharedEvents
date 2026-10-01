@@ -58,6 +58,7 @@ import {
 } from '../src/lib/export-geography';
 import { phaseTimesFor } from '../src/lib/event-datetime';
 import { bigQueryInsertRows } from '../src/cloud/bigquery';
+import { gridDisk } from 'h3-js';
 
 interface TestEnv {
   DB: D1Database;
@@ -99,7 +100,7 @@ interface InsertCall {
 }
 let bqCalls: InsertCall[] = [];
 
-function installBqMock(insertResponse: Record<string, unknown> = {}): void {
+function installBqMock(insertResponse: Record<string, unknown> | string = {}): void {
   bqCalls = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -115,7 +116,9 @@ function installBqMock(insertResponse: Record<string, unknown> = {}): void {
       if (m) {
         const body = init?.body ? JSON.parse(init.body as string) : { rows: [] };
         bqCalls.push({ dataset: m[1], table: m[2], rows: body.rows ?? [] });
-        return new Response(JSON.stringify(insertResponse), {
+        const text =
+          typeof insertResponse === 'string' ? insertResponse : JSON.stringify(insertResponse);
+        return new Response(text, {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -540,6 +543,95 @@ describe('OSE-616 geography strip: sub-corridor rows are rejected, not trimmed',
     expect(state?.last_export_status).toBe('failed');
     expect(state?.last_error).toMatch(/duplicate canonical corridor baseline key/);
     expect(state?.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  test('an unreadable HTTP 200 body fails the phase closed: BigQuery never confirmed the rows', async () => {
+    await clearPipeline();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 1, 18, 3, 3, ?)`
+      )
+      .bind(EAGLES_RES7, new Date().toISOString())
+      .run();
+
+    installBqMock('{"kind": "bigquery#tableDataInsertAllResp');
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(bqCalls).toHaveLength(1);
+    expect(result.errors).toBe(1);
+    expect(result.rowsExported).toBe(0);
+    const state = await tenv()
+      .DB.prepare(
+        `SELECT last_exported_at FROM bigquery_export_state WHERE table_name = 'corridor_density_baseline'`
+      )
+      .first<{ last_exported_at: string }>();
+    expect(state?.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  /** Seed `n` baseline rows that all share one computed_at, as one refresh writes them. */
+  async function seedOneRefreshGroup(n: number, at: string): Promise<string[]> {
+    const cells = gridDisk(EAGLES_RES7, 2); // 19 real res7 cells × 168 buckets
+    const keys: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const cell = cells[Math.floor(i / 168)];
+      const bucket = i % 168;
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, ?, ?, 1, 1, ?)`
+        )
+        .bind(cell, Math.floor(bucket / 24), bucket % 24, at)
+        .run();
+      keys.push(`${cell}/${Math.floor(bucket / 24)}/${bucket % 24}`);
+    }
+    return keys;
+  }
+
+  test('a refresh group larger than one read batch is exported whole, in insert-sized chunks', async () => {
+    await clearPipeline();
+    const at = new Date().toISOString();
+    await seedOneRefreshGroup(600, at);
+
+    installBqMock();
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(result.errors).toBe(0);
+    expect(result.rowsRead).toBe(600);
+    expect(result.rowsExported).toBe(600);
+    expect(bqCalls.map((c) => c.rows.length)).toEqual([500, 100]);
+    const state = await tenv()
+      .DB.prepare(
+        `SELECT last_exported_at FROM bigquery_export_state WHERE table_name = 'corridor_density_baseline'`
+      )
+      .first<{ last_exported_at: string }>();
+    expect(state?.last_exported_at).toBe(at);
+  });
+
+  test('a duplicate spelling beyond the first 200 rows of a group is still caught', async () => {
+    await clearPipeline();
+    const at = new Date().toISOString();
+    await seedOneRefreshGroup(250, at);
+    // Uppercase twin of a lowercase key already in the group.
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, 0, 0, 1, 1, ?)`
+      )
+      .bind(EAGLES_RES7.toUpperCase(), at)
+      .run();
+
+    installBqMock();
+    const result = await exportCorridorDensityBaseline(exportEnv());
+    vi.restoreAllMocks();
+
+    expect(result.errors).toBe(1);
+    expect(bqCalls).toEqual([]);
   });
 
   test('the legacy insertAll client also fails on rows rejected inside an HTTP 200', async () => {
