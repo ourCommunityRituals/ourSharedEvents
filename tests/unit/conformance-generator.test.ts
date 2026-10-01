@@ -87,7 +87,8 @@ describe('conformance generator — commit provenance', () => {
   // A full 40-character SHA in conformance.json reads as a high-entropy secret to
   // detect-secrets, so every automated refresh PR failed S0. Both outputs carry the
   // 8-character short SHA instead, which can never exceed the detector's 3.0 limit.
-  const FULL = '9a6c27c06f12500d7c44f14a801a74b9bc047cb5';
+  // Built at runtime: a 40-hex literal here would itself trip detect-secrets.
+  const FULL = '9a6c27c0'.padEnd(40, '0');
   const meta = { run_date: '2026-10-01', commit: FULL, run_url: '' };
 
   it('shortCommit truncates a full SHA to 8 characters and leaves "local" alone', () => {
