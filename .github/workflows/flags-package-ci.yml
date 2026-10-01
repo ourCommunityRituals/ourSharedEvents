@@ -24,15 +24,19 @@
 # .git/config before `npm ci` runs package scripts.
 #
 # DEPENDABOT: dependabot runs have no access to OCR_PROPAGATE_TOKEN. They are
-# exactly the runs that bump these devDeps, so the job still runs the four
-# adapter suites (memory, sqlite, d1, postgres) and only excludes
-# invariants.test.ts, with a notice. The full suite runs on every human PR and
-# on the push to main.
+# exactly the runs that bump these devDeps, so the job still typechecks and
+# runs the four adapter suites (memory, sqlite, d1, postgres). Only the
+# contract-dependent checks are skipped (invariants.test.ts, check:generated,
+# test:level0), with a notice. Everything runs on every human PR and on the
+# push to main.
 #
 # NOT-SKIPPED GUARD: a green run that executed nothing is not coverage. The
 # last step reads Vitest's JSON report and fails unless every tests/*.test.ts
 # file that was meant to run did run, at least one test passed, and nothing was
 # skipped, todo'd or failed.
+#
+# NOT HERE: lint. The root eslint config ignores **/*.ts and this package has
+# no eslint config/devDep of its own, so `npm run lint` cannot run yet.
 name: '@ocr/flags CI'
 
 on:
@@ -87,13 +91,13 @@ jobs:
           test -f OCR-docs/ocr-docs-brain/flags-contract.yaml \
             || { echo "::error::OCR-docs/ocr-docs-brain/flags-contract.yaml missing after checkout — invariants.test.ts cannot run"; exit 1; }
 
-      - name: Dependabot notice (invariants suite excluded — no cross-repo token)
+      - name: Dependabot notice (contract checks skipped — no cross-repo token)
         if: github.actor == 'dependabot[bot]'
         run: |
           echo "::notice::Dependabot run: OCR_PROPAGATE_TOKEN is unavailable, so the OCR-docs brain"
           echo "contract cannot be checked out. Running the adapter suites (memory, sqlite, d1,"
-          echo "postgres) and excluding tests/invariants.test.ts. The full suite runs on every human"
-          echo "PR and on the push to main."
+          echo "postgres) and skipping invariants.test.ts, check:generated and test:level0, which"
+          echo "need the brain contract. Everything runs on every human PR and on the push to main."
 
       - name: Set up Node 20
         uses: actions/setup-node@v7
@@ -106,9 +110,34 @@ jobs:
         working-directory: packages/flags
         run: npm ci --no-audit --no-fund
 
-      - name: Typecheck (tsc --noEmit)
+      # src AND tests (tsconfig.tests.json). The package tsconfig excludes
+      # tests/, which is how postgres.test.ts's `db.public.types` (TS2339 on
+      # pg-mem 3.x) shipped: a tests typecheck rejects it at compile time.
+      - name: Typecheck src + tests (tsc --noEmit)
         working-directory: packages/flags
-        run: npx tsc --noEmit -p tsconfig.json
+        run: npm run typecheck
+
+      # Byte-compares src/generated/*.ts against the generator's output for the
+      # brain contract. Catches contract drift AND hand/prettier edits to the
+      # generated files (packages/flags/src/generated/ is in .prettierignore).
+      - name: Generated modules match the brain contract (check:generated)
+        if: github.actor != 'dependabot[bot]'
+        working-directory: packages/flags
+        run: npm run check:generated
+
+      - name: Set up Python
+        if: github.actor != 'dependabot[bot]'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # Level 0 security gate: secret/PII/forbidden-URL scans, contract SHA
+      # parity, parameterized-SQL-only adapters, type-only workers-types
+      # imports, every adapter has a spec-running test, pragma audit.
+      - name: Level 0 security gate (test:level0)
+        if: github.actor != 'dependabot[bot]'
+        working-directory: packages/flags
+        run: npm run test:level0
 
       - name: Run Vitest suite
         working-directory: packages/flags

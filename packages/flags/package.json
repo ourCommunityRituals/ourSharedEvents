@@ -38,6 +38,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.tests.json",
     "generate": "node scripts/generate-from-yaml.mjs",
     "check:generated": "node scripts/generate-from-yaml.mjs --check",
     "lint": "eslint src tests",
@@ -59,6 +60,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
     "better-sqlite3": "^11.0.0",
