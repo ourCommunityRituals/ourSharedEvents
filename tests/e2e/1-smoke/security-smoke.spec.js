@@ -169,11 +169,13 @@ test.describe('🔒 SECURITY: Admin key validation', () => {
       const json = await res.json().catch(() => null);
       if (json && json.id) createdIds.push(json.id);
 
-      expect([401, 403], `status (body: ${JSON.stringify(json)})`).toContain(res.status());
-      // JSON with ok:false means the Worker refused it. An HTML/302 here would
-      // be the edge, i.e. the CF Access token is stale, which is a different failure.
+      // Exactly the Bearer-rejection 401 (requireAdmin's final UNAUTH). A 403
+      // would be the CF Access email allowlist, which never looks at the key,
+      // and an HTML/302 would be the edge (stale CF Access token).
+      expect(res.status(), `status (body: ${JSON.stringify(json)})`).toBe(401);
       expect(json, 'Worker JSON error envelope').not.toBeNull();
       expect(json.ok).toBe(false);
+      expect(json.code).toBe('UNAUTH');
       expect(json.id).toBeUndefined();
     });
   }
