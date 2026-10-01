@@ -221,3 +221,27 @@ export async function requirePlatformScope(
   if (scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID)) return null;
   return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
 }
+
+/**
+ * R-5 (OSE-850) — KEY-ACTOR guard for global, cross-brand mutations.
+ *
+ * `PUT /api/v2/admin/flags/:key` and `POST /api/v2/admin/flags/apply-tier` change
+ * every brand at once, so there is no brand to scope them by. They belong to an
+ * actor class, not a capability: only `key:` automation actors (X-OCR-Internal,
+ * enabled in production, or the staging Bearer key) may call them. Every email
+ * actor, `brand_owner` and the platform brand included, gets 403. This does not
+ * read ADMIN_SCOPE_ALL, so it works where that variable is unset (production).
+ *
+ * Call AFTER requireAdmin (anonymous → 401 first) and before the handler, so the
+ * refusal is the same 403 body for a flag key that exists and one that does not.
+ * The DEV_OPEN_ADMIN local-dev bypass (null actor) keeps its behaviour, matching
+ * guardAdminObjectScope; that bypass is refused on staging and production.
+ */
+export function requireKeyActor(request: Request, env: AdminObjectScopeEnv): Response | null {
+  const actor = extractAdminActor(request, env);
+  if (actor === null || actor.startsWith('key:')) return null;
+  return Response.json(
+    { ok: false, status: 403, code: 'KEY_ACTOR_ONLY', error: 'Forbidden' },
+    { status: 403 }
+  );
+}

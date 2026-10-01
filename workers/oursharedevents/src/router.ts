@@ -167,6 +167,7 @@ import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } fro
 import {
   guardAdminObjectScope,
   requirePlatformScope,
+  requireKeyActor,
   type AdminObjectScopeEnv,
 } from './lib/admin-object-scope';
 import {
@@ -183,7 +184,13 @@ import {
   logExportManifest,
   type AuditLogEnv,
 } from './lib/audit-log';
-import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
+import {
+  handleListAuditLog,
+  resolveBrandAuditView,
+  AUDIT_SCOPES,
+  type AuditHandlerEnv,
+} from './handlers/audit';
+import { errorResponse } from './lib/form-validation';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
@@ -1216,6 +1223,12 @@ export async function route(
       _audit(reqId, 'SET_FLAG', 'denied', 'flag', flagKeyMatch[1]);
       return deny;
     }
+    // R-5 (OSE-850): a global flag is every brand's flag, so key actors only.
+    const notKey = requireKeyActor(request, env);
+    if (notKey) {
+      _audit(reqId, 'SET_FLAG', 'denied', 'flag', flagKeyMatch[1]);
+      return notKey;
+    }
     const response = await handleSetFlag(request, env, flagKeyMatch[1]);
     const outcome = _auditOutcome(response);
     _audit(reqId, 'SET_FLAG', outcome, 'flag', flagKeyMatch[1]);
@@ -1228,6 +1241,12 @@ export async function route(
     if (deny) {
       _audit(reqId, 'APPLY_TIER', 'denied', 'flag');
       return deny;
+    }
+    // R-5 (OSE-850): a tier applies across every brand, so key actors only.
+    const notKey = requireKeyActor(request, env);
+    if (notKey) {
+      _audit(reqId, 'APPLY_TIER', 'denied', 'flag');
+      return notKey;
     }
     const response = await handleApplyTier(request, env);
     const outcome = _auditOutcome(response);
@@ -1260,9 +1279,23 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    const offPlatform = await _platformOnly(reqId);
-    if (offPlatform) return offPlatform;
-    return handleListAuditLog(request, env);
+    // AUD-3 Phase B (OSE-1447): no `scope` is the platform view (platform scope
+    // only); `scope=brand` is a brand owner's own rows with masked IPs.
+    const auditScope = url.searchParams.get('scope');
+    if (auditScope === null) {
+      const offPlatform = await _platformOnly(reqId);
+      if (offPlatform) return offPlatform;
+      return handleListAuditLog(request, env, { kind: 'platform' }, reqId);
+    }
+    if (!(AUDIT_SCOPES as readonly string[]).includes(auditScope)) {
+      return errorResponse('INVALID_SCOPE', 'scope must be one of: brand', 400, request);
+    }
+    const auditView = await resolveBrandAuditView(_actor, env);
+    if (!auditView) {
+      _audit(reqId, 'AUDIT_LOG_SCOPE_DENIED', 'denied', 'audit-log', auditScope);
+      return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
+    }
+    return handleListAuditLog(request, env, auditView, reqId);
   }
 
   // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
