@@ -8,7 +8,7 @@
 ## Verdict
 
 **Loop 5 score: 85%. NOT CCR-verified (< 95%). Human gate.**
-The plan holds direction for direction, and every finding has `file:line` evidence. Two base items stay Partial because closing them needs staging or a full workers-pool run, which this worktree can't do (see "Human gate").
+The remediation plan is directionally sound, and every finding has `file:line` evidence. Two base items stay Partial because closing them needs staging or a full workers-pool run, which this worktree can't do (see "Human gate").
 
 | Loop               | Score        | Key finding                                                                                                                                                                                                           |
 | ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ The plan holds direction for direction, and every finding has `file:line` eviden
 ## Corrections applied between loops (to my earlier answer)
 
 - **L1→2:** "1 of 9 writers fills the IP" → **wrong**; the router `_audit()` helper records the IP at 45 sites (`router.ts:355`). "Rejected logins go to the console only" → **wrong for mutations** (19 denied audit points); still true for most admin reads and for every cross-tenant probe (S4, S8).
-- **L2→3:** "Brand-filter the audit endpoint; small change" → **wrong-sized**; `admin_audit_log` has no `brand_id`. Corrected: restrict the endpoint to platform operators (closes the leak now); add a brand-filtered view later via a `brand_id` column. "Add triggers to make it immutable" → **false closure, proven** (node:sqlite: triggers block UPDATE/DELETE, then `DROP TRIGGER` succeeds and DELETE goes through). Corrected: triggers are app-level defense only; immutability comes from an export to an R2 bucket with a **bucket lock** plus a hash chain, with lock changes visible in Cloudflare account audit logs (18-month retention).
+- **L2→3:** "Brand-filter the audit endpoint; small change" → **wrong-sized**; `admin_audit_log` has no `brand_id`. Corrected: restrict the endpoint to platform operators (closes the leak now); add a brand-filtered view later via a `brand_id` column. "Add triggers to make it immutable" → **false closure, proven** (node:sqlite: triggers block UPDATE/DELETE, then `DROP TRIGGER` succeeds and DELETE goes through). Corrected: triggers are app-level defense only. The **proposed** tamper-evidence/retention control is a hash chain plus an export to an R2 bucket under a **bucket lock**, with lock changes visible in Cloudflare account audit logs (18-month retention). This is _not_ a confirmed immutable store: whether an account admin can remove or shorten the lock early is **unverified** until AUD-1 (OSE-1445). If they can, the design gives tamper **evidence** and detection, not WORM immutability.
 - **L3→4:** Added two launch preconditions: the founder needs a platform-role row in prod (prod has no `ADMIN_SCOPE_ALL`), and `CF_ACCESS_AUD` must be pinned (OSE-1377).
 - **L4→5:** Added an SRE alert on audit-write failure; security-relevant audit writes (denied, cross-tenant, platform) should be awaited, not fire-and-forget.
 
@@ -49,7 +49,7 @@ The plan holds direction for direction, and every finding has `file:line` eviden
 
 1. ~~**Platform-operator gate (S1, S2, S3).** Allow scope mode `'all'` **or** a membership row with a new role `platform_admin`.~~ **Superseded → AUD-3 (OSE-1447) + R-5 (OSE-850).** The finding still holds: the 4 flag mutations, the `flags` GETs, `subscribers`, `rate-limit-stats` and `audit-log` need a fail-closed guard, and an email admin must get 404. The blast-radius result also still holds: all 15 test files touching these routes authenticate as key actors with `ADMIN_SCOPE_ALL` (`vitest.workers.config.mts:328`), so a key-actor-only guard leaves them green.
 2. **Audit cross-tenant probes (S4)** in `guardAdminObjectScope` → `CROSS_TENANT_PROBE` / `denied`, with actor + IP.
-3. **Enforce per-brand roles (S3)** via `resolveAdminRoles` on destructive actions (delete, apply tier, mint links), or delete the column. Needs a PO decision on the role → action matrix.
+3. **Enforce per-brand roles (S3)** via `resolveAdminRoles` on destructive **brand-scoped** actions (delete, data-subject erase, mint links), or delete the column. **Apply-tier and global flags are excluded:** they are platform-global and stay behind the `key:`-actor gate (AUD-3 / R-5). No tenant role may become another authorization path for them. Needs a PO decision on the role → action matrix.
 4. **Tamper evidence (S5, S7):** migration adds BEFORE UPDATE/DELETE `RAISE(ABORT)` triggers plus `prev_hash`/`row_hash` columns; a cron exports daily batches to an R2 bucket under an indefinite or long-retention **bucket lock**; fix `ROLLBACK_PLAN.md` so it archives instead of dropping; define retention (e.g. 400 days hot, then R2).
 5. **Reliability (S6):** await security-class audit writes; alert on `AUDIT_LOG_WRITE_FAILURE` (pairs with the "zero alerting" SRE gap).
 6. **Read auditing (S8)** for PII-bearing and platform reads.
