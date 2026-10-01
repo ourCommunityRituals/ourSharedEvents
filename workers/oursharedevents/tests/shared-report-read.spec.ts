@@ -866,6 +866,33 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(r.report.corridor_map?.svg).toContain(busy);
   });
 
+  test('OSE-683 drop-before-sum: sub-K hours in one poster cell never add up to a published count', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-dbs', start_date: '2026-05-07T19:00:00Z' });
+    const sumOnly = '892664cdb13ffff'; // 3 + 3: no hour clears K, so not 6
+    const mixed = '89266454447ffff'; // 3 + 6: only the 6 counts
+    for (const [id, cell, hour, n] of [
+      ['cell-dbs-a1', sumOnly, 18, 3],
+      ['cell-dbs-a2', sumOnly, 19, 3],
+      ['cell-dbs-b1', mixed, 18, 3],
+      ['cell-dbs-b2', mixed, 19, 6],
+    ] as const) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_cell_aggregates
+             (id, event_id, bucket_date, bucket_hour, h3_res9, h3_res7, scan_count, computed_at)
+           VALUES (?, 'test-evt-read-q8-dbs', '2026-05-07', ?, ?, NULL, ?, datetime('now'))`
+        )
+        .bind(id, hour, cell, n)
+        .run();
+    }
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-dbs');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map?.cell_count).toBe(1);
+    expect(r.report.corridor_map?.svg).toContain(`data-cell="${mixed}" data-count="6"`);
+    expect(JSON.stringify(r.report)).not.toContain(sumOnly);
+  });
+
   test('OSE-1459: when every poster cell is under the K-floor, no map and no cell id is published', async () => {
     await tenv()
       .DB.prepare(

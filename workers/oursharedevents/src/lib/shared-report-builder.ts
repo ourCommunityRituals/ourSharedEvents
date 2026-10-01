@@ -686,12 +686,17 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // per-cell K-floor (CORRIDOR_MAP_MIN_COUNT) still applies in renderCorridorMap.
   const cellRows = await db
     .prepare(
-      `SELECT h3_res9 AS cell, SUM(scan_count) AS count
+      `SELECT h3_res9 AS cell,
+              SUM(CASE WHEN scan_count >= ? THEN scan_count ELSE 0 END) AS count
          FROM scan_cell_aggregates
          WHERE event_id = ?
          GROUP BY h3_res9`
     )
-    .bind(eventId)
+    // OSE-683 drop-before-sum: an hourly bucket under K never joins the cell's
+    // sum, so sub-K hours can't add up to a published count (3 + 3 is not 6).
+    // A cell made only of sub-K hours stays as a 0 row, so it is dropped below
+    // and an all-sub-K event still reads as 'suppressed', not 'no scans'.
+    .bind(CORRIDOR_MAP_MIN_COUNT, eventId)
     .all<{ cell: string; count: number }>();
 
   const cellData = cellRows.results ?? [];
