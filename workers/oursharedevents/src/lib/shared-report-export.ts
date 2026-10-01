@@ -315,11 +315,6 @@ function floorCount(n: number): number | null {
   return n >= RETURNS_MIN_COUNT ? n : null;
 }
 
-/** The snapshot's computed_at: the current hour, so a re-run within it dedupes. */
-function snapshotHour(now: Date): string {
-  return `${now.toISOString().slice(0, 13)}:00:00.000Z`;
-}
-
 export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<ExportResult> {
   const start = Date.now();
   const prep = await prepareExport(env, 'anon_id_returns', 'anon_id_returns');
@@ -339,8 +334,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
   try {
     // A rolling window changes as rows age out even when nothing new was
     // materialized, so a snapshot is taken on every scheduled run (nightly
-    // today). The insertId is keyed by the snapshot hour, so a re-run within
-    // the same hour dedupes in BigQuery. OER reads the latest snapshot;
+    // today), each with its own computed_at. OER reads the latest snapshot;
     // a group missing from it has fallen out of the window or under the floor.
     // The watermark only records how far the source has been seen.
     const changed = await env.DB.prepare(
@@ -381,7 +375,10 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
       .bind(since)
       .all<CorridorReturnsRow>();
 
-    const computedAt = snapshotHour(now);
+    // Each run is its own snapshot, identified by its full timestamp: the
+    // window moves continuously, so two runs never describe the same data.
+    // Retries inside one run reuse this value, so their insertIds dedupe.
+    const computedAt = now.toISOString();
     const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
     for (const r of rows.results ?? []) {
       const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.corridor_id, result);

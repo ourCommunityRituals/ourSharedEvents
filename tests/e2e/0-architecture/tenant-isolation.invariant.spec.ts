@@ -172,13 +172,18 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
   // a never-who geographic aggregate, or a correlated/transitively-scoped
   // subselect — never a request-reachable per-brand row enumeration.
-  'lib/draft-expiry.ts:98':
+  'lib/draft-expiry.ts:99':
     'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
     'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
     'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
-  'lib/draft-expiry.ts:110':
+  'lib/draft-expiry.ts:111':
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
     'brand by design, not request-reachable.',
+  'lib/draft-expiry.ts:146':
+    'Same cron, AUD-3 Phase B: `INSERT INTO admin_audit_log ... SELECT ... FROM ' +
+    'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
+    '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
+    'Held ids, not enumeration; not request-reachable.',
   'lib/shared-report.ts:167':
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
     'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
@@ -227,14 +232,14 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
   // 296→303 and 554→611 by the PR #726 follow-ups (import list + withheld
   // legacy-keyed baseline rows + duplicate canonical key check +
-  // whole-timestamp-group baseline read). 303→374 and 611→711 by OSE-1460 (the
+  // whole-timestamp-group baseline read). 303→368 and 611→708 by OSE-1460 (the
   // returns phase now aggregates to k-floored corridor counts before export).
-  'lib/shared-report-export.ts:374':
+  'lib/shared-report-export.ts:368':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:711':
+  'lib/shared-report-export.ts:708':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

@@ -34,8 +34,6 @@
  * carries event ids only, no operator identity beyond the system actor.
  */
 
-import { logAdminAction } from './audit-log';
-
 export interface DraftExpiryEnv {
   DB: D1Database;
   DRAFT_EXPIRY_DAYS?: string;
@@ -45,6 +43,9 @@ export const DEFAULT_DRAFT_EXPIRY_DAYS = 30;
 
 /** Upper bound on ids echoed into one audit row's details (keeps the row small). */
 const AUDIT_ID_CAP = 200;
+
+/** Drafts archived per statement (well under D1's 100 bound-parameter limit). */
+const ARCHIVE_CHUNK = 90;
 
 export interface DraftExpiryResult {
   enabled: boolean;
@@ -116,29 +117,39 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
       .first<{ n: number }>();
     result.skippedFutureDated = Number(future?.n ?? 0);
 
-    for (const id of ids) {
-      const res = await env.DB.prepare(
+    // Set-based, in chunks, to stay well inside D1's per-invocation query
+    // budget (a 500-draft sweep is 2 statements per chunk, not 2 per draft).
+    // RETURNING gives exactly the drafts this run archived; a draft edited
+    // between the SELECT and here is skipped by the WHERE.
+    for (let i = 0; i < ids.length; i += ARCHIVE_CHUNK) {
+      const chunk = ids.slice(i, i + ARCHIVE_CHUNK);
+      const marks = chunk.map(() => '?').join(', ');
+      const archived = await env.DB.prepare(
         `UPDATE events
             SET status = 'archived', updated_at = datetime('now')
-          WHERE id = ? AND status = 'draft' AND updated_at < datetime('now', ?)`
+          WHERE id IN (${marks}) AND status = 'draft' AND updated_at < datetime('now', ?)
+          RETURNING id`
       )
-        .bind(id, window)
-        .run();
-      const changed = res.meta?.changes ?? 0;
-      result.archived += changed;
-      // AUD-3 Phase B: one row per archived event, so it is attributed to that
-      // event's brand and shows in the brand owner's audit view. The run summary
-      // below stays platform-only.
-      if (changed > 0) {
-        await logAdminAction(env, {
-          action: 'DRAFT_EXPIRED',
-          actor: 'system:lifecycle',
-          resource_type: 'event',
-          resource_id: id,
-          request_id: `draft-expiry:${now}`,
-          outcome: 'success',
-          details: { days },
-        });
+        .bind(...chunk, window)
+        .all<{ id: string }>();
+      const changed = (archived.results ?? []).map((r) => r.id);
+      result.archived += changed.length;
+      if (changed.length === 0) continue;
+      // AUD-3 Phase B: one row per archived event, carrying that event's brand,
+      // so it shows in the brand owner's audit view. One INSERT per chunk.
+      try {
+        await env.DB.prepare(
+          `INSERT INTO admin_audit_log
+             (id, action, actor, resource_type, resource_id, request_id, outcome, details, brand_id)
+           SELECT lower(hex(randomblob(16))), 'DRAFT_EXPIRED', 'system:lifecycle', 'event',
+                  e.id, ?, 'success', ?, e.brand_id
+             FROM events e
+            WHERE e.id IN (${changed.map(() => '?').join(', ')})`
+        )
+          .bind(`draft-expiry:${now}`, JSON.stringify({ days }), ...changed)
+          .run();
+      } catch {
+        // Audit failures must never break the lifecycle job.
       }
     }
   } catch (err) {

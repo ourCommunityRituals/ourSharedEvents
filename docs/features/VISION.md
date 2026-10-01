@@ -24,7 +24,7 @@ What we store:                     What we never store:
 ─────────────────                  ──────────────────────
 scan_bucket (hourly window)        exact timestamps
 user_agent_hash (device class)     IP addresses
-country_code, region_code          names, emails (raw)
+(no location, OSE-1460)            names, emails (raw)
 poster_deployment_id               individual tracking
 aggregate counts                   behavioral profiles
 ```

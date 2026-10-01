@@ -166,8 +166,9 @@ sends **counts**: no per-person row, no `anon_id_hash` and no venue leave the Wo
 **When:** every scheduled run, which today is the nightly cron (`0 3 * * *` in
 `wrangler.toml`). Each run snapshots the last `RETURNS_WINDOW_DAYS` (90), even
 when no source row is past the watermark, because a rolling window changes as
-rows age out. The watermark then records the newest source row seen. A re-run
-within the same hour sends the same insertIds, so BigQuery dedupes it.
+rows age out. The watermark then records the newest source row seen. Each run
+is its own snapshot, identified by its full `computed_at` timestamp; retries
+inside one run reuse it, so their insertIds dedupe.
 
 **Reading it:** every run writes one **snapshot marker** row per pool, with
 `row_type = 'snapshot'`, `corridor_id = 'unknown'` and `groups_in_snapshot` set
@@ -206,7 +207,7 @@ with no real res7 corridor is withheld, never sent as `'unknown'`.
   "returned_3plus": 6,
   "returned_5plus": null,
   "row_type": "group",
-  "computed_at": "the snapshot hour, ISO (YYYY-MM-DDTHH:00:00.000Z)",
+  "computed_at": "the run's snapshot timestamp, ISO (full precision)",
   "exported_at": "ISO (now)"
 }
 ```
@@ -218,6 +219,11 @@ is unchanged. `assertRequiredTags()` runs on each row before send.
 **Grain you can query in OER:** one corridor × event type × pool, a 90-day
 rolling window, with one new snapshot per scheduled run (nightly today). You cannot see
 individual journeys or venues, or anyone's movement between corridors.
+
+**Corridor id for returns (OSE-1460).** A returns group with no real res7
+corridor is **withheld**, never exported as `'unknown'`. Only the snapshot
+marker carries `corridor_id = 'unknown'`. The paragraph below describes the
+shared rule the other phases follow.
 
 **Corridor id (ADR-011, OSE-616).** The corridor is the res7 H3 node. The
 exported `corridor_id` is the event's `h3_res7`; a legacy non-H3
@@ -342,7 +348,7 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 
 - Rows BigQuery already accepted stay there.
 - The watermark is NOT advanced past the failed batch.
-- Next tick retries from the watermark. insertIds are content-derived (`${tableId}-${computed_at}-${anon_id_hash}` pattern), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
+- Next tick retries from the watermark. insertIds are content-derived (for returns: `cr-${computed_at}-${corridor_id}-${uec_code}-${pool}`; no person or event id is in any key), but BigQuery's `insertId` de-duplication is **best-effort, for roughly a minute**, so a retry on a later tick can land duplicate rows.
 
 Delivery guarantee: **at-least-once.** No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
@@ -381,10 +387,10 @@ manifested as exported, and the watermark does not advance (OSE-616).
 
 | Invariant                       | How it's preserved in Session 4                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| No raw `anon_id` to BQ          | Source table `anon_id_returns` only stores `anon_id_hash`; export passes through unchanged.                 |
+| No `anon_id` or `anon_id_hash` to BQ | Since OSE-1460 the returns phase sends only k-floored corridor counts; the hash is used inside the Worker to count people and never leaves. |
 | No cross-DB join with FORMS_DB  | Export library reads main DB only (Gate 1 carries over from Session 3).                                     |
 | No user-facing surface          | Cron-only by static-source gate (Gate 5, new).                                                              |
-| Anon hash determinism preserved | Session 4 doesn't re-hash; passes existing hashes through.                                                  |
+| No re-hashing                   | Session 4 never re-hashes; the returns phase counts hashed ids in SQL and exports counts only.              |
 | Pool isolation                  | `assertRequiredTags` + `phaseToPool` guarantee no HIPAA event's aggregate row lands in the general dataset. |
 
 ---

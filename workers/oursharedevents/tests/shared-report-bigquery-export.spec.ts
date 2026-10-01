@@ -570,9 +570,9 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(row.product_id).toBe('ose');
   });
 
-  test('watermark advances to the newest source row; a re-run still snapshots, same hour → same insertId', async () => {
-    // A rolling window moves as rows age out, so every run re-snapshots. In the
-    // same hour the insertIds repeat, so BigQuery dedupes the copy.
+  test('watermark advances to the newest source row; every run is its own snapshot', async () => {
+    // A rolling window moves continuously, so every run re-snapshots under its
+    // own computed_at: two runs never share an insertId or a snapshot identity.
     await seedCorridorEvent('test-evt-exp-w1');
     await seedPeople('test-evt-exp-w1', [1, 1, 1, 1, 1], {
       computedAt: '2026-09-30T15:00:00.000Z',
@@ -586,7 +586,8 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const second = groupCalls()
       .map((c) => c.rows.map((r) => r.insertId))
       .flat();
-    expect(second).toEqual(first);
+    expect(second).toHaveLength(first.length);
+    expect(second.some((id) => first.includes(id))).toBe(false);
     const state = await tenv()
       .DB.prepare(
         `SELECT last_export_status, last_exported_at FROM bigquery_export_state WHERE table_name = ?`
@@ -629,19 +630,17 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(state!.last_exported_at).toBe('1970-01-01T00:00:00.000Z');
   });
 
-  test('idempotent insertId — a re-run in the same hour sends the same id', async () => {
+  test('insertIds are keyed by the snapshot, never by a person or an event', async () => {
     await seedCorridorEvent('test-evt-exp-i1');
     await seedPeople('test-evt-exp-i1', [1, 1, 1, 1, 1]);
     await exportAnonIdReturns(makeEnv());
-    const insertId1 = groupCalls()[0].rows[0].insertId;
-    await tenv()
-      .DB.prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
-      .bind('1970-01-01T00:00:00.000Z', 'anon_id_returns')
-      .run();
-    bqCalls = [];
-    await exportAnonIdReturns(makeEnv());
-    expect(groupCalls()[0].rows[0].insertId).toBe(insertId1);
-    expect(insertId1).not.toMatch(/test-evt-exp/);
+    const group = groupCalls()[0].rows[0];
+    const marker = markerRows()[0];
+    expect(group.insertId).toBe(
+      `cr-${String(group.json.computed_at)}-${RES7_A}-UEC-TRIVIA-general`
+    );
+    expect(String(marker.computed_at)).toBe(String(group.json.computed_at));
+    expect(group.insertId).not.toMatch(/test-evt-exp|p\d0{20,}/);
   });
 });
 

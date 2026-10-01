@@ -178,6 +178,40 @@ describe('runDraftExpiry', () => {
     ]);
   });
 
+  test('a 200-draft sweep stays far inside the D1 per-invocation query budget', async () => {
+    await db()
+      .prepare(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 199)
+         INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         SELECT 'dx-bulk-' || i, ?, 'Bulk ' || i, 'slug-dx-bulk-' || i, 'draft', ?, ? FROM n`
+      )
+      .bind(BRAND, OLD, OLD)
+      .run();
+    let prepares = 0;
+    const counted = new Proxy(db(), {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            prepares++;
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    const r = await runDraftExpiry({ ...expiryEnv(), DB: counted } as never);
+    expect(r.archived).toBeGreaterThanOrEqual(200);
+    expect(prepares).toBeLessThan(20); // 2 reads + 2 per 90-draft chunk + 1 summary
+    const audited = await db()
+      .prepare(
+        "SELECT COUNT(*) AS n FROM admin_audit_log WHERE action = 'DRAFT_EXPIRED' AND resource_id LIKE 'dx-bulk-%' AND brand_id = ?"
+      )
+      .bind(BRAND)
+      .first<{ n: number }>();
+    expect(audited?.n).toBe(200);
+  });
+
   test('one audit row per run names the archived ids (never-who: system actor only)', async () => {
     await seed('dx-audit-a', 'draft', OLD);
     await seed('dx-audit-b', 'draft', OLD);
