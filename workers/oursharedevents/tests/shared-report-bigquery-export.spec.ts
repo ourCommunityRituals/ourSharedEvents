@@ -425,12 +425,13 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(row.returned_2plus).toBeNull();
   });
 
-  test('more than 500 groups are sent in chunks of at most 500', async () => {
+  /** 501 groups: one corridor, 501 event types, five people each. */
+  async function seedManyGroups(): Promise<void> {
     const db = tenv().DB;
     await db
       .prepare(
         `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500)
-         INSERT INTO event_type_registry (id, uec_code, name, phase, legal_clearance_tier)
+         INSERT OR IGNORE INTO event_type_registry (id, uec_code, name, phase, legal_clearance_tier)
          SELECT 'et-chunk-' || i, 'UEC-CHUNK-' || i, 'Chunk ' || i, 1, 1 FROM n`
       )
       .run();
@@ -455,6 +456,10 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       )
       .bind(seen, seen, seen, await pepperEpoch(TEST_PEPPER))
       .run();
+  }
+
+  test('more than 500 groups are sent in chunks of at most 500', async () => {
+    await seedManyGroups();
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(r.rowsExported).toBe(501);
@@ -465,6 +470,21 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     const types = groupCalls().flatMap((c) => c.rows.map((x) => String(x.json.uec_code)));
     expect(new Set(types).size).toBe(501);
     expect(markerRows()[0].groups_in_snapshot).toBe(501);
+  });
+
+  test('a snapshot of exactly the page cap passes; one group more fails closed with no marker', async () => {
+    await seedManyGroups();
+    // 167 x 3 = 501: exactly at the cap, so it must complete and mark.
+    const atCap = await exportAnonIdReturns(makeEnv(), { pageSize: 167, maxPages: 3 });
+    expect(atCap.errors).toBe(0);
+    expect(atCap.rowsExported).toBe(501);
+    expect(markerRows()[0].groups_in_snapshot).toBe(501);
+
+    bqCalls.length = 0;
+    // 250 x 2 = 500 < 501: over the cap, so no marker and an error.
+    const over = await exportAnonIdReturns(makeEnv(), { pageSize: 250, maxPages: 2 });
+    expect(over.errors).toBe(1);
+    expect(markerRows()).toHaveLength(0);
   });
 
   test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export as 6', async () => {

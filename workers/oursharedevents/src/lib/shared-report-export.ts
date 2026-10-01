@@ -320,7 +320,13 @@ interface CorridorReturnsRow {
   returned_5plus: number;
 }
 
-export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<ExportResult> {
+export async function exportAnonIdReturns(
+  env: SharedReportExportEnv,
+  // Test seam only: the paging limits. Production always uses the defaults.
+  limits: { pageSize?: number; maxPages?: number } = {}
+): Promise<ExportResult> {
+  const pageSize = limits.pageSize ?? RETURNS_PAGE_SIZE;
+  const maxPages = limits.maxPages ?? RETURNS_MAX_PAGES;
   const start = Date.now();
   const prep = await prepareExport(env, 'anon_id_returns', 'anon_id_returns');
   if (!prep) {
@@ -392,11 +398,6 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     let after: [string, string, string] = ['', '', ''];
     let first = true;
     for (let page = 0; ; page++) {
-      if (page >= RETURNS_MAX_PAGES) {
-        throw new Error(
-          `returns snapshot exceeds ${RETURNS_MAX_PAGES * RETURNS_PAGE_SIZE} groups; no marker written`
-        );
-      }
       const rows = await env.DB.prepare(
         `SELECT * FROM (
            SELECT corridor_id, pool_key, MIN(legal_clearance_tier) AS legal_clearance_tier, uec_code,
@@ -438,11 +439,18 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
           after[0],
           after[1],
           after[2],
-          RETURNS_PAGE_SIZE
+          pageSize
         )
         .all<CorridorReturnsRow & { pool_key: string; k_corridor: string; k_type: string }>();
       const results = rows.results ?? [];
       if (results.length === 0) break;
+      // Checked after the fetch, so a snapshot of exactly the cap passes: only
+      // a page that actually holds rows beyond the cap fails the run closed.
+      if (page >= maxPages) {
+        throw new Error(
+          `returns snapshot exceeds ${maxPages * pageSize} groups; no marker written`
+        );
+      }
       const last = results[results.length - 1];
       after = [last.k_corridor, last.pool_key, last.k_type];
       first = false;
@@ -508,7 +516,7 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
           result.perPool[pool] += res.rowCount;
         }
       }
-      if (results.length < RETURNS_PAGE_SIZE) break;
+      if (results.length < pageSize) break;
     }
 
     // One marker per pool per run, written after the groups, so OER can tell
