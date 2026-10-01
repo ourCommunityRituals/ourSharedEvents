@@ -383,7 +383,12 @@ const WORKFLOW_RUN_CONCLUSIONS = [
   'success', 'failure', 'neutral', 'cancelled', 'skipped', 'timed_out', 'action_required', 'stale',
 ];
 
-const makeWorkflowRunEnv = (headRepo, conclusion, event = 'pull_request', headBranch = sym()) => ({
+// Any source event the author can cause (pull_request, its review variants,
+// issue_comment, merge_group, a dispatch on any ref …) is symbolic: it is only
+// known NOT to be push or schedule. Push sources are modelled separately below.
+const UNTRUSTED_SOURCE_EVENT = () => sym({ notEqual: ['push', 'schedule'] });
+
+const makeWorkflowRunEnv = (headRepo, conclusion, event = UNTRUSTED_SOURCE_EVENT(), headBranch = sym()) => ({
   event_name: 'workflow_run',
   head_ref: '',
   base_ref: '',
@@ -1394,6 +1399,36 @@ function runSelfTest() {
           jobs: {
             rt: {
               if: "github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: workflow_run push OR a review-triggered PR source',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'pull_request_review'",
+              steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
+            },
+          },
+        },
+      },
+      expectViolation: true,
+    },
+    {
+      name: 'leak: properly gated main push OR an issue_comment source (source event is symbolic)',
+      wf: {
+        'rt.yml': {
+          on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+          jobs: {
+            rt: {
+              if: "(github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || github.event.workflow_run.event == 'issue_comment'",
               steps: [{ env: { A: '${{ secrets.ADMIN_KEY }}' } }],
             },
           },
