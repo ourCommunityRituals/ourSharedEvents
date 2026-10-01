@@ -59,12 +59,20 @@ and `config/feature-flags.js`):
   request.
 - **Helper scripts.** Scripts that write to a deployed environment
   (`scripts/mint-t4-report-tokens.mjs`, `scripts/qa-environment-setup.js`) refuse a
-  production `BASE_URL` with the same host rule.
+  production `BASE_URL` with the same host rule, including writes delegated to a
+  shared helper (`tests/shared/helpers/test-runner.js`, used by `run-matrix-tests.js`).
+  No shell script writes to an OSE target; the last two (GAS-era `/api/rpc` smoke
+  scripts, an endpoint the Worker no longer has) were deleted.
+- **No hard-coded production target.** Test code may name a production URL only in
+  a short list of files that never write (fixtures, GET-only helpers, page-load smoke);
+  a spec's fallback target is staging.
 - **CI gate.** `tests/integration/production-read-only.test.js` (root vitest, every PR)
   locks the approved specs and configs on `smoke-production`, the read-only API smoke
   specs, the wrapper on every config, the guard's behaviour over a table of targets
   and env vars, the env vars specs read, the `security-smoke` skips, each Bruno
-  collection's own script, and the refusal in every writing script under `scripts/`.
+  collection's own script, the refusal in every writing script under `scripts/` (and
+  the helpers it loads), the read-only list of files that name production, and the
+  absence of shell scripts that write to an OSE target.
 
 Every `security-smoke` describe that sends a write, including the rejected-key probe
 (an invalid bearer, expected 401), skips on production. A rejected-key POST could still

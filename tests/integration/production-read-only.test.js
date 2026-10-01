@@ -237,6 +237,52 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     for (const f of senders) expect(read(f), f).toMatch(/isProductionUrl\(/);
   });
 
+  test('test code names production only in files that cannot write', () => {
+    // Derived: a production URL in test code (comments aside) is a target a spec
+    // can reach without the config guard seeing it. Only these may name it.
+    const GATE = 'tests/integration/production-read-only.test.js'; // its own URL table
+    const READ_ONLY = new Set([
+      'tests/contract/explicit-api-contracts_MOCK.test.js', // fixture data, no network
+      'tests/shared/helpers/api-version-comparator.js', // GET-only version compare
+      'tests/smoke/prod.smoke.test.js', // page loads only
+    ]);
+    const PROD_LITERAL = /['"`]https?:\/\/(www\.)?oursharedevents\.com(?![\w.-])/i;
+    const naming = listFiles('tests').filter((rel) => {
+      if (!/\.(m?[jt]s|cjs)$/.test(rel) || rel.includes('node_modules')) return false;
+      const code = read(rel)
+        .split('\n')
+        .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+        .join('\n');
+      return PROD_LITERAL.test(code);
+    });
+    expect(naming.filter((rel) => rel !== GATE && !READ_ONLY.has(rel))).toEqual([]);
+    for (const rel of READ_ONLY) expect(read(rel), rel).not.toMatch(WRITE_CALL);
+  });
+
+  test('no shell script sends a write to an OSE target', () => {
+    // Derived per curl command (continuations joined): a write flag plus an OSE
+    // URL or a target-URL variable. Retired GAS-era RPC smoke scripts were the
+    // last two; any new one must refuse production first.
+    const SH_WRITE = /-X\s*["']?(POST|PUT|PATCH|DELETE)\b|--data(-raw|-binary)?\b|\s-d\s/;
+    const OSE_TARGET =
+      /https?:\/\/[\w.-]*oursharedevents\.com|\$\{?(BASE_URL|STAGING_URL|TARGET_URL|\w*WORKER_URL|VERIFY_URL)\b/;
+    const writers = listFiles('scripts').filter(
+      (rel) =>
+        rel.endsWith('.sh') &&
+        read(rel)
+          .replace(/\\\n/g, ' ')
+          .split('\n')
+          .some(
+            (cmd) =>
+              /\bcurl\b/.test(cmd) &&
+              !/^\s*(#|echo)/.test(cmd) &&
+              SH_WRITE.test(cmd) &&
+              OSE_TARGET.test(cmd)
+          )
+    );
+    for (const rel of writers) expect(read(rel), rel).toMatch(/isProductionUrl/);
+  });
+
   test('the matrix runner refuses production before it posts', async () => {
     const { TestRunner } = require('../shared/helpers/test-runner.js');
     const post = vi.fn();
