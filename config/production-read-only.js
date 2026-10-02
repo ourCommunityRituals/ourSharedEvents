@@ -19,7 +19,11 @@ const { isProductionUrl } = require('./production-hosts');
  */
 const PRODUCTION_SMOKE_SPECS = {
   'playwright.e2e-smoke.config.ts': ['1-smoke/security-smoke.spec.js'],
-  'playwright.smoke.config.ts': ['api-health.spec.ts', 'fail-fast-gates.spec.ts'],
+  'playwright.smoke.config.ts': [
+    'api-health.spec.ts',
+    'fail-fast-gates.spec.ts',
+    'events-v2.spec.ts',
+  ],
 };
 
 /**
