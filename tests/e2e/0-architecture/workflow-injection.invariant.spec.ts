@@ -48,8 +48,10 @@ const ACTIONS_DIR = join(REPO_ROOT, '.github', 'actions');
 // enum set by GitHub, not attacker text. `github.ref` / `github.ref_name` ARE
 // matched: on push they carry a branch name the pusher chose. `github.ref_type`
 // and `github.ref_protected` are not (fixed values); the lookahead stops there.
+// The expression runs to its closing `}}`, so single braces inside it (as in
+// `format('{0}', inputs.x)`) do not end the search early.
 const FORBIDDEN =
-  /\$\{\{[^}]*?(github\.event\.|inputs\.|github\.head_ref|github\.ref(?:_name)?(?![\w]))/;
+  /\$\{\{(?:(?!\}\}).)*?(github\.event\.|inputs\.|github\.head_ref|github\.ref(?:_name)?(?![\w]))/;
 
 type Step = { name?: string; id?: string; run?: unknown };
 type Finding = { file: string; where: string; expr: string };
@@ -136,6 +138,8 @@ test.describe('Invariant: no workflow input interpolated into a shell (OSE-1470)
       'echo ${{ github.event.inputs.environment }}',
       'echo ${{ github.event.pull_request.title }}',
       'echo ${{ github.head_ref }}',
+      "curl ${{ format('{0}', inputs.target_url) }}",
+      "echo ${{ format('{0}/{1}', env.A, github.event.issue.title) }}",
     ]) {
       expect(FORBIDDEN.test(bad), `detector must flag: ${bad}`).toBe(true);
     }
@@ -145,6 +149,7 @@ test.describe('Invariant: no workflow input interpolated into a shell (OSE-1470)
       'echo ${{ env.STG_BASE_URL }}',
       'echo ${{ steps.x.outputs.y }}',
       'echo ${{ github.sha }}',
+      "echo ${{ format('{0}', env.A) }} ${{ inputs_like }}",
     ]) {
       expect(FORBIDDEN.test(ok), `detector must not flag: ${ok}`).toBe(false);
     }

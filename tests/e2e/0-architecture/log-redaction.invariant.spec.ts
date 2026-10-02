@@ -72,7 +72,9 @@ const FORBIDDEN: Array<{ label: string; re: RegExp; safe?: RegExp; why: string }
     re: /\b[A-Za-z_$][\w$]*(?:Token|_token|Secret|_secret)\b/,
     // Quoted text is prose or a fixed value ('no_secret'), not a credential;
     // template literals are kept because `${draftToken}` interpolates one.
-    safe: /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g,
+    // A quoted object KEY (`{ "draftToken": v }`) is kept too: it follows `{`
+    // or `,` and precedes `:`. Anything else quoted is stripped.
+    safe: /(?<![{,]\s*)(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")(?!\s*:)/g,
     why: 'a credential under another name (draftToken, draft_token, …)',
   },
   {
@@ -358,26 +360,29 @@ const SOURCES = FILES.map((abs) => ({
   src: readFileSync(abs, 'utf8'),
 }));
 
-// Wrappers are file-local functions; scan each wrapper's call sites in the
-// file that declares it (none of them is exported today; an exported wrapper
-// is matched by name in every file, which only widens coverage).
-const WRAPPERS_BY_FILE = new Map<string, string[]>();
-for (const { file, src } of SOURCES) WRAPPERS_BY_FILE.set(file, findWrappers(src, file));
-const EXPORTED_WRAPPERS = new Set<string>();
-for (const { file, src } of SOURCES) {
-  for (const w of WRAPPERS_BY_FILE.get(file) ?? []) {
-    if (new RegExp(`export\\s+(?:async\\s+)?function\\s+${w}\\b`).test(src)) {
-      EXPORTED_WRAPPERS.add(w);
+// Wrappers are derived per file; scan each wrapper's call sites in the file
+// that declares it. An exported wrapper (function or const arrow) is matched
+// by name in every file, so its importers' calls are sinks too.
+function deriveSinks(sources: Array<{ file: string; src: string }>) {
+  const wrappersByFile = new Map<string, string[]>();
+  for (const { file, src } of sources) wrappersByFile.set(file, findWrappers(src, file));
+  const exported = new Set<string>();
+  for (const { file, src } of sources) {
+    for (const w of wrappersByFile.get(file) ?? []) {
+      const decl = `export\\s+(?:(?:async\\s+)?function|const|let|var)\\s+${w}\\b`;
+      if (new RegExp(decl).test(src)) exported.add(w);
     }
   }
+  const sinks: Sink[] = [];
+  for (const { file, src } of sources) {
+    sinks.push(...findCalls(src, file, CONSOLE_CALL));
+    const names = new Set([...(wrappersByFile.get(file) ?? []), ...exported]);
+    for (const w of names) sinks.push(...findCalls(src, file, new RegExp(`\\b${w}\\s*\\(`)));
+  }
+  return { wrappersByFile, sinks };
 }
 
-const SINKS: Sink[] = [];
-for (const { file, src } of SOURCES) {
-  SINKS.push(...findCalls(src, file, CONSOLE_CALL));
-  const names = new Set([...(WRAPPERS_BY_FILE.get(file) ?? []), ...EXPORTED_WRAPPERS]);
-  for (const w of names) SINKS.push(...findCalls(src, file, new RegExp(`\\b${w}\\s*\\(`)));
-}
+const { wrappersByFile: WRAPPERS_BY_FILE, sinks: SINKS } = deriveSinks(SOURCES);
 
 /** Does `text` contain forbidden pattern `f` (after removing its sanctioned forms)? */
 function hits(f: (typeof FORBIDDEN)[number], text: string): boolean {
@@ -461,6 +466,27 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     expect(findWrappers(bareNoLog, 'fixture.ts')).toEqual([]);
   });
 
+  test('log-redaction | negative control | an exported wrapper makes importer calls sinks', () => {
+    // Copilot review on #747: `export const` arrows propagate like `export function`.
+    for (const decl of [
+      'export const logX = (meta) => console.log(meta);',
+      'export function logX(meta) { console.log(meta); }',
+    ]) {
+      const { sinks } = deriveSinks([
+        { file: 'lib/log.ts', src: decl },
+        { file: 'handlers/a.ts', src: "import { logX } from '../lib/log';\nlogX({ draftToken });" },
+      ]);
+      const importer = sinks.filter((s) => s.file === 'handlers/a.ts');
+      expect(importer.length, `importer call must be a sink for: ${decl}`).toBe(1);
+      expect(violationsIn(importer).length).toBeGreaterThan(0);
+    }
+    const { sinks } = deriveSinks([
+      { file: 'lib/log.ts', src: 'const logY = (meta) => console.log(meta);' },
+      { file: 'handlers/a.ts', src: 'logY({ ok: 1 });' },
+    ]);
+    expect(sinks.filter((s) => s.file === 'handlers/a.ts')).toEqual([]);
+  });
+
   test('log-redaction | negative control | the matcher catches each forbidden key', () => {
     const bad: Record<string, string> = {
       anonId: '({ id, anonId, isNew })',
@@ -477,7 +503,14 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       expect(hits(f, bad[f.label]), `matcher for ${f.label} must fire`).toBe(true);
     }
     const cred = FORBIDDEN.find((f) => f.label === 'credential name')!;
-    for (const leak of ['({ draft_token: t })', '(`draft ${draftToken}`)', '({ sessionSecret })']) {
+    for (const leak of [
+      '({ draft_token: t })',
+      '(`draft ${draftToken}`)',
+      '({ sessionSecret })',
+      // Copilot review on #747: a quoted key names the credential too.
+      '(JSON.stringify({ "draftToken": value }))',
+      "({ ok: true, 'draft_token': t })",
+    ]) {
       expect(hits(cred, leak), `credential matcher must fire on ${leak}`).toBe(true);
     }
     const reqUrl = FORBIDDEN.find((f) => f.label === 'request.url')!;
