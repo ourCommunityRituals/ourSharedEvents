@@ -249,3 +249,103 @@ describe('wizard step 4 links point at the new event', () => {
     expect(loadLinks).toContain("new CustomEvent('ose:wizard-created'");
   });
 });
+
+describe('the saved wizard is a loop: publish, go back, change, publish again', () => {
+  test('step 5 Back returns to step 4, and publish / undo repeat as often as needed', async () => {
+    const dom = new JSDOM(ADMIN_HTML, {
+      runScripts: 'outside-only',
+      url: 'https://admin.test/admin',
+    });
+    const w = dom.window as unknown as Window & { eval(s: string): unknown } & Record<
+        string,
+        unknown
+      >;
+    // jsdom has no layout; the wizard scrolls its panel into view.
+    (w as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement.prototype.scrollIntoView =
+      () => {};
+    const puts: unknown[] = [];
+    w.fetch = (async (url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (method === 'POST' && url === '/api/v2/admin/events') {
+        const body = { ok: true, id: EVT };
+        return {
+          ok: true,
+          status: 201,
+          redirected: false,
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        };
+      }
+      if (method === 'PUT') puts.push(JSON.parse(String(init!.body)));
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }) as unknown as typeof fetch;
+    const moves: Array<[string, string]> = [];
+    w.moveEventTo = async (_id: string, to: string, from: string) => {
+      moves.push([from, to]);
+      return { ok: true, from };
+    };
+    w.goLiveFromDraft = (id: string, from: string) =>
+      (w.moveEventTo as (a: string, b: string, c: string) => unknown)(id, 'active', from);
+    w.eval(scriptWith(ADMIN_HTML, 'Guided wizard logic'));
+    w.eval(scriptWith(ADMIN_HTML, "'ose:wizard-created', function"));
+    const doc = w.document;
+    const byId = (id: string) => doc.getElementById(id) as HTMLElement;
+    const active = () => doc.querySelector('.wizard-step.active')?.id;
+
+    byId('admin-path-wizard').click();
+    (byId('wizard-event-name') as HTMLInputElement).value = 'Bocce Night';
+    (byId('wizard-event-venue') as HTMLInputElement).value = 'Eagles Hall';
+    byId('wizard-event-name').dispatchEvent(new w.Event('input'));
+    byId('wizard-next-btn').click();
+    byId('wizard-next-btn').click();
+    byId('wizard-next-btn').click();
+    await flush();
+    expect(doc.getElementById('wizard-msg')!.textContent).toBe('');
+    expect(active()).toBe('wizard-step-4');
+    expect(doc.querySelector('[data-testid="wizard-tv-demo-title"]')!.textContent).toBe(
+      'Bocce Night'
+    );
+
+    byId('wizard-next-btn').click();
+    expect(active()).toBe('wizard-step-5');
+    byId('wizard-go-live-btn').click();
+    await flush();
+
+    // Back to step 4 after publishing, change the TV, forward again.
+    expect(byId('wizardBackBtn').hidden).toBe(false);
+    byId('wizardBackBtn').click();
+    expect(active()).toBe('wizard-step-4');
+    expect(byId('wizardBackBtn').hidden).toBe(true);
+    const slow = byId('wizard-tv-speed-30') as HTMLInputElement;
+    slow.checked = true;
+    slow.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await flush();
+    expect(puts).toEqual([
+      {
+        settings: {
+          displayPanes: ['event', 'upcoming', 'sponsors', 'league'],
+          displayDwellSeconds: 30,
+        },
+      },
+    ]);
+    byId('wizard-next-btn').click();
+    expect(active()).toBe('wizard-step-5');
+
+    // Undo and publish again, twice over.
+    for (let i = 0; i < 2; i++) {
+      byId('wizard-undo-live-btn').click();
+      await flush();
+      byId('wizard-go-live-btn').click();
+      await flush();
+    }
+    expect(moves).toEqual([
+      ['draft', 'active'],
+      ['active', 'draft'],
+      ['draft', 'active'],
+      ['active', 'draft'],
+      ['draft', 'active'],
+    ]);
+    expect(byId('wizard-go-live-btn').textContent).toContain('Published');
+    w.close();
+  });
+});

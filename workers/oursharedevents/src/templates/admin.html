@@ -2947,16 +2947,17 @@
             var skip = document.getElementById('wizardSkipBtn');
             var next = document.getElementById('wizard-next-btn');
             var finish = document.getElementById('wizard-finish-btn');
-            // Back only while nothing is saved yet — you can't un-create. On
-            // step 1 it returns to the front door (OSE-1315): same control, same
-            // place, on every pre-create step.
-            back.hidden = !(wiz.step <= 3 && !wiz.createdId);
+            // Before the save, Back walks steps 1-3 (on step 1 it returns to the
+            // front door, OSE-1315). After it, you can't un-create, but step 5
+            // goes back to step 4 so links and TV can be changed and republished.
+            back.hidden = !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));
             back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';
             skip.hidden = wiz.step !== 3;
             next.hidden = wiz.step === 5;
             finish.hidden = wiz.step !== 5;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
+            window.dispatchEvent(new CustomEvent('ose:wizard-step', { detail: { step: wiz.step } }));
           }
 
           // Step 1 gate: name + venue are the two real requirements. Everything
@@ -3325,7 +3326,15 @@
           }
 
           function goBack() {
-            if (wiz.createdId) return;
+            // Saved: steps 4 and 5 are a loop (links + TV <-> publish), so an
+            // organizer can publish, come back, change things and publish again.
+            if (wiz.createdId) {
+              if (wiz.step !== 5) return;
+              wiz.step = 4;
+              replaceWizardStep(4);
+              updateUI();
+              return;
+            }
             if (wiz.step === 1) {
               closeWizard();
               return;
@@ -3646,6 +3655,10 @@
               schedule();
               save();
             });
+          });
+          // Back from step 5 brings the demo back to life.
+          window.addEventListener('ose:wizard-step', function () {
+            if (st.eventId) schedule();
           });
           var pauseBtn = q('wizard-tv-demo-pause');
           if (pauseBtn) pauseBtn.addEventListener('click', function () { setPaused(!st.paused); });

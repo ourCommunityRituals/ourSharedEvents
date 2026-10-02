@@ -112,7 +112,10 @@ describe('OSE-1314 — wizard choice cards stack one per row on phones', () => {
 
 describe('OSE-1315 — step 1 has Back, and browser Back returns to the front door', () => {
   test('Back is shown on every pre-create step, step 1 included', () => {
-    expect(html).toContain('back.hidden = !(wiz.step <= 3 && !wiz.createdId);');
+    // Pre-create steps 1-3 (and, once saved, step 5 back to step 4).
+    expect(html).toContain(
+      'back.hidden = !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));'
+    );
     expect(html).not.toContain('back.hidden = !(wiz.step > 1 && wiz.step <= 3);');
     // Step 1's Back says where it goes.
     expect(html).toContain("back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';");
@@ -144,7 +147,7 @@ describe('OSE-1315 — step 1 has Back, and browser Back returns to the front do
 
   test('step-1 Back goes to the front door through the same close path as Escape', () => {
     expect(html).toMatch(
-      /function goBack\(\)[\s\S]{0,200}if \(wiz\.step === 1\) \{\s*closeWizard\(\);/
+      /function goBack\(\)[\s\S]{0,600}if \(wiz\.step === 1\) \{\s*closeWizard\(\);/
     );
   });
 });
