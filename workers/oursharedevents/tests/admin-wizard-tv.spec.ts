@@ -270,6 +270,14 @@ describe('wizard TV section: saving', () => {
   });
 });
 
+describe('wizard step 4 controls are finger-sized', () => {
+  test('Copy, Preview and Pause share a 44px-tall target', () => {
+    const rule = /\.wizard-copy-btn \{([^}]*)\}/.exec(ADMIN_HTML)?.[1] ?? '';
+    expect(rule).toContain('min-height: 44px');
+    expect(rule).toContain('display: inline-flex');
+  });
+});
+
 describe('wizard step 4 links point at the new event', () => {
   const loadLinks = scriptWith(ADMIN_HTML, 'async function loadLinks()');
   test('the poster and TV links carry ?event=', () => {

@@ -1593,19 +1593,11 @@
         display: none;
       }
 
-      /* Defensive second rule: anything that ends up OUTSIDE <main> is hidden
-         too. When this was written, four cards — forms, poster deployments,
-         sponsors and surface cards — really were direct children of <body>
-         after </main>, and 2,290px of dashboard survived a rule scoped to
-         #main-content alone. OSE-1238 moved them into <main>, so this rule
-         currently matches nothing. It stays because the failure it prevents is
-         silent: the next block added outside the landmark would reappear under
-         the wizard with nothing to catch it.
-
-         Kept visible: the skip link and <header> (wayfinding and sign-out),
-         <footer> (legal must stay reachable — OSE-1232), anything marked
-         role="dialog" or data-wizard-keep so a modal added later is not
-         swallowed by this rule. */
+      /* Defensive second rule: anything outside <main> is hidden too. Since
+         OSE-1238 it matches nothing, but it keeps the next block added outside
+         the landmark from silently reappearing under the wizard. Kept visible:
+         skip link, <header>, <footer> (legal, OSE-1232), role="dialog" and
+         data-wizard-keep. */
       body.wizard-active
         > *:not(#main-content):not(header):not(footer):not(.skip-link):not([role='dialog']):not(
           [data-wizard-keep]
@@ -1990,6 +1982,9 @@
         align-self: flex-start;
       }
       .wizard-copy-btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         align-self: flex-start;
         padding: 0.35rem 0.9rem;
         background: var(--surface);

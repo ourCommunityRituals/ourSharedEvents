@@ -1803,13 +1803,19 @@ function injectAdminPreviewToolbar(
   const note =
     opts.note ??
     'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.';
+  // A live but unlisted event has no public page, so its preview stays here
+  // (published already: no Publish button, and the bar says what it is).
+  const liveUnlisted = row.status === 'active';
   const status = row.status === 'ready' ? 'ready' : 'draft';
   const listed = row.is_published === 1 ? '1' : '0';
+  const publishBtn = liveUnlisted
+    ? ''
+    : `<button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}"${liveAttr}>Publish</button>`;
   const toolbar = `<aside class="admin-preview-toolbar" aria-label="Preview" data-testid="admin-draft-preview-toolbar">
-  <strong data-testid="admin-preview-banner">Preview — not live</strong>
-  <span data-testid="admin-draft-preview-status">${status === 'ready' ? 'Ready' : 'Draft'}</span>
+  <strong data-testid="admin-preview-banner">${liveUnlisted ? 'Preview — live, but unlisted' : 'Preview — not live'}</strong>
+  <span data-testid="admin-draft-preview-status">${liveUnlisted ? 'Live, unlisted' : status === 'ready' ? 'Ready' : 'Draft'}</span>
   <a class="btn btn-secondary" data-testid="admin-preview-back" href="/admin">Back to admin</a>
-  <button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}"${liveAttr}>Publish</button>
+  ${publishBtn}
   <p data-testid="admin-preview-note">${esc(note)}</p>
   <p id="adminPreviewMsg" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
 </aside>
@@ -1894,13 +1900,15 @@ export async function handleAdminEventPreviewPage(
   }
 
   const status = (row.status || 'draft').toLowerCase();
-  if (status === 'active') {
+  // Live and listed: the public page IS the preview. Live but unlisted has
+  // no public page (it 404s by design), so it previews here instead.
+  if (status === 'active' && row.is_published === 1) {
     return new Response(null, {
       status: 303,
       headers: { Location: `/events/${encodeURIComponent(row.id)}`, ...PREVIEW_HEADERS },
     });
   }
-  if (status !== 'draft' && status !== 'ready') {
+  if (status !== 'draft' && status !== 'ready' && status !== 'active') {
     return previewError(
       404,
       'Nothing to preview',
