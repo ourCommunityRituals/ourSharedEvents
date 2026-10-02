@@ -68,10 +68,8 @@ const UA = {
 };
 
 const config = defineConfig({
-  // On GitHub Actions Playwright records the HEAD commit message
-  // (metadata.gitCommit) and, on PR runs, the whole PR diff (metadata.gitDiff)
-  // in every report. CI uploads reports as artifacts, so neither belongs there
-  // (OSE-1470). Guarded by tests/integration/scan-artifacts-for-secrets.test.js.
+  // No git commit or diff in reports (OSE-1470): uploaded artifacts must not
+  // carry commit messages or source diffs. CI defaults both to true.
   captureGitInfo: { commit: false, diff: false },
   testDir: 'tests/playwright',
 

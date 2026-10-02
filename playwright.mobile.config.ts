@@ -111,10 +111,8 @@ const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
 process.env.OSE_ADMIN_BEARER = LOCAL_ADMIN_KEY;
 
 const config = defineConfig({
-  // On GitHub Actions Playwright records the HEAD commit message
-  // (metadata.gitCommit) and, on PR runs, the whole PR diff (metadata.gitDiff)
-  // in every report. CI uploads reports as artifacts, so neither belongs there
-  // (OSE-1470). Guarded by tests/integration/scan-artifacts-for-secrets.test.js.
+  // No git commit or diff in reports (OSE-1470): uploaded artifacts must not
+  // carry commit messages or source diffs. CI defaults both to true.
   captureGitInfo: { commit: false, diff: false },
   testDir: './tests/playwright',
   // Explicit list, not a directory sweep. tests/playwright/ holds specs written

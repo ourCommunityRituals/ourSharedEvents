@@ -307,41 +307,20 @@ describe('scan-artifacts-for-secrets.sh', () => {
   });
 });
 
-// Root cause of the T3 staging smoke failures after #747: on GitHub Actions,
-// Playwright's git-info plugin records the HEAD commit (subject and body) in
-// every report's metadata (`metadata.gitCommit.body`), and on PR runs the
-// whole PR diff (`metadata.gitDiff`). A commit message that merely names the
-// cookie literal turned every T3 report into a scan hit, and a diff can carry
-// anything the PR touched. The configs turn that capture off; these tests
-// keep it off.
+// Behavioral half of tests/integration/playwright-no-git-info.test.js (#751),
+// which checks the config source. On GitHub Actions Playwright records the HEAD
+// commit message (`metadata.gitCommit.body`) and, on PR runs, the PR diff
+// (`metadata.gitDiff`) in every report unless captureGitInfo turns it off. A
+// commit message that named the cookie literal failed T3's upload scan after
+// #747. This runs the real T3 configs and the real scanner on that case.
 describe('Playwright reports do not record git commit info', () => {
   const REPO = join(__dirname, '..', '..');
-  const CONFIGS = require('fs')
-    .readdirSync(REPO)
-    .filter((f) => /^playwright(\..+)?\.config\.(ts|js|mjs|cjs)$/.test(f))
-    .sort();
   const CLI = join(
     require('path').dirname(require.resolve('@playwright/test/package.json')),
     'cli.js'
   );
   const COMMIT_COOKIE = 'eyJfakecommitcookie.x.y';
   const HAS_GIT = spawnSync('git', ['--version'], { encoding: 'utf-8' }).status === 0;
-
-  test('every root Playwright config is found', () => {
-    expect(CONFIGS).toEqual(
-      expect.arrayContaining([
-        'playwright.config.ts',
-        'playwright.smoke.config.ts',
-        'playwright.e2e-smoke.config.ts',
-        'playwright.staging.config.js',
-      ])
-    );
-  });
-
-  test.each(CONFIGS)('%s turns off captureGitInfo commit and diff', (file) => {
-    const src = require('fs').readFileSync(join(REPO, file), 'utf-8');
-    expect(src).toMatch(/captureGitInfo:\s*\{\s*commit:\s*false,\s*diff:\s*false\s*\}/);
-  });
 
   // End to end with the real T3 configs: a run on "GitHub Actions" whose HEAD
   // commit message names the cookie must produce a report the scanner passes.
