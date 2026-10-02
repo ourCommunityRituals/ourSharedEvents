@@ -55,6 +55,10 @@ concurrency:
 jobs:
   review:
     name: "Claude PR Review"
+    # pull_request only. Without this the job also starts on every PR comment,
+    # and with a prompt set the action runs a full review there too (spend on
+    # every comment). The @claude `respond` job is the only comment consumer.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
     defaults:
