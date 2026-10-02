@@ -130,6 +130,49 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).not.toContain('eyJfakejwtvalue');
   });
 
+  test('a hit says WHERE it is (JSON key path + test title), never the value', () => {
+    const report = {
+      suites: [
+        {
+          title: 'security-smoke.spec.js',
+          specs: [
+            {
+              title: 'XSS attempt',
+              tests: [
+                { results: [{ stdout: [{ text: 'CF_Authorization=eyJfakejwtvalue.p.s' }] }] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at .suites[0].specs[0].tests[0].results[0].stdout[0].text');
+    expect(r.out).toContain('(test: XSS attempt)');
+    expect(r.out).not.toContain('eyJfakejwtvalue');
+  });
+
+  test('a secret value is located by key path too, and never printed', () => {
+    writeFileSync(
+      join(dir, 'test-results', 'results.json'),
+      JSON.stringify({ errors: [{ message: `header ${FAKE_ADMIN_KEY}` }] })
+    );
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at .errors[0].message');
+    expect(r.out).not.toContain(FAKE_ADMIN_KEY);
+  });
+
+  test('a hit in a non-JSON file is located by line number', () => {
+    writeFileSync(join(dir, 'test-results', 'log.txt'), 'ok\nCF_Authorization=eyJfakejwtvalue\n');
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at line(s) 2');
+    expect(r.out).not.toContain('eyJfakejwtvalue');
+  });
+
   test('Bearer + 20 token chars → exit 1; a short "Bearer x" is not a hit', () => {
     writeFileSync(join(dir, 'test-results', 'short.txt'), 'Authorization: Bearer x\n');
     expect(run(paths(), {}).code).toBe(0);
