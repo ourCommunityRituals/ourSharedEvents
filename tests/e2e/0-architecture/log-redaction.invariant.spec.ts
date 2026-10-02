@@ -63,6 +63,23 @@ const FORBIDDEN: Array<{ label: string; re: RegExp; safe?: RegExp; why: string }
     re: /(?:^|[\s{,(])['"`]?token['"`]?\s*:/,
     why: 'a credential as an object key',
   },
+  {
+    // Copilot review on #747: credentials are not only keyed `token`. Any
+    // identifier that ends in Token / _token / Secret / _secret names one
+    // (draftToken, draft_token, sessionSecret), as a key, a shorthand property
+    // or a value. `tokenType` does not end in Token and stays allowed.
+    label: 'credential name',
+    re: /\b[A-Za-z_$][\w$]*(?:Token|_token|Secret|_secret)\b/,
+    // Quoted text is prose or a fixed value ('no_secret'), not a credential;
+    // template literals are kept because `${draftToken}` interpolates one.
+    safe: /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g,
+    why: 'a credential under another name (draftToken, draft_token, …)',
+  },
+  {
+    label: 'token shorthand',
+    re: /[{,]\s*token\s*[,}]/,
+    why: 'a credential as a shorthand property ({ token })',
+  },
   { label: 'cookie', re: /cookie/i, why: 'cookie values identify a browser' },
 ];
 
@@ -438,10 +455,16 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       email_hash: '({ email_hash: h })',
       'request.url': '(JSON.stringify({ q: new URL(request.url).search }))',
       'token:': '({ token: t, ok: true })',
+      'credential name': '(JSON.stringify({ type: "X", draftToken }))',
+      'token shorthand': '({ ok: true, token })',
       cookie: '({ value: request.headers.get("Cookie") })',
     };
     for (const f of FORBIDDEN) {
       expect(hits(f, bad[f.label]), `matcher for ${f.label} must fire`).toBe(true);
+    }
+    const cred = FORBIDDEN.find((f) => f.label === 'credential name')!;
+    for (const leak of ['({ draft_token: t })', '(`draft ${draftToken}`)', '({ sessionSecret })']) {
+      expect(hits(cred, leak), `credential matcher must fire on ${leak}`).toBe(true);
     }
     const reqUrl = FORBIDDEN.find((f) => f.label === 'request.url')!;
     for (const leak of [
@@ -455,6 +478,7 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       '({ path: new URL(request.url).pathname })',
       '({ isNew, latencyMs })',
       '({ anonIdHash: h, tokenType: "x", count })',
+      "({ reason: !secret ? 'no_secret' : 'no_hostnames' })",
     ];
     for (const g of good) {
       for (const f of FORBIDDEN) {

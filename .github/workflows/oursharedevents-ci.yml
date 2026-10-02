@@ -1345,7 +1345,7 @@ jobs:
       # Surface per-test Playwright smoke results as a GitHub Check (visible in
       # the PR/Checks tab), matching the T4 functional reporter.
       - name: Report results (E2E smoke)
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
@@ -1615,7 +1615,7 @@ jobs:
       # PR/Checks tab), so a contract failure shows the failing request + message
       # by name instead of being buried in the CLI log.
       - name: Report results (Bruno contract)
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
@@ -2120,7 +2120,7 @@ jobs:
           include-hidden-files: true
 
       - name: Report results
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
