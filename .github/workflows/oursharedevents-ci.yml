@@ -2241,6 +2241,15 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # ADR-012 gate R2 (OSE-1467): static admin credentials must be ABSENT on
+          # production. Their presence is a standing admin path that bypasses Access.
+          for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do
+            if echo "$OUT" | grep -qw "$SECRET"; then
+              echo "::error::$SECRET is set on the production worker. Production admin is Cloudflare Access only; delete it: npx wrangler secret delete $SECRET --env production"
+              exit 1
+            fi
+          done
+          echo "ADMIN_KEY, X_OCR_INTERNAL, ADMIN_TOKEN absent on production."
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -2380,8 +2389,8 @@ jobs:
         id: security-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          # No ADMIN_KEY / X_OCR_INTERNAL: production accepts neither (ADR-012 R2),
+          # and sending them would put a staging credential on a production request.
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/1-smoke/security-smoke.spec.js

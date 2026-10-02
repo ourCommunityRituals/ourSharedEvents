@@ -63,12 +63,17 @@ if [[ ! -f "$WORKER_DIR/wrangler.toml" ]]; then
 fi
 
 SECRETS=(
-  "ADMIN_KEY"
   "FORMS_ENCRYPTION_KEY"
   "FORMS_HASH_PEPPER"
   "SHARED_REPORT_SIGNING_SECRET"
   "RATE_LIMIT_KEY_PEPPER"
 )
+# ADMIN_KEY is a staging-only fallback. Production admin is Cloudflare Access
+# only (ADR-012 gate R2), and the production deploy gate refuses a production
+# worker that carries ADMIN_KEY, X_OCR_INTERNAL or ADMIN_TOKEN.
+if [[ "$ENV" == "staging" ]]; then
+  SECRETS=("ADMIN_KEY" "${SECRETS[@]}")
+fi
 
 echo "════════════════════════════════════════════════════════════"
 echo "  Setting Wrangler secrets for: $ENV"

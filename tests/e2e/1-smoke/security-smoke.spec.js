@@ -182,7 +182,11 @@ function htmlEscape(s) {
 
 test.beforeAll(() => {
   // A missing key would make every write test fail with a vague 401. Say why.
-  if (!ADMIN_KEY) throw new Error('ADMIN_KEY is not set; security smoke cannot authenticate');
+  // Production has no static admin key (ADR-012 R2), and every writing test
+  // skips there, so the key is required only off production.
+  if (!ADMIN_KEY && !IS_PRODUCTION) {
+    throw new Error('ADMIN_KEY is not set; security smoke cannot authenticate');
+  }
   if (process.env.CI && !IS_PRODUCTION && !(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET)) {
     throw new Error('CF_ACCESS_CLIENT_ID/SECRET not set; staging admin API is behind CF Access');
   }

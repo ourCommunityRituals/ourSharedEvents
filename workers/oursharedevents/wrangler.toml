@@ -321,8 +321,10 @@ DRAFT_EXPIRY_DAYS = "30"
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
-# Allow X-OCR-Internal header for CI/CD automation
-ALLOW_OCR_INTERNAL = "true"
+# ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,
+# OSE-1467): a static X-OCR-Internal header passed requireKeyActor, so its holder
+# could write production global flags and run erasure. Production admin is
+# CF Access only. tests/prod-admin-scope-config.spec.ts fails if it returns.
 # Admin email allowlist — set explicitly here (not inherited from [vars])
 ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
