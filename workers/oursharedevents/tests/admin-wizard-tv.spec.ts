@@ -139,6 +139,19 @@ describe('wizard TV section: the one-line summary', () => {
     expect(timers.size).toBe(0);
   });
 
+  test('leaving step 4 stops the demo at once, even with one screen', () => {
+    const { w, $, box, change, created, timers } = mount();
+    created();
+    change(box('upcoming'), false);
+    change(box('sponsors'), false);
+    $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
+    expect($('wizard-tv-demo').hidden).toBe(false);
+    w.dispatchEvent(new w.CustomEvent('ose:wizard-step', { detail: { step: 5 } }));
+    expect($('wizard-tv-demo').hidden).toBe(true);
+    expect($('wizard-tv-demo-toggle').textContent).toBe('Show me');
+    expect(timers.size).toBe(0);
+  });
+
   test('the demo stops when the wizard leaves step 4', () => {
     const { doc, $, created, tick, timers } = mount();
     created();

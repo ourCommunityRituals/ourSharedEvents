@@ -2945,6 +2945,8 @@
             finish.hidden = wiz.step !== 5;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
+            // The TV step's optional demo stops the moment the wizard leaves it.
+            window.dispatchEvent(new CustomEvent('ose:wizard-step', { detail: { step: wiz.step } }));
           }
 
           // Step 1 gate: name + venue are the two real requirements. Everything
@@ -3613,6 +3615,9 @@
           function demoRefresh() {
             if (demo.timer || !(q('wizard-tv-demo') || {}).hidden) demoStart();
           }
+          window.addEventListener('ose:wizard-step', function (e) {
+            if (!e || !e.detail || e.detail.step !== 4) demoStop();
+          });
           var toggle = q('wizard-tv-demo-toggle');
           if (toggle) toggle.addEventListener('click', function () {
             if ((q('wizard-tv-demo') || {}).hidden) demoStart();
