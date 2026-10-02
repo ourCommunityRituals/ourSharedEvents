@@ -2624,4 +2624,4 @@ jobs:
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** \`$GITHUB_REF\`" >> $GITHUB_STEP_SUMMARY

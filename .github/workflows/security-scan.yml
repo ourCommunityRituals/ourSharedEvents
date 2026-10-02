@@ -112,7 +112,7 @@ jobs:
         echo "CodeQL SARIF generation is in codeql.yml (single source of truth)."
         echo ""
         echo "Trigger: ${{ github.event_name }}"
-        echo "Branch: ${{ github.ref_name }}"
+        echo "Branch: $GITHUB_REF_NAME"
         echo "Commit: ${{ github.sha }}"
         echo ""
         echo "Policy: $FAIL_ON_SEVERITY severity findings block merge"

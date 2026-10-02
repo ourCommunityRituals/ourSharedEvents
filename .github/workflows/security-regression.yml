@@ -114,7 +114,7 @@ jobs:
         echo "Any violation will fail CI."
         echo ""
         echo "Trigger: ${{ github.event_name }}"
-        echo "Branch: ${{ github.ref_name }}"
+        echo "Branch: $GITHUB_REF_NAME"
         echo "Commit: ${{ github.sha }}"
         echo ""
 
@@ -135,7 +135,7 @@ jobs:
         elif [ "${{ github.event_name }}" == "schedule" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (nightly production check)"
-        elif [ "${{ github.ref_name }}" == "main" ] && [ "${{ github.event_name }}" == "push" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
+        elif [ "$GITHUB_REF_NAME" == "main" ] && [ "${{ github.event_name }}" == "push" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (main branch - production)"
         else

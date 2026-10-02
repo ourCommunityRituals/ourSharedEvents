@@ -45,8 +45,11 @@ const ACTIONS_DIR = join(REPO_ROOT, '.github', 'actions');
 
 // `${{` then, inside the same expression, a context an outside party controls.
 // `github.event_name` is NOT matched (underscore, not a dot) — it is a fixed
-// enum set by GitHub, not attacker text.
-const FORBIDDEN = /\$\{\{[^}]*?(github\.event\.|inputs\.|github\.head_ref)/;
+// enum set by GitHub, not attacker text. `github.ref` / `github.ref_name` ARE
+// matched: on push they carry a branch name the pusher chose. `github.ref_type`
+// and `github.ref_protected` are not (fixed values); the lookahead stops there.
+const FORBIDDEN =
+  /\$\{\{[^}]*?(github\.event\.|inputs\.|github\.head_ref|github\.ref(?:_name)?(?![\w]))/;
 
 type Step = { name?: string; id?: string; run?: unknown };
 type Finding = { file: string; where: string; expr: string };
@@ -119,7 +122,10 @@ test.describe('Invariant: no workflow input interpolated into a shell (OSE-1470)
   test('OSE-INV-WFINJ | security | negative control | the walk parses workflows and finds run steps', () => {
     const { parsed, runSteps } = scan();
     expect(parsed, 'expected at least one workflow under .github/workflows').toBeGreaterThan(0);
-    expect(runSteps, 'parsed workflows but found no `run:` steps — the step walk is broken').toBeGreaterThan(0);
+    expect(
+      runSteps,
+      'parsed workflows but found no `run:` steps — the step walk is broken'
+    ).toBeGreaterThan(0);
   });
 
   test('OSE-INV-WFINJ | security | negative control | the detector flags every forbidden form', () => {

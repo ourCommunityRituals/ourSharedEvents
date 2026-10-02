@@ -237,8 +237,11 @@ function findWrappers(src: string, file: string): string[] {
       .filter((p): p is string => !!p);
     if (params.length === 0) continue;
     const consoleCalls = findCalls(body, file, CONSOLE_CALL);
+    // Any reference to a parameter inside the console arguments forwards it:
+    // spread (`...meta`), direct (`JSON.stringify(meta)`) or a member of it
+    // (`meta.x`). A property key that merely shares the name (`obj.meta`) does not.
     const forwards = consoleCalls.some((c) =>
-      params.some((p) => new RegExp(`\\.\\.\\.\\s*${p}\\b`).test(c.args))
+      params.some((p) => new RegExp(`\\.\\.\\.\\s*${p}\\b|(?<![\\w$.])${p}\\b`).test(c.args))
     );
     if (forwards) names.push(m[1]);
   }
@@ -340,6 +343,21 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       (s) => s.file === 'handlers/forms.ts' && s.callee === 'logFormEvent'
     );
     expect(formSinks.length, 'logFormEvent call sites must be scanned').toBeGreaterThan(5);
+  });
+
+  test('log-redaction | negative control | direct and spread forwarding both make a wrapper', () => {
+    const spread =
+      'function logA(meta: object) { console.log(JSON.stringify({ t: 1, ...meta })); }';
+    const direct = 'function logB(meta: object) { console.log(JSON.stringify(meta)); }';
+    const member = 'function logC(e: { id: string }) { console.warn(e.id); }';
+    const none = 'function notLog(meta: object) { console.log("fixed"); return meta; }';
+    const keyOnly =
+      'function alsoNot(meta: object) { console.log({ x: other.meta }); return meta; }';
+    expect(findWrappers(spread, 'fixture.ts')).toEqual(['logA']);
+    expect(findWrappers(direct, 'fixture.ts')).toEqual(['logB']);
+    expect(findWrappers(member, 'fixture.ts')).toEqual(['logC']);
+    expect(findWrappers(none, 'fixture.ts')).toEqual([]);
+    expect(findWrappers(keyOnly, 'fixture.ts')).toEqual([]);
   });
 
   test('log-redaction | negative control | the matcher catches each forbidden key', () => {

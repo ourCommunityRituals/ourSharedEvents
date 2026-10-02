@@ -6,7 +6,8 @@
  *   form_registrations, writes an audit record to pii_audit_log, and returns
  *   deletion counts.
  *
- *   Raw email is never written to any log or response — only the SHA-256 hash.
+ *   Neither the raw email nor its hash is written to any log, audit row or
+ *   response; only deletion counts leave the handler.
  *   Admin-only: caller must pass requireAdmin before this handler is invoked.
  *
  * OSE-1350 — anon-ID-linked scan/report rows.
