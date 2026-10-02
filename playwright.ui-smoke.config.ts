@@ -51,6 +51,9 @@ function adminExtraHeaders(): Record<string, string> {
 }
 
 const config = defineConfig({
+  // No git commit or diff in reports (OSE-1470): uploaded artifacts must not
+  // carry commit messages or source diffs. CI defaults both to true.
+  captureGitInfo: { commit: false, diff: false },
   testDir: './tests/ui/smoke',
 
   // Archived smoke specs (tests/ui/smoke/archive/**) are retired and some no
