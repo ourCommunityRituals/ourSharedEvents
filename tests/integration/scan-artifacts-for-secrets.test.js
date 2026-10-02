@@ -152,6 +152,37 @@ describe('scan-artifacts-for-secrets.sh', () => {
     }
   );
 
+  // Copilot review on #747: past the depth cap an archive would only be
+  // searched as compressed bytes. The scan must refuse rather than pass.
+  function nestedZip(levels, payload) {
+    const stage = join(dir, 'stage');
+    mkdirSync(stage);
+    let inner = join(stage, 'note.txt');
+    writeFileSync(inner, payload);
+    for (let i = 1; i <= levels; i++) {
+      const z = join(stage, `level${i}.zip`);
+      execFileSync('zip', ['-q', '-j', z, inner]);
+      inner = z;
+    }
+    const out = join(dir, 'test-results', 'nested.zip');
+    execFileSync('cp', [inner, out]);
+    rmSync(stage, { recursive: true });
+    return out;
+  }
+
+  test.skipIf(!HAS_ZIP)('an archive nested deeper than the cap fails closed', () => {
+    nestedZip(4, 'nothing secret here\n');
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('nested deeper than 3 levels');
+  });
+
+  test.skipIf(!HAS_ZIP)('archives within the cap are opened and pass when clean', () => {
+    nestedZip(3, 'nothing secret here\n');
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(0);
+  });
+
   test('an archive that cannot be opened fails closed', () => {
     writeFileSync(join(dir, 'test-results', 'broken.zip'), 'not a zip at all');
     const r = run(paths(), secrets);

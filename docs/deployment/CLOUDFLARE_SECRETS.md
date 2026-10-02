@@ -171,8 +171,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 
 ```bash
 cd workers/oursharedevents
-wrangler secret put ADMIN_KEY --env staging
-wrangler secret put ADMIN_KEY --env production
+wrangler secret put ADMIN_KEY --env staging   # staging only; never on production: production admin is Cloudflare Access only, and the production deploy gate refuses ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN (ADR-012 R2)
 wrangler secret put FORMS_ENCRYPTION_KEY --env staging
 wrangler secret put FORMS_ENCRYPTION_KEY --env production
 ```

@@ -90,6 +90,7 @@ open_zip() { # open_zip <zip file> <origin label>
 # Open archives, including archives found inside archives (bounded depth).
 scan_dirs=("${roots[@]}")
 pending=("${roots[@]}")
+unopened_level=1 # cleared when a level opens nothing new
 for _depth in 1 2 3; do
   next=()
   for r in "${pending[@]}"; do
@@ -114,10 +115,28 @@ for _depth in 1 2 3; do
       fi
     done < <(find "$r" -type f -name '*.html' -print0 2>/dev/null | xargs -0 -r grep -lZ 'data:application/zip;base64,' 2>/dev/null)
   done
-  [ "${#next[@]}" -eq 0 ] && break
+  if [ "${#next[@]}" -eq 0 ]; then
+    unopened_level=0
+    break
+  fi
   scan_dirs+=("${next[@]}")
   pending=("${next[@]}")
 done
+
+# Fail closed past the depth cap: anything still nested in the last level
+# extracted would only be searched as compressed bytes, which can hide a value.
+if [ "$unopened_level" -eq 1 ]; then
+  for r in "${pending[@]}"; do
+    while IFS= read -r -d '' z; do
+      echo "::error::scan-artifacts-for-secrets: archive nested deeper than 3 levels, refusing to upload: $(origin_of "$z")"
+      failed=1
+    done < <(find "$r" -type f -name '*.zip' -print0 2>/dev/null)
+    while IFS= read -r -d '' h; do
+      echo "::error::scan-artifacts-for-secrets: embedded report nested deeper than 3 levels, refusing to upload: $(origin_of "$h")"
+      failed=1
+    done < <(find "$r" -type f -name '*.html' -print0 2>/dev/null | xargs -0 -r grep -lZ 'data:application/zip;base64,' 2>/dev/null)
+  done
+fi
 
 report() { # report <pattern name> <file>...
   local name="$1" f

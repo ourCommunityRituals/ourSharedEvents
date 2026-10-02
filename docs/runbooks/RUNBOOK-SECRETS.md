@@ -71,9 +71,7 @@ cd workers/oursharedevents
 wrangler secret put ADMIN_KEY --env staging
 # Paste new key
 
-# Production
-wrangler secret put ADMIN_KEY --env production
-# Paste same new key
+# Production: never on production: production admin is Cloudflare Access only, and the production deploy gate refuses ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN (ADR-012 R2).
 ```
 
 ### Step 4: Redeploy
@@ -196,7 +194,8 @@ wrangler secret list --env staging
 # Expected: ADMIN_KEY, FORMS_ENCRYPTION_KEY
 
 wrangler secret list --env production
-# Expected: ADMIN_KEY, FORMS_ENCRYPTION_KEY
+# Expected: FORMS_ENCRYPTION_KEY and the other data keys, and NO ADMIN_KEY /
+# X_OCR_INTERNAL / ADMIN_TOKEN (never on production: production admin is Cloudflare Access only, and the production deploy gate refuses ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN (ADR-012 R2))
 ```
 
 ### Verify D1 Connectivity

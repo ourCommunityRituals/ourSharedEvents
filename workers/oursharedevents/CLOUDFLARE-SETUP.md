@@ -81,11 +81,7 @@ cd workers/oursharedevents
 wrangler secret put ADMIN_TOKEN --env staging
 ```
 
-**Production:**
-
-```bash
-wrangler secret put ADMIN_TOKEN --env production
-```
+**Production:** do not set `ADMIN_TOKEN`; never on production: production admin is Cloudflare Access only, and the production deploy gate refuses ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN (ADR-012 R2).
 
 ---
 
