@@ -27,6 +27,7 @@
  */
 
 import fs from 'node:fs';
+import productionHosts from '../config/production-hosts.js';
 
 function die(msg) {
   console.error(`::error::mint-t4-report-tokens: ${msg}`);
@@ -35,6 +36,8 @@ function die(msg) {
 
 const BASE_URL = (process.env.BASE_URL ?? '').replace(/\/$/, '');
 if (!BASE_URL) die('BASE_URL is required (the deployed staging origin).');
+// ADR-021 (OSE-906): minting writes (token + audit row), so never against production.
+if (productionHosts.isProductionUrl(BASE_URL)) die('ADR-021: refusing to mint against production.');
 
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';

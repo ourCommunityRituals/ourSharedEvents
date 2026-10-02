@@ -50,6 +50,7 @@
  */
 
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 // All UAs are real Safari patterns that Cloudflare Bot Management
 // whitelists. HeadlessChrome UA triggers a 403 challenge on staging
@@ -66,7 +67,7 @@ const UA = {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
 };
 
-export default defineConfig({
+const config = defineConfig({
   testDir: 'tests/playwright',
 
   // OSE-1236: specs navigate RELATIVE and let this resolve the target. Before
@@ -120,3 +121,6 @@ export default defineConfig({
     },
   ],
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

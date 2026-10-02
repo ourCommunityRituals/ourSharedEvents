@@ -113,7 +113,7 @@ async function drainRateLimit(ip: string, kv: KVNamespace): Promise<number> {
   /** Hit isRateLimited until we get the first rejection, return count used. */
   let used = 0;
   for (let i = 0; i < RATE_LIMIT_MAX + 5; i++) {
-    const limited = await isRateLimited(ip, kv);
+    const limited = await isRateLimited({ RATE_LIMIT_KV: kv }, ip);
     if (limited) return used;
     used++;
   }
@@ -186,7 +186,7 @@ describe('RL-001: CF-Connecting-IP trust model', () => {
 describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket (HIGH)', () => {
   beforeEach(async () => {
     // Clear the 'unknown' bucket before each test
-    await _deleteRateLimitKey('unknown', tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), 'unknown');
   });
 
   test('"unknown" key is used when no IP headers are present', () => {
@@ -200,12 +200,12 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
     // A-5: the KV key is now a SHA-256 of the composed key, so we can no longer
     // read the raw `ratelimit:unknown` key. Assert the SHARED-BUCKET behaviour
     // instead: draining the 'unknown' bucket blocks the next 'unknown' caller.
-    await _deleteRateLimitKey('unknown', kv);
+    await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, 'unknown');
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      expect(await isRateLimited('unknown', kv)).toBe(false);
+      expect(await isRateLimited({ RATE_LIMIT_KV: kv }, 'unknown')).toBe(false);
     }
     // All headerless callers share the same 'unknown' bucket → now blocked.
-    expect(await isRateLimited('unknown', kv)).toBe(true);
+    expect(await isRateLimited({ RATE_LIMIT_KV: kv }, 'unknown')).toBe(true);
     console.log('[RL-002] headerless clients all share the same "unknown" bucket');
   });
 
@@ -219,13 +219,13 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
     );
 
     // Next headerless request is blocked
-    const blocked = await isRateLimited('unknown', kv);
+    const blocked = await isRateLimited({ RATE_LIMIT_KV: kv }, 'unknown');
     expect(blocked).toBe(true);
   });
 
   test('Worker /forms endpoint: missing IP headers hit shared "unknown" bucket', async () => {
     // Clear bucket
-    await _deleteRateLimitKey('unknown', tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), 'unknown');
 
     // One request with no IP headers should not be rate-limited yet
     const res = await SELF.fetch('http://localhost/api/v2/events/evt_rl_test/forms/checkin', {
@@ -248,19 +248,19 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
   const RACE_IP = 'race-test-192.168.100.1';
 
   beforeEach(async () => {
-    await _deleteRateLimitKey(RACE_IP, tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), RACE_IP);
   });
 
   test('sequential requests increment correctly up to limit', async () => {
     const kv = tenv().RATE_LIMIT_KV;
     let passed = 0;
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      const limited = await isRateLimited(RACE_IP, kv);
+      const limited = await isRateLimited({ RATE_LIMIT_KV: kv }, RACE_IP);
       if (!limited) passed++;
     }
     expect(passed).toBe(RATE_LIMIT_MAX);
     // Next one should be blocked
-    expect(await isRateLimited(RACE_IP, kv)).toBe(true);
+    expect(await isRateLimited({ RATE_LIMIT_KV: kv }, RACE_IP)).toBe(true);
   });
 
   test('concurrent parallel requests at limit boundary can all succeed (race window)', async () => {
@@ -268,9 +268,9 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
     // A-5: the KV key is now hashed, so we can no longer pre-seed the raw
     // `ratelimit:${RACE_IP}` key. Drive the counter to RATE_LIMIT_MAX - 1 via
     // real calls so we sit one below the threshold before the concurrent burst.
-    await _deleteRateLimitKey(RACE_IP, kv);
+    await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, RACE_IP);
     for (let i = 0; i < RATE_LIMIT_MAX - 1; i++) {
-      await isRateLimited(RACE_IP, kv);
+      await isRateLimited({ RATE_LIMIT_KV: kv }, RACE_IP);
     }
 
     // Fire CONCURRENCY requests simultaneously — in a true race, multiple reads
@@ -278,7 +278,7 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
     // Without atomic operations, all pass even though only one should.
     const CONCURRENCY = 5;
     const results = await Promise.all(
-      Array.from({ length: CONCURRENCY }, () => isRateLimited(RACE_IP, kv))
+      Array.from({ length: CONCURRENCY }, () => isRateLimited({ RATE_LIMIT_KV: kv }, RACE_IP))
     );
 
     const passed = results.filter((r) => !r).length;
@@ -334,7 +334,7 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
   test('GET /api/v2/events is unmetered — no rate limit applied', async () => {
     // Drain a fake IP on forms to show RL is working there
     const formIp = 'rl-scope-test-1.2.3.4';
-    await _deleteRateLimitKey(formIp, tenv().RATE_LIMIT_KV);
+    await _deleteRateLimitKey(tenv(), formIp);
 
     // Events list endpoint — no RL
     const eventResults = await Promise.all(
@@ -464,13 +464,13 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
     );
 
     // Clear all attacker IP buckets
-    await Promise.all(ATTACKER_IPS.map((ip) => _deleteRateLimitKey(ip, kv)));
+    await Promise.all(ATTACKER_IPS.map((ip) => _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, ip)));
 
     // Each IP sends exactly RATE_LIMIT_MAX requests — none should be blocked
     let totalPassed = 0;
     for (const ip of ATTACKER_IPS) {
       for (let req = 0; req < RATE_LIMIT_MAX; req++) {
-        const limited = await isRateLimited(ip, kv);
+        const limited = await isRateLimited({ RATE_LIMIT_KV: kv }, ip);
         if (!limited) totalPassed++;
       }
     }
@@ -491,15 +491,15 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
   test('single IP: request 61 is blocked, request 60 is not', async () => {
     const kv = tenv().RATE_LIMIT_KV;
     const ip = 'single-ip-limit-test-10.9.8.7';
-    await _deleteRateLimitKey(ip, kv);
+    await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, ip);
 
     // Requests 1 through 60 should all pass
     for (let i = 1; i <= RATE_LIMIT_MAX; i++) {
-      const limited = await isRateLimited(ip, kv);
+      const limited = await isRateLimited({ RATE_LIMIT_KV: kv }, ip);
       expect(limited, `Request ${i} should not be rate-limited`).toBe(false);
     }
     // Request 61 should be blocked
-    const blocked = await isRateLimited(ip, kv);
+    const blocked = await isRateLimited({ RATE_LIMIT_KV: kv }, ip);
     expect(blocked, 'Request 61 should be rate-limited').toBe(true);
   });
 
@@ -516,11 +516,11 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
     const kv = tenv().RATE_LIMIT_KV;
     const ip1 = 'ns-192.168.1.1';
     const ip2 = 'ns-192.168.1.2';
-    await _deleteRateLimitKey(ip1, kv);
-    await _deleteRateLimitKey(ip2, kv);
+    await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, ip1);
+    await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, ip2);
 
-    await isRateLimited(ip1, kv);
-    await isRateLimited(ip2, kv);
+    await isRateLimited({ RATE_LIMIT_KV: kv }, ip1);
+    await isRateLimited({ RATE_LIMIT_KV: kv }, ip2);
 
     const keys = (await kv.list()).keys.map((k) => k.name);
     // No stored key may contain the raw IP literal.
@@ -555,7 +555,7 @@ describe('AUTH-004: X-Forwarded-For injection bypasses rate limit (HIGH)', () =>
     ];
 
     for (const xff of attackerXffs) {
-      await _deleteRateLimitKey(xff, kv);
+      await _deleteRateLimitKey({ RATE_LIMIT_KV: kv }, xff);
     }
 
     let totalAllowed = 0;
@@ -568,7 +568,7 @@ describe('AUTH-004: X-Forwarded-For injection bypasses rate limit (HIGH)', () =>
 
       // Drain 60 requests through this "IP"
       for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-        const limited = await isRateLimited(ip, kv);
+        const limited = await isRateLimited({ RATE_LIMIT_KV: kv }, ip);
         if (!limited) totalAllowed++;
       }
     }

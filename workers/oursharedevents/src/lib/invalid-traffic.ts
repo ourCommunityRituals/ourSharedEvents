@@ -51,11 +51,9 @@
 // bounded, and correctable; under-counting is neither. Bot classification is
 // header-only and so keeps working regardless.
 
-import { checkRateLimit, clientIp } from './rate-limit';
+import { checkRateLimit, clientIp, pepperedKeyHash, type RateLimitEnv } from './rate-limit';
 
-export interface InvalidTrafficEnv {
-  RATE_LIMIT_KV?: KVNamespace;
-}
+export type InvalidTrafficEnv = Partial<RateLimitEnv>;
 
 /** Why a beacon was not counted. Server-side only — never returned to callers. */
 export type IvtReason = 'bot' | 'duplicate' | 'flood';
@@ -161,14 +159,6 @@ export function isAutomatedClient(request: Request): boolean {
   return BOT_UA_MARKERS.some((marker) => ua.includes(marker));
 }
 
-/** SHA-256 → hex. Keeps any IP-bearing input out of KV in the clear. */
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 export interface BeaconDescriptor {
   eventId: string;
   sponsorId: string;
@@ -181,15 +171,18 @@ export interface BeaconDescriptor {
 /**
  * Has this exact beacon already been counted for this caller, in this window?
  *
- * The KV key is the SHA-256 of caller + beacon identity, so the stored key
- * reveals neither the IP nor which sponsor was seen, and it expires on its own.
+ * The KV key is a peppered hash of caller + beacon identity (OSE-1447: event
+ * and sponsor ids are public, so a bare SHA-256 would reverse to the IP), so the
+ * stored key reveals neither the IP nor which sponsor was seen, and it expires
+ * on its own.
  */
 async function isDuplicateBeacon(
   request: Request,
-  kv: KVNamespace,
+  env: RateLimitEnv,
   beacon: BeaconDescriptor
 ): Promise<boolean> {
-  const fingerprint = await sha256Hex(
+  const kv = env.RATE_LIMIT_KV;
+  const fingerprint = await pepperedKeyHash(
     [
       clientIp(request),
       beacon.eventId,
@@ -197,7 +190,8 @@ async function isDuplicateBeacon(
       beacon.surface,
       beacon.placement,
       beacon.kind,
-    ].join('|')
+    ].join('|'),
+    env.RATE_LIMIT_KEY_PEPPER
   );
   const key = `ivt:dedup:${fingerprint}`;
   if ((await kv.get(key)) !== null) return true;
@@ -223,16 +217,16 @@ export async function classifyBeacon(
 ): Promise<IvtVerdict> {
   if (isAutomatedClient(request)) return { counted: false, reason: 'bot' };
 
-  const kv = env.RATE_LIMIT_KV;
-  if (!kv) return { counted: true }; // fail open — see the header
+  if (!env.RATE_LIMIT_KV) return { counted: true }; // fail open — see the header
+  const store = env as RateLimitEnv; // KV checked just above
 
   try {
-    if (await isDuplicateBeacon(request, kv, beacon)) {
+    if (await isDuplicateBeacon(request, store, beacon)) {
       return { counted: false, reason: 'duplicate' };
     }
     const flooded = await checkRateLimit(
+      store,
       `ivt:${beacon.kind}:${beacon.eventId}:${clientIp(request)}`,
-      kv,
       IMPRESSION_WRITE_MAX
     );
     if (flooded) return { counted: false, reason: 'flood' };

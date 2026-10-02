@@ -1063,14 +1063,14 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
-          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER; do
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
-              echo "::error::$SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343). Provision it: bash scripts/set-secrets.sh staging"
+              echo "::error::$SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447). Provision it: bash scripts/set-secrets.sh staging"
               echo "$OUT"
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER present on staging (value-length verified post-deploy via /health)."
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -2233,14 +2233,14 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env production 2>&1 || true)"
-          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER; do
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
-              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343). Provision it: bash scripts/set-secrets.sh production"
+              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447). Provision it: bash scripts/set-secrets.sh production"
               echo "$OUT"
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER present on production (value-length verified post-deploy via /health)."
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
 
       - name: Apply D1 migrations (main DB)
         env:

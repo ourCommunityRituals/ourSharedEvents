@@ -10,7 +10,7 @@
 
 import { test, expect } from '@playwright/test';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://oursharedevents.com';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_URL = `${BASE_URL}/admin`;
 
 // ---------------------------------------------------------------------------

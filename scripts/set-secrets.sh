@@ -24,6 +24,13 @@
 #   SHARED_REPORT_SIGNING_SECRET — HMAC key for SharedReport + sponsor-home signed
 #                                  links (>=32 chars). FAIL-CLOSED: unset -> the whole
 #                                  /sponsor corner and every /sharedReport link is inert.
+#   RATE_LIMIT_KEY_PEPPER        — HMAC key for rate-limit / beacon-dedup KV keys (>=32
+#                                  chars, own secret; OSE-1447). The deploy gate refuses
+#                                  without it. At runtime an unset pepper falls back to
+#                                  bare SHA-256 (reversible to the IP) and logs
+#                                  RATE_LIMIT_PEPPER_MISSING, so rate limiting never stops.
+#                                  Rotate freely: rate-limit buckets live 60 s, beacon
+#                                  dedup keys 300 s (old keys age out within 5 minutes).
 #
 # Ref: E2E-LAUNCH.md Part 5
 
@@ -60,6 +67,7 @@ SECRETS=(
   "FORMS_ENCRYPTION_KEY"
   "FORMS_HASH_PEPPER"
   "SHARED_REPORT_SIGNING_SECRET"
+  "RATE_LIMIT_KEY_PEPPER"
 )
 
 echo "════════════════════════════════════════════════════════════"

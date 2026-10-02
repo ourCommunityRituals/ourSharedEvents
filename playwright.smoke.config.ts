@@ -18,12 +18,13 @@
  */
 
 import { defineConfig, devices } from '@playwright/test';
+const { guardProduction } = require('./config/production-read-only');
 
 // Import canonical environment configuration (Story 1.2)
 // Single source of truth for BASE_URL resolution
 const { getBaseUrl } = require('./config/environments');
 
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests/api/smoke',
 
   // Smoke tests run sequentially to avoid overwhelming the API
@@ -86,3 +87,6 @@ export default defineConfig({
 
   // No webServer - tests run against deployed URLs
 });
+
+// ADR-021 (OSE-906): this suite never writes to production.
+export default guardProduction(__filename, config);

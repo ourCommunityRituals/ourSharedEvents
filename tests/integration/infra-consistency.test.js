@@ -257,6 +257,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
       expect(gate?.run).toContain('SHARED_REPORT_SIGNING_SECRET');
       expect(gate?.run).toContain('FORMS_ENCRYPTION_KEY');
       expect(gate?.run).toContain('FORMS_HASH_PEPPER');
+      expect(gate?.run).toContain('RATE_LIMIT_KEY_PEPPER');
     }
     expect(stagingGate?.run).toContain('--env staging');
     expect(productionGate?.run).toContain('--env production');
@@ -265,7 +266,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   test('set-secrets.sh provisions FORMS_HASH_PEPPER alongside the other required secrets (OSE-1343)', () => {
     const script = readFile('scripts/set-secrets.sh');
     expect(script).toMatch(
-      /SECRETS=\(\s*\n\s*"ADMIN_KEY"\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*\)/
+      /SECRETS=\(\s*\n\s*"ADMIN_KEY"\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*"RATE_LIMIT_KEY_PEPPER"\s*\n\s*\)/
     );
   });
 });

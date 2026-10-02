@@ -9,6 +9,32 @@ request:
       value: https://stg.oursharedevents.com
     - name: testEventId
       value: gate_test_event_f6
+  scripts:
+    - type: before-request
+      code: |-
+        // ADR-021 (OSE-906): production is read-only for tests. Writes may only go to
+        // a known non-production host; anything else (production, an unknown host, or
+        // a URL that does not parse cleanly) is refused before it is sent.
+        (function () {
+          var WRITE_HOSTS = ['stg.oursharedevents.com', 'localhost', '127.0.0.1'];
+          function host(url) {
+            var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#]*)/i.exec(String(url || ''));
+            if (!m) return null;
+            var h = m[1].slice(m[1].lastIndexOf('@') + 1).replace(/:\d*$/, '');
+            return h.toLowerCase().replace(/\.$/, '');
+          }
+          var method = String(req.getMethod() || '').toUpperCase();
+          if (['GET', 'HEAD', 'OPTIONS'].indexOf(method) !== -1) return;
+          var targets = [bru.getEnvVar('baseUrl'), req.getUrl()].map(host).filter(function (h) {
+            return h !== null;
+          });
+          var allowed = targets.length > 0 && targets.every(function (h) {
+            return WRITE_HOSTS.indexOf(h) !== -1;
+          });
+          if (!allowed) {
+            throw new Error('ADR-021: tests write only to staging or localhost; refusing ' + method + ' ' + req.getUrl());
+          }
+        })();
 
 docs:
   content: |-

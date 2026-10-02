@@ -235,6 +235,7 @@ GCP_REGION         = "us-central1"
 #   FORMS_HASH_PEPPER        (HMAC-SHA256 pepper — min 32 chars, DIFFERENT from prod — OSE-598)
 #   ANON_ID_HASH_PEPPER      (pepper for anonymous ID hashing — min 32 chars)
 #   IP_HASH_PEPPER           (pepper for IP hashing — min 32 chars)
+#   RATE_LIMIT_KEY_PEPPER    (HMAC key for rate-limit KV keys — min 32 chars, own secret; OSE-1447)
 #   SHARED_REPORT_SIGNING_SECRET  (HMAC key for signed link tokens — min 32 chars)
 #   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint — OSE-577: cross_product class, fails closed)
 #   OSE_INTERNAL_BATCH_TOKEN (bearer token for the internal-fleet batch consumer — OSE-577: internal class, full payload)
@@ -350,6 +351,7 @@ GCP_REGION         = "us-central1"
 #                            OSE-598: different from FORMS_ENCRYPTION_KEY; rotate every 90 days
 #   ANON_ID_HASH_PEPPER      (pepper for anonymous ID hashing — min 32 chars)
 #   IP_HASH_PEPPER           (pepper for IP hashing — min 32 chars)
+#   RATE_LIMIT_KEY_PEPPER    (HMAC key for rate-limit KV keys — min 32 chars, own secret; OSE-1447)
 #   SHARED_REPORT_SIGNING_SECRET  (HMAC key for signed link tokens — min 32 chars)
 #   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint — OSE-577: cross_product class, fails closed)
 #   OSE_INTERNAL_BATCH_TOKEN (bearer token for the internal-fleet batch consumer — OSE-577: internal class, full payload)

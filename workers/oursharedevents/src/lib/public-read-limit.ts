@@ -24,7 +24,7 @@
 // is a speed bump on a scraper, not an authentication boundary, and it should
 // never be load-bearing enough to be worth an outage.
 
-import { checkRateLimit } from './rate-limit';
+import { checkRateLimit, type RateLimitEnv } from './rate-limit';
 
 /**
  * Requests per minute per caller for a public read.
@@ -35,9 +35,7 @@ import { checkRateLimit } from './rate-limit';
  */
 export const PUBLIC_READ_MAX = 120;
 
-export interface PublicReadLimitEnv {
-  RATE_LIMIT_KV?: KVNamespace;
-}
+export type PublicReadLimitEnv = Partial<RateLimitEnv>;
 
 /**
  * Identify the caller.
@@ -94,9 +92,9 @@ export async function isPublicReadLimited(
   scope: string,
   max: number = PUBLIC_READ_MAX
 ): Promise<boolean> {
-  if (!env.RATE_LIMIT_KV) return false; // fail open — see the header
   try {
-    return await checkRateLimit(callerKey(request, scope), env.RATE_LIMIT_KV, max);
+    // checkRateLimit fails open with no KV bound — see the header.
+    return await checkRateLimit(env, callerKey(request, scope), max);
   } catch {
     return false;
   }

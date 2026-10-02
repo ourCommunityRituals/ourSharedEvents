@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isProductionUrl } = require('./production-hosts');
 
 // =============================================================================
 // MANIFEST LOADING
@@ -81,8 +82,8 @@ function detectEnvironment() {
         return 'staging';
       }
 
-      // Check for production hostname (must be exact match)
-      if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') {
+      // Production hosts: one shared rule (config/production-hosts.js)
+      if (isProductionUrl(baseUrl)) {
         return 'production';
       }
     } catch {

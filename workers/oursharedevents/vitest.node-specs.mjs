@@ -222,4 +222,7 @@ export const NODE_SPECS = [
   // tag OBSERVABILITY.md tells operators to consume must be emitted by src/.
   // Reads files via node:fs (like d1-canonical-shape); node-clean, no runtime.
   'tests/observability-runbook-tags.spec.ts',
+  // OSE-1447 follow-up — rate-limit KV keys are HMAC under RATE_LIMIT_KEY_PEPPER.
+  // Pure module + in-memory KV fake + node:fs source reads; no runtime.
+  'tests/rate-limit-pepper.spec.ts',
 ];

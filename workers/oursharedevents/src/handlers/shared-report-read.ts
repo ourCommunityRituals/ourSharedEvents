@@ -32,12 +32,12 @@ import { resolveMintTtlSeconds } from '../lib/mint-ttl';
 import { applyCountFloor } from '../lib/count-floor';
 import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 import { logReportAccess } from '../lib/audit-log';
-import { checkRateLimit, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS } from '../lib/rate-limit';
+import { checkRateLimit, RATE_LIMIT_BATCH_MAX, type RateLimitEnv } from '../lib/rate-limit';
 
-export type SharedReportReadEnv = SharedReportAuthEnv & {
-  DB: D1Database;
-  RATE_LIMIT_KV?: KVNamespace;
-};
+export type SharedReportReadEnv = SharedReportAuthEnv &
+  Partial<RateLimitEnv> & {
+    DB: D1Database;
+  };
 
 const BATCH_MAX_IDS = 50; // S5-Q3 ratified
 
@@ -210,20 +210,13 @@ export async function handleBatchSharedReports(
   ctx: ExecutionContext
 ): Promise<Response> {
   // OSE-593: Rate limit batch endpoint by service token (IP as proxy for token identity)
-  if (env.RATE_LIMIT_KV) {
-    const batchIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
-    const batchKey = `batch-sr:${batchIp}`;
-    if (
-      await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS)
-    ) {
-      return jsonResponse(
-        { ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' },
-        429,
-        {
-          'Retry-After': '60',
-        }
-      );
-    }
+  const batchKey = `batch-sr:${request.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
+  if (await checkRateLimit(env, batchKey, RATE_LIMIT_BATCH_MAX)) {
+    return jsonResponse(
+      { ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' },
+      429,
+      { 'Retry-After': '60' }
+    );
   }
 
   // OSE-577 / ADR-017: access is decided by token CLASS (who holds it), not by

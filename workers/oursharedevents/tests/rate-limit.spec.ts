@@ -48,42 +48,42 @@ describe('rate-limit — L1 static', () => {
 describe('isRateLimited', () => {
   // @born-red TL-053 | method: deliberate-fixture-break | date: 2026-08-03
   it('allows the first request for a new IP', async () => {
-    expect(await isRateLimited('1.2.3.4', env.RATE_LIMIT_KV)).toBe(false);
+    expect(await isRateLimited(env, '1.2.3.4')).toBe(false);
   });
 
   it('allows up to RATE_LIMIT_MAX requests', async () => {
     const ip = '10.0.0.1';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(false);
+      expect(await isRateLimited(env, ip)).toBe(false);
     }
   });
 
   it('blocks the request after exceeding RATE_LIMIT_MAX', async () => {
     const ip = '10.0.0.2';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      await isRateLimited(ip, env.RATE_LIMIT_KV);
+      await isRateLimited(env, ip);
     }
-    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(true);
+    expect(await isRateLimited(env, ip)).toBe(true);
   });
 
   it('tracks different IPs independently', async () => {
     const ip1 = '192.168.1.1';
     const ip2 = '192.168.1.2';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      await isRateLimited(ip1, env.RATE_LIMIT_KV);
+      await isRateLimited(env, ip1);
     }
-    expect(await isRateLimited(ip1, env.RATE_LIMIT_KV)).toBe(true);
-    expect(await isRateLimited(ip2, env.RATE_LIMIT_KV)).toBe(false);
+    expect(await isRateLimited(env, ip1)).toBe(true);
+    expect(await isRateLimited(env, ip2)).toBe(false);
   });
 
   it('resets after key deletion (simulates window expiry)', async () => {
     const ip = '10.0.0.3';
     for (let i = 0; i <= RATE_LIMIT_MAX; i++) {
-      await isRateLimited(ip, env.RATE_LIMIT_KV);
+      await isRateLimited(env, ip);
     }
-    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(true);
-    await _deleteRateLimitKey(ip, env.RATE_LIMIT_KV);
-    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(false);
+    expect(await isRateLimited(env, ip)).toBe(true);
+    await _deleteRateLimitKey(env, ip);
+    expect(await isRateLimited(env, ip)).toBe(false);
   });
 });
 

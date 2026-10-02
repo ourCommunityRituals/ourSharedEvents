@@ -22,6 +22,7 @@ import {
   normalizeOperation,
   emitOperationCost,
 } from './lib/cost-metric';
+import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 
 export type { RouterEnv as Env };
 
@@ -436,7 +437,8 @@ async function logSubscribersRetentionAudit(
 // Runs daily alongside the data lifecycle job (same cron tick: 3 AM UTC).
 // Reads from:
 //   - DB.admin_audit_log  → auth failure count
-//   - RATE_LIMIT_KV       → rate-limit trigger count via KV list + parse
+//   - RATE_LIMIT_KV       → buckets tripped at cron time (a snapshot of the
+//                           active 60 s windows, NOT a daily total)
 //   - DB.admin_audit_log  → approximated 4xx/5xx via denied outcomes
 // Writes:
 //   - DB.security_metrics → daily snapshot row (upsert)
@@ -445,7 +447,7 @@ async function logSubscribersRetentionAudit(
 //
 // Alert thresholds (environment-tunable via env vars):
 //   AUTH_FAILURE_THRESHOLD         default 100 / day
-//   RATE_LIMIT_TRIGGER_THRESHOLD   default 1000 / day
+//   RATE_LIMIT_TRIGGER_THRESHOLD   default 1000 tripped buckets at cron time
 //   ERROR_5XX_THRESHOLD_PCT        default 5 (%)
 //
 // The function is fully failure-isolated. Any error is logged and swallowed.
@@ -507,38 +509,15 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
   }
 
   // ── Phase 2: Rate-limit triggers from KV ────────────────────────────────
-  // KV keys have the form ratelimit:{ip}; value = { count, resetAt }.
-  // We list all keys and sum counts where count > RATE_LIMIT_MAX (60) as
-  // a proxy for "this IP was rate-limited at some point today".
-  // NOTE: KV list is eventually consistent; exact counts are best-effort.
+  // A bucket counts when it has tripped its own stored limit (isBucketTripped).
+  // Buckets live 60 s, so this is a snapshot of who is blocked right now, not
+  // a count for the day. KV list is eventually consistent; best-effort.
   try {
-    let cursor: string | undefined;
     let listed = 0;
-    do {
-      const result = await env.RATE_LIMIT_KV.list({
-        prefix: 'ratelimit:',
-        limit: 1000,
-        cursor,
-      });
-      listed += result.keys.length;
-      // Fetch values in parallel batches of 50 to avoid fan-out explosion
-      const BATCH = 50;
-      for (let i = 0; i < result.keys.length; i += BATCH) {
-        const batch = result.keys.slice(i, i + BATCH);
-        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
-        for (const raw of values) {
-          if (!raw) continue;
-          try {
-            const entry = JSON.parse(raw) as { count: number; resetAt: number };
-            // Count as a "trigger" if the IP has exceeded 60 requests in its window
-            if (entry.count > 60) rateLimitTriggers++;
-          } catch {
-            // malformed entry — skip
-          }
-        }
-      }
-      cursor = result.list_complete ? undefined : (result as { cursor?: string }).cursor;
-    } while (cursor);
+    for await (const { entry } of scanRateLimitBuckets(env.RATE_LIMIT_KV)) {
+      listed++;
+      if (isBucketTripped(entry)) rateLimitTriggers++;
+    }
 
     console.log(
       JSON.stringify({
@@ -690,14 +669,13 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
         {
           type: 'rate_limit_triggers',
           severity: rateLimitTriggers > RATE_LIMIT_TRIGGER_THRESHOLD * 10 ? 'CRITICAL' : 'HIGH',
-          message: `Rate-limit triggers exceeded threshold: ${rateLimitTriggers} IPs rate-limited (threshold: ${RATE_LIMIT_TRIGGER_THRESHOLD})`,
+          message: `Rate-limit triggers exceeded threshold: ${rateLimitTriggers} rate-limit buckets tripped across all scopes at cron time (threshold: ${RATE_LIMIT_TRIGGER_THRESHOLD})`,
           details: {
             count: rateLimitTriggers,
             threshold: RATE_LIMIT_TRIGGER_THRESHOLD,
             kvPrefix: 'ratelimit:',
             date: today,
           },
-          affectedEndpoint: '/api/v2/events/:id/forms/*',
           detectedAt: now,
         },
         alertEnv

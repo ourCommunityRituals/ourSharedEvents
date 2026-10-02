@@ -40,12 +40,14 @@
 
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../../config/environments');
+const { isProductionUrl } = require('../../../config/production-hosts');
 
 const BASE_URL = getBaseUrl().replace(/\/+$/, '');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
-const IS_PRODUCTION = /^https:\/\/(www\.)?oursharedevents\.com$/i.test(BASE_URL);
+// ADR-021: one production check for every suite (any port, path or case).
+const IS_PRODUCTION = isProductionUrl(BASE_URL);
 const BRAND = 'root';
 const TIMEOUT = 30000;
 
@@ -99,6 +101,13 @@ function futureDate() {
  * 200 HTML page.
  */
 async function createEvent(request, fields) {
+  // ADR-021 (OSE-906): the production smoke tier is strictly read-only. The
+  // test.skip(IS_PRODUCTION) on each writing describe is the first line; this is
+  // the second, so a write test added without the skip fails here instead of
+  // creating a row in production.
+  if (IS_PRODUCTION) {
+    throw new Error('ADR-021: production smoke is read-only; createEvent refused');
+  }
   const res = await request.post(`${BASE_URL}/api/v2/admin/events`, {
     timeout: TIMEOUT,
     maxRedirects: 0,
@@ -196,6 +205,9 @@ test.afterAll(async ({ request }) => {
 });
 
 test.describe('🔒 SECURITY: Admin key validation', () => {
+  // ADR-021: even a rejected-key POST is a write attempt; if auth regressed it
+  // would create a row. Production also sits behind Access here (OSE-1353).
+  test.skip(IS_PRODUCTION, 'Never writes to production; these run on staging and locally');
   // Same edge headers as a real admin call, so the Worker (not CF Access) decides.
   for (const [label, authorization] of [
     ['Invalid admin key is rejected', 'Bearer WRONG_KEY_12345'],

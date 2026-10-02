@@ -86,7 +86,7 @@
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
  *   Security Monitoring (auth required — OSE-SEC-1):
- *   GET    /api/v2/admin/security/rate-limit-stats → top-10 rate-limited IPs (last hour, from KV)
+ *   GET    /api/v2/admin/security/rate-limit-stats → top-10 currently rate-limited buckets (active 60 s windows, from KV; keyed ids, not IPs)
  *
  *   QR Verify/Unverify (auth required — OSE-213):
  *   POST   /api/v2/admin/events/:id/verify-qr    → handleV2AdminVerifyQr (READY→ACTIVE)
@@ -274,6 +274,11 @@ import {
   RATE_LIMIT_ADMIN_MAX,
   RATE_LIMIT_BATCH_MAX,
   RATE_LIMIT_MINT_MAX,
+  RATE_LIMIT_MAX,
+  bucketLimit,
+  isBucketTripped,
+  scanRateLimitBuckets,
+  type RateLimitEntry,
   type RateLimitEnv,
 } from './lib/rate-limit';
 import {
@@ -606,7 +611,7 @@ export async function route(
     (pathname.startsWith('/api/v2/admin') || pathname === '/admin' || pathname === '/manage')
   ) {
     const adminKey = `admin:${clientIp(request)}`;
-    if (await checkRateLimit(adminKey, env.RATE_LIMIT_KV, RATE_LIMIT_ADMIN_MAX)) {
+    if (await checkRateLimit(env, adminKey, RATE_LIMIT_ADMIN_MAX)) {
       return rateLimitResponse();
     }
   }
@@ -948,7 +953,7 @@ export async function route(
   if (sponsorHomeLinkMatch && method === 'POST') {
     if (env.RATE_LIMIT_KV) {
       const mintKey = `mint-sponsor-home:${clientIp(request)}:${sponsorHomeLinkMatch[1]}`;
-      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+      if (await checkRateLimit(env, mintKey, RATE_LIMIT_MINT_MAX)) {
         return rateLimitResponse();
       }
     }
@@ -1324,7 +1329,9 @@ export async function route(
 
   // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
   // GET /api/v2/admin/security/rate-limit-stats
-  // Returns top-10 rate-limited IPs in the last hour from RATE_LIMIT_KV.
+  // Returns the top-10 currently rate-limited buckets (active 60 s windows) from RATE_LIMIT_KV. The
+  // `ip`/`top_ips` field names are the API contract; the values are HMAC bucket
+  // ids under RATE_LIMIT_KEY_PEPPER (OSE-1447), never addresses.
   // Requires admin auth. Read-only — never modifies KV state.
   if (pathname === '/api/v2/admin/security/rate-limit-stats' && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
@@ -1388,7 +1395,7 @@ export async function route(
     // OSE-576: rate limit mint by actor+eventId before paying auth cost
     if (env.RATE_LIMIT_KV) {
       const mintKey = `mint:${clientIp(request)}:${mintLinkMatch[1]}`;
-      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+      if (await checkRateLimit(env, mintKey, RATE_LIMIT_MINT_MAX)) {
         return rateLimitResponse();
       }
     }
@@ -1419,7 +1426,7 @@ export async function route(
     if (env.RATE_LIMIT_KV) {
       const tokenId = request.headers.get('Authorization')?.slice(-16) ?? clientIp(request);
       const batchKey = `batch:${tokenId}`;
-      if (await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX)) {
+      if (await checkRateLimit(env, batchKey, RATE_LIMIT_BATCH_MAX)) {
         return rateLimitResponse();
       }
     }
@@ -1572,7 +1579,7 @@ export async function route(
   // identity surface). Writes only to FORMS_DB.
   const selfDeleteMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/forms\/register$/);
   if (selfDeleteMatch && method === 'DELETE') {
-    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
+    if (await isRateLimited(env, clientIp(request))) {
       return rateLimitResponse();
     }
     return handleSelfDeleteRegistration(request, env, selfDeleteMatch[1]);
@@ -1586,7 +1593,7 @@ export async function route(
     const [, eventId, formType] = publicFormsMatch;
 
     // Rate limit: 60 req/min per IP, persistent via CF KV (OSE-552).
-    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
+    if (await isRateLimited(env, clientIp(request))) {
       return rateLimitResponse();
     }
 
@@ -1859,31 +1866,21 @@ export async function route(
 //
 // GET /api/v2/admin/security/rate-limit-stats
 //
-// Returns the top-10 rate-limited IPs from the last hour.
-// "Rate-limited" means the KV entry has count > RATE_LIMIT_MAX (60).
+// Returns the top-10 currently rate-limited buckets: windows still active now
+// (each RATE_LIMIT_WINDOW_MS, 60 s). There is no hourly rollup; for history, use
+// Cloudflare Security → Events. A bucket counts when it has tripped its own
+// stored limit (isBucketTripped: 10 mint, 30 batch, 60 default, 120 public reads).
 //
-// KV key format: ratelimit:{ip}
-// KV value format: { count: number, resetAt: number }
-//
-// The resetAt field is a Unix ms timestamp. We only return entries whose
-// resetAt is in the future (i.e. the window is still active) as a proxy
-// for "this happened in the last minute", which is the actual rate-limit
-// window. For a 1-hour view we return all active KV entries — expired keys
-// have been deleted by KV TTL already.
-//
-// Response shape:
+// Response shape (field names are the contract; `ip` values are keyed bucket
+// ids under RATE_LIMIT_KEY_PEPPER, OSE-1447, never addresses):
 // {
 //   ok: true,
 //   generated_at: ISO string,
-//   window: "1h (KV TTL)",
+//   window: "60s (active rate-limit windows)",
+//   rate_limit_max: number,           // the default limit
 //   total_rate_limited_ips: number,
-//   top_ips: [{ ip: string, count: number, reset_at: ISO string }]
+//   top_ips: [{ ip: string, count: number, limit: number, reset_at: ISO string }]
 // }
-
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
 
 async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<Response> {
   const corsOriginHeader = corsOrigin(request);
@@ -1894,46 +1891,11 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
   };
 
   const now = Date.now();
-  const ipEntries: Array<{ ip: string; count: number; resetAt: number }> = [];
-  let totalRateLimited = 0;
-
+  const tripped: Array<{ id: string; entry: RateLimitEntry }> = [];
   try {
-    // Paginate through all ratelimit: keys
-    let cursor: string | undefined;
-    do {
-      const listResult = await env.RATE_LIMIT_KV.list({
-        prefix: 'ratelimit:',
-        limit: 1000,
-        cursor,
-      });
-
-      // Batch-fetch values in groups of 50
-      const BATCH = 50;
-      for (let i = 0; i < listResult.keys.length; i += BATCH) {
-        const batch = listResult.keys.slice(i, i + BATCH);
-        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
-        for (let j = 0; j < batch.length; j++) {
-          const raw = values[j];
-          if (!raw) continue;
-          try {
-            const entry = JSON.parse(raw) as RateLimitEntry;
-            // Only include active (non-expired) windows
-            if (entry.resetAt <= now) continue;
-            // Only entries that have actually been rate-limited (count > max)
-            if (entry.count <= 60) continue;
-            const ip = batch[j].name.slice('ratelimit:'.length);
-            ipEntries.push({ ip, count: entry.count, resetAt: entry.resetAt });
-            totalRateLimited++;
-          } catch {
-            // malformed KV value — skip
-          }
-        }
-      }
-
-      cursor = listResult.list_complete
-        ? undefined
-        : (listResult as unknown as { cursor?: string }).cursor;
-    } while (cursor);
+    for await (const bucket of scanRateLimitBuckets(env.RATE_LIMIT_KV)) {
+      if (isBucketTripped(bucket.entry)) tripped.push(bucket); // the scan yields live windows only
+    }
   } catch (err) {
     return Response.json(
       {
@@ -1946,22 +1908,20 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
     );
   }
 
-  // Sort descending by count, take top 10
-  ipEntries.sort((a, b) => b.count - a.count);
-  const top10 = ipEntries.slice(0, 10).map((e) => ({
-    ip: e.ip,
-    count: e.count,
-    reset_at: new Date(e.resetAt).toISOString(),
-  }));
-
+  tripped.sort((a, b) => b.entry.count - a.entry.count);
   return Response.json(
     {
       ok: true,
       generated_at: new Date(now).toISOString(),
-      window: '1h (KV TTL)',
-      rate_limit_max: 60,
-      total_rate_limited_ips: totalRateLimited,
-      top_ips: top10,
+      window: '60s (active rate-limit windows)',
+      rate_limit_max: RATE_LIMIT_MAX,
+      total_rate_limited_ips: tripped.length,
+      top_ips: tripped.slice(0, 10).map(({ id, entry }) => ({
+        ip: id,
+        count: entry.count,
+        limit: bucketLimit(entry),
+        reset_at: new Date(entry.resetAt).toISOString(),
+      })),
     },
     { status: 200, headers }
   );
