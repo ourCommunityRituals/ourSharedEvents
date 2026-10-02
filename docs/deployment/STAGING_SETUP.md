@@ -120,12 +120,20 @@ DEPLOYMENT_ID = "YOUR_STAGING_DEPLOYMENT_ID_HERE"
 
 ### 2.2 Set Up DNS Records
 
+Staging is served by a Workers **route** (`stg.oursharedevents.com/*` in
+`workers/oursharedevents/wrangler.toml`), so the DNS record only has to exist and be
+proxied. Its target is never contacted. Use Cloudflare's placeholder for route-only
+hostnames, not a `workers.dev` address: that address carries the account's personal
+subdomain, and renaming the subdomain would break the record.
+
 In Cloudflare DNS for `oursharedevents.com`, add:
 
-| Type  | Name      | Content                       | Proxy   |
-| ----- | --------- | ----------------------------- | ------- |
-| CNAME | `stg`     | `oursharedevents.workers.dev` | Proxied |
-| CNAME | `api-stg` | `oursharedevents.workers.dev` | Proxied |
+| Type | Name  | Content | Proxy   |
+| ---- | ----- | ------- | ------- |
+| AAAA | `stg` | `100::` | Proxied |
+
+No route in `wrangler.toml` serves `api-stg`, so do not add a record for it
+until one does.
 
 ### 2.3 Deploy Staging Worker
 
@@ -295,8 +303,7 @@ Use this checklist when setting up staging:
 - [ ] Configured staging: `npm run staging:configure -- --script-id=... --deployment-id=...`
 - [ ] Deployed to staging GAS: `npm run deploy:staging`
 - [ ] Added DNS records in Cloudflare:
-  - [ ] `stg` CNAME → `oursharedevents.workers.dev` (Proxied)
-  - [ ] `api-stg` CNAME → `oursharedevents.workers.dev` (Proxied)
+  - [ ] `stg` AAAA → `100::` (Proxied)
 - [ ] Deployed staging Worker: `npm run deploy:staging:worker`
 - [ ] Added GitHub secrets for staging (STAGING_SCRIPT_ID, STAGING_DEPLOYMENT_ID)
 - [ ] Verified staging works: `npm run staging:verify`
