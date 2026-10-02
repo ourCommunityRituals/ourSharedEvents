@@ -21,8 +21,18 @@
 // start_date from "today somewhere" (UTC date 12 h ago) to +CORRIDOR_WINDOW_DAYS.
 // A multi-day event that started earlier is not counted here; that errs toward
 // latching LATER, never earlier.
+//
+// Settled events only (PO decision 2026-10-02, OSE-1508). The latch is
+// permanent, so a publish the organizer undoes must never set it. An event
+// counts once it has been listed for LATCH_SETTLE_HOURS: listed_from (the end
+// of its publish grace window, lib/publish-grace.ts) at least that long ago.
+// NULL listed_from (created live, or from before migration 0093) counts as
+// settled, as it always did.
 
 import { CORRIDOR_READY_MIN_EVENTS, CORRIDOR_WINDOW_DAYS } from './corridor-readiness';
+
+/** How long an event must have been listed before it counts toward the latch. */
+export const LATCH_SETTLE_HOURS = 24;
 
 export interface CorridorLatchEnv {
   DB: D1Database;
@@ -36,6 +46,7 @@ function day(ms: number): string {
 export async function latchReadyCorridors(db: D1Database, now: Date = new Date()): Promise<number> {
   const floor = day(now.getTime() - 12 * 3_600_000);
   const horizon = day(now.getTime() + CORRIDOR_WINDOW_DAYS * 86_400_000);
+  const settledBy = new Date(now.getTime() - LATCH_SETTLE_HOURS * 3_600_000).toISOString();
   const res = await db
     .prepare(
       `INSERT OR IGNORE INTO corridor_readiness_latch (brand_id, h3_res7, latched_at)
@@ -44,10 +55,11 @@ export async function latchReadyCorridors(db: D1Database, now: Date = new Date()
         WHERE is_published = 1 AND status = 'active'
           AND h3_res7 IS NOT NULL AND h3_res7 <> ''
           AND start_date >= ? AND start_date <= ?
+          AND (listed_from IS NULL OR listed_from <= ?)
         GROUP BY brand_id, h3_res7
        HAVING COUNT(*) >= ?`
     )
-    .bind(now.toISOString(), floor, horizon, CORRIDOR_READY_MIN_EVENTS)
+    .bind(now.toISOString(), floor, horizon, settledBy, CORRIDOR_READY_MIN_EVENTS)
     .run();
   return res.meta?.changes ?? 0;
 }

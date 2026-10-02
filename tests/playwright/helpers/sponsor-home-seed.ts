@@ -46,7 +46,7 @@ export async function createLiveEvent(
   title: string,
   daysOut = 30,
   where?: { lat: number; lon: number }
-): Promise<{ id: string }> {
+): Promise<{ id: string; listedFrom: string | null }> {
   const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
   const start = new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10);
   const ev = await ok<{ id: string }>(
@@ -56,16 +56,29 @@ export async function createLiveEvent(
     }),
     'create event'
   );
+  let listedFrom: string | null = null;
   for (const status of ['ready', 'active']) {
-    await ok(
+    const res = await ok<{ listedFrom?: string | null }>(
       await request.put(`/api/v2/admin/events/${encodeURIComponent(ev.id)}`, {
         headers,
         data: { status },
       }),
       `event -> ${status}`
     );
+    if (status === 'active') listedFrom = res.listedFrom ?? null;
   }
-  return ev;
+  return { id: ev.id, listedFrom };
+}
+
+/**
+ * Wait out the publish grace window (src/lib/publish-grace.ts): until
+ * `listedFrom` the event is live by link but not on the list, map or sponsor
+ * discovery. The local worker runs a 1-minute window (playwright.mobile.config.ts).
+ */
+export async function waitUntilListed(listedFrom: string | null): Promise<void> {
+  if (!listedFrom) return;
+  const ms = Date.parse(listedFrom) - Date.now() + 1500;
+  if (ms > 0) await new Promise((r) => setTimeout(r, ms));
 }
 
 export async function seedSponsorHome(

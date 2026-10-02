@@ -859,12 +859,8 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
-    /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
-       public event page. overflow-x:hidden prevents any descendant
-       (long URLs in the 5W fields, sponsor links, future embeds)
-       from pushing the body wide at 375px. overflow-wrap:anywhere
-       breaks long unbreakable strings so they wrap inside the
-       max-width:720px column instead of forcing a scrollbar. */
+    /* OSE-298: no sideways scroll at 375px; long strings (URLs in the 5W
+       fields, sponsor links) wrap inside the 720px column. */
     html, body { overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
@@ -1777,7 +1773,8 @@ export async function handlePublicEventPage(
 const ADMIN_PREVIEW_CSS = `<style>
 .admin-preview-toolbar{position:sticky;top:0;z-index:1000;margin:-1.5rem -1.25rem 1.25rem;padding:.75rem 1.25rem;background:var(--surface);border-bottom:2px solid var(--accent);display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
 .admin-preview-toolbar p{flex-basis:100%;margin:0}
-@media print{.admin-preview-toolbar{display:none}}
+.draft-mark{display:none}
+@media print{.admin-preview-toolbar{display:none}.draft-mark{display:block;text-align:center;font-weight:700;border:2px solid;padding:.25rem}}
 </style>`;
 
 /**
@@ -1998,10 +1995,13 @@ export async function handleAdminPosterPreviewPage(
   const page = POSTER_HTML.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`); // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
   const body = injectAdminPreviewToolbar(page, { ...row, status }, nonce, {
     liveUrl: posterUrl,
-    note: 'This is the poster people will see once it is live. Print a test copy if you like; this bar does not print.',
+    note: 'This is the poster people will see once it is live. Print a test copy if you like: this bar does not print, and a test print is marked DRAFT.',
   }).replace(
     '<body>',
-    `<body data-poster-format="${DEFAULT_POSTER_CODE}" data-preview-event="${esc(row.id)}">`
+    // Print-only DRAFT mark (OSE-1508, PO 2026-10-02): a test print hung by
+    // mistake is obvious, and its QR codes carry no placement.
+    `<body data-poster-format="${DEFAULT_POSTER_CODE}" data-preview-event="${esc(row.id)}">` +
+      '<p class="draft-mark" data-testid="poster-draft-mark">DRAFT \u2014 not live yet. Test print only.</p>'
   );
   return new Response(body, {
     status: 200,

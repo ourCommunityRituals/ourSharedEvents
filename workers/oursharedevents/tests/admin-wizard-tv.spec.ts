@@ -405,3 +405,58 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     w.close();
   });
 });
+
+describe('publish grace window: the organiser is told when it lists', () => {
+  function mountRouter(reply: Record<string, unknown>) {
+    const dom = new JSDOM(ADMIN_HTML, {
+      runScripts: 'outside-only',
+      url: 'https://admin.test/admin',
+    });
+    const w = dom.window as unknown as Window & { eval(s: string): unknown } & Record<
+        string,
+        unknown
+      >;
+    w.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => reply,
+      text: async () => JSON.stringify(reply),
+    })) as unknown as typeof fetch;
+    w.eval(scriptWith(ADMIN_HTML, 'window.moveEventTo = async function'));
+    return w as unknown as {
+      moveEventTo(
+        id: string,
+        to: string,
+        from: string
+      ): Promise<{ ok: boolean; listedFrom: string | null }>;
+      graceNote(listedFrom: string | null): string;
+    };
+  }
+
+  test('Publish returns when the event goes on the map and list, and says it plainly', async () => {
+    const at = new Date(Date.now() + 10 * 60_000).toISOString();
+    const w = mountRouter({ ok: true, event: { id: EVT, status: 'active', listedFrom: at } });
+    const r = await w.moveEventTo(EVT, 'active', 'ready');
+    expect(r.ok).toBe(true);
+    expect(r.listedFrom).toBe(at);
+    const note = w.graceNote(r.listedFrom);
+    expect(note).toContain('goes on the map and list at');
+    expect(note).toContain('Undo before then and nobody else will have found it.');
+  });
+
+  test('no window (off, or already passed) → nothing extra to say', async () => {
+    const w = mountRouter({ ok: true });
+    expect(w.graceNote(null)).toBe('');
+    expect(w.graceNote(new Date(Date.now() - 1000).toISOString())).toBe('');
+    expect(w.graceNote('not a date')).toBe('');
+  });
+
+  test('the wizard and the status panel both add the note to their Published message', () => {
+    expect(ADMIN_HTML).toContain(
+      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom) : '')"
+    );
+    expect(ADMIN_HTML).toContain(
+      "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom)"
+    );
+  });
+});

@@ -154,6 +154,11 @@ jobs:
         # cost of a gate that runs on every push does not pay for itself.
         run: npx playwright install --with-deps chromium
 
+      - name: Install Playwright WebKit (publish loop journey only)
+        # OSE-1508: the organizer's publish loop runs on WebKit too, because
+        # most phones are WebKit. One spec, so the cost stays small.
+        run: npx playwright install --with-deps webkit
+
       - name: Audit this branch's code
         # No continue-on-error. This is the whole point: the check's verdict is
         # now about the diff under review, so it is allowed to mean something.

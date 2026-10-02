@@ -56,6 +56,7 @@ import {
 } from './mock-data.js';
 
 import { resolveSponsorsForEvent, type SponsorRow } from './sponsor-resolver.js';
+import { listedSql } from './publish-grace';
 
 // ── Re-export shared types so callers only need one import ─────────────────────
 
@@ -279,7 +280,7 @@ export class DataProvider {
               what_short, who_host, why_purpose, how_details, where_address,
               lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
-       WHERE is_published = 1 AND brand_id = ? AND status = 'active'
+       WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
        ORDER BY start_date ASC, starts_at ASC
        LIMIT 1000`
     )

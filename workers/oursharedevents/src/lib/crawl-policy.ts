@@ -26,6 +26,7 @@
  */
 
 import { HARDENING_HEADERS } from './security-headers.js';
+import { listedSql } from './publish-grace';
 
 export interface CrawlPolicyEnv {
   DB?: D1Database;
@@ -158,7 +159,7 @@ async function listSitemapEvents(
   const { results } = await db
     .prepare(
       `SELECT id, updated_at FROM events
-       WHERE is_published = 1 AND brand_id = ? AND status = 'active'
+       WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
        ORDER BY updated_at DESC
        LIMIT ${SITEMAP_MAX_EVENTS}`
     )

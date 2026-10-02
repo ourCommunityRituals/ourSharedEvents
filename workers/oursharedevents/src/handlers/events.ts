@@ -45,6 +45,7 @@ import {
   type EventTypeRow,
 } from '../lib/event-type-catalog';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
+import { listedFromForPublish } from '../lib/publish-grace';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -57,6 +58,7 @@ import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../li
 export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
 }
 
 /**
@@ -330,7 +332,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
       ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
-      ' e.is_published, e.created_by';
+      ' e.is_published, e.created_by, e.listed_from';
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
@@ -1160,6 +1162,9 @@ export async function handleUpdateEvent(
   values.push(new Date().toISOString());
   values.push(eventId);
 
+  // Set only when this PUT moves the event into or out of active.
+  let listedFrom: string | null | undefined;
+
   try {
     // Status changes go through the state machine — the same VALID_TRANSITIONS
     // verify-qr / unverify-qr already enforce. Before this, `PUT status` was a
@@ -1199,6 +1204,15 @@ export async function handleUpdateEvent(
           },
           { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
         );
+      }
+      // Publish grace window (lib/publish-grace.ts). A move INTO active starts
+      // it; a move out clears it. active → active (a no-op) leaves it alone, so
+      // re-saving a settled event never takes it off the list. values ends with
+      // the WHERE id here, so the new SET value goes just before it.
+      if (from !== to && (to === 'active' || from === 'active')) {
+        listedFrom = to === 'active' ? listedFromForPublish(env.PUBLISH_GRACE_MINUTES) : null;
+        sets.push('listed_from = ?');
+        values.splice(values.length - 1, 0, listedFrom);
       }
     }
 
@@ -1256,7 +1270,12 @@ export async function handleUpdateEvent(
   }
 
   return Response.json(
-    { ok: true, status: 200, id: eventId },
+    {
+      ok: true,
+      status: 200,
+      id: eventId,
+      ...(listedFrom !== undefined ? { listedFrom } : {}),
+    },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }

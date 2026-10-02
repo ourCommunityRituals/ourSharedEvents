@@ -137,7 +137,11 @@ import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
-import { publicReadLimited } from './lib/public-read-limit.js';
+import {
+  isPublicReadLimited,
+  publicReadLimitResponse,
+  publicReadLimited,
+} from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
@@ -795,6 +799,12 @@ export async function route(
   if (adminPosterBundleMatch && method === 'GET') {
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
+    // Draws QR PNGs on every call, so it gets the same generous read limit as
+    // the public bundle (OSE-1508, PO 2026-10-02). After auth, so a stranger
+    // cannot spend an organizer's bucket.
+    if (await isPublicReadLimited(request, env, 'admin-poster-bundle')) {
+      return publicReadLimitResponse();
+    }
     const res = await handleGetPosterBundle(request, env, adminPosterBundleMatch[1], {
       preview: true,
     });

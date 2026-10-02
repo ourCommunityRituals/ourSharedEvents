@@ -12,9 +12,11 @@
  */
 
 import { isValidTransition } from '../domain/event-state';
+import { listedFromForPublish } from '../lib/publish-grace';
 
 export interface QrVerifyEnv {
   DB: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
 }
 
 interface EventRow {
@@ -42,14 +44,16 @@ export async function handleV2AdminVerifyQr(
     );
   }
 
+  // Publish grace window (lib/publish-grace.ts): live by link now, listed later.
+  const listedFrom = listedFromForPublish(env.PUBLISH_GRACE_MINUTES);
   await env.DB.prepare(
-    "UPDATE events SET status = 'active', qr_verified = 1, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE events SET status = 'active', qr_verified = 1, listed_from = ?, updated_at = datetime('now') WHERE id = ?"
   )
-    .bind(eventId)
+    .bind(listedFrom, eventId)
     .run();
 
   return Response.json(
-    { ok: true, event: { id: eventId, status: 'active', qrVerified: true } },
+    { ok: true, event: { id: eventId, status: 'active', qrVerified: true, listedFrom } },
     { status: 200 }
   );
 }
@@ -75,7 +79,7 @@ export async function handleV2AdminUnverifyQr(
   }
 
   await env.DB.prepare(
-    "UPDATE events SET status = 'ready', qr_verified = 0, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE events SET status = 'ready', qr_verified = 0, listed_from = NULL, updated_at = datetime('now') WHERE id = ?"
   )
     .bind(eventId)
     .run();
