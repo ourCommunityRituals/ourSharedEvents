@@ -384,3 +384,108 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
     expect(await latched()).toBe(1);
   });
 });
+
+describe('A concurrent Undo is never reversed', () => {
+  // Wrap D1 so another tab's Undo lands between the handler's status read and
+  // its UPDATE: the exact interleaving a read-then-write can lose.
+  function withUndoBeforeWrite(id: string): D1Database {
+    let fired = false;
+    return new Proxy(E.DB, {
+      get(target, prop) {
+        if (prop !== 'prepare') return Reflect.get(target, prop);
+        return (sql: string) => {
+          if (!fired && /^\s*UPDATE events SET/i.test(sql)) {
+            fired = true;
+            const realStmt = target.prepare(sql);
+            return new Proxy(realStmt, {
+              get(st, p2) {
+                if (p2 !== 'bind') return Reflect.get(st, p2);
+                return (...args: unknown[]) => {
+                  const bound = st.bind(...args);
+                  return new Proxy(bound, {
+                    get(b, p3) {
+                      if (p3 !== 'run') return Reflect.get(b, p3);
+                      return async () => {
+                        await target
+                          .prepare(
+                            "UPDATE events SET status = 'ready', listed_from = NULL WHERE id = ?"
+                          )
+                          .bind(id)
+                          .run();
+                        return b.run();
+                      };
+                    },
+                  });
+                };
+              },
+            });
+          }
+          return target.prepare(sql);
+        };
+      },
+    });
+  }
+
+  test('PUT status active on a live event loses to an Undo that lands first: 409, still a draft-side state', async () => {
+    const id = `grace-race-put-${Date.now()}`;
+    await insertEvent(id, 'active');
+    const res = await handleUpdateEvent(
+      new Request(`https://localhost/api/v2/admin/events/${id}`, {
+        method: 'PUT',
+        headers: { ...BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' }),
+      }),
+      { ...withGrace('10'), DB: withUndoBeforeWrite(id) } as never,
+      id
+    );
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('STATUS_CONFLICT');
+    const row = await E.DB.prepare('SELECT status FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string }>();
+    expect(row?.status).toBe('ready');
+    expect(await inPublicList(id)).toBe(false);
+  });
+
+  test('verify-qr loses to a concurrent move the same way', async () => {
+    const id = `grace-race-vq-${Date.now()}`;
+    await insertEvent(id, 'ready');
+    // The "other tab" here archives it between the read and the write.
+    let fired = false;
+    const db = new Proxy(E.DB, {
+      get(target, prop) {
+        if (prop !== 'prepare') return Reflect.get(target, prop);
+        return (sql: string) => {
+          if (!fired && /^\s*UPDATE events SET/i.test(sql)) {
+            fired = true;
+            return {
+              bind: (...args: unknown[]) => ({
+                run: async () => {
+                  await target
+                    .prepare("UPDATE events SET status = 'archived' WHERE id = ?")
+                    .bind(id)
+                    .run();
+                  return target
+                    .prepare(sql)
+                    .bind(...args)
+                    .run();
+                },
+              }),
+            };
+          }
+          return target.prepare(sql);
+        };
+      },
+    });
+    const res = await handleV2AdminVerifyQr(
+      new Request(`https://localhost/api/v2/admin/events/${id}/verify-qr`, { method: 'POST' }),
+      { ...withGrace('10'), DB: db } as never,
+      id
+    );
+    expect(res.status).toBe(409);
+    const row = await E.DB.prepare('SELECT status FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string }>();
+    expect(row?.status).toBe('archived');
+  });
+});

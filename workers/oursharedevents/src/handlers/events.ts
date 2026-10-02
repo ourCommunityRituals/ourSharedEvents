@@ -1167,6 +1167,9 @@ export async function handleUpdateEvent(
 
   // Set only when this PUT moves the event into or out of active.
   let listedFrom: string | null | undefined;
+  // The status this PUT read before deciding; the UPDATE only lands if the row
+  // still has it, so a concurrent Undo can never be reversed (with no grace).
+  let observedStatus: string | undefined;
 
   try {
     // Status changes go through the state machine — the same VALID_TRANSITIONS
@@ -1191,6 +1194,7 @@ export async function handleUpdateEvent(
       if (!current) {
         return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
       }
+      observedStatus = current.status;
       const from = parseEventState(current.status);
       const to = body.status as EventState;
       if (from !== to && !isValidTransition(from, to)) {
@@ -1220,6 +1224,10 @@ export async function handleUpdateEvent(
     }
 
     let where = ' WHERE id = ?';
+    if (observedStatus !== undefined) {
+      where += ' AND status = ?';
+      values.push(observedStatus);
+    }
     if (timeGuard) {
       // SQLite `IS` compares NULL as a value, so a date-only row guards too.
       where += ' AND start_date IS ? AND timezone IS ? AND starts_at IS ?';
@@ -1230,6 +1238,20 @@ export async function handleUpdateEvent(
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
+      if (observedStatus !== undefined) {
+        const now = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+          .bind(eventId)
+          .first<{ status: string }>();
+        if (now && now.status !== observedStatus) {
+          // Someone else moved it (Undo in another tab) between our read and write.
+          return errorResponse(
+            'STATUS_CONFLICT',
+            'This event changed while saving — reload and try again',
+            409,
+            rid
+          );
+        }
+      }
       if (timeGuard) {
         const still = await env.DB.prepare('SELECT id FROM events WHERE id = ?')
           .bind(eventId)
