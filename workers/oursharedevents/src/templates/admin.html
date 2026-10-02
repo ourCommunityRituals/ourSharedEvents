@@ -2656,7 +2656,7 @@
               <span class="wizard-card-desc" data-testid="wizard-tv-demo-desc"></span>
               <span class="wizard-card-desc" data-testid="wizard-tv-demo-count"></span>
             </div>
-            <button type="button" class="wizard-copy-btn" id="wizard-tv-demo-pause" data-testid="wizard-tv-demo-pause" aria-pressed="false">Pause demo</button>
+            <button type="button" class="wizard-copy-btn" id="wizard-tv-demo-pause" data-testid="wizard-tv-demo-pause">Pause demo</button>
             <div role="group" aria-labelledby="wizard-tv-screens-label">
               <p class="wizard-step-help" id="wizard-tv-screens-label">Screens to show</p>
               <label class="create-publish-label" for="wizard-tv-event"><input type="checkbox" id="wizard-tv-event" data-testid="wizard-tv-screen" data-pane="event" checked /><span>This event</span></label>
@@ -3565,7 +3565,7 @@
             upcoming: { title: 'Coming up next', desc: 'Your next events, so people come back' },
             sponsors: { title: 'Thanks to our sponsors', desc: 'Each sponsor shown once, all the same size' },
           };
-          var st = { eventId: null, title: '', index: 0, timer: null, paused: false, saveSeq: 0 };
+          var st = { eventId: null, title: '', index: 0, timer: null, paused: false, gen: 0, dirty: false, inFlight: false };
           function q(sel) { return document.querySelector('[data-testid="' + sel + '"]'); }
           function boxes() { return Array.prototype.slice.call(document.querySelectorAll('[data-testid="wizard-tv-screen"]')); }
           function picked() {
@@ -3615,37 +3615,51 @@
           function setPaused(on) {
             st.paused = on;
             var btn = q('wizard-tv-demo-pause');
-            if (btn) {
-              btn.textContent = on ? 'Play demo' : 'Pause demo';
-              btn.setAttribute('aria-pressed', String(on));
-            }
+            // The label names the action, so no aria-pressed (it would read
+            // "Play demo, pressed" while paused).
+            if (btn) btn.textContent = on ? 'Play demo' : 'Pause demo';
             schedule();
           }
-          async function save() {
+          // One PUT at a time, always with the latest choices: a change made
+          // while a save is in flight is sent after it, so an older request can
+          // never land last and overwrite the newer selection.
+          function save() {
             if (!st.eventId) return;
-            var eventId = st.eventId;
-            var seq = ++st.saveSeq;
-            // League goes last and stays on: it only appears on the TV once
-            // league links are added in the TV display card.
-            var panes = picked().concat(['league']);
-            msg('Saving…');
-            try {
-              var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: seconds() } }),
-              });
-              var data = await res.json().catch(function () { return null; });
-              // A newer change, or a newer event, owns the message now.
-              if (seq !== st.saveSeq || eventId !== st.eventId) return;
-              if (!res.ok || !data || !data.ok) {
-                msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV keeps its last setting.', 'error');
-                return;
+            st.dirty = true;
+            msg('Saving\u2026');
+            if (!st.inFlight) drain();
+          }
+          async function drain() {
+            st.inFlight = true;
+            while (st.dirty && st.eventId) {
+              st.dirty = false;
+              var eventId = st.eventId;
+              var gen = st.gen;
+              // League goes last and stays on: it only appears on the TV once
+              // league links are added in the TV display card.
+              var body = { settings: { displayPanes: picked().concat(['league']), displayDwellSeconds: seconds() } };
+              var text = 'Could not save. The TV keeps its last setting.';
+              var kind = 'error';
+              try {
+                var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                });
+                var data = await res.json().catch(function () { return null; });
+                if (res.ok && data && data.ok) {
+                  text = 'Saved.';
+                  kind = 'success';
+                } else if (data && data.error) {
+                  text = 'Not saved: ' + data.error;
+                }
+              } catch (e) {
+                /* network failure: the default text stands */
               }
-              msg('Saved.', 'success');
-            } catch (e) {
-              if (seq === st.saveSeq && eventId === st.eventId) msg('Could not save. The TV keeps its last setting.', 'error');
+              // A newer event, or a newer change still to send, owns the message.
+              if (gen === st.gen && !st.dirty) msg(text, kind);
             }
+            st.inFlight = false;
           }
           boxes().forEach(function (b) {
             b.addEventListener('change', function () {
@@ -3679,7 +3693,8 @@
             st.eventId = d.id ? String(d.id) : null;
             st.title = d.title || '';
             st.index = 0;
-            st.saveSeq++;
+            st.gen++;
+            st.dirty = false;
             boxes().forEach(function (b) { b.checked = true; });
             var normal = document.getElementById('wizard-tv-speed-15');
             if (normal) normal.checked = true;

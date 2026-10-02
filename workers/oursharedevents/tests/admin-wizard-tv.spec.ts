@@ -135,7 +135,8 @@ describe('wizard TV section: the demo', () => {
     $<HTMLButtonElement>('wizard-tv-demo-pause').click();
     expect(timers.size).toBe(0);
     expect($('wizard-tv-demo-pause').textContent).toBe('Play demo');
-    expect($('wizard-tv-demo-pause').getAttribute('aria-pressed')).toBe('true');
+    // The label is the action, so no contradictory "Play demo, pressed".
+    expect($('wizard-tv-demo-pause').hasAttribute('aria-pressed')).toBe(false);
     $<HTMLButtonElement>('wizard-tv-demo-pause').click();
     expect(timers.size).toBe(1);
   });
@@ -162,6 +163,37 @@ describe('wizard TV section: the demo', () => {
 });
 
 describe('wizard TV section: saving', () => {
+  test('one save at a time, and the last choice is what lands', async () => {
+    const { w, box, speed, change, created, $ } = mount();
+    const sent: unknown[] = [];
+    const answers: Array<() => void> = [];
+    w.fetch = ((_url: string, init?: RequestInit) => {
+      sent.push(JSON.parse(String(init!.body)));
+      return new Promise((resolve) => {
+        answers.push(() => resolve({ ok: true, status: 200, json: async () => ({ ok: true }) }));
+      });
+    }) as unknown as typeof fetch;
+    created();
+    change(box('upcoming'), false); // save 1 starts
+    change(box('sponsors'), false); // queued
+    change(speed(30), true); // queued: coalesced with the line above
+    await flush();
+    expect(sent).toHaveLength(1);
+    expect($('wizard-tv-msg').textContent).toBe('Saving\u2026');
+    answers.shift()!();
+    await flush();
+    // The first answer does not claim "Saved." while a newer change waits.
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual({
+      settings: { displayPanes: ['event', 'league'], displayDwellSeconds: 30 },
+    });
+    expect($('wizard-tv-msg').textContent).toBe('Saving\u2026');
+    answers.shift()!();
+    await flush();
+    expect(sent).toHaveLength(2);
+    expect($('wizard-tv-msg').textContent).toBe('Saved.');
+  });
+
   test('nothing is saved until the organiser changes something', async () => {
     const { created, calls } = mount();
     created();
