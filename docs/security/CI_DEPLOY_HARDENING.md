@@ -218,11 +218,11 @@ Add workflow file to branch protection:
 
 ```bash
 # Update repository secret
-gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
+gh secret set CF_DEPLOY_TOKEN   # hidden prompt — never pass the value on the command line
 
 # If using environment-scoped secrets
-gh secret set CF_DEPLOY_TOKEN --env staging --body "<new-token-value>"
-gh secret set CF_DEPLOY_TOKEN --env production --body "<new-token-value>"
+gh secret set CF_DEPLOY_TOKEN --env staging   # hidden prompt — never pass the value on the command line
+gh secret set CF_DEPLOY_TOKEN --env production   # hidden prompt — never pass the value on the command line
 ```
 
 **Step 3: Verify New Token**
@@ -309,7 +309,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_lo
 ```bash
 # 4. Create new token per Section 3.3
 # 5. Update GitHub Secrets
-gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
+gh secret set CF_DEPLOY_TOKEN   # hidden prompt — never pass the value on the command line
 
 # 6. Verify new token works
 CLOUDFLARE_API_TOKEN_OSE="<new-token>" wrangler whoami

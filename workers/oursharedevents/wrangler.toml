@@ -321,8 +321,10 @@ DRAFT_EXPIRY_DAYS = "30"
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
-# Allow X-OCR-Internal header for CI/CD automation
-ALLOW_OCR_INTERNAL = "true"
+# ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,
+# OSE-1467): a static X-OCR-Internal header passed requireKeyActor, so its holder
+# could write production global flags and run erasure. Production admin is
+# CF Access only. tests/prod-admin-scope-config.spec.ts fails if it returns.
 # Admin email allowlist — set explicitly here (not inherited from [vars])
 ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
@@ -344,8 +346,8 @@ GCP_REGION         = "us-central1"
 
 # Required secrets for production (set with wrangler secret put … --env production):
 #   TURNSTILE_SECRET         (Turnstile siteverify secret — ONLY when activating L4/OSE-1378; dark by default)
-#   ADMIN_KEY                (strong random string, min 32 chars)
-#   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
+#   (ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN must NOT be set on production: admin is
+#    Cloudflare Access only, and the production deploy gate refuses them. ADR-012 R2.)
 #   FORMS_ENCRYPTION_KEY     (AES-GCM key for email encryption — min 32 chars, unique per env)
 #   FORMS_HASH_PEPPER        (HMAC-SHA256 pepper for email hashing — min 32 chars, unique per env)
 #                            OSE-598: different from FORMS_ENCRYPTION_KEY; rotate every 90 days

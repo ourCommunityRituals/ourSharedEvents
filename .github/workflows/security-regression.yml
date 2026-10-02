@@ -102,6 +102,9 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Display configuration
+      env:
+        # Dispatch input → env, never interpolated into the shell (OSE-1470).
+        INPUT_TARGET_URL: ${{ inputs.target_url }}
       run: |
         echo "=============================================="
         echo "SECURITY REGRESSION GATE (SEC-10.1)"
@@ -111,7 +114,7 @@ jobs:
         echo "Any violation will fail CI."
         echo ""
         echo "Trigger: ${{ github.event_name }}"
-        echo "Branch: ${{ github.ref_name }}"
+        echo "Branch: $GITHUB_REF_NAME"
         echo "Commit: ${{ github.sha }}"
         echo ""
 
@@ -126,13 +129,13 @@ jobs:
         # variable also adds production to security-monitoring.yml's daily check.
         PRODUCTION_LIVE="${{ vars.PRODUCTION_LIVE || 'false' }}"
 
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_url }}" ]; then
-          TARGET_URL="${{ inputs.target_url }}"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "$INPUT_TARGET_URL" ]; then
+          TARGET_URL="$INPUT_TARGET_URL"
           echo "Target: $TARGET_URL (manual override)"
         elif [ "${{ github.event_name }}" == "schedule" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (nightly production check)"
-        elif [ "${{ github.ref_name }}" == "main" ] && [ "${{ github.event_name }}" == "push" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
+        elif [ "$GITHUB_REF_NAME" == "main" ] && [ "${{ github.event_name }}" == "push" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (main branch - production)"
         else
@@ -143,8 +146,15 @@ jobs:
         echo ""
         echo "=============================================="
 
-        # Export for later steps
-        echo "TARGET_URL=$TARGET_URL" >> $GITHUB_ENV
+        # Export for later steps. A dispatch value is free text: a line break
+        # would add its own entries to GITHUB_ENV for the credential-bearing
+        # steps below (Copilot review on #747), so require one http(s) URL
+        # with no whitespace or control characters before writing it.
+        if [[ ! "$TARGET_URL" =~ ^https?://[^[:space:][:cntrl:]]+$ ]]; then
+          echo "::error::target_url must be a single http(s) URL with no spaces or line breaks"
+          exit 1
+        fi
+        echo "TARGET_URL=$TARGET_URL" >> "$GITHUB_ENV"
 
     - name: Make script executable
       run: chmod +x scripts/security/security_regression.sh
@@ -174,6 +184,10 @@ jobs:
 
     - name: Create check summary
       if: always()
+      env:
+        # Inputs → env, never interpolated into the shell (OSE-1470).
+        SKIP_RATE_LIMIT: ${{ inputs.skip_rate_limit || 'true' }}
+        SKIP_ORIGIN_BYPASS: ${{ inputs.skip_origin_bypass || 'false' }}
       run: |
         echo "## Security Regression Gate (SEC-10.1)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -204,9 +218,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Configuration" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- **Target URL:** ${{ env.TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Skip Rate Limit:** ${{ inputs.skip_rate_limit || 'true' }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Skip Origin Bypass:** ${{ inputs.skip_origin_bypass || 'false' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Target URL:** $TARGET_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Rate Limit:** $SKIP_RATE_LIMIT" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Origin Bypass:** $SKIP_ORIGIN_BYPASS" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

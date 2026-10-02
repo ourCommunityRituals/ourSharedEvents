@@ -182,13 +182,29 @@ function htmlEscape(s) {
 
 test.beforeAll(() => {
   // A missing key would make every write test fail with a vague 401. Say why.
-  if (!ADMIN_KEY) throw new Error('ADMIN_KEY is not set; security smoke cannot authenticate');
+  // Production has no static admin key (ADR-012 R2), and every writing test
+  // skips there, so the key is required only off production.
+  if (!ADMIN_KEY && !IS_PRODUCTION) {
+    throw new Error('ADMIN_KEY is not set; security smoke cannot authenticate');
+  }
   if (process.env.CI && !IS_PRODUCTION && !(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET)) {
     throw new Error('CF_ACCESS_CLIENT_ID/SECRET not set; staging admin API is behind CF Access');
   }
 });
 
+// Copilot review on #747: on production every writing describe skips, so the
+// run must prove it executed something. playwright.e2e-smoke.config.ts runs one
+// worker, so this file-level counter sees the whole file.
+let executed = 0;
+test.beforeEach(() => {
+  executed++;
+});
+
 test.afterAll(async ({ request }) => {
+  expect(
+    executed,
+    'security smoke must execute at least one test (no all-skipped green)'
+  ).toBeGreaterThan(0);
   const failures = [];
   for (const id of createdIds) {
     const res = await request.delete(`${BASE_URL}/api/v2/admin/events/${id}`, {
@@ -202,6 +218,34 @@ test.afterAll(async ({ request }) => {
     `[security-smoke] cleanup: deleted ${createdIds.length - failures.length}/${createdIds.length}`
   );
   expect(failures, 'every event this spec created must be deleted').toEqual([]);
+});
+
+// Read-only, so it runs everywhere, production included (ADR-021 allows reads).
+// Production admin is Cloudflare Access only (ADR-012 R2): no static header and
+// no Bearer key may open an admin read. Staging must refuse a wrong value too.
+test.describe('🔒 SECURITY: Admin reads refuse missing and static credentials', () => {
+  for (const [label, headers] of [
+    ['No credentials', {}],
+    [
+      'Wrong static credentials',
+      {
+        Authorization: 'Bearer WRONG_KEY_12345',
+        'X-OCR-Internal': `not-a-real-secret-${RUN}`,
+      },
+    ],
+  ]) {
+    test(`${label}: admin read is refused`, async ({ request }) => {
+      const res = await request.get(`${BASE_URL}/api/v2/admin/events`, {
+        timeout: TIMEOUT,
+        maxRedirects: 0,
+        headers,
+      });
+      // 302 = the Access login redirect, 401/403 = the Worker or Access refusing.
+      expect([302, 401, 403], `status ${res.status()}`).toContain(res.status());
+      const json = await res.json().catch(() => null);
+      expect(json && Array.isArray(json.items), 'no admin data in the response').toBeFalsy();
+    });
+  }
 });
 
 test.describe('🔒 SECURITY: Admin key validation', () => {

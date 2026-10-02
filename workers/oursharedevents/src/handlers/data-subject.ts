@@ -6,7 +6,8 @@
  *   form_registrations, writes an audit record to pii_audit_log, and returns
  *   deletion counts.
  *
- *   Raw email is never written to any log or response — only the SHA-256 hash.
+ *   Neither the raw email nor its hash is written to any log, audit row or
+ *   response; only deletion counts leave the handler.
  *   Admin-only: caller must pass requireAdmin before this handler is invoked.
  *
  * OSE-1350 — anon-ID-linked scan/report rows.
@@ -42,8 +43,9 @@ import { findAnonIdsLinkedToEmailHash } from '../lib/erasure-anon-lookup';
  * (migration 0071). The row is keyed by a peppered HMAC-SHA256 `email_hash`
  * (the UNIQUE dedup + lookup key) alongside an AES-GCM `email_encrypted`. Erase
  * deletes by `email_hash` — computed with the SAME normalization the subscribe
- * path uses, so the hashes line up. The raw email is never logged or returned;
- * the response continues to expose only the emailHash.
+ * path uses, so the hashes line up. Neither the raw email nor its emailHash is
+ * logged, written to pii_audit_log, or returned (log redaction): the hash is a
+ * stable pseudonym of the person being erased. Only counts leave this handler.
  */
 export type DataSubjectEnv = FormsDbEnv & {
   /** Main DB binding — host of `subscribers`, `scan_node_returns`, `anon_id_returns`. */
@@ -233,7 +235,6 @@ export async function handleDataSubjectErase(
           anonIdReturnsDeleted,
         errors,
         JSON.stringify({
-          emailHash,
           signupsDeleted,
           registrationsDeleted,
           subscribersDeleted,
@@ -250,7 +251,6 @@ export async function handleDataSubjectErase(
   console.log(
     JSON.stringify({
       type: 'DATA_SUBJECT_ERASE',
-      emailHash,
       signupsDeleted,
       registrationsDeleted,
       subscribersDeleted,
@@ -263,7 +263,6 @@ export async function handleDataSubjectErase(
 
   return Response.json({
     ok: true,
-    emailHash,
     signupsDeleted,
     registrationsDeleted,
     subscribersDeleted,

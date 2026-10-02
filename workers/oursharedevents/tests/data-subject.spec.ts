@@ -11,15 +11,29 @@
  *   - correct deletion from email_signups and form_registrations
  *   - pii_audit_log entry written
  *   - idempotent (second call returns 0 counts)
- *   - raw email never appears in response (only hash)
+ *   - raw email never appears in response, and neither does its emailHash
+ *     (log redaction: the hash is a stable pseudonym of the erased person)
  */
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, it, expect, beforeAll } from 'vitest';
 import { handleDataSubjectErase, type DataSubjectEnv } from '../src/handlers/data-subject';
 import { hashAnonIdForReturns } from '../src/lib/anon-id-hash';
+import { hashEmail } from '../src/lib/forms-db';
 
 const TEST_ANON_PEPPER = 'test-anon-id-hash-pepper-do-not-use-in-prod';
+
+/**
+ * The email hash the erase handler computes — the same function and the same
+ * FORMS_HASH_PEPPER (from the shared test worker env, vitest.workers.config.mts)
+ * the handler uses. The handler no longer returns it, so tests that seed rows
+ * derive it here instead of reading it off a response.
+ */
+async function handlerEmailHash(email: string): Promise<string> {
+  return hashEmail(email.trim(), (env as Record<string, string>).FORMS_HASH_PEPPER, {
+    requirePepper: true,
+  });
+}
 
 // ── DB setup ───────────────────────────────────────────────────────────────────
 
@@ -153,7 +167,7 @@ describe('POST /api/v2/admin/data-subject/erase — validation', () => {
 // ── L2: Erasure behaviour ─────────────────────────────────────────────────────
 
 describe('POST /api/v2/admin/data-subject/erase — erasure', () => {
-  test('returns 200 with emailHash and counts for unknown email', async () => {
+  test('returns 200 with counts and WITHOUT emailHash for unknown email', async () => {
     const res = await SELF.fetch(eraseUrl(), {
       method: 'POST',
       headers: adminHeaders(),
@@ -162,8 +176,9 @@ describe('POST /api/v2/admin/data-subject/erase — erasure', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ok).toBe(true);
-    expect(typeof body.emailHash).toBe('string');
-    expect((body.emailHash as string).length).toBe(64);
+    // Log redaction: the emailHash is a stable pseudonym of the person being
+    // erased — it must not leave the handler.
+    expect(body).not.toHaveProperty('emailHash');
     expect(body.signupsDeleted).toBe(0);
     expect(body.registrationsDeleted).toBe(0);
     expect(typeof body.erasedAt).toBe('string');
@@ -178,18 +193,13 @@ describe('POST /api/v2/admin/data-subject/erase — erasure', () => {
     });
     const text = await res.text();
     expect(text).not.toContain(email);
+    expect(text).not.toContain(await handlerEmailHash(email));
   });
 
   test('deletes matching email_signups by hash', async () => {
     const email = 'toerase@example.com';
 
-    // Step 1: get the hash via a dry-run erase
-    const hashRes = await SELF.fetch(eraseUrl(), {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ email }),
-    });
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    const emailHash = await handlerEmailHash(email);
 
     // Step 2: seed a signup with that hash
     const signupId = `erase-su-${crypto.randomUUID()}`;
@@ -222,12 +232,7 @@ describe('POST /api/v2/admin/data-subject/erase — erasure', () => {
   test('deletes matching form_registrations by attendee_email_hash', async () => {
     const email = 'reg-erase@example.com';
 
-    const hashRes = await SELF.fetch(eraseUrl(), {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ email }),
-    });
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    const emailHash = await handlerEmailHash(email);
 
     const regId = `erase-reg-${crypto.randomUUID()}`;
     await formsDb()
@@ -271,15 +276,46 @@ describe('POST /api/v2/admin/data-subject/erase — erasure', () => {
     expect(countAfter?.n ?? 0).toBeGreaterThan(countBefore?.n ?? 0);
   });
 
-  test('is idempotent — second call returns 0 deletion counts', async () => {
-    const email = 'idempotent@example.com';
+  test('pii_audit_log details carry counts only — no emailHash key or value', async () => {
+    const email = 'audit-redaction@example.com';
+    const emailHash = await handlerEmailHash(email);
+    const signupId = `audit-red-${crypto.randomUUID()}`;
+    await formsDb()
+      .prepare(
+        `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
+         VALUES (?, 'ds-test', ?, 'enc-audit', '2026-01', '2099-01-01')`
+      )
+      .bind(signupId, emailHash)
+      .run();
 
-    const hashRes = await SELF.fetch(eraseUrl(), {
+    const res = await SELF.fetch(eraseUrl(), {
       method: 'POST',
       headers: adminHeaders(),
       body: JSON.stringify({ email }),
     });
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Record<string, unknown>).signupsDeleted).toBe(1);
+
+    // The newest erase audit row is the one this request wrote (records_affected
+    // = 1 pins it to this erase, not a zero-count one from another test).
+    const row = await formsDb()
+      .prepare(
+        `SELECT details FROM pii_audit_log
+          WHERE phase = 'data_subject_erase' AND records_affected = 1
+          ORDER BY rowid DESC LIMIT 1`
+      )
+      .first<{ details: string }>();
+    expect(row).not.toBeNull();
+    const details = JSON.parse(row!.details) as Record<string, unknown>;
+    expect(details).not.toHaveProperty('emailHash');
+    expect(row!.details).not.toContain(emailHash);
+    expect(details.signupsDeleted).toBe(1);
+  });
+
+  test('is idempotent — second call returns 0 deletion counts', async () => {
+    const email = 'idempotent@example.com';
+
+    const emailHash = await handlerEmailHash(email);
 
     const signupId = `idem-${crypto.randomUUID()}`;
     await formsDb()
@@ -318,12 +354,7 @@ describe('POST /api/v2/admin/data-subject/erase — OSE-1350 anon-ID purge', () 
     const email = 'scan-purge@example.com';
     const anonId = `anon-${crypto.randomUUID()}`;
 
-    const hashRes = await SELF.fetch(eraseUrl(), {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ email }),
-    });
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    const emailHash = await handlerEmailHash(email);
 
     const signupId = `snr-su-${crypto.randomUUID()}`;
     await formsDb()
@@ -373,17 +404,7 @@ describe('POST /api/v2/admin/data-subject/erase — OSE-1350 anon-ID purge', () 
       ANON_ID_HASH_PEPPER: TEST_ANON_PEPPER,
     };
 
-    // Discover the emailHash the handler will compute (same FORMS_HASH_PEPPER as
-    // the shared test worker env — see vitest.workers.config.mts).
-    const hashRes = await handleDataSubjectErase(
-      new Request(eraseUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      }),
-      testEnv
-    );
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    const emailHash = await handlerEmailHash(email);
 
     const regId = `air-reg-${crypto.randomUUID()}`;
     await formsDb()
@@ -453,12 +474,7 @@ describe('POST /api/v2/admin/data-subject/erase — OSE-1350 anon-ID purge', () 
     const email = 'anon-no-leak@example.com';
     const anonId = `anon-secret-${crypto.randomUUID()}`;
 
-    const hashRes = await SELF.fetch(eraseUrl(), {
-      method: 'POST',
-      headers: adminHeaders(),
-      body: JSON.stringify({ email }),
-    });
-    const { emailHash } = (await hashRes.json()) as { emailHash: string };
+    const emailHash = await handlerEmailHash(email);
 
     await formsDb()
       .prepare(

@@ -396,8 +396,7 @@ export async function handleSponsorAssetUpload(
     console.error(
       JSON.stringify({
         type: 'R2_SPONSOR_ASSET_UPLOAD_ERROR',
-        requestId,
-        draftToken,
+        requestId, // correlates with the request; the draft token is a credential and is not logged
         format: fmt,
         error: error instanceof Error ? error.message : String(error),
       })

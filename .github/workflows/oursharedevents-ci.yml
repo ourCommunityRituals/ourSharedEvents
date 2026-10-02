@@ -199,6 +199,8 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
@@ -222,7 +224,7 @@ jobs:
           if [ -f "$FLAGS_NM" ]; then
             node -e "const p=JSON.parse(require('fs').readFileSync('$FLAGS_NM','utf8'));process.exit(p.devDependencies?0:1)" 2>/dev/null || flags_mutated=true
           fi
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ "$flags_mutated" = 'false' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ "$flags_mutated" = 'false' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             if [ "$flags_mutated" = 'true' ]; then
@@ -447,10 +449,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -522,6 +526,8 @@ jobs:
       # workers/oursharedevents/node_modules populated.
       - name: Install worker dependencies
         if: matrix.shard != 'lint' && matrix.shard != 'invariants'
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
@@ -533,7 +539,7 @@ jobs:
           # could not be found"). Gate the skip on the workerd binary actually
           # being present so the clear/restore cycle self-heals every run.
           WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && [ -f "$WORKERD" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && [ -f "$WORKERD" ]; then
             echo "worker node_modules up-to-date, skipping npm ci"
           else
             [ -f "$WORKERD" ] || echo "workerd binary absent (cleared by the pre-install lock guard or a partial install) — forcing npm ci"
@@ -761,6 +767,7 @@ jobs:
             tests/e2e/0-architecture/csp-connect-src.invariant.spec.ts \
             tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
+            tests/e2e/0-architecture/log-redaction.invariant.spec.ts \
             tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
             tests/e2e/0-architecture/monetization-inert.invariant.spec.ts \
             tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts \
@@ -781,7 +788,8 @@ jobs:
             tests/e2e/0-architecture/sponsor-signal-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts \
             tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts \
-            tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts
+            tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts \
+            tests/e2e/0-architecture/workflow-injection.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
       # Real browser engine, no deploy. The webServer in
@@ -912,10 +920,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -925,11 +935,13 @@ jobs:
       - name: Install worker dependencies
         if: matrix.workdir == 'workers/oursharedevents'
         working-directory: ${{ env.WORKER_DIR }}
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
           WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && { [ "$RUNNER_OS" != "Windows" ] || [ -f "$WORKERD" ]; }; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && { [ "$RUNNER_OS" != "Windows" ] || [ -f "$WORKERD" ]; }; then
             echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -1033,10 +1045,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -1263,10 +1277,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -1297,9 +1313,23 @@ jobs:
         run: npx playwright test --config=${{ matrix.config }} ${{ matrix.specs }}
         timeout-minutes: 10
 
+      # OSE-1470: the suites above send CF Access / admin credentials. Refuse to
+      # upload anything that recorded one (trace, report, JUnit). Prints only the
+      # file + pattern name; the upload below runs only if this passes.
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: >-
+          bash scripts/ci/scan-artifacts-for-secrets.sh
+          playwright-report-smoke/ playwright-report-e2e-smoke/ .test-results/ test-results/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success'
         with:
           name: smoke-staging-${{ matrix.section }}-${{ github.run_number }}
           path: |
@@ -1315,7 +1345,7 @@ jobs:
       # Surface per-test Playwright smoke results as a GitHub Check (visible in
       # the PR/Checks tab), matching the T4 functional reporter.
       - name: Report results (E2E smoke)
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
@@ -1409,10 +1439,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -1557,9 +1589,20 @@ jobs:
             --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
         timeout-minutes: 5
 
+      # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
+      # upload a report that recorded one. Upload runs only if this passes.
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh .test-results/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success'
         with:
           name: contract-staging-${{ matrix.section }}-${{ github.run_number }}
           path: .test-results/
@@ -1572,7 +1615,7 @@ jobs:
       # PR/Checks tab), so a contract failure shows the failing request + message
       # by name instead of being buried in the CLI log.
       - name: Report results (Bruno contract)
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
@@ -1656,10 +1699,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -2042,9 +2087,25 @@ jobs:
             tests/e2e/2-pages/poster-print.data.spec.ts
         timeout-minutes: 5
 
+      # OSE-1470: the T4 suites send CF Access / admin credentials and mint a
+      # CF_Authorization cookie. Refuse to upload anything that recorded one.
+      # Prints only the file + pattern name; the upload runs only if this passes.
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: >-
+          bash scripts/ci/scan-artifacts-for-secrets.sh
+          playwright-report-smoke/ playwright-report-e2e-smoke/ playwright-report-ui-smoke/
+          .test-results/ test-results/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success'
         with:
           name: functional-staging-${{ github.run_number }}
           path: |
@@ -2059,7 +2120,7 @@ jobs:
           include-hidden-files: true
 
       - name: Report results
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
@@ -2200,10 +2261,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
@@ -2241,6 +2304,15 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # ADR-012 gate R2 (OSE-1467): static admin credentials must be ABSENT on
+          # production. Their presence is a standing admin path that bypasses Access.
+          for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do
+            if echo "$OUT" | grep -qw "$SECRET"; then
+              echo "::error::$SECRET is set on the production worker. Production admin is Cloudflare Access only; delete it: npx wrangler secret delete $SECRET --env production"
+              exit 1
+            fi
+          done
+          echo "ADMIN_KEY, X_OCR_INTERNAL, ADMIN_TOKEN absent on production."
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -2380,8 +2452,8 @@ jobs:
         id: security-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          # No ADMIN_KEY / X_OCR_INTERNAL: production accepts neither (ADR-012 R2),
+          # and sending them would put a staging credential on a production request.
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/1-smoke/security-smoke.spec.js
@@ -2396,9 +2468,21 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
+      # OSE-1470: the security smoke sent production credentials. Refuse to
+      # upload anything that recorded one; the upload runs only if this passes.
+      # Only the CF Access secret: no step in this job receives ADMIN_KEY or
+      # X_OCR_INTERNAL, so they cannot be in the reports, and passing them
+      # here would only widen secret access in the production job.
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        env:
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh playwright-report-smoke/ .test-results/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && steps.artifact-scan.outcome == 'success'
         with:
           name: smoke-production-${{ github.run_number }}
           path: |
@@ -2541,4 +2625,4 @@ jobs:
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** \`$GITHUB_REF\`" >> $GITHUB_STEP_SUMMARY

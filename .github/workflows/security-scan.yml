@@ -112,7 +112,7 @@ jobs:
         echo "CodeQL SARIF generation is in codeql.yml (single source of truth)."
         echo ""
         echo "Trigger: ${{ github.event_name }}"
-        echo "Branch: ${{ github.ref_name }}"
+        echo "Branch: $GITHUB_REF_NAME"
         echo "Commit: ${{ github.sha }}"
         echo ""
         echo "Policy: $FAIL_ON_SEVERITY severity findings block merge"
@@ -268,11 +268,13 @@ jobs:
       run: bash scripts/ci-stage-ocr-workspace.sh
 
     - name: Install dependencies
+      env:
+        # inputs.skip_cache is only populated on workflow_dispatch; default to 'false' for push/PR.
+        # Passed via env, never interpolated into the shell (OSE-1470).
+        SKIP_CACHE: ${{ inputs.skip_cache || 'false' }}
       run: |
         HASH="$(node --version)-$(git hash-object package-lock.json)"
         STAMP=node_modules/.install-stamp
-        # inputs.skip_cache is only populated on workflow_dispatch; default to 'false' for push/PR.
-        SKIP_CACHE="${{ inputs.skip_cache || 'false' }}"
         if [ "$SKIP_CACHE" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
           echo "node_modules up-to-date, skipping npm ci"
         else

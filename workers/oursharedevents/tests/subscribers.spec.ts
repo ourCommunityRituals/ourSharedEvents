@@ -412,12 +412,12 @@ describe('L2 behavioral: data-subject erase removes subscribers row', () => {
     const body = (await res.json()) as {
       ok: boolean;
       subscribersDeleted: number;
-      emailHash: string;
     };
     expect(body.ok).toBe(true);
     expect(body.subscribersDeleted).toBe(1);
-    // Contract: raw email never returned — only the hash
-    expect(body.emailHash).toMatch(/^[0-9a-f]{64}$/);
+    // Contract: neither the raw email nor its hash is returned (log redaction —
+    // the hash is a stable pseudonym of the erased person). Counts only.
+    expect(body).not.toHaveProperty('emailHash');
 
     const afterRow = await tenv()
       .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')

@@ -42,9 +42,10 @@ jobs:
         id: check-scans
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Event fields → env, never interpolated into the shell (OSE-1470).
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
           echo "Checking security scan status for PR #$PR_NUMBER (SHA: $HEAD_SHA)..."
           echo ""
@@ -83,8 +84,8 @@ jobs:
         if: steps.check-scans.outputs.security_failed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
 
           echo "=================================================="
           echo "SECURITY VIOLATIONS DETECTED"

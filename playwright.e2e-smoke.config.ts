@@ -61,8 +61,14 @@ const config = defineConfig({
 
   use: {
     baseURL: getBaseUrl(),
-    trace: 'retain-on-failure',
+    // Credential safety (OSE-1470): trace and video are OFF. Playwright traces record
+    // every request's headers (CF-Access-Client-Secret, Authorization: Bearer <ADMIN_KEY>,
+    // X-OCR-Internal) and the minted CF_Authorization cookie; CI uploads them as
+    // artifacts anyone with repo read access can download. A plain page screenshot
+    // shows no headers, so failure screenshots stay. Do not turn these back on.
+    trace: 'off',
     screenshot: 'only-on-failure',
+    video: 'off',
     ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 },
     // OSE-1310 / OSE-306: default headless Chromium sends `HeadlessChrome/...`

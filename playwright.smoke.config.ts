@@ -65,8 +65,13 @@ const config = defineConfig({
     // Base URL from environment
     baseURL: getBaseUrl(),
 
-    // Traces only on failure
-    trace: 'retain-on-failure',
+    // Credential safety (OSE-1470): trace and video are OFF. Playwright traces record
+    // every request's headers (CF-Access-Client-Secret, Authorization: Bearer <ADMIN_KEY>,
+    // X-OCR-Internal) and the minted CF_Authorization cookie; CI uploads them as
+    // artifacts anyone with repo read access can download. A plain page screenshot
+    // shows no headers, so failure screenshots stay. Do not turn these back on.
+    trace: 'off',
+    video: 'off',
 
     // Extra HTTP headers for API requests
     extraHTTPHeaders: {

@@ -160,7 +160,7 @@ export async function promoteSponsorDraft(
       JSON.stringify({
         type: 'SPONSOR_PROMOTION_GATE',
         decision: 'payment_required',
-        draft_token: draftToken,
+        // The draft token is a bearer credential for the draft; never log it.
         brand_id: draft.brand_id,
       })
     );

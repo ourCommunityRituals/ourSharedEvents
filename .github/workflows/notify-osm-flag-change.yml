@@ -43,17 +43,18 @@ jobs:
       - name: Open issue in OSM
         env:
           GH_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          # Branch and author arrive through env, never interpolated into the
+          # shell (OSE-1499). The quoted heredoc keeps the body literal; the
+          # placeholders are filled by bash string replacement afterwards.
+          BRANCH_NAME: ${{ github.ref_name }}
+          AUTHOR: ${{ github.actor }}
         run: |
-          gh issue create \
-            --repo ourCommunityRituals/ourSharedMagnets \
-            --title "OSE feature flags changed — update Postman/Newman mocks" \
-            --label "dependency-sync" \
-            --body "$(cat <<'EOISSUE'
+          BODY="$(cat <<'EOISSUE'
           ## Feature Flag Change Detected
 
-          OSE commit: ${{ github.sha }}
-          Branch: ${{ github.ref_name }}
-          Author: ${{ github.actor }}
+          OSE commit: __SHA__
+          Branch: __BRANCH__
+          Author: __AUTHOR__
 
           ### What changed
 
@@ -73,3 +74,12 @@ jobs:
           *Opened by notify-osm-flag-change workflow in ourSharedEvents.*
           EOISSUE
           )"
+          # Quoted replacements: plain text, and no bash 5.2 `&` expansion.
+          BODY="${BODY//__SHA__/"$GITHUB_SHA"}"
+          BODY="${BODY//__BRANCH__/"$BRANCH_NAME"}"
+          BODY="${BODY//__AUTHOR__/"$AUTHOR"}"
+          gh issue create \
+            --repo ourCommunityRituals/ourSharedMagnets \
+            --title "OSE feature flags changed — update Postman/Newman mocks" \
+            --label "dependency-sync" \
+            --body "$BODY"

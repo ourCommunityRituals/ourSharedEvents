@@ -51,7 +51,7 @@ export default {
         JSON.stringify({
           type: 'UNHANDLED_ERROR',
           error: err instanceof Error ? err.message : String(err),
-          url: request.url,
+          path: new URL(request.url).pathname,
           timestamp: new Date().toISOString(),
         })
       );

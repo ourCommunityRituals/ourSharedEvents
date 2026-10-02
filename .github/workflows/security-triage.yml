@@ -47,11 +47,15 @@ jobs:
 
       - name: Determine severity and SLA
         id: severity
+        env:
+          # workflow_run fields → env, never interpolated into the shell
+          # (OSE-1470): head_branch is a branch name anyone who can push a
+          # branch chooses, so `${{ }}` here was script injection.
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          WORKFLOW="${{ github.event.workflow_run.name }}"
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          RUN_URL="${{ github.event.workflow_run.html_url }}"
-          SHA="${{ github.event.workflow_run.head_sha }}"
           SHORT_SHA="${SHA:0:7}"
 
           echo "workflow=$WORKFLOW" >> $GITHUB_OUTPUT
@@ -73,12 +77,13 @@ jobs:
         id: existing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW: ${{ steps.severity.outputs.workflow }}
         run: |
           # Avoid duplicate issues for the same workflow failure
           EXISTING=$(gh issue list \
             --label "security,auto-triage" \
             --state open \
-            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --search "$WORKFLOW failure" \
             --json number \
             --jq 'length' 2>/dev/null || echo "0")
 
@@ -176,16 +181,19 @@ jobs:
           *Auto-created by security-triage workflow. Do not ignore — SLA is binding.*
           ISSUEEOF
 
-          # Substitute placeholders in place. Env-based values avoid shell
-          # injection from GitHub context expressions.
-          sed -i \
-            -e "s|WORKFLOW_PLACEHOLDER|${WORKFLOW}|g" \
-            -e "s|BRANCH_PLACEHOLDER|${BRANCH}|g" \
-            -e "s|SHA_PLACEHOLDER|${SHORT_SHA}|g" \
-            -e "s|RUN_URL_PLACEHOLDER|${RUN_URL}|g" \
-            -e "s|SLA_PLACEHOLDER|${SLA}|g" \
-            -e "s|SLA_DEADLINE_PLACEHOLDER|${SLA_DEADLINE}|g" \
-            "$BODY_FILE"
+          # Substitute placeholders as literal text. Never build a sed program
+          # from these values: a branch name may contain sed metacharacters
+          # (`|`, `;`, `e`), and GNU sed's `e` command would run them (OSE-1499).
+          # Bash pattern substitution with a QUOTED replacement treats the value
+          # as plain text (the quotes also disable bash 5.2's `&` expansion).
+          BODY="$(cat "$BODY_FILE")"
+          BODY="${BODY//WORKFLOW_PLACEHOLDER/"$WORKFLOW"}"
+          BODY="${BODY//BRANCH_PLACEHOLDER/"$BRANCH"}"
+          BODY="${BODY//SHA_PLACEHOLDER/"$SHORT_SHA"}"
+          BODY="${BODY//RUN_URL_PLACEHOLDER/"$RUN_URL"}"
+          BODY="${BODY//SLA_DEADLINE_PLACEHOLDER/"$SLA_DEADLINE"}"
+          BODY="${BODY//SLA_PLACEHOLDER/"$SLA"}"
+          printf '%s\n' "$BODY" > "$BODY_FILE"
 
           # `--assignee oursharedevents` was failing because the org name is
           # not a valid issue-assignee on this repo. Drop it; the labels +
@@ -203,16 +211,21 @@ jobs:
         if: steps.existing.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Step outputs carry the attacker-chosen branch name; env, not ${{ }} (OSE-1470).
+          WORKFLOW: ${{ steps.severity.outputs.workflow }}
+          BRANCH: ${{ steps.severity.outputs.branch }}
+          SHORT_SHA: ${{ steps.severity.outputs.short_sha }}
+          RUN_URL: ${{ steps.severity.outputs.run_url }}
         run: |
           # Find the existing issue number
           ISSUE_NUM=$(gh issue list \
             --label "security,auto-triage" \
             --state open \
-            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --search "$WORKFLOW failure" \
             --json number \
             --jq '.[0].number' 2>/dev/null || echo "")
 
           if [ -n "$ISSUE_NUM" ]; then
             gh issue comment "$ISSUE_NUM" \
-              --body "**Recurring failure detected.** New failure on \`${{ steps.severity.outputs.branch }}\` at commit \`${{ steps.severity.outputs.short_sha }}\`. [View run](${{ steps.severity.outputs.run_url }}). This issue remains unresolved — SLA clock continues."
+              --body "**Recurring failure detected.** New failure on \`$BRANCH\` at commit \`$SHORT_SHA\`. [View run]($RUN_URL). This issue remains unresolved — SLA clock continues."
           fi

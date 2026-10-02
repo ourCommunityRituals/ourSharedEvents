@@ -45,6 +45,17 @@ describe('OSE-1415 | production admin scope config', () => {
     expect(prod).not.toContain('ADMIN_SCOPE_ALL');
   });
 
+  // ADR-012 gate R2 (OSE-1467): a static X-OCR-Internal header is a `key:` actor
+  // that passes requireKeyActor, so it could write production global flags and
+  // run erasure. Production admin is CF Access only.
+  test.each(['ALLOW_OCR_INTERNAL', 'ALLOW_ADMIN_KEY_FALLBACK'])(
+    '%s is NOT set in [env.production.vars]',
+    (key) => {
+      const prod = setKeys(envVarsSection(toml, 'production'));
+      expect(prod).not.toContain(key);
+    }
+  );
+
   test('the staging opt-in is still where it belongs (parser sanity)', () => {
     const stg = setKeys(envVarsSection(toml, 'staging'));
     expect(stg).toContain('ADMIN_SCOPE_ALL');

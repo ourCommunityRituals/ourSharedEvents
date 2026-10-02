@@ -107,10 +107,11 @@ node scripts/verify-secrets.js --json
 | `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account identifier          | Yes      |
 
 **Alternative Naming (SEC-1.2 standard):**
-| Current Name | Recommended Name | Purpose |
-|--------------|------------------|---------|
+
+| Current Name               | Recommended Name  | Purpose                 |
+| -------------------------- | ----------------- | ----------------------- |
 | `CLOUDFLARE_API_TOKEN_OSE` | `CF_DEPLOY_TOKEN` | CI/CD Worker deployment |
-| `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID` | Account identifier |
+| `CLOUDFLARE_ACCOUNT_ID`    | `CF_ACCOUNT_ID`   | Account identifier      |
 
 **Required API Token Permissions (Least-Privilege):**
 
@@ -158,21 +159,20 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 
 **Purpose:** Secure admin API endpoints for event management.
 
-**Environment:** Staging + Production
+**Environment:** `ADMIN_KEY` staging only (production admin is Cloudflare Access only); `FORMS_ENCRYPTION_KEY` staging + production
 
 **Rotation Policy:** Every 90 days
 
-| Secret Name            | Description                             | Required |
-| ---------------------- | --------------------------------------- | -------- |
-| `ADMIN_KEY`            | Bearer token for admin endpoints        | Yes      |
-| `FORMS_ENCRYPTION_KEY` | AES-GCM key for PII encryption in forms | Yes      |
+| Secret Name            | Description                                              | Required                             |
+| ---------------------- | -------------------------------------------------------- | ------------------------------------ |
+| `ADMIN_KEY`            | Bearer token for admin endpoints (staging fallback only) | Staging: yes · Production: **never** |
+| `FORMS_ENCRYPTION_KEY` | AES-GCM key for PII encryption in forms                  | Yes                                  |
 
 **Setting in Cloudflare Worker:**
 
 ```bash
 cd workers/oursharedevents
-wrangler secret put ADMIN_KEY --env staging
-wrangler secret put ADMIN_KEY --env production
+wrangler secret put ADMIN_KEY --env staging   # staging only; never on production: production admin is Cloudflare Access only, and the production deploy gate refuses ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN (ADR-012 R2)
 wrangler secret put FORMS_ENCRYPTION_KEY --env staging
 wrangler secret put FORMS_ENCRYPTION_KEY --env production
 ```

@@ -294,12 +294,11 @@ These 4 secrets live inside Cloudflare's secret store — separate from GitHub. 
   ADMIN_KEY
   ```
 
-- [ ] **5.5** Set production secrets now too (same values, different env — do it while you have them handy):
+- [ ] **5.5** Set production secrets now too (same values, different env — do it while you have them handy). Do **not** set `ADMIN_KEY` on production: production admin is Cloudflare Access only; ADMIN_KEY is never set there (OSE-1470), and the production deploy gate refuses to ship while it exists.
   ```bash
   wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env production
   wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env production
   wrangler secret put SHEETS_SPREADSHEET_ID --env production
-  wrangler secret put ADMIN_KEY --env production
   ```
 
 ---
@@ -449,7 +448,7 @@ Do this from the new `ourCommunityRituals/ourSharedEvents` repo.
   wrangler secret list --env production
   ```
 
-  Should show all 4: `GOOGLE_SA_CLIENT_EMAIL`, `GOOGLE_SA_PRIVATE_KEY_PEM`, `SHEETS_SPREADSHEET_ID`, `ADMIN_KEY`
+  Should show the 3 from step 5.5: `GOOGLE_SA_CLIENT_EMAIL`, `GOOGLE_SA_PRIVATE_KEY_PEM`, `SHEETS_SPREADSHEET_ID`. It must **not** show `ADMIN_KEY`, `ADMIN_TOKEN` or `X_OCR_INTERNAL`.
 
 - [ ] **9.2** Tag and push to trigger the production CI deploy:
 
@@ -487,8 +486,11 @@ Do this from the new `ourCommunityRituals/ourSharedEvents` repo.
   curl -i https://oursharedevents.com/admin
   # Expected: HTTP 401
 
-  curl -H "Authorization: Bearer <YOUR_ADMIN_KEY>" https://oursharedevents.com/admin
-  # Expected: HTTP 200
+  curl -i -H "Authorization: Bearer not-a-real-key" https://oursharedevents.com/admin
+  # Expected: still refused (302 to Access, 401 or 403) — no static key opens production admin
+
+  # Then open https://oursharedevents.com/admin in a browser and sign in through Cloudflare Access
+  # Expected: the admin dashboard
   ```
 
 - [ ] **9.7** Final mobile check — open `https://oursharedevents.com` on your phone
@@ -499,14 +501,14 @@ Do this from the new `ourCommunityRituals/ourSharedEvents` repo.
 
 ## Quick Reference — All Secrets
 
-| Secret                      | Stored in                  | Step created | Value source                                          |
-| --------------------------- | -------------------------- | ------------ | ----------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN_OSE`  | GitHub Actions             | 3.9          | Cloudflare → My Profile → API Tokens                  |
-| `CLOUDFLARE_ACCOUNT_ID`     | GitHub Actions             | 3.8          | Cloudflare dashboard URL                              |
-| `ADMIN_KEY`                 | GitHub Actions + Wrangler  | 3.10         | `openssl rand -hex 32`                                |
-| `GOOGLE_SA_CLIENT_EMAIL`    | Wrangler (CF secret store) | 1.6          | Service account JSON → `client_email`                 |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Wrangler (CF secret store) | 1.6          | Service account JSON → `private_key`                  |
-| `SHEETS_SPREADSHEET_ID`     | Wrangler (CF secret store) | 2.7          | Google Sheets URL — segment between `/d/` and `/edit` |
+| Secret                      | Stored in                                | Step created | Value source                                          |
+| --------------------------- | ---------------------------------------- | ------------ | ----------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN_OSE`  | GitHub Actions                           | 3.9          | Cloudflare → My Profile → API Tokens                  |
+| `CLOUDFLARE_ACCOUNT_ID`     | GitHub Actions                           | 3.8          | Cloudflare dashboard URL                              |
+| `ADMIN_KEY`                 | GitHub Actions + Wrangler (staging only) | 3.10         | `openssl rand -hex 32`                                |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Wrangler (CF secret store)               | 1.6          | Service account JSON → `client_email`                 |
+| `GOOGLE_SA_PRIVATE_KEY_PEM` | Wrangler (CF secret store)               | 1.6          | Service account JSON → `private_key`                  |
+| `SHEETS_SPREADSHEET_ID`     | Wrangler (CF secret store)               | 2.7          | Google Sheets URL — segment between `/d/` and `/edit` |
 
 ---
 

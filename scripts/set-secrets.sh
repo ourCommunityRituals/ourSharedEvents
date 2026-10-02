@@ -14,7 +14,8 @@
 #   - Cloudflare Worker already created for the target environment
 #
 # Required secrets:
-#   ADMIN_KEY                    — Bearer token for /admin routes (openssl rand -hex 32)
+#   ADMIN_KEY                    — STAGING ONLY. Bearer fallback for /admin (openssl rand -hex 32).
+#                                  Never set on production: the deploy gate refuses it (ADR-012 R2).
 #   FORMS_ENCRYPTION_KEY         — AES-GCM key for email signup encryption (min 32 chars)
 #   FORMS_HASH_PEPPER            — HMAC-SHA256 pepper for email hashing (min 32 chars).
 #                                  FAIL-CLOSED: unset -> register + email-signup return
@@ -63,12 +64,17 @@ if [[ ! -f "$WORKER_DIR/wrangler.toml" ]]; then
 fi
 
 SECRETS=(
-  "ADMIN_KEY"
   "FORMS_ENCRYPTION_KEY"
   "FORMS_HASH_PEPPER"
   "SHARED_REPORT_SIGNING_SECRET"
   "RATE_LIMIT_KEY_PEPPER"
 )
+# ADMIN_KEY is a staging-only fallback. Production admin is Cloudflare Access
+# only (ADR-012 gate R2), and the production deploy gate refuses a production
+# worker that carries ADMIN_KEY, X_OCR_INTERNAL or ADMIN_TOKEN.
+if [[ "$ENV" == "staging" ]]; then
+  SECRETS=("ADMIN_KEY" "${SECRETS[@]}")
+fi
 
 echo "════════════════════════════════════════════════════════════"
 echo "  Setting Wrangler secrets for: $ENV"

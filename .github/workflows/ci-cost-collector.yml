@@ -49,11 +49,13 @@ jobs:
       - name: Collect CI job durations
         env:
           GH_TOKEN: ${{ github.token }}
+          # Dispatch input → env, never interpolated into the shell (OSE-1470).
+          LIMIT: ${{ github.event.inputs.limit || '20' }}
         run: |
           node scripts/ci-cost-collector.mjs \
             --history docs/monitoring/ci-cost-history.jsonl \
             --workflow oursharedevents-ci.yml \
-            --limit "${{ github.event.inputs.limit || '20' }}"
+            --limit "$LIMIT"
 
       - name: Commit updated history
         if: ${{ github.event.inputs.dry_run != 'true' }}
