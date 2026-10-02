@@ -18,7 +18,7 @@ function mainScript(): string {
   return el!.textContent || '';
 }
 
-async function boot(opts: { previewEvent?: string; search?: string }) {
+async function boot(opts: { previewEvent?: string; search?: string; slots?: unknown[] }) {
   const html = opts.previewEvent
     ? POSTER_HTML.replace('<body>', `<body data-preview-event="${opts.previewEvent}">`)
     : POSTER_HTML;
@@ -36,7 +36,8 @@ async function boot(opts: { previewEvent?: string; search?: string }) {
           event: { id: 'evt-draft', name: 'Draft Bocce Night', title: 'Draft Bocce Night' },
           sponsors: [],
           qr: {},
-          settings: { showQRSection: false },
+          slots: opts.slots ?? [],
+          settings: { showQRSection: !!opts.slots },
         }
       : { ok: true, items: [] };
     return { ok: true, status: 200, json: async () => body };
@@ -56,5 +57,49 @@ describe('poster preview mode', () => {
   test('a normal scoped poster still uses the public bundle', async () => {
     const { urls } = await boot({ search: '?event=evt-live' });
     expect(urls).toEqual(['/api/v2/events/evt-live/poster-bundle']);
+  });
+});
+
+describe('poster QR cards: short codes live, direct links only in preview', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const hrefs = (doc: Document) =>
+    [...doc.querySelectorAll('#poster-qr-slots a')].map((a) => a.getAttribute('href'));
+
+  test('preview: a slot with no code yet still shows, linking to its destination', async () => {
+    const { doc } = await boot({
+      previewEvent: 'evt-draft',
+      slots: [
+        {
+          kind: 'public',
+          code: null,
+          url: 'https://t.test/events/evt-draft',
+          qr: PNG,
+          word: 'Event page',
+        },
+      ],
+    });
+    expect(hrefs(doc)).toEqual(['https://t.test/events/evt-draft']);
+  });
+
+  test('preview: a non-https or odd link is dropped, never put in an href', async () => {
+    const { doc } = await boot({
+      previewEvent: 'evt-draft',
+      slots: [
+        { kind: 'public', code: null, url: 'javascript:alert(1)', qr: PNG },
+        { kind: 'donation', code: null, url: 'http://plain.example/', qr: PNG },
+      ],
+    });
+    expect(hrefs(doc)).toEqual([]);
+  });
+
+  test('live poster: only validated short codes, a code-less slot is dropped', async () => {
+    const { doc } = await boot({
+      search: '?event=evt-live',
+      slots: [
+        { kind: 'public', code: 'ABC123', url: 'https://t.test/s/ABC123', qr: PNG },
+        { kind: 'donation', code: null, url: 'https://donate.example/', qr: PNG },
+      ],
+    });
+    expect(hrefs(doc)).toEqual(['https://t.test/s/ABC123']);
   });
 });

@@ -959,14 +959,25 @@
         // origin, and a QR src must be a data:image — no response value
         // reaches an href or src unchecked.
         const ICON = Object.assign(Object.create(null), { public: '★', checkin: '✓', register: '✎', donation: '♥', sponsor: '◆', ow: '♪' });
+        // A live poster links only through a validated short code. The admin
+        // preview never mints one, so a slot with no code yet carries its
+        // destination instead: accepted only in preview, and only when it is
+        // this site or an https link.
+        function slotLink(s) {
+          if (/^[A-Za-z0-9]{6}$/.test(String(s.code || ''))) return location.origin + '/s/' + s.code;
+          if (!PREVIEW_EVENT) return '';
+          const u = String(s.url || '');
+          if (u.indexOf(location.origin + '/') === 0 || /^https:\/\/[^\s"'<>]+$/.test(u)) return u;
+          return '';
+        }
         container.innerHTML = slots
-          .filter(function (s) { return /^[A-Za-z0-9]{6}$/.test(String(s.code || '')); })
+          .filter(function (s) { return slotLink(s) !== ''; })
           .map(function (s) {
             const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
             const tone = kind === 'checkin' ? 'checkin' : kind === 'donation' ? 'donate' : 'neutral';
             const word = esc(s.word || s.label || kind);
             const label = esc(s.label || s.word || kind);
-            const link = location.origin + '/s/' + s.code;
+            const link = slotLink(s);
             const url = esc(link);
             const shortText = esc(link);
             const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
