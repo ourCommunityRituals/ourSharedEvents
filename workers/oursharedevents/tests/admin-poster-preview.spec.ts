@@ -110,7 +110,7 @@ describe('admin poster preview: a draft', () => {
     const csp = res.headers.get('Content-Security-Policy') ?? '';
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
     expect(nonce).toBeTruthy();
-    const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+    const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
     expect(scripts.length).toBeGreaterThan(1);
     for (const tag of scripts) {
       expect(tag.match(/nonce=/g)?.length, tag).toBe(1);
