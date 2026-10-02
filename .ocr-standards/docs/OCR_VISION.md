@@ -82,7 +82,7 @@ Each invariant is (or will be) enforced by an executable test file in `ourShared
 
 | # | Invariant | Test file | Status | Enforces |
 |---|-----------|-----------|--------|----------|
-| 1 | **Anonymous ID** | `anonymous-id.invariant.spec.ts` | ✅ | Zero-PII scan system, two-database separation (DB / FORMS_DB), `ose_anon` cookie contract (HttpOnly, Secure, SameSite=Lax), no cross-linking |
+| 1 | **Anonymous ID** | `anonymous-id.invariant.spec.ts` | ⚙️ | Zero-PII scan system, two-database separation (DB / FORMS_DB), `ose_anon` cookie contract (HttpOnly, Secure, SameSite=Lax), no cross-linking. **Partial as of 2026-10-02:** the raw anonymous id is stored in FORMS_DB form rows and the split scan tables share a second-precision timestamp, so cross-linking is possible today (ADR-012 gate §D2, N-DS-1 and N-DS-2; OSE-1493, OSE-923). Back to ✅ when Phase 2 of that plan merges |
 | 2 | **Hyper-local Geo-Resolution** | `geo-resolution.invariant.spec.ts` | ✅ | `sponsor_areas` + `sponsor_event_types` tables, corridor-level resolution, zip+radius matching |
 | 3 | **UEC Encoding** | `uec-codes.invariant.spec.ts` | ✅ | 7 color-semantic QR codes + 4 extensions; canonical hex values; URL path semantics |
 | 4 | **NCR Data Accumulation** | `ncr-accumulation.invariant.spec.ts` | ✅ | `poster_deployments` lat/lng, `scan_aggregates` pipeline, permanent storage (no PII = no TTL) |
