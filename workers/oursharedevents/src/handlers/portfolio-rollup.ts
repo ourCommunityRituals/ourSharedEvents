@@ -109,7 +109,7 @@ export const IN_LIST_CHUNK = 90;
  * chunk failing returns null: the caller then reports 0, exactly as the
  * single-query version did on error (never a partial sum).
  */
-async function perEventCounts(
+export async function perEventCounts(
   db: D1Database,
   eventIds: string[],
   sql: (placeholders: string) => string
