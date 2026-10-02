@@ -457,6 +457,9 @@ describe('publish grace window: the organiser is told when it lists', () => {
     const note = w.graceNote(soon, false);
     expect(note).not.toContain('goes on the map');
     expect(note).toContain('stays off the map and list, as you chose');
+    // An unlisted event's public page is closed (pages.ts), so never say "share its link".
+    expect(note).toContain('public page stays closed');
+    expect(note).not.toMatch(/share its link/i);
     expect(w.graceNote(soon, true)).toContain('goes on the map and list at');
   });
 

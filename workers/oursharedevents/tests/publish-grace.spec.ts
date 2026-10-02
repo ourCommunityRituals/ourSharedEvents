@@ -489,3 +489,50 @@ describe('A concurrent Undo is never reversed', () => {
     expect(row?.status).toBe('archived');
   });
 });
+
+describe('Turning listing on for a live event is a publication too', () => {
+  const putListed = (id: string, on: boolean) =>
+    handleUpdateEvent(
+      new Request(`https://localhost/api/v2/admin/events/${id}`, {
+        method: 'PUT',
+        headers: { ...BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_published: on }),
+      }),
+      withGrace('10'),
+      id
+    );
+
+  test('unlisted live event, long settled → listed: a fresh window, not listed at once', async () => {
+    const id = `grace-listing-on-${Date.now()}`;
+    await insertEvent(id, 'active');
+    await E.DB.prepare('UPDATE events SET is_published = 0, listed_from = ? WHERE id = ?')
+      .bind(new Date(Date.now() - 3 * 86_400_000).toISOString(), id)
+      .run();
+    expect((await putListed(id, true)).status).toBe(200);
+    const lf = await listedFromOf(id);
+    expect(Date.parse(lf!)).toBeGreaterThan(Date.now() + 9 * 60_000);
+    expect(await inPublicList(id)).toBe(false);
+  });
+
+  test('re-saving listing on an event already listed keeps its settled time', async () => {
+    const id = `grace-listing-same-${Date.now()}`;
+    await insertEvent(id, 'active');
+    const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    await E.DB.prepare('UPDATE events SET listed_from = ? WHERE id = ?').bind(old, id).run();
+    expect((await putListed(id, true)).status).toBe(200);
+    expect(await listedFromOf(id)).toBe(old);
+    expect(await inPublicList(id)).toBe(true);
+  });
+});
+
+describe('A TV or phone that opened the draft sees it live after Publish', () => {
+  test('a cached draft row does not refuse the live event', async () => {
+    const id = `grace-cache-${Date.now()}`;
+    await insertEvent(id, 'ready');
+    const first = await SELF.fetch(`https://localhost/api/v2/events/${id}`);
+    expect(first.status).toBe(403); // the draft row is now cached
+    expect((await verify(id)).status).toBe(200);
+    const after = await SELF.fetch(`https://localhost/api/v2/events/${id}`);
+    expect(after.status).toBe(200);
+  });
+});

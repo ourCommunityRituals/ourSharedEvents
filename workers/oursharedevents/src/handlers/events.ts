@@ -975,11 +975,14 @@ export async function handleUpdateEvent(
     values.push(JSON.stringify(v.value));
   }
 
+  // Set when this PUT turns listing on (see the grace window below).
+  let listingOn = false;
   if ('is_published' in body) {
     const v = body.is_published;
     if (typeof v === 'boolean' || v === 0 || v === 1) {
       sets.push('is_published = ?');
       values.push(v === true || v === 1 ? 1 : 0);
+      listingOn = v === true || v === 1;
     }
   }
 
@@ -1221,6 +1224,18 @@ export async function handleUpdateEvent(
         sets.push('listed_from = ?');
         values.splice(values.length - 1, 0, listedFrom);
       }
+    }
+
+    // Turning listing on for an event that is ALREADY live is a publication
+    // too: start a fresh grace window, so it is not listed at once and the
+    // corridor latch's 24-hour settling counts from now. Decided inside the
+    // UPDATE from the row's own old values (SQLite evaluates SET expressions
+    // against the pre-update row), so a concurrent change cannot race it.
+    if (listingOn && listedFrom === undefined) {
+      sets.push(
+        "listed_from = CASE WHEN is_published = 0 AND status = 'active' THEN ? ELSE listed_from END"
+      );
+      values.splice(values.length - 1, 0, listedFromForPublish(env.PUBLISH_GRACE_MINUTES));
     }
 
     let where = ' WHERE id = ?';

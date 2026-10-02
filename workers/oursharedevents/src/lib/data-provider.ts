@@ -209,7 +209,11 @@ export class DataProvider {
       const ttl = TTL.event;
 
       const cached = await this.fromCache<MockEvent>(keyPath, ttl, () => this.fetchEvent(eventId));
-      if (cached) return cached;
+      // A cached row that is not live may have just been published (a TV or
+      // phone that opened the draft): read it fresh rather than refuse a live
+      // event for the cache's 60 s + 300 s. Drafts are rare reads, so this
+      // costs little; live rows keep the cache.
+      if (cached && (cached.data as { status?: string } | null)?.status === 'active') return cached;
 
       const row = await this.fetchAndCache(keyPath, ttl, () => this.fetchEvent(eventId));
       // Return null data when event not found in live mode — do not fall through to mock fixture.

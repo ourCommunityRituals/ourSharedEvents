@@ -7698,7 +7698,7 @@
        */
       window.graceNote = function (listedFrom, listed) {
         // Kept off the map by the organizer's choice: never promise a listing.
-        if (listed === false) return ' It stays off the map and list, as you chose. Share its link to invite people.';
+        if (listed === false) return ' It stays off the map and list, as you chose, and its public page stays closed to guests. Turn on listing when you want people to find it.';
         var t = listedFrom ? new Date(listedFrom) : null;
         if (!t || isNaN(t.getTime()) || t.getTime() <= Date.now()) return '';
         var at = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
