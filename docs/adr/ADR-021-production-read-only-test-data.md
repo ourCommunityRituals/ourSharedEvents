@@ -31,12 +31,14 @@ Facts on 2026-10-01:
 
 **Production is read-only for every test suite.** No suite seeds, mutates or probes
 production with writes. The production post-deploy tier makes reads only. Today it
-runs `api-health.spec.ts` (health and build version) and `fail-fast-gates.spec.ts`
-(health and HTML surfaces). `security-smoke.spec.js` stays on the job but every one of
-its groups writes, so all of them skip on production and it runs no tests there; its
-coverage is on staging. A schema-version assert (OSE-803 pattern) and public GET
-contract shapes are allowed under this ADR but are not in that list yet. Adding them is
-a follow-up, and the gate requires any spec added to the list to be read-only.
+runs `api-health.spec.ts` (health and build version), `fail-fast-gates.spec.ts`
+(health and HTML surfaces) and `events-v2.spec.ts` (the public `GET /api/v2/events`
+contract). `/api/v2/events` is not a diagnostic path, so the OSE-803 schema guard
+answers it with 503 when a D1 binding is behind the Worker; that spec is also the
+production schema-version assert. `security-smoke.spec.js` stays on the job but every
+one of its groups writes, so all of them skip on production and it runs no tests there;
+its coverage is on staging. The gate requires any spec added to the list to be
+read-only.
 
 It is enforced in three places, all keyed on one host rule
 (`config/production-hosts.js` `isProductionUrl()`, also used by `config/environments.js`

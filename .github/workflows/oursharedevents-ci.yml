@@ -2464,7 +2464,7 @@ jobs:
         id: iac-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts tests/api/smoke/events-v2.spec.ts
         timeout-minutes: 10
         continue-on-error: true
 
