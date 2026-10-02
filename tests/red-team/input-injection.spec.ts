@@ -101,6 +101,28 @@ async function assertSafeErrorBody(body: string, label: string): Promise<void> {
   }
 }
 
+/**
+ * POST once; on 429 wait the server's Retry-After (capped) and POST once more.
+ * Every form POST in this file goes through here: earlier suites in the run
+ * share the staging form limiter from one CI IP, so a 429 says nothing about
+ * the payload (first T5 runs, 2026-10-02: INJ-003 and INJ-004 both hit it).
+ */
+async function postPastRateLimit(request: APIRequestContext, url: string, data: unknown) {
+  const send = () => request.post(url, { data, headers: { 'Content-Type': 'application/json' } });
+  const first = await send();
+  if (first.status() !== 429) return first;
+  const waitS = Math.min(Math.max(Number(first.headers()['retry-after']) || 60, 1), 120);
+  await new Promise((r) => setTimeout(r, waitS * 1000));
+  return send();
+}
+
+/** A 429 after the retry means the payload never reached validation. */
+function expectExercised(status: number, what: string) {
+  expect(status, `still rate-limited after waiting Retry-After: ${what} not exercised`).not.toBe(
+    429
+  );
+}
+
 // ─── INJ-001 — XSS in form name field ────────────────────────────────────────
 
 test.describe('INJ-001 — XSS payload in form name field is stored sanitized', () => {
@@ -108,15 +130,13 @@ test.describe('INJ-001 — XSS payload in form name field is stored sanitized', 
     test(`XSS payload "${payload.slice(0, 40)}" is rejected or sanitized`, async ({ request }) => {
       const endpoint = `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`;
 
-      const response = await request.post(endpoint, {
-        data: {
-          name: payload,
-          email: 'redteam@example.com',
-        },
-        headers: { 'Content-Type': 'application/json' },
+      const response = await postPastRateLimit(request, endpoint, {
+        name: payload,
+        email: 'redteam@example.com',
       });
 
       const status = response.status();
+      expectExercised(status, `XSS payload "${payload.slice(0, 40)}"`);
       let body = '';
       try {
         body = await response.text();
@@ -176,10 +196,12 @@ test.describe('INJ-006 — XSS payload not reflected unescaped in GET response',
 
     // 1. Submit the payload via the public email-signup form
     const eventId = FIXTURE_EVENT_ID;
-    await request.post(`${BASE_URL}/api/v2/events/${eventId}/forms/email-signup`, {
-      data: { name: UNIQUE_PAYLOAD, email: 'redteam-xss@example.com' },
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const submit = await postPastRateLimit(
+      request,
+      `${BASE_URL}/api/v2/events/${eventId}/forms/email-signup`,
+      { name: UNIQUE_PAYLOAD, email: 'redteam-xss@example.com' }
+    );
+    expectExercised(submit.status(), 'stored-XSS submission');
 
     // 2. Read it back through the admin endpoint
     const readResponse = await request.get(`${BASE_URL}/api/v2/admin/events`, {
@@ -232,24 +254,6 @@ test.describe('INJ-002 — SQL injection payloads in event ID path parameter', (
   }
 });
 
-/**
- * POST once; on 429 wait the server's Retry-After (capped) and POST once more.
- * Earlier suites in this run share the staging form limiter from one CI IP,
- * so a 429 here says nothing about the payload (first T5 run, 2026-10-02).
- */
-async function postPastRateLimit(
-  request: APIRequestContext,
-  url: string,
-  data: Record<string, string>
-) {
-  const send = () => request.post(url, { data, headers: { 'Content-Type': 'application/json' } });
-  const first = await send();
-  if (first.status() !== 429) return first;
-  const waitS = Math.min(Math.max(Number(first.headers()['retry-after']) || 60, 1), 120);
-  await new Promise((r) => setTimeout(r, waitS * 1000));
-  return send();
-}
-
 // ─── INJ-003 — SQL injection in form body ────────────────────────────────────
 
 test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
@@ -266,10 +270,7 @@ test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
       const status = response.status();
       // A 429 means the form limiter answered and the payload never reached
       // validation, so this case proved nothing. Fail on that, never pass.
-      expect(
-        status,
-        `still rate-limited after waiting Retry-After: payload not exercised: "${payload}"`
-      ).not.toBe(429);
+      expectExercised(status, `payload "${payload}"`);
       const body = await response.text();
 
       expect(status, `SQL injection in email body caused 500: "${payload}"`).not.toBe(500);
@@ -297,18 +298,14 @@ test.describe('INJ-004 — Oversized payload is rejected cleanly', () => {
     // 17 KB string that exceeds any reasonable field size limit
     const SEVENTEEN_KB = 'A'.repeat(17 * 1024);
 
-    const response = await request.post(
+    const response = await postPastRateLimit(
+      request,
       `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`,
-      {
-        data: {
-          name: SEVENTEEN_KB,
-          email: 'oversize@example.com',
-        },
-        headers: { 'Content-Type': 'application/json' },
-      }
+      { name: SEVENTEEN_KB, email: 'oversize@example.com' }
     );
 
     const status = response.status();
+    expectExercised(status, '17 KB field payload');
     const body = await response.text();
 
     expect(status, `17 KB payload returned 500 — unhandled oversized input`).not.toBe(500);
@@ -334,14 +331,13 @@ test.describe('INJ-004 — Oversized payload is rejected cleanly', () => {
       extra: 'X'.repeat(17 * 1024),
     });
 
-    const response = await request.post(
+    const response = await postPastRateLimit(
+      request,
       `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`,
-      {
-        data: largeBody,
-        headers: { 'Content-Type': 'application/json' },
-      }
+      largeBody
     );
 
+    expectExercised(response.status(), '17 KB top-level body');
     expect(response.status()).not.toBe(500);
     expect([400, 404, 413]).toContain(response.status());
   });
@@ -362,16 +358,15 @@ test.describe('INJ-005 — Malformed JSON body returns 400 with safe error messa
 
   for (const { label, body } of MALFORMED_BODIES) {
     test(`Malformed JSON "${label}" → 400 with safe message`, async ({ request }) => {
-      const response = await request.post(
+      const response = await postPastRateLimit(
+        request,
         `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`,
-        {
-          data: body,
-          headers: { 'Content-Type': 'application/json' },
-        }
+        body
       );
 
       const status = response.status();
       const responseBody = await response.text();
+      expectExercised(status, `malformed JSON "${label}"`);
 
       // 500 means the JSON parse error was unhandled
       expect(status, `Malformed JSON "${label}" caused 500`).not.toBe(500);
@@ -383,8 +378,8 @@ test.describe('INJ-005 — Malformed JSON body returns 400 with safe error messa
         await assertSafeErrorBody(responseBody, `Malformed JSON accepted "${label}"`);
       } else {
         expect(
-          [400, 404, 415, 422, 429],
-          `Malformed JSON "${label}" returned ${status} — expected a safe client or rate-limit response`
+          [400, 404, 415, 422],
+          `Malformed JSON "${label}" returned ${status} — expected a safe client response`
         ).toContain(status);
       }
 
