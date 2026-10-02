@@ -177,12 +177,16 @@ export async function seedDashboardFixture(db: D1Database, forms: D1Database): P
   await insertPoster(db, 'pd-dash-3', DASH.bocce, CELL_SRC_2);
   await insertPoster(db, 'pd-dash-ws', DASH.workshop, CELL_SRC_1);
   await insertPoster(db, 'pd-dash-demo', DASH.demo, CELL_SRC_1);
+  // 3 demo scans in cell 2: a sub-K bucket that data_class=all must not add to
+  // the 5 production scans there, or all minus production would reveal it.
+  await insertPoster(db, 'pd-dash-demo-2', DASH.demo, CELL_SRC_2);
   await insertPoster(db, 'pd-dash-b', DASH.other, CELL_SRC_1);
   await insertScans(db, DASH.bocce, 'pd-dash-1', 7);
   await insertScans(db, DASH.bocce, 'pd-dash-2', 3);
   await insertScans(db, DASH.bocce, 'pd-dash-3', 2);
   await insertScans(db, DASH.workshop, 'pd-dash-ws', 3);
   await insertScans(db, DASH.demo, 'pd-dash-demo', 40);
+  await insertScans(db, DASH.demo, 'pd-dash-demo-2', 3);
   await insertScans(db, DASH.other, 'pd-dash-b', 50);
 
   await db

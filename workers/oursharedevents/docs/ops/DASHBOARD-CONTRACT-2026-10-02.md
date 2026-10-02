@@ -5,7 +5,7 @@ Part of OSE-1468. The code is the source of truth:
 - Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `1.0.0`)
 - Queries: `src/handlers/dashboards.ts`
 - Seeded fixture: `tests/helpers/seed-dashboard-fixture.ts`
-- Tests: `tests/dashboards.spec.ts` (24, workers pool)
+- Tests: `tests/dashboards.spec.ts` (25, workers pool)
 
 This page explains the decisions. If it disagrees with the code, the code wins and this page is wrong.
 
@@ -48,6 +48,15 @@ The organizer report has no `scope` block, because its scope is the event id.
 
 A failed D1 or FORMS_DB read is a logged `DASHBOARD_DB_ERROR` and a 503 `DB_UNAVAILABLE`. A dashboard never turns an outage into zeroes, and the event report never turns one into a 404.
 
+## Floors across scopes
+
+A caller can pick overlapping views: several brands or one, and `production` or `all`. Scans per cell and flows therefore keep one raw count per brand, data class and cell (or cell pair), and each count is floored before the sum. Every view is a sum of counts that each cleared K, so subtracting one view from another cannot reveal a count under K. Per-event floors already work this way, because each event belongs to exactly one brand and one data class.
+
+## Listed and admin activity
+
+- `events.published` counts events on the public list and map now: `is_published = 1` and `status = 'active'`. A published draft is not listed.
+- `admin_activity_30d` has one counter per audit action: `created`, `updated`, `qr_verified`, `qr_unverified`, `deleted` and `denied`. A status change made through `PUT /api/v2/admin/events/:id` is audited as `UPDATE_EVENT`, so it counts as `updated`. Counting those changes as lifecycle transitions needs the audit row to carry the from/to status, which is listed under not measured.
+
 ## Sponsors on show
 
 `on_show` counts a placement only when a visitor can see it: active placement, active business, the sponsor accepted, the organizer accepted under the source-aware rule (a `sponsor_request` needs `organizer_accepted = 1`), and the event is live. The rule is `PLACEMENT_ON_SHOW_SQL` in `lib/sponsor-card.ts`, next to the card's `SPONSOR_ON_SHOW_SQL`. On show, waiting and declined never overlap.
@@ -86,6 +95,7 @@ Each item below is in `NOT_MEASURED` and is returned in every response. The dash
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `/public`, `/display`, `/sharedReport` page visits | No per-surface view counter exists                                                                                           |
 | QR / short-link resolution failures                | Not stored in D1. Successes are counted as scans and taps                                                                    |
+| Status changes made through PUT                    | Audited as `UPDATE_EVENT` with no from/to status                                                                             |
 | API errors and 409 transition failures             | Worker log only. Needs a log-sink read                                                                                       |
 | Ingestion, contract and CI gate health             | GitHub Actions and BigQuery, not D1                                                                                          |
 | Profile / flag actions                             | OW spoke                                                                                                                     |

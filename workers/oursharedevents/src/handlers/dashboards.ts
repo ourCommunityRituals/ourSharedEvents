@@ -299,7 +299,8 @@ async function readBrandOps(
   for (const e of events) {
     const s = e.status ?? 'draft';
     byStatus.set(s, (byStatus.get(s) ?? 0) + 1);
-    if (num(e.is_published) === 1) published++;
+    // Listed = what the public list and map show: published AND live.
+    if (num(e.is_published) === 1 && e.status === 'active') published++;
     if (typeof e.created_at === 'string' && e.created_at >= sinceSql) created30d++;
   }
   const adminMap = new Map<string, number>();
@@ -416,10 +417,13 @@ export async function handleOperationsDashboard(
         created_30d: created30d,
       },
       admin_activity_30d: {
+        // Named for the audit action each one counts. A status change made
+        // through PUT is audited as UPDATE_EVENT, so it lands in `updated`,
+        // not in the QR verify counters (see NOT_MEASURED).
         created: admin.get('CREATE_EVENT') ?? 0,
-        revised: admin.get('UPDATE_EVENT') ?? 0,
-        went_live: admin.get('VERIFY_QR') ?? 0,
-        taken_offline: admin.get('UNVERIFY_QR') ?? 0,
+        updated: admin.get('UPDATE_EVENT') ?? 0,
+        qr_verified: admin.get('VERIFY_QR') ?? 0,
+        qr_unverified: admin.get('UNVERIFY_QR') ?? 0,
         deleted: admin.get('DELETE_EVENT') ?? 0,
         denied: admin.get('denied') ?? 0,
       },
@@ -500,7 +504,7 @@ async function readBrandCorridor(
                JOIN events e ON e.id = s.event_id
                JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
               WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL
-              GROUP BY pd.h3_res7`
+              GROUP BY pd.h3_res7, e.data_class`
           )
           .bind(brand, dc)
       ),
@@ -513,7 +517,7 @@ async function readBrandCorridor(
                JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
               WHERE e.brand_id = ? AND ${DC}
                 AND pd.h3_res7 IS NOT NULL AND e.h3_res7 IS NOT NULL
-              GROUP BY pd.h3_res7, e.h3_res7`
+              GROUP BY pd.h3_res7, e.h3_res7, e.data_class`
           )
           .bind(brand, dc)
       ),
@@ -564,6 +568,12 @@ async function readBrandCorridor(
   };
 }
 
+function pushTo(map: Map<string, number[]>, key: string, n: unknown): void {
+  const list = map.get(key) ?? [];
+  list.push(num(n));
+  map.set(key, list);
+}
+
 function addTo(map: Map<string, number>, key: string, n: unknown): void {
   map.set(key, (map.get(key) ?? 0) + num(n));
 }
@@ -591,8 +601,13 @@ export async function handleCorridorDashboard(
     const cats = new Map<string, number>();
     const evCells = new Map<string, { events: number; live: number }>();
     const posterCells = new Map<string, number>();
-    const scanCells = new Map<string, number>();
-    const flows = new Map<string, number>();
+    // Floored metrics keep one raw bucket per (brand, data class, cell) and are
+    // floored per bucket before the sum. Every view a caller can select (one
+    // brand or several, production or all) is then a sum of buckets that each
+    // cleared K, so subtracting one view from another never exposes a sub-K
+    // count (#7, the OSE-669 rule applied to cells and flows).
+    const scanCells = new Map<string, number[]>();
+    const flows = new Map<string, number[]>();
     const dayPart = new Map<string, number>([
       ['weekday', 0],
       ['weekend', 0],
@@ -609,8 +624,8 @@ export async function handleCorridorDashboard(
         evCells.set(c.cell, { events: cur.events + num(c.events), live: cur.live + num(c.live) });
       }
       for (const c of b.posterCells) addTo(posterCells, c.cell, c.posters);
-      for (const c of b.scanCells) addTo(scanCells, c.cell, c.scans);
-      for (const f of b.flows) addTo(flows, `${f.source}>${f.destination}`, f.scans);
+      for (const c of b.scanCells) pushTo(scanCells, c.cell, c.scans);
+      for (const f of b.flows) pushTo(flows, `${f.source}>${f.destination}`, f.scans);
       for (const d of b.dayParts) addTo(dayPart, d.part, d.cnt);
       for (const s of b.series) series.push(num(s.cnt));
       for (const p of b.partners) businesses.add(p.business);
@@ -621,7 +636,7 @@ export async function handleCorridorDashboard(
     const sourceCells = [...sourceCellIds].sort().map((cell) => ({
       cell,
       posters: posterCells.get(cell) ?? 0,
-      scans: applyCountFloor(scanCells.get(cell) ?? 0),
+      scans: floorBucketsThenSum(scanCells.get(cell) ?? []),
     }));
 
     // A flow under K is left out entirely, not shown as suppressed: listing the
@@ -629,7 +644,7 @@ export async function handleCorridorDashboard(
     const flowRows = [...flows.entries()]
       .map(([k, n]) => {
         const [source, destination] = k.split('>');
-        return { source, destination, scans: applyCountFloor(n) };
+        return { source, destination, scans: floorBucketsThenSum(n) };
       })
       .filter((f) => !f.scans.suppressed)
       .sort((a, b) => (b.scans.count ?? 0) - (a.scans.count ?? 0));

@@ -73,8 +73,8 @@ export const DASHBOARD_METRICS = {
     dashboard: 'operations',
     privacy: 'entity',
     path: 'events.published',
-    source: 'events.is_published',
-    description: 'Events listed on public surfaces.',
+    source: "events.is_published = 1 AND status = 'active'",
+    description: 'Events on the public list and map now (published and live).',
   },
   'events.created_30d': {
     dashboard: 'operations',
@@ -89,7 +89,7 @@ export const DASHBOARD_METRICS = {
     path: 'admin_activity_30d',
     source: 'admin_audit_log (brand_id, action, outcome)',
     description:
-      'Admin actions on this brand in the last 30 days: created, revised, went live, taken offline, deleted, denied.',
+      'Admin actions on this brand in the last 30 days, one counter per audit action: created (CREATE_EVENT), updated (UPDATE_EVENT), qr_verified (VERIFY_QR), qr_unverified (UNVERIFY_QR), deleted (DELETE_EVENT), denied (any action refused).',
   },
   'reach.poster_scans': {
     dashboard: 'operations',
@@ -284,6 +284,13 @@ export const DASHBOARD_METRICS = {
     source: 'events.h3_res7',
     description: 'Destination layer: events and live events per res-7 cell.',
   },
+  'corridor.source_cells.cell': {
+    dashboard: 'corridor',
+    privacy: 'entity',
+    path: 'source_cells[].cell',
+    source: 'poster_deployments.h3_res7',
+    description: 'The res-7 cell each source-layer row describes (where posters hang).',
+  },
   'corridor.source_cells.posters': {
     dashboard: 'corridor',
     privacy: 'entity',
@@ -295,14 +302,30 @@ export const DASHBOARD_METRICS = {
     dashboard: 'corridor',
     privacy: 'floored',
     path: 'source_cells[].scans',
-    source: 'scan_placement_events → poster_deployments.h3_res7',
+    source:
+      'scan_placement_events → poster_deployments.h3_res7 (floored per brand × data class × cell, survivors summed)',
     description: 'Source layer: scans per res-7 poster cell.',
+  },
+  'corridor.flows.source': {
+    dashboard: 'corridor',
+    privacy: 'entity',
+    path: 'flows[].source',
+    source: 'poster_deployments.h3_res7',
+    description: 'The res-7 poster cell a flow starts from.',
+  },
+  'corridor.flows.destination': {
+    dashboard: 'corridor',
+    privacy: 'entity',
+    path: 'flows[].destination',
+    source: 'events.h3_res7',
+    description: 'The res-7 event cell a flow ends at.',
   },
   'corridor.flows': {
     dashboard: 'corridor',
     privacy: 'floored',
     path: 'flows[].scans',
-    source: 'scan_placement_events → poster cell → event cell',
+    source:
+      'scan_placement_events → poster cell → event cell (floored per brand × data class × pair, survivors summed)',
     description: 'Scans from a source cell to an event cell; pairs under K are left out.',
   },
   'corridor.day_part': {
@@ -354,6 +377,12 @@ export const NOT_MEASURED: readonly NotMeasured[] = [
     dashboard: 'operations',
     reason:
       '4xx/5xx and 409 INVALID_TRANSITION responses go to the Worker log, not to D1. Needs a log-sink read.',
+  },
+  {
+    id: 'status_changes_via_update',
+    dashboard: 'operations',
+    reason:
+      'PUT /api/v2/admin/events/:id can change status (e.g. archived to active), but it is audited as UPDATE_EVENT with no from/to status, so those changes count as updated, not as a lifecycle transition. Needs the audit row to carry the transition.',
   },
   {
     id: 'ingestion_and_contract_health',

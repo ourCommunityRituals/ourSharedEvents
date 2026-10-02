@@ -100,6 +100,20 @@ function resolvePath(root: unknown, path: string): unknown[] {
   return cur;
 }
 
+/** Every leaf path of a value, arrays normalised to `name[]`. */
+function leafPaths(v: unknown, prefix = ''): string[] {
+  if (Array.isArray(v)) {
+    const out = v.flatMap((item) => leafPaths(item, `${prefix}[]`));
+    return out.length ? out : [`${prefix}[]`];
+  }
+  if (v !== null && typeof v === 'object') {
+    const entries = Object.entries(v as Body);
+    if (entries.length === 0) return [prefix];
+    return entries.flatMap(([k, child]) => leafPaths(child, prefix ? `${prefix}.${k}` : k));
+  }
+  return [prefix];
+}
+
 function isFloored(v: unknown): boolean {
   if (v === null || typeof v !== 'object') return false;
   const f = v as Body;
@@ -186,19 +200,31 @@ describe('contract', () => {
     }
   });
 
-  test('no response key is outside the registry', async () => {
+  test('every response leaf is covered by a registered metric path', async () => {
     const envelopeKeys = ['ok', 'status', 'contract', 'scope', 'generated_at', 'not_measured'];
     const responses: Record<string, Body> = {
       operations: (await call(handleOperationsDashboard, reqAs(A, OPS))).body,
       corridor: (await call(handleCorridorDashboard, reqAs(A, COR))).body,
+      event: (await (
+        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce)
+      ).json()) as Body,
     };
     for (const [dash, body] of Object.entries(responses)) {
-      const covered = Object.values(DASHBOARD_METRICS)
+      const paths = Object.values(DASHBOARD_METRICS)
         .filter((m) => m.dashboard === dash)
-        .map((m) => m.path.split('.')[0].replace('[]', ''));
-      for (const key of Object.keys(body)) {
-        if (envelopeKeys.includes(key)) continue;
-        expect(covered, `${dash}.${key} is registered`).toContain(key);
+        .map((m) => m.path);
+      const rest = Object.fromEntries(
+        Object.entries(body).filter(([k]) => !envelopeKeys.includes(k))
+      );
+      const leaves = leafPaths(rest);
+      expect(leaves.length, dash).toBeGreaterThan(0);
+      for (const leaf of leaves) {
+        // A registered path covers itself and everything under it (an
+        // object-valued terminal such as a FlooredCount or `event`).
+        const covered = paths.some(
+          (p) => leaf === p || leaf.startsWith(`${p}.`) || leaf.startsWith(`${p}[]`)
+        );
+        expect(covered, `${dash}: ${leaf} is registered`).toBe(true);
       }
     }
   });
@@ -223,7 +249,9 @@ describe('founder / operations cockpit', () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, OPS));
     expect(body.events.total).toBe(3);
     expect(body.events.by_status).toEqual({ draft: 1, ready: 1, active: 1, archived: 0 });
-    expect(body.events.published).toBe(2);
+    // bocce is live and published; the ready event is published but not live,
+    // the workshop is a draft and unpublished. Only bocce is on the public list.
+    expect(body.events.published).toBe(1);
     expect(body.events.created_30d).toBe(3);
     // 7 + 3 + 2 bocce + 3 workshop; the demo's 40 and dash-b's 50 are not here.
     expect(body.reach.poster_scans).toBe(15);
@@ -256,7 +284,7 @@ describe('founder / operations cockpit', () => {
   test('data_class=all brings the demo event in; a bad value is 400', async () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=all`));
     expect(body.events.total).toBe(4);
-    expect(body.reach.poster_scans).toBe(55);
+    expect(body.reach.poster_scans).toBe(58);
     expect(body.scope.data_class).toBe('all');
     const bad = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=nope`));
     expect(bad.status).toBe(400);
@@ -348,6 +376,25 @@ describe('corridor / community intelligence', () => {
         scans: { count: 5, suppressed: false, floor: 5 },
       },
     ]);
+  });
+
+  test('#7: a sub-K bucket is not recoverable by subtracting two scopes', async () => {
+    // Cell 2 holds 5 production scans and 3 demo scans for dash-a. Summing raw
+    // counts before the floor would show 8 under data_class=all, and 8 - 5
+    // would reveal the suppressed 3.
+    const prod = await call(handleCorridorDashboard, reqAs(A, COR));
+    const all = await call(handleCorridorDashboard, reqAs(A, `${COR}?data_class=all`));
+    const cell2 = (b: Body) => b.source_cells.find((c: Body) => c.cell === CELL_SRC_2).scans;
+    expect(cell2(prod.body).count).toBe(5);
+    expect(cell2(all.body).count).toBe(5);
+    const flow2 = (b: Body) =>
+      b.flows.find((f: Body) => f.source === CELL_SRC_2 && f.destination === CELL_EVENT).scans;
+    expect(flow2(all.body).count).toBe(5);
+    // Across brands too: a member of both sees each brand's bucket floored alone.
+    const both = await call(handleCorridorDashboard, reqAs(AB, COR));
+    const onlyB = await call(handleCorridorDashboard, reqAs(AB, `${COR}?brand_id=${DASH.brandB}`));
+    const cell1 = (b: Body) => b.source_cells.find((c: Body) => c.cell === CELL_SRC_1)?.scans;
+    expect(cell1(both.body).count - (cell1(onlyB.body)?.count ?? 0)).toBe(10);
   });
 
   test('#1: no coordinates or res-9 cells in the response', async () => {
