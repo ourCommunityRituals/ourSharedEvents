@@ -1,0 +1,83 @@
+[
+  {
+    "name": "corridor_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "H3 res-7 cell, or 'unknown' (ADR-011: never finer than corridor grain)"
+  },
+  {
+    "name": "venue_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "event_type",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "uec_code",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "regulatory_pool",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Only 'general' exists; HIPAA/COPPA are declined (OSE-1220)"
+  },
+  {
+    "name": "product_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Always 'ose'"
+  },
+  {
+    "name": "id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "event_series.id"
+  },
+  {
+    "name": "series_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cadence",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "day_of_week",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "hour_of_day",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "state",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "confirmed_at",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Copied as text from D1"
+  },
+  {
+    "name": "updated_at",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Copied as text from D1; dedupe on (id, updated_at)"
+  },
+  {
+    "name": "exported_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]
