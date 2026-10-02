@@ -29,7 +29,7 @@
 set -uo pipefail
 set +x # never trace: a traced `grep -- "$v"` would print the value
 
-DEFAULT_SECRET_VARS="ADMIN_KEY CF_ACCESS_CLIENT_SECRET X_OCR_INTERNAL STAGING_ADMIN_KEY OSE_ADMIN_BEARER OCR_CI_EDGE_TOKEN"
+DEFAULT_SECRET_VARS="ADMIN_KEY CF_ACCESS_CLIENT_SECRET X_OCR_INTERNAL STAGING_ADMIN_KEY OSE_ADMIN_BEARER OCR_CI_EDGE_TOKEN"  # pragma: allowlist secret (variable NAMES only, no values)
 SECRET_VARS="${SCAN_SECRET_VARS:-$DEFAULT_SECRET_VARS}"
 # A value shorter than this would match by accident (and is not a real secret).
 MIN_SECRET_LEN=8

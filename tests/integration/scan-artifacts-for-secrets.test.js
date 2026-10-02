@@ -16,7 +16,7 @@ const SCRIPT = join(__dirname, '..', '..', 'scripts', 'ci', 'scan-artifacts-for-
 
 // Fake values only. Never a real secret.
 const FAKE_ADMIN_KEY = 'fake-admin-key-0123456789abcdef';
-const FAKE_CF_SECRET = 'fakecfaccesssecret9876543210';
+const FAKE_CF_SECRET = 'fakecfaccesssecret9876543210'; // pragma: allowlist secret (fake test value)
 
 const HAS_ZIP = spawnSync('zip', ['-v'], { encoding: 'utf-8' }).status === 0;
 
