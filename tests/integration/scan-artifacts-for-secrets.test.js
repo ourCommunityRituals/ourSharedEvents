@@ -130,6 +130,87 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).not.toContain('eyJfakejwtvalue');
   });
 
+  test('a hit says WHERE it is (JSON key path + test title), never the value', () => {
+    const report = {
+      suites: [
+        {
+          title: 'security-smoke.spec.js',
+          specs: [
+            {
+              title: 'XSS attempt',
+              tests: [
+                { results: [{ stdout: [{ text: 'CF_Authorization=eyJfakejwtvalue.p.s' }] }] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at .suites[0].specs[0].tests[0].results[0].stdout[0].text');
+    expect(r.out).toContain('(test: XSS attempt)');
+    expect(r.out).not.toContain('eyJfakejwtvalue');
+  });
+
+  test('a secret value is located by key path too, and never printed', () => {
+    writeFileSync(
+      join(dir, 'test-results', 'results.json'),
+      JSON.stringify({ errors: [{ message: `header ${FAKE_ADMIN_KEY}` }] })
+    );
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at .errors[0].message');
+    expect(r.out).not.toContain(FAKE_ADMIN_KEY);
+  });
+
+  test('titles and keys printed by the locator are scrubbed of credentials', () => {
+    const report = {
+      suites: [
+        {
+          title: 'case CF_Authorization=eyJtitlecookie.x.y\u0007',
+          'Bearer abcdefghijklmnopqrstuvwxyz0123': { text: 'CF_Authorization=eyJfakejwtvalue.p.s' },
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('(test: [withheld: credential-shaped])');
+    expect(r.out).toContain('.[withheld: credential-shaped].text');
+    expect(r.out).not.toContain('eyJtitlecookie');
+    expect(r.out).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+    expect(r.out).not.toContain('\u0007');
+  });
+
+  test('a quoted cookie in a key is withheld; a plain title loses control characters', () => {
+    const report = {
+      suites: [
+        {
+          title: 'plain\u0007title',
+          'CF_Authorization="eyJquotedcookie.x.y"': {
+            text: 'CF_Authorization=eyJfakejwtvalue.p.s',
+          },
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('.[withheld: credential-shaped].text (test: plain title)');
+    expect(r.out).not.toContain('eyJquotedcookie');
+    expect(r.out).not.toContain('\u0007');
+  });
+
+  test('a hit in a non-JSON file is located by line number', () => {
+    writeFileSync(join(dir, 'test-results', 'log.txt'), 'ok\nCF_Authorization=eyJfakejwtvalue\n');
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('at line(s) 2');
+    expect(r.out).not.toContain('eyJfakejwtvalue');
+  });
+
   test('Bearer + 20 token chars → exit 1; a short "Bearer x" is not a hit', () => {
     writeFileSync(join(dir, 'test-results', 'short.txt'), 'Authorization: Bearer x\n');
     expect(run(paths(), {}).code).toBe(0);

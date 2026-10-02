@@ -166,11 +166,60 @@ if [ "$unopened_level" -eq 1 ]; then
   done
 fi
 
-report() { # report <pattern name> <file>...
-  local name="$1" f
+# where <file> -> one line per hit saying WHERE it is, never what it is: in a
+# JSON file the key path of each matching string plus the nearest test title,
+# otherwise the line numbers. The needle travels in SCAN_NEEDLE (env, never
+# argv); SCAN_NEEDLE_KIND is "fixed" or "regex". Output is redacted like paths.
+where() {
+  local f="$1" out
+  if command -v node >/dev/null 2>&1; then
+    out="$(SCAN_FILE="$f" node -e '
+      const fs = require("fs");
+      const { SCAN_FILE: file, SCAN_NEEDLE: needle, SCAN_NEEDLE_KIND: kind } = process.env;
+      const hit = kind === "regex" ? (s) => new RegExp(needle).test(s) : (s) => s.includes(needle);
+      // Titles and keys are printed. Any that looks credential-shaped (the
+      // needle, a cookie name, a Bearer token) is withheld whole, not masked
+      // piecemeal: masking chases every value syntax (quoted, encoded, ...).
+      const shaped = (t) =>
+        /CF_Authorization|Bearer\s/i.test(t) || (kind === "regex" ? new RegExp(needle).test(t) : t.includes(needle));
+      const safe = (t) => {
+        const o = String(t);
+        if (shaped(o)) return "[withheld: credential-shaped]";
+        const c = o.replace(/[\u0000-\u001f\u007f]/g, " ");
+        return c.length > 120 ? c.slice(0, 120) + "…" : c;
+      };
+      let doc;
+      try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch { process.exit(3); }
+      const found = [];
+      (function walk(v, path, title) {
+        if (found.length >= 10) return;
+        if (typeof v === "string") { if (hit(v)) found.push(`${path || "."} (test: ${title ? safe(title) : "none"})`); return; }
+        if (v && typeof v === "object") {
+          const t = typeof v.title === "string" ? v.title : title;
+          for (const [k, c] of Object.entries(v)) walk(c, Array.isArray(v) ? `${path}[${k}]` : `${path}.${safe(k)}`, t);
+        }
+      })(doc, "", "");
+      console.log(found.join("\n"));
+    ' 2>/dev/null)" && [ -n "$out" ] && { redact "$out"; return; }
+  fi
+  if [ "$SCAN_NEEDLE_KIND" = "regex" ]; then
+    out="$(grep -nE -- "$SCAN_NEEDLE" "$f" 2>/dev/null | cut -d: -f1 | head -10 | paste -sd, -)"
+  else
+    out="$(grep -nF -- "$SCAN_NEEDLE" "$f" 2>/dev/null | cut -d: -f1 | head -10 | paste -sd, -)"
+  fi
+  [ -n "$out" ] && echo "line(s) $out"
+}
+
+report() { # report <pattern name> <file>...  (SCAN_NEEDLE/SCAN_NEEDLE_KIND set)
+  local name="$1" f loc
   shift
   for f in "$@"; do
     echo "::error::credential pattern '$name' found in artifact file: $(origin_of "$f")"
+    if [ -n "${SCAN_NEEDLE:-}" ]; then
+      while IFS= read -r loc; do
+        [ -n "$loc" ] && echo "  at $loc"
+      done < <(where "$f")
+    fi
     failed=1
   done
 }
@@ -182,7 +231,7 @@ for i in "${!SECRET_VALUES[@]}"; do
   var="${SECRET_NAMES[$i]}"
   v="${SECRET_VALUES[$i]}"
   mapfile -t hits < <(grep -rlF -- "$v" "${scan_dirs[@]}" 2>/dev/null)
-  [ "${#hits[@]}" -gt 0 ] && report "secret:$var" "${hits[@]}"
+  [ "${#hits[@]}" -gt 0 ] && SCAN_NEEDLE="$v" SCAN_NEEDLE_KIND=fixed report "secret:$var" "${hits[@]}"
   while IFS= read -r -d '' path; do
     case "$path" in
       *"$v"*) report "secret:$var (in the path name)" "$path" ;;
@@ -193,11 +242,11 @@ unset v
 
 # 2. A minted Cloudflare Access session cookie.
 mapfile -t hits < <(grep -rlF -- 'CF_Authorization=' "${scan_dirs[@]}" 2>/dev/null)
-[ "${#hits[@]}" -gt 0 ] && report "CF_Authorization cookie" "${hits[@]}"
+[ "${#hits[@]}" -gt 0 ] && SCAN_NEEDLE='CF_Authorization=' SCAN_NEEDLE_KIND=fixed report "CF_Authorization cookie" "${hits[@]}"
 
 # 3. A bearer token of real length.
 mapfile -t hits < <(grep -rlE -- 'Bearer [A-Za-z0-9._~+/=-]{20,}' "${scan_dirs[@]}" 2>/dev/null)
-[ "${#hits[@]}" -gt 0 ] && report "Bearer token" "${hits[@]}"
+[ "${#hits[@]}" -gt 0 ] && SCAN_NEEDLE='Bearer [A-Za-z0-9._~+/=-]{20,}' SCAN_NEEDLE_KIND=regex report "Bearer token" "${hits[@]}"
 
 if [ "$failed" -ne 0 ]; then
   echo "scan-artifacts-for-secrets: FAILED — the artifact will not be uploaded."
