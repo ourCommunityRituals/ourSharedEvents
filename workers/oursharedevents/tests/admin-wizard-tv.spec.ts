@@ -31,7 +31,7 @@ function scriptWith(html: string, marker: string): string {
 
 type Reply = { status?: number; body?: unknown };
 
-function mount(opts: { save?: Reply; reduceMotion?: boolean } = {}) {
+function mount(opts: { save?: Reply } = {}) {
   const dom = new JSDOM(`<!doctype html><body>${step4Markup(ADMIN_HTML)}</body>`, {
     runScripts: 'outside-only',
     url: 'https://admin.test/admin',
@@ -40,7 +40,7 @@ function mount(opts: { save?: Reply; reduceMotion?: boolean } = {}) {
       string,
       unknown
     >;
-  // Hand-driven timers: the demo's next tick runs only when the test says so.
+  // Hand-driven timers: the optional demo's next tick runs only when the test says so.
   const timers = new Map<number, { fn: () => void; ms: number }>();
   let nextId = 1;
   w.setTimeout = ((fn: () => void, ms: number) => {
@@ -58,11 +58,6 @@ function mount(opts: { save?: Reply; reduceMotion?: boolean } = {}) {
     t.fn();
     return t.ms;
   };
-  if (opts.reduceMotion) {
-    w.matchMedia = ((q: string) => ({
-      matches: q.includes('reduce'),
-    })) as unknown as typeof matchMedia;
-  }
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const save = opts.save ?? { body: { ok: true } };
   w.fetch = (async (url: string, init?: RequestInit) => {
@@ -94,71 +89,64 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 };
 
-describe('wizard TV section: the demo', () => {
-  test('starts on this event, named, and cycles through the picked screens', () => {
-    const { $, created, tick } = mount();
+describe('wizard TV section: the one-line summary', () => {
+  test('says what the TV will show, in order, and for how long', () => {
+    const { $, created } = mount();
     created();
-    expect($('wizard-tv-demo-title').textContent).toBe('Bocce Night');
-    expect($('wizard-tv-demo-count').textContent).toContain('Screen 1 of 3');
-    expect($('wizard-tv-demo-count').textContent).toContain('15 seconds on the TV');
-    expect(tick()).toBe(3000); // 15 s shown 5x faster
-    expect($('wizard-tv-demo-title').textContent).toBe('Coming up next');
-    tick();
-    expect($('wizard-tv-demo-title').textContent).toBe('Thanks to our sponsors');
-    tick();
-    expect($('wizard-tv-demo-title').textContent).toBe('Bocce Night');
+    expect($('wizard-tv-summary').textContent).toBe(
+      'This event \u2192 Coming up next \u2192 Sponsors \u00b7 15 seconds each'
+    );
   });
 
-  test('the speed changes the demo pace and the label', () => {
-    const { $, speed, change, created, tick } = mount();
+  test('follows the speed and the ticked screens', () => {
+    const { $, box, speed, change, created } = mount();
     created();
     change(speed(30), true);
-    expect($('wizard-tv-demo-count').textContent).toContain('30 seconds on the TV');
-    expect(tick()).toBe(6000);
+    change(box('upcoming'), false);
+    expect($('wizard-tv-summary').textContent).toBe(
+      'This event \u2192 Sponsors \u00b7 30 seconds each'
+    );
   });
 
-  test('an unticked screen leaves the demo; one screen left means no rotation', () => {
-    const { $, box, change, created, timers } = mount();
+  test('one screen left stays on screen (nothing to rotate, like the TV)', () => {
+    const { $, box, change, created } = mount();
     created();
     change(box('upcoming'), false);
-    expect($('wizard-tv-demo-count').textContent).toContain('of 2');
     change(box('sponsors'), false);
-    expect($('wizard-tv-demo-count').textContent).toContain('Screen 1 of 1');
-    expect($('wizard-tv-demo-count').textContent).not.toContain('faster');
-    expect(timers.size).toBe(0);
+    expect($('wizard-tv-summary').textContent).toBe('This event \u00b7 stays on screen');
   });
 
-  test('Pause stops the demo and Play resumes it', () => {
+  test('nothing moves on its own: the demo is off until Show me', () => {
     const { $, created, timers } = mount();
     created();
-    expect(timers.size).toBe(1);
-    $<HTMLButtonElement>('wizard-tv-demo-pause').click();
     expect(timers.size).toBe(0);
-    expect($('wizard-tv-demo-pause').textContent).toBe('Play demo');
-    // The label is the action, so no contradictory "Play demo, pressed".
-    expect($('wizard-tv-demo-pause').hasAttribute('aria-pressed')).toBe(false);
-    $<HTMLButtonElement>('wizard-tv-demo-pause').click();
-    expect(timers.size).toBe(1);
+    expect($('wizard-tv-demo').hidden).toBe(true);
+    expect($('wizard-tv-demo-toggle').textContent).toBe('Show me');
   });
 
-  test('reduced motion: the demo starts paused', () => {
-    const { $, created, timers } = mount({ reduceMotion: true });
+  test('Show me plays the demo 5x faster and says so; Stop ends it', () => {
+    const { $, created, timers, tick } = mount();
     created();
+    $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
+    expect($('wizard-tv-demo').hidden).toBe(false);
+    expect($('wizard-tv-demo').textContent).toBe(
+      'On the TV now: This event (screen 1 of 3) \u00b7 demo plays 5x faster'
+    );
+    expect(tick()).toBe(3000); // 15 s on the TV, 3 s in the demo
+    expect($('wizard-tv-demo').textContent).toContain('Coming up next (screen 2 of 3)');
+    $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
+    expect($('wizard-tv-demo').hidden).toBe(true);
     expect(timers.size).toBe(0);
-    expect($('wizard-tv-demo-pause').textContent).toBe('Play demo');
   });
 
   test('the demo stops when the wizard leaves step 4', () => {
-    const { doc, $, created, tick } = mount();
+    const { doc, $, created, tick, timers } = mount();
     created();
+    $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
     doc.getElementById('wizard-step-4')!.classList.remove('active');
     tick();
-    expect($('wizard-tv-demo-title').textContent).toBe('Bocce Night');
-  });
-
-  test('the demo region is not announced on every change', () => {
-    const { $ } = mount();
-    expect($('wizard-tv-demo').getAttribute('aria-live')).toBe('off');
+    expect($('wizard-tv-demo').hidden).toBe(true);
+    expect(timers.size).toBe(0);
   });
 });
 
@@ -257,7 +245,7 @@ describe('wizard TV section: saving', () => {
     expect(box('sponsors').checked).toBe(true);
     expect(speed(15).checked).toBe(true);
     expect($('wizard-tv-msg').textContent).toBe('');
-    expect($('wizard-tv-demo-title').textContent).toBe('Second');
+    expect($('wizard-tv-summary').textContent).toContain('15 seconds each');
   });
 
   test('every control is labelled', () => {
@@ -271,7 +259,7 @@ describe('wizard TV section: saving', () => {
 });
 
 describe('wizard step 4 controls are finger-sized', () => {
-  test('Copy, Preview and Pause share a 44px-tall target', () => {
+  test('Copy, Preview and Show me share a 44px-tall target', () => {
     const rule = /\.wizard-copy-btn \{([^}]*)\}/.exec(ADMIN_HTML)?.[1] ?? '';
     expect(rule).toContain('min-height: 44px');
     expect(rule).toContain('display: inline-flex');
@@ -344,8 +332,8 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     await flush();
     expect(doc.getElementById('wizard-msg')!.textContent).toBe('');
     expect(active()).toBe('wizard-step-4');
-    expect(doc.querySelector('[data-testid="wizard-tv-demo-title"]')!.textContent).toBe(
-      'Bocce Night'
+    expect(doc.querySelector('[data-testid="wizard-tv-summary"]')!.textContent).toContain(
+      'This event'
     );
 
     // Previews: the real page and poster, admin-only, even as a draft. The

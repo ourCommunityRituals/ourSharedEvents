@@ -1800,12 +1800,14 @@ function injectAdminPreviewToolbar(
 ): string {
   const safeId = esc(row.id);
   const liveAttr = opts.liveUrl ? ` data-live-url="${esc(opts.liveUrl)}"` : '';
-  const note =
-    opts.note ??
-    'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.';
   // A live but unlisted event has no public page, so its preview stays here
   // (published already: no Publish button, and the bar says what it is).
   const liveUnlisted = row.status === 'active';
+  const note =
+    opts.note ??
+    (liveUnlisted
+      ? "It is live but kept off the map and list, so guests can't open this page. List it in admin to share it."
+      : 'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.');
   const status = row.status === 'ready' ? 'ready' : 'draft';
   const listed = row.is_published === 1 ? '1' : '0';
   const publishBtn = liveUnlisted

@@ -165,6 +165,9 @@ describe('preview after publishing (the publish / unpublish loop)', () => {
     const html = await res.text();
     expect(html).toContain('Draft Preview Smoke');
     expect(html).toContain('Live, unlisted');
+    // The note says what to do, not "once it is live".
+    expect(html).toContain('List it in admin to share it.');
+    expect(html).not.toContain('once it is live');
     // Already published: no Publish button to press again.
     expect(html).not.toContain('data-testid="admin-preview-go-live"');
   });

@@ -1948,8 +1948,7 @@
       .wizard-skip-btn:hover {
         background: var(--surface-hover);
       }
-      .wizard-link-card,
-      .wizard-tv-demo {
+      .wizard-link-card {
         background: var(--surface-hover);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -1962,12 +1961,6 @@
          sign-up card genuinely disappears when the organizer skips sign-ups. */
       .wizard-link-card[hidden] {
         display: none;
-      }
-      .wizard-tv-demo {
-        aspect-ratio: 16 / 9;
-        max-width: 20rem;
-        justify-content: center;
-        margin-bottom: 0.5rem;
       }
       .wizard-link-card .wizard-card-url {
         font-size: 0.75rem;
@@ -2640,18 +2633,16 @@
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
             </div>
           </div>
-          <!-- The TV, the light way: which screens and how fast, with a demo.
+          <!-- The TV, the plain way: which screens and how fast, in one line.
                Order and league links stay in the event's TV display card.
                Saves on change through the same PUT { settings } as that card. -->
           <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
             <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
-            <p class="wizard-step-help">A TV at the venue shows these screens in turn. Watch the demo, then pick what fits. You can change it any time.</p>
-            <div class="wizard-tv-demo" data-testid="wizard-tv-demo" aria-live="off">
-              <strong data-testid="wizard-tv-demo-title"></strong>
-              <span class="wizard-card-desc" data-testid="wizard-tv-demo-desc"></span>
-              <span class="wizard-card-desc" data-testid="wizard-tv-demo-count"></span>
-            </div>
-            <button type="button" class="wizard-copy-btn" id="wizard-tv-demo-pause" data-testid="wizard-tv-demo-pause">Pause demo</button>
+            <p class="wizard-step-help">A TV at the venue shows these screens in turn. You can change it any time. Press Show me to watch it cycle.</p>
+            <p><strong>Your TV will show:</strong> <span data-testid="wizard-tv-summary"></span></p>
+            <!-- Optional: a demo plays only when asked; nothing moves on its own. -->
+            <button type="button" class="wizard-copy-btn" data-testid="wizard-tv-demo-toggle">Show me</button>
+            <p class="wizard-link-card" data-testid="wizard-tv-demo" aria-live="off" hidden></p>
             <div role="group" aria-labelledby="wizard-tv-screens-label">
               <p class="wizard-step-help" id="wizard-tv-screens-label">Screens to show</p>
               <label class="create-publish-label" for="wizard-tv-event"><input type="checkbox" id="wizard-tv-event" data-testid="wizard-tv-screen" data-pane="event" checked /><span>This event</span></label>
@@ -2954,7 +2945,6 @@
             finish.hidden = wiz.step !== 5;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
-            window.dispatchEvent(new CustomEvent('ose:wizard-step', { detail: { step: wiz.step } }));
           }
 
           // Step 1 gate: name + venue are the two real requirements. Everything
@@ -3549,18 +3539,14 @@
       </script>
 
       <script>
-        // Wizard step 4 — "Your TV screen". The light version of the TV display
-        // card: screens on/off and one speed, with a demo that cycles through
-        // the picked screens. The demo runs 5x faster than the TV so a 30 s
-        // setting can be seen in a few seconds; it says so on screen.
+        // Wizard step 4 — "Your TV screen". The plain version of the TV display
+        // card: screens on/off and one speed, summed up in one line ("This
+        // event → Coming up next → Sponsors · 15 seconds each"). Base practical
+        // (PO, 2026-10-02): speed and understanding first; the demo is an
+        // option behind Show me, never automatic.
         (function () {
-          var DEMO_SPEEDUP = 5;
-          var SCREENS = {
-            event: { desc: 'Event details and the scan code' },
-            upcoming: { title: 'Coming up next', desc: 'Your next events, so people come back' },
-            sponsors: { title: 'Thanks to our sponsors', desc: 'Each sponsor shown once, all the same size' },
-          };
-          var st = { eventId: null, title: '', index: 0, timer: null, paused: false, gen: 0, dirty: false, inFlight: false };
+          var NAMES = { event: 'This event', upcoming: 'Coming up next', sponsors: 'Sponsors' };
+          var st = { eventId: null, gen: 0, dirty: false, inFlight: false };
           function q(sel) { return document.querySelector('[data-testid="' + sel + '"]'); }
           function boxes() { return Array.prototype.slice.call(document.querySelectorAll('[data-testid="wizard-tv-screen"]')); }
           function picked() {
@@ -3576,45 +3562,62 @@
             el.textContent = text || '';
             el.className = 'create-msg' + (kind ? ' ' + kind : '');
           }
-          function visible() {
-            var step = document.getElementById('wizard-step-4');
-            return !!(step && step.classList.contains('active'));
-          }
+          // One screen stays up; two or more take turns, like the TV.
           function show() {
             var panes = picked();
-            if (!panes.length) return;
-            if (st.index >= panes.length) st.index = 0;
-            var pane = panes[st.index];
-            q('wizard-tv-demo-title').textContent = pane === 'event' ? st.title || 'Your event' : SCREENS[pane].title;
-            q('wizard-tv-demo-desc').textContent = SCREENS[pane].desc;
-            q('wizard-tv-demo-count').textContent =
-              'Screen ' + (st.index + 1) + ' of ' + panes.length + ' · ' + seconds() + ' seconds on the TV' +
-              (panes.length > 1 ? ' (demo plays ' + DEMO_SPEEDUP + 'x faster)' : '');
+            var el = q('wizard-tv-summary');
+            if (!el || !panes.length) return;
+            el.textContent =
+              panes.map(function (p) { return NAMES[p]; }).join(' \u2192 ') +
+              (panes.length > 1 ? ' \u00b7 ' + seconds() + ' seconds each' : ' \u00b7 stays on screen');
           }
-          function stop() {
-            if (st.timer) window.clearTimeout(st.timer);
-            st.timer = null;
+          // The optional demo: plays 5x faster than the TV (and says so) only
+          // after Show me, until Stop or the wizard leaves step 4.
+          var DEMO_SPEEDUP = 5;
+          var demo = { timer: null, index: 0 };
+          function demoStop() {
+            if (demo.timer) window.clearTimeout(demo.timer);
+            demo.timer = null;
+            var box = q('wizard-tv-demo');
+            if (box) box.hidden = true;
+            var btn = q('wizard-tv-demo-toggle');
+            if (btn) btn.textContent = 'Show me';
           }
-          // One screen = nothing to rotate, same as the TV.
-          function schedule() {
-            stop();
-            if (st.paused || picked().length < 2 || !visible()) return;
-            st.timer = window.setTimeout(function () {
-              st.timer = null;
-              if (!visible()) return;
-              st.index = (st.index + 1) % picked().length;
-              show();
-              schedule();
-            }, (seconds() * 1000) / DEMO_SPEEDUP);
+          function demoShow() {
+            var panes = picked();
+            var box = q('wizard-tv-demo');
+            if (!box || !panes.length) return;
+            if (demo.index >= panes.length) demo.index = 0;
+            box.textContent =
+              'On the TV now: ' + NAMES[panes[demo.index]] + ' (screen ' + (demo.index + 1) + ' of ' + panes.length + ')' +
+              (panes.length > 1 ? ' \u00b7 demo plays ' + DEMO_SPEEDUP + 'x faster' : '');
           }
-          function setPaused(on) {
-            st.paused = on;
-            var btn = q('wizard-tv-demo-pause');
-            // The label names the action, so no aria-pressed (it would read
-            // "Play demo, pressed" while paused).
-            if (btn) btn.textContent = on ? 'Play demo' : 'Pause demo';
-            schedule();
+          function demoNext() {
+            var step = document.getElementById('wizard-step-4');
+            if (!step || !step.classList.contains('active')) return demoStop();
+            demo.index = (demo.index + 1) % Math.max(picked().length, 1);
+            demoShow();
+            demo.timer = window.setTimeout(demoNext, (seconds() * 1000) / DEMO_SPEEDUP);
           }
+          function demoStart() {
+            var box = q('wizard-tv-demo');
+            var btn = q('wizard-tv-demo-toggle');
+            if (!box) return;
+            demo.index = 0;
+            box.hidden = false;
+            if (btn) btn.textContent = 'Stop';
+            demoShow();
+            if (demo.timer) window.clearTimeout(demo.timer);
+            demo.timer = picked().length > 1 ? window.setTimeout(demoNext, (seconds() * 1000) / DEMO_SPEEDUP) : null;
+          }
+          function demoRefresh() {
+            if (demo.timer || !(q('wizard-tv-demo') || {}).hidden) demoStart();
+          }
+          var toggle = q('wizard-tv-demo-toggle');
+          if (toggle) toggle.addEventListener('click', function () {
+            if ((q('wizard-tv-demo') || {}).hidden) demoStart();
+            else demoStop();
+          });
           // One PUT at a time, always with the latest choices: a change made
           // while a save is in flight is sent after it, so an older request can
           // never land last and overwrite the newer selection.
@@ -3663,41 +3666,30 @@
                 msg('Keep at least one screen on.', 'error');
                 return;
               }
-              st.index = 0;
               show();
-              schedule();
+              demoRefresh();
               save();
             });
           });
           document.querySelectorAll('input[name="wizard-tv-speed"]').forEach(function (r) {
             r.addEventListener('change', function () {
               show();
-              schedule();
+              demoRefresh();
               save();
             });
           });
-          // Back from step 5 brings the demo back to life.
-          window.addEventListener('ose:wizard-step', function () {
-            if (st.eventId) schedule();
-          });
-          var pauseBtn = q('wizard-tv-demo-pause');
-          if (pauseBtn) pauseBtn.addEventListener('click', function () { setPaused(!st.paused); });
           // A new event starts from the TV's defaults: every screen, 15 s.
           window.addEventListener('ose:wizard-created', function (e) {
             var d = (e && e.detail) || {};
             st.eventId = d.id ? String(d.id) : null;
-            st.title = d.title || '';
-            st.index = 0;
             st.gen++;
             st.dirty = false;
             boxes().forEach(function (b) { b.checked = true; });
             var normal = document.getElementById('wizard-tv-speed-15');
             if (normal) normal.checked = true;
             msg('');
-            var reduce = false;
-            try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (err) {}
+            demoStop();
             show();
-            setPaused(reduce);
           });
         })();
       </script>
