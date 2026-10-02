@@ -102,6 +102,9 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Display configuration
+      env:
+        # Dispatch input → env, never interpolated into the shell (OSE-1470).
+        INPUT_TARGET_URL: ${{ inputs.target_url }}
       run: |
         echo "=============================================="
         echo "SECURITY REGRESSION GATE (SEC-10.1)"
@@ -126,8 +129,8 @@ jobs:
         # variable also adds production to security-monitoring.yml's daily check.
         PRODUCTION_LIVE="${{ vars.PRODUCTION_LIVE || 'false' }}"
 
-        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_url }}" ]; then
-          TARGET_URL="${{ inputs.target_url }}"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "$INPUT_TARGET_URL" ]; then
+          TARGET_URL="$INPUT_TARGET_URL"
           echo "Target: $TARGET_URL (manual override)"
         elif [ "${{ github.event_name }}" == "schedule" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
@@ -174,6 +177,10 @@ jobs:
 
     - name: Create check summary
       if: always()
+      env:
+        # Inputs → env, never interpolated into the shell (OSE-1470).
+        SKIP_RATE_LIMIT: ${{ inputs.skip_rate_limit || 'true' }}
+        SKIP_ORIGIN_BYPASS: ${{ inputs.skip_origin_bypass || 'false' }}
       run: |
         echo "## Security Regression Gate (SEC-10.1)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -204,9 +211,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Configuration" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- **Target URL:** ${{ env.TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Skip Rate Limit:** ${{ inputs.skip_rate_limit || 'true' }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Skip Origin Bypass:** ${{ inputs.skip_origin_bypass || 'false' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Target URL:** $TARGET_URL" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Rate Limit:** $SKIP_RATE_LIMIT" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Origin Bypass:** $SKIP_ORIGIN_BYPASS" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

@@ -72,14 +72,16 @@ const config = defineConfig({
     navigationTimeout: 45000, // 45 seconds for page loads
     actionTimeout: 15000, // 15 seconds for interactions
 
-    // Tracing: Always capture for debugging
-    trace: 'on-first-retry',
+    // Credential safety (OSE-1470): trace and video are OFF. The specs this config
+    // runs (tests/e2e) send CF Access / admin credential headers and mint a
+    // CF_Authorization cookie; Playwright traces record all of them. A plain page
+    // screenshot shows no headers, so failure screenshots stay.
+    trace: 'off',
 
     // Screenshots: Capture on failure
     screenshot: 'only-on-failure',
 
-    // Video: Capture on failure for debugging
-    video: 'on-first-retry',
+    video: 'off',
 
     // Extra HTTP headers
     extraHTTPHeaders: {

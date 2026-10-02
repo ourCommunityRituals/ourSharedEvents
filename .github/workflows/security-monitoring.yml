@@ -487,8 +487,19 @@ jobs:
           echo "prod_summary=$PROD_SUMMARY"   >> "$GITHUB_OUTPUT"
           echo "prod_findings=$PROD_FINDINGS" >> "$GITHUB_OUTPUT"
 
-      - name: Upload health check report
+      # OSE-1470: the check above sends STAGING_ADMIN_KEY. Refuse to upload a
+      # report that recorded it (prints only file + pattern name).
+      - name: Scan report for credentials
+        id: artifact-scan
         if: always()
+        env:
+          STAGING_ADMIN_KEY: ${{ secrets.STAGING_ADMIN_KEY }}
+        run: >-
+          bash scripts/ci/scan-artifacts-for-secrets.sh
+          .security-reports/health-check.json .security-reports/health-check-production.json
+
+      - name: Upload health check report
+        if: always() && steps.artifact-scan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: health-check-${{ github.run_number }}

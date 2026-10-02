@@ -217,8 +217,15 @@ jobs:
         id: audit
         run: npx playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
 
-      - name: Upload Playwright report
+      # OSE-1470: this audit sends OSE_ADMIN_BEARER to deployed staging. Refuse
+      # to upload a report that recorded it (prints only file + pattern name).
+      - name: Scan report for credentials
+        id: artifact-scan
         if: always()
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh playwright-report/
+
+      - name: Upload Playwright report
+        if: always() && steps.artifact-scan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: mobile-workability-staging-report

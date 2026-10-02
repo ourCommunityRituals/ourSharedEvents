@@ -47,11 +47,15 @@ jobs:
 
       - name: Determine severity and SLA
         id: severity
+        env:
+          # workflow_run fields → env, never interpolated into the shell
+          # (OSE-1470): head_branch is a branch name anyone who can push a
+          # branch chooses, so `${{ }}` here was script injection.
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          WORKFLOW="${{ github.event.workflow_run.name }}"
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-          RUN_URL="${{ github.event.workflow_run.html_url }}"
-          SHA="${{ github.event.workflow_run.head_sha }}"
           SHORT_SHA="${SHA:0:7}"
 
           echo "workflow=$WORKFLOW" >> $GITHUB_OUTPUT
@@ -73,12 +77,13 @@ jobs:
         id: existing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW: ${{ steps.severity.outputs.workflow }}
         run: |
           # Avoid duplicate issues for the same workflow failure
           EXISTING=$(gh issue list \
             --label "security,auto-triage" \
             --state open \
-            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --search "$WORKFLOW failure" \
             --json number \
             --jq 'length' 2>/dev/null || echo "0")
 
@@ -203,16 +208,21 @@ jobs:
         if: steps.existing.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Step outputs carry the attacker-chosen branch name; env, not ${{ }} (OSE-1470).
+          WORKFLOW: ${{ steps.severity.outputs.workflow }}
+          BRANCH: ${{ steps.severity.outputs.branch }}
+          SHORT_SHA: ${{ steps.severity.outputs.short_sha }}
+          RUN_URL: ${{ steps.severity.outputs.run_url }}
         run: |
           # Find the existing issue number
           ISSUE_NUM=$(gh issue list \
             --label "security,auto-triage" \
             --state open \
-            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --search "$WORKFLOW failure" \
             --json number \
             --jq '.[0].number' 2>/dev/null || echo "")
 
           if [ -n "$ISSUE_NUM" ]; then
             gh issue comment "$ISSUE_NUM" \
-              --body "**Recurring failure detected.** New failure on \`${{ steps.severity.outputs.branch }}\` at commit \`${{ steps.severity.outputs.short_sha }}\`. [View run](${{ steps.severity.outputs.run_url }}). This issue remains unresolved — SLA clock continues."
+              --body "**Recurring failure detected.** New failure on \`$BRANCH\` at commit \`$SHORT_SHA\`. [View run]($RUN_URL). This issue remains unresolved — SLA clock continues."
           fi

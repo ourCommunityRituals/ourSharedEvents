@@ -71,10 +71,14 @@ const config = defineConfig({
     // Each test injects its own auth (or deliberately omits it) to test
     // the auth boundary. Do NOT add extraHTTPHeaders here.
 
-    // Capture artifacts on failure for triage
-    trace: 'retain-on-failure',
+    // Credential safety (OSE-1470): trace and video are OFF. Playwright traces record
+    // every request's headers (CF-Access-Client-Secret, Authorization: Bearer <ADMIN_KEY>,
+    // X-OCR-Internal) and the minted CF_Authorization cookie; CI uploads them as
+    // artifacts anyone with repo read access can download. A plain page screenshot
+    // shows no headers, so failure screenshots stay. Do not turn these back on.
+    trace: 'off',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'off',
 
     // Staging uses valid TLS — do not ignore errors in security tests
     ignoreHTTPSErrors: false,
