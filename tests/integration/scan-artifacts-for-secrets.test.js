@@ -177,10 +177,29 @@ describe('scan-artifacts-for-secrets.sh', () => {
     writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
     const r = run(paths(), {});
     expect(r.code).toBe(1);
-    expect(r.out).toContain('(test: case CF_Authorization=[REDACTED]');
-    expect(r.out).toContain('.Bearer [REDACTED].text');
+    expect(r.out).toContain('(test: [withheld: credential-shaped])');
+    expect(r.out).toContain('.[withheld: credential-shaped].text');
     expect(r.out).not.toContain('eyJtitlecookie');
     expect(r.out).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+    expect(r.out).not.toContain('\u0007');
+  });
+
+  test('a quoted cookie in a key is withheld; a plain title loses control characters', () => {
+    const report = {
+      suites: [
+        {
+          title: 'plain\u0007title',
+          'CF_Authorization="eyJquotedcookie.x.y"': {
+            text: 'CF_Authorization=eyJfakejwtvalue.p.s',
+          },
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('.[withheld: credential-shaped].text (test: plain title)');
+    expect(r.out).not.toContain('eyJquotedcookie');
     expect(r.out).not.toContain('\u0007');
   });
 

@@ -177,17 +177,16 @@ where() {
       const fs = require("fs");
       const { SCAN_FILE: file, SCAN_NEEDLE: needle, SCAN_NEEDLE_KIND: kind } = process.env;
       const hit = kind === "regex" ? (s) => new RegExp(needle).test(s) : (s) => s.includes(needle);
-      // Titles and keys are printed, so they are scrubbed first: the needle,
-      // any cookie or Bearer value, control characters; and capped in length.
+      // Titles and keys are printed. Any that looks credential-shaped (the
+      // needle, a cookie name, a Bearer token) is withheld whole, not masked
+      // piecemeal: masking chases every value syntax (quoted, encoded, ...).
+      const shaped = (t) =>
+        /CF_Authorization|Bearer\s/i.test(t) || (kind === "regex" ? new RegExp(needle).test(t) : t.includes(needle));
       const safe = (t) => {
-        // Value-shaped patterns first, so their value goes with the name.
-        let o = String(t)
-          .replace(/CF_Authorization=[^;\s"]*/g, "CF_Authorization=[REDACTED]")
-          .replace(/Bearer\s+[A-Za-z0-9._~+\/=-]+/g, "Bearer [REDACTED]");
-        if (kind === "regex") o = o.replace(new RegExp(needle, "g"), "[REDACTED]");
-        else if (needle !== "CF_Authorization=") o = o.split(needle).join("[REDACTED]");
-        o = o.replace(/[\u0000-\u001f\u007f]/g, " ");
-        return o.length > 120 ? o.slice(0, 120) + "…" : o;
+        const o = String(t);
+        if (shaped(o)) return "[withheld: credential-shaped]";
+        const c = o.replace(/[\u0000-\u001f\u007f]/g, " ");
+        return c.length > 120 ? c.slice(0, 120) + "…" : c;
       };
       let doc;
       try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch { process.exit(3); }
