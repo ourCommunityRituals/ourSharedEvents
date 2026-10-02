@@ -166,6 +166,38 @@ describe('admin poster preview: a draft', () => {
   });
 });
 
+describe('opening a preview leaves no audit trail; a change does', () => {
+  test('poster and page previews write no admin_audit_log row', async () => {
+    const id = 'evt_pp_audit';
+    await seed(id, 'draft');
+    const db = (env as unknown as TestEnv).DB;
+    await db.prepare('DELETE FROM admin_audit_log WHERE resource_id = ?').bind(id).run();
+    await SELF.fetch(page(id), { headers: admin });
+    await SELF.fetch(bundle(id), { headers: admin });
+    await SELF.fetch(`https://t.test/api/v2/admin/events/${id}/preview`, { headers: admin });
+    // Control: one real change. Audit rows are written after the response
+    // (waitUntil), so wait for THIS row; then any row a preview wrote earlier
+    // would already be there too.
+    const put = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...admin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: { displayDwellSeconds: 30 } }),
+    });
+    expect(put.status).toBe(200);
+    let rows: Array<{ action: string }> = [];
+    for (let i = 0; i < 50 && rows.length === 0; i++) {
+      rows = (
+        await db
+          .prepare('SELECT action FROM admin_audit_log WHERE resource_id = ? ORDER BY id')
+          .bind(id)
+          .all<{ action: string }>()
+      ).results;
+      if (rows.length === 0) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(rows.map((r) => r.action)).toEqual(['UPDATE_EVENT']);
+  });
+});
+
 describe('admin poster preview: other states', () => {
   test('a live event goes to its real poster', async () => {
     await seed('evt_pp_live', 'active');

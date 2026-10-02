@@ -103,3 +103,11 @@ describe('poster QR cards: short codes live, direct links only in preview', () =
     expect(hrefs(doc)).toEqual(['https://t.test/s/ABC123']);
   });
 });
+
+describe('the poster counts nothing', () => {
+  test('no beacon, impression or click call anywhere in poster.html', () => {
+    expect(POSTER_HTML).not.toMatch(/sendBeacon/);
+    expect(POSTER_HTML).not.toMatch(/\/impression\b/);
+    expect(POSTER_HTML).not.toMatch(/\/sponsors\/[^'"\s]*\/click\b/);
+  });
+});
