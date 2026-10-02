@@ -14,7 +14,8 @@
 #   - Cloudflare Worker already created for the target environment
 #
 # Required secrets:
-#   ADMIN_KEY                    — Bearer token for /admin routes (openssl rand -hex 32)
+#   ADMIN_KEY                    — STAGING ONLY. Bearer fallback for /admin (openssl rand -hex 32).
+#                                  Never set on production: the deploy gate refuses it (ADR-012 R2).
 #   FORMS_ENCRYPTION_KEY         — AES-GCM key for email signup encryption (min 32 chars)
 #   FORMS_HASH_PEPPER            — HMAC-SHA256 pepper for email hashing (min 32 chars).
 #                                  FAIL-CLOSED: unset -> register + email-signup return

@@ -229,8 +229,8 @@ GCP_REGION         = "us-central1"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   TURNSTILE_SECRET         (Turnstile siteverify secret — ONLY when activating L4/OSE-1378; dark by default)
-#   ADMIN_KEY                (strong random string, min 32 chars)
-#   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
+#   (ADMIN_KEY, X_OCR_INTERNAL and ADMIN_TOKEN must NOT be set on production: admin is
+#    Cloudflare Access only, and the production deploy gate refuses them. ADR-012 R2.)
 #   FORMS_ENCRYPTION_KEY     (AES-GCM key for email encryption — min 32 chars, DIFFERENT from prod)
 #   FORMS_HASH_PEPPER        (HMAC-SHA256 pepper — min 32 chars, DIFFERENT from prod — OSE-598)
 #   ANON_ID_HASH_PEPPER      (pepper for anonymous ID hashing — min 32 chars)
