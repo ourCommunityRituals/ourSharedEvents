@@ -51,6 +51,11 @@ function adminExtraHeaders(): Record<string, string> {
 }
 
 const config = defineConfig({
+  // On GitHub Actions Playwright records the HEAD commit message
+  // (metadata.gitCommit) and, on PR runs, the whole PR diff (metadata.gitDiff)
+  // in every report. CI uploads reports as artifacts, so neither belongs there
+  // (OSE-1470). Guarded by tests/integration/scan-artifacts-for-secrets.test.js.
+  captureGitInfo: { commit: false, diff: false },
   testDir: './tests/ui/smoke',
 
   // Archived smoke specs (tests/ui/smoke/archive/**) are retired and some no

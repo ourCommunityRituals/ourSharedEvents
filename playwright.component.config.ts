@@ -49,6 +49,11 @@ const PORT = Number(process.env.COMPONENT_PORT ?? 8787);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 const config = defineConfig({
+  // On GitHub Actions Playwright records the HEAD commit message
+  // (metadata.gitCommit) and, on PR runs, the whole PR diff (metadata.gitDiff)
+  // in every report. CI uploads reports as artifacts, so neither belongs there
+  // (OSE-1470). Guarded by tests/integration/scan-artifacts-for-secrets.test.js.
+  captureGitInfo: { commit: false, diff: false },
   testDir: './tests/e2e',
 
   // Deliberately no testMatch. Batches are passed explicitly on the CLI so a

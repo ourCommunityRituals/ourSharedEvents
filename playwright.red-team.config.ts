@@ -34,6 +34,11 @@ import { defineConfig, devices } from '@playwright/test';
 const { guardProduction } = require('./config/production-read-only');
 
 const config = defineConfig({
+  // On GitHub Actions Playwright records the HEAD commit message
+  // (metadata.gitCommit) and, on PR runs, the whole PR diff (metadata.gitDiff)
+  // in every report. CI uploads reports as artifacts, so neither belongs there
+  // (OSE-1470). Guarded by tests/integration/scan-artifacts-for-secrets.test.js.
+  captureGitInfo: { commit: false, diff: false },
   testDir: './tests/red-team',
   testMatch: '**/*.spec.ts',
 
@@ -59,10 +64,7 @@ const config = defineConfig({
         ['junit', { outputFile: '.test-results/red-team-junit.xml' }],
         ['line'],
       ]
-    : [
-        ['html', { outputFolder: 'playwright-report-red-team', open: 'never' }],
-        ['list'],
-      ],
+    : [['html', { outputFolder: 'playwright-report-red-team', open: 'never' }], ['list']],
 
   use: {
     baseURL: process.env.BASE_URL ?? 'https://stg.oursharedevents.com',
