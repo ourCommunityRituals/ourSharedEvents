@@ -62,10 +62,7 @@ const config = defineConfig({
         ['junit', { outputFile: '.test-results/red-team-junit.xml' }],
         ['line'],
       ]
-    : [
-        ['html', { outputFolder: 'playwright-report-red-team', open: 'never' }],
-        ['list'],
-      ],
+    : [['html', { outputFolder: 'playwright-report-red-team', open: 'never' }], ['list']],
 
   use: {
     baseURL: process.env.BASE_URL ?? 'https://stg.oursharedevents.com',

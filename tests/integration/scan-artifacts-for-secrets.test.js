@@ -306,3 +306,81 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).toContain('cannot inspect archive');
   });
 });
+
+// Behavioral half of tests/integration/playwright-no-git-info.test.js (#751),
+// which checks the config source. On GitHub Actions Playwright records the HEAD
+// commit message (`metadata.gitCommit.body`) and, on PR runs, the PR diff
+// (`metadata.gitDiff`) in every report unless captureGitInfo turns it off. A
+// commit message that named the cookie literal failed T3's upload scan after
+// #747. This runs the real T3 configs and the real scanner on that case.
+describe('Playwright reports do not record git commit info', () => {
+  const REPO = join(__dirname, '..', '..');
+  const CLI = join(
+    require('path').dirname(require.resolve('@playwright/test/package.json')),
+    'cli.js'
+  );
+  const COMMIT_COOKIE = 'eyJfakecommitcookie.x.y';
+  const HAS_GIT = spawnSync('git', ['--version'], { encoding: 'utf-8' }).status === 0;
+
+  // End to end with the real T3 configs: a run on "GitHub Actions" whose HEAD
+  // commit message names the cookie must produce a report the scanner passes.
+  test.skipIf(!HAS_GIT).each(['playwright.smoke.config.ts', 'playwright.e2e-smoke.config.ts'])(
+    '%s: a commit message naming the cookie does not reach the report',
+    (config) => {
+      const repo = join(dir, 'fakegit');
+      mkdirSync(repo);
+      const git = (...a) =>
+        execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: repo });
+      git('init', '-q');
+      git(
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'subject',
+        '-m',
+        `body CF_Authorization=${COMMIT_COOKIE}`
+      );
+      const res = spawnSync(
+        process.execPath,
+        [
+          CLI,
+          'test',
+          '--config',
+          config,
+          '--reporter=json',
+          '--grep',
+          'NO_SUCH_TEST_ZZZ',
+          '--pass-with-no-tests',
+        ],
+        {
+          cwd: REPO,
+          encoding: 'utf-8',
+          timeout: 60_000,
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            SystemRoot: process.env.SystemRoot,
+            CI: '1',
+            GITHUB_ACTIONS: 'true',
+            GITHUB_EVENT_PATH: join(dir, 'no-event.json'),
+            GIT_DIR: join(repo, '.git'),
+          },
+        }
+      );
+      const report = JSON.parse(res.stdout);
+      // The run really reached the plugin stage (CI info is recorded)...
+      expect(report.config.metadata.ci).toBeDefined();
+      // ...the scanner passes the report, as T3 runs it...
+      writeFileSync(join(dir, 'test-results', 'smoke-results.json'), res.stdout);
+      const r = run(paths(), {});
+      expect(r.out).not.toContain(COMMIT_COOKIE);
+      expect(r.out).not.toContain('gitCommit');
+      expect(r.code).toBe(0);
+      // ...and no git info is recorded at all.
+      expect(report.config.metadata.gitCommit).toBeUndefined();
+      expect(report.config.metadata.gitDiff).toBeUndefined();
+    },
+    90_000
+  );
+});

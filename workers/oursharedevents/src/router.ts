@@ -25,6 +25,8 @@
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
+ *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
+ *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in (public)
@@ -166,6 +168,7 @@ import {
   handleSubscribe,
   handleDisplayPage,
   handlePosterPage,
+  handleAdminPosterPreviewPage,
   handleSharedReportPage,
   renderErrorPage,
   handleUiPreview,
@@ -765,6 +768,39 @@ export async function route(
       return deny;
     }
     return handleAdminEventPreviewPage(request, env, adminEventPreviewMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/poster-preview — the real poster for a draft
+  // (HTML), same gating as /preview above. Its data comes from the admin
+  // poster-bundle below, so a draft renders without becoming public.
+  const adminPosterPreviewMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/poster-preview$/
+  );
+  if (adminPosterPreviewMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) {
+      if ((request.headers.get('Accept') ?? '').includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
+    return handleAdminPosterPreviewPage(env, adminPosterPreviewMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/poster-bundle — the poster bundle for a draft
+  // or ready event (admin only; the public route refuses them). Read-only.
+  const adminPosterBundleMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/poster-bundle$/
+  );
+  if (adminPosterBundleMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    const res = await handleGetPosterBundle(request, env, adminPosterBundleMatch[1], {
+      preview: true,
+    });
+    const headers = new Headers(res.headers);
+    headers.set('Cache-Control', 'no-store');
+    return new Response(res.body, { status: res.status, headers });
   }
 
   // PUT/DELETE /api/v2/admin/events/:id — update, or hard-delete (OSE-982) one event

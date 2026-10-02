@@ -1572,27 +1572,12 @@
 
       /* ── Two paths, one admin: guided wizard + advanced dashboard
          (docs/plans/FE-DEV-PREP-2026-08-29.md). */
-      /* While the launch wizard is open, the dashboard behind it is HIDDEN.
-         Reported from a phone, 2026-09-05: choosing the guided path showed the
-         wizard, but the advanced admin screen kept rendering underneath it —
-         so scrolling past the wizard landed the operator in a SECOND create
-         form, on a 4942px page. Measured: the advanced create card sat at
-         y=640 with the wizard open.
-
-         The chooser asks the operator to pick a path; showing both paths
-         afterwards makes the question pointless and the answer ambiguous.
-
-         Hide-all-then-exempt, rather than naming the panels to hide: any panel
-         added to #main-content later is hidden by default while the wizard is
-         open, which is the safe direction to fail. #admin-status is exempt
-         because it is the aria-live region that announces errors — hiding it
-         would silence the wizard's own messages to a screen reader. Script
-         children render nothing either way.
-
-         (Do not write a literal script tag in this comment: the inline-JS
-         validity gate, tests/unit/rendered-surface-integrity.test.js, finds
-         the opening tag by regex and starts parsing CSS prose as JavaScript.
-         It caught exactly that here.) */
+      /* While the wizard is open the dashboard behind it is hidden (phone
+         report 2026-09-05: a second create form rendered under the wizard).
+         Hide-all-then-exempt, so a panel added later is hidden by default;
+         #admin-status stays, as it is the aria-live region for errors.
+         (No literal script tag in this comment: the inline-JS gate,
+         tests/unit/rendered-surface-integrity.test.js, finds it by regex.) */
       body.wizard-active #main-content > *:not(#launch-wizard):not(#admin-status) {
         display: none;
       }
@@ -1608,19 +1593,11 @@
         display: none;
       }
 
-      /* Defensive second rule: anything that ends up OUTSIDE <main> is hidden
-         too. When this was written, four cards — forms, poster deployments,
-         sponsors and surface cards — really were direct children of <body>
-         after </main>, and 2,290px of dashboard survived a rule scoped to
-         #main-content alone. OSE-1238 moved them into <main>, so this rule
-         currently matches nothing. It stays because the failure it prevents is
-         silent: the next block added outside the landmark would reappear under
-         the wizard with nothing to catch it.
-
-         Kept visible: the skip link and <header> (wayfinding and sign-out),
-         <footer> (legal must stay reachable — OSE-1232), anything marked
-         role="dialog" or data-wizard-keep so a modal added later is not
-         swallowed by this rule. */
+      /* Defensive second rule: anything outside <main> is hidden too. Since
+         OSE-1238 it matches nothing, but it keeps the next block added outside
+         the landmark from silently reappearing under the wizard. Kept visible:
+         skip link, <header>, <footer> (legal, OSE-1232), role="dialog" and
+         data-wizard-keep. */
       body.wizard-active
         > *:not(#main-content):not(header):not(footer):not(.skip-link):not([role='dialog']):not(
           [data-wizard-keep]
@@ -1998,6 +1975,9 @@
         align-self: flex-start;
       }
       .wizard-copy-btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         align-self: flex-start;
         padding: 0.35rem 0.9rem;
         background: var(--surface);
@@ -2616,7 +2596,7 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. Heads up — they won't work yet; they start working when you publish in the next step.</p>
+          <p class="wizard-step-help">Here are your event's links to share and print. They start working for guests when you publish in the next step. Until then, use Preview to see the page and poster exactly as guests will.</p>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
@@ -2624,6 +2604,7 @@
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrPublic"></span>
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public">Copy link</button>
+              <a class="wizard-copy-btn" data-testid="wizard-preview-public" target="_blank" rel="noopener">Preview</a>
             </div>
             <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
               <span class="wizard-card-title">Sign-up page</span>
@@ -2637,6 +2618,7 @@
               <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster">Copy link</button>
+              <a class="wizard-copy-btn" data-testid="wizard-preview-poster" target="_blank" rel="noopener">Preview</a>
             </div>
             <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
               <span class="wizard-card-title">Big-screen display</span>
@@ -2651,6 +2633,31 @@
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
             </div>
           </div>
+          <!-- The TV, the plain way: which screens and how fast, in one line.
+               Order and league links stay in the event's TV display card.
+               Saves on change through the same PUT { settings } as that card. -->
+          <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
+            <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
+            <p class="wizard-step-help">A TV at the venue shows these screens in turn. You can change it any time. Press Show me to watch it cycle.</p>
+            <p><strong>Your TV will show:</strong> <span data-testid="wizard-tv-summary"></span></p>
+            <!-- Optional: a demo plays only when asked; nothing moves on its own. -->
+            <button type="button" class="wizard-copy-btn" data-testid="wizard-tv-demo-toggle">Show me</button>
+            <p class="wizard-link-card" data-testid="wizard-tv-demo" aria-live="off" hidden></p>
+            <div role="group" aria-labelledby="wizard-tv-screens-label">
+              <p class="wizard-step-help" id="wizard-tv-screens-label">Screens to show</p>
+              <label class="create-publish-label" for="wizard-tv-event"><input type="checkbox" id="wizard-tv-event" data-testid="wizard-tv-screen" data-pane="event" checked /><span>This event</span></label>
+              <label class="create-publish-label" for="wizard-tv-upcoming"><input type="checkbox" id="wizard-tv-upcoming" data-testid="wizard-tv-screen" data-pane="upcoming" checked /><span>Coming up next</span></label>
+              <label class="create-publish-label" for="wizard-tv-sponsors"><input type="checkbox" id="wizard-tv-sponsors" data-testid="wizard-tv-screen" data-pane="sponsors" checked /><span>Sponsors</span></label>
+            </div>
+            <div role="radiogroup" aria-labelledby="wizard-tv-speed-label">
+              <p class="wizard-step-help" id="wizard-tv-speed-label">How long each screen stays up</p>
+              <label class="create-publish-label" for="wizard-tv-speed-8"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-8" data-testid="wizard-tv-speed" value="8" /><span>Quick: 8 seconds</span></label>
+              <label class="create-publish-label" for="wizard-tv-speed-15"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-15" data-testid="wizard-tv-speed" value="15" checked /><span>Normal: 15 seconds</span></label>
+              <label class="create-publish-label" for="wizard-tv-speed-30"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-30" data-testid="wizard-tv-speed" value="30" /><span>Slow: 30 seconds</span></label>
+            </div>
+            <p class="create-msg" data-testid="wizard-tv-msg" role="status" aria-live="polite"></p>
+            <p class="wizard-step-help">Want a different order, or league schedule links? Use the event's TV display card after you press Done.</p>
+          </section>
         </div>
 
         <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
@@ -2928,16 +2935,18 @@
             var skip = document.getElementById('wizardSkipBtn');
             var next = document.getElementById('wizard-next-btn');
             var finish = document.getElementById('wizard-finish-btn');
-            // Back only while nothing is saved yet — you can't un-create. On
-            // step 1 it returns to the front door (OSE-1315): same control, same
-            // place, on every pre-create step.
-            back.hidden = !(wiz.step <= 3 && !wiz.createdId);
+            // Before the save, Back walks steps 1-3 (on step 1 it returns to the
+            // front door, OSE-1315). After it, you can't un-create, but step 5
+            // goes back to step 4 so links and TV can be changed and republished.
+            back.hidden = !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));
             back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';
             skip.hidden = wiz.step !== 3;
             next.hidden = wiz.step === 5;
             finish.hidden = wiz.step !== 5;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
+            // The TV step's optional demo stops the moment the wizard leaves it.
+            window.dispatchEvent(new CustomEvent('ose:wizard-step', { detail: { step: wiz.step } }));
           }
 
           // Step 1 gate: name + venue are the two real requirements. Everything
@@ -2967,13 +2976,28 @@
             var origin = window.location.origin;
             var id = encodeURIComponent(wiz.createdId);
             setCardUrl('wizard-link-public', origin + '/events/' + id);
-            setCardUrl('wizard-link-poster', origin + '/poster');
-            setCardUrl('wizard-link-display', origin + '/display');
+            // Scoped to this event: a bare /poster or /display shows whichever
+            // event is featured, not necessarily the one just made.
+            setCardUrl('wizard-link-poster', origin + '/poster?event=' + id);
+            setCardUrl('wizard-link-display', origin + '/display?event=' + id);
+            // The TV section (its own script below) needs the new event's id.
+            window.dispatchEvent(
+              new CustomEvent('ose:wizard-created', {
+                detail: { id: wiz.createdId, title: document.getElementById('wizard-event-name').value.trim() },
+              })
+            );
             setCardUrl('wizard-link-report', origin + '/admin');
             var signupCard = document.getElementById('wizard-link-signup');
             if (signupCard) signupCard.hidden = wiz.signup !== 'create';
+            // Admin-only previews: the real page and poster, even as a draft.
+            var pv = document.querySelector('[data-testid="wizard-preview-public"]');
+            if (pv) pv.href = '/api/v2/admin/events/' + id + '/preview';
+            var pp = document.querySelector('[data-testid="wizard-preview-poster"]');
+            if (pp) pp.href = '/api/v2/admin/events/' + id + '/poster-preview';
             try {
-              var res = await fetch('/api/v2/events/' + id + '/poster-bundle');
+              // The admin bundle: the public one refuses a draft, so the codes
+              // never showed here for a brand-new event.
+              var res = await fetch('/api/v2/admin/events/' + id + '/poster-bundle');
               var data = await res.json();
               if (!data.ok) return;
               if (data.uecQr) {
@@ -3298,7 +3322,15 @@
           }
 
           function goBack() {
-            if (wiz.createdId) return;
+            // Saved: steps 4 and 5 are a loop (links + TV <-> publish), so an
+            // organizer can publish, come back, change things and publish again.
+            if (wiz.createdId) {
+              if (wiz.step !== 5) return;
+              wiz.step = 4;
+              replaceWizardStep(4);
+              updateUI();
+              return;
+            }
             if (wiz.step === 1) {
               closeWizard();
               return;
@@ -3493,7 +3525,9 @@
               });
             });
           });
-          document.querySelectorAll('.wizard-copy-btn').forEach(function (el) {
+          // Only the Copy buttons: Preview links and the TV demo's Pause share
+          // the look (.wizard-copy-btn) but not the job.
+          document.querySelectorAll('button.wizard-copy-btn[data-testid^="wizard-copy-"]').forEach(function (el) {
             el.addEventListener('click', function () {
               copyLink(el);
             });
@@ -3502,6 +3536,165 @@
           ['wizard-event-name', 'wizard-event-venue'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('input', validate);
+          });
+        })();
+      </script>
+
+      <script>
+        // Wizard step 4 — "Your TV screen". The plain version of the TV display
+        // card: screens on/off and one speed, summed up in one line ("This
+        // event → Coming up next → Sponsors · 15 seconds each"). Base practical
+        // (PO, 2026-10-02): speed and understanding first; the demo is an
+        // option behind Show me, never automatic.
+        (function () {
+          var NAMES = { event: 'This event', upcoming: 'Coming up next', sponsors: 'Sponsors' };
+          var st = { eventId: null, gen: 0, dirty: false, inFlight: false };
+          function q(sel) { return document.querySelector('[data-testid="' + sel + '"]'); }
+          function boxes() { return Array.prototype.slice.call(document.querySelectorAll('[data-testid="wizard-tv-screen"]')); }
+          function picked() {
+            return boxes().filter(function (b) { return b.checked; }).map(function (b) { return b.getAttribute('data-pane'); });
+          }
+          function seconds() {
+            var r = document.querySelector('input[name="wizard-tv-speed"]:checked');
+            return r ? Number(r.value) : 15;
+          }
+          function msg(text, kind) {
+            var el = q('wizard-tv-msg');
+            if (!el) return;
+            el.textContent = text || '';
+            el.className = 'create-msg' + (kind ? ' ' + kind : '');
+          }
+          // One screen stays up; two or more take turns, like the TV.
+          function show() {
+            var panes = picked();
+            var el = q('wizard-tv-summary');
+            if (!el || !panes.length) return;
+            el.textContent =
+              panes.map(function (p) { return NAMES[p]; }).join(' \u2192 ') +
+              (panes.length > 1 ? ' \u00b7 ' + seconds() + ' seconds each' : ' \u00b7 stays on screen');
+          }
+          // The optional demo: plays 5x faster than the TV (and says so) only
+          // after Show me, until Stop or the wizard leaves step 4.
+          var DEMO_SPEEDUP = 5;
+          var demo = { timer: null, index: 0 };
+          function demoStop() {
+            if (demo.timer) window.clearTimeout(demo.timer);
+            demo.timer = null;
+            var box = q('wizard-tv-demo');
+            if (box) box.hidden = true;
+            var btn = q('wizard-tv-demo-toggle');
+            if (btn) btn.textContent = 'Show me';
+          }
+          function demoShow() {
+            var panes = picked();
+            var box = q('wizard-tv-demo');
+            if (!box || !panes.length) return;
+            if (demo.index >= panes.length) demo.index = 0;
+            box.textContent =
+              'On the TV now: ' + NAMES[panes[demo.index]] + ' (screen ' + (demo.index + 1) + ' of ' + panes.length + ')' +
+              (panes.length > 1 ? ' \u00b7 demo plays ' + DEMO_SPEEDUP + 'x faster' : '');
+          }
+          function demoNext() {
+            var step = document.getElementById('wizard-step-4');
+            if (!step || !step.classList.contains('active')) return demoStop();
+            demo.index = (demo.index + 1) % Math.max(picked().length, 1);
+            demoShow();
+            demo.timer = window.setTimeout(demoNext, (seconds() * 1000) / DEMO_SPEEDUP);
+          }
+          function demoStart() {
+            var box = q('wizard-tv-demo');
+            var btn = q('wizard-tv-demo-toggle');
+            if (!box) return;
+            demo.index = 0;
+            box.hidden = false;
+            if (btn) btn.textContent = 'Stop';
+            demoShow();
+            if (demo.timer) window.clearTimeout(demo.timer);
+            demo.timer = picked().length > 1 ? window.setTimeout(demoNext, (seconds() * 1000) / DEMO_SPEEDUP) : null;
+          }
+          function demoRefresh() {
+            if (demo.timer || !(q('wizard-tv-demo') || {}).hidden) demoStart();
+          }
+          window.addEventListener('ose:wizard-step', function (e) {
+            if (!e || !e.detail || e.detail.step !== 4) demoStop();
+          });
+          var toggle = q('wizard-tv-demo-toggle');
+          if (toggle) toggle.addEventListener('click', function () {
+            if ((q('wizard-tv-demo') || {}).hidden) demoStart();
+            else demoStop();
+          });
+          // One PUT at a time, always with the latest choices: a change made
+          // while a save is in flight is sent after it, so an older request can
+          // never land last and overwrite the newer selection.
+          function save() {
+            if (!st.eventId) return;
+            st.dirty = true;
+            msg('Saving\u2026');
+            if (!st.inFlight) drain();
+          }
+          async function drain() {
+            st.inFlight = true;
+            while (st.dirty && st.eventId) {
+              st.dirty = false;
+              var eventId = st.eventId;
+              var gen = st.gen;
+              // League goes last and stays on: it only appears on the TV once
+              // league links are added in the TV display card.
+              var body = { settings: { displayPanes: picked().concat(['league']), displayDwellSeconds: seconds() } };
+              var text = 'Could not save. The TV keeps its last setting.';
+              var kind = 'error';
+              try {
+                var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                });
+                var data = await res.json().catch(function () { return null; });
+                if (res.ok && data && data.ok) {
+                  text = 'Saved.';
+                  kind = 'success';
+                } else if (data && data.error) {
+                  text = 'Not saved: ' + data.error;
+                }
+              } catch (e) {
+                /* network failure: the default text stands */
+              }
+              // A newer event, or a newer change still to send, owns the message.
+              if (gen === st.gen && !st.dirty) msg(text, kind);
+            }
+            st.inFlight = false;
+          }
+          boxes().forEach(function (b) {
+            b.addEventListener('change', function () {
+              if (!picked().length) {
+                b.checked = true;
+                msg('Keep at least one screen on.', 'error');
+                return;
+              }
+              show();
+              demoRefresh();
+              save();
+            });
+          });
+          document.querySelectorAll('input[name="wizard-tv-speed"]').forEach(function (r) {
+            r.addEventListener('change', function () {
+              show();
+              demoRefresh();
+              save();
+            });
+          });
+          // A new event starts from the TV's defaults: every screen, 15 s.
+          window.addEventListener('ose:wizard-created', function (e) {
+            var d = (e && e.detail) || {};
+            st.eventId = d.id ? String(d.id) : null;
+            st.gen++;
+            st.dirty = false;
+            boxes().forEach(function (b) { b.checked = true; });
+            var normal = document.getElementById('wizard-tv-speed-15');
+            if (normal) normal.checked = true;
+            msg('');
+            demoStop();
+            show();
           });
         })();
       </script>
