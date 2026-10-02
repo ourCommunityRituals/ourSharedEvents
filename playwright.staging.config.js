@@ -23,6 +23,9 @@ const stagingEnv = {
 };
 
 const config = defineConfig({
+  // No git commit or diff in reports (OSE-1470): uploaded artifacts must not
+  // carry commit messages or source diffs. CI defaults both to true.
+  captureGitInfo: { commit: false, diff: false },
   testDir: './tests/e2e',
 
   // Parallelization: Sequential in staging for stability
