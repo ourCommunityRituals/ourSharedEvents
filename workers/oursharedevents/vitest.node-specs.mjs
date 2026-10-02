@@ -159,6 +159,7 @@ export const NODE_SPECS = [
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
+  'tests/poster-preview-mode.spec.ts',
   // display-config ETag computed before QR generation (handler called directly,
   // stub DB, lib/qr mocked to count encoder calls).
   'tests/display-config-etag.spec.ts',

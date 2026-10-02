@@ -77,8 +77,9 @@ describe('OSE-1081 — poster.html honours ?event=', () => {
   test('fetches the named event directly, encoded into the poster-bundle path', () => {
     const poster = sourceFile('templates/poster.html');
     expect(poster).toContain('loadPosterBundle(wanted, true)');
-    expect(poster).toContain(
-      "fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle')"
+    // Public bundle normally; the admin bundle only in the admin draft preview.
+    expect(poster).toMatch(
+      /fetch\(\s*\(PREVIEW_EVENT \? '\/api\/v2\/admin\/events\/' : '\/api\/v2\/events\/'\) \+\s*encodeURIComponent\(eventId\) \+\s*'\/poster-bundle'\s*\)/
     );
   });
 

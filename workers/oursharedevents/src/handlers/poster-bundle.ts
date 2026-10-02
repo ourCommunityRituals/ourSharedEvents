@@ -178,7 +178,11 @@ export function posterSlotLabel(kind: string): string {
 export async function handleGetPosterBundle(
   request: Request,
   env: PosterBundleEnv,
-  eventId: string
+  eventId: string,
+  // Admin preview (GET /api/v2/admin/events/:id/poster-bundle, behind
+  // requireAdmin + the object-scope guard): a draft or ready event renders so
+  // the organizer can see the poster before publishing. Archived still refuses.
+  opts: { preview?: boolean } = {}
 ): Promise<Response> {
   const row = await env.DB.prepare(POSTER_EVENT_SELECT).bind(eventId).first<
     Record<string, unknown> & {
@@ -196,8 +200,10 @@ export async function handleGetPosterBundle(
     return Response.json({ ok: false, status: 404, error: 'Event not found' }, { status: 404 });
   }
 
-  const { allowed, reason } = assertRenderable(parseEventState(row.status), 'poster');
-  if (!allowed) {
+  const state = parseEventState(row.status);
+  const previewable = opts.preview === true && state !== 'archived';
+  const { allowed, reason } = assertRenderable(state, 'poster');
+  if (!allowed && !previewable) {
     return Response.json(
       { ok: false, status: 403, code: 'NOT_RENDERABLE', error: reason },
       { status: 403 }

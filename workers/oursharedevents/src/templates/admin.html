@@ -2608,7 +2608,7 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. Heads up — they won't work yet; they start working when you publish in the next step.</p>
+          <p class="wizard-step-help">Here are your event's links to share and print. They start working for guests when you publish in the next step. Until then, use Preview to see the page and poster exactly as guests will.</p>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
@@ -2616,6 +2616,7 @@
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrPublic"></span>
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public">Copy link</button>
+              <a class="wizard-copy-btn" data-testid="wizard-preview-public" target="_blank" rel="noopener">Preview</a>
             </div>
             <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
               <span class="wizard-card-title">Sign-up page</span>
@@ -2629,6 +2630,7 @@
               <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster">Copy link</button>
+              <a class="wizard-copy-btn" data-testid="wizard-preview-poster" target="_blank" rel="noopener">Preview</a>
             </div>
             <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
               <span class="wizard-card-title">Big-screen display</span>
@@ -3000,8 +3002,15 @@
             setCardUrl('wizard-link-report', origin + '/admin');
             var signupCard = document.getElementById('wizard-link-signup');
             if (signupCard) signupCard.hidden = wiz.signup !== 'create';
+            // Admin-only previews: the real page and poster, even as a draft.
+            var pv = document.querySelector('[data-testid="wizard-preview-public"]');
+            if (pv) pv.href = '/api/v2/admin/events/' + id + '/preview';
+            var pp = document.querySelector('[data-testid="wizard-preview-poster"]');
+            if (pp) pp.href = '/api/v2/admin/events/' + id + '/poster-preview';
             try {
-              var res = await fetch('/api/v2/events/' + id + '/poster-bundle');
+              // The admin bundle: the public one refuses a draft, so the codes
+              // never showed here for a brand-new event.
+              var res = await fetch('/api/v2/admin/events/' + id + '/poster-bundle');
               var data = await res.json();
               if (!data.ok) return;
               if (data.uecQr) {
@@ -3529,7 +3538,9 @@
               });
             });
           });
-          document.querySelectorAll('.wizard-copy-btn').forEach(function (el) {
+          // Only the Copy buttons: Preview links and the TV demo's Pause share
+          // the look (.wizard-copy-btn) but not the job.
+          document.querySelectorAll('button.wizard-copy-btn[data-testid^="wizard-copy-"]').forEach(function (el) {
             el.addEventListener('click', function () {
               copyLink(el);
             });

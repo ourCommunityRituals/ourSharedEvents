@@ -242,11 +242,8 @@ export function renderErrorPage(
     /* Colours are @ocr/ui tokens from /ui.css — the page follows the viewer's theme. */
     body { display: flex; flex-direction: column; }
     header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.25rem 2rem; }
-    /* OSE-308: both anchors are primary action targets on the
-       error-page recovery flow. Per WCAG 2.5.5 Level AAA + invariant 14
-       refined contract, they must meet the 44x44 floor. Using
-       inline-flex + align-items: center vertically centers the text
-       inside the 44px box without misaligning the visual baseline. */
+    /* OSE-308: both anchors are primary actions on the error page, so they
+       meet the 44x44 floor (WCAG 2.5.5, invariant 14); inline-flex centers. */
     header a { color: var(--text); text-decoration: none; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center; }
     .error-status { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
@@ -1778,8 +1775,9 @@ export async function handlePublicEventPage(
 }
 
 const ADMIN_PREVIEW_CSS = `<style>
-  .admin-preview-toolbar { position: sticky; top: 0; z-index: 1000; margin: -1.5rem -1.25rem 1.25rem; padding: 0.75rem 1.25rem; background: var(--surface); border-bottom: 2px solid var(--accent); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
-  .admin-preview-toolbar p { flex-basis: 100%; margin: 0; }
+.admin-preview-toolbar{position:sticky;top:0;z-index:1000;margin:-1.5rem -1.25rem 1.25rem;padding:.75rem 1.25rem;background:var(--surface);border-bottom:2px solid var(--accent);display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+.admin-preview-toolbar p{flex-basis:100%;margin:0}
+@media print{.admin-preview-toolbar{display:none}}
 </style>`;
 
 /**
@@ -1795,20 +1793,27 @@ const ADMIN_PREVIEW_CSS = `<style>
 function injectAdminPreviewToolbar(
   body: string,
   row: { id: string; status: string; is_published: number | null },
-  nonce: string
+  nonce: string,
+  // liveUrl: where Publish lands (the poster preview goes to the live poster).
+  // Without it, Publish opens the public event page, or says it is unlisted.
+  opts: { liveUrl?: string; note?: string } = {}
 ): string {
   const safeId = esc(row.id);
+  const liveAttr = opts.liveUrl ? ` data-live-url="${esc(opts.liveUrl)}"` : '';
+  const note =
+    opts.note ??
+    'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.';
   const status = row.status === 'ready' ? 'ready' : 'draft';
   const listed = row.is_published === 1 ? '1' : '0';
   const toolbar = `<aside class="admin-preview-toolbar" aria-label="Preview" data-testid="admin-draft-preview-toolbar">
   <strong data-testid="admin-preview-banner">Preview — not live</strong>
   <span data-testid="admin-draft-preview-status">${status === 'ready' ? 'Ready' : 'Draft'}</span>
   <a class="btn btn-secondary" data-testid="admin-preview-back" href="/admin">Back to admin</a>
-  <button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}">Publish</button>
-  <p data-testid="admin-preview-note">This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.</p>
+  <button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}"${liveAttr}>Publish</button>
+  <p data-testid="admin-preview-note">${esc(note)}</p>
   <p id="adminPreviewMsg" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
 </aside>
-<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.listed==='1'){say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}else{say('Published, but unlisted: it has no public page. Change that in admin.');}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
+<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.liveUrl){say('Published. Opening it…');window.location.href=b.dataset.liveUrl;}else if(b.dataset.listed==='1'){say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}else{say('Published, but unlisted: it has no public page. Change that in admin.');}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
   return body
     .replace('</head>', `${ADMIN_PREVIEW_CSS}\n</head>`)
     .replace('<body>', `<body>\n${toolbar}`);
@@ -1914,6 +1919,80 @@ export async function handleAdminEventPreviewPage(
     nonce
   );
 
+  return new Response(body, {
+    status: 200,
+    headers: { ...securityHeaders(nonce), ...PREVIEW_HEADERS },
+  });
+}
+
+/**
+ * GET /api/v2/admin/events/:id/poster-preview — the real poster for a draft.
+ *
+ * Same gating and states as the event preview above: requireAdmin in the
+ * router, guardAdminObjectScope for the brand, no-store + noindex. draft/ready
+ * render poster.html in preview mode (data-preview-event on <body>, so its one
+ * data call goes to the admin poster-bundle instead of the public one); active
+ * redirects to the real /poster?event=; archived or missing is a 404. The
+ * toolbar is hidden when printing, so a test print looks like the real one.
+ */
+export async function handleAdminPosterPreviewPage(
+  env: PublicEventEnv,
+  eventId: string
+): Promise<Response> {
+  if (!env.DB) {
+    return previewError(
+      503,
+      "We're having trouble loading this event",
+      'The poster preview is briefly unavailable. Try again in a minute.'
+    );
+  }
+  if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
+    return previewError(404, "We couldn't find that event", 'This poster preview link is invalid.');
+  }
+  let row: { id: string; status: string; is_published: number | null } | null;
+  try {
+    row = await env.DB.prepare('SELECT id, status, is_published FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ id: string; status: string; is_published: number | null }>();
+  } catch {
+    return previewError(
+      503,
+      "We're having trouble loading this event",
+      'The poster preview is briefly unavailable. Try again in a minute.'
+    );
+  }
+  if (!row) {
+    return previewError(
+      404,
+      "We couldn't find that event",
+      'This poster preview link no longer points to an event.'
+    );
+  }
+  const status = (row.status || 'draft').toLowerCase();
+  const posterUrl = `/poster?event=${encodeURIComponent(row.id)}`;
+  if (status === 'active') {
+    return new Response(null, {
+      status: 303,
+      headers: { Location: posterUrl, ...PREVIEW_HEADERS },
+    });
+  }
+  if (status !== 'draft' && status !== 'ready') {
+    return previewError(
+      404,
+      'Nothing to preview',
+      'This event is archived. Reopen it as a draft in admin to preview it again.'
+    );
+  }
+  const nonce = generateNonce();
+  // Nonce the poster's own scripts first; the toolbar brings its own nonce.
+  const page = POSTER_HTML.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`); // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
+  const body = injectAdminPreviewToolbar(page, { ...row, status }, nonce, {
+    liveUrl: posterUrl,
+    note: 'This is the poster people will see once it is live. Print a test copy if you like; this bar does not print.',
+  }).replace(
+    '<body>',
+    `<body data-poster-format="${DEFAULT_POSTER_CODE}" data-preview-event="${esc(row.id)}">`
+  );
   return new Response(body, {
     status: 200,
     headers: { ...securityHeaders(nonce), ...PREVIEW_HEADERS },

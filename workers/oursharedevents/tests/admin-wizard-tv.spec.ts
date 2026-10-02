@@ -264,6 +264,7 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     (w as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement.prototype.scrollIntoView =
       () => {};
     const puts: unknown[] = [];
+    const gets: string[] = [];
     w.fetch = (async (url: string, init?: RequestInit) => {
       const method = (init?.method ?? 'GET').toUpperCase();
       if (method === 'POST' && url === '/api/v2/admin/events') {
@@ -277,6 +278,7 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
         };
       }
       if (method === 'PUT') puts.push(JSON.parse(String(init!.body)));
+      if (method === 'GET') gets.push(url);
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }) as unknown as typeof fetch;
     const moves: Array<[string, string]> = [];
@@ -305,6 +307,19 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     expect(doc.querySelector('[data-testid="wizard-tv-demo-title"]')!.textContent).toBe(
       'Bocce Night'
     );
+
+    // Previews: the real page and poster, admin-only, even as a draft. The
+    // QR codes come from the admin bundle (the public one refuses drafts).
+    const pv = doc.querySelector<HTMLAnchorElement>('[data-testid="wizard-preview-public"]')!;
+    const pp = doc.querySelector<HTMLAnchorElement>('[data-testid="wizard-preview-poster"]')!;
+    expect(pv.getAttribute('href')).toBe(`/api/v2/admin/events/${EVT}/preview`);
+    expect(pp.getAttribute('href')).toBe(`/api/v2/admin/events/${EVT}/poster-preview`);
+    expect(gets).toContain(`/api/v2/admin/events/${EVT}/poster-bundle`);
+    expect(gets.some((u) => u.startsWith('/api/v2/events/'))).toBe(false);
+    // Preview is a link, not a Copy button: clicking leaves its text alone.
+    pv.addEventListener('click', (e) => e.preventDefault());
+    pv.click();
+    expect(pv.textContent).toBe('Preview');
 
     byId('wizard-next-btn').click();
     expect(active()).toBe('wizard-step-5');

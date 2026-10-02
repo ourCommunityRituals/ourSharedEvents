@@ -510,6 +510,9 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
     // renderer. It is not public, but it is still an HTML render surface and
     // must not introduce per-attendee identity reads.
     'handleAdminEventPreviewPage',
+    // Same for the admin poster preview (draft poster, admin-only): an HTML
+    // render surface that must not read per-attendee identity either.
+    'handleAdminPosterPreviewPage',
     // R-001 (2026-05-15) — HTML sign-in page for unauth GET /admin. Public-
     // render because it's served to anonymous prospects; must be anonymity-safe.
     'handleAdminSignInPage',
