@@ -26,8 +26,9 @@
 // permanent, so a publish the organizer undoes must never set it. An event
 // counts once it has been listed for LATCH_SETTLE_HOURS: listed_from (the end
 // of its publish grace window, lib/publish-grace.ts) at least that long ago.
-// NULL listed_from (created live, or from before migration 0093) counts as
-// settled, as it always did.
+// Every publication and every create-as-active stores listed_from, so NULL
+// means a row from before migration 0093, which counts as settled as it
+// always did.
 
 import { CORRIDOR_READY_MIN_EVENTS, CORRIDOR_WINDOW_DAYS } from './corridor-readiness';
 

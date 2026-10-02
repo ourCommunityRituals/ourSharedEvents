@@ -429,7 +429,7 @@ describe('publish grace window: the organiser is told when it lists', () => {
         to: string,
         from: string
       ): Promise<{ ok: boolean; listedFrom: string | null }>;
-      graceNote(listedFrom: string | null): string;
+      graceNote(listedFrom: string | null, listed?: boolean): string;
     };
   }
 
@@ -451,12 +451,21 @@ describe('publish grace window: the organiser is told when it lists', () => {
     expect(w.graceNote('not a date')).toBe('');
   });
 
+  test('an event kept off the map is never promised a listing', () => {
+    const w = mountRouter({ ok: true });
+    const soon = new Date(Date.now() + 10 * 60_000).toISOString();
+    const note = w.graceNote(soon, false);
+    expect(note).not.toContain('goes on the map');
+    expect(note).toContain('stays off the map and list, as you chose');
+    expect(w.graceNote(soon, true)).toContain('goes on the map and list at');
+  });
+
   test('the wizard and the status panel both add the note to their Published message', () => {
     expect(ADMIN_HTML).toContain(
-      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom) : '')"
+      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false) : '')"
     );
     expect(ADMIN_HTML).toContain(
-      "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom)"
+      "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0)"
     );
   });
 });

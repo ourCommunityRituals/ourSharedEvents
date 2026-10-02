@@ -3445,7 +3445,7 @@
               syncWizardSummary();
               btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom) : ''); msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false) : ''); msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
@@ -7696,7 +7696,9 @@
        * Undo before then and nobody else will have found it." Empty when the
        * event lists at once (window off).
        */
-      window.graceNote = function (listedFrom) {
+      window.graceNote = function (listedFrom, listed) {
+        // Kept off the map by the organizer's choice: never promise a listing.
+        if (listed === false) return ' It stays off the map and list, as you chose. Share its link to invite people.';
         var t = listedFrom ? new Date(listedFrom) : null;
         if (!t || isNaN(t.getTime()) || t.getTime() <= Date.now()) return '';
         var at = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -7732,7 +7734,7 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
-          var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
+          var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
           if (m2) {

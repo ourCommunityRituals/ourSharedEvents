@@ -110,7 +110,8 @@ describe('resolvePublishGraceMinutes', () => {
   test('listedFromForPublish is now + minutes, or null when off', () => {
     const now = new Date('2026-10-02T21:00:00.000Z');
     expect(listedFromForPublish('10', now)).toBe('2026-10-02T21:10:00.000Z');
-    expect(listedFromForPublish('0', now)).toBeNull();
+    // Off still records the listing start, so the latch can settle it.
+    expect(listedFromForPublish('0', now)).toBe('2026-10-02T21:00:00.000Z');
   });
 });
 
@@ -202,11 +203,26 @@ describe('Publish starts the window; the event is live by link but not listed', 
     expect(await inPublicList(id)).toBe(true);
   });
 
-  test('window off ("0") → listed at once, listed_from stays NULL', async () => {
+  test('window off ("0") → listed at once, and the listing start is still recorded', async () => {
     const id = `grace-off-${Date.now()}`;
     await insertEvent(id, 'ready');
+    const before = Date.now();
     expect((await verify(id, '0')).status).toBe(200);
-    expect(await listedFromOf(id)).toBeNull();
+    const stored = await listedFromOf(id);
+    expect(stored).not.toBeNull();
+    expect(Math.abs(Date.parse(stored!) - before)).toBeLessThan(5_000);
+    expect(await inPublicList(id)).toBe(true);
+  });
+
+  test('created live (automation) lists at once and records its listing start', async () => {
+    const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
+      method: 'POST',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Created live', status: 'active', start_date: inDays(3) }),
+    });
+    expect(res.status).toBeLessThan(300);
+    const id = ((await res.json()) as { id: string }).id;
+    expect(await listedFromOf(id)).not.toBeNull();
     expect(await inPublicList(id)).toBe(true);
   });
 });
@@ -258,6 +274,36 @@ describe('Undo inside the window leaves no public trace', () => {
   });
 });
 
+describe('Recap "next at this venue" is a public list too', () => {
+  test('it skips an event inside its window and an unlisted one', async () => {
+    const venue = `Grace Hall ${Date.now()}`;
+    const past = `grace-recap-past-${Date.now()}`;
+    await E.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date,
+              location, created_at, updated_at)
+       VALUES (?, ?, 'Last week', ?, 'active', 1, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(past, BRAND, past, inDays(-7), inDays(-7), venue)
+      .run();
+    const mk = async (id: string, title: string, published: number, listedFrom: string | null) =>
+      E.DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, location,
+                listed_from, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      )
+        .bind(id, BRAND, title, id, published, inDays(5), venue, listedFrom)
+        .run();
+    const t = Date.now();
+    await mk(`grace-recap-new-${t}`, 'Still in its window', 1, new Date(t + 600_000).toISOString());
+    await mk(`grace-recap-unl-${t}`, 'Kept off the map', 0, null);
+    await mk(`grace-recap-ok-${t}`, 'Settled and listed', 1, new Date(t - 1000).toISOString());
+    const html = await (await SELF.fetch(`https://localhost/events/${past}`)).text();
+    expect(html).toContain('Settled and listed'); // control: the list renders
+    expect(html).not.toContain('Still in its window');
+    expect(html).not.toContain('Kept off the map');
+  });
+});
+
 describe('Corridor latch counts settled events only (OSE-1508)', () => {
   test('five events published today do not latch; the same five a day later do', async () => {
     const brand = `grace-latch-${Date.now()}`;
@@ -301,6 +347,39 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
     await latchReadyCorridors(
       E.DB,
       new Date(now.getTime() + 10 * 60_000 + LATCH_SETTLE_HOURS * 3_600_000 + 1000)
+    );
+    expect(await latched()).toBe(1);
+  });
+
+  test('events created live do not latch on the first nightly run either', async () => {
+    const cell = '872664546ffffff';
+    const now = new Date();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
+        method: 'POST',
+        headers: { ...BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `Live ${i}`, status: 'active', start_date: inDays(2) }),
+      });
+      ids.push(((await res.json()) as { id: string }).id);
+    }
+    // Put them in one corridor of their own (the API derives cells from lat/lon).
+    for (const id of ids) {
+      await E.DB.prepare('UPDATE events SET h3_res7 = ? WHERE id = ?').bind(cell, id).run();
+    }
+    const latched = async () =>
+      (
+        await E.DB.prepare(
+          'SELECT COUNT(*) AS n FROM corridor_readiness_latch WHERE brand_id = ? AND h3_res7 = ?'
+        )
+          .bind(BRAND, cell)
+          .first<{ n: number }>()
+      )?.n ?? 0;
+    await latchReadyCorridors(E.DB, now);
+    expect(await latched()).toBe(0);
+    await latchReadyCorridors(
+      E.DB,
+      new Date(now.getTime() + LATCH_SETTLE_HOURS * 3_600_000 + 5000)
     );
     expect(await latched()).toBe(1);
   });

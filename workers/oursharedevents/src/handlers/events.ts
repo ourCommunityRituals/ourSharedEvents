@@ -738,9 +738,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published, created_by,
-                           event_type_id, settings_json,
+                           event_type_id, settings_json, listed_from,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -775,6 +775,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         createdBy,
         eventType.id,
         settingsJson,
+        // Created live (automation): listed at once, but the listing start is
+        // recorded so the corridor latch's settling rule still applies.
+        status === 'active' ? now : null,
         now,
         now
       )

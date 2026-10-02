@@ -10,8 +10,11 @@
 // ends the event lists itself; nothing has to run.
 //
 // Storage: events.listed_from (migration 0093), an ISO-8601 UTC instant.
-//   NULL  → listed whenever is_published = 1 (created live, or from before 0093).
-//   value → listed once that instant has passed.
+//   value → listed once that instant has passed. Every move into active sets
+//           it, even with the window off (then it is "now"), and so does
+//           creating an event as active, so the corridor latch can always
+//           tell how long an event has been listed.
+//   NULL  → rows from before 0093 (listed as before), and events not active.
 // Stored as JS toISOString() so it compares as text against LISTED_NOW_SQL.
 //
 // Testing: the fast vitest pool sets PUBLISH_GRACE_MINUTES = "0" so unrelated
@@ -44,13 +47,13 @@ export function resolvePublishGraceMinutes(raw: string | undefined): number {
   return Math.min(Math.floor(n), MAX_PUBLISH_GRACE_MINUTES);
 }
 
-/** The listed_from to store when an event moves into active now. */
-export function listedFromForPublish(
-  raw: string | undefined,
-  now: Date = new Date()
-): string | null {
+/**
+ * The listed_from to store when an event moves into active now: now plus the
+ * window, or now itself when the window is off. Never NULL, so the corridor
+ * latch's 24-hour settling rule applies to every new publication.
+ */
+export function listedFromForPublish(raw: string | undefined, now: Date = new Date()): string {
   const minutes = resolvePublishGraceMinutes(raw);
-  if (minutes === 0) return null;
   return new Date(now.getTime() + minutes * 60_000).toISOString();
 }
 

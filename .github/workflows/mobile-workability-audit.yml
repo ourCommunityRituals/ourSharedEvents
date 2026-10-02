@@ -73,6 +73,7 @@ on:
       - 'tests/playwright/admin-sponsor-form.spec.ts'
       - 'tests/playwright/sponsor-home-flow.spec.ts'
       - 'tests/playwright/landing-theme.spec.ts'
+      - 'tests/playwright/publish-loop-journey.spec.ts'
       - 'tests/playwright/mobile.global-setup.ts'
       - 'tests/playwright/helpers/**'
       - 'playwright.mobile.config.ts'

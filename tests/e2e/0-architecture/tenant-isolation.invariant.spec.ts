@@ -87,14 +87,14 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts:54':
+  'lib/corridor-latch.ts:55':
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
     'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
     'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
     'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
     'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
     'request-path read (readLatchedCorridors) binds brand_id. (Line shifted ' +
-    '43→54 by the OSE-1508 settled-events rule: LATCH_SETTLE_HOURS and its ' +
+    '43→55 by the OSE-1508 settled-events rule: LATCH_SETTLE_HOURS and its ' +
     'comment land above the SELECT.)',
   'handlers/events.ts:373':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +

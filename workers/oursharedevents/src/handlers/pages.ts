@@ -8,6 +8,7 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { listedSql } from '../lib/publish-grace';
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { HARDENING_HEADERS } from '../lib/security-headers';
 import { computeEventPhase } from '../domain/event-phase';
@@ -1731,15 +1732,12 @@ export async function handlePublicEventPage(
     let nextEvents: NextEventRow[] = [];
     try {
       if (row.location) {
-        // OSE-1242 / CCR H1: brand-scoped. This is a PUBLIC surface listing
-        // other events at the same venue, and it had no brand filter — so a
-        // venue hosting two white-label instances would advertise each brand's
-        // events on the other's recap page. Invariant #9 applies to every
-        // public list, not only the one at /events. Found by the rewritten
-        // OSE-INV9 gate, which scans handlers instead of naming one.
+        // A public list, like /events: brand-scoped (OSE-1242, Invariant #9),
+        // and listed events only (is_published + publish grace window).
         const rs = await env.DB.prepare(
           `SELECT id, title, start_date, location FROM events
            WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
+             AND is_published = 1 AND ${listedSql()}
              AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
            ORDER BY datetime(start_date) ASC LIMIT ?4`
         )
@@ -1774,7 +1772,7 @@ const ADMIN_PREVIEW_CSS = `<style>
 .admin-preview-toolbar{position:sticky;top:0;z-index:1000;margin:-1.5rem -1.25rem 1.25rem;padding:.75rem 1.25rem;background:var(--surface);border-bottom:2px solid var(--accent);display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
 .admin-preview-toolbar p{flex-basis:100%;margin:0}
 .draft-mark{display:none}
-@media print{.admin-preview-toolbar{display:none}.draft-mark{display:block;text-align:center;font-weight:700;border:2px solid;padding:.25rem}}
+@media print{.admin-preview-toolbar{display:none}.draft-mark{display:block;position:fixed;top:0;left:0;right:0;z-index:9;text-align:center;font-weight:700;border:2px solid;background:Canvas;color:CanvasText}}
 </style>`;
 
 /**
@@ -1999,7 +1997,9 @@ export async function handleAdminPosterPreviewPage(
   }).replace(
     '<body>',
     // Print-only DRAFT mark (OSE-1508, PO 2026-10-02): a test print hung by
-    // mistake is obvious, and its QR codes carry no placement.
+    // mistake is obvious, and its QR codes carry no placement. Fixed in print,
+    // so it overlays the poster's top margin on every sheet and takes no room
+    // in the flow: it can never push the one-page poster onto a second sheet.
     `<body data-poster-format="${DEFAULT_POSTER_CODE}" data-preview-event="${esc(row.id)}">` +
       '<p class="draft-mark" data-testid="poster-draft-mark">DRAFT \u2014 not live yet. Test print only.</p>'
   );

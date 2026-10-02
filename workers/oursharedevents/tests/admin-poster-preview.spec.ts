@@ -112,7 +112,9 @@ describe('admin poster preview: a draft', () => {
     expect(html).toContain('data-testid="poster-draft-mark"');
     expect(html).toContain('DRAFT \u2014 not live yet');
     expect(html).toMatch(/\.draft-mark\{display:none\}/);
-    expect(html).toMatch(/@media print\{[^}]*\}\.draft-mark\{display:block/);
+    // Fixed, so it overlays the sheet instead of taking room: it can never push
+    // the one-page poster onto a second sheet (verified by a Chromium PDF).
+    expect(html).toMatch(/@media print\{[^}]*\}\.draft-mark\{display:block;position:fixed/);
     // Every script carries the response's nonce, exactly once.
     const csp = res.headers.get('Content-Security-Policy') ?? '';
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
