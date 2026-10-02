@@ -1572,27 +1572,12 @@
 
       /* ── Two paths, one admin: guided wizard + advanced dashboard
          (docs/plans/FE-DEV-PREP-2026-08-29.md). */
-      /* While the launch wizard is open, the dashboard behind it is HIDDEN.
-         Reported from a phone, 2026-09-05: choosing the guided path showed the
-         wizard, but the advanced admin screen kept rendering underneath it —
-         so scrolling past the wizard landed the operator in a SECOND create
-         form, on a 4942px page. Measured: the advanced create card sat at
-         y=640 with the wizard open.
-
-         The chooser asks the operator to pick a path; showing both paths
-         afterwards makes the question pointless and the answer ambiguous.
-
-         Hide-all-then-exempt, rather than naming the panels to hide: any panel
-         added to #main-content later is hidden by default while the wizard is
-         open, which is the safe direction to fail. #admin-status is exempt
-         because it is the aria-live region that announces errors — hiding it
-         would silence the wizard's own messages to a screen reader. Script
-         children render nothing either way.
-
-         (Do not write a literal script tag in this comment: the inline-JS
-         validity gate, tests/unit/rendered-surface-integrity.test.js, finds
-         the opening tag by regex and starts parsing CSS prose as JavaScript.
-         It caught exactly that here.) */
+      /* While the wizard is open the dashboard behind it is hidden (phone
+         report 2026-09-05: a second create form rendered under the wizard).
+         Hide-all-then-exempt, so a panel added later is hidden by default;
+         #admin-status stays, as it is the aria-live region for errors.
+         (No literal script tag in this comment: the inline-JS gate,
+         tests/unit/rendered-surface-integrity.test.js, finds it by regex.) */
       body.wizard-active #main-content > *:not(#launch-wizard):not(#admin-status) {
         display: none;
       }
@@ -1971,7 +1956,8 @@
       .wizard-skip-btn:hover {
         background: var(--surface-hover);
       }
-      .wizard-link-card {
+      .wizard-link-card,
+      .wizard-tv-demo {
         background: var(--surface-hover);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -1984,6 +1970,12 @@
          sign-up card genuinely disappears when the organizer skips sign-ups. */
       .wizard-link-card[hidden] {
         display: none;
+      }
+      .wizard-tv-demo {
+        aspect-ratio: 16 / 9;
+        max-width: 20rem;
+        justify-content: center;
+        margin-bottom: 0.5rem;
       }
       .wizard-link-card .wizard-card-url {
         font-size: 0.75rem;
@@ -2651,6 +2643,33 @@
               <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
             </div>
           </div>
+          <!-- The TV, the light way: which screens and how fast, with a demo.
+               Order and league links stay in the event's TV display card.
+               Saves on change through the same PUT { settings } as that card. -->
+          <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
+            <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
+            <p class="wizard-step-help">A TV at the venue shows these screens in turn. Watch the demo, then pick what fits. You can change it any time.</p>
+            <div class="wizard-tv-demo" data-testid="wizard-tv-demo" aria-live="off">
+              <strong data-testid="wizard-tv-demo-title"></strong>
+              <span class="wizard-card-desc" data-testid="wizard-tv-demo-desc"></span>
+              <span class="wizard-card-desc" data-testid="wizard-tv-demo-count"></span>
+            </div>
+            <button type="button" class="wizard-copy-btn" id="wizard-tv-demo-pause" data-testid="wizard-tv-demo-pause" aria-pressed="false">Pause demo</button>
+            <div role="group" aria-labelledby="wizard-tv-screens-label">
+              <p class="wizard-step-help" id="wizard-tv-screens-label">Screens to show</p>
+              <label class="create-publish-label" for="wizard-tv-event"><input type="checkbox" id="wizard-tv-event" data-testid="wizard-tv-screen" data-pane="event" checked /><span>This event</span></label>
+              <label class="create-publish-label" for="wizard-tv-upcoming"><input type="checkbox" id="wizard-tv-upcoming" data-testid="wizard-tv-screen" data-pane="upcoming" checked /><span>Coming up next</span></label>
+              <label class="create-publish-label" for="wizard-tv-sponsors"><input type="checkbox" id="wizard-tv-sponsors" data-testid="wizard-tv-screen" data-pane="sponsors" checked /><span>Sponsors</span></label>
+            </div>
+            <div role="radiogroup" aria-labelledby="wizard-tv-speed-label">
+              <p class="wizard-step-help" id="wizard-tv-speed-label">How long each screen stays up</p>
+              <label class="create-publish-label" for="wizard-tv-speed-8"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-8" data-testid="wizard-tv-speed" value="8" /><span>Quick: 8 seconds</span></label>
+              <label class="create-publish-label" for="wizard-tv-speed-15"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-15" data-testid="wizard-tv-speed" value="15" checked /><span>Normal: 15 seconds</span></label>
+              <label class="create-publish-label" for="wizard-tv-speed-30"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-30" data-testid="wizard-tv-speed" value="30" /><span>Slow: 30 seconds</span></label>
+            </div>
+            <p class="create-msg" data-testid="wizard-tv-msg" role="status" aria-live="polite"></p>
+            <p class="wizard-step-help">Want a different order, or league schedule links? Use the event's TV display card after you press Done.</p>
+          </section>
         </div>
 
         <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
@@ -2967,8 +2986,16 @@
             var origin = window.location.origin;
             var id = encodeURIComponent(wiz.createdId);
             setCardUrl('wizard-link-public', origin + '/events/' + id);
-            setCardUrl('wizard-link-poster', origin + '/poster');
-            setCardUrl('wizard-link-display', origin + '/display');
+            // Scoped to this event: a bare /poster or /display shows whichever
+            // event is featured, not necessarily the one just made.
+            setCardUrl('wizard-link-poster', origin + '/poster?event=' + id);
+            setCardUrl('wizard-link-display', origin + '/display?event=' + id);
+            // The TV section (its own script below) needs the new event's id.
+            window.dispatchEvent(
+              new CustomEvent('ose:wizard-created', {
+                detail: { id: wiz.createdId, title: document.getElementById('wizard-event-name').value.trim() },
+              })
+            );
             setCardUrl('wizard-link-report', origin + '/admin');
             var signupCard = document.getElementById('wizard-link-signup');
             if (signupCard) signupCard.hidden = wiz.signup !== 'create';
@@ -3502,6 +3529,141 @@
           ['wizard-event-name', 'wizard-event-venue'].forEach(function (id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('input', validate);
+          });
+        })();
+      </script>
+
+      <script>
+        // Wizard step 4 — "Your TV screen". The light version of the TV display
+        // card: screens on/off and one speed, with a demo that cycles through
+        // the picked screens. The demo runs 5x faster than the TV so a 30 s
+        // setting can be seen in a few seconds; it says so on screen.
+        (function () {
+          var DEMO_SPEEDUP = 5;
+          var SCREENS = {
+            event: { desc: 'Event details and the scan code' },
+            upcoming: { title: 'Coming up next', desc: 'Your next events, so people come back' },
+            sponsors: { title: 'Thanks to our sponsors', desc: 'Each sponsor shown once, all the same size' },
+          };
+          var st = { eventId: null, title: '', index: 0, timer: null, paused: false, saveSeq: 0 };
+          function q(sel) { return document.querySelector('[data-testid="' + sel + '"]'); }
+          function boxes() { return Array.prototype.slice.call(document.querySelectorAll('[data-testid="wizard-tv-screen"]')); }
+          function picked() {
+            return boxes().filter(function (b) { return b.checked; }).map(function (b) { return b.getAttribute('data-pane'); });
+          }
+          function seconds() {
+            var r = document.querySelector('input[name="wizard-tv-speed"]:checked');
+            return r ? Number(r.value) : 15;
+          }
+          function msg(text, kind) {
+            var el = q('wizard-tv-msg');
+            if (!el) return;
+            el.textContent = text || '';
+            el.className = 'create-msg' + (kind ? ' ' + kind : '');
+          }
+          function visible() {
+            var step = document.getElementById('wizard-step-4');
+            return !!(step && step.classList.contains('active'));
+          }
+          function show() {
+            var panes = picked();
+            if (!panes.length) return;
+            if (st.index >= panes.length) st.index = 0;
+            var pane = panes[st.index];
+            q('wizard-tv-demo-title').textContent = pane === 'event' ? st.title || 'Your event' : SCREENS[pane].title;
+            q('wizard-tv-demo-desc').textContent = SCREENS[pane].desc;
+            q('wizard-tv-demo-count').textContent =
+              'Screen ' + (st.index + 1) + ' of ' + panes.length + ' · ' + seconds() + ' seconds on the TV' +
+              (panes.length > 1 ? ' (demo plays ' + DEMO_SPEEDUP + 'x faster)' : '');
+          }
+          function stop() {
+            if (st.timer) window.clearTimeout(st.timer);
+            st.timer = null;
+          }
+          // One screen = nothing to rotate, same as the TV.
+          function schedule() {
+            stop();
+            if (st.paused || picked().length < 2 || !visible()) return;
+            st.timer = window.setTimeout(function () {
+              st.timer = null;
+              if (!visible()) return;
+              st.index = (st.index + 1) % picked().length;
+              show();
+              schedule();
+            }, (seconds() * 1000) / DEMO_SPEEDUP);
+          }
+          function setPaused(on) {
+            st.paused = on;
+            var btn = q('wizard-tv-demo-pause');
+            if (btn) {
+              btn.textContent = on ? 'Play demo' : 'Pause demo';
+              btn.setAttribute('aria-pressed', String(on));
+            }
+            schedule();
+          }
+          async function save() {
+            if (!st.eventId) return;
+            var eventId = st.eventId;
+            var seq = ++st.saveSeq;
+            // League goes last and stays on: it only appears on the TV once
+            // league links are added in the TV display card.
+            var panes = picked().concat(['league']);
+            msg('Saving…');
+            try {
+              var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: seconds() } }),
+              });
+              var data = await res.json().catch(function () { return null; });
+              // A newer change, or a newer event, owns the message now.
+              if (seq !== st.saveSeq || eventId !== st.eventId) return;
+              if (!res.ok || !data || !data.ok) {
+                msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV keeps its last setting.', 'error');
+                return;
+              }
+              msg('Saved.', 'success');
+            } catch (e) {
+              if (seq === st.saveSeq && eventId === st.eventId) msg('Could not save. The TV keeps its last setting.', 'error');
+            }
+          }
+          boxes().forEach(function (b) {
+            b.addEventListener('change', function () {
+              if (!picked().length) {
+                b.checked = true;
+                msg('Keep at least one screen on.', 'error');
+                return;
+              }
+              st.index = 0;
+              show();
+              schedule();
+              save();
+            });
+          });
+          document.querySelectorAll('input[name="wizard-tv-speed"]').forEach(function (r) {
+            r.addEventListener('change', function () {
+              show();
+              schedule();
+              save();
+            });
+          });
+          var pauseBtn = q('wizard-tv-demo-pause');
+          if (pauseBtn) pauseBtn.addEventListener('click', function () { setPaused(!st.paused); });
+          // A new event starts from the TV's defaults: every screen, 15 s.
+          window.addEventListener('ose:wizard-created', function (e) {
+            var d = (e && e.detail) || {};
+            st.eventId = d.id ? String(d.id) : null;
+            st.title = d.title || '';
+            st.index = 0;
+            st.saveSeq++;
+            boxes().forEach(function (b) { b.checked = true; });
+            var normal = document.getElementById('wizard-tv-speed-15');
+            if (normal) normal.checked = true;
+            msg('');
+            var reduce = false;
+            try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (err) {}
+            show();
+            setPaused(reduce);
           });
         })();
       </script>
