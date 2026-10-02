@@ -1844,10 +1844,17 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           SMOKE_EVENT_SPONSORED: evt_smoke_sponsored
+        # Runtime invariants only (OSE-1507). The structural ones read source
+        # files, and T0 already ran them on this SHA; re-running them after a
+        # deploy proves nothing. infra-consistency.test.js derives both sets and
+        # fails if this list drifts from the runtime set.
         run: |
           PW_LABEL='T4a: Architecture Invariants' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
-            tests/e2e/0-architecture/
+            tests/e2e/0-architecture/anonymous-id.invariant.spec.ts \
+            tests/e2e/0-architecture/geo-resolution.invariant.spec.ts \
+            tests/e2e/0-architecture/ncr-accumulation.invariant.spec.ts \
+            tests/e2e/0-architecture/uec-codes.invariant.spec.ts
         timeout-minutes: 3
 
       - name: 'T4b: Core Journeys'
@@ -1880,6 +1887,9 @@ jobs:
       # (OSE-1007) — split out to continue-on-error below so a known-deferred
       # gate can never block a PR. --grep-invert excludes the survey/email
       # describes ("Survey Form" / "Email Signup") from this blocking step.
+      # form-email-signup / form-survey are not named here: every describe in
+      # them matches that filter, so they ran 0 tests in T4c (OSE-1507).
+      # T4c-phase2 below is their home.
       - name: 'T4c: Form E2E — register/checkin + validation (blocking)'
         id: form-e2e-tests
         env:
@@ -1892,8 +1902,6 @@ jobs:
             --grep-invert "Survey Form|Email Signup" \
             tests/e2e/2-pages/form-registration.spec.ts \
             tests/e2e/2-pages/form-checkin.spec.ts \
-            tests/e2e/2-pages/form-email-signup.spec.ts \
-            tests/e2e/2-pages/form-survey.spec.ts \
             tests/e2e/3-flows/form-submission-flows.spec.ts \
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10

@@ -987,6 +987,35 @@ describe('invariant enforcement continuity — structural specs gate T0 (OSE-350
     }
   });
 
+  // T4a (post-deploy) runs exactly the runtime set (OSE-1507). Structural
+  // specs already gated T0 on the same SHA, so re-running them after deploy
+  // adds no signal; a runtime spec missing here would never run at all.
+  const t4aRun = (() => {
+    const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+    for (const job of Object.values(wf.jobs || {})) {
+      const st = (job.steps || []).find((s) => s && s.name === 'T4a: Architecture Invariants');
+      if (st) return String(st.run || '');
+    }
+    return '';
+  })();
+
+  test('T4a runs every runtime invariant and no structural one', () => {
+    expect(t4aRun, 'T4a step must exist').not.toBe('');
+    expect(runtime.length, 'expected ≥1 runtime invariant spec').toBeGreaterThan(0);
+    expect(t4aRun, 'T4a must name files, not the whole directory').not.toMatch(
+      /0-architecture\/(\s|\\|$)/
+    );
+    for (const spec of runtime) {
+      expect(t4aRun.includes(spec), `runtime invariant ${spec} must run in T4a`).toBe(true);
+    }
+    for (const spec of structural) {
+      expect(
+        t4aRun.includes(spec),
+        `structural invariant ${spec} already gates T0; do not re-run it in T4a`
+      ).toBe(false);
+    }
+  });
+
   test('NO runtime invariant spec is in the T0 structural step', () => {
     for (const spec of runtime) {
       expect(
