@@ -27,7 +27,7 @@
  */
 
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
-import { ensureSlotShortlinks } from '../lib/shortlinks';
+import { ensureSlotShortlinks, previewSlotShortlinks } from '../lib/shortlinks';
 import { listSavedPosterCodes, posterCodeKind } from '../lib/poster-codes';
 import { assertRenderable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
@@ -269,15 +269,21 @@ export async function handleGetPosterBundle(
   // OSE-1357 part 2: once the organizer has SAVED the poster's codes, those
   // are the slots, in their order (event page first); until then, the
   // original event page + typed link.
-  const slotDefs =
+  // A preview never mints: missing codes point straight at their destination.
+  const slotOpts = {
+    whatUrl: row.what_url,
+    whatUrlType: row.what_url_type,
+    whatUrlEnabled: row.what_url_enabled,
+  };
+  const slotDefs: Array<{ kind: string; code: string | null; target_url?: string | null }> =
     (await listSavedPosterCodes(env, row.id)) ??
-    (await ensureSlotShortlinks(env, row.id, {
-      whatUrl: row.what_url,
-      whatUrlType: row.what_url_type,
-      whatUrlEnabled: row.what_url_enabled,
-    }));
+    (opts.preview
+      ? await previewSlotShortlinks(env, row.id, slotOpts)
+      : await ensureSlotShortlinks(env, row.id, slotOpts));
   const slots = slotDefs.map((s) => {
-    const shortUrl = `${origin}/s/${s.code}`;
+    const shortUrl = s.code
+      ? `${origin}/s/${s.code}`
+      : (s.target_url ?? `${origin}/events/${encodeURIComponent(row.id)}`);
     const spec = posterCodeKind(s.kind);
     return {
       kind: s.kind,

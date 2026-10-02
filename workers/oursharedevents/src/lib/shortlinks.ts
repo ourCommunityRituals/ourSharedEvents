@@ -220,6 +220,43 @@ export async function ensureSlotShortlinks(
 }
 
 /**
+ * The same slots as ensureSlotShortlinks, for an admin PREVIEW: read-only. A
+ * slot whose shortlink already exists gets its code; a missing one gets
+ * `code: null`, and the caller points its QR straight at the destination (the
+ * event page, or the typed https link) instead of minting a code just because
+ * someone looked at a draft. The live poster still mints through
+ * ensureSlotShortlinks, so what prints once it is live is unchanged.
+ */
+export async function previewSlotShortlinks(
+  env: ShortlinksEnv,
+  eventId: string,
+  opts: {
+    whatUrl?: string | null;
+    whatUrlType?: string | null;
+    whatUrlEnabled?: boolean | number | null;
+  } = {}
+): Promise<Array<{ kind: string; code: string | null; target_url: string | null }>> {
+  if (!env.DB) return [];
+  const existing = await listShortlinksForEvent(env, eventId);
+  const codeFor = (kind: string) => existing.find((s) => s.kind === kind)?.code ?? null;
+  const slots: Array<{ kind: string; code: string | null; target_url: string | null }> = [
+    { kind: 'public', code: codeFor('public'), target_url: null },
+  ];
+  const target =
+    opts.whatUrlEnabled && typeof opts.whatUrl === 'string' && isValidHttpsTarget(opts.whatUrl)
+      ? opts.whatUrl
+      : null;
+  if (target) {
+    const kind =
+      typeof opts.whatUrlType === 'string' && opts.whatUrlType.trim().length > 0
+        ? opts.whatUrlType.trim().slice(0, 32)
+        : 'link';
+    slots.push({ kind, code: codeFor(kind), target_url: target });
+  }
+  return slots;
+}
+
+/**
  * Read the existing public shortlink for an event without minting or counting
  * anything. Use this from read-only public surfaces such as calendar downloads.
  */

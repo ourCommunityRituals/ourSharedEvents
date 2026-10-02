@@ -131,3 +131,22 @@ Trajectory: 82 → (corrected) 96 → 96 → 96. Nothing decayed after the corre
 1. The browser journey for the full loop in the blocking phone audit (OSE-1508).
 2. The `CLAUDE.md` §3 update after merge (governance; needs human review).
 3. The PO decisions on the latch rule and unpublish lag, so "take it back" leaves no trace (OSE-1508).
+
+## Correction after the CCR (Copilot, 2026-10-02) — confidence was overstated
+
+The claim "previews write nothing" was **incomplete**. I verified only that `status` and `is_published` stay unchanged.
+
+Copilot found that the poster preview's bundle falls back to `ensureSlotShortlinks`, which **inserts** a missing `shortlinks` row (at most one per kind) when a draft has none yet. A **High** finding (10) in this change was missed by loops 1–5. By the protocol, the true loop-1 score was 72, not 82, and loops 2–5 should have read 86 → HELD.
+
+**Fix:**
+
+- `previewSlotShortlinks` (`lib/shortlinks.ts`) is the read-only twin. A missing code comes back `null`, and the QR points straight at its destination (the event page, or the typed https link).
+- The live poster still mints through `ensureSlotShortlinks`, so what prints once live is unchanged.
+- The data-scientist lens now also checks every table the preview path can reach, not only the event row.
+
+**Test:** `admin-poster-preview.spec.ts`, "previewing mints no shortlinks; codes point straight at the event".
+
+- It asserts 0 shortlink rows after both preview routes.
+- It fails if preview goes back to `ensureSlotShortlinks`.
+
+**Re-score after the fix:** 96. The open Lows are unchanged (C3, C6). The hold is unchanged: CI green on the corrected head.

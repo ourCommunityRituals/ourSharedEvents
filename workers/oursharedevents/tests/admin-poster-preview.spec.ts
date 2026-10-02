@@ -130,6 +130,29 @@ describe('admin poster preview: a draft', () => {
     expect(pub.status).toBe(403);
   });
 
+  test('previewing mints no shortlinks; codes point straight at the event', async () => {
+    const id = 'evt_pp_nomint';
+    await seed(id, 'draft');
+    const db = (env as unknown as TestEnv).DB;
+    await db.prepare('DELETE FROM shortlinks WHERE event_id = ?').bind(id).run();
+    const res = await SELF.fetch(bundle(id), { headers: admin });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      slots: Array<{ kind: string; code: string | null; url: string }>;
+    };
+    expect(data.slots[0]).toMatchObject({
+      kind: 'public',
+      code: null,
+      url: `https://t.test/events/${id}`,
+    });
+    await SELF.fetch(page(id), { headers: admin });
+    const n = await db
+      .prepare('SELECT COUNT(*) AS n FROM shortlinks WHERE event_id = ?')
+      .bind(id)
+      .first<{ n: number }>();
+    expect(n?.n).toBe(0);
+  });
+
   test('previewing changes nothing about the event', async () => {
     await seed('evt_pp_nochange', 'draft');
     await SELF.fetch(page('evt_pp_nochange'), { headers: admin });
