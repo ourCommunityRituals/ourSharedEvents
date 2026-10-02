@@ -207,6 +207,12 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //   poster-codes.ts  — reads ONLY the global flag set, via detectCurrentTier, to
   //                      size the plan's poster-code allotment (a number). No form
   //                      rows, no PII; requireAdmin-gated. Authorized: OSE-1357 p2.
+  //   dashboards.ts    — reads ONLY per-event aggregate counts (registration
+  //                      COUNT(*), checkin total_count, email signup COUNT(*))
+  //                      keyed by the brand-scoped event ids, floored per event
+  //                      before any sum (#7). Never a row, never a PII column;
+  //                      requireAdmin-gated + brand-scoped (#9).
+  //                      Authorized: OSE-1468 governed dashboards.
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
@@ -219,6 +225,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/poster-bundle.ts',
       'src/handlers/portfolio-rollup.ts',
       'src/handlers/event-stats.ts',
+      'src/handlers/dashboards.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;

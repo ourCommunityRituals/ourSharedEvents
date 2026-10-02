@@ -82,6 +82,11 @@
  *                                                         posters/places + scans per day
  *                                                         (counts only, read-only)
  *
+ *   Governed dashboards (auth required — OSE-1468; contract: lib/dashboard-contract.ts):
+ *   GET    /api/v2/admin/dashboards/operations      → founder cockpit, brand-scoped aggregates
+ *   GET    /api/v2/admin/dashboards/corridor        → event cells, source cells, flows (res 7)
+ *   GET    /api/v2/admin/events/:id/dashboard       → organizer / partner report, one event
+ *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
@@ -146,6 +151,11 @@ import {
   type EventsEnv,
 } from './handlers/events';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
+import {
+  handleOperationsDashboard,
+  handleCorridorDashboard,
+  handleEventDashboard,
+} from './handlers/dashboards';
 import {
   handlePublicPage,
   handlePublicEventPage,
@@ -718,6 +728,20 @@ export async function route(
     return handleBackfillH3Cells(request, env);
   }
 
+  // GET /api/v2/admin/dashboards/{operations,corridor} — OSE-1468 governed
+  // dashboards. Brand scope is resolved inside the handler (server-derived, #9).
+  if (
+    (pathname === '/api/v2/admin/dashboards/operations' ||
+      pathname === '/api/v2/admin/dashboards/corridor') &&
+    method === 'GET'
+  ) {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return pathname.endsWith('/operations')
+      ? handleOperationsDashboard(request, env)
+      : handleCorridorDashboard(request, env);
+  }
+
   // GET /api/v2/admin/events/portfolio-rollup — OSE-669 brand-scoped rollup strip.
   // Exact match placed BEFORE the /:id matcher so "portfolio-rollup" is never
   // parsed as an event id.
@@ -1073,6 +1097,16 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleAdminEventStats(request, env, adminEventStatsMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/dashboard — OSE-1468 organizer / partner report.
+  // guardAdminObjectScope (above) already 404s an event outside the caller's brands.
+  const adminEventDashboardMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/dashboard$/);
+  if (adminEventDashboardMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleEventDashboard(request, env, adminEventDashboardMatch[1]);
   }
 
   // GET /api/v2/admin/events/:id/pre-event-activity — the organizer's pre-event
