@@ -232,6 +232,24 @@ test.describe('INJ-002 — SQL injection payloads in event ID path parameter', (
   }
 });
 
+/**
+ * POST once; on 429 wait the server's Retry-After (capped) and POST once more.
+ * Earlier suites in this run share the staging form limiter from one CI IP,
+ * so a 429 here says nothing about the payload (first T5 run, 2026-10-02).
+ */
+async function postPastRateLimit(
+  request: APIRequestContext,
+  url: string,
+  data: Record<string, string>
+) {
+  const send = () => request.post(url, { data, headers: { 'Content-Type': 'application/json' } });
+  const first = await send();
+  if (first.status() !== 429) return first;
+  const waitS = Math.min(Math.max(Number(first.headers()['retry-after']) || 60, 1), 120);
+  await new Promise((r) => setTimeout(r, waitS * 1000));
+  return send();
+}
+
 // ─── INJ-003 — SQL injection in form body ────────────────────────────────────
 
 test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
@@ -239,18 +257,19 @@ test.describe('INJ-003 — SQL injection payloads in form body fields', () => {
     test(`SQL injection in email field "${payload.slice(0, 40)}" → 400 or 404 (not 500)`, async ({
       request,
     }) => {
-      const response = await request.post(
+      const response = await postPastRateLimit(
+        request,
         `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/register`,
-        {
-          data: {
-            name: 'Red Team Test',
-            email: payload,
-          },
-          headers: { 'Content-Type': 'application/json' },
-        }
+        { name: 'Red Team Test', email: payload }
       );
 
       const status = response.status();
+      // A 429 means the form limiter answered and the payload never reached
+      // validation, so this case proved nothing. Fail on that, never pass.
+      expect(
+        status,
+        `still rate-limited after waiting Retry-After: payload not exercised: "${payload}"`
+      ).not.toBe(429);
       const body = await response.text();
 
       expect(status, `SQL injection in email body caused 500: "${payload}"`).not.toBe(500);
