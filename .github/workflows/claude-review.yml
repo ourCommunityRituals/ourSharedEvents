@@ -17,9 +17,18 @@
 # A `prompt` puts the action in agent mode for EVERY event, so the security
 # prompt must not ride on the @claude path — hence two jobs.
 #
-# Required Secrets:
-#   - ANTHROPIC_API_KEY: Anthropic API key for Claude access (owner-provisioned;
-#     until it exists both jobs skip with a ::warning:: rather than a silent pass)
+# Which reviewer runs (repo variable PR_REVIEWER, Settings → Secrets and variables
+# → Actions → Variables):
+#   - unset or `claude` (default): Claude reviews every PR; Copilot is not asked.
+#   - `copilot`: the Claude review steps aside and Copilot is requested instead,
+#     for when the Claude weekly limit is used up. Flip it back to `claude` after.
+# The @claude respond job ignores the switch: a person asked for it by name.
+#
+# Auth (one is enough; the subscription token wins when both are set):
+#   - CLAUDE_CODE_OAUTH_TOKEN: Claude subscription token (`claude setup-token`).
+#     Reviews count against the subscription's usage limits, not API billing.
+#   - ANTHROPIC_API_KEY: pay-as-you-go API key, used only without the token.
+# With neither, both jobs skip with a ::warning:: rather than a silent pass.
 #
 # @see .github/claude-review/security-charter.md - the review charter
 # @see CLAUDE.md - Project conventions and architecture decisions
@@ -46,6 +55,10 @@ concurrency:
 jobs:
   review:
     name: "Claude PR Review"
+    # pull_request only. Without this the job also starts on every PR comment,
+    # and with a prompt set the action runs a full review there too (spend on
+    # every comment). The @claude `respond` job is the only comment consumer.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
     defaults:
@@ -57,16 +70,44 @@ jobs:
       issues: write
 
     steps:
-      - name: Check for API key
+      - name: Pick reviewer and check auth
         id: check-key
+        env:
+          PR_REVIEWER: ${{ vars.PR_REVIEWER || 'claude' }}
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: |
-          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+          case "$PR_REVIEWER" in
+            copilot)
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "copilot=true" >> "$GITHUB_OUTPUT"
+              echo "::notice title=Reviewer is Copilot::PR_REVIEWER=copilot — Claude review skipped; Copilot is the reviewer for this PR."
+              exit 0 ;;
+            claude) ;;
+            *) echo "::warning title=Unknown PR_REVIEWER::'$PR_REVIEWER' is not claude or copilot — using claude." ;;
+          esac
+          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             # warning, not notice: a skipped reviewer must be visible on the PR,
             # not read as a passed review (OSE-1400).
-            echo "::warning title=Claude security review NOT run::ANTHROPIC_API_KEY is not configured — this PR was not security-reviewed by Claude."
+            echo "::warning title=Claude security review NOT run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is configured — this PR was not security-reviewed by Claude."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Copilot mode: ask Copilot once per PR (opened/reopened), not on every
+      # push, so a busy PR does not spend a Copilot review per commit. Best
+      # effort: if GitHub refuses the request from this token, say how to ask
+      # by hand instead of failing the PR.
+      - name: Request Copilot review
+        if: steps.check-key.outputs.copilot == 'true' && github.event_name == 'pull_request' && github.event.action != 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if ! gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR}/requested_reviewers" \
+               -f 'reviewers[]=copilot-pull-request-reviewer[bot]' > /dev/null; then
+            echo "::notice title=Request Copilot by hand::GitHub did not accept the request from Actions. On the PR, open Reviewers and pick Copilot."
           fi
 
       # Sweep 9 #6 (2026-05-14): shallow checkout — the review works from the PR
@@ -98,12 +139,15 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
-      # attacker code with this job's ANTHROPIC_API_KEY + write scopes. Bump via Dependabot.
+      # attacker code with this job's Claude credentials + write scopes. Bump via Dependabot.
       - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
         if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
         continue-on-error: true # Advisory — API failures must not block PRs
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Subscription first; the API key is passed only when no token is set,
+          # so a configured subscription is never silently bypassed for billing.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -123,7 +167,7 @@ jobs:
   respond:
     name: 'Claude @mention'
     # TRUSTED-ACTOR-GATED (author_association ∈ OWNER/MEMBER/COLLABORATOR) —
-    # comment bodies are fed to an LLM agent that runs with ANTHROPIC_API_KEY and
+    # comment bodies are fed to an LLM agent that runs with the Claude credentials and
     # pull-requests/issues write. Without the gate, any commenter could trigger
     # it: prompt-injection + API-spend DoS. Mirrors the gate in ourWKRP's
     # claude.yml (best-of-both CI sync flowing WKRP→OSE).
@@ -144,12 +188,15 @@ jobs:
       issues: write
 
     steps:
-      - name: Check for API key
+      - name: Check auth
         id: check-key
+        env:
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: |
-          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Claude not run::ANTHROPIC_API_KEY is not configured — @claude cannot respond."
+            echo "::warning title=Claude not run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is configured — @claude cannot respond."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -162,7 +209,10 @@ jobs:
         if: steps.check-key.outputs.skip != 'true'
         continue-on-error: true
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Subscription first; the API key is passed only when no token is set,
+          # so a configured subscription is never silently bypassed for billing.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           claude_args: |
             --model claude-sonnet-5-5
             --max-turns 20
