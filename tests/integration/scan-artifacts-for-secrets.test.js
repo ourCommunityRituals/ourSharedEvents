@@ -165,6 +165,25 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).not.toContain(FAKE_ADMIN_KEY);
   });
 
+  test('titles and keys printed by the locator are scrubbed of credentials', () => {
+    const report = {
+      suites: [
+        {
+          title: 'case CF_Authorization=eyJtitlecookie.x.y\u0007',
+          'Bearer abcdefghijklmnopqrstuvwxyz0123': { text: 'CF_Authorization=eyJfakejwtvalue.p.s' },
+        },
+      ],
+    };
+    writeFileSync(join(dir, 'test-results', 'results.json'), JSON.stringify(report));
+    const r = run(paths(), {});
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('(test: case CF_Authorization=[REDACTED]');
+    expect(r.out).toContain('.Bearer [REDACTED].text');
+    expect(r.out).not.toContain('eyJtitlecookie');
+    expect(r.out).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+    expect(r.out).not.toContain('\u0007');
+  });
+
   test('a hit in a non-JSON file is located by line number', () => {
     writeFileSync(join(dir, 'test-results', 'log.txt'), 'ok\nCF_Authorization=eyJfakejwtvalue\n');
     const r = run(paths(), {});

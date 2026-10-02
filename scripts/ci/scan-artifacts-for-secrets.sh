@@ -177,15 +177,27 @@ where() {
       const fs = require("fs");
       const { SCAN_FILE: file, SCAN_NEEDLE: needle, SCAN_NEEDLE_KIND: kind } = process.env;
       const hit = kind === "regex" ? (s) => new RegExp(needle).test(s) : (s) => s.includes(needle);
+      // Titles and keys are printed, so they are scrubbed first: the needle,
+      // any cookie or Bearer value, control characters; and capped in length.
+      const safe = (t) => {
+        // Value-shaped patterns first, so their value goes with the name.
+        let o = String(t)
+          .replace(/CF_Authorization=[^;\s"]*/g, "CF_Authorization=[REDACTED]")
+          .replace(/Bearer\s+[A-Za-z0-9._~+\/=-]+/g, "Bearer [REDACTED]");
+        if (kind === "regex") o = o.replace(new RegExp(needle, "g"), "[REDACTED]");
+        else if (needle !== "CF_Authorization=") o = o.split(needle).join("[REDACTED]");
+        o = o.replace(/[\u0000-\u001f\u007f]/g, " ");
+        return o.length > 120 ? o.slice(0, 120) + "…" : o;
+      };
       let doc;
       try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch { process.exit(3); }
       const found = [];
       (function walk(v, path, title) {
         if (found.length >= 10) return;
-        if (typeof v === "string") { if (hit(v)) found.push(`${path || "."} (test: ${title || "none"})`); return; }
+        if (typeof v === "string") { if (hit(v)) found.push(`${path || "."} (test: ${title ? safe(title) : "none"})`); return; }
         if (v && typeof v === "object") {
           const t = typeof v.title === "string" ? v.title : title;
-          for (const [k, c] of Object.entries(v)) walk(c, Array.isArray(v) ? `${path}[${k}]` : `${path}.${k}`, t);
+          for (const [k, c] of Object.entries(v)) walk(c, Array.isArray(v) ? `${path}[${k}]` : `${path}.${safe(k)}`, t);
         }
       })(doc, "", "");
       console.log(found.join("\n"));
