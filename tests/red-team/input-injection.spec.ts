@@ -189,40 +189,58 @@ test.describe('INJ-006 — XSS payload not reflected unescaped in GET response',
     'Admin auth not set — skipping XSS readback test (set ADMIN_KEY or X_OCR_INTERNAL)'
   );
 
-  test('Stored XSS payload appears escaped in admin GET /api/v2/admin/events', async ({
+  // The payload goes in as a registration NAME, the one form field that is
+  // persisted (encrypted at rest) and read back decrypted by an admin
+  // endpoint. email-signup ignores `name`, and /api/v2/admin/events does not
+  // return submissions, so the earlier version of this test could pass
+  // without storing or reading anything (Copilot review, PR #755).
+  test('Stored XSS payload round-trips as JSON data, never as renderable HTML', async ({
     request,
   }) => {
-    const UNIQUE_PAYLOAD = `<script>alert('xss-${Date.now()}')</script>`;
-
-    // 1. Submit the payload via the public email-signup form
+    const marker = `rt-xss-${Date.now()}`;
+    const UNIQUE_PAYLOAD = `<script>alert('${marker}')</script>`;
     const eventId = FIXTURE_EVENT_ID;
+
+    // 1. Store it through the public registration form.
     const submit = await postPastRateLimit(
       request,
-      `${BASE_URL}/api/v2/events/${eventId}/forms/email-signup`,
-      { name: UNIQUE_PAYLOAD, email: 'redteam-xss@example.com' }
+      `${BASE_URL}/api/v2/events/${eventId}/forms/register`,
+      { name: UNIQUE_PAYLOAD, email: `${marker}@example.com` }
     );
     expectExercised(submit.status(), 'stored-XSS submission');
+    test.skip(
+      submit.status() === 404,
+      `precondition unmet: fixture event ${eventId} not found (404), so nothing was stored`
+    );
+    expect(
+      submit.status(),
+      `registration with an XSS name was rejected (${submit.status()}), so nothing was stored to read back`
+    ).toBeLessThan(300);
 
-    // 2. Read it back through the admin endpoint
-    const readResponse = await request.get(`${BASE_URL}/api/v2/admin/events`, {
-      headers: adminHeaders(),
-      maxRedirects: 0,
-    });
+    // 2. Read it back through the admin registrations list.
+    const read = await request.get(
+      `${BASE_URL}/api/v2/admin/events/${eventId}/forms/registrations`,
+      {
+        headers: adminHeaders(),
+        maxRedirects: 0,
+      }
+    );
+    test.skip(
+      [401, 403].includes(read.status()) || (read.status() >= 300 && read.status() < 400),
+      `precondition unmet: admin registrations read returned ${read.status()} with the provided credentials`
+    );
+    expect(read.status(), 'admin registrations read failed').toBe(200);
 
-    if (
-      readResponse.status() === 401 ||
-      readResponse.status() === 403 ||
-      (readResponse.status() >= 300 && readResponse.status() < 400)
-    ) {
-      test.skip(true, 'Admin endpoint is gated — cannot verify readback');
-      return;
-    }
+    // 3. The payload must actually be there: proves it was stored and read.
+    const body = await read.text();
+    expect(body, 'stored XSS payload not found in the registrations read-back').toContain(marker);
 
-    const body = await readResponse.text();
-
-    // The payload should NOT appear unescaped in the JSON body.
-    // If it's stored, it must be HTML-entity-encoded or stripped.
-    assertNoUnescapedHtml(body, 'admin GET response after XSS submission');
+    // 4. It may come back verbatim as JSON data, but the response must be
+    //    typed as JSON so a browser never renders it as a page. (JSON API
+    //    responses do not send nosniff yet; tracked as hardening in OSE-1506.)
+    expect(read.headers()['content-type'] ?? '', 'read-back must be JSON').toMatch(
+      /^application\/json/i
+    );
   });
 });
 
