@@ -204,8 +204,8 @@ Cloudflare Worker secrets are scoped by wrangler environment:
 # Staging secrets
 wrangler secret put ADMIN_TOKEN --env staging
 
-# Production secrets
-wrangler secret put ADMIN_TOKEN --env production
+# Production: no static admin credential (ADMIN_KEY, ADMIN_TOKEN, X_OCR_INTERNAL).
+# production admin is Cloudflare Access only; ADMIN_KEY is never set there (OSE-1470).
 ```
 
 ---
@@ -341,7 +341,7 @@ wrangler whoami
 
 1. Choose name following convention: `{PROVIDER}_{PURPOSE}_{QUALIFIER}`
 2. Determine storage location (GitHub Secrets / Cloudflare / Password Manager)
-3. Add to GitHub Secrets: `gh secret set SECRET_NAME --body "value"`
+3. Add it to GitHub: run `gh secret set <NAME>` and paste the value at the hidden prompt (never `--body`)
 4. Add to Cloudflare: `wrangler secret put SECRET_NAME --env <env>`
 5. Document in this file (Section 3)
 6. Update workflow files if needed
@@ -353,7 +353,7 @@ wrangler whoami
 gh secret list
 
 # Set GitHub Secret
-gh secret set CF_DEPLOY_TOKEN --body "<token>"
+gh secret set CF_DEPLOY_TOKEN   # hidden prompt; never pass a value with --body
 
 # List Cloudflare Worker Secrets
 wrangler secret list --env staging

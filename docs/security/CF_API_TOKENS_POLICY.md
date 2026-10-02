@@ -234,7 +234,7 @@ Immediately rotate if any of these occur:
 
 ```bash
 # For GitHub Secrets (WORKER_DEPLOY)
-gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
+gh secret set CF_DEPLOY_TOKEN   # hidden prompt — never pass the value on the command line
 
 # For local verification
 CLOUDFLARE_API_TOKEN_OSE=<new-token> wrangler whoami

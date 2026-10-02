@@ -553,8 +553,8 @@ grep -r "CF_API_KEY\|CLOUDFLARE_API_KEY\|X-Auth-Key" \
 
 ```bash
 # Using GitHub CLI
-gh secret set CF_DEPLOY_TOKEN --body "<token-value>"
-gh secret set CF_ACCOUNT_ID --body "<account-id>"
+gh secret set CF_DEPLOY_TOKEN   # hidden prompt — never pass the value on the command line
+gh secret set CF_ACCOUNT_ID   # hidden prompt — never pass the value on the command line
 
 # Verify secrets are set
 gh secret list

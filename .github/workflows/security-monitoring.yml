@@ -240,6 +240,7 @@ jobs:
             --log-opts "${OLDEST}^..${NEWEST}" \
             --report-format json \
             --report-path .security-reports/gitleaks.json \
+            --redact \
             --no-banner \
             --exit-code 1
           GL_EXIT=$?
@@ -261,8 +262,27 @@ jobs:
           echo "=== gitleaks result ==="
           echo "$SUMMARY"
 
-      - name: Upload gitleaks report
+      # The report exists to find a real leak, so it must never carry the value
+      # (OSE-1499): gitleaks runs with --redact, and the artifact scan below is
+      # the backstop. A finding is described by file, line, commit and rule.
+      - name: Scan gitleaks report for credentials before upload
+        id: artifact-scan
         if: always()
+        run: |
+          R=.security-reports/gitleaks.json
+          if [ -s "$R" ]; then
+            # Every finding's Secret must be the redaction marker, never a value.
+            UNREDACTED=$(jq '[.[] | select((.Secret // "REDACTED") != "REDACTED")] | length' "$R") || {
+              echo "::error::gitleaks report is not valid JSON; refusing to upload"; exit 1; }
+            if [ "$UNREDACTED" != "0" ]; then
+              echo "::error::gitleaks report has $UNREDACTED unredacted finding(s); refusing to upload"
+              exit 1
+            fi
+          fi
+          bash scripts/ci/scan-artifacts-for-secrets.sh .security-reports
+
+      - name: Upload gitleaks report
+        if: always() && steps.artifact-scan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-${{ github.run_number }}

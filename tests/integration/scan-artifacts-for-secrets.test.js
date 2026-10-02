@@ -75,6 +75,20 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).not.toContain(FAKE_ADMIN_KEY);
   });
 
+  test.each([
+    'SMOKE_RPT_ADMIN_TOKEN',
+    'SMOKE_RPT_LOCAL_TOKEN',
+    'SMOKE_RPT_MID_TOKEN',
+    'SMOKE_RPT_OTHER_EVENT_TOKEN',
+  ])('runtime signed-link token %s is scanned by default (no Bearer prefix needed)', (name) => {
+    const tok = 'fake.signed.report.link.0123456789';
+    writeFileSync(join(dir, 'test-results', 'junit.xml'), `<failure>GET /r?t=${tok}</failure>\n`);
+    const r = run(paths(), { [name]: tok });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(`secret:${name}`);
+    expect(r.out).not.toContain(tok);
+  });
+
   test('a secret value starting with "-" is matched, not parsed as a grep option', () => {
     const dash = '-e-looks-like-an-option-12345';
     writeFileSync(join(dir, 'test-results', 'x.txt'), `token ${dash}\n`);

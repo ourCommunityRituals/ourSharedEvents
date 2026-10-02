@@ -105,10 +105,11 @@ wrangler d1 migrations apply FORMS_DB --env production --remote
 # 1. IMMEDIATELY rotate the compromised secret
 openssl rand -hex 32  # Generate new value
 
-# 2. If ADMIN_KEY compromised:
-wrangler secret put ADMIN_KEY --env staging
-wrangler secret put ADMIN_KEY --env production
-# Also update GitHub Actions secret
+# 2. If ADMIN_KEY compromised (staging only — production admin is Cloudflare Access only; ADMIN_KEY is never set there (OSE-1470)):
+openssl rand -hex 32 | tr -d '\n' | wrangler secret put ADMIN_KEY --env staging
+# Also update the GitHub Actions secret: gh secret set ADMIN_KEY (hidden prompt)
+# If it is ever found on production, delete it there instead of rotating:
+#   wrangler secret delete ADMIN_KEY --env production
 
 # 3. If FORMS_ENCRYPTION_KEY compromised:
 wrangler secret put FORMS_ENCRYPTION_KEY --env staging
@@ -193,7 +194,7 @@ npm run deploy:staging
 
 | Item                         | Where to Store                         | How Often               |
 | ---------------------------- | -------------------------------------- | ----------------------- |
-| `ADMIN_KEY` value            | Doppler / 1Password / secure vault     | On every rotation       |
+| `ADMIN_KEY` value (staging)  | Doppler / 1Password / secure vault     | On every rotation       |
 | `FORMS_ENCRYPTION_KEY` value | Doppler / 1Password / secure vault     | On every rotation       |
 | `CLOUDFLARE_API_TOKEN_OSE`   | Doppler / 1Password / secure vault     | On every rotation       |
 | `CLOUDFLARE_ACCOUNT_ID`      | Documented in `wrangler.toml` comments | Static                  |
