@@ -76,11 +76,12 @@ describe('scan-artifacts-for-secrets.sh', () => {
   });
 
   test.each([
+    'ADMIN_TOKEN',
     'SMOKE_RPT_ADMIN_TOKEN',
     'SMOKE_RPT_LOCAL_TOKEN',
     'SMOKE_RPT_MID_TOKEN',
     'SMOKE_RPT_OTHER_EVENT_TOKEN',
-  ])('runtime signed-link token %s is scanned by default (no Bearer prefix needed)', (name) => {
+  ])('credential %s is scanned by default (no Bearer prefix needed)', (name) => {
     const tok = 'fake.signed.report.link.0123456789';
     writeFileSync(join(dir, 'test-results', 'junit.xml'), `<failure>GET /r?t=${tok}</failure>\n`);
     const r = run(paths(), { [name]: tok });

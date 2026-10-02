@@ -273,6 +273,9 @@ function candidates(src: string): FnCandidate[] {
   const fnRe = /\bfunction\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(/g;
   // const NAME = (…) => …   (optionally typed, optionally async)
   const arrowRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(?:async\s*)?\(/g;
+  // const NAME = meta => …   (one unparenthesized parameter)
+  const bareArrowRe =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>\s*/g;
   // NAME(…) { …   at the start of a line (class / object method)
   const methodRe =
     /^[ \t]*(?:(?:public|private|protected|static|async)\s+)*([A-Za-z_$][\w$]*)\s*\(/gm;
@@ -283,18 +286,22 @@ function candidates(src: string): FnCandidate[] {
     const body = blockBody(close);
     if (body) out.push({ name: m[1], paramText: src.slice(open + 1, close - 1), body });
   }
+  const arrowBody = (at: number): string =>
+    src[at] === '{'
+      ? src.slice(at, skipBalanced(src, at))
+      : // expression body: up to the end of the statement
+        src.slice(at, (/;|\n\s*\n/.exec(src.slice(at))?.index ?? 400) + at);
   while ((m = arrowRe.exec(src)) !== null) {
     const open = m.index + m[0].length - 1;
     const close = skipBalanced(src, open);
     const arrow = /^\s*(?::[^=]*)?=>\s*/.exec(src.slice(close));
     if (!arrow) continue;
-    const at = close + arrow[0].length;
-    const body =
-      src[at] === '{'
-        ? src.slice(at, skipBalanced(src, at))
-        : // expression body: up to the end of the statement
-          src.slice(at, (/;|\n\s*\n/.exec(src.slice(at))?.index ?? 400) + at);
+    const body = arrowBody(close + arrow[0].length);
     out.push({ name: m[1], paramText: src.slice(open + 1, close - 1), body });
+  }
+  while ((m = bareArrowRe.exec(src)) !== null) {
+    if (m[2] === 'async') continue; // `async (…) =>` is the parenthesized form
+    out.push({ name: m[1], paramText: m[2], body: arrowBody(m.index + m[0].length) });
   }
   while ((m = methodRe.exec(src)) !== null) {
     if (NOT_A_METHOD.has(m[1])) continue;
@@ -445,6 +452,13 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     expect(findWrappers(arrowExpr, 'fixture.ts')).toEqual(['logE']);
     expect(findWrappers(method, 'fixture.ts')).toEqual(['logF']);
     expect(findWrappers(callNotDecl, 'fixture.ts')).toEqual([]);
+    // Copilot review on #747: a single parameter needs no parentheses.
+    const bare = 'const logH = meta => console.log(meta);';
+    const bareAsync = 'const logI = async m => { console.warn(JSON.stringify(m)); };';
+    const bareNoLog = 'const double = n => n * 2;';
+    expect(findWrappers(bare, 'fixture.ts')).toEqual(['logH']);
+    expect(findWrappers(bareAsync, 'fixture.ts')).toEqual(['logI']);
+    expect(findWrappers(bareNoLog, 'fixture.ts')).toEqual([]);
   });
 
   test('log-redaction | negative control | the matcher catches each forbidden key', () => {

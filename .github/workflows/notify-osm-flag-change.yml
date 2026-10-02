@@ -74,9 +74,10 @@ jobs:
           *Opened by notify-osm-flag-change workflow in ourSharedEvents.*
           EOISSUE
           )"
-          BODY="${BODY//__SHA__/$GITHUB_SHA}"
-          BODY="${BODY//__BRANCH__/$BRANCH_NAME}"
-          BODY="${BODY//__AUTHOR__/$AUTHOR}"
+          # Quoted replacements: plain text, and no bash 5.2 `&` expansion.
+          BODY="${BODY//__SHA__/"$GITHUB_SHA"}"
+          BODY="${BODY//__BRANCH__/"$BRANCH_NAME"}"
+          BODY="${BODY//__AUTHOR__/"$AUTHOR"}"
           gh issue create \
             --repo ourCommunityRituals/ourSharedMagnets \
             --title "OSE feature flags changed — update Postman/Newman mocks" \
