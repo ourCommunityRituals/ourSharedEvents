@@ -213,39 +213,100 @@ function findCalls(src: string, file: string, calleeRe: RegExp): Sink[] {
 const CONSOLE_CALL = new RegExp(`\\bconsole\\.(?:${CONSOLE_LEVELS.join('|')})\\s*\\(`);
 
 /**
- * Derive log wrappers: `function NAME(params) { … console.<level>(… param …) … }`.
- * A function that forwards one of its own parameters into a console call makes
- * its call sites log sinks.
+ * Derive log wrappers: any function that forwards one of its own parameters
+ * into a console call makes its call sites log sinks. Three declaration forms:
+ *   function NAME(params) { … }
+ *   const NAME = (params) => { … }   (or `=> expression`, `async (…) =>`)
+ *   NAME(params) { … }               (class or object method)
  */
-function findWrappers(src: string, file: string): string[] {
-  const names: string[] = [];
-  const re = /\bfunction\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    const open = m.index + m[0].length - 1;
-    const closeParams = skipBalanced(src, open);
-    const paramText = stripComments(src.slice(open + 1, closeParams - 1));
-    const bodyOpen = src.indexOf('{', closeParams);
-    if (bodyOpen === -1) continue;
+const NOT_A_METHOD = new Set([
+  'if',
+  'for',
+  'while',
+  'switch',
+  'catch',
+  'function',
+  'return',
+  'with',
+]);
+
+interface FnCandidate {
+  name: string;
+  paramText: string;
+  body: string;
+}
+
+function paramsOf(paramText: string): string[] {
+  return splitTopLevel(paramText)
+    .map((p) => p.trim().replace(/^\.\.\./, ''))
+    .map((p) => (p.match(/^([A-Za-z_$][\w$]*)/) || [])[1])
+    .filter((p): p is string => !!p);
+}
+
+function candidates(src: string): FnCandidate[] {
+  const out: FnCandidate[] = [];
+  const blockBody = (from: number): string | null => {
+    const bodyOpen = src.indexOf('{', from);
+    if (bodyOpen === -1) return null;
     // Return-type annotations may contain braces (`: { ok: boolean }`); accept
     // that imprecision — the body we take still contains the real body.
-    const bodyClose = skipBalanced(src, bodyOpen);
-    const body = src.slice(bodyOpen, bodyClose);
-    const params = splitTopLevel(paramText)
-      .map((p) => p.trim().replace(/^\.\.\./, ''))
-      .map((p) => (p.match(/^([A-Za-z_$][\w$]*)/) || [])[1])
-      .filter((p): p is string => !!p);
+    return src.slice(bodyOpen, skipBalanced(src, bodyOpen));
+  };
+  // function NAME(…) { … }
+  const fnRe = /\bfunction\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(/g;
+  // const NAME = (…) => …   (optionally typed, optionally async)
+  const arrowRe = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(?:async\s*)?\(/g;
+  // NAME(…) { …   at the start of a line (class / object method)
+  const methodRe =
+    /^[ \t]*(?:(?:public|private|protected|static|async)\s+)*([A-Za-z_$][\w$]*)\s*\(/gm;
+  let m: RegExpExecArray | null;
+  while ((m = fnRe.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = skipBalanced(src, open);
+    const body = blockBody(close);
+    if (body) out.push({ name: m[1], paramText: src.slice(open + 1, close - 1), body });
+  }
+  while ((m = arrowRe.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = skipBalanced(src, open);
+    const arrow = /^\s*(?::[^=]*)?=>\s*/.exec(src.slice(close));
+    if (!arrow) continue;
+    const at = close + arrow[0].length;
+    const body =
+      src[at] === '{'
+        ? src.slice(at, skipBalanced(src, at))
+        : // expression body: up to the end of the statement
+          src.slice(at, (/;|\n\s*\n/.exec(src.slice(at))?.index ?? 400) + at);
+    out.push({ name: m[1], paramText: src.slice(open + 1, close - 1), body });
+  }
+  while ((m = methodRe.exec(src)) !== null) {
+    if (NOT_A_METHOD.has(m[1])) continue;
+    const open = m.index + m[0].length - 1;
+    const close = skipBalanced(src, open);
+    // A method declaration is followed by `{` (after an optional return type);
+    // a call is followed by `;`, `)`, `.` or a newline.
+    if (!/^\s*(?::[^;{]+)?\{/.test(src.slice(close))) continue;
+    const body = blockBody(close);
+    if (body) out.push({ name: m[1], paramText: src.slice(open + 1, close - 1), body });
+  }
+  return out;
+}
+
+function findWrappers(src: string, file: string): string[] {
+  const names = new Set<string>();
+  for (const c of candidates(src)) {
+    const params = paramsOf(stripComments(c.paramText));
     if (params.length === 0) continue;
-    const consoleCalls = findCalls(body, file, CONSOLE_CALL);
+    const consoleCalls = findCalls(c.body, file, CONSOLE_CALL);
     // Any reference to a parameter inside the console arguments forwards it:
     // spread (`...meta`), direct (`JSON.stringify(meta)`) or a member of it
     // (`meta.x`). A property key that merely shares the name (`obj.meta`) does not.
-    const forwards = consoleCalls.some((c) =>
-      params.some((p) => new RegExp(`\\.\\.\\.\\s*${p}\\b|(?<![\\w$.])${p}\\b`).test(c.args))
+    const forwards = consoleCalls.some((call) =>
+      params.some((p) => new RegExp(`\\.\\.\\.\\s*${p}\\b|(?<![\\w$.])${p}\\b`).test(call.args))
     );
-    if (forwards) names.push(m[1]);
+    if (forwards) names.add(c.name);
   }
-  return names;
+  return [...names];
 }
 
 function splitTopLevel(text: string): string[] {
@@ -358,6 +419,15 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     expect(findWrappers(member, 'fixture.ts')).toEqual(['logC']);
     expect(findWrappers(none, 'fixture.ts')).toEqual([]);
     expect(findWrappers(keyOnly, 'fixture.ts')).toEqual([]);
+    // Copilot review on #747: arrow functions and methods are wrappers too.
+    const arrowBlock = 'const logD = (meta: object) => { console.log(JSON.stringify(meta)); };';
+    const arrowExpr = 'const logE = async (m) => console.info(m);';
+    const method = 'class X {\n  logF(meta: object): void {\n    console.error(meta);\n  }\n}';
+    const callNotDecl = 'logG(meta);\nconsole.log("x");';
+    expect(findWrappers(arrowBlock, 'fixture.ts')).toEqual(['logD']);
+    expect(findWrappers(arrowExpr, 'fixture.ts')).toEqual(['logE']);
+    expect(findWrappers(method, 'fixture.ts')).toEqual(['logF']);
+    expect(findWrappers(callNotDecl, 'fixture.ts')).toEqual([]);
   });
 
   test('log-redaction | negative control | the matcher catches each forbidden key', () => {

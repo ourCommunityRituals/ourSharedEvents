@@ -181,16 +181,19 @@ jobs:
           *Auto-created by security-triage workflow. Do not ignore — SLA is binding.*
           ISSUEEOF
 
-          # Substitute placeholders in place. Env-based values avoid shell
-          # injection from GitHub context expressions.
-          sed -i \
-            -e "s|WORKFLOW_PLACEHOLDER|${WORKFLOW}|g" \
-            -e "s|BRANCH_PLACEHOLDER|${BRANCH}|g" \
-            -e "s|SHA_PLACEHOLDER|${SHORT_SHA}|g" \
-            -e "s|RUN_URL_PLACEHOLDER|${RUN_URL}|g" \
-            -e "s|SLA_PLACEHOLDER|${SLA}|g" \
-            -e "s|SLA_DEADLINE_PLACEHOLDER|${SLA_DEADLINE}|g" \
-            "$BODY_FILE"
+          # Substitute placeholders as literal text. Never build a sed program
+          # from these values: a branch name may contain sed metacharacters
+          # (`|`, `;`, `e`), and GNU sed's `e` command would run them (OSE-1499).
+          # Bash pattern substitution with a QUOTED replacement treats the value
+          # as plain text (the quotes also disable bash 5.2's `&` expansion).
+          BODY="$(cat "$BODY_FILE")"
+          BODY="${BODY//WORKFLOW_PLACEHOLDER/"$WORKFLOW"}"
+          BODY="${BODY//BRANCH_PLACEHOLDER/"$BRANCH"}"
+          BODY="${BODY//SHA_PLACEHOLDER/"$SHORT_SHA"}"
+          BODY="${BODY//RUN_URL_PLACEHOLDER/"$RUN_URL"}"
+          BODY="${BODY//SLA_DEADLINE_PLACEHOLDER/"$SLA_DEADLINE"}"
+          BODY="${BODY//SLA_PLACEHOLDER/"$SLA"}"
+          printf '%s\n' "$BODY" > "$BODY_FILE"
 
           # `--assignee oursharedevents` was failing because the org name is
           # not a valid issue-assignee on this repo. Drop it; the labels +
