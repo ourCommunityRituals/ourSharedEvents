@@ -180,8 +180,12 @@ function envelope(dashboard: DashboardId, brands: string[], dataClass: DataClass
 
 // A sponsor's request the organizer has not answered (and the sponsor has not
 // withdrawn). Never overlaps on-show, which needs organizer_accepted = 1 here.
+// Every sponsor count also requires the sponsor and the event to share a brand:
+// the schema allows a cross-brand placement row, and the public paths ignore it.
 const PENDING_SQL = `(sp.source = 'sponsor_request' AND sp.organizer_accepted IS NULL
-  AND COALESCE(sp.sponsor_accepted, 1) <> 0)`;
+  AND COALESCE(sp.sponsor_accepted, 1) <> 0 AND e.brand_id = sb.brand_id)`;
+const DECLINED_SQL = `((sp.organizer_accepted = 0 OR sp.sponsor_accepted = 0)
+  AND e.brand_id = sb.brand_id)`;
 
 // The SQL predicate for the data-class filter; bind the filter value twice.
 const DC = `(e.data_class = 'production' OR ? = 'all')`;
@@ -330,10 +334,12 @@ async function explicitChoices(
   formsDb: D1Database | undefined,
   eventIds: string[]
 ): Promise<{ registrations: FlooredCount; checkins: FlooredCount; email_signups: FlooredCount }> {
-  if (!formsDb || eventIds.length === 0) {
+  if (eventIds.length === 0) {
     const zero = applyCountFloor(0);
     return { registrations: zero, checkins: zero, email_signups: zero };
   }
+  // Events exist but their counts cannot be read: an outage, not a zero.
+  if (!formsDb) throw new Error('FORMS_DB binding missing');
   const [reg, chk, mail] = await Promise.all([
     perEventCounts(
       formsDb,
@@ -715,8 +721,7 @@ export async function handleEventDashboard(
         env.DB.prepare(
           `SELECT SUM(CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN 1 ELSE 0 END) AS on_show,
                   SUM(CASE WHEN ${PENDING_SQL} THEN 1 ELSE 0 END) AS pending,
-                  SUM(CASE WHEN sp.organizer_accepted = 0 OR sp.sponsor_accepted = 0
-                           THEN 1 ELSE 0 END) AS declined
+                  SUM(CASE WHEN ${DECLINED_SQL} THEN 1 ELSE 0 END) AS declined
              FROM sponsor_placement sp
              JOIN events e ON e.id = sp.event_id
              JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id

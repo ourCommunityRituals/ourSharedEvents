@@ -500,6 +500,12 @@ describe('query failures are 503, never zeroes', () => {
     }
   });
 
+  test('a missing FORMS_DB binding is 503 when events exist', async () => {
+    const unbound = { ...denv, FORMS_DB: undefined } as DashboardsEnv;
+    expect((await handleOperationsDashboard(reqAs(A, OPS), unbound)).status).toBe(503);
+    expect((await handleEventDashboard(reqAs(A, '/x'), unbound, DASH.bocce)).status).toBe(503);
+  });
+
   test('a FORMS_DB failure is 503, not a suppressed zero', async () => {
     const broken = {
       ...denv,

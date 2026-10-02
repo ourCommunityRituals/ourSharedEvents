@@ -137,13 +137,15 @@ export const SPONSOR_ON_SHOW_SQL = `(sb.is_active = 1 AND EXISTS (
  * The same on-show rule per PLACEMENT, for counting (OSE-1468 dashboards). A
  * boolean over a row with `sp` (sponsor_placement), `sb` (its sponsor_business)
  * and `e` (its event) in scope: active placement, active business, sponsor
- * accepted, organizer accepted under the source-aware rule, live event. Keep in
- * step with SPONSOR_ON_SHOW_SQL above; tests/dashboards.spec.ts pins the cases.
+ * accepted, organizer accepted under the source-aware rule, live event, and the
+ * event in the sponsor's own brand (the schema does not enforce that; the card
+ * does). Keep in step with SPONSOR_ON_SHOW_SQL above; tests/dashboards.spec.ts
+ * pins the cases.
  */
 export const PLACEMENT_ON_SHOW_SQL = `(sp.is_active = 1 AND sb.is_active = 1
   AND sp.sponsor_accepted = 1
   AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-  AND e.status = 'active')`;
+  AND e.status = 'active' AND e.brand_id = sb.brand_id)`;
 
 /** The public card for a sponsor (no website → a tap lands here). */
 export function sponsorCardPath(sponsorId: string): string {

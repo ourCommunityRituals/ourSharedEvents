@@ -223,6 +223,21 @@ export async function seedDashboardFixture(db: D1Database, forms: D1Database): P
   });
   await seedSplitSponsor(db, { id: 'sb-dash-draft', eventId: DASH.workshop, brandId: DASH.brandA });
   await seedSplitSponsor(db, { id: 'sb-dash-b', eventId: DASH.other, brandId: DASH.brandB });
+  // Malformed cross-brand rows (the schema permits them): a dash-b sponsor
+  // placed on dash-a's bocce, once fully accepted and once as an unanswered
+  // request. No dash-a sponsor count may include either.
+  await seedSplitSponsor(db, { id: 'sb-dash-x-show', eventId: DASH.bocce, brandId: DASH.brandB });
+  await seedSplitSponsor(db, {
+    id: 'sb-dash-x-ask',
+    eventId: DASH.bocce,
+    brandId: DASH.brandB,
+    source: 'sponsor_request',
+    isActive: 0,
+  });
+  await db
+    .prepare(`UPDATE sponsor_placement SET organizer_accepted = NULL WHERE sponsor_business_id = ?`)
+    .bind('sb-dash-x-ask')
+    .run();
 
   await db
     .prepare(
