@@ -45,7 +45,14 @@ const SRC_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
 const CONSOLE_LEVELS = ['log', 'warn', 'error', 'info', 'debug', 'trace'];
 
 /** Forbidden content in a log sink's argument text. */
-const FORBIDDEN: Array<{ label: string; re: RegExp; safe?: RegExp; why: string }> = [
+const FORBIDDEN: Array<{
+  label: string;
+  re: RegExp;
+  safe?: RegExp;
+  /** Only sinks in files matching this (path relative to src/) are checked. */
+  files?: RegExp;
+  why: string;
+}> = [
   { label: 'anonId', re: /\banonId\b/, why: 'raw ose_anon cookie value (Invariant #1)' },
   { label: 'anonymous_id', re: /\banonymous_id\b/, why: 'raw anonymous id column' },
   { label: 'emailHash', re: /\bemailHash\b/, why: 'stable pseudonym of an email' },
@@ -84,6 +91,15 @@ const FORBIDDEN: Array<{ label: string; re: RegExp; safe?: RegExp; why: string }
     why: 'a credential as a shorthand property ({ token })',
   },
   { label: 'cookie', re: /cookie/i, why: 'cookie values identify a browser' },
+  {
+    // Copilot review on #747: a form row's id is the key to an encrypted
+    // attendee name, an unscrubbed survey answer or an encrypted email. Form
+    // logs carry the event, the outcome and counts, never which row.
+    label: 'form record id',
+    re: /(?:^|[{,(]\s*)['"]?(?:row_id|id)['"]?\s*[:,}]/,
+    files: /^handlers\/forms\.ts$/,
+    why: 'a form row id points at one attendee record; log counts instead',
+  },
 ];
 
 /**
@@ -413,6 +429,7 @@ function violationsIn(sinks: Sink[]): string[] {
   const out: string[] = [];
   for (const s of sinks) {
     for (const f of FORBIDDEN) {
+      if (f.files && !f.files.test(s.file)) continue;
       if (!hits(f, s.args)) continue;
       if (EXEMPTIONS.some((e) => e.file === s.file && e.pattern === f.label)) continue;
       out.push(`src/${s.file}:${s.line} ${s.callee}(…) contains "${f.label}" — ${f.why}`);
@@ -502,6 +519,29 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     expect(violationsIn(sinks).some((v) => v.includes('logC(…)'))).toBe(true);
   });
 
+  test('log-redaction | negative control | form record ids are refused in form logs only', () => {
+    const rid = FORBIDDEN.find((f) => f.label === 'form record id')!;
+    for (const leak of [
+      '({ row_id: rest.id, decrypt_error: true })',
+      '({ isNew, id })',
+      "({ 'id': x })",
+    ]) {
+      expect(hits(rid, leak), `form record id must fire on ${leak}`).toBe(true);
+    }
+    for (const ok of [
+      "('register', String(rest.event_id ?? eventId), 'error', { decrypt_error: true })",
+      '({ count, isNew })',
+    ]) {
+      expect(hits(rid, ok), `form record id must not fire on ${ok}`).toBe(false);
+    }
+    const src =
+      "logFormEvent('register', eventId, 'submit', { id, isNew });\nfunction logFormEvent(a, b, c, meta) { console.log(meta); }";
+    expect(
+      violationsIn(deriveSinks([{ file: 'handlers/forms.ts', src }]).sinks).length
+    ).toBeGreaterThan(0);
+    expect(violationsIn(deriveSinks([{ file: 'handlers/events.ts', src }]).sinks)).toEqual([]);
+  });
+
   test('log-redaction | negative control | console.debug and console.trace are sinks', () => {
     for (const lvl of ['debug', 'trace']) {
       const { sinks } = deriveSinks([{ file: 'x.ts', src: `console.${lvl}({ draftToken });` }]);
@@ -539,6 +579,7 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       'request.url': '(JSON.stringify({ q: new URL(request.url).search }))',
       'token:': '({ token: t, ok: true })',
       'credential name': '(JSON.stringify({ type: "X", draftToken }))',
+      'form record id': "('register', eventId, 'submit', { id, isNew })",
       'token shorthand': '({ ok: true, token })',
       cookie: '({ value: request.headers.get("Cookie") })',
     };

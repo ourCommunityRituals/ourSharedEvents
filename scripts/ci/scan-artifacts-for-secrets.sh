@@ -51,6 +51,31 @@ if [ "${#roots[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# The set, non-trivial secret values. Collected up front so every path this
+# script prints can be redacted first (a value can be part of a file NAME).
+SECRET_NAMES=()
+SECRET_VALUES=()
+for var in $SECRET_VARS; do
+  v="${!var:-}"
+  [ -z "$v" ] && continue
+  if [ "${#v}" -lt "$MIN_SECRET_LEN" ]; then
+    echo "::warning::scan-artifacts-for-secrets: $var is shorter than $MIN_SECRET_LEN chars; not scanned for it"
+    continue
+  fi
+  SECRET_NAMES+=("$var")
+  SECRET_VALUES+=("$v")
+done
+unset v
+
+# redact <text> -> text with every secret value replaced by [REDACTED]
+redact() {
+  local s="$1" i
+  for i in "${!SECRET_VALUES[@]}"; do
+    s="${s//"${SECRET_VALUES[$i]}"/[REDACTED]}"
+  done
+  printf '%s\n' "$s"
+}
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 : >"$work/map" # "<expanded dir>\t<origin file>" per opened archive
@@ -63,10 +88,10 @@ origin_of() {
   local f="$1" dir origin
   while IFS=$'\t' read -r dir origin; do
     case "$f" in
-      "$dir"/*) printf '%s (inside archive)\n' "$origin"; return ;;
+      "$dir"/*) redact "$origin (inside archive)"; return ;;
     esac
   done <"$work/map"
-  printf '%s\n' "$f"
+  redact "$f"
 }
 
 open_zip() { # open_zip <zip file> <origin label>
@@ -150,17 +175,19 @@ report() { # report <pattern name> <file>...
   done
 }
 
-# 1. Secret values, as fixed strings. `--` so a value starting with '-' is not
-#    an option; the value is never echoed.
-for var in $SECRET_VARS; do
-  v="${!var:-}"
-  [ -z "$v" ] && continue
-  if [ "${#v}" -lt "$MIN_SECRET_LEN" ]; then
-    echo "::warning::scan-artifacts-for-secrets: $var is shorter than $MIN_SECRET_LEN chars; not scanned for it"
-    continue
-  fi
+# 1. Secret values, as fixed strings, in file contents and in path names
+#    (Playwright derives output paths from test titles). `--` so a value
+#    starting with '-' is not an option; values are never echoed.
+for i in "${!SECRET_VALUES[@]}"; do
+  var="${SECRET_NAMES[$i]}"
+  v="${SECRET_VALUES[$i]}"
   mapfile -t hits < <(grep -rlF -- "$v" "${scan_dirs[@]}" 2>/dev/null)
   [ "${#hits[@]}" -gt 0 ] && report "secret:$var" "${hits[@]}"
+  while IFS= read -r -d '' path; do
+    case "$path" in
+      *"$v"*) report "secret:$var (in the path name)" "$path" ;;
+    esac
+  done < <(find "${scan_dirs[@]}" -print0 2>/dev/null)
 done
 unset v
 

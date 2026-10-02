@@ -2470,12 +2470,13 @@ jobs:
 
       # OSE-1470: the security smoke sent production credentials. Refuse to
       # upload anything that recorded one; the upload runs only if this passes.
+      # Only the CF Access secret: no step in this job receives ADMIN_KEY or
+      # X_OCR_INTERNAL, so they cannot be in the reports, and passing them
+      # here would only widen secret access in the production job.
       - name: Scan artifacts for credentials
         id: artifact-scan
         if: always()
         env:
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: bash scripts/ci/scan-artifacts-for-secrets.sh playwright-report-smoke/ .test-results/
 

@@ -99,6 +99,26 @@ describe('scan-artifacts-for-secrets.sh', () => {
     expect(r.out).not.toContain(dash);
   });
 
+  test('a secret value in a file NAME → exit 1, and the printed path is redacted', () => {
+    const f = join(dir, 'test-results', `report-${FAKE_ADMIN_KEY}.txt`);
+    writeFileSync(f, 'nothing secret inside\n');
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('secret:ADMIN_KEY (in the path name)');
+    expect(r.out).toContain('report-[REDACTED].txt');
+    expect(r.out).not.toContain(FAKE_ADMIN_KEY);
+  });
+
+  test('a secret value in a directory name → exit 1, path redacted', () => {
+    const d = join(dir, 'playwright-report', `data-${FAKE_CF_SECRET}`);
+    mkdirSync(d);
+    writeFileSync(join(d, 'x.json'), '{}');
+    const r = run(paths(), secrets);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('secret:CF_ACCESS_CLIENT_SECRET (in the path name)');
+    expect(r.out).not.toContain(FAKE_CF_SECRET);
+  });
+
   test('CF_Authorization cookie → exit 1 without the cookie value', () => {
     writeFileSync(
       join(dir, 'test-results', 'c.txt'),
