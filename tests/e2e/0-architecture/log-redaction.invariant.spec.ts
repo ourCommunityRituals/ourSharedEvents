@@ -41,7 +41,8 @@ import { join, relative } from 'node:path';
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const SRC_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
 
-const CONSOLE_LEVELS = ['log', 'warn', 'error', 'info'];
+// Every console method that reaches Workers Logs (Copilot review on #747: debug + trace).
+const CONSOLE_LEVELS = ['log', 'warn', 'error', 'info', 'debug', 'trace'];
 
 /** Forbidden content in a log sink's argument text. */
 const FORBIDDEN: Array<{ label: string; re: RegExp; safe?: RegExp; why: string }> = [
@@ -318,12 +319,18 @@ function candidates(src: string): FnCandidate[] {
   return out;
 }
 
-function findWrappers(src: string, file: string): string[] {
+function findWrappers(src: string, file: string, known: Iterable<string> = []): string[] {
+  // A call to an already-known wrapper is a log sink too, so a wrapper of a
+  // wrapper is derived when this is iterated to a fixed point (deriveSinks).
+  const knownList = [...known];
+  const sinkRe = knownList.length
+    ? new RegExp(`${CONSOLE_CALL.source}|\\b(?:${knownList.join('|')})\\s*\\(`)
+    : CONSOLE_CALL;
   const names = new Set<string>();
   for (const c of candidates(src)) {
     const params = paramsOf(stripComments(c.paramText));
     if (params.length === 0) continue;
-    const consoleCalls = findCalls(c.body, file, CONSOLE_CALL);
+    const consoleCalls = findCalls(c.body, file, sinkRe).filter((call) => call.callee !== c.name);
     // Any reference to a parameter inside the console arguments forwards it:
     // spread (`...meta`), direct (`JSON.stringify(meta)`) or a member of it
     // (`meta.x`). A property key that merely shares the name (`obj.meta`) does not.
@@ -365,12 +372,25 @@ const SOURCES = FILES.map((abs) => ({
 // by name in every file, so its importers' calls are sinks too.
 function deriveSinks(sources: Array<{ file: string; src: string }>) {
   const wrappersByFile = new Map<string, string[]>();
-  for (const { file, src } of sources) wrappersByFile.set(file, findWrappers(src, file));
   const exported = new Set<string>();
-  for (const { file, src } of sources) {
-    for (const w of wrappersByFile.get(file) ?? []) {
-      const decl = `export\\s+(?:(?:async\\s+)?function|const|let|var)\\s+${w}\\b`;
-      if (new RegExp(decl).test(src)) exported.add(w);
+  // Iterate to a fixed point: a function that forwards a parameter to a known
+  // wrapper is a wrapper too (Copilot review on #747: chained wrappers).
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const { file, src } of sources) {
+      const known = new Set([...(wrappersByFile.get(file) ?? []), ...exported]);
+      const found = findWrappers(src, file, known);
+      if (found.some((w) => !(wrappersByFile.get(file) ?? []).includes(w))) {
+        wrappersByFile.set(file, [...new Set([...(wrappersByFile.get(file) ?? []), ...found])]);
+        changed = true;
+      }
+      for (const w of wrappersByFile.get(file) ?? []) {
+        const decl = `export\\s+(?:(?:async\\s+)?function|const|let|var)\\s+${w}\\b`;
+        if (!exported.has(w) && new RegExp(decl).test(src)) {
+          exported.add(w);
+          changed = true;
+        }
+      }
     }
   }
   const sinks: Sink[] = [];
@@ -464,6 +484,29 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     expect(findWrappers(bare, 'fixture.ts')).toEqual(['logH']);
     expect(findWrappers(bareAsync, 'fixture.ts')).toEqual(['logI']);
     expect(findWrappers(bareNoLog, 'fixture.ts')).toEqual([]);
+  });
+
+  test('log-redaction | negative control | a wrapper of a wrapper is derived (fixed point)', () => {
+    const { wrappersByFile, sinks } = deriveSinks([
+      {
+        file: 'lib/log.ts',
+        src: [
+          'function logA(meta) { console.log(meta); }',
+          'function logB(meta) { logA(meta); }',
+          'const logC = (m) => logB({ ...m });',
+          'logC({ anonId });',
+        ].join('\n'),
+      },
+    ]);
+    expect(new Set(wrappersByFile.get('lib/log.ts'))).toEqual(new Set(['logA', 'logB', 'logC']));
+    expect(violationsIn(sinks).some((v) => v.includes('logC(…)'))).toBe(true);
+  });
+
+  test('log-redaction | negative control | console.debug and console.trace are sinks', () => {
+    for (const lvl of ['debug', 'trace']) {
+      const { sinks } = deriveSinks([{ file: 'x.ts', src: `console.${lvl}({ draftToken });` }]);
+      expect(violationsIn(sinks).length, `console.${lvl} must be a sink`).toBeGreaterThan(0);
+    }
   });
 
   test('log-redaction | negative control | an exported wrapper makes importer calls sinks', () => {

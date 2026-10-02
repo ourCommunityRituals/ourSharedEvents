@@ -146,8 +146,15 @@ jobs:
         echo ""
         echo "=============================================="
 
-        # Export for later steps
-        echo "TARGET_URL=$TARGET_URL" >> $GITHUB_ENV
+        # Export for later steps. A dispatch value is free text: a line break
+        # would add its own entries to GITHUB_ENV for the credential-bearing
+        # steps below (Copilot review on #747), so require one http(s) URL
+        # with no whitespace or control characters before writing it.
+        if [[ ! "$TARGET_URL" =~ ^https?://[^[:space:][:cntrl:]]+$ ]]; then
+          echo "::error::target_url must be a single http(s) URL with no spaces or line breaks"
+          exit 1
+        fi
+        echo "TARGET_URL=$TARGET_URL" >> "$GITHUB_ENV"
 
     - name: Make script executable
       run: chmod +x scripts/security/security_regression.sh
