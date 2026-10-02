@@ -107,10 +107,11 @@ export function bucketScansByDay(
   return out;
 }
 
-async function one<T>(stmt: D1PreparedStatement): Promise<T | null> {
+async function one<T>(stmt: D1PreparedStatement, strict: boolean): Promise<T | null> {
   try {
     return await stmt.first<T>();
-  } catch {
+  } catch (e) {
+    if (strict) throw e;
     return null;
   }
 }
@@ -118,12 +119,15 @@ async function one<T>(stmt: D1PreparedStatement): Promise<T | null> {
 /**
  * Read the pre-event activity for one event. Counts only. A failed sub-query
  * reads as 0 rather than failing the whole card (same stance as /stats).
+ * `strict` rethrows instead, for callers that must not publish a zero they did
+ * not read (the OSE-1468 event dashboard answers 503).
  */
 export async function readPreEventActivity(
   db: D1Database,
   eventId: string,
   timezone: string | null | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  strict = false
 ): Promise<PreEventActivity> {
   const posterRow = await one<{ posters: number; places: number }>(
     db
@@ -131,15 +135,20 @@ export async function readPreEventActivity(
         `SELECT COUNT(*) AS posters, COUNT(DISTINCT h3_res7) AS places
            FROM poster_deployments WHERE event_id = ? AND is_active = 1`
       )
-      .bind(eventId)
+      .bind(eventId),
+    strict
   );
   const scanRow = await one<{ cnt: number }>(
-    db.prepare('SELECT COUNT(*) AS cnt FROM scan_placement_events WHERE event_id = ?').bind(eventId)
+    db
+      .prepare('SELECT COUNT(*) AS cnt FROM scan_placement_events WHERE event_id = ?')
+      .bind(eventId),
+    strict
   );
   const clickRow = await one<{ cnt: number }>(
     db
       .prepare('SELECT COALESCE(SUM(clicks), 0) AS cnt FROM shortlinks WHERE event_id = ?')
-      .bind(eventId)
+      .bind(eventId),
+    strict
   );
 
   // Hour buckets for the window plus a day of slack either side (zone shift);
@@ -159,7 +168,8 @@ export async function readPreEventActivity(
       .bind(eventId, since)
       .all<{ bucket: string; cnt: number }>();
     hours = res.results ?? [];
-  } catch {
+  } catch (e) {
+    if (strict) throw e;
     hours = [];
   }
 

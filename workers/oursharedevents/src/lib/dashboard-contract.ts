@@ -17,6 +17,8 @@
 //                       CONTRIBUTING BUCKET before any sum (Invariant #7, the
 //                       OSE-669 rule), so a total never exposes a sub-K bucket
 //                       by differencing.
+//   • its path        — where the value sits in the response, so the class can
+//                       be checked against what is actually returned;
 //   • its source      — the table(s) it is read from, so a reviewer can check it.
 //
 // Things the ticket asks for that have no data source today are listed in
@@ -36,139 +38,233 @@ export type PrivacyClass = 'entity' | 'anonymous_exact' | 'floored';
 
 export interface MetricDef {
   dashboard: DashboardId;
+  /** The class actually applied to every value at `path`. One metric, one class. */
   privacy: PrivacyClass;
+  /**
+   * Where the value sits in the response: dot-separated keys, and `name[]` maps
+   * over an array (`flows[].scans`). tests/dashboards.spec.ts resolves every
+   * path against a live response and checks the value has its class's shape.
+   */
+  path: string;
   source: string;
   description: string;
 }
+
+/** On show = active placement, both sides consented, active business, live event. */
+const ON_SHOW = 'sponsor_placement + sponsor_business + events (PLACEMENT_ON_SHOW_SQL)';
 
 export const DASHBOARD_METRICS = {
   // ── operations (founder cockpit; brand-scoped) ────────────────────────────
   'events.total': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'events.total',
     source: 'events',
     description: 'Events in scope.',
   },
   'events.by_status': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'events.by_status',
     source: 'events.status',
     description: 'Events per lifecycle state (draft, ready, active, archived).',
   },
   'events.published': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'events.published',
     source: 'events.is_published',
     description: 'Events listed on public surfaces.',
   },
   'events.created_30d': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'events.created_30d',
     source: 'events.created_at',
     description: 'Events created in the last 30 days.',
   },
   admin_activity_30d: {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'admin_activity_30d',
     source: 'admin_audit_log (brand_id, action, outcome)',
     description:
-      'Admin actions on this brand in the last 30 days: created, revised, went live, taken offline, denied.',
+      'Admin actions on this brand in the last 30 days: created, revised, went live, taken offline, deleted, denied.',
   },
   'reach.poster_scans': {
     dashboard: 'operations',
     privacy: 'anonymous_exact',
+    path: 'reach.poster_scans',
     source: 'scan_placement_events',
     description: 'Poster QR scans, all time.',
   },
   'reach.link_taps': {
     dashboard: 'operations',
     privacy: 'floored',
+    path: 'reach.link_taps',
     source: 'shortlinks.clicks (per event, floored, survivors summed)',
     description: 'Short-link taps, all time.',
   },
   'reach.active_posters': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'reach.active_posters',
     source: 'poster_deployments (is_active = 1)',
     description: 'Posters out now.',
   },
   'reach.poster_places': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'reach.poster_places',
     source: 'poster_deployments.h3_res7 (distinct)',
     description: 'Distinct res-7 places those posters cover.',
   },
   'participation.anonymous_scans': {
     dashboard: 'operations',
     privacy: 'anonymous_exact',
+    path: 'participation.anonymous.scans',
     source: 'scan_placement_events',
     description: 'Anonymous participation: scans, which name no one.',
   },
   'participation.registrations': {
     dashboard: 'operations',
     privacy: 'floored',
+    path: 'participation.explicit.registrations',
     source: 'FORMS_DB.form_registrations (confirmed, unexpired; per event, floored)',
     description: 'Explicit choice: registrations.',
   },
   'participation.checkins': {
     dashboard: 'operations',
     privacy: 'floored',
+    path: 'participation.explicit.checkins',
     source: 'FORMS_DB.checkin_counts (per event, floored)',
     description: 'Explicit choice: check-ins.',
   },
   'participation.email_signups': {
     dashboard: 'operations',
     privacy: 'floored',
+    path: 'participation.explicit.email_signups',
     source: 'FORMS_DB.email_signups (per event, floored)',
     description: 'Explicit choice: next-event email signups.',
   },
-  'sponsors.active_placements': {
+  'sponsors.on_show': {
     dashboard: 'operations',
     privacy: 'entity',
-    source: 'sponsor_placement (is_active = 1)',
-    description: 'Sponsors on show.',
+    path: 'sponsors.on_show',
+    source: ON_SHOW,
+    description: 'Sponsor placements a visitor can see right now.',
   },
   'sponsors.pending_requests': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'sponsors.pending_requests',
     source: "sponsor_placement (source = 'sponsor_request', organizer_accepted IS NULL)",
     description: 'Sponsors asking to back an event, not yet answered.',
   },
   'shared_report.views_30d': {
     dashboard: 'operations',
     privacy: 'entity',
+    path: 'shared_report.views_30d',
     source: "report_access_log (outcome = 'granted')",
     description: 'SharedReport opens through a signed link, last 30 days.',
   },
 
   // ── event (organizer / partner report; one event) ─────────────────────────
-  'event.status': {
+  'event.state': {
     dashboard: 'event',
     privacy: 'entity',
+    path: 'event',
     source: 'events',
     description: 'Lifecycle state, listed flag and days to go.',
   },
-  'event.reach': {
-    dashboard: 'event',
-    privacy: 'anonymous_exact',
-    source: 'lib/pre-event-activity.ts (organizer shape: scans exact, taps floored)',
-    description: 'Posters, places, scans, taps and scans per day for the last 14 days.',
-  },
-  'event.participation': {
-    dashboard: 'event',
-    privacy: 'floored',
-    source: 'scan_placement_events + FORMS_DB counts',
-    description: 'Anonymous scans (exact) beside explicit choices (floored).',
-  },
-  'event.sponsors': {
+  'event.reach.posters': {
     dashboard: 'event',
     privacy: 'entity',
-    source: 'sponsor_placement',
-    description: 'Sponsors on show, waiting for the organizer, declined.',
+    path: 'reach.posters',
+    source: 'poster_deployments (is_active = 1)',
+    description: 'Posters out for this event.',
+  },
+  'event.reach.places': {
+    dashboard: 'event',
+    privacy: 'entity',
+    path: 'reach.places',
+    source: 'poster_deployments.h3_res7 (distinct)',
+    description: 'Distinct res-7 places those posters cover.',
+  },
+  'event.reach.scans': {
+    dashboard: 'event',
+    privacy: 'anonymous_exact',
+    path: 'reach.scans',
+    source: 'scan_placement_events',
+    description: 'Poster QR scans, all time.',
+  },
+  'event.reach.scans_by_day': {
+    dashboard: 'event',
+    privacy: 'anonymous_exact',
+    path: 'reach.scansByDay',
+    source: 'scan_placement_events.scan_bucket (event-local days)',
+    description: 'Scans per day for the last 14 days.',
+  },
+  'event.reach.link_taps': {
+    dashboard: 'event',
+    privacy: 'floored',
+    path: 'reach.clicks',
+    source: 'shortlinks.clicks',
+    description: 'Short-link taps, all time.',
+  },
+  'event.participation.anonymous_scans': {
+    dashboard: 'event',
+    privacy: 'anonymous_exact',
+    path: 'participation.anonymous.scans',
+    source: 'scan_placement_events',
+    description: 'Anonymous participation: scans.',
+  },
+  'event.participation.registrations': {
+    dashboard: 'event',
+    privacy: 'floored',
+    path: 'participation.explicit.registrations',
+    source: 'FORMS_DB.form_registrations (confirmed, unexpired)',
+    description: 'Explicit choice: registrations.',
+  },
+  'event.participation.checkins': {
+    dashboard: 'event',
+    privacy: 'floored',
+    path: 'participation.explicit.checkins',
+    source: 'FORMS_DB.checkin_counts',
+    description: 'Explicit choice: check-ins.',
+  },
+  'event.participation.email_signups': {
+    dashboard: 'event',
+    privacy: 'floored',
+    path: 'participation.explicit.email_signups',
+    source: 'FORMS_DB.email_signups',
+    description: 'Explicit choice: next-event email signups.',
+  },
+  'event.sponsors.on_show': {
+    dashboard: 'event',
+    privacy: 'entity',
+    path: 'sponsors.on_show',
+    source: ON_SHOW,
+    description: 'Sponsors a visitor can see on this event now.',
+  },
+  'event.sponsors.pending_requests': {
+    dashboard: 'event',
+    privacy: 'entity',
+    path: 'sponsors.pending_requests',
+    source: "sponsor_placement (source = 'sponsor_request', organizer_accepted IS NULL)",
+    description: 'Sponsors waiting for the organizer.',
+  },
+  'event.sponsors.declined': {
+    dashboard: 'event',
+    privacy: 'entity',
+    path: 'sponsors.declined',
+    source: 'sponsor_placement (sponsor_accepted = 0 OR organizer_accepted = 0)',
+    description: 'Placements either side declined.',
   },
   'event.shared_report_views_30d': {
     dashboard: 'event',
     privacy: 'entity',
+    path: 'shared_report.views_30d',
     source: "report_access_log (outcome = 'granted')",
     description: 'SharedReport opens for this event, last 30 days.',
   },
@@ -177,43 +273,57 @@ export const DASHBOARD_METRICS = {
   'corridor.by_category': {
     dashboard: 'corridor',
     privacy: 'entity',
+    path: 'by_category',
     source: 'events → event_type_registry.category_code → event_type_category_registry',
     description: 'Events per UEC category; untyped events count under OTHER, never dropped.',
   },
   'corridor.event_cells': {
     dashboard: 'corridor',
     privacy: 'entity',
+    path: 'event_cells',
     source: 'events.h3_res7',
     description: 'Destination layer: events and live events per res-7 cell.',
   },
-  'corridor.source_cells': {
+  'corridor.source_cells.posters': {
+    dashboard: 'corridor',
+    privacy: 'entity',
+    path: 'source_cells[].posters',
+    source: 'poster_deployments.h3_res7',
+    description: 'Source layer: active posters per res-7 cell.',
+  },
+  'corridor.source_cells.scans': {
     dashboard: 'corridor',
     privacy: 'floored',
-    source: 'poster_deployments.h3_res7 + scan_placement_events',
-    description: 'Source layer: posters per cell (exact) and scans per cell (floored).',
+    path: 'source_cells[].scans',
+    source: 'scan_placement_events → poster_deployments.h3_res7',
+    description: 'Source layer: scans per res-7 poster cell.',
   },
   'corridor.flows': {
     dashboard: 'corridor',
     privacy: 'floored',
+    path: 'flows[].scans',
     source: 'scan_placement_events → poster cell → event cell',
     description: 'Scans from a source cell to an event cell; pairs under K are left out.',
   },
   'corridor.day_part': {
     dashboard: 'corridor',
     privacy: 'entity',
+    path: 'day_part',
     source: 'events.start_date',
     description: 'Events on weekdays, weekends, or undated.',
   },
   'corridor.series': {
     dashboard: 'corridor',
     privacy: 'entity',
+    path: 'series',
     source: 'events.series_id',
     description: 'Series count, events in a series, largest series.',
   },
   'corridor.partner_network': {
     dashboard: 'corridor',
     privacy: 'entity',
-    source: 'sponsor_placement (is_active = 1)',
+    path: 'partner_network',
+    source: ON_SHOW,
     description: 'Distinct sponsors on show and their placements.',
   },
 } as const satisfies Record<string, MetricDef>;

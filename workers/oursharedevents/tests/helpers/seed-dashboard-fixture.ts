@@ -4,10 +4,11 @@
  * Brand `dash-a` runs two events in one corridor:
  *   • a bocce tournament (REC, live, listed, weekend, in a series of two),
  *     with three posters in two source cells, 12 scans, 9 link taps,
- *     7 registrations, 6 check-ins, 2 email signups, two sponsors on show and
- *     one sponsor asking to join;
+ *     7 registrations, 6 check-ins, 2 email signups, two sponsors on show,
+ *     one sponsor asking to join and one that declined;
  *   • a teacher/parent workshop (no event type → OTHER, draft, weekday),
- *     with one poster, 3 scans and 3 registrations: every count under K.
+ *     with one poster, 3 scans and 3 registrations: every count under K. Its
+ *     one sponsor is not on show, because the event is a draft.
  * Plus one `demo` event that the default data_class filter must leave out.
  *
  * Brand `dash-b` has one big event in the same cell. A `dash-a` operator must
@@ -208,6 +209,15 @@ export async function seedDashboardFixture(db: D1Database, forms: D1Database): P
     .prepare(`UPDATE sponsor_placement SET organizer_accepted = NULL WHERE sponsor_business_id = ?`)
     .bind('sb-dash-3')
     .run();
+  // Not on show, each for one reason: the sponsor declined (the placement stays
+  // active, as the respond route leaves it), and an active placement on a draft.
+  await seedSplitSponsor(db, {
+    id: 'sb-dash-declined',
+    eventId: DASH.bocce,
+    brandId: DASH.brandA,
+    sponsorAccepted: 0,
+  });
+  await seedSplitSponsor(db, { id: 'sb-dash-draft', eventId: DASH.workshop, brandId: DASH.brandA });
   await seedSplitSponsor(db, { id: 'sb-dash-b', eventId: DASH.other, brandId: DASH.brandB });
 
   await db

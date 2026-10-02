@@ -41,6 +41,7 @@ import {
 } from '../lib/dashboard-contract';
 import { organizerPreEventActivity, readPreEventActivity } from '../lib/pre-event-activity';
 import { daysToGo } from './pre-event-activity';
+import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { perEventCounts } from './portfolio-rollup';
 
 export interface DashboardsEnv extends AdminEnv, AdminBrandScopeEnv {
@@ -77,19 +78,35 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Query failures propagate. A dashboard that turned a D1 error into zeroes
+// would publish numbers nobody read; the handler answers 503 instead.
 async function all<T>(stmt: D1PreparedStatement): Promise<T[]> {
-  try {
-    return (await stmt.all<T>()).results ?? [];
-  } catch {
-    return [];
-  }
+  return (await stmt.all<T>()).results ?? [];
 }
 
 async function first<T>(stmt: D1PreparedStatement): Promise<T | null> {
+  return stmt.first<T>();
+}
+
+/** Run a dashboard body; any thrown query error becomes a logged 503. */
+async function guarded(
+  request: Request,
+  reqId: string,
+  dashboard: DashboardId,
+  body: () => Promise<Response>
+): Promise<Response> {
   try {
-    return await stmt.first<T>();
-  } catch {
-    return null;
+    return await body();
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        type: 'DASHBOARD_DB_ERROR',
+        dashboard,
+        requestId: reqId,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    );
+    return fail(request, reqId, 503, 'DB_UNAVAILABLE', 'Dashboard data could not be read');
   }
 }
 
@@ -161,6 +178,11 @@ function envelope(dashboard: DashboardId, brands: string[], dataClass: DataClass
   };
 }
 
+// A sponsor's request the organizer has not answered (and the sponsor has not
+// withdrawn). Never overlaps on-show, which needs organizer_accepted = 1 here.
+const PENDING_SQL = `(sp.source = 'sponsor_request' AND sp.organizer_accepted IS NULL
+  AND COALESCE(sp.sponsor_accepted, 1) <> 0)`;
+
 // The SQL predicate for the data-class filter; bind the filter value twice.
 const DC = `(e.data_class = 'production' OR ? = 'all')`;
 
@@ -177,7 +199,7 @@ interface BrandOps {
   tapsPerEvent: number[];
   posters: number;
   places: Set<string>;
-  activeSponsors: number;
+  onShow: number;
   pendingRequests: number;
   reportViews: number;
   admin: Map<string, number>;
@@ -240,13 +262,13 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    first<{ active: number; pending: number }>(
+    first<{ on_show: number; pending: number }>(
       db
         .prepare(
-          `SELECT SUM(CASE WHEN sp.is_active = 1 THEN 1 ELSE 0 END) AS active,
-                  SUM(CASE WHEN sp.source = 'sponsor_request' AND sp.organizer_accepted IS NULL
-                           THEN 1 ELSE 0 END) AS pending
+          `SELECT SUM(CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN 1 ELSE 0 END) AS on_show,
+                  SUM(CASE WHEN ${PENDING_SQL} THEN 1 ELSE 0 END) AS pending
              FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
+             JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
             WHERE e.brand_id = ? AND ${DC}`
         )
         .bind(brand, dc)
@@ -295,7 +317,7 @@ async function readBrandOps(
     tapsPerEvent: taps.map((t) => num(t.cnt)),
     posters: num(posters?.cnt),
     places: new Set(places.map((p) => p.cell)),
-    activeSponsors: num(sponsors?.active),
+    onShow: num(sponsors?.on_show),
     pendingRequests: num(sponsors?.pending),
     reportViews: num(views?.cnt),
     admin: adminMap,
@@ -332,10 +354,12 @@ async function explicitChoices(
        WHERE event_id IN (${ph}) GROUP BY event_id`
     ),
   ]);
+  // perEventCounts reports a failed chunk as null; that is an outage, not a zero.
+  if (!reg || !chk || !mail) throw new Error('FORMS_DB per-event count failed');
   return {
-    registrations: floorBucketsThenSum((reg ?? []).map((r) => num(r.cnt))),
-    checkins: floorBucketsThenSum((chk ?? []).map((r) => num(r.cnt))),
-    email_signups: floorBucketsThenSum((mail ?? []).map((r) => num(r.cnt))),
+    registrations: floorBucketsThenSum(reg.map((r) => num(r.cnt))),
+    checkins: floorBucketsThenSum(chk.map((r) => num(r.cnt))),
+    email_signups: floorBucketsThenSum(mail.map((r) => num(r.cnt))),
   };
 }
 
@@ -349,66 +373,69 @@ export async function handleOperationsDashboard(
   const pre = await preamble(request, env, reqId);
   if (pre instanceof Response) return pre;
   const { brands, dataClass } = pre;
+  return guarded(request, reqId, 'operations', async () => {
+    const now = new Date();
+    const perBrand = await Promise.all(brands.map((b) => readBrandOps(env.DB, b, dataClass, now)));
 
-  const now = new Date();
-  const perBrand = await Promise.all(brands.map((b) => readBrandOps(env.DB, b, dataClass, now)));
+    const byStatus: Record<string, number> = Object.fromEntries(
+      LIFECYCLE_STATES.map((s) => [s, 0])
+    );
+    const places = new Set<string>();
+    const admin = new Map<string, number>();
+    const eventIds: string[] = [];
+    const taps: number[] = [];
+    let published = 0,
+      created30d = 0,
+      scans = 0,
+      posters = 0,
+      onShow = 0,
+      pendingRequests = 0,
+      reportViews = 0;
+    for (const b of perBrand) {
+      for (const [s, n] of b.byStatus) byStatus[s] = (byStatus[s] ?? 0) + n;
+      for (const p of b.places) places.add(p);
+      for (const [k, n] of b.admin) admin.set(k, (admin.get(k) ?? 0) + n);
+      eventIds.push(...b.eventIds);
+      taps.push(...b.tapsPerEvent);
+      published += b.published;
+      created30d += b.created30d;
+      scans += b.scans;
+      posters += b.posters;
+      onShow += b.onShow;
+      pendingRequests += b.pendingRequests;
+      reportViews += b.reportViews;
+    }
+    const explicit = await explicitChoices(env.FORMS_DB, eventIds);
 
-  const byStatus: Record<string, number> = Object.fromEntries(LIFECYCLE_STATES.map((s) => [s, 0]));
-  const places = new Set<string>();
-  const admin = new Map<string, number>();
-  const eventIds: string[] = [];
-  const taps: number[] = [];
-  let published = 0,
-    created30d = 0,
-    scans = 0,
-    posters = 0,
-    activeSponsors = 0,
-    pendingRequests = 0,
-    reportViews = 0;
-  for (const b of perBrand) {
-    for (const [s, n] of b.byStatus) byStatus[s] = (byStatus[s] ?? 0) + n;
-    for (const p of b.places) places.add(p);
-    for (const [k, n] of b.admin) admin.set(k, (admin.get(k) ?? 0) + n);
-    eventIds.push(...b.eventIds);
-    taps.push(...b.tapsPerEvent);
-    published += b.published;
-    created30d += b.created30d;
-    scans += b.scans;
-    posters += b.posters;
-    activeSponsors += b.activeSponsors;
-    pendingRequests += b.pendingRequests;
-    reportViews += b.reportViews;
-  }
-  const explicit = await explicitChoices(env.FORMS_DB, eventIds);
-
-  return json(request, reqId, {
-    ...envelope('operations', brands, dataClass),
-    events: {
-      total: eventIds.length,
-      by_status: byStatus,
-      published,
-      created_30d: created30d,
-    },
-    admin_activity_30d: {
-      created: admin.get('CREATE_EVENT') ?? 0,
-      revised: admin.get('UPDATE_EVENT') ?? 0,
-      went_live: admin.get('VERIFY_QR') ?? 0,
-      taken_offline: admin.get('UNVERIFY_QR') ?? 0,
-      deleted: admin.get('DELETE_EVENT') ?? 0,
-      denied: admin.get('denied') ?? 0,
-    },
-    reach: {
-      poster_scans: scans,
-      link_taps: floorBucketsThenSum(taps),
-      active_posters: posters,
-      poster_places: places.size,
-    },
-    participation: {
-      anonymous: { scans },
-      explicit,
-    },
-    sponsors: { active_placements: activeSponsors, pending_requests: pendingRequests },
-    shared_report: { views_30d: reportViews },
+    return json(request, reqId, {
+      ...envelope('operations', brands, dataClass),
+      events: {
+        total: eventIds.length,
+        by_status: byStatus,
+        published,
+        created_30d: created30d,
+      },
+      admin_activity_30d: {
+        created: admin.get('CREATE_EVENT') ?? 0,
+        revised: admin.get('UPDATE_EVENT') ?? 0,
+        went_live: admin.get('VERIFY_QR') ?? 0,
+        taken_offline: admin.get('UNVERIFY_QR') ?? 0,
+        deleted: admin.get('DELETE_EVENT') ?? 0,
+        denied: admin.get('denied') ?? 0,
+      },
+      reach: {
+        poster_scans: scans,
+        link_taps: floorBucketsThenSum(taps),
+        active_posters: posters,
+        poster_places: places.size,
+      },
+      participation: {
+        anonymous: { scans },
+        explicit,
+      },
+      sponsors: { on_show: onShow, pending_requests: pendingRequests },
+      shared_report: { views_30d: reportViews },
+    });
   });
 }
 
@@ -518,7 +545,8 @@ async function readBrandCorridor(
           .prepare(
             `SELECT sp.sponsor_business_id AS business FROM sponsor_placement sp
                JOIN events e ON e.id = sp.event_id
-              WHERE e.brand_id = ? AND ${DC} AND sp.is_active = 1`
+               JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+              WHERE e.brand_id = ? AND ${DC} AND ${PLACEMENT_ON_SHOW_SQL}`
           )
           .bind(brand, dc)
       ),
@@ -548,85 +576,86 @@ export async function handleCorridorDashboard(
   const pre = await preamble(request, env, reqId);
   if (pre instanceof Response) return pre;
   const { brands, dataClass } = pre;
+  return guarded(request, reqId, 'corridor', async () => {
+    const perBrand = await Promise.all(brands.map((b) => readBrandCorridor(env.DB, b, dataClass)));
 
-  const perBrand = await Promise.all(brands.map((b) => readBrandCorridor(env.DB, b, dataClass)));
+    // Category labels: a shared, non-tenant registry.
+    const labels = new Map<string, string>(
+      (
+        await all<{ category_code: string; display_name: string }>(
+          env.DB.prepare('SELECT category_code, display_name FROM event_type_category_registry')
+        )
+      ).map((r) => [r.category_code, r.display_name])
+    );
 
-  // Category labels: a shared, non-tenant registry.
-  const labels = new Map<string, string>(
-    (
-      await all<{ category_code: string; display_name: string }>(
-        env.DB.prepare('SELECT category_code, display_name FROM event_type_category_registry')
-      )
-    ).map((r) => [r.category_code, r.display_name])
-  );
+    const cats = new Map<string, number>();
+    const evCells = new Map<string, { events: number; live: number }>();
+    const posterCells = new Map<string, number>();
+    const scanCells = new Map<string, number>();
+    const flows = new Map<string, number>();
+    const dayPart = new Map<string, number>([
+      ['weekday', 0],
+      ['weekend', 0],
+      ['undated', 0],
+    ]);
+    const series: number[] = [];
+    const businesses = new Set<string>();
+    let placements = 0;
 
-  const cats = new Map<string, number>();
-  const evCells = new Map<string, { events: number; live: number }>();
-  const posterCells = new Map<string, number>();
-  const scanCells = new Map<string, number>();
-  const flows = new Map<string, number>();
-  const dayPart = new Map<string, number>([
-    ['weekday', 0],
-    ['weekend', 0],
-    ['undated', 0],
-  ]);
-  const series: number[] = [];
-  const businesses = new Set<string>();
-  let placements = 0;
-
-  for (const b of perBrand) {
-    for (const c of b.categories) addTo(cats, c.code, c.cnt);
-    for (const c of b.eventCells) {
-      const cur = evCells.get(c.cell) ?? { events: 0, live: 0 };
-      evCells.set(c.cell, { events: cur.events + num(c.events), live: cur.live + num(c.live) });
+    for (const b of perBrand) {
+      for (const c of b.categories) addTo(cats, c.code, c.cnt);
+      for (const c of b.eventCells) {
+        const cur = evCells.get(c.cell) ?? { events: 0, live: 0 };
+        evCells.set(c.cell, { events: cur.events + num(c.events), live: cur.live + num(c.live) });
+      }
+      for (const c of b.posterCells) addTo(posterCells, c.cell, c.posters);
+      for (const c of b.scanCells) addTo(scanCells, c.cell, c.scans);
+      for (const f of b.flows) addTo(flows, `${f.source}>${f.destination}`, f.scans);
+      for (const d of b.dayParts) addTo(dayPart, d.part, d.cnt);
+      for (const s of b.series) series.push(num(s.cnt));
+      for (const p of b.partners) businesses.add(p.business);
+      placements += b.placements;
     }
-    for (const c of b.posterCells) addTo(posterCells, c.cell, c.posters);
-    for (const c of b.scanCells) addTo(scanCells, c.cell, c.scans);
-    for (const f of b.flows) addTo(flows, `${f.source}>${f.destination}`, f.scans);
-    for (const d of b.dayParts) addTo(dayPart, d.part, d.cnt);
-    for (const s of b.series) series.push(num(s.cnt));
-    for (const p of b.partners) businesses.add(p.business);
-    placements += b.placements;
-  }
 
-  const sourceCellIds = new Set([...posterCells.keys(), ...scanCells.keys()]);
-  const sourceCells = [...sourceCellIds].sort().map((cell) => ({
-    cell,
-    posters: posterCells.get(cell) ?? 0,
-    scans: applyCountFloor(scanCells.get(cell) ?? 0),
-  }));
+    const sourceCellIds = new Set([...posterCells.keys(), ...scanCells.keys()]);
+    const sourceCells = [...sourceCellIds].sort().map((cell) => ({
+      cell,
+      posters: posterCells.get(cell) ?? 0,
+      scans: applyCountFloor(scanCells.get(cell) ?? 0),
+    }));
 
-  // A flow under K is left out entirely, not shown as suppressed: listing the
-  // pair would tell a reader that someone scanned from that cell to that one.
-  const flowRows = [...flows.entries()]
-    .map(([k, n]) => {
-      const [source, destination] = k.split('>');
-      return { source, destination, scans: applyCountFloor(n) };
-    })
-    .filter((f) => !f.scans.suppressed)
-    .sort((a, b) => (b.scans.count ?? 0) - (a.scans.count ?? 0));
+    // A flow under K is left out entirely, not shown as suppressed: listing the
+    // pair would tell a reader that someone scanned from that cell to that one.
+    const flowRows = [...flows.entries()]
+      .map(([k, n]) => {
+        const [source, destination] = k.split('>');
+        return { source, destination, scans: applyCountFloor(n) };
+      })
+      .filter((f) => !f.scans.suppressed)
+      .sort((a, b) => (b.scans.count ?? 0) - (a.scans.count ?? 0));
 
-  return json(request, reqId, {
-    ...envelope('corridor', brands, dataClass),
-    by_category: [...cats.entries()]
-      .map(([code, events]) => ({
-        code,
-        label: labels.get(code) ?? 'Other',
-        events,
-      }))
-      .sort((a, b) => b.events - a.events || a.code.localeCompare(b.code)),
-    event_cells: [...evCells.entries()]
-      .map(([cell, v]) => ({ cell, ...v }))
-      .sort((a, b) => b.events - a.events || a.cell.localeCompare(b.cell)),
-    source_cells: sourceCells,
-    flows: flowRows,
-    day_part: Object.fromEntries(dayPart),
-    series: {
-      series: series.length,
-      events_in_series: series.reduce((a, n) => a + n, 0),
-      largest: series.length ? Math.max(...series) : 0,
-    },
-    partner_network: { sponsors: businesses.size, placements },
+    return json(request, reqId, {
+      ...envelope('corridor', brands, dataClass),
+      by_category: [...cats.entries()]
+        .map(([code, events]) => ({
+          code,
+          label: labels.get(code) ?? 'Other',
+          events,
+        }))
+        .sort((a, b) => b.events - a.events || a.code.localeCompare(b.code)),
+      event_cells: [...evCells.entries()]
+        .map(([cell, v]) => ({ cell, ...v }))
+        .sort((a, b) => b.events - a.events || a.cell.localeCompare(b.cell)),
+      source_cells: sourceCells,
+      flows: flowRows,
+      day_part: Object.fromEntries(dayPart),
+      series: {
+        series: series.length,
+        events_in_series: series.reduce((a, n) => a + n, 0),
+        largest: series.length ? Math.max(...series) : 0,
+      },
+      partner_network: { sponsors: businesses.size, placements },
+    });
   });
 }
 
@@ -644,69 +673,73 @@ export async function handleEventDashboard(
   eventId: string
 ): Promise<Response> {
   const reqId = rid();
-  const row = await first<{
-    id: string;
-    status: string | null;
-    is_published: number;
-    start_date: string | null;
-    starts_at: string | null;
-    timezone: string | null;
-  }>(
-    env.DB.prepare(
-      `SELECT id, status, is_published, start_date, starts_at, timezone
-         FROM events WHERE id = ? LIMIT 1`
-    ).bind(eventId)
-  );
-  if (!row) return fail(request, reqId, 404, 'NOT_FOUND', 'Event not found');
-
-  const now = new Date();
-  const sinceDay = new Date(now.getTime() - WINDOW_DAYS * 24 * 3600 * 1000)
-    .toISOString()
-    .slice(0, 10);
-
-  const [activity, sponsors, views, explicit] = await Promise.all([
-    readPreEventActivity(env.DB, eventId, row.timezone, now),
-    first<{ active: number; pending: number; declined: number }>(
+  return guarded(request, reqId, 'event', async () => {
+    const row = await first<{
+      id: string;
+      status: string | null;
+      is_published: number;
+      start_date: string | null;
+      starts_at: string | null;
+      timezone: string | null;
+    }>(
       env.DB.prepare(
-        `SELECT SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active,
-                SUM(CASE WHEN source = 'sponsor_request' AND organizer_accepted IS NULL
-                         THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN organizer_accepted = 0 OR sponsor_accepted = 0
-                         THEN 1 ELSE 0 END) AS declined
-           FROM sponsor_placement WHERE event_id = ?`
+        `SELECT id, status, is_published, start_date, starts_at, timezone
+           FROM events WHERE id = ? LIMIT 1`
       ).bind(eventId)
-    ),
-    first<{ cnt: number }>(
-      env.DB.prepare(
-        `SELECT COALESCE(SUM(access_count), 0) AS cnt FROM report_access_log
-          WHERE event_id = ? AND outcome = 'granted' AND date >= ?`
-      ).bind(eventId, sinceDay)
-    ),
-    explicitChoices(env.FORMS_DB, [eventId]),
-  ]);
+    );
+    if (!row) return fail(request, reqId, 404, 'NOT_FOUND', 'Event not found');
 
-  return json(request, reqId, {
-    ok: true,
-    status: 200,
-    contract: contractBlock('event'),
-    generated_at: now.toISOString(),
-    not_measured: notMeasuredFor('event'),
-    event: {
-      id: row.id,
-      status: row.status ?? 'draft',
-      is_published: num(row.is_published) === 1,
-      days_to_go: daysToGo(row, now),
-    },
-    reach: organizerPreEventActivity(activity),
-    participation: {
-      anonymous: { scans: activity.scans },
-      explicit,
-    },
-    sponsors: {
-      active: num(sponsors?.active),
-      pending_requests: num(sponsors?.pending),
-      declined: num(sponsors?.declined),
-    },
-    shared_report: { views_30d: num(views?.cnt) },
+    const now = new Date();
+    const sinceDay = new Date(now.getTime() - WINDOW_DAYS * 24 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const [activity, sponsors, views, explicit] = await Promise.all([
+      readPreEventActivity(env.DB, eventId, row.timezone, now, true),
+      first<{ on_show: number; pending: number; declined: number }>(
+        env.DB.prepare(
+          `SELECT SUM(CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN 1 ELSE 0 END) AS on_show,
+                  SUM(CASE WHEN ${PENDING_SQL} THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN sp.organizer_accepted = 0 OR sp.sponsor_accepted = 0
+                           THEN 1 ELSE 0 END) AS declined
+             FROM sponsor_placement sp
+             JOIN events e ON e.id = sp.event_id
+             JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+            WHERE sp.event_id = ?`
+        ).bind(eventId)
+      ),
+      first<{ cnt: number }>(
+        env.DB.prepare(
+          `SELECT COALESCE(SUM(access_count), 0) AS cnt FROM report_access_log
+            WHERE event_id = ? AND outcome = 'granted' AND date >= ?`
+        ).bind(eventId, sinceDay)
+      ),
+      explicitChoices(env.FORMS_DB, [eventId]),
+    ]);
+
+    return json(request, reqId, {
+      ok: true,
+      status: 200,
+      contract: contractBlock('event'),
+      generated_at: now.toISOString(),
+      not_measured: notMeasuredFor('event'),
+      event: {
+        id: row.id,
+        status: row.status ?? 'draft',
+        is_published: num(row.is_published) === 1,
+        days_to_go: daysToGo(row, now),
+      },
+      reach: organizerPreEventActivity(activity),
+      participation: {
+        anonymous: { scans: activity.scans },
+        explicit,
+      },
+      sponsors: {
+        on_show: num(sponsors?.on_show),
+        pending_requests: num(sponsors?.pending),
+        declined: num(sponsors?.declined),
+      },
+      shared_report: { views_30d: num(views?.cnt) },
+    });
   });
 }

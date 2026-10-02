@@ -27,7 +27,9 @@ import {
   DASHBOARD_METRICS,
   NOT_MEASURED,
   floorBucketsThenSum,
+  type PrivacyClass,
 } from '../src/lib/dashboard-contract';
+import { normalizeOperation } from '../src/lib/cost-metric';
 import {
   CELL_EVENT,
   CELL_SRC_1,
@@ -78,6 +80,47 @@ function reqAs(email: string, path: string): Request {
 
 type Body = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+/** Resolve a registry path (`a.b`, `list[].field`) to the values it names. */
+function resolvePath(root: unknown, path: string): unknown[] {
+  let cur: unknown[] = [root];
+  for (const seg of path.split('.')) {
+    const isList = seg.endsWith('[]');
+    const key = isList ? seg.slice(0, -2) : seg;
+    const next: unknown[] = [];
+    for (const v of cur) {
+      if (v === null || typeof v !== 'object') continue;
+      const child = (v as Body)[key];
+      if (child === undefined) continue;
+      if (isList) {
+        if (Array.isArray(child)) next.push(...child);
+      } else next.push(child);
+    }
+    cur = next;
+  }
+  return cur;
+}
+
+function isFloored(v: unknown): boolean {
+  if (v === null || typeof v !== 'object') return false;
+  const f = v as Body;
+  return (
+    typeof f.suppressed === 'boolean' &&
+    f.floor === 5 &&
+    (f.suppressed ? f.count === null : Number.isInteger(f.count) && f.count >= 5)
+  );
+}
+
+function containsFloored(v: unknown): boolean {
+  if (isFloored(v)) return true;
+  if (v === null || typeof v !== 'object') return false;
+  return Object.values(v as Body).some(containsFloored);
+}
+
+/** floored → a FlooredCount; exact classes → no FlooredCount anywhere inside. */
+function hasClassShape(v: unknown, cls: PrivacyClass): boolean {
+  return cls === 'floored' ? isFloored(v) : !containsFloored(v) && v !== undefined;
+}
+
 async function call(
   fn: (r: Request, e: DashboardsEnv) => Promise<Response>,
   req: Request
@@ -127,6 +170,47 @@ describe('contract', () => {
     }
   });
 
+  test('every metric path resolves, and the value has its class shape', async () => {
+    const responses: Record<string, Body> = {
+      operations: (await call(handleOperationsDashboard, reqAs(A, OPS))).body,
+      corridor: (await call(handleCorridorDashboard, reqAs(A, COR))).body,
+      event: (await (
+        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce)
+      ).json()) as Body,
+    };
+    for (const [id, m] of Object.entries(DASHBOARD_METRICS)) {
+      const values = resolvePath(responses[m.dashboard], m.path);
+      expect(values.length, `${id} → ${m.path} resolves`).toBeGreaterThan(0);
+      for (const v of values)
+        expect(hasClassShape(v, m.privacy), `${id} is ${m.privacy}`).toBe(true);
+    }
+  });
+
+  test('no response key is outside the registry', async () => {
+    const envelopeKeys = ['ok', 'status', 'contract', 'scope', 'generated_at', 'not_measured'];
+    const responses: Record<string, Body> = {
+      operations: (await call(handleOperationsDashboard, reqAs(A, OPS))).body,
+      corridor: (await call(handleCorridorDashboard, reqAs(A, COR))).body,
+    };
+    for (const [dash, body] of Object.entries(responses)) {
+      const covered = Object.values(DASHBOARD_METRICS)
+        .filter((m) => m.dashboard === dash)
+        .map((m) => m.path.split('.')[0].replace('[]', ''));
+      for (const key of Object.keys(body)) {
+        if (envelopeKeys.includes(key)) continue;
+        expect(covered, `${dash}.${key} is registered`).toContain(key);
+      }
+    }
+  });
+
+  test('cost labels name the dashboard routes (no masked segments)', () => {
+    expect(normalizeOperation('GET', OPS)).toBe('GET /api/v2/admin/dashboards/operations');
+    expect(normalizeOperation('GET', COR)).toBe('GET /api/v2/admin/dashboards/corridor');
+    expect(normalizeOperation('GET', `/api/v2/admin/events/${DASH.bocce}/dashboard`)).toBe(
+      'GET /api/v2/admin/events/:x/dashboard'
+    );
+  });
+
   test('floorBucketsThenSum drops sub-K buckets before the sum', () => {
     expect(floorBucketsThenSum([9, 2])).toEqual({ count: 9, suppressed: false, floor: 5 });
     expect(floorBucketsThenSum([4, 4])).toEqual({ count: null, suppressed: true, floor: 5 });
@@ -145,7 +229,7 @@ describe('founder / operations cockpit', () => {
     expect(body.reach.poster_scans).toBe(15);
     expect(body.reach.active_posters).toBe(4);
     expect(body.reach.poster_places).toBe(2);
-    expect(body.sponsors).toEqual({ active_placements: 2, pending_requests: 1 });
+    expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1 });
     expect(body.shared_report.views_30d).toBe(4);
   });
 
@@ -308,7 +392,9 @@ describe('organizer / partner report — one event', () => {
     expect(body.participation.anonymous.scans).toBe(12);
     expect(body.participation.explicit.registrations.count).toBe(7);
     expect(body.participation.explicit.email_signups.suppressed).toBe(true);
-    expect(body.sponsors).toEqual({ active: 2, pending_requests: 1, declined: 0 });
+    // on show, waiting and declined never overlap: the declined placement is
+    // still is_active = 1 and must not count as on show.
+    expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1, declined: 1 });
     expect(body.shared_report.views_30d).toBe(4);
   });
 
@@ -336,5 +422,52 @@ describe('organizer / partner report — one event', () => {
       'nope'
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe('query failures are 503, never zeroes', () => {
+  /** The real DB, except any statement naming `table` fails. */
+  function failingOn(db: D1Database, table: string): D1Database {
+    return new Proxy(db, {
+      get(target, prop) {
+        if (prop !== 'prepare') return Reflect.get(target, prop);
+        return (sql: string) => {
+          if (!sql.includes(table)) return target.prepare(sql);
+          const boom = () => Promise.reject(new Error(`no such table: ${table}`));
+          const stmt = { bind: () => stmt, all: boom, first: boom, run: boom, raw: boom };
+          return stmt;
+        };
+      },
+    });
+  }
+
+  test('operations and corridor answer 503 DB_UNAVAILABLE', async () => {
+    const broken = { ...denv, DB: failingOn(tenv.DB, 'scan_placement_events') } as DashboardsEnv;
+    for (const [fn, path] of [
+      [handleOperationsDashboard, OPS],
+      [handleCorridorDashboard, COR],
+    ] as const) {
+      const res = await fn(reqAs(A, path), broken);
+      expect(res.status, path).toBe(503);
+      expect(((await res.json()) as Body).code).toBe('DB_UNAVAILABLE');
+    }
+  });
+
+  test('a FORMS_DB failure is 503, not a suppressed zero', async () => {
+    const broken = {
+      ...denv,
+      FORMS_DB: failingOn(tenv.FORMS_DB, 'form_registrations'),
+    } as DashboardsEnv;
+    const res = await handleOperationsDashboard(reqAs(A, OPS), broken);
+    expect(res.status).toBe(503);
+  });
+
+  test('the event report is 503 on a failed read, not 404 and not zeroes', async () => {
+    const lookup = { ...denv, DB: failingOn(tenv.DB, 'FROM events') } as DashboardsEnv;
+    const a = await handleEventDashboard(reqAs(A, '/x'), lookup, DASH.bocce);
+    expect(a.status).toBe(503);
+    const reach = { ...denv, DB: failingOn(tenv.DB, 'scan_placement_events') } as DashboardsEnv;
+    const b = await handleEventDashboard(reqAs(A, '/x'), reach, DASH.bocce);
+    expect(b.status).toBe(503);
   });
 });
