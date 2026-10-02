@@ -126,3 +126,49 @@ describe('OSE-1355 admin-only draft preview', () => {
     expect(row).toEqual({ status: 'draft', is_published: 0 });
   });
 });
+
+describe('preview after publishing (the publish / unpublish loop)', () => {
+  async function seedLive(id: string, listed: 0 | 1): Promise<void> {
+    await seedDraft(id);
+    await (env as unknown as TestEnv).DB.prepare(
+      "UPDATE events SET status = 'active', qr_verified = 1, is_published = ? WHERE id = ?"
+    )
+      .bind(listed, id)
+      .run();
+  }
+
+  test('live and listed: the preview goes to the public page', async () => {
+    await seedLive('evt_preview_live_listed', 1);
+    const res = await SELF.fetch(
+      'https://t.test/api/v2/admin/events/evt_preview_live_listed/preview',
+      {
+        headers: adminHeaders(),
+        redirect: 'manual',
+      }
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get('Location')).toBe('/events/evt_preview_live_listed');
+  });
+
+  test('live but unlisted: no public page exists, so the preview renders here', async () => {
+    const id = 'evt_preview_live_unlisted';
+    await seedLive(id, 0);
+    // The public page 404s by design for an unlisted event...
+    expect((await SELF.fetch(`https://t.test/events/${id}`)).status).toBe(404);
+    // ...so a redirect there would strand the organizer on "couldn't find".
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}/preview`, {
+      headers: adminHeaders(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    const html = await res.text();
+    expect(html).toContain('Draft Preview Smoke');
+    expect(html).toContain('Live, unlisted');
+    // The note says what to do, not "once it is live".
+    expect(html).toContain('List it in admin to share it.');
+    expect(html).not.toContain('once it is live');
+    // Already published: no Publish button to press again.
+    expect(html).not.toContain('data-testid="admin-preview-go-live"');
+  });
+});
