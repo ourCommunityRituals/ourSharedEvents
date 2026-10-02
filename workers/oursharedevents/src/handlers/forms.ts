@@ -293,7 +293,7 @@ export async function handleFormRegistration(
     return handleDbError('register', eventId, err, request);
   }
 
-  logFormEvent('register', eventId, 'submit', { id, anonId, isNew, latencyMs: Date.now() - start });
+  logFormEvent('register', eventId, 'submit', { id, isNew, latencyMs: Date.now() - start });
   const res = jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
   return isNew ? setAnonCookie(res, anonId) : res;
 }
@@ -410,7 +410,6 @@ export async function handleFormCheckin(
     const count = result?.total_count ?? 1;
     logFormEvent('checkin', eventId, 'submit', {
       count,
-      anonId,
       isNew,
       latencyMs: Date.now() - start,
     });
@@ -460,7 +459,7 @@ export async function handleFormSurvey(
     return handleDbError('survey', eventId, err, request);
   }
 
-  logFormEvent('survey', eventId, 'submit', { id, anonId, isNew, latencyMs: Date.now() - start });
+  logFormEvent('survey', eventId, 'submit', { id, isNew, latencyMs: Date.now() - start });
   const res = jsonResponse({ ok: true, id }, request);
   return isNew ? setAnonCookie(res, anonId) : res;
 }
@@ -515,7 +514,6 @@ export async function handleFormEmailSignup(
     if (existing) {
       logFormEvent('email-signup', eventId, 'submit', {
         duplicate: true,
-        anonId,
         latencyMs: Date.now() - start,
       });
       const res = jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
@@ -545,7 +543,6 @@ export async function handleFormEmailSignup(
 
     logFormEvent('email-signup', eventId, 'submit', {
       id,
-      anonId,
       isNew,
       latencyMs: Date.now() - start,
     });

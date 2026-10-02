@@ -761,6 +761,7 @@ jobs:
             tests/e2e/0-architecture/csp-connect-src.invariant.spec.ts \
             tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
+            tests/e2e/0-architecture/log-redaction.invariant.spec.ts \
             tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
             tests/e2e/0-architecture/monetization-inert.invariant.spec.ts \
             tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts \
