@@ -1,8 +1,12 @@
-# T5 — Adversarial red-team run
+# T5 — Adversarial red-team run, then T6 Security Finale, then the post-T6 bookend
 #
-# This is intentionally a separate workflow run from Stage 2 — Security Finale.
-# It starts only after the full staging pipeline has passed, then Stage 2 is
-# triggered by this workflow's successful completion.
+# Starts only after the full staging pipeline (OurSharedEvents CI/CD, push on
+# main) has passed. T6 and post-T6 are jobs here, chained by `needs:`, not
+# separate workflow_run workflows: a workflow_run fired by another workflow_run
+# reports workflow_run.event == 'workflow_run', so the push-on-main gate below
+# could never pass one link down the chain. As separate workflows, T6 and
+# post-T6 skipped on every run from #743 (2026-10-01) until this change. Here
+# every job reads the CI/CD run's own event, so one gate covers the chain.
 name: T5 — Adversarial Red Team
 
 on:
@@ -64,3 +68,71 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
         run: npx playwright test --config=playwright.red-team.config.ts
+
+  security-closing:
+    name: 'T6 Closing Security (post-test integrity)'
+    needs: [red-team-staging]
+    # Same ADR-012 0.2 gate as red-team-staging (only push runs on main hold
+    # secrets); needs: adds "only after T5 succeeded".
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          clean: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: 'Closing: committed-secret gate (nothing injected during testing)'
+        run: |
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
+      - name: Install dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: 'Closing: deployed surface carries no injected content'
+        env:
+          # OSE-1418: same target as T5 (repo variable RED_TEAM_BASE_URL).
+          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          npx playwright test --config=playwright.red-team.config.ts             tests/red-team/public-list-stored-xss.spec.ts             tests/red-team/security-headers.spec.ts
+
+  post-t6-security:
+    name: 'Post-T6 Security (final bookend)'
+    needs: [security-closing]
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: 'Integrity: committed tree is clean'
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+          git diff-tree --check HEAD
+
+      - name: 'Closing: committed-secret gate'
+        run: |
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
+
+      - name: 'Closing: dependency audit'
+        run: npm audit --omit=dev --audit-level=moderate --package-lock-only
