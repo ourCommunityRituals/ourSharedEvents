@@ -15,8 +15,8 @@
  * if a cookie does arrive, the handler structurally cannot link it. Belt + brace.
  *
  * Pyramid map: L0 source shape → THIS (L1 cookie-present → no linkage) →
- * L2 Newman contract → E2E (anonymous-id.invariant.spec.ts: real request sends
- * no Cookie; anchor rel has noreferrer).
+ * L2 Bruno contract (bruno/ose-api, folder 11) → E2E (anonymous-id.invariant.spec.ts:
+ * real request sends no Cookie). The anchor rel is locked at L0.
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';

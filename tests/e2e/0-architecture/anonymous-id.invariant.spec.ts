@@ -290,36 +290,69 @@ test.describe('Invariant: Anonymous ID — Two-Database Separation', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Invariant: Sponsor Signal Never-Who — cookie not transmitted', () => {
-  test('impression request does not carry ose_anon even when the cookie is set (credentials:omit)', async ({
-    page,
-    baseURL,
-  }) => {
-    test.skip(!baseURL, 'no baseURL configured');
-    // Plant the anonymous-scan cookie for this origin, as a returning attendee
-    // (who already scanned) would carry. credentials:'omit' on the client fetch
-    // must still keep it off the sponsor-signal request → never-who is structural.
-    await page.context().addCookies([{ name: 'ose_anon', value: 'anon_e2e_probe', url: baseURL! }]);
+  // OSE-1166: this used to open bare /display, which features whatever event is
+  // first on the environment. On staging that event has no sponsor, so no
+  // impression fired and the test skipped on every run while T4a stayed green.
+  // It now opens the seeded sponsored event on both surfaces that fire the
+  // signal, and a sponsored event that fires nothing is a failure, not a skip.
+  for (const [surface, path] of [
+    ['display', '/display'],
+    ['public', '/events'],
+  ] as const) {
+    test(`${surface}: impression request does not carry ose_anon even when the cookie is set (credentials:omit)`, async ({
+      page,
+      baseURL,
+    }) => {
+      test.skip(!baseURL, 'precondition unmet: no baseURL configured');
+      test.skip(
+        !SPONSORED_EVENT,
+        'precondition unmet: SMOKE_EVENT_SPONSORED is not set, so there is no event known to show a sponsor'
+      );
+      // Plant the anonymous-scan cookie for this origin, as a returning attendee
+      // (who already scanned) would carry. credentials:'omit' on the client fetch
+      // must still keep it off the sponsor-signal request → never-who is structural.
+      await page
+        .context()
+        .addCookies([{ name: 'ose_anon', value: 'anon_e2e_probe', url: baseURL! }]);
 
-    const cookieHeadersSeen: string[] = [];
-    await page.route('**/impression', async (route) => {
-      const headers = await route.request().allHeaders();
-      cookieHeadersSeen.push(headers['cookie'] ?? '');
-      await route.continue();
-    });
+      const impressionCookies: string[] = [];
+      await page.route('**/impression', async (route) => {
+        const headers = await route.request().allHeaders();
+        impressionCookies.push(headers['cookie'] ?? '');
+        await route.continue();
+      });
+      // Control: the same page's sponsor-bundle read is an ordinary same-origin
+      // fetch, so it DOES carry the cookie. Without this, "no cookie on the
+      // impression" would also pass if the cookie had never been planted.
+      const bundleCookies: string[] = [];
+      await page.route('**/sponsor-bundle*', async (route) => {
+        const headers = await route.request().allHeaders();
+        bundleCookies.push(headers['cookie'] ?? '');
+        await route.continue();
+      });
 
-    await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-    await page.waitForTimeout(3000); // let the impression fetch(es) fire
+      await page.goto(`${path}?event=${encodeURIComponent(SPONSORED_EVENT)}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: TIMEOUT,
+      });
+      await expect
+        .poll(() => impressionCookies.length, {
+          timeout: TIMEOUT,
+          message: `${path}?event=${SPONSORED_EVENT} fired no sponsor impression — the seeded sponsored event shows no sponsor here, so this test proved nothing`,
+        })
+        .toBeGreaterThan(0);
 
-    test.skip(
-      cookieHeadersSeen.length === 0,
-      'no sponsor impressions fired — no sponsored event on this environment'
-    );
-    for (const cookie of cookieHeadersSeen) {
       expect(
-        cookie,
-        'sponsor impression request must not carry ose_anon — credentials:omit makes the ' +
-          '"no link back to you" guarantee structural, not behavioral (OSE-1164)'
-      ).not.toContain('ose_anon');
-    }
-  });
+        bundleCookies.some((c) => c.includes('ose_anon')),
+        'control: the planted ose_anon cookie must reach an ordinary same-origin request'
+      ).toBe(true);
+      for (const cookie of impressionCookies) {
+        expect(
+          cookie,
+          'sponsor impression request must not carry ose_anon — credentials:omit makes the ' +
+            '"no link back to you" guarantee structural, not behavioral (OSE-1164)'
+        ).not.toContain('ose_anon');
+      }
+    });
+  }
 });
