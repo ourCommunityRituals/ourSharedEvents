@@ -233,6 +233,13 @@ describe('OSE-1355 — a draft renders the real pre-event page, marked as a prev
     expect(html).not.toMatch(/<form[\s>]/);
   });
 
+  test('a draft preview shows no venue map image: the image route serves public events only', async () => {
+    await seed('evt_dp_map', 'draft');
+    const html = await (await preview('evt_dp_map')).text();
+    expect(html).toContain('Eagles Bowl'); // the venue itself is still shown
+    expect(html).not.toContain('/api/v2/maps/venue-image');
+  });
+
   test('CSP stays nonce-based: every inline script carries the header nonce, no on* handlers', async () => {
     await seed('evt_dp_csp', 'draft');
     const res = await preview('evt_dp_csp');

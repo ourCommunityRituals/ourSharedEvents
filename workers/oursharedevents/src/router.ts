@@ -264,7 +264,8 @@ import {
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
-import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
+import { type MapsEnv } from './lib/maps';
+import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
 import {
@@ -1678,19 +1679,20 @@ export async function route(
     return handleSponsorLogo(request, env, logoMatch[1]);
   }
 
-  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
   // GET /api/v2/uploads/*key — serve R2 file (OSE-200)
   const uploadServeMatch = pathname.match(/^\/api\/v2\/uploads\/(.+)$/);
   if (uploadServeMatch && method === 'GET') {
     return handleGetUploadedFile(request, env, uploadServeMatch[1]);
   }
 
-  // GET /api/v2/maps/venue-image?venue=<encoded>
+  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/maps/venue-image?event=<id>
   // Proxies Google Static Maps API server-side so the API key never reaches
-  // the browser. Used by SharedReports to render venue map thumbnails.
+  // the browser. Each cache miss is a billed Google load, so the route is
+  // rate-limited, keyed by a public event (never free text) and edge-cached
+  // (handlers/venue-image.ts).
   if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
-    const venueParam = url.searchParams.get('venue') ?? '';
-    return fetchStaticMapImage(env, venueParam);
+    return publicReadLimited('venue-image', handleVenueImage)(request, env);
   }
 
   // ── Public: self-delete a registration (OSE-659) ───────────────────────────

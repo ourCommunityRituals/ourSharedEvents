@@ -144,7 +144,8 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     expect(html).toContain('12345 South Western Ave'); // where_address
 
     // Venue map proxy reference
-    expect(html).toContain('/api/v2/maps/venue-image?venue=');
+    expect(html).toContain(`/api/v2/maps/venue-image?event=${eventId}`);
+    expect(html).not.toContain('venue-image?venue=');
     expect(html).toContain('data-testid="venue-map"');
     expect(html).toContain('data-testid="geo-link"');
 
