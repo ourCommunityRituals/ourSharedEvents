@@ -25,6 +25,15 @@ vi.mock('../src/google/auth', () => ({
 }));
 
 import { BIGQUERY_DATASETS } from '../src/lib/pool-contract';
+import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
+
+// OSE-1416: every row a test sends must fit its pool table (bigquery/*.schema.json),
+// or the real insertAll would reject it. Checked after every test in this file.
+const schemaViolations: string[] = [];
+afterEach(() => {
+  const found = schemaViolations.splice(0);
+  expect(found, 'a BigQuery row does not fit its pool table (bigquery/*.schema.json)').toEqual([]);
+});
 
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
@@ -316,6 +325,10 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
         if (m) {
           const body = init?.body ? JSON.parse(init.body as string) : { rows: [] };
           bqCalls.push({ dataset: m[1], tableId: m[2], rows: body.rows ?? [] });
+          // Pool datasets only: the legacy flat backup dataset has its own table shape.
+          if (/^oureventring_/.test(m[1]))
+            for (const r of (body.rows ?? []) as Array<{ json: Record<string, unknown> }>)
+              schemaViolations.push(...poolSchemaViolations(m[2], r.json));
           return new Response(JSON.stringify({}), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },

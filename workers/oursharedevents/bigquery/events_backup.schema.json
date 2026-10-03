@@ -1,0 +1,102 @@
+[
+  {
+    "name": "corridor_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "H3 res-7 cell, or 'unknown' (ADR-011: never finer than corridor grain)"
+  },
+  {
+    "name": "venue_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "event_type",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "uec_code",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "regulatory_pool",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Only 'general' exists; HIPAA/COPPA are declined (OSE-1220)"
+  },
+  {
+    "name": "product_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Always 'ose'"
+  },
+  {
+    "name": "id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "events.id"
+  },
+  {
+    "name": "brand_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "title",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "slug",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "start_date",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Copied as text from D1"
+  },
+  {
+    "name": "end_date",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Copied as text from D1"
+  },
+  {
+    "name": "timezone",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "IANA zone"
+  },
+  {
+    "name": "created_at",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Copied as text from D1"
+  },
+  {
+    "name": "updated_at",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Copied as text from D1; dedupe on (id, updated_at)"
+  },
+  {
+    "name": "legal_clearance_tier",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "backed_up_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "When the Worker sent the row"
+  }
+]

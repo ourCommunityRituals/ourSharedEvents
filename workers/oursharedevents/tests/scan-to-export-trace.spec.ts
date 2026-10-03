@@ -39,7 +39,7 @@
  * (OSE-613 / OSE-603, not built).
  */
 
-import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 
 vi.mock('../src/google/auth', () => ({
@@ -62,6 +62,15 @@ import {
 import { phaseTimesFor } from '../src/lib/event-datetime';
 import { bigQueryInsertRows } from '../src/cloud/bigquery';
 import { gridDisk } from 'h3-js';
+import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
+
+// OSE-1416: every row a test sends must fit its pool table (bigquery/*.schema.json),
+// or the real insertAll would reject it. Checked after every test in this file.
+const schemaViolations: string[] = [];
+afterEach(() => {
+  const found = schemaViolations.splice(0);
+  expect(found, 'a BigQuery row does not fit its pool table (bigquery/*.schema.json)').toEqual([]);
+});
 
 interface TestEnv {
   DB: D1Database;
@@ -127,6 +136,10 @@ function installBqMock(insertResponse: Record<string, unknown> | string = {}): v
       if (m) {
         const body = init?.body ? JSON.parse(init.body as string) : { rows: [] };
         bqCalls.push({ dataset: m[1], table: m[2], rows: body.rows ?? [] });
+        // Pool datasets only: the legacy flat backup dataset has its own table shape.
+        if (/^oureventring_/.test(m[1]))
+          for (const r of (body.rows ?? []) as Array<{ json: Record<string, unknown> }>)
+            schemaViolations.push(...poolSchemaViolations(m[2], r.json));
         const text =
           typeof insertResponse === 'string' ? insertResponse : JSON.stringify(insertResponse);
         return new Response(text, {

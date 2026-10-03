@@ -50,6 +50,15 @@ import {
 } from '../src/lib/pool-contract';
 import corridorReturnsSchema from '../bigquery/corridor_returns_export.schema.json';
 import { pepperEpoch } from '../src/lib/anon-id-hash';
+import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
+
+// OSE-1416: every row a test sends must fit its pool table (bigquery/*.schema.json),
+// or the real insertAll would reject it. Checked after every test in this file.
+const schemaViolations: string[] = [];
+afterEach(() => {
+  const found = schemaViolations.splice(0);
+  expect(found, 'a BigQuery row does not fit its pool table (bigquery/*.schema.json)').toEqual([]);
+});
 
 interface TestEnv {
   DB: D1Database;
@@ -253,6 +262,10 @@ function installBqMock(): void {
         const tableId = m[2];
         const body = init?.body ? JSON.parse(init.body as string) : { rows: [] };
         bqCalls.push({ url, dataset, tableId, rows: body.rows ?? [] });
+        // Pool datasets only: the legacy flat backup dataset has its own table shape.
+        if (/^oureventring_/.test(dataset))
+          for (const r of (body.rows ?? []) as Array<{ json: Record<string, unknown> }>)
+            schemaViolations.push(...poolSchemaViolations(tableId, r.json));
         return new Response(JSON.stringify({}), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -592,7 +605,9 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
                           if (p3 === 'all') {
                             return async () => {
                               await target
-                                .prepare(`UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`)
+                                .prepare(
+                                  `UPDATE bigquery_export_state SET last_exported_at = ? WHERE table_name = ?`
+                                )
                                 .bind(otherClaim, RETURNS_SNAPSHOT_CLAIM_STATE)
                                 .run();
                               return b.all();

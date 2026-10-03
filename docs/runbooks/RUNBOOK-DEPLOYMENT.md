@@ -338,26 +338,31 @@ npx wrangler d1 execute DB --env "$ENV" --remote \
 
 The visitor-country cleanup (0089) needs no such step: the nightly roll-up clears any `country_code` a Worker wrote in the deploy window (`aggregateScanBuckets`, OSE-1460).
 
-### Create the corridor-returns BigQuery table before the first export (OSE-1460)
+### Create the BigQuery pool tables before the first export (OSE-1460, OSE-1416)
 
-**Why:** the nightly export streams rows with `tabledata.insertAll`, which fails if the table does not exist; BigQuery does not create it on first insert. `corridor_returns_export` is new in OSE-1460. Its schema is checked in at `workers/oursharedevents/bigquery/corridor_returns_export.schema.json`, and `tests/shared-report-bigquery-export.spec.ts` fails if the export sends a field the schema lacks.
+**Why:** the nightly backup and SharedReport exports stream rows with `tabledata.insertAll`, which fails if the table does not exist; BigQuery does not create it on first insert. Staging's 2026-10-02 03:01Z run failed exactly this way (`404 Not found: Table …oureventring_general_stg.events_backup`, and the same for `corridor_returns_export`). Every pool dataset needs four tables: `events_backup`, `corridor_returns_export`, `corridor_density_baseline_export` and `event_series_export`. Their schemas are checked in at `workers/oursharedevents/bigquery/<table>.schema.json`. The export specs (`oer-boundary`, `shared-report-bigquery-export`, `scan-to-export-trace`) fail if any row they send does not fit its file (`tests/helpers/bigquery-pool-schema.ts`).
 
-**When:** once per environment, before the deploy that carries OSE-1460 runs its first nightly export (`0 3 * * *` UTC).
+**When:** once per environment, before that environment's first nightly run (`0 3 * * *` UTC).
 
-**Datasets:** staging writes `oureventring_general_stg`, which exists (US, read 2026-10-01). Production writes `oureventring_general`, which does **not** exist yet, so production creates the dataset first.
+**State:** staging's `oureventring_general_stg` holds all four tables (created 2026-10-02 with the script below). Production's `oureventring_general` does **not** exist yet.
 
 ```bash
 PROJECT=project-7cc9adcd-ed55-47aa-958
 DATASET=oureventring_general_stg   # production: DATASET=oureventring_general
 cd workers/oursharedevents
-bq --project_id="$PROJECT" show "$DATASET" >/dev/null 2>&1 \
-  || bq --project_id="$PROJECT" mk --dataset --location=US "$DATASET"   # production only, first time
-bq --project_id="$PROJECT" mk --table "$DATASET.corridor_returns_export" bigquery/corridor_returns_export.schema.json
+# Production only, first time: create the dataset, then let only production's Worker write it.
+bq --project_id="$PROJECT" show "$DATASET" >/dev/null 2>&1   || bq --project_id="$PROJECT" mk --dataset --location=US "$DATASET"
+bash scripts/bq-create-pool-tables.sh "$PROJECT" "$DATASET"   # idempotent; never alters an existing table
 ```
 
-**Verify:** `bq --project_id="$PROJECT" show --schema "$DATASET.corridor_returns_export"` lists the 15 fields.
+On production, also grant the dataset to production's Worker **only** (OSE-1416; staging's datasets are granted to `attribute.env/staging` the same way). Run this in the BigQuery console or `bq query --nouse_legacy_sql`:
 
-**Not covered here:** `corridor_density_baseline_export` and `event_series_export` predate OSE-1460 and also have no checked-in schema; they were never created either (staging's dataset held no tables on 2026-10-01). Creating them is separate work.
+```sql
+GRANT `roles/bigquery.dataEditor` ON SCHEMA `project-7cc9adcd-ed55-47aa-958.oureventring_general`
+TO "principalSet://iam.googleapis.com/projects/295230478705/locations/global/workloadIdentityPools/cf-workers-pool/attribute.env/production";
+```
+
+**Verify:** `bq --project_id="$PROJECT" ls "$DATASET"` lists the four tables, each partitioned by day and clustered on `corridor_id`. After the next 03:00 UTC run, `SELECT * FROM export_manifest WHERE export_type = 'BIGQUERY' ORDER BY created_at DESC LIMIT 4` (D1) shows no `404 Not found` and no `PERMISSION_DENIED`.
 
 ### Purge return rows after migration 0091 and after any `ANON_ID_HASH_PEPPER` rotation (OSE-1460)
 
