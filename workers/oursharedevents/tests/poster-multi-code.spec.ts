@@ -44,7 +44,7 @@ const OW = 'https://ourwkrp.example.org/playlists/bocce-night';
 interface Code {
   kind: string;
   word: string;
-  tone: string;
+  uec: { id: string; color: string; scan_hex: string };
   code: string;
   url: string;
   target_url: string | null;
@@ -201,14 +201,15 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
     }
   });
 
-  test('word + tone per kind: green only for check-in, blue only for donate', () => {
+  test('word + UEC per kind: check-in is CHECK-IN, donate is SHOP, the event page is UTILITY', () => {
     const by = Object.fromEntries(saved.map((c) => [c.kind, c]));
     expect(by.checkin.word).toBe('CHECK IN');
-    expect(by.checkin.tone).toBe('checkin');
+    expect(by.checkin.uec).toMatchObject({ id: 'CHECK-IN', color: 'Teal' });
     expect(by.donation.word).toBe('DONATE');
-    expect(by.donation.tone).toBe('donate');
-    expect(by.public.tone).toBe('neutral');
-    if (by.ow) expect(by.ow.tone).toBe('neutral');
+    expect(by.donation.uec).toMatchObject({ id: 'SHOP', color: 'Dark Teal' });
+    expect(by.public.uec.id).toBe('UTILITY');
+    if (by.ow) expect(by.ow.uec.id).toBe('UTILITY');
+    for (const c of saved) expect(c.uec.scan_hex).toMatch(/^#[0-9A-F]{6}$/i);
   });
 
   test('check-in is built server-side (the check-in form); a client-sent target is dropped', async () => {
@@ -281,14 +282,14 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
     );
   });
 
-  test('the poster bundle renders the saved codes in order, each with word + tone, all /s/ (never /q/)', async () => {
+  test('the poster bundle renders the saved codes in order, each with word + UEC, all /s/ (never /q/)', async () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/events/${EVT}/poster-bundle`);
     expect(res.status).toBe(200);
     const bundle = (await res.json()) as {
       slots: Array<{
         kind: string;
         word: string;
-        tone: string;
+        uec: { id: string; scan_hex: string };
         code: string;
         url: string;
         qr: string;
@@ -297,7 +298,8 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
     expect(bundle.slots.map((s) => s.code)).toEqual(saved.map((c) => c.code));
     for (const s of bundle.slots) {
       expect(s.word.length).toBeGreaterThan(0);
-      expect(['checkin', 'donate', 'neutral']).toContain(s.tone);
+      expect(s.uec.id.length).toBeGreaterThan(0);
+      expect(s.uec.scan_hex).toMatch(/^#[0-9A-F]{6}$/i);
       expect(s.url).toBe(`${ORIGIN}/s/${s.code}`);
       expect(s.url).not.toContain('/q/');
       expect(s.qr).toMatch(/^data:image\//);

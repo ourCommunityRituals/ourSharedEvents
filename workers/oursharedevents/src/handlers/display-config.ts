@@ -39,9 +39,11 @@ export interface DisplayConfigEnv {
   DB: D1Database;
 }
 
-// UEC 07 UTILITY (Charcoal, "General · Info") is the code for a schedule or
-// other general link — Invariant #3: the colour is the instruction.
-const UTILITY_HEX = getCode('UTILITY')!.scan_hex;
+// UEC 02 LIVE (Coral: "live scoring, real-time brackets") is the code for a
+// league's schedule, standings or bracket — the same code the poster's LEAGUE
+// link prints as (lib/poster-codes.ts). Invariant #3: the colour is the
+// instruction. PO-confirmed 2026-10-03 (was UTILITY).
+const LEAGUE_HEX = getCode('LIVE')!.scan_hex;
 
 const LEAGUE_LABELS: Record<LeagueLinkKind, string> = {
   schedule: 'Schedule',
@@ -53,13 +55,13 @@ export interface LeagueItem {
   kind: LeagueLinkKind;
   label: string;
   url: string;
-  /** PNG data URI in the UEC UTILITY colour, or null if the link is too long to encode. */
+  /** PNG data URI in the UEC LIVE colour, or null if the link is too long to encode. */
   qr: string | null;
 }
 
 function qrFor(url: string): string | null {
   try {
-    return generateQrCode(url, { fgColor: UTILITY_HEX, errorCorrection: 'L', scale: 6 });
+    return generateQrCode(url, { fgColor: LEAGUE_HEX, errorCorrection: 'L', scale: 6 });
   } catch {
     return null; // longer than QR version 7 holds: the link text still shows
   }
@@ -107,7 +109,7 @@ export async function handleDisplayConfig(
 
 /**
  * Everything the response depends on except the QR images. A QR is a pure
- * function of its link and the options in qrFor() (the UEC UTILITY colour,
+ * function of its link and the options in qrFor() (the UEC LIVE colour,
  * error correction, scale), so hashing this plus those inputs identifies the
  * full body exactly. QR_VERSION is bumped for an encoder change; the colour
  * is hashed directly, so a UEC palette change also changes the ETag. That lets a TV's
@@ -138,7 +140,7 @@ async function withEtag(
   { withQr }: { withQr: boolean }
 ): Promise<Response> {
   const shape = configShape(row);
-  const etag = await strongEtag(`${QR_VERSION}|${UTILITY_HEX}|${JSON.stringify(shape)}`);
+  const etag = await strongEtag(`${QR_VERSION}|${LEAGUE_HEX}|${JSON.stringify(shape)}`);
   const cacheHeaders = {
     ...headers,
     ETag: etag,

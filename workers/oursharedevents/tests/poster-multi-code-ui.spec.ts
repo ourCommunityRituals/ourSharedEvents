@@ -12,9 +12,15 @@
 
 import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { getCode } from '../src/lib/uec';
 import ADMIN_HTML from '../src/templates/admin.html';
 import POSTER_HTML from '../src/templates/poster.html';
 
+// A code's UEC as the server sends it, read from the registry.
+const UEC = (id: string) => {
+  const c = getCode(id)!;
+  return { id: c.id, color: c.label, scan_hex: c.scan_hex };
+};
 const EVT = 'evt_multi_ui_1357';
 const QR = 'data:image/png;base64,iVBORw0KGgo=';
 const KINDS = [
@@ -22,12 +28,12 @@ const KINDS = [
     kind: 'checkin',
     word: 'CHECK IN',
     choice: 'Anonymous check-in',
-    tone: 'checkin',
+    uec: UEC('CHECK-IN'),
     needs_url: false,
   },
-  { kind: 'donation', word: 'DONATE', choice: 'Donation link', tone: 'donate', needs_url: true },
-  { kind: 'signup', word: 'SIGN UP', choice: 'Sign-up link', tone: 'neutral', needs_url: true },
-  { kind: 'ow', word: 'MUSIC', choice: 'ourWKRP link', tone: 'neutral', needs_url: true },
+  { kind: 'donation', word: 'DONATE', choice: 'Donation link', uec: UEC('SHOP'), needs_url: true },
+  { kind: 'signup', word: 'SIGN UP', choice: 'Sign-up link', uec: UEC('ENTER'), needs_url: true },
+  { kind: 'ow', word: 'MUSIC', choice: 'ourWKRP link', uec: UEC('UTILITY'), needs_url: true },
 ];
 const code = (kind: string, c: string, extra: Record<string, unknown> = {}) => ({
   kind,
@@ -222,7 +228,7 @@ describe('admin | Codes on the poster', () => {
     ).toBe(true);
   });
 
-  test('each code: one big word + icon, colour only as a second channel (green check-in, blue donate)', async () => {
+  test('each code: one big word + icon, its UEC colour as a second channel, with the UEC name in text', async () => {
     const { rows } = await mountAdmin();
     const [pub, chk, don] = rows();
     expect(chk.querySelector('[data-testid="poster-code-word"]')!.textContent).toContain(
@@ -230,9 +236,17 @@ describe('admin | Codes on the poster', () => {
     );
     expect(don.querySelector('[data-testid="poster-code-word"]')!.textContent).toContain('DONATE');
     expect(chk.querySelector('.pc-icon')!.textContent!.length).toBeGreaterThan(0);
-    expect(chk.classList.contains('tone-checkin')).toBe(true);
-    expect(don.classList.contains('tone-donate')).toBe(true);
-    expect(pub.classList.contains('tone-neutral')).toBe(true);
+    expect(chk.getAttribute('data-uec')).toBe('CHECK-IN');
+    expect(don.getAttribute('data-uec')).toBe('SHOP');
+    expect((chk as HTMLElement).style.borderLeftColor).not.toBe('');
+    expect((don as HTMLElement).style.borderLeftColor).not.toBe('');
+    expect((don as HTMLElement).style.borderLeftColor).not.toBe(
+      (chk as HTMLElement).style.borderLeftColor
+    );
+    // The UEC name is text too, unless it only repeats the word.
+    expect(don.querySelector('[data-testid="poster-code-uec"]')!.textContent).toBe('· SHOP');
+    expect(chk.querySelector('[data-testid="poster-code-uec"]')!.textContent).toBe('');
+    expect(pub.querySelector('[data-testid="poster-code-word"]')!.textContent).toContain('EVENT');
   });
 
   test('short link + Copy come FIRST, then the QR; Copy copies the link built from the code', async () => {
@@ -446,7 +460,7 @@ const BUNDLE_SLOTS = [
   {
     kind: 'public',
     word: 'EVENT',
-    tone: 'neutral',
+    uec: UEC('UTILITY'),
     label: 'Event page',
     code: 'Pub001',
     url: 'https://ose.test/s/Pub001',
@@ -455,7 +469,7 @@ const BUNDLE_SLOTS = [
   {
     kind: 'checkin',
     word: 'CHECK IN',
-    tone: 'checkin',
+    uec: UEC('CHECK-IN'),
     label: 'Check in',
     code: 'Chk001',
     url: 'https://ose.test/s/Chk001',
@@ -464,7 +478,7 @@ const BUNDLE_SLOTS = [
   {
     kind: 'donation',
     word: 'DONATE',
-    tone: 'donate',
+    uec: UEC('SHOP'),
     label: 'Donate',
     code: 'Don001',
     url: 'https://ose.test/s/Don001',
@@ -473,7 +487,7 @@ const BUNDLE_SLOTS = [
   {
     kind: 'ow',
     word: 'MUSIC',
-    tone: 'neutral',
+    uec: UEC('UTILITY'),
     label: 'Listen on ourWKRP',
     code: 'Ow0001',
     url: 'https://ose.test/s/Ow0001',
@@ -546,7 +560,7 @@ describe('/poster | CCR PR701 F2: the switch governs PRINTED QR codes only', () 
 });
 
 describe('/poster | every code, in order, word + colour', () => {
-  test('print: each code renders its word, tone class, QR and the printed short link, in the saved order', async () => {
+  test('print: each code renders its word, UEC colour + name, QR and the printed short link, in the saved order', async () => {
     const { doc } = await mountPoster('print', BUNDLE_SLOTS);
     const cards = Array.from(doc.querySelectorAll('#poster-qr-slots .code-card'));
     expect(cards.map((c) => c.getAttribute('data-testid'))).toEqual([
@@ -556,16 +570,20 @@ describe('/poster | every code, in order, word + colour', () => {
       'poster-qr-slot-ow',
     ]);
     const chk = doc.querySelector('[data-testid="poster-qr-slot-checkin"]')!;
-    expect(chk.classList.contains('tone-checkin')).toBe(true);
+    const don = doc.querySelector('[data-testid="poster-qr-slot-donation"]') as HTMLElement;
+    const ow = doc.querySelector('[data-testid="poster-qr-slot-ow"]') as HTMLElement;
+    expect(chk.getAttribute('data-uec')).toBe('CHECK-IN');
     expect(chk.querySelector('.code-word')!.textContent).toContain('CHECK IN');
-    expect(
-      doc
-        .querySelector('[data-testid="poster-qr-slot-donation"]')!
-        .classList.contains('tone-donate')
-    ).toBe(true);
-    expect(
-      doc.querySelector('[data-testid="poster-qr-slot-ow"]')!.classList.contains('tone-neutral')
-    ).toBe(true);
+    expect(don.getAttribute('data-uec')).toBe('SHOP');
+    expect(ow.getAttribute('data-uec')).toBe('UTILITY');
+    // The band is the UEC scan colour: set, and different per code.
+    expect(don.style.borderTopColor).not.toBe('');
+    expect(don.style.borderTopColor).not.toBe((chk as HTMLElement).style.borderTopColor);
+    // Never colour alone: the UEC name prints beside the word (unless it repeats it).
+    expect(doc.querySelector('[data-testid="poster-qr-slot-uec-donation"]')!.textContent).toContain(
+      'SHOP'
+    );
+    expect(doc.querySelector('[data-testid="poster-qr-slot-uec-checkin"]')).toBeNull();
     for (const s of BUNDLE_SLOTS) {
       expect(
         (doc.querySelector(`[data-testid="qr-img-slot-${s.kind}"]`) as HTMLImageElement).src
@@ -616,24 +634,24 @@ describe('/poster | every code, in order, word + colour', () => {
     ).toContain('<img');
   });
 
-  test('no raw hex and no size keyed to a kind: the tone classes only colour a same-width band', () => {
+  test('no raw hex and no colour rule of its own: the band colour is the UEC registry colour', () => {
     const style = POSTER_HTML.slice(
       POSTER_HTML.indexOf('.code-card {'),
       POSTER_HTML.indexOf('.qr-section {')
     );
     expect(style).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-    expect(style).toContain('var(--success)');
-    expect(style).toContain('var(--info)');
-    for (const tone of ['.tone-checkin', '.tone-donate']) {
-      const rule = style.slice(style.indexOf(tone), style.indexOf('}', style.indexOf(tone)));
-      expect(rule).not.toMatch(/width|height|font-size|padding|margin/);
-    }
+    expect(POSTER_HTML).not.toContain('.tone-');
+    // A hue reaches the page only as a validated #rrggbb from the bundle.
+    expect(POSTER_HTML).toContain(
+      "/^#[0-9A-Fa-f]{6}$/.test(String((s.uec && s.uec.scan_hex) || ''))"
+    );
+    expect(POSTER_HTML).toContain('el.style.borderTopColor = hex');
     const admin = ADMIN_HTML.slice(
       ADMIN_HTML.indexOf('.pc-list {'),
       ADMIN_HTML.indexOf('.pc-qr {')
     );
     expect(admin).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-    expect(admin).toContain('var(--success)');
-    expect(admin).toContain('var(--info)');
+    expect(admin).not.toContain('.tone-');
+    expect(ADMIN_HTML).toContain('li.style.borderLeftColor = uec.scan_hex');
   });
 });

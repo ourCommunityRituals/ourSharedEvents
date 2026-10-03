@@ -32,6 +32,14 @@
 // THE THING COUNTED IS THE THING SHOWN: each corridor's count is exactly the
 // events its hex links.
 //
+// PLACE NAMES (2026-10-03). A hexagon alone does not say where it is, so each
+// area carries a name taken from the events in it: the town in their public
+// address ("…, Blue Island, IL 60406" or "Venue, Chicago IL"), else "near
+// <venue>". Both fields are already public (the event projection); no
+// coordinate is read and nothing is looked up. This is the free base for every
+// tier — there is no map service behind it. An area whose events carry neither
+// stays a number.
+//
 // The landing's type / modality / product radios do not re-draw the map (it is
 // CSS-only, no JS), so the caption says what the map shows: every kind, the
 // next CORRIDOR_WINDOW_DAYS days. The filtered list sits right below.
@@ -52,12 +60,18 @@ export interface AttendeeMapItem {
   endDateISO?: unknown;
   phase?: unknown;
   h3_res7?: unknown;
+  /** Public venue name and address — read only to NAME the area. */
+  venue?: unknown;
+  location?: unknown;
+  where_address?: unknown;
 }
 
 export interface AttendeeMapArea {
   cell: string;
   /** 1-based number printed in the hex and the legend. */
   n: number;
+  /** Town, or "near <venue>"; '' when the events carry neither. */
+  name: string;
   events: { id: string; name: string }[];
 }
 
@@ -92,12 +106,55 @@ function corridorCell(v: unknown): string | null {
   return getResolution(cell) === CORRIDOR_RES ? cell : null;
 }
 
+const STATE_ZIP = /^[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?$/;
+const TOWN_STATE = /^(.+?)\s+[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?$/;
+const COUNTRY = /^(?:USA?|United States(?: of America)?)\.?$/i;
+const NAME_MAX = 40;
+/** Names are drawn inside the hexagons only while there is room for them. */
+const SVG_NAME_MAX_AREAS = 4;
+const SVG_NAME_MAX_CHARS = 16;
+
+/** A town is letters, spaces and a little punctuation — never a street number. */
+function asTown(v: string): string | null {
+  const t = v.trim();
+  return t.length >= 2 && t.length <= NAME_MAX && /^[\p{L} .'-]+$/u.test(t) ? t : null;
+}
+
+/** The town in a US-style address or "Venue, Town ST" line, else null. */
+export function townOf(text: unknown): string | null {
+  const parts = str(text)
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  while (parts.length && COUNTRY.test(parts[parts.length - 1]!)) parts.pop();
+  if (parts.length < 2) return null;
+  const last = parts[parts.length - 1]!;
+  if (STATE_ZIP.test(last)) return asTown(parts[parts.length - 2]!);
+  const m = TOWN_STATE.exec(last);
+  return m ? asTown(m[1]!) : null;
+}
+
+function mostCommon(values: (string | null)[]): string {
+  const tally = new Map<string, number>();
+  for (const v of values) if (v) tally.set(v, (tally.get(v) ?? 0) + 1);
+  return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? '';
+}
+
+/** Name an area from its events: the commonest town, else "near <venue>". */
+function areaName(places: { town: string | null; venue: string | null }[]): string {
+  const town = mostCommon(places.map((p) => p.town));
+  if (town) return town;
+  const venue = mostCommon(places.map((p) => p.venue));
+  return venue ? `near ${venue}` : '';
+}
+
 /** Group the drawable events by corridor cell, most events first. */
 export function attendeeMapAreas(
   items: readonly AttendeeMapItem[] | null | undefined,
   now: Date = new Date()
 ): { areas: AttendeeMapArea[]; count: number } {
   const byCell = new Map<string, { id: string; name: string }[]>();
+  const places = new Map<string, { town: string | null; venue: string | null }[]>();
   for (const e of items ?? []) {
     if (!isInForwardWindow(e, now)) continue;
     const cell = corridorCell(e.h3_res7);
@@ -105,19 +162,56 @@ export function attendeeMapAreas(
     const list = byCell.get(cell) ?? [];
     list.push({ id: str(e.id), name: str(e.name) || 'Untitled event' });
     byCell.set(cell, list);
+    const venueLine = str(e.venue) || str(e.location);
+    const venue = venueLine.split(',')[0]!.trim().slice(0, NAME_MAX) || null;
+    const seen = places.get(cell) ?? [];
+    seen.push({ town: townOf(e.where_address) ?? townOf(venueLine), venue });
+    places.set(cell, seen);
   }
   const sorted = [...byCell.entries()]
     .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
     .slice(0, MAX_MAP_AREAS);
-  const areas = sorted.map(([cell, events], i) => ({ cell, n: i + 1, events }));
+  const areas = sorted.map(([cell, events], i) => ({
+    cell,
+    n: i + 1,
+    name: areaName(places.get(cell) ?? []),
+    events,
+  }));
   return { areas, count: areas.reduce((s, a) => s + a.events.length, 0) };
 }
+
+// Below the gate the map shows an EXAMPLE, clearly labelled, so a first-time
+// visitor sees what the map becomes (PO, 2026-10-03). It is a fixed drawing:
+// no cell id, no event, no link, and none of the real map's test ids, so it can
+// never be mistaken for (or counted as) a neighborhood. Same classes as the
+// real map, so it takes both themes from the tokens.
+const HEX = (cx: number, cy: number) =>
+  `${cx},${cy - 80} ${cx + 69.3},${cy - 40} ${cx + 69.3},${cy + 40} ${cx},${cy + 80} ${cx - 69.3},${cy + 40} ${cx - 69.3},${cy - 40}`;
+const EXAMPLE_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="Example map: three neighborhoods drawn as numbered hexagons, the busiest shaded deepest" data-testid="amap-example-svg">` +
+  [
+    [231, 100, '0.80', '1'],
+    [369.6, 100, '0.50', '2'],
+    [300.3, 220, '0.30', '3'],
+  ]
+    .map(
+      ([cx, cy, o, n]) =>
+        `<polygon class="amap-cell" points="${HEX(cx as number, cy as number)}" fill-opacity="${o}" stroke-width="1.5"/>` +
+        `<text class="amap-num" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${n}</text>`
+    )
+    .join('') +
+  `</svg>`;
 
 function thinHtml(busiest: number): string {
   const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
               <p><strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar} &mdash; every event is listed below.</p>
-            </div>`;
+            </div>
+            <figure class="amap" data-testid="amap-example">
+              ${MAP_STYLE}
+              ${EXAMPLE_SVG}
+              <figcaption data-testid="amap-example-caption"><strong>Example.</strong> This is what the map looks like once neighborhoods fill in: one numbered hexagon each, a few square kilometres, never a street address.</figcaption>
+            </figure>`;
 }
 
 function svgFor(areas: AttendeeMapArea[]): string {
@@ -144,12 +238,19 @@ function svgFor(areas: AttendeeMapArea[]): string {
       const k = a.events.length;
       const points = ring.map((p) => `${px(p[1]!)},${py(p[0]!)}`).join(' ');
       const opacity = (0.2 + 0.6 * (k / max)).toFixed(2);
-      const label = `Area ${a.n}: ${k} event${k === 1 ? '' : 's'}`;
+      const label = `Area ${a.n}${a.name ? `, ${a.name}` : ''}: ${k} event${k === 1 ? '' : 's'}`;
+      // The name sits under the number while the hexagons are few and large.
+      const short =
+        a.name.length > SVG_NAME_MAX_CHARS ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…` : a.name;
+      const nameLine =
+        a.name && areas.length <= SVG_NAME_MAX_AREAS
+          ? `<tspan x="${px(mid[1])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
+          : '';
       return (
         `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">` +
         `<title>${escapeHtml(label)}</title>` +
         `<polygon class="amap-cell" points="${points}" fill-opacity="${opacity}" stroke-width="1.5"/>` +
-        `<text class="amap-num" x="${px(mid[1])}" y="${py(mid[0])}" text-anchor="middle" dominant-baseline="central">${a.n}</text>` +
+        `<text class="amap-num" x="${px(mid[1])}" y="${py(mid[0])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>` +
         `</g>`
       );
     })
@@ -167,7 +268,10 @@ function legendFor(areas: AttendeeMapArea[]): string {
         )
         .join(' &middot; ');
       const k = a.events.length;
-      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${k} event${k === 1 ? '' : 's'}:</strong> ${links}</li>`;
+      const place = a.name
+        ? `<span data-testid="amap-legend-name">${escapeHtml(a.name)}</span> &middot; `
+        : '';
+      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${k} event${k === 1 ? '' : 's'}:</strong> ${links}</li>`;
     })
     .join('');
   return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;

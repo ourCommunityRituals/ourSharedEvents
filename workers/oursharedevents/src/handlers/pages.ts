@@ -14,6 +14,7 @@ import { HARDENING_HEADERS } from '../lib/security-headers';
 import { computeEventPhase } from '../domain/event-phase';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
+import { renderEventNav } from '../lib/event-nav';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
@@ -900,7 +901,7 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
-  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
+  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events' })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
@@ -1101,7 +1102,7 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
-  <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
+  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live' })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">

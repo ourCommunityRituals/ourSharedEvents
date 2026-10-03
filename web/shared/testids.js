@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-02 — 568 ids.
+ * Generated 2026-10-03 — 573 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 385 ids
+    // admin.html — 387 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -131,6 +131,7 @@
       'event-id',
       'event-inbox',
       'event-inbox-list',
+      'event-live-link',
       'event-name',
       'event-preview',
       'event-preview-link',
@@ -254,6 +255,7 @@
       'poster-code-remove',
       'poster-code-row',
       'poster-code-target',
+      'poster-code-uec',
       'poster-code-up',
       'poster-code-word',
       'poster-codes',
@@ -431,13 +433,14 @@
       'wizard-type-picker-msg',
       'wizard-undo-live-btn',
     ]),
-    // public.html — 18 ids
+    // public.html — 19 ids
     PUBLIC: Object.freeze([
       'public-events',
       'public-events-count',
       'public-events-heading',
       'public-events-section',
       'public-header',
+      'public-home-link',
       'public-main',
       'public-skip-link',
       'public-sponsor-address',
@@ -502,7 +505,7 @@
       'display-wall-sponsor-logo',
       'display-wall-sponsor-name',
     ]),
-    // poster.html — 37 ids
+    // poster.html — 39 ids
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
@@ -515,6 +518,7 @@
       'poster-container',
       'poster-empty',
       'poster-error',
+      'poster-event-nav',
       'poster-event-picker',
       'poster-event-select',
       'poster-footer',
@@ -526,6 +530,7 @@
       'poster-meta',
       'poster-meta-date',
       'poster-meta-venue',
+      'poster-nav-events',
       'poster-open-map',
       'poster-org',
       'poster-page-title',
