@@ -2383,7 +2383,12 @@ jobs:
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          VERSION="${GITHUB_REF_NAME:-prod-$(git rev-parse --short HEAD)}"
+          # Same shape as staging ("prod-<shortSHA>-<YYYYMMDD>") so /health names
+          # the commit that is live and assert-deploy-freshness can parse it.
+          # The old "${GITHUB_REF_NAME:-prod-<sha>}" never reached its fallback:
+          # GITHUB_REF_NAME is always set, so a dispatch from main stamped "main".
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="prod-${SHORT_SHA}-$(date -u +%Y%m%d)"
           sed -i "s/WORKER_BUILD_VERSION = \"prod-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
       - name: Deploy

@@ -61,7 +61,11 @@ export async function handleHealth(env: HealthEnv): Promise<Response> {
       db,
       dataSource: effective_source,
       cacheAge,
-      _debug: { db_bound, mock_mode_forced },
+      // Internal DataProvider state is a staging/dev diagnostic only. Production
+      // /health stays "boring OK" (NS-3): no internal-state fields on a public
+      // endpoint. Fail closed: only an exact 'production' omits it, matching
+      // datasetForPool's env comparison.
+      ...(env.WORKER_ENV === 'production' ? {} : { _debug: { db_bound, mock_mode_forced } }),
       timestamp,
     },
     {
