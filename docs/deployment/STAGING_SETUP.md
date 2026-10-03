@@ -43,7 +43,7 @@ The staging environment provides a safe sandbox for:
 | Component      | Staging                               | Production                        |
 | -------------- | ------------------------------------- | --------------------------------- |
 | URL            | `https://stg.oursharedevents.com`     | `https://www.oursharedevents.com` |
-| API            | `https://api-stg.oursharedevents.com` | `https://api.oursharedevents.com` |
+| API            | `https://stg.oursharedevents.com/api` | `https://oursharedevents.com/api` |
 | GAS Project    | Separate Script ID                    | Production Script ID              |
 | Spreadsheets   | Staging EVENTS/DIAG                   | Production EVENTS/DIAG            |
 | Cloudflare Env | `--env staging`                       | `--env events`                    |
