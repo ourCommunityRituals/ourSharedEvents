@@ -29,6 +29,7 @@ import {
   parsePosterCodes,
   posterCodeKind,
   posterCodeLimit,
+  posterCodeUec,
   savePosterCodes,
 } from '../lib/poster-codes';
 import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
@@ -55,9 +56,10 @@ async function planLimit(env: PosterCodesEnv): Promise<number> {
 export function describeCode(origin: string, eventId: string, s: SlotShortlink) {
   const spec = posterCodeKind(s.kind);
   const url = `${origin}/s/${s.code}`;
+  const uec = posterCodeUec(s.kind);
   let qr = '';
   try {
-    qr = generateQrCode(url, { errorCorrection: 'M', scale: 4 });
+    qr = generateQrCode(url, { errorCorrection: 'M', scale: 4, fgColor: uec.scan_hex });
   } catch {
     qr = '';
   }
@@ -65,7 +67,7 @@ export function describeCode(origin: string, eventId: string, s: SlotShortlink) 
     kind: s.kind,
     word: spec.word,
     choice: spec.choice,
-    tone: spec.tone,
+    uec,
     code: s.code,
     url,
     target_url: spec.target === 'https' ? s.target_url : null,
@@ -108,7 +110,7 @@ async function respond(request: Request, env: PosterCodesEnv, eventId: string, s
         kind: k.kind,
         word: k.word,
         choice: k.choice,
-        tone: k.tone,
+        uec: posterCodeUec(k.kind),
         needs_url: k.target === 'https',
       })),
       codes,

@@ -26,6 +26,7 @@
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
+ *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -162,6 +163,7 @@ import {
   handleCorridorDashboard,
   handleEventDashboard,
 } from './handlers/dashboards';
+import { handleAdminEventLivePage } from './handlers/live-monitor';
 import {
   handlePublicPage,
   handlePublicEventPage,
@@ -830,6 +832,21 @@ export async function route(
       return deny;
     }
     return handleAdminPosterPreviewPage(env, adminPosterPreviewMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/live — the organizer's live view (HTML). Same
+  // gating as the previews above. The page reads its numbers from the governed
+  // event dashboard below; this route itself reads only the title and status.
+  const adminEventLiveMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/live$/);
+  if (adminEventLiveMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) {
+      if ((request.headers.get('Accept') ?? '').includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
+    return handleAdminEventLivePage(env, adminEventLiveMatch[1]);
   }
 
   // GET /api/v2/admin/events/:id/poster-bundle — the poster bundle for a draft

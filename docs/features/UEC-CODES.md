@@ -225,6 +225,33 @@ Every core code works across all verticals — no vertical requires a different 
 
 ---
 
+## Poster and Display Codes → UEC
+
+Every code an organizer puts on a poster prints in one UEC colour, with the
+word and the UEC name in text beside it (colour is never the only signal). The
+mapping lives in `workers/oursharedevents/src/lib/poster-codes.ts`; colours are
+read from the registry (`lib/uec`), never written as hex. PO-confirmed 2026-10-03.
+
+| Poster code                        | Word on the card | UEC code    | Colour    |
+| ---------------------------------- | ---------------- | ----------- | --------- |
+| Event page                         | EVENT            | 07 UTILITY  | Charcoal  |
+| Anonymous check-in                 | CHECK IN         | 10 CHECK-IN | Teal      |
+| Registration (own form / external) | REGISTER         | 01 ENTER    | Green     |
+| Sign-up link                       | SIGN UP          | 01 ENTER    | Green     |
+| Donation link                      | DONATE           | 11 SHOP     | Dark Teal |
+| Tickets link                       | TICKETS          | 11 SHOP     | Dark Teal |
+| Sponsorship link                   | SPONSOR          | 03 SPONSOR  | Blue      |
+| League link                        | LEAGUE           | 02 LIVE     | Coral     |
+| Music, Menu, Newsletter, Other     | (as named)       | 07 UTILITY  | Charcoal  |
+
+The TV display's league screen (schedule, standings, bracket) draws its QR
+codes in the same LIVE colour as the poster's LEAGUE code.
+
+This replaces the earlier poster-only rule ("green is only check-in, blue is
+only donate"), which gave blue a second meaning beside SPONSOR.
+
+---
+
 ## How UEC Connects to the Platform
 
 | UEC Code       | Platform Feature                    | Data Generated                         |

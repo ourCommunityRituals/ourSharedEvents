@@ -146,8 +146,8 @@
       .poster-art-img {
         display: block;
         width: 100%;
-        max-height: min(64vh, 720px);
-        object-fit: cover;
+        max-height: min(88vh, 1100px);
+        object-fit: contain;
       }
       .poster-art--empty {
         display: flex;
@@ -183,12 +183,6 @@
       /* OSE-1357: one word per code; same size for every kind. */
       .code-card {
         border-top: 6px solid var(--border);
-      }
-      .tone-checkin {
-        border-top-color: var(--success);
-      }
-      .tone-donate {
-        border-top-color: var(--info);
       }
       .code-word {
         font-size: 1rem;
@@ -302,7 +296,7 @@
         max-width: 16rem;
       }
       .poster--digital .poster-art-img {
-        max-height: min(80vh, 960px);
+        max-height: min(92vh, 1200px);
       }
       .poster--digital .qr-img,
       .poster--digital .qr-loading {
@@ -474,11 +468,9 @@
           width: 100px;
           height: 100px;
         }
-        .poster-art-img {
-          max-height: 360px;
-        }
+        .poster-art-img,
         .poster--digital .poster-art-img {
-          max-height: 70vh;
+          max-height: 80vh;
         }
         .qr-link-url {
           max-width: 100px;
@@ -587,7 +579,7 @@
         }
         .poster-art-img {
           max-height: 7in;
-          object-fit: cover;
+          object-fit: contain;
         }
         /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
            if ANY QR is still a loading placeholder, hide the whole section so
@@ -700,7 +692,7 @@
   </head>
   <body>
     <a href="#main-content" class="skip-link" data-testid="poster-skip-link">Skip to content</a>
-    <div class="page-header no-print" data-testid="poster-header">
+    <div class="page-header no-print" data-testid="poster-header" style="flex-wrap:wrap;gap:0 0.75rem">
       <!-- The title is the EVENT's (poster-page-title is filled with its name);
            the OurSharedEvents name lives at the bottom of the poster only. -->
       <h1 class="sr-only" id="poster-page-title" data-testid="poster-page-title">Event poster</h1>
@@ -708,6 +700,11 @@
            codes (it's already on a screen — the short links are tappable),
            gives the art the room, and turns the date/venue into taps. The URL
            is the state (?kind=), so Back and a shared link keep the choice. -->
+      <!-- One tap back to the event's page and the list (lib/event-nav.ts is
+           the same set of links on the event page). Hidden when printing. -->
+      <nav class="poster-kind" aria-label="This event" data-testid="poster-event-nav">
+        <a href="/events" data-testid="poster-nav-events">&larr; All events</a>
+      </nav>
       <nav class="poster-kind" aria-label="Poster type" data-testid="poster-kind">
         <a href="?kind=print" data-kind="print" data-testid="poster-kind-print">Print</a>
         <a href="?kind=digital" data-kind="digital" data-testid="poster-kind-digital">Digital</a>
@@ -802,6 +799,18 @@
           if (a.getAttribute('data-kind') === KIND) a.setAttribute('aria-current', 'page');
           else a.removeAttribute('aria-current');
         });
+        // The event's other screens, one tap away (the same links as the event
+        // page's nav, lib/event-nav.ts). A draft preview has no public page or
+        // TV yet, so it keeps only "All events".
+        const eventNav = document.querySelector('[data-testid="poster-event-nav"]');
+        if (eventNav && event && event.id && !PREVIEW_EVENT) {
+          const eid = encodeURIComponent(event.id);
+          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/display?event=' + eid, 'TV display']].forEach(function (l) {
+            let a = eventNav.querySelector('[data-testid="' + l[0] + '"]');
+            if (!a) { a = document.createElement('a'); a.setAttribute('data-testid', l[0]); a.textContent = l[2]; eventNav.appendChild(a); }
+            a.setAttribute('href', l[1]);
+          });
+        }
         const title = document.getElementById('poster-page-title');
         if (title && event && event.name) title.textContent = event.name + (KIND === 'digital' ? ' — digital poster' : ' — poster');
         const controls = document.getElementById('poster-print-controls');
@@ -1159,8 +1168,8 @@
         const container = document.getElementById('poster-qr-slots');
         if (!container || !Array.isArray(slots) || !slots.length) return;
         // OSE-1357 part 2: every code the organizer chose, in their order —
-        // one big WORD + icon per code (never colour alone; green = anonymous
-        // check-in only, blue = donate only). Kind, tone and icon come from
+        // one big WORD + icon per code, in its UEC colour with the UEC name in
+        // text (never colour alone; docs/features/UEC-CODES.md). Kind and icon come from
         // allowlists here, the link is rebuilt from a validated code on this
         // origin, and a QR src must be a data:image — no response value
         // reaches an href or src unchecked.
@@ -1176,11 +1185,18 @@
           if (u.indexOf(location.origin + '/') === 0 || /^https:\/\/[^\s"'<>]+$/.test(u)) return u;
           return '';
         }
-        container.innerHTML = slots
-          .filter(function (s) { return slotLink(s) !== ''; })
+        // The colour never enters the markup: it is checked here and set on the
+        // card through the CSSOM after the cards exist.
+        function slotHex(s) {
+          return /^#[0-9A-Fa-f]{6}$/.test(String((s.uec && s.uec.scan_hex) || '')) ? String(s.uec.scan_hex) : '';
+        }
+        const shown = slots.filter(function (s) { return slotLink(s) !== ''; });
+        container.innerHTML = shown
           .map(function (s) {
             const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
-            const tone = kind === 'checkin' ? 'checkin' : kind === 'donation' ? 'donate' : 'neutral';
+            // UEC id from the bundle, shown as text beside the word.
+            const uecId = String((s.uec && s.uec.id) || '').replace(/[^A-Z-]/g, '');
+            const uecName = uecId.replace(/-/g, ' ');
             const word = esc(s.word || s.label || kind);
             const label = esc(s.label || s.word || kind);
             const link = slotLink(s);
@@ -1188,8 +1204,8 @@
             const shortText = esc(link);
             const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
             return (
-              '<div class="qr-card qr-item code-card tone-' + tone + '" data-tone="' + tone + '" data-testid="poster-qr-slot-' + kind + '">' +
-              '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + '</span></div>' +
+              '<div class="qr-card qr-item code-card" data-uec="' + uecId + '" data-testid="poster-qr-slot-' + kind + '">' +
+              '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + (uecName && uecName !== String(s.word || '') ? ' <span class="code-uec meta-text" data-testid="poster-qr-slot-uec-' + kind + '">&middot; ' + uecName + '</span>' : '') + '</span></div>' +
               '<div class="qr-card-body">' +
               (KIND === 'digital'
                 ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
@@ -1202,6 +1218,11 @@
             );
           })
           .join('');
+        // The band colour is set through the CSSOM (no inline style attribute).
+        container.querySelectorAll('.code-card').forEach(function (el, i) {
+          const hex = shown[i] ? slotHex(shown[i]) : '';
+          if (hex) el.style.borderTopColor = hex;
+        });
       }
       // OSE-867: the poster's ONE data call. With renderEvent, the poster card
       // itself is drawn from data.event (the scoped path); otherwise the card

@@ -66,8 +66,11 @@ describe('Print | Digital — the URL is the state', () => {
   });
 
   test('Print keeps its QR codes and a bigger art area; Print controls hide on Digital', () => {
-    expect(html).toContain('max-height: min(64vh, 720px)');
+    expect(html).toContain('max-height: min(88vh, 1100px)');
     expect(html).toContain('max-height: 7in');
+    // The whole artwork shows on screen and on paper: contain, never a crop.
+    expect(html).not.toMatch(/\.poster-art-img\s*\{[^}]*object-fit:\s*cover/);
+    expect(html.match(/\.poster-art-img\s*\{[^}]*object-fit:\s*contain/g)?.length).toBe(2);
     expect(html).toContain("controls.hidden = KIND === 'digital'");
     // …and the hide actually applies: .print-controls is display:inline-flex,
     // which beats the UA [hidden] rule unless restored (caught in the browser).
@@ -78,7 +81,7 @@ describe('Print | Digital — the URL is the state', () => {
     expect(rule('.poster--digital .qr-img,\n      .poster--digital .qr-loading')).toMatch(
       /display:\s*none/
     );
-    expect(html).toContain('max-height: min(80vh, 960px)');
+    expect(html).toContain('max-height: min(92vh, 1200px)');
     // In the digital branch the slot renders as a tappable short link, no <img>.
     const i = html.indexOf('? \'<a class="qr-slot-code" href="');
     expect(i).toBeGreaterThan(-1);

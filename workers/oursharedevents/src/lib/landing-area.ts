@@ -347,5 +347,29 @@ function buildAreaMarkup(args: {
  */
 export function injectLandingArea(html: string, area: RenderedLandingArea): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  return injectMarker(html, LANDING_AREA_MARKER, area.html);
+  return injectMarker(orderLandingSections(html, area.defaultView), LANDING_AREA_MARKER, area.html);
+}
+
+const DOORS_START = '<!--OCR_DOORS_START-->';
+const DOORS_END = '<!--OCR_DOORS_END-->';
+const AFTER_AREA = '<!--OCR_AFTER_AREA-->';
+
+/**
+ * Which leads the landing page (PO, 2026-10-03). Fewer than LIST_MAX events:
+ * the two create doors lead and the area follows, because the page's job is to
+ * get the first gatherings made. At LIST_MAX or more the area's default view is
+ * the map, and the map leads; the doors move directly beneath it. One rule, one
+ * threshold: this reads the same `defaultView` the list/map toggle uses.
+ * Markers are always removed; a template without them is returned unchanged.
+ */
+export function orderLandingSections(html: string, defaultView: 'list' | 'map'): string {
+  const a = html.indexOf(DOORS_START);
+  const b = html.indexOf(DOORS_END);
+  const c = html.indexOf(AFTER_AREA);
+  if (a < 0 || b < a || c < b) return html;
+  const doors = html.slice(a + DOORS_START.length, b);
+  const before = html.slice(0, a);
+  const middle = html.slice(b + DOORS_END.length, c);
+  const after = html.slice(c + AFTER_AREA.length);
+  return defaultView === 'map' ? before + middle + doors + after : before + doors + middle + after;
 }

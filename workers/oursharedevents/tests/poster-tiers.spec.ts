@@ -212,11 +212,11 @@ describe('Tier 1 | a native REGISTER code and a SPONSOR code', () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/events/${EVT}/poster-bundle`);
     expect(res.status).toBe(200);
     const bundle = (await res.json()) as {
-      slots: Array<{ kind: string; word: string; tone: string; url: string }>;
+      slots: Array<{ kind: string; word: string; uec: { id: string }; url: string }>;
     };
     const byKind = Object.fromEntries(bundle.slots.map((s) => [s.kind, s]));
-    expect(byKind.register).toMatchObject({ word: 'REGISTER', tone: 'neutral' });
-    expect(byKind.sponsor).toMatchObject({ word: 'SPONSOR', tone: 'neutral' });
+    expect(byKind.register).toMatchObject({ word: 'REGISTER', uec: { id: 'ENTER' } });
+    expect(byKind.sponsor).toMatchObject({ word: 'SPONSOR', uec: { id: 'SPONSOR' } });
     for (const s of bundle.slots) expect(s.url).toMatch(/\/s\/[A-Za-z0-9]{6}$/);
   });
 });

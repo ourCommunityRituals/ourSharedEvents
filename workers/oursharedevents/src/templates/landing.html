@@ -279,7 +279,11 @@
       <!-- The page's single <h1>. Frames the supply-side ask (the two doors
            below) and gives screen readers + search engines a page-level heading. -->
       <h1 class="lead" data-testid="landing-h1">Host or sponsor a gathering in your neighborhood</h1>
-      <!-- Two doors: always present. This is the supply-side ask. -->
+      <!-- Two doors: always present. This is the supply-side ask. Fewer than
+           LIST_MAX events: the doors lead and the area follows. At or above it
+           the server moves this block below the area (lib/landing-area.ts
+           orderLandingSections), so the map leads. -->
+      <!--OCR_DOORS_START-->
       <section class="doors" data-testid="landing-doors" aria-label="Get started">
         <a class="door" href="/admin" data-testid="door-create-event">
           <p class="door-title">Create an event</p>
@@ -290,6 +294,7 @@
           <p class="door-sub">Support events in your area. You choose which events you appear on.</p>
         </a>
       </section>
+      <!--OCR_DOORS_END-->
 
       <!-- Area view (OSE-1312 slice 2). The inner markup is server-rendered by
            renderLandingArea and injected at the marker below: hidden radios +
@@ -307,6 +312,7 @@
         <h2 class="area-heading" data-testid="area-heading">Happening near you</h2>
         <!--OCR_LANDING_AREA-->
       </section>
+      <!--OCR_AFTER_AREA-->
 
       <!-- Never-who statement (Invariant #1 surface language). One line, the
            paragraph behind a native disclosure; TRUE of this page: no cookies,
