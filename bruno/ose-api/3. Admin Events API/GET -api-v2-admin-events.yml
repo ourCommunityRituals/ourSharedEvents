@@ -59,11 +59,15 @@ runtime:
 
         
 
-        \    test('Returns items sorted by updated_at DESC', function() {
+        \    // The default order is created_at DESC (cursor pagination,
 
-        \        if (json.items.length >= 2) {
+        \    // handleAdminListEvents in events.ts), not updated_at.
 
-        \            expect(json.items[0].updated_at >= json.items[1].updated_at).to.be.true;
+        \    test('Returns items sorted by created_at DESC', function() {
+
+        \        for (let i = 1; i < json.items.length; i++) {
+
+        \            expect(json.items[i - 1].created_at >= json.items[i].created_at).to.be.true;
 
         \        }
 
