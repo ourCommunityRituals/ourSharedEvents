@@ -38,6 +38,7 @@
       }
       .poster-kind {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.25rem;
       }
       .page-header .poster-kind a[aria-current] {
@@ -52,6 +53,9 @@
         min-height: 44px;
         font-size: 0.85rem;
         text-decoration: none;
+      }
+      .page-header a {
+        padding: 0 0.5rem;
       }
       .page-header a:hover,
       .page-header .print-btn:not(:disabled):hover {
@@ -443,9 +447,6 @@
         .page-header {
           padding: 0.75rem 1rem;
         }
-        .page-header a {
-          padding: 0 0.5rem;
-        }
         .container {
           padding: 0 .75rem;
           margin: 1rem auto;
@@ -494,7 +495,6 @@
         .no-print {
           display: none !important;
         }
-        /* restore white background for print even in dark mode */
         body {
           background: #fff !important;
           color: #1e293b !important;

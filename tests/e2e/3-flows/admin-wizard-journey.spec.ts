@@ -65,12 +65,16 @@ test.describe('guided wizard journey (two paths, one admin)', () => {
     await expect(wizard.locator('h2')).toHaveText('Create & Launch');
     await expect(page.locator('[data-testid="wizard-step-1"]')).toBeVisible();
 
-    // Step 1 gate: Next stays off until name + venue are filled (the only
-    // two real requirements — everything else is optional by design).
+    // Step 1 gate: name + venue are the only two real requirements. Next stays
+    // enabled and says why it will not move on (OSE-1515).
     const next = page.locator('[data-testid="wizard-next-btn"]');
-    await expect(next).toBeDisabled();
+    await next.click();
+    await expect(page.locator('[data-testid="wizard-msg"]')).toHaveText(
+      'Add a name and a place to continue'
+    );
     await page.locator('[data-testid="wizard-event-name"]').fill('Journey Trivia Night');
-    await expect(next).toBeDisabled();
+    await next.click();
+    await expect(page.locator('[data-testid="wizard-step-1"]')).toBeVisible();
     await page.locator('[data-testid="wizard-event-venue"]').fill('Rock Island Public House');
     await expect(next).toBeEnabled();
     // Date pre-fills to today — the organizer shouldn't start from a blank.

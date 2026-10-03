@@ -84,6 +84,19 @@ const SPONSOR_CARD_SKIP_REASON = SPONSOR_CARD_ID
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
 const MOBILE_VIEWPORT = { width: 375, height: 812 };
 
+/**
+ * The viewport this run audits at. The phone project is the default; the
+ * tablet project (playwright.mobile.config.ts, `tablet-chromium`) names its own
+ * in `metadata.auditViewport`, so the same contracts run at tablet size. The
+ * test titles keep "375×812" (they are the stable ids the reports key on); the
+ * project name in the report says which size ran.
+ */
+function auditViewport(): { width: number; height: number } {
+  const v = (test.info().project.metadata as { auditViewport?: { width: number; height: number } })
+    ?.auditViewport;
+  return v ?? MOBILE_VIEWPORT;
+}
+
 // 44 px is WCAG 2.5.5 Level AAA + Apple HIG. The standard.
 const MIN_TOUCH_TARGET_PX = 44;
 
@@ -239,7 +252,7 @@ async function loadSurface(page: Page, surface: Surface): Promise<void> {
   if (surface.authHeader) {
     await page.setExtraHTTPHeaders(surface.authHeader);
   }
-  await page.setViewportSize(MOBILE_VIEWPORT);
+  await page.setViewportSize(auditViewport());
   // Relative — resolved against the config's baseURL. See the header.
   await page.goto(surface.path, { waitUntil: 'domcontentloaded' });
   // OCR-42 page-state model — contract (4) "primary CTA above the fold"
@@ -517,8 +530,8 @@ for (const surface of SURFACES) {
       // sees the CTA without scrolling on initial load.
       expect(
         box!.y,
-        `${surface.name}: primary CTA top = ${Math.round(box!.y)}px > viewport height ${MOBILE_VIEWPORT.height}px — CTA below the fold, requires scroll-then-tap`
-      ).toBeLessThan(MOBILE_VIEWPORT.height);
+        `${surface.name}: primary CTA top = ${Math.round(box!.y)}px > viewport height ${auditViewport().height}px — CTA below the fold, requires scroll-then-tap`
+      ).toBeLessThan(auditViewport().height);
     });
 
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no pinch-zoom required for form submit`, async ({

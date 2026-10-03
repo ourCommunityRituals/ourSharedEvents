@@ -54,6 +54,7 @@ import {
 /** Most pre-event placements whose reach one /sponsor view reads (4 small queries each). */
 const PRE_EVENT_REACH_MAX = 20;
 import { renderSponsorHomePage, type PlacementRow } from '../lib/sponsor-home-render';
+import { sponsorTitle } from '../lib/sponsor-card';
 import { corsHeaders } from '../lib/cors';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
@@ -176,10 +177,16 @@ export async function handleSponsorHomePage(
   if (!claim || !env.DB) return invalidLinkPage();
 
   const sponsor = await env.DB.prepare(
-    'SELECT id, name, is_active, h3_res7 FROM sponsor_business WHERE id = ? AND brand_id = ? LIMIT 1'
+    'SELECT id, name, display_name, is_active, h3_res7 FROM sponsor_business WHERE id = ? AND brand_id = ? LIMIT 1'
   )
     .bind(claim.sponsor_id, claim.brand_id)
-    .first<{ id: string; name: string; is_active: number; h3_res7: string | null }>();
+    .first<{
+      id: string;
+      name: string;
+      display_name: string | null;
+      is_active: number;
+      h3_res7: string | null;
+    }>();
   if (!sponsor || Number(sponsor.is_active) === 0) return invalidLinkPage();
 
   const rows = await env.DB.prepare(
@@ -249,7 +256,8 @@ export async function handleSponsorHomePage(
   ]);
 
   const page = renderSponsorHomePage({
-    sponsor: { id: sponsor.id, name: sponsor.name },
+    // OSE-1431: the sponsor sees the same title the public sees.
+    sponsor: { id: sponsor.id, name: sponsorTitle(sponsor) },
     placements,
     discoverable,
     requests,

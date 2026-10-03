@@ -534,6 +534,21 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     expect(html).toContain('Thanks to our sponsors');
   });
 
+  test('post-sponsor-thanks renders below the title and date, above the recap', async () => {
+    const id = 'evt_ssp1_post_sponsor_top';
+    await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
+    await seedSponsor(id, { name: 'Top Sponsor', websiteUrl: 'https://top.example.com' });
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const thanks = html.indexOf('data-testid="post-sponsor-thanks"');
+    const when = html.indexOf('data-testid="event-when-post"');
+    const recap = html.indexOf('data-testid="recap-primary"');
+    expect(thanks, 'sponsor thanks must render').toBeGreaterThan(-1);
+    expect(recap, 'the recap must render').toBeGreaterThan(-1);
+    expect(thanks, 'sponsor thanks follows the title and date').toBeGreaterThan(when);
+    expect(thanks, 'sponsor thanks precedes the recap').toBeLessThan(recap);
+  });
+
   test('post-sponsor-thanks absent when no sponsors', async () => {
     const id = 'evt_ssp1_post_sponsor_no';
     await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });

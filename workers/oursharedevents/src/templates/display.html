@@ -128,6 +128,10 @@
         display: inline-block;
         animation: scroll 30s linear infinite;
       }
+      @media (prefers-reduced-motion: reduce) {
+        .ticker { white-space: normal; }
+        .ticker-inner { animation: none; }
+      }
       @keyframes scroll {
         from {
           transform: translateX(100vw);
@@ -175,9 +179,7 @@
       .display-sponsor-item.fade-out {
         opacity: 0;
       }
-      /* OSE-878/#25: ONE uniform logo box for every sponsor regardless of tier,
-         responsive (clamp) from phone to the 10-foot TV. Tier-blind — money buys
-         frequency, never size/slot/treatment. WALL-3b (OSE-835) enforces this. */
+      /* OSE-878/#25: one logo box for every sponsor, tier-blind (WALL-3b). */
       .display-sponsor-item img {
         height: clamp(32px, 3.5vw, 56px);
         width: auto;
