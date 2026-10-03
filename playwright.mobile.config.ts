@@ -120,7 +120,7 @@ const config = defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|admin-sponsor-form|sponsor-home-flow|landing-theme)\.spec\.ts/,
+    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|admin-sponsor-form|sponsor-home-flow|landing-theme|publish-loop-journey)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the
@@ -169,6 +169,20 @@ const config = defineConfig({
           : {},
       },
     },
+    {
+      // WebKit for the organizer's publish loop only (OSE-1508): most phones
+      // in the nightly matrix are WebKit, and this flow is the one where a
+      // first-time organizer must not get lost. The rest of the audit stays
+      // Chromium-only (see the workflow's install step for why).
+      name: 'mobile-webkit',
+      testMatch: /publish-loop-journey\.spec\.ts/,
+      use: {
+        ...devices['iPhone 13'],
+        viewport: { width: 375, height: 812 },
+        // WebKit rejects the Chromium clipboard permissions set above.
+        permissions: [],
+      },
+    },
   ],
 
   webServer: {
@@ -193,7 +207,11 @@ const config = defineConfig({
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
       ` --var ADMIN_SCOPE_ALL:true` +
-      ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}`,
+      ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}` +
+      // Publish grace window ON, as deployed, but 1 minute instead of 10 so a
+      // spec can watch an event go from "live by link only" to listed.
+      // helpers/sponsor-home-seed.ts waitUntilListed() waits it out.
+      ` --var PUBLISH_GRACE_MINUTES:1`,
     cwd: 'workers/oursharedevents',
     url: BASE + '/',
     reuseExistingServer: !process.env.CI,

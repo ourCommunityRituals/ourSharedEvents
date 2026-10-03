@@ -30,6 +30,7 @@
 
 import { maybeTag } from './h3-tagging';
 import { toPublicEvent } from './public-event-projection';
+import { listedSql } from './publish-grace';
 
 /** Waiting (organizer has not answered) requests one sponsor may hold at once. */
 export const MAX_OPEN_REQUESTS = 5;
@@ -71,7 +72,7 @@ function floorDate(now: Date): string {
  * Invariant #9 structural gate can see it.
  */
 const DISCOVERABLE_REST = `e.is_published = 1
-          AND e.status = 'active'
+          AND e.status = 'active' AND ${listedSql('e')}
           AND e.start_date IS NOT NULL AND e.start_date >= ?
           AND NOT EXISTS (
             SELECT 1 FROM sponsor_placement px

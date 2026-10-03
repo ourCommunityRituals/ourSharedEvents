@@ -12,9 +12,23 @@
  */
 
 import { isValidTransition } from '../domain/event-state';
+import { listedFromForPublish } from '../lib/publish-grace';
 
 export interface QrVerifyEnv {
   DB: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
+}
+
+/** The row moved between our read and our write (e.g. Undo in another tab). */
+function statusConflict(): Response {
+  return Response.json(
+    {
+      ok: false,
+      code: 'STATUS_CONFLICT',
+      error: 'This event changed while saving. Reload and try again.',
+    },
+    { status: 409 }
+  );
 }
 
 interface EventRow {
@@ -42,14 +56,18 @@ export async function handleV2AdminVerifyQr(
     );
   }
 
-  await env.DB.prepare(
-    "UPDATE events SET status = 'active', qr_verified = 1, updated_at = datetime('now') WHERE id = ?"
+  // Publish grace window (lib/publish-grace.ts): live by link now, listed later.
+  const listedFrom = listedFromForPublish(env.PUBLISH_GRACE_MINUTES);
+  const res = await env.DB.prepare(
+    "UPDATE events SET status = 'active', qr_verified = 1, listed_from = ?, updated_at = datetime('now') WHERE id = ? AND status = ?"
   )
-    .bind(eventId)
+    .bind(listedFrom, eventId, row.status)
     .run();
+  // Guarded on the status read above: if another tab moved it meanwhile, say so.
+  if ((res.meta?.changes ?? 0) === 0) return statusConflict();
 
   return Response.json(
-    { ok: true, event: { id: eventId, status: 'active', qrVerified: true } },
+    { ok: true, event: { id: eventId, status: 'active', qrVerified: true, listedFrom } },
     { status: 200 }
   );
 }
@@ -74,11 +92,12 @@ export async function handleV2AdminUnverifyQr(
     );
   }
 
-  await env.DB.prepare(
-    "UPDATE events SET status = 'ready', qr_verified = 0, updated_at = datetime('now') WHERE id = ?"
+  const res = await env.DB.prepare(
+    "UPDATE events SET status = 'ready', qr_verified = 0, listed_from = NULL, updated_at = datetime('now') WHERE id = ? AND status = ?"
   )
-    .bind(eventId)
+    .bind(eventId, row.status)
     .run();
+  if ((res.meta?.changes ?? 0) === 0) return statusConflict();
 
   return Response.json(
     { ok: true, event: { id: eventId, status: 'ready', qrVerified: false } },

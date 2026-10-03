@@ -328,6 +328,10 @@ export default defineConfig({
           ADMIN_SCOPE_ALL: 'true',
           FORMS_ENCRYPTION_KEY: 'test-forms-encryption-secret-32ch',
           WORKER_ENV: 'test',
+          // Publish grace window OFF in the fast pool so specs can publish and list
+          // at once. Deployed envs, wrangler dev and the API / Playwright suites run
+          // it ON (wrangler.toml); tests/publish-grace.spec.ts turns it back on.
+          PUBLISH_GRACE_MINUTES: '0',
           WORKER_BUILD_VERSION: 'e2e-mock',
           // OSE-211: admin email allowlist (SEC-5)
           ALLOWED_ADMIN_EMAILS: 'test-admin@example.com',

@@ -3445,7 +3445,7 @@
               syncWizardSummary();
               btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.'; msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false) : ''); msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
@@ -7676,8 +7676,10 @@
         var route = statusRoute(from, to);
         if (!route) return { ok: false, from: from, error: 'This event can not move from ' + window.friendlyStatus(from) + ' to ' + window.friendlyStatus(to) + '.' };
         var at = from;
+        var last = null;
         for (var i = 0; i < route.length; i++) {
           var r = await transition(id, at, route[i]);
+          last = r.data;
           if (!r.res.ok || !r.data.ok) {
             if (current) current.status = at;
             return { ok: false, from: from, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
@@ -7685,7 +7687,22 @@
           at = route[i];
         }
         if (current) current.status = to;
-        return { ok: true, from: from };
+        // Publish grace window: when the event goes on the list and map.
+        var lf = last && (last.listedFrom || (last.event && last.event.listedFrom));
+        return { ok: true, from: from, listedFrom: lf || null };
+      };
+      /**
+       * Publish grace window, in words: "On the map and list at 9:24 PM.
+       * Undo before then and nobody else will have found it." Empty when the
+       * event lists at once (window off).
+       */
+      window.graceNote = function (listedFrom, listed) {
+        // Kept off the map by the organizer's choice: never promise a listing.
+        if (listed === false) return ' It stays off the map and list, as you chose, and its public page stays closed to guests. Turn on listing when you want people to find it.';
+        var t = listedFrom ? new Date(listedFrom) : null;
+        if (!t || isNaN(t.getTime()) || t.getTime() <= Date.now()) return '';
+        var at = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return ' It goes on the map and list at ' + at + '. Undo before then and nobody else will have found it.';
       };
       /** The wizard's Go live now: same router, one call. */
       window.goLiveFromDraft = function (id, knownFrom) {
@@ -7717,7 +7734,7 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
-          var nice = { active: 'Published — the public page, poster and display are on.', ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
+          var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
           if (m2) {

@@ -87,14 +87,16 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts:43':
+  'lib/corridor-latch.ts:55':
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
     'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
     'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
     'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
     'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
-    'request-path read (readLatchedCorridors) binds brand_id.',
-  'handlers/events.ts:371':
+    'request-path read (readLatchedCorridors) binds brand_id. (Line shifted ' +
+    '43→55 by the OSE-1508 settled-events rule: LATCH_SETTLE_HOURS and its ' +
+    'comment land above the SELECT.)',
+  'handlers/events.ts:373':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -104,7 +106,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
     'it; 336→370 by the "Soonest first" slice — the admin-events-upcoming import ' +
     'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
-    'one-line event-settings import lands above it. Scope enforcement unchanged; ' +
+    'one-line event-settings import lands above it; 371→373 by the publish grace ' +
+    'window, whose publish-grace import and EventsEnv field land above it. Scope ' +
+    'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +

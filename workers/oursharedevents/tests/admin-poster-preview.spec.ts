@@ -7,6 +7,8 @@
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { rateLimitKvKey } from '../src/lib/rate-limit';
+import { PUBLIC_READ_MAX } from '../src/lib/public-read-limit';
 
 const BRAND = 'poster-preview-brand';
 const OTHER_BRAND = 'poster-preview-other';
@@ -104,8 +106,15 @@ describe('admin poster preview: a draft', () => {
     expect(html).toContain('data-preview-event="evt_pp_draft"');
     expect(html).toContain('data-testid="admin-draft-preview-toolbar"');
     expect(html).toContain('data-live-url="/poster?event=evt_pp_draft"');
-    // The bar never prints, so a test print looks like the real poster.
-    expect(html).toMatch(/@media print\{\.admin-preview-toolbar\{display:none\}\}/);
+    // The bar never prints; a test print carries a DRAFT mark instead
+    // (OSE-1508), hidden on screen and shown only on paper.
+    expect(html).toMatch(/@media print\{\.admin-preview-toolbar\{display:none\}/);
+    expect(html).toContain('data-testid="poster-draft-mark"');
+    expect(html).toContain('DRAFT \u2014 not live yet');
+    expect(html).toMatch(/\.draft-mark\{display:none\}/);
+    // Fixed, so it overlays the sheet instead of taking room: it can never push
+    // the one-page poster onto a second sheet (verified by a Chromium PDF).
+    expect(html).toMatch(/@media print\{[^}]*\}\.draft-mark\{display:block;position:fixed/);
     // Every script carries the response's nonce, exactly once.
     const csp = res.headers.get('Content-Security-Policy') ?? '';
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
@@ -199,11 +208,44 @@ describe('opening a preview leaves no audit trail; a change does', () => {
 });
 
 describe('admin poster preview: other states', () => {
+  test('the real poster carries no DRAFT mark', async () => {
+    const html = await (await SELF.fetch('https://t.test/poster?event=evt_pp_draft')).text();
+    expect(html).not.toContain('poster-draft-mark');
+  });
+
   test('a live event goes to its real poster', async () => {
     await seed('evt_pp_live', 'active');
     const res = await SELF.fetch(page('evt_pp_live'), { headers: admin, redirect: 'manual' });
     expect(res.status).toBe(303);
     expect(res.headers.get('Location')).toBe('/poster?event=evt_pp_live');
+  });
+
+  test('the admin bundle is rate-limited per caller (it draws QR images every call)', async () => {
+    await seed('evt_pp_limit', 'draft');
+    const ip = '203.0.113.77';
+    const headers = { ...admin, 'CF-Connecting-IP': ip };
+    expect((await SELF.fetch(bundle('evt_pp_limit'), { headers })).status).toBe(200);
+    // Spend the rest of this caller's minute.
+    const E = env as unknown as {
+      RATE_LIMIT_KV: KVNamespace;
+      RATE_LIMIT_KEY_PEPPER?: string;
+    };
+    const key = await rateLimitKvKey(
+      `publicread:admin-poster-bundle:${ip}`,
+      E.RATE_LIMIT_KEY_PEPPER
+    );
+    await E.RATE_LIMIT_KV.put(
+      key,
+      JSON.stringify({ count: PUBLIC_READ_MAX, resetAt: Date.now() + 60_000, max: PUBLIC_READ_MAX })
+    );
+    const limited = await SELF.fetch(bundle('evt_pp_limit'), { headers });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBe('60');
+    // Another caller is unaffected.
+    const other = await SELF.fetch(bundle('evt_pp_limit'), {
+      headers: { ...admin, 'CF-Connecting-IP': '203.0.113.78' },
+    });
+    expect(other.status).toBe(200);
   });
 
   test('an archived event has nothing to preview', async () => {

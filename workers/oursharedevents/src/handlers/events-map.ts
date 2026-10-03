@@ -43,6 +43,7 @@ import {
   CORRIDOR_READY_MIN_EVENTS,
 } from '../lib/corridor-readiness.js';
 import { corsHeaders } from '../lib/cors';
+import { listedSql } from '../lib/publish-grace';
 
 export interface EventsMapEnv {
   DB?: D1Database;
@@ -175,7 +176,7 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
               lat, lon, h3_res7
          FROM events
         WHERE is_published = 1
-          AND brand_id = ? AND h3_res7 = ? AND status = 'active'
+          AND brand_id = ? AND h3_res7 = ? AND status = 'active' AND ${listedSql()}
           AND start_date >= ? AND start_date <= ?
         ORDER BY start_date ASC
         LIMIT ?`

@@ -45,6 +45,7 @@ import {
   type EventTypeRow,
 } from '../lib/event-type-catalog';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
+import { listedFromForPublish } from '../lib/publish-grace';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -57,6 +58,7 @@ import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../li
 export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
 }
 
 /**
@@ -330,7 +332,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
       ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
-      ' e.is_published, e.created_by';
+      ' e.is_published, e.created_by, e.listed_from';
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
@@ -736,9 +738,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                            who_story, who_image_url, what_video_url, what_url,
                            what_url_enabled, what_url_type,
                            lat, lon, h3_res9, h3_res7, is_published, created_by,
-                           event_type_id, settings_json,
+                           event_type_id, settings_json, listed_from,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -773,6 +775,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         createdBy,
         eventType.id,
         settingsJson,
+        // Created live (automation): listed at once, but the listing start is
+        // recorded so the corridor latch's settling rule still applies.
+        status === 'active' ? now : null,
         now,
         now
       )
@@ -970,11 +975,14 @@ export async function handleUpdateEvent(
     values.push(JSON.stringify(v.value));
   }
 
+  // Set when this PUT turns listing on (see the grace window below).
+  let listingOn = false;
   if ('is_published' in body) {
     const v = body.is_published;
     if (typeof v === 'boolean' || v === 0 || v === 1) {
       sets.push('is_published = ?');
       values.push(v === true || v === 1 ? 1 : 0);
+      listingOn = v === true || v === 1;
     }
   }
 
@@ -1160,6 +1168,12 @@ export async function handleUpdateEvent(
   values.push(new Date().toISOString());
   values.push(eventId);
 
+  // Set only when this PUT moves the event into or out of active.
+  let listedFrom: string | null | undefined;
+  // The status this PUT read before deciding; the UPDATE only lands if the row
+  // still has it, so a concurrent Undo can never be reversed (with no grace).
+  let observedStatus: string | undefined;
+
   try {
     // Status changes go through the state machine — the same VALID_TRANSITIONS
     // verify-qr / unverify-qr already enforce. Before this, `PUT status` was a
@@ -1183,6 +1197,7 @@ export async function handleUpdateEvent(
       if (!current) {
         return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
       }
+      observedStatus = current.status;
       const from = parseEventState(current.status);
       const to = body.status as EventState;
       if (from !== to && !isValidTransition(from, to)) {
@@ -1200,9 +1215,34 @@ export async function handleUpdateEvent(
           { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
         );
       }
+      // Publish grace window (lib/publish-grace.ts). A move INTO active starts
+      // it; a move out clears it. active → active (a no-op) leaves it alone, so
+      // re-saving a settled event never takes it off the list. values ends with
+      // the WHERE id here, so the new SET value goes just before it.
+      if (from !== to && (to === 'active' || from === 'active')) {
+        listedFrom = to === 'active' ? listedFromForPublish(env.PUBLISH_GRACE_MINUTES) : null;
+        sets.push('listed_from = ?');
+        values.splice(values.length - 1, 0, listedFrom);
+      }
+    }
+
+    // Turning listing on for an event that is ALREADY live is a publication
+    // too: start a fresh grace window, so it is not listed at once and the
+    // corridor latch's 24-hour settling counts from now. Decided inside the
+    // UPDATE from the row's own old values (SQLite evaluates SET expressions
+    // against the pre-update row), so a concurrent change cannot race it.
+    if (listingOn && listedFrom === undefined) {
+      sets.push(
+        "listed_from = CASE WHEN is_published = 0 AND status = 'active' THEN ? ELSE listed_from END"
+      );
+      values.splice(values.length - 1, 0, listedFromForPublish(env.PUBLISH_GRACE_MINUTES));
     }
 
     let where = ' WHERE id = ?';
+    if (observedStatus !== undefined) {
+      where += ' AND status = ?';
+      values.push(observedStatus);
+    }
     if (timeGuard) {
       // SQLite `IS` compares NULL as a value, so a date-only row guards too.
       where += ' AND start_date IS ? AND timezone IS ? AND starts_at IS ?';
@@ -1213,6 +1253,20 @@ export async function handleUpdateEvent(
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
+      if (observedStatus !== undefined) {
+        const now = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+          .bind(eventId)
+          .first<{ status: string }>();
+        if (now && now.status !== observedStatus) {
+          // Someone else moved it (Undo in another tab) between our read and write.
+          return errorResponse(
+            'STATUS_CONFLICT',
+            'This event changed while saving — reload and try again',
+            409,
+            rid
+          );
+        }
+      }
       if (timeGuard) {
         const still = await env.DB.prepare('SELECT id FROM events WHERE id = ?')
           .bind(eventId)
@@ -1256,7 +1310,12 @@ export async function handleUpdateEvent(
   }
 
   return Response.json(
-    { ok: true, status: 200, id: eventId },
+    {
+      ok: true,
+      status: 200,
+      id: eventId,
+      ...(listedFrom !== undefined ? { listedFrom } : {}),
+    },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }

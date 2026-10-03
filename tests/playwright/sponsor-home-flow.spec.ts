@@ -29,6 +29,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   createLiveEvent,
+  waitUntilListed,
   seedSponsorHome,
   type SeededSponsorHome,
 } from './helpers/sponsor-home-seed';
@@ -229,19 +230,28 @@ test('a tampered link shows the invalid-link page and no sponsor data', async ({
 
 test.describe('sponsor discovery: ask to join → organizer approves', () => {
   let otherEventId = '';
+  let otherListedFrom: string | null = null;
   test.beforeAll(async ({ request }) => {
     // Dated today: "Events you could back" lists the soonest MAX_DISCOVERABLE
     // (20), and the shared local worker holds every other spec's events too.
-    otherEventId = (await createLiveEvent(request, ADMIN_BEARER, `Discover ${Date.now()}`, 0)).id;
+    const ev = await createLiveEvent(request, ADMIN_BEARER, `Discover ${Date.now()}`, 0);
+    otherEventId = ev.id;
+    otherListedFrom = ev.listedFrom;
   });
 
   test('the sponsor asks from their page; the event page still does not show them', async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 375, height: 812 });
     const problems = watchForBreakage(page);
-    await page.goto(sponsorPath());
     const card = page.locator(`[data-testid="discover-card"][data-event-id="${otherEventId}"]`);
+    // Publish grace window: just published, so sponsors cannot find it yet.
+    expect(otherListedFrom, 'publish should start a grace window').not.toBeNull();
+    await page.goto(sponsorPath());
+    await expect(card).toHaveCount(0);
+    await waitUntilListed(otherListedFrom);
+    await page.goto(sponsorPath());
     await expect(card).toBeVisible();
     const askBtn = card.getByTestId('discover-ask');
     const box = await askBtn.boundingBox();

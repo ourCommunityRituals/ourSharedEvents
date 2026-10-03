@@ -73,6 +73,7 @@ on:
       - 'tests/playwright/admin-sponsor-form.spec.ts'
       - 'tests/playwright/sponsor-home-flow.spec.ts'
       - 'tests/playwright/landing-theme.spec.ts'
+      - 'tests/playwright/publish-loop-journey.spec.ts'
       - 'tests/playwright/mobile.global-setup.ts'
       - 'tests/playwright/helpers/**'
       - 'playwright.mobile.config.ts'
@@ -153,6 +154,11 @@ jobs:
         # are real, which is why the nightly keeps all four. Quadrupling the
         # cost of a gate that runs on every push does not pay for itself.
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright WebKit (publish loop journey only)
+        # OSE-1508: the organizer's publish loop runs on WebKit too, because
+        # most phones are WebKit. One spec, so the cost stays small.
+        run: npx playwright install --with-deps webkit
 
       - name: Audit this branch's code
         # No continue-on-error. This is the whole point: the check's verdict is

@@ -96,6 +96,10 @@ WORKER_BUILD_VERSION = "dev-local"
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
 DRAFT_EXPIRY_DAYS = "30"
+# Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
+# event is live by link but off the list, map, sitemap and sponsor discovery,
+# so Undo leaves no public trace. 0 turns it off; capped at 60.
+PUBLISH_GRACE_MINUTES = "10"
 # Subscriber retention defaults to a 365-day bounded window so the email list does
 # not retain PII forever when no explicit override is configured.
 SUBSCRIBERS_RETENTION_DAYS = "365"
@@ -192,6 +196,10 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 # Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
 # (CCR-PR567 re-run item 9 / L2). Otherwise staging runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
+# Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
+# event is live by link but off the list, map, sitemap and sponsor discovery,
+# so Undo leaves no public trace. 0 turns it off; capped at 60.
+PUBLISH_GRACE_MINUTES = "10"
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
@@ -318,6 +326,10 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 # Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
 # (CCR-PR567 re-run item 9 / L2). Otherwise production runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
+# Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
+# event is live by link but off the list, map, sitemap and sponsor discovery,
+# so Undo leaves no public trace. 0 turns it off; capped at 60.
+PUBLISH_GRACE_MINUTES = "10"
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
