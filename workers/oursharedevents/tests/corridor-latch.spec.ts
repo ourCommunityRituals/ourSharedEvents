@@ -9,7 +9,14 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { latLngToCell } from 'h3-js';
-import { latchReadyCorridors, readLatchedCorridors } from '../src/lib/corridor-latch';
+import {
+  latchLandingAreas,
+  latchReadyCorridors,
+  readLatchedCorridors,
+  readLatches,
+  LANDING_AREA_LATCH_KEY,
+} from '../src/lib/corridor-latch';
+import { LIST_MAX } from '../src/lib/landing-area';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
 
 interface TestEnv {
@@ -87,15 +94,75 @@ describe('latchReadyCorridors', () => {
   });
 });
 
-describe('the landing keeps a latched corridor on the map', () => {
-  test('after BUSY drops below the threshold, / still draws it (no flapping)', async () => {
-    // Four of the five busy events wrap up; one remains upcoming.
+// Owner decision 2026-10-03: the landing map is gated on the AREA total
+// (LIST_MAX = 10 events on the page), not on a corridor and not on the latch.
+// The corridor latch still records at CORRIDOR_READY_MIN_EVENTS (above), but it
+// no longer decides what "/" draws. The landing has its own latch, recorded by
+// the same nightly job at LIST_MAX events for the whole area.
+describe('the landing area latch (LIST_MAX events on the page, recorded nightly)', () => {
+  const areaLatched = async (brand: string) => (await readLatches(tenv.DB, brand)).landingArea;
+  const insertListed = (id: string, listedFrom: string) =>
+    tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, start_date, location, is_published, h3_res7, listed_from)
+       VALUES (?, ?, 'Latch area', ?, 'active', ?, 'Hall', 1, ?, ?)`
+    )
+      .bind(id, BRAND, `slug-${id}`, day(12), QUIET, listedFrom)
+      .run();
+
+  test('the threshold is 10, and the seed holds one fewer countable event', async () => {
+    expect(LIST_MAX).toBe(10);
+    const row = await tenv.DB.prepare(
+      `SELECT COUNT(*) AS n FROM events WHERE brand_id = ? AND id LIKE 'lt-%'
+        AND is_published = 1 AND status = 'active' AND start_date >= ? AND start_date <= ?`
+    )
+      .bind(BRAND, day(0), day(90))
+      .first<{ n: number }>();
+    expect(row?.n).toBe(LIST_MAX - 1);
+  });
+
+  test('one short of the threshold does not latch, and "/" leads with the doors', async () => {
+    expect(await latchLandingAreas(tenv.DB)).toBe(0);
+    expect(await areaLatched(BRAND)).toBe(false);
+    const html = await (await SELF.fetch('https://x/')).text();
+    expect(html.indexOf('data-testid="landing-doors"')).toBeLessThan(
+      html.indexOf('data-testid="landing-area"')
+    );
+    expect(html).toContain('data-testid="amap-example"');
+    expect(html).not.toContain('data-cell=');
+  });
+
+  test('a tenth event published a moment ago does not latch yet (settled events only)', async () => {
+    await insertListed('lt-area-fresh', new Date().toISOString());
+    expect(await latchLandingAreas(tenv.DB)).toBe(0);
+    expect(await areaLatched(BRAND)).toBe(false);
+    await tenv.DB.prepare(`DELETE FROM events WHERE id = 'lt-area-fresh'`).run();
+  });
+
+  test('a settled tenth event latches the area, once, for that brand only', async () => {
+    await insertListed('lt-area-settled', new Date(Date.now() - 2 * 86_400_000).toISOString());
+    expect(await latchLandingAreas(tenv.DB)).toBe(1);
+    expect(await areaLatched(BRAND)).toBe(true);
+    expect(await areaLatched(OTHER)).toBe(false);
+    expect(await latchLandingAreas(tenv.DB)).toBe(0);
+  });
+
+  test('the area row is not a corridor: the corridor reader never returns its key', async () => {
+    const cells = [...(await readLatchedCorridors(tenv.DB, BRAND))];
+    expect(cells).toEqual([BUSY]);
+    expect(cells).not.toContain(LANDING_AREA_LATCH_KEY);
+  });
+
+  test('after the count drops below 10, "/" still leads with the map and draws it (no flapping)', async () => {
+    // Four of the five busy events wrap up: six events remain.
     await tenv.DB.prepare(
       `UPDATE events SET status = 'archived' WHERE id IN ('lt-busy-0','lt-busy-1','lt-busy-2','lt-busy-3')`
     ).run();
     const html = await (await SELF.fetch('https://x/')).text();
+    expect(html.indexOf('data-testid="landing-area"')).toBeLessThan(
+      html.indexOf('data-testid="landing-doors"')
+    );
     expect(html).toContain(`data-cell="${BUSY}"`);
-    // QUIET never latched and is below the threshold: never a hex.
-    expect(html).not.toContain(`data-cell="${QUIET}"`);
+    expect(html).toContain(`data-cell="${QUIET}"`);
+    expect(html).not.toContain('data-testid="amap-example"');
   });
 });

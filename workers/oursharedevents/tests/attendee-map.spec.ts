@@ -22,7 +22,7 @@ import {
   MAX_MAP_AREAS,
   type AttendeeMapItem,
 } from '../src/lib/attendee-map';
-import { renderLandingArea } from '../src/lib/landing-area';
+import { renderLandingArea, LIST_MAX } from '../src/lib/landing-area';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
 
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
@@ -58,7 +58,9 @@ describe('attendee map | per-corridor gate (§6.2b)', () => {
   it('below the gate in every corridor: no SVG, the busiest count, a pointer to the list', () => {
     const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
     expect(out.state).toBe('thin');
-    expect(out.html).not.toContain('<svg');
+    // The only drawing below the gate is the labelled example, never a real map.
+    expect(out.html).not.toContain('data-testid="amap-svg"');
+    expect(out.html).not.toContain('data-testid="amap-area"');
     expect(out.html).toContain('data-testid="area-map-thin"');
     expect(out.html).toContain(`The busiest has ${CORRIDOR_READY_MIN_EVENTS - 1} so far`);
     expect(out.html).toContain('every event is listed below');
@@ -83,7 +85,9 @@ describe('attendee map | per-corridor gate (§6.2b)', () => {
     );
     const out = renderAttendeeMap(items, { now: NOW });
     expect(out.state).toBe('thin');
-    expect(out.html).not.toContain('<svg');
+    // The only drawing below the gate is the labelled example, never a real map.
+    expect(out.html).not.toContain('data-testid="amap-svg"');
+    expect(out.html).not.toContain('data-testid="amap-area"');
     expect(out.html).toContain('The busiest has 1 so far');
   });
 
@@ -211,9 +215,85 @@ describe('attendee map | shape', () => {
   });
 });
 
+describe('attendee map | the example shown below the gate', () => {
+  const thin = () => renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
+  const figure = (h: string) => h.slice(h.indexOf('<figure'), h.indexOf('</figure>'));
+
+  it('shows an example drawing under a bar that says Example', () => {
+    const html = thin().html;
+    expect(html).toContain('data-testid="amap-example"');
+    expect(html).toContain('dominant-baseline="central">Example</text>');
+    expect(html).toContain('these are not real events');
+    expect(html.split('<polygon').length - 1).toBe(3);
+  });
+
+  it('cannot be mistaken for a real map: no real test ids, links, cells or counts', () => {
+    const html = thin().html;
+    expect(html).not.toContain('data-testid="amap-svg"');
+    expect(html).not.toContain('data-testid="amap-area"');
+    expect(html).not.toContain('data-testid="amap-legend"');
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('data-cell');
+    expect(html).not.toContain('data-count');
+    expect(html).not.toContain(BLUE7);
+  });
+
+  it('is the same drawing whatever the events are (it is not data)', () => {
+    const other = renderAttendeeMap([ev(1, { h3_res7: BEV7 })], { now: NOW }).html;
+    expect(figure(other)).toBe(figure(thin().html));
+  });
+
+  it('is named for assistive tech as an example, and is gone once a real map is drawn', () => {
+    expect(thin().html).toContain(
+      'role="img" aria-label="Example of the neighborhood map. These are not real events."'
+    );
+    const real = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW }).html;
+    expect(real).not.toContain('amap-example');
+    expect(real).not.toContain('>Example<');
+  });
+});
+
+describe('attendee map | the landing area gate', () => {
+  const gate = (count: number) => ({ now: NOW, area: { count, min: 10 } });
+
+  it('below the gate the note carries the real count and nothing is drawn', () => {
+    const out = renderAttendeeMap(many(7), gate(7));
+    expect(out.state).toBe('thin');
+    expect(out.html).toContain('once this area has 10 events');
+    expect(out.html).toContain('There are 7 so far');
+  });
+
+  it('says "is" for one event and "None yet" for none', () => {
+    expect(renderAttendeeMap(many(1), gate(1)).html).toContain('There is 1 so far');
+    expect(renderAttendeeMap([], gate(0)).html).toContain('None yet');
+  });
+
+  it('at the gate, events without a place on the map get a plain note, not a broken map', () => {
+    const out = renderAttendeeMap(many(10, { h3_res7: null }), gate(10));
+    expect(out.state).toBe('thin');
+    expect(out.html).toContain('None of these events has a place on the map yet');
+  });
+
+  it('a latched area keeps drawing below the gate', () => {
+    const out = renderAttendeeMap(many(3), {
+      now: NOW,
+      area: { count: 3, min: 10, latched: true },
+    });
+    expect(out.state).toBe('map');
+    expect(out.areas.map((a) => [a.cell, a.events.length])).toEqual([[BLUE7, 3]]);
+  });
+
+  it('without an area gate the shared per-neighbourhood rule (5, or latched) still applies', () => {
+    expect(CORRIDOR_READY_MIN_EVENTS).toBe(5);
+    expect(renderAttendeeMap(many(5), { now: NOW }).state).toBe('map');
+    expect(renderAttendeeMap(many(4), { now: NOW }).state).toBe('thin');
+    expect(renderAttendeeMap(many(1), { now: NOW, latched: new Set([BLUE7]) }).state).toBe('map');
+  });
+});
+
 describe('attendee map | on the landing', () => {
   it('replaces the placeholder and still sits above the full card list', () => {
-    const items = many(6).map((e) => ({ ...e, venue: 'Eagles Hall' }));
+    const items = many(LIST_MAX).map((e) => ({ ...e, venue: 'Eagles Hall' }));
     const area = renderLandingArea(items, { now: NOW });
     expect(area.html).not.toContain('A neighborhood map lands here');
     expect(area.html).toContain('data-testid="amap-svg"');
@@ -221,7 +301,20 @@ describe('attendee map | on the landing', () => {
     const listAt = area.html.indexOf('data-testid="area-list"');
     expect(mapAt).toBeGreaterThan(-1);
     expect(mapAt).toBeLessThan(listAt);
-    expect(area.html.split('data-testid="area-card"').length - 1).toBe(6);
+    expect(area.html.split('data-testid="area-card"').length - 1).toBe(LIST_MAX);
+  });
+
+  it('at the landing threshold every neighbourhood with an event is drawn, lonely ones too', () => {
+    const items = [...many(LIST_MAX - 1), ev(20, { h3_res7: BEV7 })];
+    const area = renderLandingArea(items, { now: NOW });
+    expect(area.html).toContain(`data-cell="${BLUE7}"`);
+    expect(area.html).toContain(`data-cell="${BEV7}"`);
+  });
+
+  it('one event short of the threshold draws nothing, even in a latched neighbourhood', () => {
+    const area = renderLandingArea(many(LIST_MAX - 1), { now: NOW, latched: new Set([BLUE7]) });
+    expect(area.html).not.toContain('data-cell=');
+    expect(area.html).toContain('data-testid="amap-example"');
   });
 
   it('a thin landing shows the gate note inside the map view', () => {

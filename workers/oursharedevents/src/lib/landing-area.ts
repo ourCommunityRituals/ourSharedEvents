@@ -86,9 +86,19 @@ export type LandingWindow = (typeof LANDING_WINDOWS)[number];
 export const DEFAULT_WINDOW: LandingWindow = 'next-90';
 
 /**
- * The list/map crossover. Fewer than this many events (at the widest window) →
- * the list is the friendlier default; at or above it, the map is. Evaluated once
- * over the widest window, exactly as the spec requires.
+ * The landing's one threshold (owner, 2026-10-03). Counted over the widest
+ * window, on the events this page actually lists.
+ *
+ *   fewer than this  → the page leads with the two doors (Create an event /
+ *                      Create a sponsor); the map view below them is a note
+ *                      with the real count and a labelled example drawing.
+ *   this many or more → the page leads with the map, which draws every
+ *                      neighbourhood that holds an event; the doors move
+ *                      underneath it.
+ *
+ * This number belongs to this page's display and nothing else. The shared
+ * readiness number (CORRIDOR_READY_MIN_EVENTS = 5) and every privacy floor are
+ * separate and unchanged.
  */
 export const LIST_MAX = 10;
 
@@ -102,8 +112,10 @@ export interface RenderedLandingArea {
   types: { slug: string; label: string }[];
   /** Cards visible at the widest window — drives the default view. */
   windowCount: number;
-  /** 'list' | 'map' — the default view for this count. */
+  /** 'list' | 'map' — the view the area opens on. */
   defaultView: 'list' | 'map';
+  /** True at LIST_MAX or more: the map leads the page and the doors go under it. */
+  leadsWithMap: boolean;
 }
 
 // ── small helpers ────────────────────────────────────────────────────────────
@@ -167,7 +179,7 @@ const EMPTY_HTML = `<div class="empty-state" data-testid="area-empty" role="stat
 
 /** The empty area, for callers that have no events (or a read error). */
 export function renderEmptyLandingArea(): RenderedLandingArea {
-  return { html: EMPTY_HTML, types: [], windowCount: 0, defaultView: 'list' };
+  return { html: EMPTY_HTML, types: [], windowCount: 0, defaultView: 'list', leadsWithMap: false };
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -183,7 +195,7 @@ export function renderEmptyLandingArea(): RenderedLandingArea {
  */
 export function renderLandingArea(
   items: readonly LandingAreaItem[] | null | undefined,
-  opts?: { now?: number; latched?: ReadonlySet<string> }
+  opts?: { now?: number; latched?: ReadonlySet<string>; areaLatched?: boolean }
 ): RenderedLandingArea {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
 
@@ -233,7 +245,13 @@ export function renderLandingArea(
     .map(([slug, label]) => ({ slug, label }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  const defaultView: 'list' | 'map' = windowCount >= LIST_MAX ? 'map' : 'list';
+  // The area always opens on the map view: under LIST_MAX that is the note and
+  // the example, at LIST_MAX or more the real map. The cards sit below either.
+  // Once the area has been recorded at LIST_MAX (nightly, lib/corridor-latch) it
+  // keeps leading with the map while it has anything to show.
+  const areaLatched = opts?.areaLatched === true && windowCount > 0;
+  const leadsWithMap = windowCount >= LIST_MAX || areaLatched;
+  const defaultView: 'list' | 'map' = 'map';
 
   // The map is drawn from the same `live` set as the cards, at corridor (res-7)
   // precision only, and gated on how many events it would actually show.
@@ -242,11 +260,15 @@ export function renderLandingArea(
   // what the public sees narrows the map with it.
   const mapHtml = renderAttendeeMap(
     live.map((e) => toPublicEvent(e as Record<string, unknown>)),
-    { now: now.getTime(), latched: opts?.latched }
+    {
+      now: now.getTime(),
+      latched: opts?.latched,
+      area: { count: windowCount, min: LIST_MAX, latched: areaLatched },
+    }
   ).html;
 
   const html = buildAreaMarkup({ cards, types, defaultView, mapHtml });
-  return { html, types, windowCount, defaultView };
+  return { html, types, windowCount, defaultView, leadsWithMap };
 }
 
 // ── markup assembly ──────────────────────────────────────────────────────────
@@ -347,5 +369,29 @@ function buildAreaMarkup(args: {
  */
 export function injectLandingArea(html: string, area: RenderedLandingArea): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  return injectMarker(html, LANDING_AREA_MARKER, area.html);
+  const ordered = area.leadsWithMap ? mapFirst(html) : html;
+  return injectMarker(ordered, LANDING_AREA_MARKER, area.html);
+}
+
+// At LIST_MAX or more the map leads: the area section moves above the page
+// heading and the two doors, in the DOM (not with CSS order), so reading order
+// and tab order match what is seen. The page keeps exactly one <h1>: the area
+// heading takes it and the doors' heading becomes an <h2>. If the template no
+// longer has the three blocks, the page is left as it is.
+const LEAD_RE = /<h1 class="lead"([^>]*)>([\s\S]*?)<\/h1>/;
+const DOORS_RE = /<section class="doors"[\s\S]*?<\/section>/;
+const AREA_RE = /<section [^>]*data-testid="landing-area"[^>]*>[\s\S]*?<\/section>/;
+const AREA_H2_RE = /<h2 class="area-heading"([^>]*)>([\s\S]*?)<\/h2>/;
+
+function mapFirst(html: string): string {
+  const lead = LEAD_RE.exec(html);
+  const doors = DOORS_RE.exec(html);
+  const areaSection = AREA_RE.exec(html);
+  if (!lead || !doors || !areaSection || !AREA_H2_RE.test(areaSection[0])) return html;
+  const areaAsH1 = areaSection[0].replace(AREA_H2_RE, '<h1 class="area-heading"$1>$2</h1>');
+  const leadAsH2 = `<h2 class="lead"${lead[1]}>${lead[2]}</h2>`;
+  return html
+    .replace(areaSection[0], '')
+    .replace(doors[0], '')
+    .replace(lead[0], () => [areaAsH1, leadAsH2, doors[0]].join('\n      '));
 }

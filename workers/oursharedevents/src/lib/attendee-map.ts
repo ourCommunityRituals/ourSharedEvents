@@ -70,6 +70,21 @@ export interface RenderedAttendeeMap {
   areas: AttendeeMapArea[];
 }
 
+/**
+ * The landing page's own gate (owner, 2026-10-03): the AREA the page shows, not
+ * one corridor. Under `min` events the map view is the note plus the labelled
+ * example; at `min` or more the map leads the page and draws every corridor
+ * that holds an event. `count` is the real number of events the page lists.
+ * This is a display rule for that one page. CORRIDOR_READY_MIN_EVENTS (5), the
+ * latch, GET /api/v2/events/map and every privacy floor are untouched by it.
+ */
+export interface AreaGate {
+  count: number;
+  min: number;
+  /** The area reached `min` before and was recorded (lib/corridor-latch): stay open. */
+  latched?: boolean;
+}
+
 /** Hexes drawn at most. Past this the answer is clustering, not a bigger SVG. */
 export const MAX_MAP_AREAS = 60;
 
@@ -113,11 +128,64 @@ export function attendeeMapAreas(
   return { areas, count: areas.reduce((s, a) => s + a.events.length, 0) };
 }
 
-function thinHtml(busiest: number): string {
-  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
+// The below-the-gate state shows what the map WILL look like: three made-up
+// hexagons under an "Example" bar. It is a fixed drawing, not data: no cell id,
+// no event, no link, no count, and none of the test ids a real map carries, so
+// nothing can mistake it for one. It reuses MAP_STYLE's classes (no new CSS).
+const EXAMPLE_HEXES: readonly (readonly [number, number, string])[] = [
+  [248, 140, '0.80'],
+  [352, 140, '0.50'],
+  [300, 230, '0.30'],
+];
+
+function exampleSvg(): string {
+  const r = 60;
+  const dx = (0.866 * r).toFixed(1);
+  const hexes = EXAMPLE_HEXES.map(([cx, cy, opacity], i) => {
+    const pts = [
+      [cx, cy - r],
+      [cx + +dx, cy - r / 2],
+      [cx + +dx, cy + r / 2],
+      [cx, cy + r],
+      [cx - +dx, cy + r / 2],
+      [cx - +dx, cy - r / 2],
+    ]
+      .map((p) => p.join(','))
+      .join(' ');
+    return (
+      `<polygon class="amap-cell" points="${pts}" fill-opacity="${opacity}" stroke-width="1.5"/>` +
+      `<text class="amap-num" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${i + 1}</text>`
+    );
+  }).join('');
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 305" role="img" aria-label="Example of the neighborhood map. These are not real events." data-testid="amap-example-svg">` +
+    `<rect class="amap-cell" x="1" y="1" width="${W - 2}" height="52" fill-opacity="0.25" stroke-width="1.5"/>` +
+    `<text class="amap-num" x="${W / 2}" y="27" text-anchor="middle" dominant-baseline="central">Example</text>` +
+    hexes +
+    `</svg>`
+  );
+}
+
+function thinHtml(note: string): string {
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
-              <p><strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar} &mdash; every event is listed below.</p>
+              <p>${note} &mdash; every event is listed below.</p>
+              <figure class="amap" data-testid="amap-example">
+                ${MAP_STYLE}
+                ${exampleSvg()}
+                <figcaption>Example only. This is how a neighborhood will look on the map; these are not real events.</figcaption>
+              </figure>
             </div>`;
+}
+
+function corridorNote(busiest: number): string {
+  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
+  return `<strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
+}
+
+function areaNote(gate: AreaGate): string {
+  const sofar =
+    gate.count === 0 ? 'None yet' : `There ${gate.count === 1 ? 'is' : 'are'} ${gate.count} so far`;
+  return `<strong>The map appears once this area has ${gate.min} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
 }
 
 function svgFor(areas: AttendeeMapArea[]): string {
@@ -180,20 +248,32 @@ function legendFor(areas: AttendeeMapArea[]): string {
  */
 export function renderAttendeeMap(
   items: readonly AttendeeMapItem[] | null | undefined,
-  opts?: { now?: number; latched?: ReadonlySet<string> }
+  opts?: { now?: number; latched?: ReadonlySet<string>; area?: AreaGate }
 ): RenderedAttendeeMap {
   const now = new Date(opts?.now ?? Date.now());
   const latched = opts?.latched ?? new Set<string>();
   const all = attendeeMapAreas(items, now).areas;
-  // Per corridor: ready now, or latched (and with something to link).
-  const drawn = all
-    .filter((a) => a.events.length >= CORRIDOR_READY_MIN_EVENTS || latched.has(a.cell))
-    .map((a, i) => ({ ...a, n: i + 1 }));
+  const gate = opts?.area;
+  // Landing (an area gate is given): below it nothing is drawn; at it, every
+  // corridor with an event is. Anywhere else: per corridor, ready now or latched.
+  const drawn = (
+    gate
+      ? gate.count >= gate.min || gate.latched
+        ? all
+        : []
+      : all.filter((a) => a.events.length >= CORRIDOR_READY_MIN_EVENTS || latched.has(a.cell))
+  ).map((a, i) => ({ ...a, n: i + 1 }));
   const count = drawn.reduce((s, a) => s + a.events.length, 0);
 
   if (drawn.length === 0) {
     const busiest = all.reduce((m, a) => Math.max(m, a.events.length), 0);
-    return { html: thinHtml(busiest), state: 'thin', count: 0, areas: [] };
+    const note =
+      gate && gate.count < gate.min && !gate.latched
+        ? areaNote(gate)
+        : gate
+          ? '<strong>None of these events has a place on the map yet</strong>'
+          : corridorNote(busiest);
+    return { html: thinHtml(note), state: 'thin', count: 0, areas: [] };
   }
 
   const caption = `${count} event${count === 1 ? '' : 's'} in ${drawn.length} neighborhood${drawn.length === 1 ? '' : 's'}, every kind, over the next ${CORRIDOR_WINDOW_DAYS} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.`;

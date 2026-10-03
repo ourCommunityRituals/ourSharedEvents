@@ -30,7 +30,20 @@
 // means a row from before migration 0093, which counts as settled as it
 // always did.
 
+// THE LANDING AREA LATCH (owner, 2026-10-03). The landing page leads with its
+// map once the page's area holds LIST_MAX (10) events, and once that has been
+// recorded it keeps leading with the map when the count later drops (no
+// flapping front door). It is recorded here, by the same nightly job and under
+// the same settled-events rule, as one row per brand whose key is
+// LANDING_AREA_LATCH_KEY instead of a cell. So "stays" starts at the first
+// nightly run after the area has held 10 settled events; before that run the
+// page follows the live count. The per-corridor latch above is unchanged (5).
+
 import { CORRIDOR_READY_MIN_EVENTS, CORRIDOR_WINDOW_DAYS } from './corridor-readiness';
+import { LIST_MAX } from './landing-area';
+
+/** The row key that marks "this brand's landing area has latched". Not a cell. */
+export const LANDING_AREA_LATCH_KEY = 'landing-area';
 
 /** How long an event must have been listed before it counts toward the latch. */
 export const LATCH_SETTLE_HOURS = 24;
@@ -65,20 +78,60 @@ export async function latchReadyCorridors(db: D1Database, now: Date = new Date()
   return res.meta?.changes ?? 0;
 }
 
-/** The corridor cells that have latched for one brand. */
-export async function readLatchedCorridors(db: D1Database, brand: string): Promise<Set<string>> {
+/**
+ * Record every brand whose landing area now holds at least LIST_MAX settled,
+ * listed, upcoming events (with or without a place on the map: the landing
+ * counts the events it lists). Idempotent; a one-way door like the rows above.
+ */
+export async function latchLandingAreas(db: D1Database, now: Date = new Date()): Promise<number> {
+  const floor = day(now.getTime() - 12 * 3_600_000);
+  const horizon = day(now.getTime() + CORRIDOR_WINDOW_DAYS * 86_400_000);
+  const settledBy = new Date(now.getTime() - LATCH_SETTLE_HOURS * 3_600_000).toISOString();
+  const res = await db
+    .prepare(
+      `INSERT OR IGNORE INTO corridor_readiness_latch (brand_id, h3_res7, latched_at)
+       SELECT brand_id, ?, ?
+         FROM events
+        WHERE is_published = 1 AND status = 'active'
+          AND start_date >= ? AND start_date <= ?
+          AND (listed_from IS NULL OR listed_from <= ?)
+        GROUP BY brand_id
+       HAVING COUNT(*) >= ?`
+    )
+    .bind(LANDING_AREA_LATCH_KEY, now.toISOString(), floor, horizon, settledBy, LIST_MAX)
+    .run();
+  return res.meta?.changes ?? 0;
+}
+
+/** Everything latched for one brand: its corridor cells, and its landing area. */
+export async function readLatches(
+  db: D1Database,
+  brand: string
+): Promise<{ corridors: Set<string>; landingArea: boolean }> {
   const { results } = await db
     .prepare('SELECT h3_res7 FROM corridor_readiness_latch WHERE brand_id = ?')
     .bind(brand)
     .all<{ h3_res7: string }>();
-  return new Set((results ?? []).map((r) => r.h3_res7));
+  const keys = (results ?? []).map((r) => r.h3_res7);
+  return {
+    corridors: new Set(keys.filter((k) => k !== LANDING_AREA_LATCH_KEY)),
+    landingArea: keys.includes(LANDING_AREA_LATCH_KEY),
+  };
+}
+
+/** The corridor cells that have latched for one brand. */
+export async function readLatchedCorridors(db: D1Database, brand: string): Promise<Set<string>> {
+  return (await readLatches(db, brand)).corridors;
 }
 
 /** Nightly phase (index.ts scheduled). Never throws: a missing table is a no-op. */
 export async function runCorridorLatch(env: CorridorLatchEnv): Promise<void> {
   try {
     const n = await latchReadyCorridors(env.DB);
-    console.log(JSON.stringify({ type: 'LIFECYCLE', job: 'corridor_latch', latched: n }));
+    const areas = await latchLandingAreas(env.DB);
+    console.log(
+      JSON.stringify({ type: 'LIFECYCLE', job: 'corridor_latch', latched: n, landing_areas: areas })
+    );
   } catch (err) {
     console.error(
       JSON.stringify({
