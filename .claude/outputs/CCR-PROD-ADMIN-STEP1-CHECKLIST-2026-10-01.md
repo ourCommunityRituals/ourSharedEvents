@@ -77,7 +77,7 @@ No decay (30 → 77.5 → 92.5). **Below 95%, so the human gate applies.**
 
 ## Revised checklist (the corrected artifact)
 
-0. **Unblock deploys** (separate terminal): set repo secret `OCR_CI_EDGE_TOKEN`; re-run `main`; confirm T1–T4 green.
+0. **Unblock deploys** (separate terminal): set the `OCR_CI_EDGE_TOKEN` repo secret, then re-run `main` and confirm T1–T4 green.
 1. **Production Access app**, host `oursharedevents.com`, paths: `admin`, `admin/*`, `manage`, `api/v2/admin`, `api/v2/admin/*`, `briefing`, `overview`, `summary`. Policy: Allow → Emails → `mzdano@gmail.com` (not the domain). Copy the AUD tag.
    Verify: each path → `302` to `mzdano.cloudflareaccess.com/cdn-cgi/access/login/oursharedevents.com`; re-dispatch CF Access Canary → production `access_ok`.
 2. **PR (non-secret):** production `CF_ACCESS_AUD = "<aud>"` (OSE-1377). In the same PR or a ticket: production `ALLOW_OCR_INTERNAL = "false"`.
@@ -108,10 +108,20 @@ The loop scores and worksheets above are left as assessed. Corrections found aft
 
 **Current checklist** (replaces "Revised checklist" above):
 
-- **Admin-ready, no deploy needed:**
-  1. Production Access app: the 8 destinations in `scripts/ci/access-protected-paths.txt`, a policy that allows only `mzdano@gmail.com`; copy the AUD tag; verify with the runbook loop.
-  2. Staging Access app: add `dashboard`, `create`, `briefing`, `overview`, `summary`.
-  3. Production D1 rows: `root` (OSE-1415) and `ose-platform` (OSE-1447).
-  4. Sign in: `GET /api/v2/admin/events` has a `filters` key; `GET /briefing` returns 200.
-- **Before Bocce setup:** 5. Set `OCR_CI_EDGE_TOKEN`; `main` T1–T4 green. 6. Delete `ADMIN_KEY` / `X_OCR_INTERNAL` / `ADMIN_TOKEN` from production secrets if present. 7. PR pinning production `CF_ACCESS_AUD` (OSE-1377). 8. Deploy production; `/health` version shows `prod-<sha>`. 9. Post-deploy runbook steps: 0088 backfill, 0091 purge, BigQuery dataset and table before 03:00 UTC. 10. `PRODUCTION_LIVE=true` after the production smoke passes.
-- **Ticket:** production `/health` exposes `_debug`.
+**Admin-ready, no deploy needed:**
+
+1. Production Access app: the 8 destinations in `scripts/ci/access-protected-paths.txt`, a policy that allows only `mzdano@gmail.com`. Copy the AUD tag, then verify with the runbook loop.
+2. Staging Access app: add `dashboard`, `create`, `briefing`, `overview`, `summary`.
+3. Production D1 rows: `root` (OSE-1415) and `ose-platform` (OSE-1447).
+4. Sign in: `GET /api/v2/admin/events` has a `filters` key, and `GET /briefing` returns 200.
+
+**Before Bocce setup:**
+
+5. Set the `OCR_CI_EDGE_TOKEN` repo secret, then confirm `main` T1–T4 green.
+6. Delete `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` from production secrets if present.
+7. PR pinning production `CF_ACCESS_AUD` (OSE-1377).
+8. Deploy production. `/health` version shows `prod-<sha>`.
+9. Post-deploy runbook steps: 0088 backfill, 0091 purge, BigQuery dataset and table before 03:00 UTC.
+10. `PRODUCTION_LIVE=true` after the production smoke passes.
+
+**Ticket:** production `/health` exposes `_debug`.
