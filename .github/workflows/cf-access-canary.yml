@@ -79,7 +79,11 @@ jobs:
         run: |
           chmod +x scripts/ci/cf-access-probe.sh
           rc=0
-          for path in /admin /api/v2/admin/sponsors; do
+          # Every path the Worker guards (scripts/ci/access-protected-paths.txt,
+          # kept in step with the router by tests/integration/access-protected-paths.test.js).
+          paths=$(grep -vE '^\s*(#|$)' scripts/ci/access-protected-paths.txt)
+          [ -n "$paths" ] || { echo "::error::access-protected-paths.txt lists no paths"; exit 1; }
+          for path in $paths; do
             scripts/ci/cf-access-probe.sh --expect-challenge --gate --url="${BASE}${path}" || rc=1
           done
           exit $rc

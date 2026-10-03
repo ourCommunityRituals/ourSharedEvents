@@ -199,6 +199,36 @@ npm run test:prod:smoke
 
 ---
 
+## First Production Launch — Cloudflare Access App (OSE-1353)
+
+**Why:** production admin is Cloudflare Access only. `ALLOW_OCR_INTERNAL` and `ALLOW_ADMIN_KEY_FALLBACK` are absent from `[env.production.vars]` (ADR-012 gate R2, `tests/prod-admin-scope-config.spec.ts`). The Worker requires an Access identity on every path it guards with `requireAdmin`. A guarded path that the Access app does not cover reaches the Worker with no `Cf-Access-Jwt-Assertion` and returns 401, so the admin UI breaks on it. Protecting `/admin` alone is not enough: the dashboard loads, then every `/api/v2/admin/*` call fails.
+
+**The paths:** `scripts/ci/access-protected-paths.txt` is the list. `tests/integration/access-protected-paths.test.js` derives the guarded paths from `src/router.ts` and fails when the file misses one. As of 2026-10-01 the Access app destinations are:
+
+`admin` · `manage` · `dashboard` · `create` · `api/v2/admin/*` · `briefing` · `overview` · `summary`
+
+**Create** (Zero Trust → Access → Applications → Add → Self-hosted), in a separate browser session:
+
+1. Domain `oursharedevents.com`, one destination per path above. `www` needs none: it 301s to the apex.
+2. Policy: **Allow**, Include → **Emails** → `mzdano@gmail.com`. Use the single email, not the `oursharedevents.com` domain: `ALLOWED_ADMIN_DOMAINS` admits that whole domain at the Worker, so the Access policy is the narrower gate.
+3. Copy the app's **Application Audience (AUD) tag** for the pin step below.
+
+**Verify:** every path is challenged by the production app (`access_ok`). The 6-hourly `cf-access-canary.yml` runs the same loop, so dispatch it afterwards and confirm the production row is green.
+
+```bash
+for p in $(grep -vE '^\s*(#|$)' scripts/ci/access-protected-paths.txt); do
+  scripts/ci/cf-access-probe.sh --expect-challenge --url="https://oursharedevents.com$p"
+done
+```
+
+**Staging too:** on 2026-10-01 the staging app covered `admin`, `manage` and `api/v2/admin/*` only. Add `dashboard`, `create`, `briefing`, `overview` and `summary` to it. Until you do, the canary's staging row is red, and `GET /briefing` cannot reach the Worker with an identity.
+
+**Pin the audience (OSE-1377), after the app exists:** set `CF_ACCESS_AUD = "<AUD tag>"` in `[env.production.vars]` in a PR. The tag is not a secret. Until it is pinned, a token from any Access app on the `mzdano` team verifies on production. The pin takes effect on the next production deploy.
+
+**Before that deploy:** `deploy-production` refuses to run while `ADMIN_KEY`, `X_OCR_INTERNAL` or `ADMIN_TOKEN` is set as a production Worker secret (ADR-012 gate R2). Check with `npx wrangler secret list --env production`. Delete any of the three with `npx wrangler secret delete <NAME> --env production`.
+
+---
+
 ## First Production Launch — One-Time Data Steps
 
 These run once, against the production database, before the first launch. They are data steps, not migrations, so no test brand or fixture ever ships in `migrations/`.
@@ -241,7 +271,7 @@ SELECT action, resource_id, outcome FROM admin_audit_log WHERE id = 'ose-1415-fo
 
 After OSE-1353, sign in to `https://oursharedevents.com/admin` through the **production** Access app:
 
-- `GET /api/v2/admin/events` must return `ok: true` with `filters` echoed back, not an empty deny-scoped list.
+- `GET /api/v2/admin/events` must return `ok: true` with `filters` echoed back, not an empty deny-scoped list. Production starts with 0 events (migration 0086), so an empty `items` proves nothing: a deny-scoped response is also `ok: true, items: []` but has no `filters` key.
 - A non-member identity must still get an empty list. `tests/admin-brand-membership.spec.ts` covers this fail-closed case.
 
 **Never:** add a wildcard brand, add a second identity without its own ticket, or set `ADMIN_SCOPE_ALL` on production.
@@ -334,6 +364,7 @@ bq --project_id="$PROJECT" mk --table "$DATASET.corridor_returns_export" bigquer
 **Why:** `anon_id_returns.anon_id_hash` is keyed by `ANON_ID_HASH_PEPPER`. Erasure (`handlers/data-subject.ts`) can only re-derive the hash under the current pepper, so rows written under any other pepper, or before 0091 (`pepper_epoch` NULL), cannot be found for a person who asks to be erased. The export never counts them. The nightly materializer deletes them, but at most 50,000 rows a run; past that it logs `ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE` and continues the next night. This step removes them all at once.
 
 **When:**
+
 - once per environment, right after the deploy that applies 0091;
 - after every `ANON_ID_HASH_PEPPER` rotation, straight after the secret is changed and before the next nightly run (`0 3 * * *` UTC).
 
@@ -361,7 +392,7 @@ npx wrangler d1 execute DB --env "$ENV" --remote --command "DELETE FROM anon_id_
 - `security-monitoring.yml`: the daily health and security-header check runs against production as well. A production failure opens an urgent Linear issue and fails the digest.
 - `security-regression.yml`: main-push and nightly runs target production instead of staging.
 
-**Already on, no variable needed:** `cf-access-canary.yml` checks every 6 hours that `/admin` and `/api/v2/admin/sponsors` on each host are challenged by that host's own Access app. The production row stays red until OSE-1353 is fixed.
+**Already on, no variable needed:** `cf-access-canary.yml` checks every 6 hours that every path in `scripts/ci/access-protected-paths.txt` on each host is challenged by that host's own Access app. The production row stays red until OSE-1353 is fixed.
 
 **Verify:** dispatch `Security Monitoring — Daily` with `dry_run=true`. The job summary should show a "Health check (production)" row that is not `SKIPPED`.
 

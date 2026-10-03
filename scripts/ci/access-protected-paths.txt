@@ -1,0 +1,19 @@
+# Paths the Worker guards with requireAdmin (workers/oursharedevents/src/router.ts).
+# Each one must sit behind the host's Cloudflare Access app: a guarded path that
+# Access does not cover reaches the Worker with no Cf-Access-Jwt-Assertion and
+# answers 401, so the admin UI breaks on it (OSE-1353).
+#
+# One probe path per line. cf-access-canary.yml probes every line on every host,
+# and tests/integration/access-protected-paths.test.js fails if the router
+# guards a path group that no line here covers.
+#
+# Access app destinations to configure (per host):
+#   admin  manage  dashboard  create  api/v2/admin/*  briefing  overview  summary
+/admin
+/manage
+/dashboard
+/create
+/api/v2/admin/sponsors
+/briefing
+/overview
+/summary
