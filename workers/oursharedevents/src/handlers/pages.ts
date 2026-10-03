@@ -782,6 +782,18 @@ function formatHumanDate(iso: string | null): string {
  */
 const ANONYMITY_AFFORDANCE = renderNeverWho('event');
 
+/**
+ * The venue map image, or nothing when the event has no venue. Requested by
+ * event id: the image route (handlers/venue-image.ts) serves public events
+ * only, so the admin preview of a draft passes over it rather than show a
+ * broken image.
+ */
+function venueMapImg(row: PublicEventRow, testId: string): string {
+  const venue = row.location || row.where_address;
+  if (!venue) return '';
+  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(venue)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />`;
+}
+
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
 // The current CSP policy (see `securityHeaders` below) allows
 // `style-src 'self' 'unsafe-inline'`. With `'unsafe-inline'` present,
@@ -834,13 +846,7 @@ export function renderPreEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const startHuman = formatEventWhen(row);
-  const hasVenue = Boolean(row.location || row.where_address);
-  // The image route serves public events only, so the admin preview of a draft
-  // leaves the map out instead of showing a broken image.
-  const mapImg =
-    hasVenue && !preview
-      ? `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map" />`
-      : '';
+  const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -1035,10 +1041,7 @@ export function renderEventLiveHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const hasVenue = Boolean(row.location || row.where_address);
-  const mapImg = hasVenue
-    ? `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />`
-    : '';
+  const mapImg = venueMapImg(row, 'venue-map-live');
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -1298,10 +1301,7 @@ export function renderPostEventHtml(
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row);
-  const hasVenue = Boolean(row.location || row.where_address);
-  const mapImg = hasVenue
-    ? `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />`
-    : '';
+  const mapImg = venueMapImg(row, 'venue-map-post');
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
