@@ -65,7 +65,11 @@ const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // Matches the pattern in pages.ts handleSubscribe.
 
 const FORM_RATE_WINDOW_MS = 60_000; // 1 minute
-const FORM_RATE_MAX = 10; // 10 submissions per IP per eventId per minute
+// 360 per IP per eventId per minute (6/s), the PO bar of OSE-1509: one person
+// at ~5 requests a second is never refused. Fast blocking of a flood is the
+// edge layer's job (router.ts, FORM_EDGE_LIMITER); this per-isolate count is a
+// backstop.
+const FORM_RATE_MAX = 360;
 const FORM_RATE_MAX_BUCKETS = 50_000;
 const FORM_RATE_EVICT_BATCH = 200;
 const formRateBuckets = new Map<string, number[]>();

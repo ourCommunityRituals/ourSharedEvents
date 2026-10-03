@@ -1,0 +1,51 @@
+info:
+  name: OSE-INV-NW | T2 | assert | POST sponsor impression with a cookie returns no identity and sets no cookie
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/test-event-001/sponsors/sb_cov_local_bronze/impression"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Cookie
+      value: ose_anon=anon_bruno_planted_7d1e
+  body:
+    type: json
+    data: '{"surface":"public","placement":"mobileBanner"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Sponsor signal is never-who (OSE-1164), contract rung. The pair is the
+        // covenant fixture (covenant-sponsors-seed.sql), so the placement is real.
+        // No beacon_token is sent, so the worker answers 202 counted:false and
+        // writes nothing: this request never adds to a sponsor's numbers.
+        // Runnable twin with a counted 201: tests/sponsor-signal-anonymity.spec.ts.
+        const PLANTED = 'anon_bruno_planted_7d1e';
+        const json = res.getBody();
+        test('never-who: a real placement without a beacon token is 202, not counted', function () {
+          expect(res.getStatus()).to.eql(202);
+          expect(json.ok).to.eql(true);
+          expect(json.counted).to.eql(false);
+        });
+        test('never-who: the response carries only ok, status and counted', function () {
+          expect(Object.keys(json).sort()).to.eql(['counted', 'ok', 'status']);
+        });
+        test('never-who: the cookie sent with the request is not echoed back', function () {
+          expect(JSON.stringify(json)).to.not.include(PLANTED);
+          expect(JSON.stringify(res.getHeaders())).to.not.include(PLANTED);
+        });
+        test('never-who: the signal endpoint sets no cookie', function () {
+          expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

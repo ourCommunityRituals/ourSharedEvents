@@ -20,17 +20,19 @@
 
 ## Cost lines
 
-| Line                                     | Fixed / month                                                                      | Variable                                                          | Driver                                   | Who triggers it                     | Who pays                             |
-| ---------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------- | ----------------------------------- | ------------------------------------ |
-| H3 hexagons                              | $0                                                                                 | $0 beyond Worker compute                                          | page views                               | everyone                            | platform (inside the Workers plan)   |
-| Place names on hexagons (first release)  | $0                                                                                 | $0                                                                | page views                               | everyone                            | platform                             |
-| Google venue image (today)               | $0                                                                                 | first 10,000 loads/month free, then **$2.00 per 1,000**           | one load per uncached image request      | **attendees on public event pages** | platform — not tied to any paid tier |
-| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** (whole planet ≈ 120 GB ≈ **$1.80**; first 10 GB free) | reads: **$0.36 per million** after 10 million free; no egress fee | tile reads per map view (estimate 10–30) | whoever sees the street map         | funded by Mid revenue (see below)    |
+| Line                                     | Fixed / month                                                                      | Variable                                                          | Driver                                                             | Who triggers it                     | Who pays                             |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------- | ------------------------------------ |
+| H3 hexagons                              | $0                                                                                 | $0 beyond Worker compute                                          | page views                                                         | everyone                            | platform (inside the Workers plan)   |
+| Place names on hexagons (first release)  | $0                                                                                 | $0                                                                | page views                                                         | everyone                            | platform                             |
+| Google venue image (today)               | $0                                                                                 | first 10,000 loads/month free, then **$2.00 per 1,000**           | one load per venue, per Cloudflare location, per day (edge-cached) | **attendees on public event pages** | platform — not tied to any paid tier |
+| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** (whole planet ≈ 120 GB ≈ **$1.80**; first 10 GB free) | reads: **$0.36 per million** after 10 million free; no egress fee | tile reads per map view (estimate 10–30)                           | whoever sees the street map         | funded by Mid revenue (see below)    |
 
 ## What each option costs at volume (estimates)
 
 Assumes one Google load per event-page view that is not already cached in the
-visitor's browser, and 20 tile reads per street-map view.
+visitor's browser, and 20 tile reads per street-map view. The Google column is the
+worst case: since the edge cache (see "Open exposure"), views of the same venue
+share one load, so the real figure is lower.
 
 | Monthly map views | Google venue image | Self-hosted street map                          |
 | ----------------- | ------------------ | ----------------------------------------------- |
@@ -73,22 +75,40 @@ The PO needs a plan and a reaction ready for this inside the next year
 
 Their actual volumes are unknown; re-run the table above with their numbers at intake.
 
-## Open exposure (not yet fixed)
+## Open exposure
 
-`GET /api/v2/maps/venue-image` takes any `venue` text up to 200 characters and makes
-a billed Google request for it. The route has no rate limit of its own in
-`router.ts`, and the response is cached only in the visitor's browser. A script
-varying the `venue` text could spend the free allowance and then run up charges.
-Mitigations, cheapest first: set a daily quota cap on the key in Google Cloud;
-wrap the route in the public-read rate limit; accept only venues that belong to a
-published event; cache each image at the edge.
+**Fixed in code on 2026-10-03** (`handlers/venue-image.ts`, gate
+`tests/venue-image.spec.ts`). **Still open: the daily quota cap on the key in
+Google Cloud**, which is set in the Google console, not in this repo.
+
+What it was: `GET /api/v2/maps/venue-image` took any `venue` text up to 200
+characters and made a billed Google request for it. The route had no rate limit,
+and the response was cached only in the visitor's browser. A script varying the
+`venue` text could spend the free allowance and then run up charges.
+
+What the route does now:
+
+- **It is keyed by event, not by text.** `?event=<id>` only; `?venue=` is a 400. The
+  venue text comes from the event row, and only for an event whose public page
+  renders (published, not draft or ready). Anything else is a 404 with no Google
+  request. The set of billable strings is the set of venues on public events.
+- **It is rate-limited** at the router with the public-read limit
+  (`publicReadLimited('venue-image', …)`).
+- **It is cached at the edge**, keyed by the venue text (case and spacing ignored).
+  A repeat view, or a second event at the same venue, makes no Google request for a
+  day per Cloudflare location. A Google failure is remembered for 60 seconds.
+
+What the code does not bound: the edge cache is per Cloudflare location and can be
+evicted, and the rate limiter fails open when its storage is down. The quota cap in
+Google Cloud is the only hard ceiling on the bill.
 
 ## How the cost is observed
 
-`OPERATION_COST` already logs one line per request with a masked route label, so the
-count of `GET /api/v2/maps/venue-image` lines per month is the count of billable
-Google loads. No new metric is needed for the current layers. A self-hosted street
-map would add one tile route to count the same way.
+`OPERATION_COST` logs one line per request with a masked route label. Since the edge
+cache, the count of `GET /api/v2/maps/venue-image` lines per month is an **upper
+bound** on billable Google loads (cache hits are counted but not billed); the exact
+count is in the Google Cloud console for the key. A self-hosted street map would add
+one tile route to count the same way.
 
 ## Sources (read 2026-10-03)
 

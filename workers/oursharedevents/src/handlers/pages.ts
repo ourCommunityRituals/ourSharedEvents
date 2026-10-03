@@ -783,6 +783,18 @@ function formatHumanDate(iso: string | null): string {
  */
 const ANONYMITY_AFFORDANCE = renderNeverWho('event');
 
+/**
+ * The venue map image, or nothing when the event has no venue. Requested by
+ * event id: the image route (handlers/venue-image.ts) serves public events
+ * only, so the admin preview of a draft passes over it rather than show a
+ * broken image.
+ */
+function venueMapImg(row: PublicEventRow, testId: string): string {
+  const venue = row.location || row.where_address;
+  if (!venue) return '';
+  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(venue)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />`;
+}
+
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
 // The current CSP policy (see `securityHeaders` below) allows
 // `style-src 'self' 'unsafe-inline'`. With `'unsafe-inline'` present,
@@ -835,10 +847,7 @@ export function renderPreEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const startHuman = formatEventWhen(row);
-  const venueParam = encodeURIComponent(row.location || row.where_address || '');
-  const mapImg = venueParam
-    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map" />`
-    : '';
+  const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -903,12 +912,12 @@ ${SPONSOR_LIST_CSS}
   <a href="#main" class="ose-skip">Skip to event content</a>
   ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events' })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
-    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
     </header>
+    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort || whatVideo || whatLink
@@ -1033,10 +1042,7 @@ export function renderEventLiveHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const venueParam = encodeURIComponent(row.location || row.where_address || '');
-  const mapImg = venueParam
-    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />`
-    : '';
+  const mapImg = venueMapImg(row, 'venue-map-live');
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -1104,7 +1110,6 @@ ${SPONSOR_LIST_CSS}
   <a href="#main" class="ose-skip">Skip to event content</a>
   ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live' })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
-    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
@@ -1113,6 +1118,7 @@ ${SPONSOR_LIST_CSS}
       ${renderEventTypeMeta(row, 'event-type-live')}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
     </header>
+    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort || whatLink
@@ -1296,10 +1302,7 @@ export function renderPostEventHtml(
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row);
-  const venueParam = encodeURIComponent(row.location || row.where_address || '');
-  const mapImg = venueParam
-    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />`
-    : '';
+  const mapImg = venueMapImg(row, 'venue-map-post');
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.

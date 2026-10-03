@@ -26,6 +26,9 @@ import { env } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import { handleFormRegistration } from '../src/handlers/forms';
 
+/** Mirrors FORM_RATE_MAX in handlers/forms.ts (pinned by form-rate-limit.spec.ts). */
+const FORM_RATE_MAX = 360;
+
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
   FORMS_DB: D1Database;
@@ -107,15 +110,23 @@ describe('TL-013 | Rate limit bypass | Integration: known bypass documentation',
     const eventId = 'evt_rl_bypass_tl013';
 
     // Exhaust the rate limit for IP A
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
       await handleFormRegistration(makeReq(eventId, '192.0.2.1', i), formsEnv as any, eventId);
     }
-    const limitedA = await handleFormRegistration(makeReq(eventId, '192.0.2.1', 11), formsEnv as any, eventId);
+    const limitedA = await handleFormRegistration(
+      makeReq(eventId, '192.0.2.1', FORM_RATE_MAX + 1),
+      formsEnv as any,
+      eventId
+    );
     expect(limitedA.status).toBe(429);
 
     // IP B is NOT rate-limited (fresh bucket) — this is the bypass
     // @known-bypass TL-013: pending SR-23 distributed rate limiting
-    const resultB = await handleFormRegistration(makeReq(eventId, '192.0.2.2', 1), formsEnv as any, eventId);
+    const resultB = await handleFormRegistration(
+      makeReq(eventId, '192.0.2.2', 1),
+      formsEnv as any,
+      eventId
+    );
     expect(resultB.status).not.toBe(429);
   });
 
@@ -124,12 +135,20 @@ describe('TL-013 | Rate limit bypass | Integration: known bypass documentation',
     const ip = '192.0.2.10';
 
     // Exhaust for event A
-    for (let i = 1; i <= 10; i++) {
-      await handleFormRegistration(makeReq('evt_rl_tl013_a', ip, i), formsEnv as any, 'evt_rl_tl013_a');
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
+      await handleFormRegistration(
+        makeReq('evt_rl_tl013_a', ip, i),
+        formsEnv as any,
+        'evt_rl_tl013_a'
+      );
     }
 
     // Event B is not rate-limited for same IP (correct — per-event isolation)
-    const resultB = await handleFormRegistration(makeReq('evt_rl_tl013_b', ip, 1), formsEnv as any, 'evt_rl_tl013_b');
+    const resultB = await handleFormRegistration(
+      makeReq('evt_rl_tl013_b', ip, 1),
+      formsEnv as any,
+      'evt_rl_tl013_b'
+    );
     expect(resultB.status).not.toBe(429);
   });
 
@@ -137,7 +156,11 @@ describe('TL-013 | Rate limit bypass | Integration: known bypass documentation',
     const formsEnv = env as unknown as TestEnv;
     // 15 requests with no IP header should never return 429
     for (let i = 1; i <= 15; i++) {
-      const res = await handleFormRegistration(makeReq('evt_rl_tl013_noip', null, i), formsEnv as any, 'evt_rl_tl013_noip');
+      const res = await handleFormRegistration(
+        makeReq('evt_rl_tl013_noip', null, i),
+        formsEnv as any,
+        'evt_rl_tl013_noip'
+      );
       expect(res.status).not.toBe(429);
     }
   });

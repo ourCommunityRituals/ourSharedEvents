@@ -5,7 +5,7 @@
  * sliding-window rate limiting on PII-collecting form handlers:
  *
  *   1. isFormRateLimited function defined with ip + eventId composite key
- *   2. FORM_RATE_MAX = 10 (10 submissions per minute)
+ *   2. FORM_RATE_MAX = 360 (6 a second: OSE-1509, ~5/s from one person is never refused)
  *   3. FORM_RATE_WINDOW_MS = 60_000 (1-minute window)
  *   4. 429 status + Retry-After: 60 on rate limit hit
  *   5. registration + email-signup handlers check the rate limit (PII handlers)
@@ -13,7 +13,7 @@
  *   7. Rate limiting is skipped when CF-Connecting-IP header is absent (local/test)
  *   8. Different eventIds have independent limits (composite key)
  *
- * Integration gate: direct handler invocation confirms 429 after 10 requests.
+ * Integration gate: direct handler invocation confirms 429 after FORM_RATE_MAX (360) requests.
  */
 
 import { SELF, env } from 'cloudflare:test';
@@ -24,7 +24,11 @@ import {
   handleFormSurvey,
   handleFormEmailSignup,
 } from '../src/handlers/forms';
-import { RATE_LIMIT_MAX } from '../src/lib/rate-limit';
+import { RATE_LIMIT_FORM_MAX } from '../src/lib/rate-limit';
+import { FORM_EDGE_MAX, EDGE_WINDOW_SECONDS } from '../src/lib/edge-rate-limit';
+
+/** Mirrors FORM_RATE_MAX in handlers/forms.ts (pinned by the source gate below). */
+const FORM_RATE_MAX = 360;
 
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
@@ -66,9 +70,9 @@ describe('SR-16 | Rate limiting | Source gate', () => {
     expect(src).toContain('`${ip}:${eventId}`');
   });
 
-  test('FORM_RATE_MAX is 10', () => {
+  test('FORM_RATE_MAX is 360', () => {
     const src = getFormsTs();
-    expect(src).toContain('FORM_RATE_MAX = 10');
+    expect(src).toContain('FORM_RATE_MAX = 360');
   });
 
   test('FORM_RATE_WINDOW_MS is 60000 (1 minute)', () => {
@@ -130,7 +134,7 @@ describe('SR-16 | Rate limiting | Source gate', () => {
 });
 
 describe('SR-16 | Rate limiting | Integration gate', () => {
-  test('registration handler returns 429 after 10 requests from same IP+eventId', async () => {
+  test('registration handler returns 429 after FORM_RATE_MAX requests from same IP+eventId', async () => {
     const formsEnv = env as unknown as TestEnv;
     // Use a unique IP to avoid cross-test pollution from other test runs
     const ip = '10.0.0.1';
@@ -147,17 +151,21 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
         body: JSON.stringify({ name: `User ${n}`, consent: true }),
       });
 
-    // First 10 should not be rate-limited (may fail DB — that's OK; only care about non-429 status)
-    for (let i = 1; i <= 10; i++) {
+    // The first FORM_RATE_MAX are not rate-limited (may fail DB — that's OK; only care about non-429 status)
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
       const res = await handleFormRegistration(makeReq(i), formsEnv as any, eventId);
       expect(res.status).not.toBe(429);
     }
 
-    // 11th request must be rate-limited
-    const limited = await handleFormRegistration(makeReq(11), formsEnv as any, eventId);
+    // The next one must be rate-limited
+    const limited = await handleFormRegistration(
+      makeReq(FORM_RATE_MAX + 1),
+      formsEnv as any,
+      eventId
+    );
     expect(limited.status).toBe(429);
     expect(limited.headers.get('Retry-After')).toBe('60');
-    const body = await limited.json() as Record<string, unknown>;
+    const body = (await limited.json()) as Record<string, unknown>;
     expect(body.code).toBe('RATE_LIMITED');
   });
 
@@ -167,11 +175,15 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
     const ip = '10.0.0.20';
 
     // Exhaust rate limit for eventId A (registration is rate-limited)
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
       await handleFormRegistration(
         new Request('http://localhost/api/v2/events/evt_rl_a2/forms/register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+          headers: {
+            'Content-Type': 'application/json',
+            'CF-Connecting-IP': ip,
+            Origin: 'http://localhost',
+          },
           body: JSON.stringify({ name: `User ${i}`, consent: true }),
         }),
         formsEnv as any,
@@ -183,7 +195,11 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
     const resB = await handleFormRegistration(
       new Request('http://localhost/api/v2/events/evt_rl_b2/forms/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': ip,
+          Origin: 'http://localhost',
+        },
         body: JSON.stringify({ name: 'User 1', consent: true }),
       }),
       formsEnv as any,
@@ -211,28 +227,58 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
 });
 
 // TL-057: the handler exemption above is not the whole picture. The router puts
-// every public form POST, check-in and survey included, behind the KV-backed
-// per-IP limiter (src/router.ts, isRateLimited(clientIp(request), ...), 60/min;
-// the KV key is a SHA-256 of the IP, never the IP itself). These tests pin that
-// route-level limit, so a router change that drops it turns red.
+// every public form POST, check-in and survey included, behind two route-level
+// limits (src/router.ts, formRouteLimit; OSE-1509): the edge layer
+// (FORM_EDGE_LIMITER, 60 per 10 s per IP per event) refuses a flood within its
+// first fraction of a second, and the KV count (RATE_LIMIT_FORM_MAX = 360/min
+// per IP across events; the KV key is an HMAC/SHA-256 of the IP, never the IP)
+// catches a caller who stays under it. These tests pin both, so a router change
+// that drops either turns red.
 describe('TL-057 | route-level limit covers the anonymous form handlers', () => {
+  const post = (formType: string, eventId: string, ip: string) =>
+    SELF.fetch(`http://localhost/api/v2/events/${eventId}/forms/${formType}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': ip,
+        Origin: 'http://localhost',
+      },
+      body: JSON.stringify({}),
+    });
+
   for (const formType of ['checkin', 'survey'] as const) {
-    test(`POST /forms/${formType} returns 429 after ${RATE_LIMIT_MAX} requests from one IP`, async () => {
+    test(`POST /forms/${formType}: a burst on one event is refused after ${FORM_EDGE_MAX}, retry in ${EDGE_WINDOW_SECONDS} s`, async () => {
       const ip = formType === 'checkin' ? '10.57.0.1' : '10.57.0.2';
-      const call = () =>
-        SELF.fetch(`http://localhost/api/v2/events/evt_tl057_${formType}/forms/${formType}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
-          body: JSON.stringify({}),
-        });
-      for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-        const res = await call();
+      for (let i = 0; i < FORM_EDGE_MAX; i++) {
+        const res = await post(formType, `evt_tl057_${formType}`, ip);
         expect(res.status).not.toBe(429);
         await res.body?.cancel();
       }
-      const limited = await call();
+      // The binding counts in fixed 10 s windows, so a burst that straddles a
+      // window edge is counted afresh once; it is refused by 2x the limit.
+      let limited = await post(formType, `evt_tl057_${formType}`, ip);
+      for (let i = 0; limited.status !== 429 && i < FORM_EDGE_MAX; i++) {
+        await limited.body?.cancel();
+        limited = await post(formType, `evt_tl057_${formType}`, ip);
+      }
       expect(limited.status).toBe(429);
+      expect(limited.headers.get('Retry-After')).toBe(String(EDGE_WINDOW_SECONDS));
+      expect(limited.headers.get('X-RateLimit-Limit')).toBe(String(FORM_EDGE_MAX));
       await limited.body?.cancel();
     });
   }
+
+  test(`the per-IP KV count refuses a caller spread across events after ${RATE_LIMIT_FORM_MAX}`, async () => {
+    const ip = '10.57.0.3';
+    // One event per request, so the per-event edge layer never trips.
+    for (let i = 0; i < RATE_LIMIT_FORM_MAX; i++) {
+      const res = await post('checkin', `evt_tl057_spread_${i}`, ip);
+      expect(res.status).not.toBe(429);
+      await res.body?.cancel();
+    }
+    const limited = await post('checkin', 'evt_tl057_spread_last', ip);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('X-RateLimit-Limit')).toBe(String(RATE_LIMIT_FORM_MAX));
+    await limited.body?.cancel();
+  });
 });

@@ -266,7 +266,8 @@ import {
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
-import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
+import { type MapsEnv } from './lib/maps';
+import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
 import {
@@ -284,9 +285,14 @@ import { handleAdminPreEventActivity } from './handlers/pre-event-activity';
 import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { bindCorsEnv, corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
+import {
+  FORM_EDGE_MAX,
+  edgeCallerIp,
+  edgeLimitResponse,
+  isEdgeLimited,
+} from './lib/edge-rate-limit';
 import { assertRenderable, parseEventState } from './domain/event-state';
 import {
-  isRateLimited,
   checkRateLimit,
   clientIp,
   rateLimitResponse,
@@ -294,6 +300,7 @@ import {
   RATE_LIMIT_BATCH_MAX,
   RATE_LIMIT_MINT_MAX,
   RATE_LIMIT_MAX,
+  RATE_LIMIT_FORM_MAX,
   bucketLimit,
   isBucketTripped,
   scanRateLimitBuckets,
@@ -378,6 +385,40 @@ export type RouterEnv = PagesEnv &
      */
     SCAN_RETURNS_RETENTION_DAYS?: string;
   };
+
+/**
+ * The rate limit every public form POST and the registration self-delete meet
+ * first (OSE-552, OSE-1509): the edge layer, keyed per caller per event, then
+ * the per-IP KV count across events. Both are sized so one person at ~5
+ * requests a second is never refused. Returns the 429 to send, or null to go on.
+ *
+ * The KV count fails open, like the public-read limiter: KV takes about one
+ * write a second per key, so a burst on one caller's bucket makes `put` throw.
+ * Unguarded, that throw was a 500 (22 of 180 in T5 run 37098251345).
+ */
+async function formRouteLimit(
+  request: Request,
+  env: RouterEnv,
+  eventId: string
+): Promise<Response | null> {
+  const ip = edgeCallerIp(request);
+  if (ip && (await isEdgeLimited(env.FORM_EDGE_LIMITER, `${ip}:${eventId}`))) {
+    return edgeLimitResponse(FORM_EDGE_MAX);
+  }
+  try {
+    if (await checkRateLimit(env, clientIp(request), RATE_LIMIT_FORM_MAX)) {
+      return rateLimitResponse(RATE_LIMIT_FORM_MAX);
+    }
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        type: 'FORM_RATE_LIMIT_FAIL_OPEN',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+  return null;
+}
 
 export async function route(
   request: Request,
@@ -1655,19 +1696,20 @@ export async function route(
     return handleSponsorLogo(request, env, logoMatch[1]);
   }
 
-  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
   // GET /api/v2/uploads/*key — serve R2 file (OSE-200)
   const uploadServeMatch = pathname.match(/^\/api\/v2\/uploads\/(.+)$/);
   if (uploadServeMatch && method === 'GET') {
     return handleGetUploadedFile(request, env, uploadServeMatch[1]);
   }
 
-  // GET /api/v2/maps/venue-image?venue=<encoded>
+  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/maps/venue-image?event=<id>
   // Proxies Google Static Maps API server-side so the API key never reaches
-  // the browser. Used by SharedReports to render venue map thumbnails.
+  // the browser. Each cache miss is a billed Google load, so the route is
+  // rate-limited, keyed by a public event (never free text) and edge-cached
+  // (handlers/venue-image.ts).
   if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
-    const venueParam = url.searchParams.get('venue') ?? '';
-    return fetchStaticMapImage(env, venueParam);
+    return publicReadLimited('venue-image', handleVenueImage)(request, env);
   }
 
   // ── Public: self-delete a registration (OSE-659) ───────────────────────────
@@ -1676,9 +1718,8 @@ export async function route(
   // identity surface). Writes only to FORMS_DB.
   const selfDeleteMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/forms\/register$/);
   if (selfDeleteMatch && method === 'DELETE') {
-    if (await isRateLimited(env, clientIp(request))) {
-      return rateLimitResponse();
-    }
+    const limited = await formRouteLimit(request, env, selfDeleteMatch[1]);
+    if (limited) return limited;
     return handleSelfDeleteRegistration(request, env, selfDeleteMatch[1]);
   }
 
@@ -1689,10 +1730,9 @@ export async function route(
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
 
-    // Rate limit: 60 req/min per IP, persistent via CF KV (OSE-552).
-    if (await isRateLimited(env, clientIp(request))) {
-      return rateLimitResponse();
-    }
+    // Rate limit (OSE-552, OSE-1509): edge layer, then the per-IP KV count.
+    const limited = await formRouteLimit(request, env, eventId);
+    if (limited) return limited;
 
     // Event lifecycle guard: reject submissions for non-active events.
     // Only blocks if the event row explicitly exists with a non-active status;

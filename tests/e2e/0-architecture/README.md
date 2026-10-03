@@ -127,11 +127,11 @@ about a _class_ of things or about _one specific artifact_.
 
 ### The audit
 
-| Shape                                  | Gates                                                                                                                                                                                                             | Verdict |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| Derives its subjects                   | csp-connect-src, log-redaction, migration-monotonicity, slug-permanence, rendered-surface-lexicon, runtime-llm-free, monetization-inert, scan-path-split, sponsor-identity-split, tenant-isolation, pii-retention | correct |
-| Names one specific artifact, correctly | cost-metric-never-who, deprecation-lock, worker-claude-md, and others whose invariant IS about one module's shape                                                                                                 | correct |
-| Runtime checks, not source-shape gates | anonymous-id, geo-resolution, ncr-accumulation, uec-codes                                                                                                                                                         | n/a     |
+| Shape                                  | Gates                                                                                                                                                                                                                                                                            | Verdict |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Derives its subjects                   | csp-connect-src, log-redaction, sponsor-signal-never-who (client + click-out, since OSE-1166), migration-monotonicity, slug-permanence, rendered-surface-lexicon, runtime-llm-free, monetization-inert, scan-path-split, sponsor-identity-split, tenant-isolation, pii-retention | correct |
+| Names one specific artifact, correctly | cost-metric-never-who, deprecation-lock, worker-claude-md, and others whose invariant IS about one module's shape                                                                                                                                                                | correct |
+| Runtime checks, not source-shape gates | anonymous-id, geo-resolution, ncr-accumulation, uec-codes                                                                                                                                                                                                                        | n/a     |
 
 ### Two findings, both fixed
 

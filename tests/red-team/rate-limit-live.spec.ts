@@ -12,8 +12,8 @@
  *   X_OCR_INTERNAL  — internal auth secret
  *
  * Test IDs:
- *   RL-001  /api/v2/events — requests past the 120-request public-read limit → 429
- *   RL-002  /api/v2/events/:id/forms/email-signup — 61 POSTs → 429
+ *   RL-001  /api/v2/events — a burst past the public-read limit → 429 within 3 s
+ *   RL-002  /api/v2/events/:id/forms/email-signup — a burst past the form limit → 429 within 3 s
  *   RL-003  Retry-After header value is present and numeric
  *   RL-004  X-RateLimit-Limit header reflects the configured window
  *
@@ -28,11 +28,23 @@ const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
 
 /**
- * The number of requests allowed within the rate-limit window.
- * The (N+1)th request should receive 429.
+ * Requests allowed per 10 s edge window (OSE-1509; workers/oursharedevents/
+ * src/lib/edge-rate-limit.ts: PUBLIC_READ_EDGE_MAX, FORM_EDGE_MAX). The PO bar:
+ * a flood is refused within 3 s, while one person at ~5 requests a second
+ * (50 per window) never is.
  */
 const RATE_LIMIT_THRESHOLD = 60;
-const PUBLIC_READ_RATE_LIMIT_THRESHOLD = 120;
+const PUBLIC_READ_RATE_LIMIT_THRESHOLD = 60;
+
+/** The PO bar: the first 429 must arrive within this long of the burst starting. */
+const MAX_SECONDS_TO_FIRST_429 = 3;
+
+/**
+ * Requests in flight at once. A sequential loop from a CI runner managed about
+ * 4 requests a second, under the 5-a-second bar the limits are sized to let
+ * through, so it was not a flood. Waves of 20 are.
+ */
+const BURST_CONCURRENCY = 20;
 
 /**
  * A real event ID that exists on staging. The test tries to use
@@ -53,6 +65,8 @@ function adminHeaders(): Record<string, string> {
 interface HitResult {
   statuses: number[];
   firstRateLimitIndex: number | null;
+  /** Seconds from the burst starting to the first 429 arriving. */
+  secondsToFirst429: number | null;
   /** Who answered when the burst was NOT limited: first non-2xx/429 response, else the last. */
   answeredBy: string;
   retryAfterOnFirst429: string | null;
@@ -60,9 +74,9 @@ interface HitResult {
 }
 
 /**
- * Hit an endpoint N+1 times sequentially and return a structured summary.
- * Sequential (not concurrent) so Cloudflare's per-IP counter increments
- * cleanly and we can pinpoint exactly which request number triggers the 429.
+ * Send `total` requests as a burst, in waves of BURST_CONCURRENCY, and return a
+ * structured summary. Stops after the wave that drew the first 429. Responses
+ * are read in request order, so "first" means lowest request number.
  */
 async function hammmerEndpoint(
   fetcher: (n: number) => Promise<APIResponse>,
@@ -70,44 +84,60 @@ async function hammmerEndpoint(
 ): Promise<HitResult> {
   const statuses: number[] = [];
   let firstRateLimitIndex: number | null = null;
+  let secondsToFirst429: number | null = null;
   let retryAfterOnFirst429: string | null = null;
   let xRateLimitLimitOnFirst429: string | null = null;
   let answeredBy = '';
+  const start = Date.now();
 
-  for (let i = 0; i < total; i++) {
-    const response = await fetcher(i);
-    const status = response.status();
-    statuses.push(status);
+  for (
+    let waveStart = 0;
+    waveStart < total && firstRateLimitIndex === null;
+    waveStart += BURST_CONCURRENCY
+  ) {
+    const size = Math.min(BURST_CONCURRENCY, total - waveStart);
+    const wave = await Promise.all(
+      Array.from({ length: size }, async (_, k) => {
+        const response = await fetcher(waveStart + k);
+        return { response, at: Date.now() };
+      })
+    );
 
-    // OSE-1509: record which layer answered, so a burst that is never limited
-    // can be told apart as Worker (JSON error code, X-RateLimit-* headers) or
-    // the Cloudflare edge (cf-mitigated, HTML block page). Kept: the first
-    // non-2xx/non-429 response, otherwise the last response of the burst.
-    if (status !== 429 && !answeredBy.startsWith('first-error')) {
-      const h = response.headers();
-      const isError = status >= 300;
-      const body = isError ? (await response.text().catch(() => '')).slice(0, 160) : '';
-      answeredBy =
-        `${isError ? 'first-error' : 'last'} #${i + 1}: status=${status} ` +
-        `cf-mitigated=${h['cf-mitigated'] ?? '-'} ` +
-        `x-ratelimit-remaining=${h['x-ratelimit-remaining'] ?? '-'} ` +
-        `content-type=${h['content-type'] ?? '-'}` +
-        (body ? ` body=${JSON.stringify(body.replace(/\s+/g, ' '))}` : '');
-    }
+    for (let k = 0; k < wave.length; k++) {
+      const i = waveStart + k;
+      const { response, at } = wave[k];
+      const status = response.status();
+      statuses.push(status);
 
-    if (status === 429 && firstRateLimitIndex === null) {
-      firstRateLimitIndex = i;
-      retryAfterOnFirst429 = response.headers()['retry-after'] ?? null;
-      xRateLimitLimitOnFirst429 = response.headers()['x-ratelimit-limit'] ?? null;
+      // OSE-1509: record which layer answered, so a burst that is never limited
+      // can be told apart as Worker (JSON error code, X-RateLimit-* headers) or
+      // the Cloudflare edge (cf-mitigated, HTML block page). Kept: the first
+      // non-2xx/non-429 response, otherwise the last response of the burst.
+      if (status !== 429 && !answeredBy.startsWith('first-error')) {
+        const h = response.headers();
+        const isError = status >= 300;
+        const body = isError ? (await response.text().catch(() => '')).slice(0, 160) : '';
+        answeredBy =
+          `${isError ? 'first-error' : 'last'} #${i + 1}: status=${status} ` +
+          `cf-mitigated=${h['cf-mitigated'] ?? '-'} ` +
+          `x-ratelimit-remaining=${h['x-ratelimit-remaining'] ?? '-'} ` +
+          `content-type=${h['content-type'] ?? '-'}` +
+          (body ? ` body=${JSON.stringify(body.replace(/\s+/g, ' '))}` : '');
+      }
 
-      // We have what we need — no need to keep hammering after the first 429
-      break;
+      if (status === 429 && firstRateLimitIndex === null) {
+        firstRateLimitIndex = i;
+        secondsToFirst429 = (at - start) / 1000;
+        retryAfterOnFirst429 = response.headers()['retry-after'] ?? null;
+        xRateLimitLimitOnFirst429 = response.headers()['x-ratelimit-limit'] ?? null;
+      }
     }
   }
 
   return {
     statuses,
     firstRateLimitIndex,
+    secondsToFirst429,
     answeredBy,
     retryAfterOnFirst429,
     xRateLimitLimitOnFirst429,
@@ -118,13 +148,12 @@ async function hammmerEndpoint(
 
 test.describe('RL-001 — GET /api/v2/events rate limit', () => {
   /**
-   * This test is slow by design (121 sequential HTTP calls).
-   * Increase the test timeout to 3 minutes.
+   * A burst of up to 3x the limit; it stops after the first 429.
    */
   test.setTimeout(180_000);
 
   test('requests past the public-read limit return 429', async ({ request }) => {
-    const TOTAL = PUBLIC_READ_RATE_LIMIT_THRESHOLD + 1;
+    const TOTAL = 3 * PUBLIC_READ_RATE_LIMIT_THRESHOLD;
     const endpoint = `${BASE_URL}/api/v2/events`;
 
     const result = await hammmerEndpoint(() => request.get(endpoint), TOTAL);
@@ -134,9 +163,14 @@ test.describe('RL-001 — GET /api/v2/events rate limit', () => {
       `Expected 429 by request #${TOTAL} on /api/v2/events. ` +
         `Statuses received: ${result.statuses.join(', ')}. Answered by: ${result.answeredBy}`
     ).not.toBeNull();
+    expect(
+      result.secondsToFirst429,
+      `First 429 took ${result.secondsToFirst429}s; the bar is ${MAX_SECONDS_TO_FIRST_429}s`
+    ).toBeLessThanOrEqual(MAX_SECONDS_TO_FIRST_429);
 
     console.log(
-      `[RL-001] 429 triggered at request #${(result.firstRateLimitIndex ?? 0) + 1} of ${TOTAL}`
+      `[RL-001] 429 triggered at request #${(result.firstRateLimitIndex ?? 0) + 1} of ${TOTAL}, ` +
+        `${result.secondsToFirst429}s into the burst`
     );
   });
 });
@@ -147,7 +181,7 @@ test.describe('RL-002 — POST email-signup form rate limit', () => {
   test.setTimeout(180_000);
 
   test('requests past the form limit return 429', async ({ request }) => {
-    const TOTAL = RATE_LIMIT_THRESHOLD + 1;
+    const TOTAL = 3 * RATE_LIMIT_THRESHOLD;
     const endpoint = `${BASE_URL}/api/v2/events/${FIXTURE_EVENT_ID}/forms/email-signup`;
 
     const result = await hammmerEndpoint(
@@ -169,9 +203,14 @@ test.describe('RL-002 — POST email-signup form rate limit', () => {
       `Expected 429 by request #${TOTAL} on email-signup. ` +
         `Statuses received: ${result.statuses.join(', ')}. Answered by: ${result.answeredBy}`
     ).not.toBeNull();
+    expect(
+      result.secondsToFirst429,
+      `First 429 took ${result.secondsToFirst429}s; the bar is ${MAX_SECONDS_TO_FIRST_429}s`
+    ).toBeLessThanOrEqual(MAX_SECONDS_TO_FIRST_429);
 
     console.log(
-      `[RL-002] 429 triggered at request #${(result.firstRateLimitIndex ?? 0) + 1} of ${TOTAL}`
+      `[RL-002] 429 triggered at request #${(result.firstRateLimitIndex ?? 0) + 1} of ${TOTAL}, ` +
+        `${result.secondsToFirst429}s into the burst`
     );
   });
 });
@@ -185,7 +224,7 @@ test.describe('RL-003 — Retry-After header on 429 response', () => {
     request,
   }) => {
     const endpoint = `${BASE_URL}/api/v2/events`;
-    const TOTAL = PUBLIC_READ_RATE_LIMIT_THRESHOLD + 1;
+    const TOTAL = 3 * PUBLIC_READ_RATE_LIMIT_THRESHOLD;
 
     const result = await hammmerEndpoint(() => request.get(endpoint), TOTAL);
 
@@ -228,7 +267,7 @@ test.describe('RL-004 — X-RateLimit-Limit header reflects configured window', 
 
   test('X-RateLimit-Limit header matches the configured threshold', async ({ request }) => {
     const endpoint = `${BASE_URL}/api/v2/events`;
-    const TOTAL = PUBLIC_READ_RATE_LIMIT_THRESHOLD + 1;
+    const TOTAL = 3 * PUBLIC_READ_RATE_LIMIT_THRESHOLD;
 
     const result = await hammmerEndpoint(() => request.get(endpoint), TOTAL);
 

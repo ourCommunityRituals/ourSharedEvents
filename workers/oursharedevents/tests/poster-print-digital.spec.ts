@@ -103,40 +103,6 @@ describe('Print | Digital — the URL is the state', () => {
   });
 });
 
-describe('the sponsor header sits between the title and the date, and rotates on screen', () => {
-  test('the strip renders after the title block and before the date', () => {
-    const header = html.indexOf('data-testid="poster-card-header"');
-    const strip = html.indexOf('\'<div id="poster-sponsor-strip"');
-    const meta = html.indexOf('data-testid="poster-meta"');
-    expect(header).toBeGreaterThan(-1);
-    expect(strip).toBeGreaterThan(header);
-    expect(meta).toBeGreaterThan(strip);
-    // One strip only — it moved, it was not duplicated.
-    expect(html.match(/'<div id="poster-sponsor-strip"/g)?.length).toBe(1);
-  });
-
-  test('one sponsor shows at a time on screen only; print is untouched, so it shows them all', () => {
-    // The hide rule lives inside @media screen, so paper never sees it.
-    expect(html).toMatch(
-      /@media screen \{\s*\.poster-sponsors\.is-rotating \.poster-sponsor:not\(\.is-current\) \{\s*display:\s*none;\s*\}\s*\}/
-    );
-    const css = html.slice(0, html.indexOf('</style>'));
-    const print = css.slice(css.indexOf('@media print {'));
-    expect(print).not.toContain('is-rotating');
-    expect(html.match(/\.is-rotating/g)?.length).toBe(1);
-  });
-
-  test('rotation needs two sponsors, honours reduced motion, and never stacks timers', () => {
-    const i = html.indexOf('function rotatePosterSponsors(strip)');
-    expect(i).toBeGreaterThan(-1);
-    const fn = html.slice(i, html.indexOf('function renderPosterSponsors', i));
-    expect(fn).toContain('clearInterval(sponsorRotation)');
-    expect(fn).toContain('if (items.length < 2) return;');
-    expect(fn).toContain("'(prefers-reduced-motion: reduce)'");
-    expect(fn).toContain('SPONSOR_DWELL_MS');
-  });
-});
-
 describe('the picker only offers the event being configured', () => {
   test('?event= shows only that event: the picker is hidden and no list is fetched', () => {
     // OSE-867: the scoped poster is one poster-bundle call — there is no list
