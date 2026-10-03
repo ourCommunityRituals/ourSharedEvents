@@ -158,10 +158,14 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
     }
 
     // The next one must be rate-limited
-    const limited = await handleFormRegistration(makeReq(FORM_RATE_MAX + 1), formsEnv as any, eventId);
+    const limited = await handleFormRegistration(
+      makeReq(FORM_RATE_MAX + 1),
+      formsEnv as any,
+      eventId
+    );
     expect(limited.status).toBe(429);
     expect(limited.headers.get('Retry-After')).toBe('60');
-    const body = await limited.json() as Record<string, unknown>;
+    const body = (await limited.json()) as Record<string, unknown>;
     expect(body.code).toBe('RATE_LIMITED');
   });
 
@@ -175,7 +179,11 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
       await handleFormRegistration(
         new Request('http://localhost/api/v2/events/evt_rl_a2/forms/register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+          headers: {
+            'Content-Type': 'application/json',
+            'CF-Connecting-IP': ip,
+            Origin: 'http://localhost',
+          },
           body: JSON.stringify({ name: `User ${i}`, consent: true }),
         }),
         formsEnv as any,
@@ -187,7 +195,11 @@ describe('SR-16 | Rate limiting | Integration gate', () => {
     const resB = await handleFormRegistration(
       new Request('http://localhost/api/v2/events/evt_rl_b2/forms/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': ip,
+          Origin: 'http://localhost',
+        },
         body: JSON.stringify({ name: 'User 1', consent: true }),
       }),
       formsEnv as any,
@@ -226,7 +238,11 @@ describe('TL-057 | route-level limit covers the anonymous form handlers', () => 
   const post = (formType: string, eventId: string, ip: string) =>
     SELF.fetch(`http://localhost/api/v2/events/${eventId}/forms/${formType}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: 'http://localhost' },
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': ip,
+        Origin: 'http://localhost',
+      },
       body: JSON.stringify({}),
     });
 

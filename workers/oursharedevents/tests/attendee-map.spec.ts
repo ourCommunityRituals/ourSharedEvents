@@ -19,10 +19,17 @@ import { latLngToCell } from 'h3-js';
 import {
   renderAttendeeMap,
   attendeeMapAreas,
+  townOf,
   MAX_MAP_AREAS,
   type AttendeeMapItem,
 } from '../src/lib/attendee-map';
-import { renderLandingArea, LIST_MAX } from '../src/lib/landing-area';
+import {
+  renderLandingArea,
+  injectLandingArea,
+  orderLandingSections,
+  LIST_MAX,
+} from '../src/lib/landing-area';
+import LANDING_HTML from '../src/templates/landing.html';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
 
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
@@ -58,7 +65,7 @@ describe('attendee map | per-corridor gate (§6.2b)', () => {
   it('below the gate in every corridor: no SVG, the busiest count, a pointer to the list', () => {
     const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
     expect(out.state).toBe('thin');
-    // The only drawing below the gate is the labelled example, never a real map.
+    // No real neighborhood is drawn: only the labelled example.
     expect(out.html).not.toContain('data-testid="amap-svg"');
     expect(out.html).not.toContain('data-testid="amap-area"');
     expect(out.html).toContain('data-testid="area-map-thin"');
@@ -85,7 +92,6 @@ describe('attendee map | per-corridor gate (§6.2b)', () => {
     );
     const out = renderAttendeeMap(items, { now: NOW });
     expect(out.state).toBe('thin');
-    // The only drawing below the gate is the labelled example, never a real map.
     expect(out.html).not.toContain('data-testid="amap-svg"');
     expect(out.html).not.toContain('data-testid="amap-area"');
     expect(out.html).toContain('The busiest has 1 so far');
@@ -215,44 +221,6 @@ describe('attendee map | shape', () => {
   });
 });
 
-describe('attendee map | the example shown below the gate', () => {
-  const thin = () => renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
-  const figure = (h: string) => h.slice(h.indexOf('<figure'), h.indexOf('</figure>'));
-
-  it('shows an example drawing under a bar that says Example', () => {
-    const html = thin().html;
-    expect(html).toContain('data-testid="amap-example"');
-    expect(html).toContain('dominant-baseline="central">Example</text>');
-    expect(html).toContain('these are not real events');
-    expect(html.split('<polygon').length - 1).toBe(3);
-  });
-
-  it('cannot be mistaken for a real map: no real test ids, links, cells or counts', () => {
-    const html = thin().html;
-    expect(html).not.toContain('data-testid="amap-svg"');
-    expect(html).not.toContain('data-testid="amap-area"');
-    expect(html).not.toContain('data-testid="amap-legend"');
-    expect(html).not.toContain('<a ');
-    expect(html).not.toContain('data-cell');
-    expect(html).not.toContain('data-count');
-    expect(html).not.toContain(BLUE7);
-  });
-
-  it('is the same drawing whatever the events are (it is not data)', () => {
-    const other = renderAttendeeMap([ev(1, { h3_res7: BEV7 })], { now: NOW }).html;
-    expect(figure(other)).toBe(figure(thin().html));
-  });
-
-  it('is named for assistive tech as an example, and is gone once a real map is drawn', () => {
-    expect(thin().html).toContain(
-      'role="img" aria-label="Example of the neighborhood map. These are not real events."'
-    );
-    const real = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW }).html;
-    expect(real).not.toContain('amap-example');
-    expect(real).not.toContain('>Example<');
-  });
-});
-
 describe('attendee map | the landing area gate', () => {
   const gate = (count: number) => ({ now: NOW, area: { count, min: 10 } });
 
@@ -320,5 +288,172 @@ describe('attendee map | on the landing', () => {
   it('a thin landing shows the gate note inside the map view', () => {
     const area = renderLandingArea(many(2), { now: NOW });
     expect(area.html).toContain('data-testid="area-map-thin"');
+  });
+});
+
+describe('attendee map | place names (the free base: no map service)', () => {
+  const G = CORRIDOR_READY_MIN_EVENTS;
+
+  it('townOf reads the town from a US address or a "Venue, Town ST" line, and nothing else', () => {
+    expect(townOf('13326 Olde Western Ave, Blue Island, IL 60406')).toBe('Blue Island');
+    expect(townOf('5771 Sawyer Rd, Sawyer, MI 49125-9100, USA')).toBe('Sawyer');
+    expect(townOf('Beverly Arts Center, Chicago IL')).toBe('Chicago');
+    expect(townOf("Rock Island Public House, Coeur d'Alene, ID")).toBe("Coeur d'Alene");
+    // No state, a street where the town should be, or junk: no name.
+    expect(townOf('Rock Island Public House')).toBeNull();
+    expect(townOf('Suite 4, 123 Main St, IL')).toBeNull();
+    expect(townOf('<b>x</b>, <i>y</i>, IL')).toBeNull();
+    expect(townOf(null)).toBeNull();
+    expect(townOf(42)).toBeNull();
+  });
+
+  it('names an area after the commonest town in its events, in the hexagon and the legend', () => {
+    const items = [
+      ...many(G - 1, { where_address: '13326 Olde Western Ave, Blue Island, IL 60406' }),
+      ev(50, { where_address: '1 Elsewhere Rd, Posen, IL 60469' }),
+    ];
+    const out = renderAttendeeMap(items, { now: NOW });
+    expect(out.areas.map((a) => a.name)).toEqual(['Blue Island']);
+    expect(out.html).toContain('<title>Area 1, Blue Island: ' + G + ' events</title>');
+    expect(out.html).toMatch(/<tspan [^>]*data-testid="amap-area-name">Blue Island<\/tspan>/);
+    expect(out.html).toContain(
+      '<span data-testid="amap-legend-name">Blue Island</span> &middot; ' + G + ' events:'
+    );
+  });
+
+  it('falls back to the venue line, then to "near <venue>", then to no name at all', () => {
+    const town = renderAttendeeMap(many(G, { venue: 'Beverly Arts Center, Chicago IL' }), {
+      now: NOW,
+    });
+    expect(town.areas[0]!.name).toBe('Chicago');
+
+    const near = renderAttendeeMap(many(G, { location: 'Rock Island Public House' }), { now: NOW });
+    expect(near.areas[0]!.name).toBe('near Rock Island Public House');
+
+    const none = renderAttendeeMap(many(G), { now: NOW });
+    expect(none.areas[0]!.name).toBe('');
+    expect(none.html).not.toContain('amap-area-name');
+    expect(none.html).not.toContain('amap-legend-name');
+    expect(none.html).toContain('<title>Area 1: ' + G + ' events</title>');
+    expect(none.html).toContain('<strong>' + G + ' events:</strong>');
+  });
+
+  it('escapes a hostile venue name wherever the area name is written', () => {
+    const hostile = '"><img src=x onerror=alert(1)>';
+    const out = renderAttendeeMap(many(G, { venue: hostile }), { now: NOW });
+    expect(out.areas[0]!.name).toContain('near ');
+    expect(out.html).not.toContain('<img');
+    expect(out.html).toContain('&lt;img');
+  });
+
+  it('draws names inside the hexagons only while they are few; the legend always has them', () => {
+    const towns = ['Alsip', 'Posen', 'Harvey', 'Dolton', 'Riverdale'];
+    const items = towns.flatMap((t, c) =>
+      Array.from({ length: G }, (_, i) =>
+        ev(c * 10 + i, { h3_res7: cellAt(c), where_address: `1 Main St, ${t}, IL` })
+      )
+    );
+    const five = renderAttendeeMap(items, { now: NOW });
+    expect(five.areas.map((a) => a.name).sort()).toEqual([...towns].sort());
+    expect(five.html).not.toContain('amap-area-name');
+    expect(five.html.match(/data-testid="amap-legend-name"/g)?.length).toBe(5);
+
+    const four = renderAttendeeMap(items.slice(0, 4 * G), { now: NOW });
+    expect(four.html.match(/data-testid="amap-area-name"/g)?.length).toBe(4);
+  });
+
+  it('a long name is shortened in the hexagon and whole in the legend; no address reaches the page', () => {
+    const address = '900 Lake Shore Dr, Village of Grand Beach Springs, MI 49117';
+    const out = renderAttendeeMap(many(G, { where_address: address }), { now: NOW });
+    expect(out.html).toContain('data-testid="amap-area-name">Village of Gran…</tspan>');
+    expect(out.html).toContain('Village of Grand Beach Springs</span>');
+    expect(out.html).not.toContain('900 Lake Shore');
+    expect(out.html).not.toContain('49117');
+  });
+});
+
+describe('attendee map | the example below the gate (PO 2026-10-03)', () => {
+  it('shows a labelled example drawing, with no cell, no event and no link in it', () => {
+    const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
+    expect(out.state).toBe('thin');
+    expect(out.areas).toEqual([]);
+    const i = out.html.indexOf('data-testid="amap-example"');
+    expect(i).toBeGreaterThan(-1);
+    const example = out.html.slice(i);
+    expect(example).toContain('<strong>Example.</strong>');
+    expect(example.match(/<polygon class="amap-cell"/g)?.length).toBe(3);
+    expect(example).not.toContain('data-cell=');
+    expect(example).not.toContain('href=');
+    expect(example).not.toContain(BLUE7);
+    expect(example).not.toContain('Event 0');
+  });
+
+  it('is gone once a real neighborhood is drawn', () => {
+    const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW });
+    expect(out.state).toBe('map');
+    expect(out.html).not.toContain('amap-example');
+  });
+});
+
+describe('landing | which leads: the create doors or the map (PO 2026-10-03)', () => {
+  const PAGE =
+    '<h1>H</h1><!--OCR_DOORS_START--><section data-testid="landing-doors">D</section><!--OCR_DOORS_END-->' +
+    '<section data-testid="landing-area">A</section><!--OCR_AFTER_AREA--><p>tail</p>';
+
+  it('fewer than LIST_MAX events: the doors lead, then the area', () => {
+    const html = orderLandingSections(PAGE, 'list');
+    expect(html.indexOf('landing-doors')).toBeLessThan(html.indexOf('landing-area'));
+    expect(html).not.toContain('<!--OCR_');
+  });
+
+  it('LIST_MAX or more: the area (map) leads and the doors sit directly beneath it', () => {
+    const html = orderLandingSections(PAGE, 'map');
+    expect(html.indexOf('landing-area')).toBeLessThan(html.indexOf('landing-doors'));
+    expect(html.indexOf('landing-doors')).toBeLessThan(html.indexOf('tail'));
+    expect(html).not.toContain('<!--OCR_');
+    expect(html.match(/landing-doors/g)?.length).toBe(1);
+  });
+
+  it('a template without the markers is returned unchanged', () => {
+    expect(orderLandingSections('<p>plain</p>', 'map')).toBe('<p>plain</p>');
+  });
+
+  it('the real landing template: doors first under the threshold, map first at it, markers gone', () => {
+    const served = (n: number) =>
+      injectLandingArea(
+        LANDING_HTML,
+        renderLandingArea(
+          Array.from({ length: n }, (_, i) => ev(i, { h3_res7: cellAt(i) })),
+          { now: NOW }
+        )
+      );
+    const few = served(LIST_MAX - 1);
+    expect(few.indexOf('data-testid="landing-doors"')).toBeLessThan(
+      few.indexOf('data-testid="landing-area"')
+    );
+    const many10 = served(LIST_MAX);
+    expect(many10.indexOf('data-testid="landing-area"')).toBeLessThan(
+      many10.indexOf('data-testid="landing-doors"')
+    );
+    // Both doors survive the move, once each, and the h1 still leads the page.
+    for (const page of [few, many10]) {
+      expect(page).not.toContain('<!--OCR_DOORS');
+      expect(page).not.toContain('<!--OCR_AFTER_AREA');
+      expect(page.match(/data-testid="door-create-event"/g)?.length).toBe(1);
+      expect(page.match(/data-testid="door-create-sponsor"/g)?.length).toBe(1);
+      expect(page.indexOf('data-testid="landing-h1"')).toBeLessThan(
+        page.indexOf('data-testid="landing-area"')
+      );
+    }
+  });
+
+  it('the threshold is the same one the list/map default uses', () => {
+    const at = (n: number) =>
+      renderLandingArea(
+        Array.from({ length: n }, (_, i) => ev(i, { h3_res7: cellAt(i) })),
+        { now: NOW }
+      ).defaultView;
+    expect(at(LIST_MAX - 1)).toBe('list');
+    expect(at(LIST_MAX)).toBe('map');
   });
 });

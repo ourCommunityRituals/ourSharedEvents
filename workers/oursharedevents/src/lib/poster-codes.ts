@@ -32,12 +32,25 @@ import {
   type SlotShortlink,
 } from './shortlinks';
 import type { Tier } from './feature-flags';
+import { getCode } from './uec';
 
 /** How a code's target is produced. */
 export type PosterCodeTarget = 'event' | 'checkin' | 'register' | 'https';
 
-/** Colour family. Green is ONLY anonymous check-in; blue is ONLY donate. */
-export type PosterCodeTone = 'checkin' | 'donate' | 'neutral';
+/**
+ * Each kind prints in the colour of ONE Universal Event Code (UEC v1.1,
+ * docs/features/UEC-CODES.md — the registry is lib/uec). The colour is never
+ * alone: the card also carries the word and the UEC name in text.
+ * PO-confirmed mapping, 2026-10-03.
+ */
+export interface PosterCodeUec {
+  /** UEC id, e.g. ENTER, SHOP, CHECK-IN. */
+  id: string;
+  /** Colour name from the registry, e.g. Green, Dark Teal. */
+  color: string;
+  /** The registry's scan colour: the QR's dark modules and the card's band. */
+  scan_hex: string;
+}
 
 export interface PosterCodeKind {
   kind: string;
@@ -46,8 +59,12 @@ export interface PosterCodeKind {
   /** What the organizer picks from, in their words. */
   choice: string;
   target: PosterCodeTarget;
-  tone: PosterCodeTone;
+  /** UEC id this kind prints as. */
+  uec: string;
 }
+
+/** Anything without a dedicated UEC colour is UTILITY (the standard's catch-all). */
+const FALLBACK_UEC = 'UTILITY';
 
 /**
  * The target kinds, in the order the admin picker offers them. The external
@@ -55,13 +72,13 @@ export interface PosterCodeKind {
  * event's existing typed link carries straight over as a poster code.
  */
 export const POSTER_CODE_KINDS: readonly PosterCodeKind[] = [
-  { kind: 'public', word: 'EVENT', choice: 'Event page', target: 'event', tone: 'neutral' },
+  { kind: 'public', word: 'EVENT', choice: 'Event page', target: 'event', uec: 'UTILITY' },
   {
     kind: 'checkin',
     word: 'CHECK IN',
     choice: 'Anonymous check-in',
     target: 'checkin',
-    tone: 'checkin',
+    uec: 'CHECK-IN',
   },
   // Tier 1 (2026-09-30): the event's OWN registration form, built server-side
   // like check-in — distinct from the external `workshop` link below.
@@ -70,42 +87,42 @@ export const POSTER_CODE_KINDS: readonly PosterCodeKind[] = [
     word: 'REGISTER',
     choice: 'Registration form',
     target: 'register',
-    tone: 'neutral',
+    uec: 'ENTER',
   },
-  { kind: 'donation', word: 'DONATE', choice: 'Donation link', target: 'https', tone: 'donate' },
-  // The organizer's sponsorship page/form — https only, neutral tone.
+  { kind: 'donation', word: 'DONATE', choice: 'Donation link', target: 'https', uec: 'SHOP' },
+  // The organizer's sponsorship page/form — https only.
   {
     kind: 'sponsor',
     word: 'SPONSOR',
     choice: 'Sponsorship link',
     target: 'https',
-    tone: 'neutral',
+    uec: 'SPONSOR',
   },
-  { kind: 'signup', word: 'SIGN UP', choice: 'Sign-up link', target: 'https', tone: 'neutral' },
-  { kind: 'tickets', word: 'TICKETS', choice: 'Tickets link', target: 'https', tone: 'neutral' },
-  { kind: 'ow', word: 'MUSIC', choice: 'ourWKRP link', target: 'https', tone: 'neutral' },
-  { kind: 'league', word: 'LEAGUE', choice: 'League link', target: 'https', tone: 'neutral' },
+  { kind: 'signup', word: 'SIGN UP', choice: 'Sign-up link', target: 'https', uec: 'ENTER' },
+  { kind: 'tickets', word: 'TICKETS', choice: 'Tickets link', target: 'https', uec: 'SHOP' },
+  { kind: 'ow', word: 'MUSIC', choice: 'ourWKRP link', target: 'https', uec: 'UTILITY' },
+  { kind: 'league', word: 'LEAGUE', choice: 'League link', target: 'https', uec: 'LIVE' },
   {
     kind: 'workshop',
     word: 'REGISTER',
     choice: 'External registration link',
     target: 'https',
-    tone: 'neutral',
+    uec: 'ENTER',
   },
   {
     kind: 'substack',
     word: 'SUBSCRIBE',
     choice: 'Newsletter link',
     target: 'https',
-    tone: 'neutral',
+    uec: 'UTILITY',
   },
-  { kind: 'menu', word: 'MENU', choice: 'Menu link', target: 'https', tone: 'neutral' },
-  { kind: 'website', word: 'MORE', choice: 'Other link', target: 'https', tone: 'neutral' },
+  { kind: 'menu', word: 'MENU', choice: 'Menu link', target: 'https', uec: 'UTILITY' },
+  { kind: 'website', word: 'MORE', choice: 'Other link', target: 'https', uec: 'UTILITY' },
 ];
 
 const KIND_BY_KEY = new Map(POSTER_CODE_KINDS.map((k) => [k.kind, k]));
 
-/** Catalog entry for a kind; unknown/legacy kinds read as a neutral "MORE". */
+/** Catalog entry for a kind; unknown/legacy kinds read as a UTILITY "MORE". */
 export function posterCodeKind(kind: string): PosterCodeKind {
   return (
     KIND_BY_KEY.get(kind) ?? {
@@ -113,9 +130,15 @@ export function posterCodeKind(kind: string): PosterCodeKind {
       word: 'MORE',
       choice: 'Other link',
       target: 'https',
-      tone: 'neutral',
+      uec: FALLBACK_UEC,
     }
   );
+}
+
+/** The UEC a kind prints as, read from the registry (never a hex literal here). */
+export function posterCodeUec(kind: string): PosterCodeUec {
+  const code = getCode(posterCodeKind(kind).uec) ?? getCode(FALLBACK_UEC)!;
+  return { id: code.id, color: code.label, scan_hex: code.scan_hex };
 }
 
 /**

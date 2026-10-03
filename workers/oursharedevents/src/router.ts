@@ -26,6 +26,7 @@
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
+ *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -162,6 +163,7 @@ import {
   handleCorridorDashboard,
   handleEventDashboard,
 } from './handlers/dashboards';
+import { handleAdminEventLivePage } from './handlers/live-monitor';
 import {
   handlePublicPage,
   handlePublicEventPage,
@@ -264,7 +266,8 @@ import {
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
-import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
+import { type MapsEnv } from './lib/maps';
+import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
 import {
@@ -829,6 +832,21 @@ export async function route(
       return deny;
     }
     return handleAdminPosterPreviewPage(env, adminPosterPreviewMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/live — the organizer's live view (HTML). Same
+  // gating as the previews above. The page reads its numbers from the governed
+  // event dashboard below; this route itself reads only the title and status.
+  const adminEventLiveMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/live$/);
+  if (adminEventLiveMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) {
+      if ((request.headers.get('Accept') ?? '').includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
+    return handleAdminEventLivePage(env, adminEventLiveMatch[1]);
   }
 
   // GET /api/v2/admin/events/:id/poster-bundle — the poster bundle for a draft
@@ -1678,19 +1696,20 @@ export async function route(
     return handleSponsorLogo(request, env, logoMatch[1]);
   }
 
-  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
   // GET /api/v2/uploads/*key — serve R2 file (OSE-200)
   const uploadServeMatch = pathname.match(/^\/api\/v2\/uploads\/(.+)$/);
   if (uploadServeMatch && method === 'GET') {
     return handleGetUploadedFile(request, env, uploadServeMatch[1]);
   }
 
-  // GET /api/v2/maps/venue-image?venue=<encoded>
+  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/maps/venue-image?event=<id>
   // Proxies Google Static Maps API server-side so the API key never reaches
-  // the browser. Used by SharedReports to render venue map thumbnails.
+  // the browser. Each cache miss is a billed Google load, so the route is
+  // rate-limited, keyed by a public event (never free text) and edge-cached
+  // (handlers/venue-image.ts).
   if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
-    const venueParam = url.searchParams.get('venue') ?? '';
-    return fetchStaticMapImage(env, venueParam);
+    return publicReadLimited('venue-image', handleVenueImage)(request, env);
   }
 
   // ── Public: self-delete a registration (OSE-659) ───────────────────────────

@@ -5587,8 +5587,7 @@
       .pd-advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
       .pc-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 12px; }
       .pc-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 6px solid var(--border); border-radius: 8px; }
-      .pc-row.tone-checkin { border-left-color: var(--success); }
-      .pc-row.tone-donate { border-left-color: var(--info); }
+      .pc-uec { font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: var(--text-muted); }
       .pc-word { font-weight: 800; letter-spacing: 0.06em; font-size: 18px; }
       .pc-qr { image-rendering: pixelated; background: white; padding: 4px; }
       .pd-link { display: flex; align-items: center; gap: 8px; width: 100%; }
@@ -6124,7 +6123,7 @@
       (function () {
         const PC_ROW =
           '<li class="pc-row" data-testid="poster-code-row">' +
-            '<span class="pc-word" data-testid="poster-code-word"><span class="pc-icon" aria-hidden="true"></span> <span class="pc-word-text"></span></span>' +
+            '<span class="pc-word" data-testid="poster-code-word"><span class="pc-icon" aria-hidden="true"></span> <span class="pc-word-text"></span> <span class="pc-uec" data-testid="poster-code-uec"></span></span>' +
             '<span class="pd-target" data-testid="poster-code-points-to"></span>' +
             '<div class="pd-link" data-testid="poster-code-link-block">' +
               '<code data-testid="poster-code-link"></code>' +
@@ -6144,7 +6143,13 @@
           '</li>';
         // A null-prototype map: a response kind can never reach Object.prototype.
         const ICON = Object.assign(Object.create(null), { public: '★', checkin: '✓', register: '✎', donation: '♥', sponsor: '◆', ow: '♪' });
-        const toneOf = (k) => (k === 'checkin' ? 'checkin' : k === 'donation' ? 'donate' : 'neutral');
+        // Each code's UEC (docs/features/UEC-CODES.md): id shown as text, the
+        // colour applied only when it is a plain #rrggbb from the server.
+        const uecOf = (u) => {
+          const id = text(u && u.id).replace(/[^A-Z-]/g, '');
+          const hex = /^#[0-9A-Fa-f]{6}$/.test(text(u && u.scan_hex)) ? text(u.scan_hex) : '';
+          return id ? { id: id, scan_hex: hex } : null;
+        };
         const text = (v) => (v === null || v === undefined ? '' : String(v));
         const shortLink = (code) => (/^[A-Za-z0-9]{6}$/.test(text(code)) ? location.origin + '/s/' + code : '');
         const dataImage = (uri) => (/^data:image\/(png|gif);base64,/.test(text(uri)) ? uri : '');
@@ -6166,7 +6171,7 @@
         };
         const rowsFrom = (codes) => (Array.isArray(codes) ? codes : []).map((c) => ({
           kind: text(c.kind), word: text(c.word), code: text(c.code), qr: text(c.qr),
-          target_url: text(c.target_url), points_to: text(c.points_to),
+          target_url: text(c.target_url), points_to: text(c.points_to), uec: uecOf(c.uec),
         }));
 
         function renderRow(row, i) {
@@ -6175,7 +6180,13 @@
           const isPublic = row.kind === 'public';
           const spec = kindSpec(row.kind);
           const word = row.word || (spec ? spec.word : '') || (isPublic ? 'EVENT' : 'MORE');
-          li.classList.add('tone-' + toneOf(row.kind));
+          const uec = row.uec || uecOf(spec && spec.uec);
+          if (uec) {
+            li.setAttribute('data-uec', uec.id);
+            if (uec.scan_hex) li.style.borderLeftColor = uec.scan_hex;
+            const uecName = uec.id.replace(/-/g, ' ');
+            if (uecName !== word) li.querySelector('.pc-uec').textContent = '· ' + uecName;
+          }
           li.setAttribute('data-kind', row.kind);
           li.querySelector('.pc-icon').textContent = ICON[row.kind] || '→';
           li.querySelector('.pc-word-text').textContent = word;
@@ -6223,7 +6234,7 @@
           input.value = row.target_url;
           sel.addEventListener('change', () => {
             row.kind = sel.value;
-            row.code = ''; row.qr = ''; row.word = ''; row.points_to = '';
+            row.code = ''; row.qr = ''; row.word = ''; row.points_to = ''; row.uec = null;
             render();
             const again = document.getElementById('pc-kind-' + i);
             if (again) again.focus();
@@ -7130,6 +7141,8 @@
             var unlisted = e.status === 'active' && Number(e.is_published) === 0 ? ' <span class="muted-sm" title="Published, but kept off the public map and list">(unlisted)</span>' : '';
             // OSE-1355: only not-yet-public events preview (draft/ready); a published one has its real page.
             var preview = e.status === 'draft' || e.status === 'ready' ? '<a class="event-preview-link" data-testid="event-preview-link" href="/api/v2/admin/events/' + safeId + '/preview" target="_blank" rel="noopener">Preview</a>' : '';
+            // A live event gets its live view in the same spot (counts only, admin-only).
+            if (e.status === 'active') preview = '<a class="event-preview-link" data-testid="event-live-link" href="/api/v2/admin/events/' + safeId + '/live" target="_blank" rel="noopener">Live view</a>';
             return `
           <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}" data-status="${st}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>

@@ -28,7 +28,7 @@
 
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
 import { ensureSlotShortlinks, previewSlotShortlinks } from '../lib/shortlinks';
-import { listSavedPosterCodes, posterCodeKind } from '../lib/poster-codes';
+import { listSavedPosterCodes, posterCodeKind, posterCodeUec } from '../lib/poster-codes';
 import { assertRenderable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
 import { enrichWithPhase } from '../lib/event-enrich.js';
@@ -285,16 +285,18 @@ export async function handleGetPosterBundle(
       ? `${origin}/s/${s.code}`
       : (s.target_url ?? `${origin}/events/${encodeURIComponent(row.id)}`);
     const spec = posterCodeKind(s.kind);
+    const uec = posterCodeUec(s.kind);
     return {
       kind: s.kind,
-      // The big word printed with the code, and its colour family (green =
-      // anonymous check-in only, blue = donate only). Never colour alone.
+      // The big word printed with the code, and its UEC (colour + name). The
+      // colour is never alone: the poster prints the word and the UEC name.
       word: spec.word,
-      tone: spec.tone,
+      uec,
       label: posterSlotLabel(s.kind),
       code: s.code,
       url: shortUrl,
-      qr: generateQrCode(shortUrl, { errorCorrection: 'M' }),
+      // The dark modules are the UEC scan colour (OSE-1200: black is a bug).
+      qr: generateQrCode(shortUrl, { errorCorrection: 'M', fgColor: uec.scan_hex }),
     };
   });
 

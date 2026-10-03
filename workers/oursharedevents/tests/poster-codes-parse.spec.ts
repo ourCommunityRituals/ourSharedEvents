@@ -15,7 +15,9 @@ import {
   parsePosterCodes,
   posterCodeKind,
   posterCodeLimit,
+  posterCodeUec,
 } from '../src/lib/poster-codes';
+import { getCode } from '../src/lib/uec';
 import { WHAT_URL_TYPES } from '../src/lib/what-url-types';
 
 describe('the kind catalog', () => {
@@ -32,13 +34,33 @@ describe('the kind catalog', () => {
     expect(posterCodeKind('donation').word).toBe('DONATE');
   });
 
-  test('colour is never alone, and each colour means one thing: green = check-in, blue = donate', () => {
-    expect(POSTER_CODE_KINDS.filter((k) => k.tone === 'checkin').map((k) => k.kind)).toEqual([
-      'checkin',
-    ]);
-    expect(POSTER_CODE_KINDS.filter((k) => k.tone === 'donate').map((k) => k.kind)).toEqual([
-      'donation',
-    ]);
+  test('each kind prints as ONE Universal Event Code, read from the registry (PO mapping 2026-10-03)', () => {
+    expect(Object.fromEntries(POSTER_CODE_KINDS.map((k) => [k.kind, k.uec]))).toEqual({
+      public: 'UTILITY',
+      checkin: 'CHECK-IN',
+      register: 'ENTER',
+      donation: 'SHOP',
+      sponsor: 'SPONSOR',
+      signup: 'ENTER',
+      tickets: 'SHOP',
+      ow: 'UTILITY',
+      league: 'LIVE',
+      workshop: 'ENTER',
+      substack: 'UTILITY',
+      menu: 'UTILITY',
+      website: 'UTILITY',
+    });
+    for (const k of POSTER_CODE_KINDS) {
+      const reg = getCode(k.uec);
+      expect(reg, k.kind + ' names a UEC the registry has').not.toBeNull();
+      expect(posterCodeUec(k.kind)).toEqual({
+        id: reg!.id,
+        color: reg!.label,
+        scan_hex: reg!.scan_hex,
+      });
+    }
+    // Anything unknown is the standard's catch-all.
+    expect(posterCodeUec('not-a-kind').id).toBe('UTILITY');
   });
 
   test('only the event page, check-in and the event registration form are built server-side; every other kind is an https link', () => {

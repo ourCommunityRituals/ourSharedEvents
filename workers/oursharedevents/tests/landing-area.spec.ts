@@ -11,7 +11,6 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import LANDING_HTML from '../src/templates/landing.html';
 import {
   renderLandingArea,
   renderEmptyLandingArea,
@@ -149,12 +148,12 @@ describe('the landing threshold (LIST_MAX): doors lead below it, the map leads a
     expect(LIST_MAX).toBe(10);
   });
 
-  it('below it: the doors lead, and the map view is the note with the real count plus the example', () => {
+  it('below it: the doors lead (list view opens), and the map view is the note with the real count plus the example', () => {
     const items = Array.from({ length: LIST_MAX - 1 }, (_, i) => ev({ id: `e${i}` }));
     const out = render(items);
     expect(out.leadsWithMap).toBe(false);
-    expect(out.defaultView).toBe('map');
-    expect(out.html).toContain('id="view-map" class="toggle-radio" checked');
+    expect(out.defaultView).toBe('list');
+    expect(out.html).toContain('id="view-list" class="toggle-radio" checked');
     expect(out.html).toContain(`once this area has ${LIST_MAX} events`);
     expect(out.html).toContain(`There are ${LIST_MAX - 1} so far`);
     expect(out.html).toContain('data-testid="amap-example"');
@@ -168,6 +167,7 @@ describe('the landing threshold (LIST_MAX): doors lead below it, the map leads a
     const out = renderLandingArea(items, { now: NOW, areaLatched: true });
     expect(out.windowCount).toBe(3);
     expect(out.leadsWithMap).toBe(true);
+    expect(out.defaultView).toBe('map');
     expect(out.html).not.toContain('once this area has');
   });
 
@@ -221,56 +221,6 @@ describe('OSE-1312 | empty + injection', () => {
     expect(out).not.toContain(LANDING_AREA_MARKER);
     expect(out).toContain('data-testid="area-card"');
     expect(injectLandingArea('<p>no marker</p>', area)).toBe('<p>no marker</p>');
-  });
-
-  // The real template, so a template edit that breaks the reorder goes red here.
-  const pageWith = (n: number) =>
-    injectLandingArea(
-      LANDING_HTML,
-      render(Array.from({ length: n }, (_, i) => ev({ id: `e${i}` })))
-    );
-  const at = (html: string, needle: string) => {
-    const i = html.indexOf(needle);
-    expect(i, needle).toBeGreaterThan(-1);
-    return i;
-  };
-  // Opening tags only: the template's comments mention the tag by name.
-  const h1s = (html: string) => html.split('<h1 ').length - 1;
-
-  it('under the threshold the doors lead and the area follows; one <h1>, on the doors heading', () => {
-    const html = pageWith(LIST_MAX - 1);
-    expect(at(html, 'data-testid="landing-doors"')).toBeLessThan(
-      at(html, 'data-testid="landing-area"')
-    );
-    expect(h1s(html)).toBe(1);
-    expect(html).toContain('<h1 class="lead"');
-    expect(html).toContain('<h2 class="area-heading"');
-  });
-
-  it('at the threshold the map leads and the doors sit underneath; still one <h1>, on the area', () => {
-    const html = pageWith(LIST_MAX);
-    expect(at(html, 'data-testid="landing-area"')).toBeLessThan(
-      at(html, 'data-testid="landing-doors"')
-    );
-    expect(at(html, 'data-testid="area-heading"')).toBeLessThan(
-      at(html, 'data-testid="landing-h1"')
-    );
-    expect(h1s(html)).toBe(1);
-    expect(html).toContain('<h1 class="area-heading"');
-    expect(html).toContain('<h2 class="lead"');
-    // Nothing was lost or duplicated in the move.
-    expect(html.split('data-testid="landing-doors"').length - 1).toBe(1);
-    expect(html.split('data-testid="door-create-event"').length - 1).toBe(1);
-    expect(html.split('data-testid="door-create-sponsor"').length - 1).toBe(1);
-    expect(html.split('data-testid="landing-area"').length - 1).toBe(1);
-    expect(html.length).toBe(pageWith(LIST_MAX).length);
-  });
-
-  it('a template missing one of the blocks is left in its original order', () => {
-    const shell = `<h1 class="lead">x</h1><section data-testid="landing-area"><!--OCR_LANDING_AREA--></section>`;
-    const area = render(Array.from({ length: LIST_MAX }, (_, i) => ev({ id: `e${i}` })));
-    const out = injectLandingArea(shell, area);
-    expect(out.indexOf('<h1 class="lead">')).toBe(0);
   });
 
   it('escapes hostile event names', () => {

@@ -96,7 +96,7 @@ describe('the ETag covers the QR colour', () => {
     return res.headers.get('ETag')!;
   }
 
-  test('a different UEC UTILITY colour gives a different ETag (no stale 304)', async () => {
+  test('a different UEC colour gives a different ETag (no stale 304)', async () => {
     const a = await etagWithColour('#2A2A3A');
     const b = await etagWithColour('#112233');
     expect(a).toMatch(/^"[0-9a-f]{32}"$/);

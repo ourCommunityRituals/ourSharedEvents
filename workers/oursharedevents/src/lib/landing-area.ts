@@ -90,7 +90,7 @@ export const DEFAULT_WINDOW: LandingWindow = 'next-90';
  * window, on the events this page actually lists.
  *
  *   fewer than this  → the page leads with the two doors (Create an event /
- *                      Create a sponsor); the map view below them is a note
+ *                      Create a sponsor) and the list opens first; the map view is a note
  *                      with the real count and a labelled example drawing.
  *   this many or more → the page leads with the map, which draws every
  *                      neighbourhood that holds an event; the doors move
@@ -245,13 +245,11 @@ export function renderLandingArea(
     .map(([slug, label]) => ({ slug, label }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // The area always opens on the map view: under LIST_MAX that is the note and
-  // the example, at LIST_MAX or more the real map. The cards sit below either.
   // Once the area has been recorded at LIST_MAX (nightly, lib/corridor-latch) it
   // keeps leading with the map while it has anything to show.
   const areaLatched = opts?.areaLatched === true && windowCount > 0;
   const leadsWithMap = windowCount >= LIST_MAX || areaLatched;
-  const defaultView: 'list' | 'map' = 'map';
+  const defaultView: 'list' | 'map' = leadsWithMap ? 'map' : 'list';
 
   // The map is drawn from the same `live` set as the cards, at corridor (res-7)
   // precision only, and gated on how many events it would actually show.
@@ -369,29 +367,29 @@ function buildAreaMarkup(args: {
  */
 export function injectLandingArea(html: string, area: RenderedLandingArea): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  const ordered = area.leadsWithMap ? mapFirst(html) : html;
-  return injectMarker(ordered, LANDING_AREA_MARKER, area.html);
+  return injectMarker(orderLandingSections(html, area.defaultView), LANDING_AREA_MARKER, area.html);
 }
 
-// At LIST_MAX or more the map leads: the area section moves above the page
-// heading and the two doors, in the DOM (not with CSS order), so reading order
-// and tab order match what is seen. The page keeps exactly one <h1>: the area
-// heading takes it and the doors' heading becomes an <h2>. If the template no
-// longer has the three blocks, the page is left as it is.
-const LEAD_RE = /<h1 class="lead"([^>]*)>([\s\S]*?)<\/h1>/;
-const DOORS_RE = /<section class="doors"[\s\S]*?<\/section>/;
-const AREA_RE = /<section [^>]*data-testid="landing-area"[^>]*>[\s\S]*?<\/section>/;
-const AREA_H2_RE = /<h2 class="area-heading"([^>]*)>([\s\S]*?)<\/h2>/;
+const DOORS_START = '<!--OCR_DOORS_START-->';
+const DOORS_END = '<!--OCR_DOORS_END-->';
+const AFTER_AREA = '<!--OCR_AFTER_AREA-->';
 
-function mapFirst(html: string): string {
-  const lead = LEAD_RE.exec(html);
-  const doors = DOORS_RE.exec(html);
-  const areaSection = AREA_RE.exec(html);
-  if (!lead || !doors || !areaSection || !AREA_H2_RE.test(areaSection[0])) return html;
-  const areaAsH1 = areaSection[0].replace(AREA_H2_RE, '<h1 class="area-heading"$1>$2</h1>');
-  const leadAsH2 = `<h2 class="lead"${lead[1]}>${lead[2]}</h2>`;
-  return html
-    .replace(areaSection[0], '')
-    .replace(doors[0], '')
-    .replace(lead[0], () => [areaAsH1, leadAsH2, doors[0]].join('\n      '));
+/**
+ * Which leads the landing page (PO, 2026-10-03). Fewer than LIST_MAX events:
+ * the two create doors lead and the area follows, because the page's job is to
+ * get the first gatherings made. At LIST_MAX or more the area's default view is
+ * the map, and the map leads; the doors move directly beneath it. One rule, one
+ * threshold: this reads the same `defaultView` the list/map toggle uses.
+ * Markers are always removed; a template without them is returned unchanged.
+ */
+export function orderLandingSections(html: string, defaultView: 'list' | 'map'): string {
+  const a = html.indexOf(DOORS_START);
+  const b = html.indexOf(DOORS_END);
+  const c = html.indexOf(AFTER_AREA);
+  if (a < 0 || b < a || c < b) return html;
+  const doors = html.slice(a + DOORS_START.length, b);
+  const before = html.slice(0, a);
+  const middle = html.slice(b + DOORS_END.length, c);
+  const after = html.slice(c + AFTER_AREA.length);
+  return defaultView === 'map' ? before + middle + doors + after : before + doors + middle + after;
 }

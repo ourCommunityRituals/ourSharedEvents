@@ -98,21 +98,22 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
   // ── R4 — poster art viewport (quality bar: mobile + structure + error path) ──
   test('R4 | API | GET /poster (any) | art viewport img is fluid-width so it cannot overflow at 375px', async () => {
     const html = await fetchPosterHtml();
-    // width:100% + object-fit:cover means the art scales to the poster
-    // column and can never push the layout wider than the viewport.
+    // width:100% + object-fit:contain means the art scales to the poster
+    // column, can never push the layout wider than the viewport, and is
+    // never cropped.
     expect(html).toMatch(/\.poster-art-img\s*\{[^}]*width:\s*100%/);
-    expect(html).toMatch(/\.poster-art-img\s*\{[^}]*object-fit:\s*cover/);
+    expect(html).toMatch(/\.poster-art-img\s*\{[^}]*object-fit:\s*contain/);
   });
 
   test('R4 | API | GET /poster (mobile media query) | art viewport height clamps on narrow viewports', async () => {
     const html = await fetchPosterHtml();
     const mediaBlock = extractMediaBlock(html, 768);
-    // Still clamped on phones — raised 200px → 360px when dogfooding asked for
-    // a larger art viewport; the clamp (a px cap, well under a phone screen)
-    // is the property, not the exact number.
-    const m = mediaBlock.match(/\.poster-art-img\s*\{[^}]*max-height:\s*(\d+)px/);
+    // Still clamped on phones — the art now shows whole (contain), so the
+    // clamp is a share of the screen, not a px cap: the property is "the art
+    // fits inside one phone screen", not the exact number.
+    const m = mediaBlock.match(/\.poster-art-img\s*\{[^}]*max-height:\s*(\d+)vh/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeLessThanOrEqual(400);
+    expect(Number(m![1])).toBeLessThanOrEqual(80);
   });
 
   test('R4 | API | GET /poster (any) | art viewport + empty-state render (no broken-image slot; failed art is hidden)', async () => {

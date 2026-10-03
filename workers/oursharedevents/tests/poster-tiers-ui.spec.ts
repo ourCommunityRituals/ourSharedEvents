@@ -19,9 +19,15 @@
 
 import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { getCode } from '../src/lib/uec';
 import ADMIN_HTML from '../src/templates/admin.html';
 import POSTER_HTML from '../src/templates/poster.html';
 
+// A code's UEC as the server sends it, read from the registry.
+const UEC = (id: string) => {
+  const c = getCode(id)!;
+  return { id: c.id, color: c.label, scan_hex: c.scan_hex };
+};
 const EVT = 'evt_tiers_ui_0930';
 const QR = 'data:image/png;base64,iVBORw0KGgo=';
 const HOSTILE = '"><img src=x onerror="window.__pwned=1"><script>window.__pwned=1</script>';
@@ -90,28 +96,28 @@ const KINDS = [
     kind: 'checkin',
     word: 'CHECK IN',
     choice: 'Anonymous check-in',
-    tone: 'checkin',
+    uec: UEC('CHECK-IN'),
     needs_url: false,
   },
   {
     kind: 'register',
     word: 'REGISTER',
     choice: 'Registration form',
-    tone: 'neutral',
+    uec: UEC('ENTER'),
     needs_url: false,
   },
   {
     kind: 'sponsor',
     word: 'SPONSOR',
     choice: 'Sponsorship link',
-    tone: 'neutral',
+    uec: UEC('SPONSOR'),
     needs_url: true,
   },
   {
     kind: 'workshop',
     word: 'REGISTER',
     choice: 'External registration link',
-    tone: 'neutral',
+    uec: UEC('ENTER'),
     needs_url: true,
   },
 ];
@@ -129,7 +135,7 @@ const CODES = [
 ];
 
 describe('Tier 1 | admin: REGISTER and SPONSOR codes carry a word + an icon', () => {
-  test('each has its own icon (never the generic arrow), neutral tone, and the word', async () => {
+  test('each has its own icon (never the generic arrow), its UEC, and the word', async () => {
     const { w, doc } = mountAdmin(
       () => ({ body: { ok: true, limit: 5, kinds: KINDS, codes: CODES } }),
       'window.loadPosterCodes = async function'
@@ -148,7 +154,8 @@ describe('Tier 1 | admin: REGISTER and SPONSOR codes carry a word + an icon', ()
       expect(icon).not.toBe('→');
       expect(icon.length).toBeGreaterThan(0);
       icons.add(icon);
-      expect(row(k).classList.contains('tone-neutral')).toBe(true);
+      expect(row(k).getAttribute('data-uec')).toBe(k === 'register' ? 'ENTER' : 'SPONSOR');
+      expect((row(k) as HTMLElement).style.borderLeftColor).not.toBe('');
     }
     expect(icons.size).toBe(2);
     // REGISTER (the event's own form) needs no link; SPONSOR does.
@@ -214,13 +221,29 @@ async function mountPoster(kind: 'print' | 'digital', slots: unknown[]) {
 
 const SLOTS = [
   { kind: 'public', word: 'EVENT', code: 'Pub001', url: 'x', qr: QR },
-  { kind: 'register', word: 'REGISTER', label: 'Register', code: 'Reg001', url: 'x', qr: QR },
-  { kind: 'sponsor', word: 'SPONSOR', label: 'Sponsor us', code: 'Spo001', url: 'x', qr: QR },
+  {
+    kind: 'register',
+    word: 'REGISTER',
+    uec: UEC('ENTER'),
+    label: 'Register',
+    code: 'Reg001',
+    url: 'x',
+    qr: QR,
+  },
+  {
+    kind: 'sponsor',
+    word: 'SPONSOR',
+    uec: UEC('SPONSOR'),
+    label: 'Sponsor us',
+    code: 'Spo001',
+    url: 'x',
+    qr: QR,
+  },
 ];
 
 describe('Tier 1 | /poster: REGISTER and SPONSOR print + digital with word and icon', () => {
   for (const kind of ['print', 'digital'] as const) {
-    test(`${kind}: word + a distinct icon, neutral tone, link rebuilt from the code`, async () => {
+    test(`${kind}: word + a distinct icon, its UEC, link rebuilt from the code`, async () => {
       const doc = await mountPoster(kind, SLOTS);
       const iconOf = (k: string) =>
         doc.querySelector(`[data-testid="poster-qr-slot-label-${k}"] [aria-hidden="true"]`)!
@@ -230,7 +253,8 @@ describe('Tier 1 | /poster: REGISTER and SPONSOR print + digital with word and i
         ['sponsor', 'SPONSOR', 'Spo001'],
       ]) {
         const card = doc.querySelector(`[data-testid="poster-qr-slot-${k}"]`)!;
-        expect(card.classList.contains('tone-neutral')).toBe(true);
+        expect(card.getAttribute('data-uec')).toBe(k === 'register' ? 'ENTER' : 'SPONSOR');
+        expect((card as HTMLElement).style.borderTopColor).not.toBe('');
         expect(
           doc.querySelector(`[data-testid="poster-qr-slot-label-${k}"]`)!.textContent
         ).toContain(word);

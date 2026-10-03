@@ -299,19 +299,19 @@ Check the Actions tab — all tiers green = CI is real.
 
 ## Troubleshooting
 
-| Symptom                            | Fix                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| Zone still "Pending"               | NS propagation up to 48h — `dig oursharedevents.com NS`                  |
-| `wrangler deploy` auth error       | Verify `wrangler login` completed; API token has Workers:Edit permission |
-| Health returns `{ "d1": "error" }` | Migrations not applied — run B4 again                                    |
-| 1101 Worker error                  | Worker threw — `wrangler tail --env staging` to see logs                 |
-| 522/523 error                      | DNS not proxied (orange cloud) or zone not active                        |
-| CI deploy fails                    | Check GitHub Actions secrets have no trailing whitespace                 |
-| `/admin` returns 403 (not 401)     | `ALLOWED_ADMIN_EMAILS` not set — staging CF Access JWT enforcement       |
-| Form submissions return 500        | `FORMS_ENCRYPTION_KEY` not set — required for AES-GCM PII encryption     |
+| Symptom                            | Fix                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zone still "Pending"               | NS propagation up to 48h — `dig oursharedevents.com NS`                                                                                                                   |
+| `wrangler deploy` auth error       | Verify `wrangler login` completed; API token has Workers:Edit permission                                                                                                  |
+| Health returns `{ "d1": "error" }` | Migrations not applied — run B4 again                                                                                                                                     |
+| 1101 Worker error                  | Worker threw — `wrangler tail --env staging` to see logs                                                                                                                  |
+| 522/523 error                      | DNS not proxied (orange cloud) or zone not active                                                                                                                         |
+| CI deploy fails                    | Check GitHub Actions secrets have no trailing whitespace                                                                                                                  |
+| `/admin` returns 403 (not 401)     | `ALLOWED_ADMIN_EMAILS` not set — staging CF Access JWT enforcement                                                                                                        |
+| Form submissions return 500        | `FORMS_ENCRYPTION_KEY` not set — required for AES-GCM PII encryption                                                                                                      |
 | Rate limiter fires in testing      | Limits (OSE-1509): 60 per 10 s per IP at the edge (per event for forms), 360/min per IP behind it. Stay at or under ~5 requests/s per IP; a stress run should expect 429s |
-| `assertRenderable` error in logs   | Event is in DRAFT state — create/transition a test event to ACTIVE       |
-| BigQuery backup silently skipped   | WIF secrets not set — expected in staging unless GCP is configured       |
+| `assertRenderable` error in logs   | Event is in DRAFT state — create/transition a test event to ACTIVE                                                                                                        |
+| BigQuery backup silently skipped   | WIF secrets not set — expected in staging unless GCP is configured                                                                                                        |
 
 ---
 
