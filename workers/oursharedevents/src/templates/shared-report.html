@@ -1439,8 +1439,8 @@
                 const venueInner =
                   venue && mapsOn
                     ? '<div class="venue-cell">' +
-                      '<img src="/api/v2/maps/venue-image?venue=' +
-                      encodeURIComponent(venue) +
+                      '<img src="/api/v2/maps/venue-image?event=' +
+                      encodeURIComponent(e.id) +
                       '" alt="Map: ' +
                       esc(venue) +
                       '" class="venue-map" width="200" height="80" loading="lazy" />' +
