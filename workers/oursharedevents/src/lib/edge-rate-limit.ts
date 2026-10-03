@@ -64,7 +64,14 @@ export async function isEdgeLimited(
   try {
     const { success } = await limiter.limit({ key });
     return !success;
-  } catch {
+  } catch (err) {
+    // OSE-1509 DoD: fail open, but say so. No key in the log: it holds an IP.
+    console.warn(
+      JSON.stringify({
+        type: 'EDGE_RATE_LIMIT_FAIL_OPEN',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
     return false;
   }
 }

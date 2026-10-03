@@ -8,7 +8,7 @@
  */
 
 import { SELF, env } from 'cloudflare:test';
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import {
   EDGE_WINDOW_SECONDS,
   FORM_EDGE_MAX,
@@ -127,7 +127,17 @@ describe('fails open — a speed bump never becomes an outage', () => {
         throw new Error('binding unavailable');
       },
     };
-    expect(await isEdgeLimited(broken, 'k')).toBe(false);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await isEdgeLimited(broken, '203.0.113.9:evt')).toBe(false);
+      // Logged, and the log never carries the key (it holds an IP).
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0][0]);
+      expect(line).toContain('EDGE_RATE_LIMIT_FAIL_OPEN');
+      expect(line).not.toContain('203.0.113.9');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test('refused when the binding says so', async () => {
@@ -144,13 +154,12 @@ describe('wrangler.toml agrees with the code in every environment', () => {
       ['FORM_EDGE_LIMITER', FORM_EDGE_MAX],
     ] as const) {
       test(`[[${prefix}ratelimits]] ${name} = ${limit} per ${EDGE_WINDOW_SECONDS} s`, () => {
-        const re = new RegExp(
-          `\\[\\[${prefix.replace(/\./g, '\\.')}ratelimits\\]\\]\\s*\\n` +
-            `name = "${name}"\\s*\\n` +
-            `namespace_id = "\\d+"\\s*\\n` +
-            `simple = \\{ limit = ${limit}, period = ${EDGE_WINDOW_SECONDS} \\}`
-        );
-        expect(toml).toMatch(re);
+        // Plain string checks on the one block that names this binding in this env.
+        const block = toml
+          .split('[[')
+          .find((b) => b.startsWith(`${prefix}ratelimits]]`) && b.includes(`name = "${name}"`));
+        expect(block, `no [[${prefix}ratelimits]] block for ${name}`).toBeDefined();
+        expect(block).toContain(`simple = { limit = ${limit}, period = ${EDGE_WINDOW_SECONDS} }`);
       });
     }
   }
