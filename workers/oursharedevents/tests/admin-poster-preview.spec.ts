@@ -9,6 +9,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { rateLimitKvKey } from '../src/lib/rate-limit';
 import { PUBLIC_READ_MAX } from '../src/lib/public-read-limit';
+import { EDGE_WINDOW_SECONDS } from '../src/lib/edge-rate-limit';
 
 const BRAND = 'poster-preview-brand';
 const OTHER_BRAND = 'poster-preview-other';
@@ -240,7 +241,7 @@ describe('admin poster preview: other states', () => {
     );
     const limited = await SELF.fetch(bundle('evt_pp_limit'), { headers });
     expect(limited.status).toBe(429);
-    expect(limited.headers.get('Retry-After')).toBe('60');
+    expect(limited.headers.get('Retry-After')).toBe(String(EDGE_WINDOW_SECONDS));
     // Another caller is unaffected.
     const other = await SELF.fetch(bundle('evt_pp_limit'), {
       headers: { ...admin, 'CF-Connecting-IP': '203.0.113.78' },

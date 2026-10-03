@@ -18,6 +18,7 @@ import {
   publicReadLimitResponse,
   PUBLIC_READ_MAX,
 } from '../src/lib/public-read-limit';
+import { EDGE_WINDOW_SECONDS, PUBLIC_READ_EDGE_MAX } from '../src/lib/edge-rate-limit';
 
 /** In-memory KV good enough for the sliding window the limiter uses. */
 function kv() {
@@ -55,8 +56,9 @@ describe('the limit applies, and only past the threshold', () => {
       last = await wrapped(req(), { RATE_LIMIT_KV });
     }
     expect(last.status).toBe(429);
-    expect(last.headers.get('Retry-After')).toBe('60');
-    expect(last.headers.get('X-RateLimit-Limit')).toBe(String(PUBLIC_READ_MAX));
+    // The headers describe the edge layer, the one a burst meets first (OSE-1509).
+    expect(last.headers.get('Retry-After')).toBe(String(EDGE_WINDOW_SECONDS));
+    expect(last.headers.get('X-RateLimit-Limit')).toBe(String(PUBLIC_READ_EDGE_MAX));
     expect(last.headers.get('X-RateLimit-Remaining')).toBe('0');
   });
 

@@ -17,6 +17,13 @@ export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_ADMIN_MAX = 60; // admin mutations: 60 req/min by CF-Ray-ID
 export const RATE_LIMIT_BATCH_MAX = 30; // SharedReport batch: 30 req/min by service token
 export const RATE_LIMIT_MINT_MAX = 10; // mint endpoint: 10 req/min by actor+eventId
+/**
+ * Public form POSTs + self-delete, per IP across all events (router.ts). 360/min
+ * = 6/s: the OSE-1509 PO bar is that one person at ~5 requests a second is never
+ * refused. Floods are refused within the first second by FORM_EDGE_LIMITER
+ * (lib/edge-rate-limit.ts); this KV count is the backstop. Was the 60 default.
+ */
+export const RATE_LIMIT_FORM_MAX = 360;
 
 /**
  * What the limiter needs from the Worker env. Callers pass `env` itself, so the
@@ -217,7 +224,7 @@ export async function isRateLimited(env: Partial<RateLimitEnv>, ip: string): Pro
 /**
  * Build a 429 Too Many Requests response with standard rate-limit headers.
  */
-export function rateLimitResponse(): Response {
+export function rateLimitResponse(max: number = RATE_LIMIT_MAX): Response {
   return Response.json(
     {
       ok: false,
@@ -230,7 +237,7 @@ export function rateLimitResponse(): Response {
       status: 429,
       headers: {
         'Retry-After': '60',
-        'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+        'X-RateLimit-Limit': String(max),
         'X-RateLimit-Remaining': '0',
         'X-RateLimit-Window': '60s',
         'Content-Type': 'application/json',

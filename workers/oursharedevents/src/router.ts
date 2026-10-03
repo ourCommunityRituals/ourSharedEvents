@@ -282,9 +282,14 @@ import { handleAdminPreEventActivity } from './handlers/pre-event-activity';
 import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { bindCorsEnv, corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
+import {
+  FORM_EDGE_MAX,
+  edgeCallerIp,
+  edgeLimitResponse,
+  isEdgeLimited,
+} from './lib/edge-rate-limit';
 import { assertRenderable, parseEventState } from './domain/event-state';
 import {
-  isRateLimited,
   checkRateLimit,
   clientIp,
   rateLimitResponse,
@@ -292,6 +297,7 @@ import {
   RATE_LIMIT_BATCH_MAX,
   RATE_LIMIT_MINT_MAX,
   RATE_LIMIT_MAX,
+  RATE_LIMIT_FORM_MAX,
   bucketLimit,
   isBucketTripped,
   scanRateLimitBuckets,
@@ -376,6 +382,29 @@ export type RouterEnv = PagesEnv &
      */
     SCAN_RETURNS_RETENTION_DAYS?: string;
   };
+
+/**
+ * The rate limit every public form POST and the registration self-delete meet
+ * first (OSE-552, OSE-1509). The edge layer, keyed per caller per event,
+ * refuses a flood within its first fraction of a second; the per-IP KV count
+ * behind it catches a caller that stays under the edge limit across events.
+ * Both are sized so one person at ~5 requests a second is never refused.
+ * Returns the 429 to send, or null to go on.
+ */
+async function formRouteLimit(
+  request: Request,
+  env: RouterEnv,
+  eventId: string
+): Promise<Response | null> {
+  const ip = edgeCallerIp(request);
+  if (ip && (await isEdgeLimited(env.FORM_EDGE_LIMITER, `${ip}:${eventId}`))) {
+    return edgeLimitResponse(FORM_EDGE_MAX);
+  }
+  if (await checkRateLimit(env, clientIp(request), RATE_LIMIT_FORM_MAX)) {
+    return rateLimitResponse(RATE_LIMIT_FORM_MAX);
+  }
+  return null;
+}
 
 export async function route(
   request: Request,
@@ -1659,9 +1688,8 @@ export async function route(
   // identity surface). Writes only to FORMS_DB.
   const selfDeleteMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/forms\/register$/);
   if (selfDeleteMatch && method === 'DELETE') {
-    if (await isRateLimited(env, clientIp(request))) {
-      return rateLimitResponse();
-    }
+    const limited = await formRouteLimit(request, env, selfDeleteMatch[1]);
+    if (limited) return limited;
     return handleSelfDeleteRegistration(request, env, selfDeleteMatch[1]);
   }
 
@@ -1672,10 +1700,9 @@ export async function route(
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
 
-    // Rate limit: 60 req/min per IP, persistent via CF KV (OSE-552).
-    if (await isRateLimited(env, clientIp(request))) {
-      return rateLimitResponse();
-    }
+    // Rate limit (OSE-552, OSE-1509): edge layer, then the per-IP KV count.
+    const limited = await formRouteLimit(request, env, eventId);
+    if (limited) return limited;
 
     // Event lifecycle guard: reject submissions for non-active events.
     // Only blocks if the event row explicitly exists with a non-active status;

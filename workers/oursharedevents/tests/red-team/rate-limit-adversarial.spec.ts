@@ -351,25 +351,20 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
     console.log('[RL-005] GET /api/v2/events: 10 rapid requests, none rate-limited');
   });
 
-  test('static: isRateLimited only called in publicFormsMatch block', () => {
+  test('static: the form routes are limited in router.ts (formRouteLimit)', () => {
     const sources = JSON.parse(
       (env as unknown as Record<string, string>).TEST_SOURCE_FILES_JSON
     ) as Record<string, string>;
 
     for (const [path, content] of Object.entries(sources)) {
       if (path.replace(/\\/g, '/').includes('/src/router.ts')) {
-        // Count total calls to isRateLimited
-        const matches = content.match(/isRateLimited\s*\(/g) ?? [];
-        console.log(`[RL-005] isRateLimited() calls in router.ts: ${matches.length}`);
-        // Document: currently only 1 call site (inside publicFormsMatch block)
-        // A hardened implementation would also rate-limit sponsor impression/click
-        // endpoints and other public POST endpoints
-        expect(matches.length).toBeGreaterThanOrEqual(1);
-        // Document which routes are protected
-        const rlLineMatch = content.match(/isRateLimited[\s\S]{0,200}/);
-        if (rlLineMatch) {
-          console.log('[RL-005] Rate-limit context:', rlLineMatch[0].slice(0, 150));
-        }
+        // OSE-1509: the per-IP KV count moved into formRouteLimit, behind the
+        // edge layer. Both the form POST block and the self-delete call it.
+        const calls = content.match(/await formRouteLimit\s*\(/g) ?? [];
+        console.log(`[RL-005] formRouteLimit() call sites in router.ts: ${calls.length}`);
+        expect(calls.length).toBeGreaterThanOrEqual(2);
+        expect(content).toContain('isEdgeLimited(env.FORM_EDGE_LIMITER');
+        expect(content).toContain('checkRateLimit(env, clientIp(request), RATE_LIMIT_FORM_MAX)');
       }
     }
   });

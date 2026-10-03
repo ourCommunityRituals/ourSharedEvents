@@ -25,17 +25,28 @@
 // never be load-bearing enough to be worth an outage.
 
 import { checkRateLimit, type RateLimitEnv } from './rate-limit';
+import {
+  EDGE_WINDOW_SECONDS,
+  PUBLIC_READ_EDGE_MAX,
+  edgeCallerIp,
+  isEdgeLimited,
+  type EdgeRateLimitEnv,
+} from './edge-rate-limit';
 
 /**
- * Requests per minute per caller for a public read.
+ * Requests per minute per caller for a public read (the KV layer).
  *
- * 120/min is two per second sustained. A reader panning a map, a page
- * refreshing its list, a poster QR being scanned by a queue of people at a door
- * — none of these come close. Enumerating a metro's ~2,800 corridor cells does.
+ * 360/min is six per second sustained. The PO bar (2026-10-03, OSE-1509) is
+ * that one person working fast — about 5 requests a second — is never
+ * refused, while a flood is refused within 3 seconds. The flood half is the
+ * edge layer's job (`PUBLIC_READ_EDGE_MAX` per 10 s); this per-minute count is
+ * the backstop for a caller that stays under the edge limit. It was 120/min,
+ * which refused a 5-per-second user after ~24 s. Enumerating a metro's ~2,800
+ * corridor cells still takes about eight minutes.
  */
-export const PUBLIC_READ_MAX = 120;
+export const PUBLIC_READ_MAX = 360;
 
-export type PublicReadLimitEnv = Partial<RateLimitEnv>;
+export type PublicReadLimitEnv = Partial<RateLimitEnv> & EdgeRateLimitEnv;
 
 /**
  * Identify the caller.
@@ -58,7 +69,14 @@ function callerKey(request: Request, scope: string): string {
   return `publicread:${scope}:${ip}`;
 }
 
-/** 429 with a Retry-After, so a well-behaved client can back off correctly. */
+/**
+ * 429 with a Retry-After, so a well-behaved client can back off correctly.
+ *
+ * The headers describe the edge layer (OSE-1509), which is the one a burst
+ * meets first: 60 per 10 s. The KV layer behind it (360 per minute) only
+ * catches a caller that stays under the edge limit for a whole minute; such a
+ * caller retrying after 10 s is simply refused again.
+ */
 export function publicReadLimitResponse(): Response {
   return Response.json(
     {
@@ -70,10 +88,10 @@ export function publicReadLimitResponse(): Response {
     {
       status: 429,
       headers: {
-        'Retry-After': '60',
-        'X-RateLimit-Limit': String(PUBLIC_READ_MAX),
+        'Retry-After': String(EDGE_WINDOW_SECONDS),
+        'X-RateLimit-Limit': String(PUBLIC_READ_EDGE_MAX),
         'X-RateLimit-Remaining': '0',
-        'X-RateLimit-Window': '60s',
+        'X-RateLimit-Window': `${EDGE_WINDOW_SECONDS}s`,
         'Cache-Control': 'no-store',
       },
     }
@@ -92,6 +110,17 @@ export async function isPublicReadLimited(
   scope: string,
   max: number = PUBLIC_READ_MAX
 ): Promise<boolean> {
+  // Edge layer first (OSE-1509): blocks a burst within its first fraction of a
+  // second. Routes that raise the limit above the default (the sponsor logo
+  // proxy, 300/min) skip it, so this layer never tightens a deliberate raise.
+  const ip = edgeCallerIp(request);
+  if (
+    ip &&
+    max <= PUBLIC_READ_MAX &&
+    (await isEdgeLimited(env.PUBLIC_READ_EDGE_LIMITER, `${scope}:${ip}`))
+  ) {
+    return true;
+  }
   try {
     // checkRateLimit fails open with no KV bound — see the header.
     return await checkRateLimit(env, callerKey(request, scope), max);
