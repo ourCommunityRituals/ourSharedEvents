@@ -173,7 +173,9 @@ describe('stored bucket values are validated before use', () => {
 // lists `ratelimit:` keys itself would bypass the shared scan and its rule.
 describe('src uses the rate limiter through env and the shared scan', () => {
   const root = join(__dirname, '..');
+  // readdirSync yields `lib\rate-limit.ts` on Windows; compare on forward slashes.
   const srcFiles = (readdirSync(join(root, 'src'), { recursive: true }) as string[])
+    .map((rel) => rel.replace(/\\/g, '/'))
     .filter((rel) => rel.endsWith('.ts') && !rel.endsWith('lib/rate-limit.ts'))
     .map((rel) => [rel, readFileSync(join(root, 'src', rel), 'utf8')] as const);
 
