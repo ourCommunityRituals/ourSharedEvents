@@ -53,6 +53,8 @@ function adminHeaders(): Record<string, string> {
 interface HitResult {
   statuses: number[];
   firstRateLimitIndex: number | null;
+  /** Who answered when the burst was NOT limited: first non-2xx/429 response, else the last. */
+  answeredBy: string;
   retryAfterOnFirst429: string | null;
   xRateLimitLimitOnFirst429: string | null;
 }
@@ -70,11 +72,28 @@ async function hammmerEndpoint(
   let firstRateLimitIndex: number | null = null;
   let retryAfterOnFirst429: string | null = null;
   let xRateLimitLimitOnFirst429: string | null = null;
+  let answeredBy = '';
 
   for (let i = 0; i < total; i++) {
     const response = await fetcher(i);
     const status = response.status();
     statuses.push(status);
+
+    // OSE-1509: record which layer answered, so a burst that is never limited
+    // can be told apart as Worker (JSON error code, X-RateLimit-* headers) or
+    // the Cloudflare edge (cf-mitigated, HTML block page). Kept: the first
+    // non-2xx/non-429 response, otherwise the last response of the burst.
+    if (status !== 429 && !answeredBy.startsWith('first-error')) {
+      const h = response.headers();
+      const isError = status >= 300;
+      const body = isError ? (await response.text().catch(() => '')).slice(0, 160) : '';
+      answeredBy =
+        `${isError ? 'first-error' : 'last'} #${i + 1}: status=${status} ` +
+        `cf-mitigated=${h['cf-mitigated'] ?? '-'} ` +
+        `x-ratelimit-remaining=${h['x-ratelimit-remaining'] ?? '-'} ` +
+        `content-type=${h['content-type'] ?? '-'}` +
+        (body ? ` body=${JSON.stringify(body.replace(/\s+/g, ' '))}` : '');
+    }
 
     if (status === 429 && firstRateLimitIndex === null) {
       firstRateLimitIndex = i;
@@ -89,6 +108,7 @@ async function hammmerEndpoint(
   return {
     statuses,
     firstRateLimitIndex,
+    answeredBy,
     retryAfterOnFirst429,
     xRateLimitLimitOnFirst429,
   };
@@ -112,7 +132,7 @@ test.describe('RL-001 — GET /api/v2/events rate limit', () => {
     expect(
       result.firstRateLimitIndex,
       `Expected 429 by request #${TOTAL} on /api/v2/events. ` +
-        `Statuses received: ${result.statuses.join(', ')}`
+        `Statuses received: ${result.statuses.join(', ')}. Answered by: ${result.answeredBy}`
     ).not.toBeNull();
 
     console.log(
@@ -147,7 +167,7 @@ test.describe('RL-002 — POST email-signup form rate limit', () => {
     expect(
       result.firstRateLimitIndex,
       `Expected 429 by request #${TOTAL} on email-signup. ` +
-        `Statuses received: ${result.statuses.join(', ')}`
+        `Statuses received: ${result.statuses.join(', ')}. Answered by: ${result.answeredBy}`
     ).not.toBeNull();
 
     console.log(
