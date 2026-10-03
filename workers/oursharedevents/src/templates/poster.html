@@ -1185,14 +1185,17 @@
           if (u.indexOf(location.origin + '/') === 0 || /^https:\/\/[^\s"'<>]+$/.test(u)) return u;
           return '';
         }
-        container.innerHTML = slots
-          .filter(function (s) { return slotLink(s) !== ''; })
+        // The colour never enters the markup: it is checked here and set on the
+        // card through the CSSOM after the cards exist.
+        function slotHex(s) {
+          return /^#[0-9A-Fa-f]{6}$/.test(String((s.uec && s.uec.scan_hex) || '')) ? String(s.uec.scan_hex) : '';
+        }
+        const shown = slots.filter(function (s) { return slotLink(s) !== ''; });
+        container.innerHTML = shown
           .map(function (s) {
             const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
-            // UEC id and colour from the bundle: the id is shown as text, the
-            // colour is applied below only if it is a plain #rrggbb.
+            // UEC id from the bundle, shown as text beside the word.
             const uecId = String((s.uec && s.uec.id) || '').replace(/[^A-Z-]/g, '');
-            const uecHex = /^#[0-9A-Fa-f]{6}$/.test(String((s.uec && s.uec.scan_hex) || '')) ? s.uec.scan_hex : '';
             const uecName = uecId.replace(/-/g, ' ');
             const word = esc(s.word || s.label || kind);
             const label = esc(s.label || s.word || kind);
@@ -1201,7 +1204,7 @@
             const shortText = esc(link);
             const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
             return (
-              '<div class="qr-card qr-item code-card" data-uec="' + uecId + '" data-uec-hex="' + uecHex + '" data-testid="poster-qr-slot-' + kind + '">' +
+              '<div class="qr-card qr-item code-card" data-uec="' + uecId + '" data-testid="poster-qr-slot-' + kind + '">' +
               '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + (uecName && uecName !== String(s.word || '') ? ' <span class="code-uec meta-text" data-testid="poster-qr-slot-uec-' + kind + '">&middot; ' + uecName + '</span>' : '') + '</span></div>' +
               '<div class="qr-card-body">' +
               (KIND === 'digital'
@@ -1216,8 +1219,8 @@
           })
           .join('');
         // The band colour is set through the CSSOM (no inline style attribute).
-        container.querySelectorAll('.code-card[data-uec-hex]').forEach(function (el) {
-          const hex = el.getAttribute('data-uec-hex');
+        container.querySelectorAll('.code-card').forEach(function (el, i) {
+          const hex = shown[i] ? slotHex(shown[i]) : '';
           if (hex) el.style.borderTopColor = hex;
         });
       }
