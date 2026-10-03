@@ -61,14 +61,17 @@ test('light and dark actually differ (dark mode is not a white page)', async ({ 
 });
 
 // The map state in a real browser (CCR PR 700, QA M1): CI's other seeded
-// events have no coordinates, so nothing ever drew a hex. Five upcoming events
-// in ONE corridor (Blue Island, H3 res 7) meet the per-corridor gate.
+// events have no coordinates, so nothing ever drew a hex. MAP_FLOOR upcoming
+// events (Blue Island, H3 res 7) meet the landing gate: the map is drawn, and
+// leads the page, once the page lists LIST_MAX events (the Worker's
+// lib/landing-area.ts).
+const MAP_FLOOR = 10;
 test('the attendee map draws coloured hexes with 44px legend links', async ({ page, request }) => {
   test.skip(!ADMIN_BEARER, 'needs OSE_ADMIN_BEARER (set by playwright.mobile.config.ts)');
   test.setTimeout(150_000);
   const stamp = Date.now();
   let lastListedFrom: string | null = null;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < MAP_FLOOR; i++) {
     const ev = await createLiveEvent(request, ADMIN_BEARER, `Map corridor ${stamp}-${i}`, 3 + i, {
       lat: 41.657731,
       lon: -87.680213,

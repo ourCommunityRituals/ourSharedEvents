@@ -26,7 +26,7 @@ import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import PUBLIC_HTML from '../templates/public.html';
 import ADMIN_HTML from '../templates/admin.html';
 import LANDING_HTML from '../templates/landing.html';
-import { readLatchedCorridors } from '../lib/corridor-latch';
+import { readLatches } from '../lib/corridor-latch';
 import ADMIN_SIGNIN_HTML from '../templates/admin-signin.html';
 import DISPLAY_HTML from '../templates/display.html';
 import POSTER_HTML from '../templates/poster.html';
@@ -2242,15 +2242,20 @@ export async function handleLandingPage(
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
     // §6.2b latch: corridors that have ever reached the threshold stay on the
     // map. Brand-bound read; a missing table (pre-0084) just means none yet.
+    // The landing's own latch rides in the same table: once the area has held
+    // LIST_MAX events it keeps leading with the map.
     let latched = new Set<string>();
+    let areaLatched = false;
     if ((env as LandingEnv).DB) {
       try {
-        latched = await readLatchedCorridors((env as LandingEnv).DB as D1Database, 'root');
+        const l = await readLatches((env as LandingEnv).DB as D1Database, 'root');
+        latched = l.corridors;
+        areaLatched = l.landingArea;
       } catch {
         latched = new Set();
       }
     }
-    area = renderLandingArea(items as LandingAreaItem[], { latched });
+    area = renderLandingArea(items as LandingAreaItem[], { latched, areaLatched });
   } catch {
     area = renderEmptyLandingArea();
   }

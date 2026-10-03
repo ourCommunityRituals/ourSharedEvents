@@ -32,6 +32,17 @@
 // THE THING COUNTED IS THE THING SHOWN: each corridor's count is exactly the
 // events its hex links.
 //
+// THE LANDING IS THE ONE EXCEPTION TO THAT GATE (owner, 2026-10-03; see
+// AreaGate below). The landing passes an area gate, and then the question is
+// the whole area the page lists: under 10 events nothing is drawn, at 10 or
+// more (or once latched) every corridor with an event is drawn, lonely ones
+// included. That is the owner's call for this page and departs from the
+// per-corridor grain above on purpose. What does NOT change on that path: the
+// hexes still come from res-7 cell ids alone (attendeeMapAreas), no event
+// coordinate and no viewer location is read, and each hex's count is still
+// exactly the events it links. The area count also includes events with no
+// cell; those are listed in the cards and never drawn.
+//
 // PLACE NAMES (2026-10-03). A hexagon alone does not say where it is, so each
 // area carries a name taken from the events in it: the town in their public
 // address ("…, Blue Island, IL 60406" or "Venue, Chicago IL"), else "near
@@ -82,6 +93,21 @@ export interface RenderedAttendeeMap {
   /** Events that are (or would be) on the map. */
   count: number;
   areas: AttendeeMapArea[];
+}
+
+/**
+ * The landing page's own gate (owner, 2026-10-03): the AREA the page shows, not
+ * one corridor. Under `min` events the map view is the note plus the labelled
+ * example; at `min` or more the map leads the page and draws every corridor
+ * that holds an event. `count` is the real number of events the page lists.
+ * This is a display rule for that one page. CORRIDOR_READY_MIN_EVENTS (5), the
+ * latch, GET /api/v2/events/map and every privacy floor are untouched by it.
+ */
+export interface AreaGate {
+  count: number;
+  min: number;
+  /** The area reached `min` before and was recorded (lib/corridor-latch): stay open. */
+  latched?: boolean;
 }
 
 /** Hexes drawn at most. Past this the answer is clustering, not a bigger SVG. */
@@ -202,16 +228,26 @@ const EXAMPLE_SVG =
     .join('') +
   `</svg>`;
 
-function thinHtml(busiest: number): string {
-  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
+function thinHtml(note: string): string {
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
-              <p><strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar} &mdash; every event is listed below.</p>
+              <p>${note} &mdash; every event is listed below.</p>
             </div>
             <figure class="amap" data-testid="amap-example">
               ${MAP_STYLE}
               ${EXAMPLE_SVG}
               <figcaption data-testid="amap-example-caption"><strong>Example.</strong> This is what the map looks like once neighborhoods fill in: one numbered hexagon each, a few square kilometres, never a street address.</figcaption>
             </figure>`;
+}
+
+function corridorNote(busiest: number): string {
+  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
+  return `<strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
+}
+
+function areaNote(gate: AreaGate): string {
+  const sofar =
+    gate.count === 0 ? 'None yet' : `There ${gate.count === 1 ? 'is' : 'are'} ${gate.count} so far`;
+  return `<strong>The map appears once this area has ${gate.min} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
 }
 
 function svgFor(areas: AttendeeMapArea[]): string {
@@ -284,20 +320,32 @@ function legendFor(areas: AttendeeMapArea[]): string {
  */
 export function renderAttendeeMap(
   items: readonly AttendeeMapItem[] | null | undefined,
-  opts?: { now?: number; latched?: ReadonlySet<string> }
+  opts?: { now?: number; latched?: ReadonlySet<string>; area?: AreaGate }
 ): RenderedAttendeeMap {
   const now = new Date(opts?.now ?? Date.now());
   const latched = opts?.latched ?? new Set<string>();
   const all = attendeeMapAreas(items, now).areas;
-  // Per corridor: ready now, or latched (and with something to link).
-  const drawn = all
-    .filter((a) => a.events.length >= CORRIDOR_READY_MIN_EVENTS || latched.has(a.cell))
-    .map((a, i) => ({ ...a, n: i + 1 }));
+  const gate = opts?.area;
+  // Landing (an area gate is given): below it nothing is drawn; at it, every
+  // corridor with an event is. Anywhere else: per corridor, ready now or latched.
+  const drawn = (
+    gate
+      ? gate.count >= gate.min || gate.latched
+        ? all
+        : []
+      : all.filter((a) => a.events.length >= CORRIDOR_READY_MIN_EVENTS || latched.has(a.cell))
+  ).map((a, i) => ({ ...a, n: i + 1 }));
   const count = drawn.reduce((s, a) => s + a.events.length, 0);
 
   if (drawn.length === 0) {
     const busiest = all.reduce((m, a) => Math.max(m, a.events.length), 0);
-    return { html: thinHtml(busiest), state: 'thin', count: 0, areas: [] };
+    const note =
+      gate && gate.count < gate.min && !gate.latched
+        ? areaNote(gate)
+        : gate
+          ? '<strong>None of these events has a place on the map yet</strong>'
+          : corridorNote(busiest);
+    return { html: thinHtml(note), state: 'thin', count: 0, areas: [] };
   }
 
   const caption = `${count} event${count === 1 ? '' : 's'} in ${drawn.length} neighborhood${drawn.length === 1 ? '' : 's'}, every kind, over the next ${CORRIDOR_WINDOW_DAYS} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.`;

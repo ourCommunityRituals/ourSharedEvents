@@ -115,3 +115,28 @@ one tile route to count the same way.
 - Google Maps Static API: 10,000 free loads/month, then $2.00 per 1,000 — <https://developers.google.com/maps/billing-and-pricing/pricing>
 - Cloudflare R2: $0.015/GB-month, Class B $0.36/million, 10 GB and 10 million Class B free, no egress fee — <https://developers.cloudflare.com/r2/platform/pricing/>
 - Protomaps: planet file about 120 GB; R2 recommended for hosting — <https://docs.protomaps.com/basemaps/downloads>, <https://docs.protomaps.com/pmtiles/cloud-storage>
+
+## Measured in the street-map proof (2026-10-03)
+
+The self-hosted line above was written from published figures. A local proof
+(`proofs/street-map/`, not shipped, nothing on staging or production) measured it
+for one region. These replace the estimates for that region only.
+
+| Item                                 | Measured                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| Region                               | Chicago area: west -91.0, south 40.9, east -86.2, north 43.3                   |
+| Protomaps build                      | `20261003.pmtiles`; the planet file is 138.5 GB (not the 120 GB assumed above) |
+| Regional file                        | **464,372,385 bytes (0.464 GB)**, zoom 0–15, 143,442 tiles                     |
+| R2 storage for the region            | **$0.007 a month** at list price; $0 while the account stays under 10 GB       |
+| R2 storage for the whole planet      | about $1.93 a month at list price, after the free 10 GB                        |
+| Tile reads for one first map view    | **6–11** range reads, 91–634 KB (the estimate above was 10–30)                 |
+| Browser libraries (once per visitor) | 1.27 MB raw, 330 KB gzip (MapLibre GL JS, PMTiles reader, style)               |
+| Fonts and sprites stored             | 1.9 MB fonts (3 faces, Latin ranges) + 0.1 MB sprites                          |
+| Transfer to cut the regional file    | 487 MB, 124 requests, about 1 minute                                           |
+
+Each tile read is also one Worker request, billed under the Workers plan.
+
+Not measured: reads per visit once a visitor pans and zooms; how much the 24-hour
+browser cache cuts repeat reads; whether tile reads can be cached at Cloudflare's
+edge (the proof answers byte ranges, HTTP 206, which the edge cache does not store
+from a Worker).

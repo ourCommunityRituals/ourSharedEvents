@@ -143,20 +143,48 @@ describe('OSE-1312 | product tagging (anon pole; hybrid inert)', () => {
   });
 });
 
-describe('OSE-1312 | default view by count (list < LIST_MAX ≤ map)', () => {
-  it('defaults to list below the crossover', () => {
-    const items = Array.from({ length: LIST_MAX - 1 }, (_, i) => ev({ id: `e${i}` }));
-    const out = render(items);
-    expect(out.defaultView).toBe('list');
-    expect(out.html).toContain('id="view-list" class="toggle-radio" checked');
+describe('the landing threshold (LIST_MAX): doors lead below it, the map leads at it', () => {
+  it('the threshold is 10', () => {
+    expect(LIST_MAX).toBe(10);
   });
 
-  it('defaults to map at/above the crossover — counted at the widest window', () => {
+  it('below it: the doors lead (list view opens), and the map view is the note with the real count plus the example', () => {
+    const items = Array.from({ length: LIST_MAX - 1 }, (_, i) => ev({ id: `e${i}` }));
+    const out = render(items);
+    expect(out.leadsWithMap).toBe(false);
+    expect(out.defaultView).toBe('list');
+    expect(out.html).toContain('id="view-list" class="toggle-radio" checked');
+    expect(out.html).toContain(`once this area has ${LIST_MAX} events`);
+    expect(out.html).toContain(`There are ${LIST_MAX - 1} so far`);
+    expect(out.html).toContain('data-testid="amap-example"');
+    expect(out.html).not.toContain('data-testid="amap-svg"');
+    // The events themselves are still listed.
+    expect(out.html.split('data-testid="area-card"').length - 1).toBe(LIST_MAX - 1);
+  });
+
+  it('below it but latched: the map still leads and the note is gone (no flapping)', () => {
+    const items = Array.from({ length: 3 }, (_, i) => ev({ id: `e${i}` }));
+    const out = renderLandingArea(items, { now: NOW, areaLatched: true });
+    expect(out.windowCount).toBe(3);
+    expect(out.leadsWithMap).toBe(true);
+    expect(out.defaultView).toBe('map');
+    expect(out.html).not.toContain('once this area has');
+  });
+
+  it('a latched area with nothing to show is the plain empty state, doors first', () => {
+    const out = renderLandingArea([], { now: NOW, areaLatched: true });
+    expect(out.leadsWithMap).toBe(false);
+    expect(out).toEqual(renderEmptyLandingArea());
+  });
+
+  it('at it: the map leads — counted at the widest window', () => {
     const items = Array.from({ length: LIST_MAX }, (_, i) => ev({ id: `e${i}` }));
     const out = render(items);
     expect(out.windowCount).toBe(LIST_MAX);
+    expect(out.leadsWithMap).toBe(true);
     expect(out.defaultView).toBe('map');
     expect(out.html).toContain('id="view-map" class="toggle-radio" checked');
+    expect(out.html).not.toContain('once this area has');
   });
 
   it('events beyond the widest window do not count toward the crossover', () => {
@@ -166,7 +194,8 @@ describe('OSE-1312 | default view by count (list < LIST_MAX ≤ map)', () => {
     );
     const out = render([...near, ...far]);
     expect(out.windowCount).toBe(3);
-    expect(out.defaultView).toBe('list');
+    expect(out.leadsWithMap).toBe(false);
+    expect(out.html).toContain('There are 3 so far');
   });
 });
 

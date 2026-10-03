@@ -1,0 +1,12 @@
+{
+  "name": "ose-street-map-proof",
+  "private": true,
+  "description": "Proof only: H3 res-7 hexagons over a self-hosted OpenStreetMap (Protomaps) street map. Not part of the product Worker.",
+  "type": "module",
+  "dependencies": {
+    "@protomaps/basemaps": "5.7.2",
+    "h3-js": "^4.1.0",
+    "maplibre-gl": "6.11.2",
+    "pmtiles": "4.5.0"
+  }
+}

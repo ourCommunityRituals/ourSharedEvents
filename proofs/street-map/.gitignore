@@ -1,0 +1,11 @@
+# Downloaded or generated; never committed.
+node_modules/
+.wrangler/
+data/
+tools/
+public/vendor/
+public/fonts/
+public/sprites/
+
+# Screenshots are large and include Google map images; regenerate with scripts/shoot.cjs.
+screenshots/

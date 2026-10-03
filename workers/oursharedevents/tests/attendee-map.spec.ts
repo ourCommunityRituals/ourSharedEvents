@@ -157,6 +157,53 @@ describe('attendee map | precision (Invariant #1 by construction)', () => {
   });
 });
 
+// The landing draws through an area gate (lib/landing-area: at LIST_MAX events,
+// or once latched, every corridor with an event). The gate changes WHICH
+// corridors are drawn; it must not change what a hex is made from.
+describe('landing map | Invariant #1 holds on the area-gate path', () => {
+  const coords = [BLUE.lat, BLUE.lon, BEV.lat, BEV.lon];
+  const mixed = (n: number) => [
+    ...many(n - 1),
+    ev(30, { h3_res7: BEV7, lat: BEV.lat, lon: BEV.lon }),
+  ];
+  const drawnCells = (html: string) => [...html.matchAll(/data-cell="([^"]*)"/g)].map((m) => m[1]!);
+
+  it('at the threshold: no event coordinate reaches the page, in the map or the cards', () => {
+    const html = renderLandingArea(mixed(LIST_MAX), { now: NOW }).html;
+    expect(drawnCells(html).sort()).toEqual([BLUE7, BEV7].sort());
+    for (const n of coords) {
+      expect(html).not.toContain(String(n));
+      expect(html).not.toContain(n.toFixed(4));
+    }
+  });
+
+  it('latched below the threshold: the same holds', () => {
+    const html = renderLandingArea(mixed(3), { now: NOW, areaLatched: true }).html;
+    expect(drawnCells(html).length).toBe(2);
+    for (const n of coords) expect(html).not.toContain(String(n));
+  });
+
+  it('only res-7 cells are ever drawn: a finer cell or a non-cell is counted but never a hex', () => {
+    const res9 = latLngToCell(BLUE.lat, BLUE.lon, 9);
+    const items = [...many(LIST_MAX), ev(40, { h3_res7: res9 }), ev(41, { h3_res7: 'not-a-cell' })];
+    const html = renderLandingArea(items, { now: NOW }).html;
+    expect(drawnCells(html)).toEqual([BLUE7]);
+    expect(html).not.toContain(res9);
+    expect(html).not.toContain('not-a-cell');
+  });
+
+  it('each hex still counts exactly the events it links (the thing counted is the thing shown)', () => {
+    const out = renderAttendeeMap(mixed(LIST_MAX), {
+      now: NOW,
+      area: { count: LIST_MAX, min: LIST_MAX },
+    });
+    for (const a of out.areas) {
+      expect(out.html).toContain(`data-cell="${a.cell}" data-count="${a.events.length}"`);
+    }
+    expect(out.count).toBe(out.areas.reduce((s, a) => s + a.events.length, 0));
+  });
+});
+
 describe('attendee map | forward window', () => {
   it('drops wrapped events and events past the horizon', () => {
     const items = [
@@ -221,9 +268,47 @@ describe('attendee map | shape', () => {
   });
 });
 
+describe('attendee map | the landing area gate', () => {
+  const gate = (count: number) => ({ now: NOW, area: { count, min: 10 } });
+
+  it('below the gate the note carries the real count and nothing is drawn', () => {
+    const out = renderAttendeeMap(many(7), gate(7));
+    expect(out.state).toBe('thin');
+    expect(out.html).toContain('once this area has 10 events');
+    expect(out.html).toContain('There are 7 so far');
+  });
+
+  it('says "is" for one event and "None yet" for none', () => {
+    expect(renderAttendeeMap(many(1), gate(1)).html).toContain('There is 1 so far');
+    expect(renderAttendeeMap([], gate(0)).html).toContain('None yet');
+  });
+
+  it('at the gate, events without a place on the map get a plain note, not a broken map', () => {
+    const out = renderAttendeeMap(many(10, { h3_res7: null }), gate(10));
+    expect(out.state).toBe('thin');
+    expect(out.html).toContain('None of these events has a place on the map yet');
+  });
+
+  it('a latched area keeps drawing below the gate', () => {
+    const out = renderAttendeeMap(many(3), {
+      now: NOW,
+      area: { count: 3, min: 10, latched: true },
+    });
+    expect(out.state).toBe('map');
+    expect(out.areas.map((a) => [a.cell, a.events.length])).toEqual([[BLUE7, 3]]);
+  });
+
+  it('without an area gate the shared per-neighbourhood rule (5, or latched) still applies', () => {
+    expect(CORRIDOR_READY_MIN_EVENTS).toBe(5);
+    expect(renderAttendeeMap(many(5), { now: NOW }).state).toBe('map');
+    expect(renderAttendeeMap(many(4), { now: NOW }).state).toBe('thin');
+    expect(renderAttendeeMap(many(1), { now: NOW, latched: new Set([BLUE7]) }).state).toBe('map');
+  });
+});
+
 describe('attendee map | on the landing', () => {
   it('replaces the placeholder and still sits above the full card list', () => {
-    const items = many(6).map((e) => ({ ...e, venue: 'Eagles Hall' }));
+    const items = many(LIST_MAX).map((e) => ({ ...e, venue: 'Eagles Hall' }));
     const area = renderLandingArea(items, { now: NOW });
     expect(area.html).not.toContain('A neighborhood map lands here');
     expect(area.html).toContain('data-testid="amap-svg"');
@@ -231,7 +316,20 @@ describe('attendee map | on the landing', () => {
     const listAt = area.html.indexOf('data-testid="area-list"');
     expect(mapAt).toBeGreaterThan(-1);
     expect(mapAt).toBeLessThan(listAt);
-    expect(area.html.split('data-testid="area-card"').length - 1).toBe(6);
+    expect(area.html.split('data-testid="area-card"').length - 1).toBe(LIST_MAX);
+  });
+
+  it('at the landing threshold every neighbourhood with an event is drawn, lonely ones too', () => {
+    const items = [...many(LIST_MAX - 1), ev(20, { h3_res7: BEV7 })];
+    const area = renderLandingArea(items, { now: NOW });
+    expect(area.html).toContain(`data-cell="${BLUE7}"`);
+    expect(area.html).toContain(`data-cell="${BEV7}"`);
+  });
+
+  it('one event short of the threshold draws nothing, even in a latched neighbourhood', () => {
+    const area = renderLandingArea(many(LIST_MAX - 1), { now: NOW, latched: new Set([BLUE7]) });
+    expect(area.html).not.toContain('data-cell=');
+    expect(area.html).toContain('data-testid="amap-example"');
   });
 
   it('a thin landing shows the gate note inside the map view', () => {

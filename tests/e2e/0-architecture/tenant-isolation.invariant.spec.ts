@@ -87,15 +87,23 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts:55':
+  'lib/corridor-latch.ts:68':
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
     'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
     'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
     'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
     'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
     'request-path read (readLatchedCorridors) binds brand_id. (Line shifted ' +
-    '43→55 by the OSE-1508 settled-events rule: LATCH_SETTLE_HOURS and its ' +
-    'comment land above the SELECT.)',
+    '43→55 by the OSE-1508 settled-events rule, then 55→68 by the landing area ' +
+    'latch: its header comment, the LIST_MAX import and LANDING_AREA_LATCH_KEY ' +
+    'land above the SELECT.)',
+  'lib/corridor-latch.ts:94':
+    'Nightly landing area latch (latchLandingAreas, called by the same ' +
+    'runCorridorLatch — no request, no caller brand). `INSERT OR IGNORE … SELECT ' +
+    'brand_id, ?, ? FROM events … GROUP BY brand_id HAVING COUNT(*) >= 10`: one ' +
+    'count per brand, written as one row under that brand’s own brand_id, so no ' +
+    'brand’s events count toward another’s landing page. Nothing is returned to ' +
+    'a caller. The request-path read (readLatches) binds brand_id.',
   'handlers/events.ts:373':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +

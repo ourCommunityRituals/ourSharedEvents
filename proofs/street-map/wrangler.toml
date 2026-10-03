@@ -1,0 +1,19 @@
+# PROOF ONLY — street map under the H3 hexagons. Local `wrangler dev` only.
+# This is its own Worker so the product Worker (workers/oursharedevents) and its
+# wrangler.toml are untouched. It has no routes and no account bindings; do not
+# deploy it.
+name = "ose-street-map-proof"
+main = "src/worker.ts"
+compatibility_date = "2026-04-28"
+
+# Browser-only files: MapLibre, the PMTiles reader, fonts, sprites. Served as
+# static assets, so none of it is in the Worker's own script or startup.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+# Local R2 bucket (miniflare, persisted under .wrangler/). Never created remotely.
+[[r2_buckets]]
+binding = "MAP_TILES"
+bucket_name = "ose-map-tiles-proof-local"
