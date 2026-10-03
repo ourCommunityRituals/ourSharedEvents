@@ -5,19 +5,20 @@
 
 ## Active Workflows
 
-| Workflow                      | File                       | Triggers                                        |
-| ----------------------------- | -------------------------- | ----------------------------------------------- |
-| **Stage-1 Validation**        | `stage1.yml`               | PR to main, Push to main, Tag `v*.*.*`          |
-| **T5 Adversarial Red Team**   | `red-team-adversarial.yml` | workflow_run (CI success for full-pipeline PRs) |
-| **Stage 2 — Security Finale** | `security-finale.yml`      | workflow_run (T5 success)                       |
-| **CodeQL Security Analysis**  | `security-scan.yml`        | Push to main/claude/**, PR to main, Weekly cron |
+| Workflow                     | File                       | Triggers                                        |
+| ---------------------------- | -------------------------- | ----------------------------------------------- |
+| **Stage-1 Validation**       | `stage1.yml`               | PR to main, Push to main, Tag `v*.*.*`          |
+| **T5 → T6 → Post-T6**        | `red-team-adversarial.yml` | workflow_run (CI/CD success on a push to main)  |
+| **CodeQL Security Analysis** | `security-scan.yml`        | Push to main/claude/**, PR to main, Weekly cron |
 
 The canonical OurSharedEvents pipeline is defined in `oursharedevents-ci.yml`.
-T5, T6, and the post-T6 security bookend are intentionally separate workflow
-runs: T5 adversarial testing must complete before the independent Stage 2
-security finale (T6) starts, and the post-T6 bookend runs only after T6
-success. The chain accepts both pull-request pipeline runs and the
-corresponding `main` push, so merged changes receive the same sequence.
+T5, T6 and the post-T6 security bookend are three jobs in one workflow run,
+chained by `needs:`: T6 starts only after T5 succeeds, and the bookend only
+after T6. Every job runs only when the triggering CI/CD run was a push to
+`main` from this repo (ADR-012 0.2); pull-request pipeline runs are never
+red-teamed with live secrets. They were separate workflow_run workflows until
+2026-10-03, but a workflow_run fired by another workflow_run reports
+`event == 'workflow_run'`, so T6 and the bookend skipped on every run.
 
 ## Properly Archived/Disabled Files
 
@@ -71,12 +72,11 @@ Files in `archive/` are ignored by GitHub Actions (only root `.github/workflows/
 
 **Trigger:** Open a PR targeting `main`
 
-| Workflow                  | Should Run? | Jobs                                                    |
-| ------------------------- | ----------- | ------------------------------------------------------- |
-| Stage-1 Validation        | **YES**     | `validate` only (no deploy)                             |
-| T5 Adversarial Red Team   | **NO**      | (only triggers after a successful full-pipeline CI run) |
-| Stage 2 — Security Finale | **NO**      | (only triggers after T5 succeeds)                       |
-| CodeQL Security Analysis  | **YES**     | `analyze`                                               |
+| Workflow                 | Should Run? | Jobs                                          |
+| ------------------------ | ----------- | --------------------------------------------- |
+| Stage-1 Validation       | **YES**     | `validate` only (no deploy)                   |
+| T5 → T6 → Post-T6        | **NO**      | (only after CI/CD succeeds on a push to main) |
+| CodeQL Security Analysis | **YES**     | `analyze`                                     |
 
 ### Scenario 3: Tag Push (vX.Y.Z)
 

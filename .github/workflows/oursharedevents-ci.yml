@@ -65,9 +65,9 @@
 #   T5: Adversarial Red Team — separate workflow_run after this workflow succeeds
 #       - red-team-adversarial.yml      → T5 — Adversarial Red Team
 #
-#   T6: Security — separate workflow_run after T5 succeeds
-#       - security-finale.yml           → Stage 2 — Security Finale
-#       - post-t6-security.yml          → final post-T6 security bookend
+#   T6: Security — jobs in red-team-adversarial.yml, after the T5 job succeeds
+#       - security-closing              → T6 Closing Security
+#       - post-t6-security              → final post-T6 security bookend
 #
 # Trigger Matrix:
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
@@ -2632,8 +2632,8 @@ jobs:
           echo "| T3 Playwright Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 E2E + T4d Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T5 Adversarial Red Team | red-team-adversarial.yml | separate workflow after CI success |" >> $GITHUB_STEP_SUMMARY
-          echo "| T6 Security | security-finale.yml | separate workflow after T5 success |" >> $GITHUB_STEP_SUMMARY
-          echo "| Post-T6 Security Bookend | post-t6-security.yml | separate workflow after T6 success |" >> $GITHUB_STEP_SUMMARY
+          echo "| T6 Security | red-team-adversarial.yml | job after T5 success |" >> $GITHUB_STEP_SUMMARY
+          echo "| Post-T6 Security Bookend | red-team-adversarial.yml | job after T6 success |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
