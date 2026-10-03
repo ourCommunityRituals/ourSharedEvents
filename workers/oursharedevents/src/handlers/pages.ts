@@ -902,12 +902,12 @@ ${SPONSOR_LIST_CSS}
   <a href="#main" class="ose-skip">Skip to event content</a>
   <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
-    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
     </header>
+    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort || whatVideo || whatLink
@@ -1103,7 +1103,6 @@ ${SPONSOR_LIST_CSS}
   <a href="#main" class="ose-skip">Skip to event content</a>
   <nav aria-label="Site" style="margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
-    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
@@ -1112,6 +1111,7 @@ ${SPONSOR_LIST_CSS}
       ${renderEventTypeMeta(row, 'event-type-live')}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
     </header>
+    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort || whatLink

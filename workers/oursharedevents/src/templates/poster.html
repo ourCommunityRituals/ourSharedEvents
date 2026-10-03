@@ -841,6 +841,9 @@
           '<div class="poster-header" data-testid="poster-card-header">' +
             '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
           '</div>' +
+          // Sponsors sit directly below the title, above the details, artwork
+          // and codes — the same place as on the public event page.
+          '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
           '<div class="poster-body" data-testid="poster-body">' +
             '<div class="poster-meta" data-testid="poster-meta">' +
             (startDate ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + whenHtml + '</div></div>' : '') +
@@ -860,7 +863,6 @@
               '<div id="poster-qr-slots" class="qr-slots" data-testid="poster-qr-slots"><div class="qr-loading" aria-busy="true">&#x23F3;</div></div>' +
             '</div>' +
           '</div>' +
-          '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
           '<div class="poster-footer" data-testid="poster-footer"><span data-testid="poster-org">OurSharedEvents</span> &middot; oursharedevents.com</div>' +
         '</div>';
       }
@@ -944,6 +946,210 @@
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
             return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + attr(title) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + attr(title) + '</span></div>';
           }).join('');
+        rotatePosterSponsors(strip);
+      }
+      // Digital poster: one sponsor at a time, each in turn. Tier-blind — every
+      // sponsor gets the same share of the cycle. The print poster shows all of
+      // them at once, since paper cannot rotate. A hidden tab holds its place.
+      //
+      // The TV display moves sponsors across the screen; the poster is tall, so
+      // here they travel up and down. All motion is declared below as data and
+      // played with element.animate(), so a new entrance or scene is one more
+      // entry and no stylesheet change.
+      var POSTER_SPONSOR_ROTATE_MS = 5000;
+      var posterSponsorTimer = null;
+      // How the next sponsor arrives.
+      var POSTER_ENTRANCES = {
+        rise: { ms: 500, frames: [
+          { transform: 'translateY(100%)', opacity: 0 },
+          { transform: 'none', opacity: 1 }
+        ] },
+        spin: { ms: 700, frames: [
+          { transform: 'translateY(100%) rotate(-360deg)', opacity: 0 },
+          { transform: 'none', opacity: 1 }
+        ] },
+        shake: { ms: 600, frames: [
+          { transform: 'translateY(100%)', opacity: 0, offset: 0 },
+          { transform: 'translateY(0) rotate(-4deg)', opacity: 1, offset: 0.4 },
+          { transform: 'rotate(3deg)', offset: 0.6 },
+          { transform: 'rotate(-2deg)', offset: 0.8 },
+          { transform: 'none', offset: 1 }
+        ] }
+      };
+      // How the sponsor on screen leaves when a scene knocks it.
+      var POSTER_EXITS = {
+        topple: { ms: 320, delay: 780, origin: '0% 100%', frames: [
+          { transform: 'none', opacity: 1 },
+          { transform: 'rotate(-82deg) translateY(0.5rem)', opacity: 0 }
+        ] }
+      };
+      // The vignette library: small scenes that play before a sponsor changes.
+      // Each is line art on a transparent background, coloured by the page's own
+      // text colour, so any scene works on any poster, theme or brand. An entry
+      // is its art, where it stands, how it moves and for how long, how the
+      // sponsor on screen leaves (if the scene knocks it), and how the next one
+      // arrives when the scene lands.
+      var POSTER_VIGNETTES = {
+        // Backyard bocce: a ball thrown askew arcs in and knocks the sponsor.
+        bocce: {
+          ms: 700,
+          lands: 'shake',
+          place: { left: '50%', bottom: '0.75rem' },
+          easing: 'cubic-bezier(0.3, 0, 0.6, 1)',
+          frames: [
+            { transform: 'translate(-48vw, 1.5rem) rotate(-540deg)', offset: 0 },
+            { transform: 'translate(-22vw, -1.75rem) rotate(-200deg)', offset: 0.55 },
+            { transform: 'translate(-4.5rem, 0) rotate(0deg)', offset: 1 }
+          ],
+          art: '<svg viewBox="0 0 32 32" width="28" height="28" focusable="false">' +
+            '<circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.5"/>' +
+            '<path d="M6 11c6 4 14 4 20 0M6 21c6-4 14-4 20 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+            '</svg>'
+        },
+        // Softball: the throw sails past first base, flat and fast, into the sponsor.
+        softball: {
+          ms: 550,
+          lands: 'spin',
+          place: { left: '50%', bottom: '0.75rem' },
+          easing: 'linear',
+          frames: [
+            { transform: 'translate(48vw, -0.75rem) rotate(0deg)' },
+            { transform: 'translate(4.5rem, -0.25rem) rotate(-720deg)' }
+          ],
+          art: '<svg viewBox="0 0 32 32" width="26" height="26" focusable="false">' +
+            '<circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.5"/>' +
+            '<path d="M8 6c5 6 5 14 0 20M24 6c-5 6-5 14 0 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 3"/>' +
+            '</svg>'
+        },
+        // Darts: one misses the board and sticks in the sponsor instead.
+        darts: {
+          ms: 450,
+          lands: 'shake',
+          place: { left: '50%', bottom: '1.5rem' },
+          easing: 'cubic-bezier(0.2, 0, 0.9, 0.6)',
+          frames: [
+            { transform: 'translate(-50vw, -0.5rem) rotate(-6deg)' },
+            { transform: 'translate(-6.5rem, 0) rotate(4deg)' }
+          ],
+          art: '<svg viewBox="0 0 40 16" width="36" height="14" focusable="false">' +
+            '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M10 8h28"/>' +
+            '<path d="M10 8L3 2v12z"/>' +
+            '<path d="M20 5v6" stroke-width="3"/>' +
+            '</g></svg>'
+        },
+        // The DJ: rocking to her own set, she bumps the sponsor and it topples.
+        dj: {
+          ms: 1100,
+          leaves: 'topple',
+          lands: 'rise',
+          place: { right: '0.5rem', bottom: '0.15rem', transformOrigin: '50% 100%' },
+          easing: 'ease-in-out',
+          frames: [
+            { transform: 'translateX(130%)', offset: 0 },
+            { transform: 'translateX(0) rotate(-9deg)', offset: 0.2 },
+            { transform: 'rotate(9deg)', offset: 0.35 },
+            { transform: 'rotate(-9deg)', offset: 0.5 },
+            { transform: 'rotate(8deg)', offset: 0.62 },
+            { transform: 'translateX(-1.6rem) rotate(-16deg)', offset: 0.78 },
+            { transform: 'translateX(-0.4rem) rotate(0deg)', offset: 1 }
+          ],
+          art: '<svg viewBox="0 0 48 48" width="44" height="44" focusable="false">' +
+            '<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="24" cy="12" r="6"/>' +
+            '<path d="M17 12c0-9 14-9 14 0"/>' +
+            '<path d="M16 11v4M32 11v4" stroke-width="3.4"/>' +
+            '<path d="M29 16c4 1 6 4 6 8"/>' +
+            '<path d="M24 18v12"/>' +
+            '<path d="M24 22l-9-11"/>' +
+            '<path d="M24 22l8 9"/>' +
+            '<path d="M5 31h38v6H5z"/>' +
+            '<path d="M9 37v8M39 37v8"/>' +
+            '<ellipse cx="14" cy="31" rx="5" ry="1.6"/>' +
+            '<ellipse cx="34" cy="31" rx="5" ry="1.6"/>' +
+            '<path d="M22 13c1 1.5 3 1.5 4 0" stroke-width="1.8"/>' +
+            '<path d="M8 6v6M8 6l4 1.5" stroke-width="1.8"/>' +
+            '<circle cx="6.5" cy="12" r="1.6" fill="currentColor" stroke="none"/>' +
+            '</g></svg>'
+        }
+      };
+      function rotatePosterSponsors(strip) {
+        if (posterSponsorTimer) { clearInterval(posterSponsorTimer); posterSponsorTimer = null; }
+        strip.removeAttribute('data-rotating');
+        if (KIND !== 'digital') return;
+        const items = Array.prototype.slice.call(strip.querySelectorAll('[data-testid="poster-sponsor-item"]'));
+        if (items.length < 2) return;
+        let at = 0;
+        const entrances = Object.keys(POSTER_ENTRANCES);
+        const vignettes = Object.keys(POSTER_VIGNETTES);
+        // People who ask for less motion get a plain swap: no entrance, no scene.
+        const calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        const play = function(el, move, extra) {
+          if (calm || !move || !el.animate) return;
+          const timing = { duration: move.ms, easing: move.easing || 'ease-out', fill: 'both' };
+          if (extra) Object.keys(extra).forEach(function(k) { timing[k] = extra[k]; });
+          el.animate(move.frames, timing);
+        };
+        const show = function(effect) {
+          items.forEach(function(el, i) {
+            const on = i === at;
+            el.hidden = !on;
+            el.style.display = on ? '' : 'none';
+            if (on) { el.setAttribute('data-effect', effect); play(el, POSTER_ENTRANCES[effect]); }
+          });
+        };
+        const pick = function(list) { return list[Math.floor(Math.random() * list.length)]; };
+        const advance = function() {
+          const next = (at + 1) % items.length;
+          // Roughly one turn in five is a vignette.
+          const name = !calm && vignettes.length && Math.random() >= 0.8 ? pick(vignettes) : null;
+          if (!name) { at = next; show(pick(entrances)); return; }
+          const scene = POSTER_VIGNETTES[name];
+          const actor = document.createElement('span');
+          actor.setAttribute('data-testid', 'poster-vignette');
+          actor.setAttribute('data-vignette', name);
+          actor.setAttribute('aria-hidden', 'true');
+          actor.style.position = 'absolute';
+          actor.style.lineHeight = '0';
+          actor.style.pointerEvents = 'none';
+          Object.keys(scene.place).forEach(function(k) { actor.style[k] = scene.place[k]; });
+          actor.innerHTML = scene.art;
+          strip.appendChild(actor);
+          play(actor, scene);
+          // Some scenes knock the sponsor that is on screen before the next arrives.
+          const leaving = items[at];
+          const exit = scene.leaves ? POSTER_EXITS[scene.leaves] : null;
+          if (exit) {
+            leaving.setAttribute('data-leaving', scene.leaves);
+            leaving.style.transformOrigin = exit.origin;
+            play(leaving, { ms: exit.ms, frames: exit.frames, easing: 'ease-in' }, { delay: exit.delay });
+          }
+          // The scene ends by touching the sponsor; that touch is the change.
+          setTimeout(function() {
+            actor.remove();
+            if (leaving.getAnimations) leaving.getAnimations().forEach(function(a) { a.cancel(); });
+            leaving.removeAttribute('data-leaving');
+            leaving.style.transformOrigin = '';
+            at = next;
+            show(scene.lands);
+          }, scene.ms);
+        };
+        strip.style.position = 'relative';
+        strip.style.overflow = 'hidden';
+        strip.setAttribute('data-rotating', 'true');
+        show('rise');
+        posterSponsorTimer = setInterval(function() {
+          if (document.hidden) return;
+          advance();
+        }, POSTER_SPONSOR_ROTATE_MS);
+        // Paper cannot rotate: if someone prints the digital poster, show every
+        // sponsor for the print and go back to one afterwards.
+        window.addEventListener('beforeprint', function() {
+          items.forEach(function(el) { el.style.display = ''; });
+        });
+        window.addEventListener('afterprint', function() {
+          items.forEach(function(el, i) { el.style.display = i === at ? '' : 'none'; });
+        });
       }
       // Typed destination slots (Public / Donate / Sign Up) from the bundle:
       // each is a /s routing shortlink (printed AND scannable) — the anonymous

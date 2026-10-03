@@ -182,7 +182,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('Supported by');
   });
 
-  test('pre-sponsor-strip renders above the event title (sponsor header at top)', async () => {
+  test('pre-sponsor-strip renders below the title and date, above the content', async () => {
     const id = 'evt_ssp1_pre_sponsor_top';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
     await seedSponsor(id, { name: 'Top Sponsor', websiteUrl: 'https://top.example.com' });
@@ -190,10 +190,11 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     const strip = html.indexOf('data-testid="pre-sponsor-strip"');
     const title = html.indexOf('data-testid="event-title"');
+    const where = html.indexOf('data-testid="event-where"');
     expect(strip, 'sponsor strip must render').toBeGreaterThan(-1);
-    expect(strip, 'sponsor strip precedes the event title (top-of-page header)').toBeLessThan(
-      title
-    );
+    expect(where, 'WHERE must render').toBeGreaterThan(-1);
+    expect(strip, 'sponsor strip follows the event title').toBeGreaterThan(title);
+    expect(strip, 'sponsor strip precedes the content and map').toBeLessThan(where);
   });
 
   test('pre-sponsor-strip absent when no sponsors for event', async () => {
@@ -362,18 +363,19 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
     expect(html).not.toContain('data-testid="live-sponsor-strip"');
   });
 
-  test('live-sponsor-strip renders above the live badge (sponsor header at top)', async () => {
+  test('live-sponsor-strip renders below the title and date, above the content', async () => {
     const id = 'evt_ssp1_live_sponsor_top';
     await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });
     await seedSponsor(id, { name: 'Live Top Sponsor', websiteUrl: 'https://livetop.example.com' });
 
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     const strip = html.indexOf('data-testid="live-sponsor-strip"');
-    const badge = html.indexOf('data-testid="event-live-badge"');
+    const title = html.indexOf('data-testid="event-title-live"');
+    const where = html.indexOf('data-testid="event-where-live"');
     expect(strip, 'live sponsor strip must render').toBeGreaterThan(-1);
-    expect(strip, 'live sponsor strip precedes the live badge (top-of-page header)').toBeLessThan(
-      badge
-    );
+    expect(where, 'WHERE must render').toBeGreaterThan(-1);
+    expect(strip, 'live sponsor strip follows the event title').toBeGreaterThan(title);
+    expect(strip, 'live sponsor strip precedes the content and map').toBeLessThan(where);
   });
 });
 
