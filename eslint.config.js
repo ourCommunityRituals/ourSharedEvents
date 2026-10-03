@@ -47,6 +47,8 @@ module.exports = [
       'archive/**',
       // Retired GAS/zeventbook MVP reference — kept as history, not linted (OSE-882)
       'reference/**',
+      // Standalone proofs (own Worker, own package.json) — not product code, not linted
+      'proofs/**',
       // Claude worktrees — isolated git branches, not part of active codebase
       '.claude/**',
       // Generated files
