@@ -269,6 +269,25 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 ---
 
+### Issue: An Event Is Still Visible After Undo / Take Offline
+
+**Symptoms:**
+
+- An organizer pressed Undo or Take offline, but a guest or the TV still shows the event for a few minutes
+
+**What is expected (OSE-1508):** the database change is immediate, but copies already handed out live until they expire.
+
+| Where | How long it can lag | Source |
+| ----- | ------------------- | ------ |
+| Guest's browser, `GET /api/v2/events` and `GET /api/v2/events/:id` | up to 60 s fresh + 300 s stale-while-revalidate = **6 min** | `private, max-age=60, stale-while-revalidate=300` in `workers/oursharedevents/src/handlers/events.ts` |
+| Attendee map, `GET /api/v2/events/map` | up to **6 min** (also cacheable at the edge: `public`) | `workers/oursharedevents/src/handlers/events-map.ts` |
+| TV `/display` event list | until its next refresh, **5 min** | `setInterval(loadEvents, 5 * 60 * 1000)` in `src/templates/display.html` |
+| TV screen settings (`display-config`) | **1 min** | `setInterval(loadDisplayConfig, 60 * 1000)` in `src/templates/display.html` |
+
+**Inside the publish grace window** (`PUBLISH_GRACE_MINUTES`, 10 on deployed envs) the event was never listed, on the map, sitemap or the TV's "coming up", so an Undo there leaves no public trace. Only someone who already had the direct link could have seen it.
+
+**Resolution:** none needed; wait up to 6 minutes. A guest can reload to see the change sooner. To shorten the lag, lower `max-age` / `stale-while-revalidate` on those responses (a code change, with a test).
+
 ## Monitoring
 
 ### Cloudflare Dashboard
