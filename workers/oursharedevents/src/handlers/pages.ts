@@ -1391,11 +1391,21 @@ ${SPONSOR_LIST_CSS}
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     ${renderEventTypeMeta(row, 'event-type-post')}
     <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
+    ${
+      // OSE-1513: sponsors sit by the title on every phase. Still spend-blind
+      // here (names/links only, no tier/spend).
+      social && social.sponsors.length
+        ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
+            <h2 id="thanks-heading">Thanks to our sponsors</h2>
+            ${renderSponsorList(social.sponsors)}
+          </section>`
+        : ''
+    }
 
     <!-- OSE-1136 / OSE-657: the recap is the canonical 5W table in PAST TENSE and
        the keepsake hero. Card order is the same facts-first sequence the pre/live
        renders use — WHAT → WHERE → WHO → HOW MUCH — then the by-the-numbers
-       keepsake + sponsor thanks. HOW is intentionally dropped (nothing to "join"
+       keepsake. Sponsor thanks sits above, by the title (OSE-1513). HOW is intentionally dropped (nothing to "join"
        once it is over); WHY moves below the ask. This region is a HARD layout
        invariant: it MUST precede the suggestions margin below, or
        post-event-recap-first.spec.ts fails. -->
@@ -1446,7 +1456,7 @@ ${SPONSOR_LIST_CSS}
         // OSE-1201: "attendance" is a banned lexicon word (it claims people; the
         // platform counts signals). The ratio is labelled by what was measured —
         // check-ins over registrations — never by a word that implies bodies.
-        const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
+        const { checkinCount, regCount, surveyCount, emailCount } = social;
         const walkInCount = social.walkInCount ?? 0;
         const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
         const statsCard = hasStats
@@ -1477,15 +1487,7 @@ ${SPONSOR_LIST_CSS}
               ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
             </section>`
           : '';
-        // Sponsor rotation stays ambient + spend-blind here (names/links only,
-        // no tier/spend) — a warm, receptive-attention placement, not a wall.
-        const sponsorThanks = sponsors.length
-          ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
-              <h2 id="thanks-heading">Thanks to our sponsors</h2>
-              ${renderSponsorList(sponsors)}
-            </section>`
-          : '';
-        return statsCard + sponsorThanks;
+        return statsCard;
       })()}
     </div>
 

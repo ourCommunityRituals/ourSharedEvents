@@ -56,13 +56,22 @@ test.describe('🚀 S08: Admin "10-Minute Event" Wizard Flow', () => {
   });
 
   test('Step 1: Basic Info - validation works', async ({ page }) => {
-    // Next button should be disabled initially
+    // OSE-1515: Next stays enabled and says why it will not move on.
     const nextBtn = page.locator('[data-testid="wizard-next-btn"]');
-    await expect(nextBtn).toBeDisabled();
+    await expect(nextBtn).toBeEnabled();
+    await nextBtn.click();
+    await expect(page.locator('[data-testid="wizard-msg"]')).toHaveText(
+      'Add a name and a place to continue'
+    );
+    await expect(page.locator('[data-testid="wizard-step-1"]')).toBeVisible();
 
     // Fill in event name
     await page.fill('[data-testid="wizard-event-name"]', 'Test Wizard Event');
-    await expect(nextBtn).toBeDisabled(); // Still disabled (missing fields)
+    await nextBtn.click();
+    await expect(page.locator('[data-testid="wizard-event-venue"]')).toHaveAttribute(
+      'aria-invalid',
+      'true'
+    ); // Still on step 1 (the place is missing)
 
     // Fill in venue
     await page.fill('[data-testid="wizard-event-venue"]', 'Test Venue');

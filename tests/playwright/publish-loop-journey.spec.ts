@@ -30,6 +30,52 @@ async function tall(page: Page, testid: string): Promise<number> {
 test.describe('publish loop: draft → preview → publish → undo → republish', () => {
   test.skip(!ADMIN_BEARER, 'needs OSE_ADMIN_BEARER; the blocking PR gate supplies a local one');
 
+  // OSE-1515: the keyboard-only path from the front door to step 4. Buttons
+  // are focused directly (WebKit's Tab skips them unless the system setting is
+  // on) and pressed with Enter; the fields move on with Enter.
+  test('keyboard only: front door to step 4, and step 1 says why it will not move on', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize(MOBILE);
+    await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+    const pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('admin-path-wizard').focus();
+    await page.keyboard.press('Enter');
+    const name = page.getByTestId('wizard-event-name');
+    const venue = page.getByTestId('wizard-event-venue');
+    await expect(name).toBeFocused();
+
+    // Next is reachable and enabled with nothing filled in.
+    await expect(page.getByTestId('wizard-next-btn')).toBeEnabled();
+
+    // Name only, Enter: the wizard says why and puts focus on the place.
+    await page.keyboard.type(`Keyboard night ${Date.now()}`);
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('wizard-msg')).toHaveText('Add a name and a place to continue');
+    await expect(venue).toHaveAttribute('aria-invalid', 'true');
+    await expect(venue).toBeFocused();
+    await expect(page.getByTestId('wizard-step-1')).toBeVisible();
+
+    // Place filled, Enter: step 2.
+    await page.keyboard.type('Eagles Hall');
+    await expect(venue).not.toHaveAttribute('aria-invalid', 'true');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('wizard-step-2')).toBeVisible();
+
+    // Steps 2 and 3 with the keyboard; step 3's Next creates the draft.
+    for (const step of [3, 4]) {
+      await page.getByTestId('wizard-next-btn').focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByTestId(`wizard-step-${step}`)).toBeVisible();
+    }
+    await expect(page.getByTestId('wizard-preview-public')).toBeVisible();
+    expect(pageErrors, 'no script error on the way').toEqual([]);
+  });
+
   test('a first-time organizer can go back and forth without getting lost', async ({
     page,
     request,

@@ -25,10 +25,12 @@
         color: var(--text);
         padding: 1.25rem 2rem;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
       }
       header h1 {
+        overflow-wrap: anywhere;
         font-size: 1.4rem;
         font-weight: 600;
       }
@@ -1483,7 +1485,6 @@
         border-color: var(--border);
         box-shadow: none;
       }
-      /* tables */
       table th {
         color: var(--text-muted);
         border-color: var(--border);
@@ -1496,7 +1497,6 @@
       table tr:hover td {
         background: var(--surface-hover);
       }
-      /* form inputs */
       input,
       select,
       textarea {
@@ -1510,7 +1510,6 @@
         border-color: var(--accent);
         outline: 2px solid var(--accent);
       }
-      /* buttons */
       .btn-primary,
       button.primary {
         background: var(--accent);
@@ -1546,7 +1545,6 @@
       .tier-badge.enterprise {
         color: var(--text);
       }
-      /* muted text */
       .section-title,
       .label,
       .events-toolbar,
@@ -1554,7 +1552,6 @@
       .events-toolbar label {
         color: var(--text-muted);
       }
-      /* skip link */
       .skip-link:focus {
         background: var(--surface);
         color: var(--text);
@@ -2717,7 +2714,6 @@
             class="create-btn"
             id="wizard-next-btn"
             data-testid="wizard-next-btn"
-            disabled
           >
             Next
           </button>
@@ -2951,15 +2947,56 @@
 
           // Step 1 gate: name + venue are the two real requirements. Everything
           // else in the wizard is optional by design (first-read simplicity).
+          // Next stays enabled (OSE-1515): a disabled button is skipped by Tab
+          // and silent to a screen reader, so the gate speaks when Next is
+          // pressed (step1Blocked) and this only clears what it said.
+          var STEP1_REQUIRED = ['wizard-event-name', 'wizard-event-venue'];
+          var STEP1_MSG = 'Add a name and a place to continue';
           function validate() {
-            var next = document.getElementById('wizard-next-btn');
-            if (wiz.step === 1) {
-              var name = document.getElementById('wizard-event-name').value.trim();
-              var venue = document.getElementById('wizard-event-venue').value.trim();
-              next.disabled = !(name && venue);
-            } else {
-              next.disabled = false;
+            document.getElementById('wizard-next-btn').disabled = false;
+            if (wiz.step !== 1) return;
+            var missing = 0;
+            STEP1_REQUIRED.forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el.value.trim()) el.removeAttribute('aria-invalid');
+              else missing += 1;
+            });
+            var msg = document.getElementById('wizard-msg');
+            if (!missing && msg && msg.textContent === STEP1_MSG) setMsg('');
+          }
+
+          // True when step 1 may not move on yet; says why and puts focus there.
+          function step1Blocked() {
+            var empty = STEP1_REQUIRED.map(function (id) {
+              return document.getElementById(id);
+            }).filter(function (el) {
+              return !el.value.trim();
+            });
+            if (empty.length) {
+              empty.forEach(function (el) {
+                el.setAttribute('aria-invalid', 'true');
+              });
+              setMsg(STEP1_MSG, 'error');
+              empty[0].focus();
+              return true;
             }
+            // A date that has passed is asked about once, then allowed: an
+            // organizer may be logging an event that already happened.
+            var dateVal = document.getElementById('wizard-event-date').value;
+            var now = new Date();
+            var today =
+              now.getFullYear() +
+              '-' +
+              String(now.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(now.getDate()).padStart(2, '0');
+            if (dateVal && dateVal < today && wiz.pastDateOk !== dateVal) {
+              wiz.pastDateOk = dateVal;
+              setMsg('That date has passed. Is that right? Press Next again to keep it.', 'error');
+              return true;
+            }
+            setMsg('');
+            return false;
           }
 
           function setCardUrl(cardId, url) {
@@ -3307,6 +3344,7 @@
           }
 
           function goNext() {
+            if (wiz.step === 1 && step1Blocked()) return;
             if (wiz.step === 3) {
               createEvent();
               return;
@@ -3532,10 +3570,17 @@
               copyLink(el);
             });
           });
-          // Live-validate step 1 as the organizer types.
-          ['wizard-event-name', 'wizard-event-venue'].forEach(function (id) {
+          // Live-validate step 1 as the organizer types, and let Enter act as
+          // Next there (OSE-1515).
+          STEP1_REQUIRED.forEach(function (id) {
             var el = document.getElementById(id);
-            if (el) el.addEventListener('input', validate);
+            if (!el) return;
+            el.addEventListener('input', validate);
+            el.addEventListener('keydown', function (ev) {
+              if (ev.key !== 'Enter' || wiz.step !== 1) return;
+              ev.preventDefault();
+              goNext();
+            });
           });
         })();
       </script>

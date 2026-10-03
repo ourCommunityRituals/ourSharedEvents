@@ -32,6 +32,7 @@ import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
 import { applyCountFloor } from './count-floor';
+import { sponsorTitle } from './sponsor-card';
 import {
   formatHourBucketLabel,
   parseUtcInstant,
@@ -143,6 +144,8 @@ export interface SharedReport {
   sponsor_impressions: Array<{
     sponsor_id: string;
     sponsor_name: string;
+    /** The name the public sees: display name, else the business name (OSE-1431). */
+    sponsor_title: string;
     campaign_id: string | null;
     campaign_title: string | null;
     sponsor_tier: string | null;
@@ -463,6 +466,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       `SELECT
          si.sponsor_id      AS sponsor_id,
          sb.name            AS sponsor_name,
+         sb.display_name    AS sponsor_display_name,
          sp.campaign_id     AS campaign_id,
          c.title            AS campaign_title,
          sp.tier            AS sponsor_tier,
@@ -475,13 +479,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
        LEFT JOIN campaigns c ON c.id = sp.campaign_id
        WHERE si.event_id = ?
-       GROUP BY si.sponsor_id, sb.name, sp.campaign_id, c.title, sp.tier, sp.locality_band, si.surface
+       GROUP BY si.sponsor_id, sb.name, sb.display_name, sp.campaign_id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )
     .bind(eventId)
     .all<{
       sponsor_id: string;
       sponsor_name: string | null;
+      sponsor_display_name: string | null;
       campaign_id: string | null;
       campaign_title: string | null;
       sponsor_tier: string | null;
@@ -492,6 +497,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const sponsorImpressions = (impressions.results ?? []).map((r) => ({
     sponsor_id: r.sponsor_id,
     sponsor_name: r.sponsor_name ?? 'unknown',
+    // OSE-1431: sponsor_name stays the business name (identity stays with the name).
+    sponsor_title: sponsorTitle({
+      name: r.sponsor_name ?? 'unknown',
+      display_name: r.sponsor_display_name,
+    }),
     campaign_id: r.campaign_id ?? null,
     campaign_title: r.campaign_title ?? null,
     sponsor_tier: r.sponsor_tier ?? null,

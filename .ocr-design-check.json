@@ -41,13 +41,13 @@
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 63303,
+      "own-stylesheet": 63253,
       "raw-hex": 28,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/display.html": {
       "own-tokens": 0,
-      "own-stylesheet": 8334,
+      "own-stylesheet": 8307,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -59,13 +59,13 @@
     },
     "workers/oursharedevents/src/templates/poster.html": {
       "own-tokens": 0,
-      "own-stylesheet": 18308,
+      "own-stylesheet": 18260,
       "raw-hex": 6,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/public.html": {
       "own-tokens": 0,
-      "own-stylesheet": 6857,
+      "own-stylesheet": 6817,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -77,7 +77,7 @@
     },
     "workers/oursharedevents/src/templates/sponsor-home.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3340,
+      "own-stylesheet": 3334,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     }

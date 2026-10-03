@@ -16,6 +16,7 @@
         gap: 1rem;
       }
       header h1 {
+        overflow-wrap: anywhere;
         font-size: 1.4rem;
         font-weight: 600;
         letter-spacing: -0.01em;
@@ -77,11 +78,13 @@
       }
       .disc-search {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.5rem;
         margin: 0 0 0.75rem;
       }
       .disc-q {
-        flex: 1;
+        flex: 1 1 8rem;
+        min-width: 0;
         min-height: 48px;
         font-size: 1rem;
         padding: 0.5rem 0.9rem;
@@ -101,7 +104,6 @@
         font-size: 1rem;
         cursor: pointer;
       }
-      /* OSE-1372: wrap keeps the active chip visible. */
       .disc-chips {
         display: flex;
         flex-wrap: wrap;
@@ -110,7 +112,7 @@
       }
       .disc-chip,
       .disc-clear {
-        flex: 0 0 auto;
+        flex: 0 1 auto;
         display: inline-flex;
         align-items: center;
         min-height: 44px;
@@ -122,7 +124,6 @@
         font-size: 0.95rem;
         font-weight: 600;
         text-decoration: none;
-        white-space: nowrap;
       }
       .disc-chip.active {
         background: var(--accent);
@@ -291,7 +292,6 @@
       footer a:hover {
         text-decoration: underline;
       }
-      /* Never-who: lib/never-who.ts */
       /*OCR_NEVER_WHO_CSS*/
     </style>
   </head>

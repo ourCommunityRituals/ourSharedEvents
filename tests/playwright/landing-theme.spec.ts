@@ -11,6 +11,7 @@
  * This measures the computed values in a real engine. Runs in the blocking
  * phone audit (playwright.mobile.config.ts).
  */
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page } from '@playwright/test';
 import { createLiveEvent, waitUntilListed } from './helpers/sponsor-home-seed';
 
@@ -95,5 +96,13 @@ test('the attendee map draws coloured hexes with 44px legend links', async ({ pa
     expect(await links.count()).toBeGreaterThanOrEqual(5);
     const box = await links.first().boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
+    // OSE-1514 / OSE-1548: the legend links had no colour of their own, so they
+    // rendered in the browser's default link blue, unreadable on the dark theme.
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="amap-legend"]')
+      .withRules(['color-contrast'])
+      .analyze();
+    const lowContrast = axe.violations.flatMap((v) => v.nodes.map((n) => n.target.join(' ')));
+    expect(lowContrast, `${scheme}: legend links fail contrast`).toEqual([]);
   }
 });

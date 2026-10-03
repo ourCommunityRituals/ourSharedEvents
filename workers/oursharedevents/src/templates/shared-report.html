@@ -1088,7 +1088,7 @@
             (s) =>
               '<tr data-testid="signed-link-sponsor-row">' +
               '<td data-label="Sponsor">' +
-              esc(s.sponsor_name) +
+              esc(s.sponsor_title || s.sponsor_name) +
               '</td>' +
               '<td data-label="Surface">' +
               esc(s.surface) +
