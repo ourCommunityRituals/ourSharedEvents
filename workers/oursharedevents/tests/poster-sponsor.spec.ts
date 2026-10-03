@@ -81,3 +81,19 @@ describe('SPON-4: Poster sponsor section is print-safe (no clickable links)', ()
     expect(fnBody).not.toMatch(/<a\s+href/);
   });
 });
+
+// ─── Placement: sponsors sit under the title ────────────────────────────────
+
+describe('Poster sponsor strip sits below the title, above the details and codes', () => {
+  test('the strip is built after the poster title and before the body', async () => {
+    const body = await posterHtml();
+    const title = body.indexOf('data-testid="poster-title"');
+    const strip = body.indexOf('data-testid="poster-sponsor-strip"');
+    const details = body.indexOf('data-testid="poster-body"');
+    const codes = body.indexOf('data-testid="poster-qr-section"');
+    expect(title, 'poster title must exist').toBeGreaterThanOrEqual(0);
+    expect(strip, 'sponsor strip follows the title').toBeGreaterThan(title);
+    expect(strip, 'sponsor strip precedes the details and artwork').toBeLessThan(details);
+    expect(strip, 'sponsor strip precedes the codes').toBeLessThan(codes);
+  });
+});

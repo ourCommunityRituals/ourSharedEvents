@@ -106,6 +106,14 @@ const LOCAL_ADMIN_KEY = 'ose-local-mobile-audit-key';
  */
 const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
 
+/**
+ * Local-only keys for the forms database. Without them a registration that
+ * carries a name answers 503 CONFIG_ERROR, so no browser flow can register.
+ * Random per run, for the same reason as the signing secret above.
+ */
+const LOCAL_FORMS_KEY = randomBytes(32).toString('hex');
+const LOCAL_FORMS_PEPPER = randomBytes(32).toString('hex');
+
 // Read by the spec at import time. The config module is evaluated in the
 // runner AND in each test worker process, so this reaches the spec in both.
 process.env.OSE_ADMIN_BEARER = LOCAL_ADMIN_KEY;
@@ -120,7 +128,7 @@ const config = defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|admin-sponsor-form|sponsor-home-flow|landing-theme|publish-loop-journey)\.spec\.ts/,
+    /(mobile-workability|admin-wizard-isolation|admin-csp-controls|admin-sponsor-form|sponsor-home-flow|landing-theme|publish-loop-journey|flow-admin-deep-dive|flow-sponsor-surfaces|flow-attendee-forms|flow-report-counts)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the
@@ -208,6 +216,8 @@ const config = defineConfig({
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
       ` --var ADMIN_SCOPE_ALL:true` +
       ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}` +
+      ` --var FORMS_ENCRYPTION_KEY:${LOCAL_FORMS_KEY}` +
+      ` --var FORMS_HASH_PEPPER:${LOCAL_FORMS_PEPPER}` +
       // Publish grace window ON, as deployed, but 1 minute instead of 10 so a
       // spec can watch an event go from "live by link only" to listed.
       // helpers/sponsor-home-seed.ts waitUntilListed() waits it out.
