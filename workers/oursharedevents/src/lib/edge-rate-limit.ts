@@ -12,13 +12,17 @@
 //     (60/min per IP), which is itself only eventually consistent.
 //
 // The `ratelimits` binding counts in memory at the Cloudflare location that
-// receives the request and answers in well under a millisecond. Its shortest
-// window is 10 s, but the block is applied the moment the count is crossed:
-// at 100 requests a second a caller is cut off within the first fraction of a
-// second. The product bar (PO, 2026-10-03): a flood is blocked within 3
-// seconds, tops, and one person working at ~5 requests a second never is. So
-// both limits are 60 per 10 s (6 a second): at 100 a second, the 61st request,
-// about 0.6 s in, is the first one refused.
+// receives the request. Its shortest window is 10 s. The product bar (PO,
+// 2026-10-03): a flood is blocked within 3 seconds, tops, and one person
+// working at ~5 requests a second never is. So both limits are 60 per 10 s.
+//
+// MEASURED, NOT ASSUMED: locally (miniflare) the 61st request of a burst is
+// refused. On staging (T5 run 37098251345, 2026-10-03) the binding let about
+// 500 public reads through over ~20 s before its first 429, and never refused
+// a 180-request form burst. Its counts are synchronised in the background, so
+// it does not meet the 3-second bar on its own. The bar needs a layer that
+// counts in the request path at the edge: a Cloudflare WAF rate-limiting rule
+// (OSE-1509). This layer stays as the in-Worker defence behind it.
 //
 // The older limiters stay behind this one as backstops; this layer only adds.
 //

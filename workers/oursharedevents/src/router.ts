@@ -385,11 +385,13 @@ export type RouterEnv = PagesEnv &
 
 /**
  * The rate limit every public form POST and the registration self-delete meet
- * first (OSE-552, OSE-1509). The edge layer, keyed per caller per event,
- * refuses a flood within its first fraction of a second; the per-IP KV count
- * behind it catches a caller that stays under the edge limit across events.
- * Both are sized so one person at ~5 requests a second is never refused.
- * Returns the 429 to send, or null to go on.
+ * first (OSE-552, OSE-1509): the edge layer, keyed per caller per event, then
+ * the per-IP KV count across events. Both are sized so one person at ~5
+ * requests a second is never refused. Returns the 429 to send, or null to go on.
+ *
+ * The KV count fails open, like the public-read limiter: KV takes about one
+ * write a second per key, so a burst on one caller's bucket makes `put` throw.
+ * Unguarded, that throw was a 500 (22 of 180 in T5 run 37098251345).
  */
 async function formRouteLimit(
   request: Request,
@@ -400,8 +402,17 @@ async function formRouteLimit(
   if (ip && (await isEdgeLimited(env.FORM_EDGE_LIMITER, `${ip}:${eventId}`))) {
     return edgeLimitResponse(FORM_EDGE_MAX);
   }
-  if (await checkRateLimit(env, clientIp(request), RATE_LIMIT_FORM_MAX)) {
-    return rateLimitResponse(RATE_LIMIT_FORM_MAX);
+  try {
+    if (await checkRateLimit(env, clientIp(request), RATE_LIMIT_FORM_MAX)) {
+      return rateLimitResponse(RATE_LIMIT_FORM_MAX);
+    }
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        type: 'FORM_RATE_LIMIT_FAIL_OPEN',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
   }
   return null;
 }
