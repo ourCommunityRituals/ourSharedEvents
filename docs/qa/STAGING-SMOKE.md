@@ -204,7 +204,7 @@ for i in $(seq 1 5); do
 done
 ```
 
-- [ ] After 60 req/min from same IP → `429 Too Many Requests` (BE-11)
+- [ ] A burst of more than 60 form POSTs in 10 s to one event from the same IP → `429 Too Many Requests` within 3 s, `Retry-After: 10` (BE-11, OSE-1509); 5 a second is never refused
 
 ```bash
 # 6.3 Public mutation guard — POST to non-form endpoint blocked

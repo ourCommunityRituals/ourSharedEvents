@@ -309,7 +309,7 @@ Check the Actions tab — all tiers green = CI is real.
 | CI deploy fails                    | Check GitHub Actions secrets have no trailing whitespace                 |
 | `/admin` returns 403 (not 401)     | `ALLOWED_ADMIN_EMAILS` not set — staging CF Access JWT enforcement       |
 | Form submissions return 500        | `FORMS_ENCRYPTION_KEY` not set — required for AES-GCM PII encryption     |
-| Rate limiter fires in testing      | Staging rate limit is 60 req/min per IP — space out automated calls      |
+| Rate limiter fires in testing      | Limits (OSE-1509): 60 per 10 s per IP at the edge (per event for forms), 360/min per IP behind it. Stay at or under ~5 requests/s per IP; a stress run should expect 429s |
 | `assertRenderable` error in logs   | Event is in DRAFT state — create/transition a test event to ACTIVE       |
 | BigQuery backup silently skipped   | WIF secrets not set — expected in staging unless GCP is configured       |
 

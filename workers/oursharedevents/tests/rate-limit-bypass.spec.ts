@@ -26,6 +26,9 @@ import { env } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import { handleFormRegistration } from '../src/handlers/forms';
 
+/** Mirrors FORM_RATE_MAX in handlers/forms.ts (pinned by form-rate-limit.spec.ts). */
+const FORM_RATE_MAX = 360;
+
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
   FORMS_DB: D1Database;
@@ -107,10 +110,10 @@ describe('TL-013 | Rate limit bypass | Integration: known bypass documentation',
     const eventId = 'evt_rl_bypass_tl013';
 
     // Exhaust the rate limit for IP A
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
       await handleFormRegistration(makeReq(eventId, '192.0.2.1', i), formsEnv as any, eventId);
     }
-    const limitedA = await handleFormRegistration(makeReq(eventId, '192.0.2.1', 11), formsEnv as any, eventId);
+    const limitedA = await handleFormRegistration(makeReq(eventId, '192.0.2.1', FORM_RATE_MAX + 1), formsEnv as any, eventId);
     expect(limitedA.status).toBe(429);
 
     // IP B is NOT rate-limited (fresh bucket) — this is the bypass
@@ -124,7 +127,7 @@ describe('TL-013 | Rate limit bypass | Integration: known bypass documentation',
     const ip = '192.0.2.10';
 
     // Exhaust for event A
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= FORM_RATE_MAX; i++) {
       await handleFormRegistration(makeReq('evt_rl_tl013_a', ip, i), formsEnv as any, 'evt_rl_tl013_a');
     }
 

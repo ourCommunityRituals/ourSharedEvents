@@ -73,6 +73,22 @@ bucket_name = "ose-uploads-dev"
 binding = "RATE_LIMIT_KV"
 id = "rate-limit-kv-dev-local"
 
+# ── Edge rate limiters (OSE-1509) ──────────────────────────────────────────
+# Cloudflare Workers Rate Limiting: counted in memory at the receiving location,
+# so a burst is refused within its first fraction of a second. PO bar: a flood
+# is blocked within 3 s; one person at ~5 requests/s never is. Window can only be 10 or 60 s. Limits must match
+# src/lib/edge-rate-limit.ts. namespace_id is an account-unique integer string;
+# each env has its own so staging and production never share counts.
+[[ratelimits]]
+name = "PUBLIC_READ_EDGE_LIMITER"
+namespace_id = "15091"
+simple = { limit = 60, period = 10 }
+
+[[ratelimits]]
+name = "FORM_EDGE_LIMITER"
+namespace_id = "15092"
+simple = { limit = 60, period = 10 }
+
 # ── Observability: structured logs and traces ────────────────────
 # Enables Workers Logs in CF Dashboard (real-time + historical)
 # See: https://developers.cloudflare.com/workers/observability/
@@ -158,6 +174,22 @@ bucket_name = "ose-uploads-staging"
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "4418eb1709e24987bf86b1aa280725c2"
+
+# ── Edge rate limiters (staging) (OSE-1509) ──────────────────────────────────────────
+# Cloudflare Workers Rate Limiting: counted in memory at the receiving location,
+# so a burst is refused within its first fraction of a second. PO bar: a flood
+# is blocked within 3 s; one person at ~5 requests/s never is. Window can only be 10 or 60 s. Limits must match
+# src/lib/edge-rate-limit.ts. namespace_id is an account-unique integer string;
+# each env has its own so staging and production never share counts.
+[[env.staging.ratelimits]]
+name = "PUBLIC_READ_EDGE_LIMITER"
+namespace_id = "15093"
+simple = { limit = 60, period = 10 }
+
+[[env.staging.ratelimits]]
+name = "FORM_EDGE_LIMITER"
+namespace_id = "15094"
+simple = { limit = 60, period = 10 }
 
 # ── Scan write-buffer (staging) — engine-hardening #1, ACTIVE ─────────────────
 # Producer + consumer for the /q/ QR-scan write buffer (src/lib/scan-buffer.ts).
@@ -291,6 +323,22 @@ bucket_name = "ose-uploads-production"
 [[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "e44974e89361435e97b3cb79bd10abbb"
+
+# ── Edge rate limiters (production) (OSE-1509) ──────────────────────────────────────────
+# Cloudflare Workers Rate Limiting: counted in memory at the receiving location,
+# so a burst is refused within its first fraction of a second. PO bar: a flood
+# is blocked within 3 s; one person at ~5 requests/s never is. Window can only be 10 or 60 s. Limits must match
+# src/lib/edge-rate-limit.ts. namespace_id is an account-unique integer string;
+# each env has its own so staging and production never share counts.
+[[env.production.ratelimits]]
+name = "PUBLIC_READ_EDGE_LIMITER"
+namespace_id = "15095"
+simple = { limit = 60, period = 10 }
+
+[[env.production.ratelimits]]
+name = "FORM_EDGE_LIMITER"
+namespace_id = "15096"
+simple = { limit = 60, period = 10 }
 
 # ── Scan write-buffer (production) — engine-hardening #1, DARK (needs own queues) ─
 # Commented until PRODUCTION-SPECIFIC queues exist. Production must NOT share
