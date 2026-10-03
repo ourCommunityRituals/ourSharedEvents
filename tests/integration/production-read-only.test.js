@@ -27,8 +27,10 @@ const { isProductionUrl } = require('../../config/production-hosts');
 
 const ROOT = join(__dirname, '..', '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
+// Repo-relative paths are compared on forward slashes; Windows yields `a\b.js`.
+const posix = (p) => p.replace(/\\/g, '/');
 const listFiles = (dir) =>
-  readdirSync(join(ROOT, dir), { recursive: true }).map((rel) => `${dir}/${rel}`);
+  readdirSync(join(ROOT, dir), { recursive: true }).map((rel) => posix(`${dir}/${rel}`));
 
 const PROD = 'https://oursharedevents.com';
 const STG = 'https://stg.oursharedevents.com';
@@ -219,7 +221,7 @@ describe('ADR-021: production is read-only for tests (OSE-906)', () => {
     const { dirname, normalize } = require('path');
     const localDeps = (rel) =>
       [...read(rel).matchAll(/(?:require\(|from\s+)['"](\.{1,2}\/[^'"]+)['"]/g)]
-        .map((m) => normalize(join(dirname(rel), m[1])))
+        .map((m) => posix(normalize(join(dirname(rel), m[1]))))
         .flatMap((dep) => [dep, `${dep}.js`].filter((f) => /\.(m?js|cjs)$/.test(f)))
         .filter((f) => existsSync(join(ROOT, f)));
     const senders = new Set();

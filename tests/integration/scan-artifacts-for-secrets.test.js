@@ -69,7 +69,10 @@ describe('scan-artifacts-for-secrets.sh', () => {
     );
     const r = run(paths(), secrets);
     expect(r.code).toBe(1);
-    expect(r.out).toContain(f);
+    // On Windows the script prints `C:\…\test-results/trace.network` (grep joins
+    // with `/`) while join() gives all backslashes; compare on forward slashes.
+    const posix = (p) => p.replace(/\\/g, '/');
+    expect(posix(r.out)).toContain(posix(f));
     expect(r.out).toContain('secret:CF_ACCESS_CLIENT_SECRET');
     expect(r.out).not.toContain(FAKE_CF_SECRET);
     expect(r.out).not.toContain(FAKE_ADMIN_KEY);
