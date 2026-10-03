@@ -157,6 +157,53 @@ describe('attendee map | precision (Invariant #1 by construction)', () => {
   });
 });
 
+// The landing draws through an area gate (lib/landing-area: at LIST_MAX events,
+// or once latched, every corridor with an event). The gate changes WHICH
+// corridors are drawn; it must not change what a hex is made from.
+describe('landing map | Invariant #1 holds on the area-gate path', () => {
+  const coords = [BLUE.lat, BLUE.lon, BEV.lat, BEV.lon];
+  const mixed = (n: number) => [
+    ...many(n - 1),
+    ev(30, { h3_res7: BEV7, lat: BEV.lat, lon: BEV.lon }),
+  ];
+  const drawnCells = (html: string) => [...html.matchAll(/data-cell="([^"]*)"/g)].map((m) => m[1]!);
+
+  it('at the threshold: no event coordinate reaches the page, in the map or the cards', () => {
+    const html = renderLandingArea(mixed(LIST_MAX), { now: NOW }).html;
+    expect(drawnCells(html).sort()).toEqual([BLUE7, BEV7].sort());
+    for (const n of coords) {
+      expect(html).not.toContain(String(n));
+      expect(html).not.toContain(n.toFixed(4));
+    }
+  });
+
+  it('latched below the threshold: the same holds', () => {
+    const html = renderLandingArea(mixed(3), { now: NOW, areaLatched: true }).html;
+    expect(drawnCells(html).length).toBe(2);
+    for (const n of coords) expect(html).not.toContain(String(n));
+  });
+
+  it('only res-7 cells are ever drawn: a finer cell or a non-cell is counted but never a hex', () => {
+    const res9 = latLngToCell(BLUE.lat, BLUE.lon, 9);
+    const items = [...many(LIST_MAX), ev(40, { h3_res7: res9 }), ev(41, { h3_res7: 'not-a-cell' })];
+    const html = renderLandingArea(items, { now: NOW }).html;
+    expect(drawnCells(html)).toEqual([BLUE7]);
+    expect(html).not.toContain(res9);
+    expect(html).not.toContain('not-a-cell');
+  });
+
+  it('each hex still counts exactly the events it links (the thing counted is the thing shown)', () => {
+    const out = renderAttendeeMap(mixed(LIST_MAX), {
+      now: NOW,
+      area: { count: LIST_MAX, min: LIST_MAX },
+    });
+    for (const a of out.areas) {
+      expect(out.html).toContain(`data-cell="${a.cell}" data-count="${a.events.length}"`);
+    }
+    expect(out.count).toBe(out.areas.reduce((s, a) => s + a.events.length, 0));
+  });
+});
+
 describe('attendee map | forward window', () => {
   it('drops wrapped events and events past the horizon', () => {
     const items = [

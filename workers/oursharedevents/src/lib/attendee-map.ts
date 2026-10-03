@@ -32,6 +32,17 @@
 // THE THING COUNTED IS THE THING SHOWN: each corridor's count is exactly the
 // events its hex links.
 //
+// THE LANDING IS THE ONE EXCEPTION TO THAT GATE (owner, 2026-10-03; see
+// AreaGate below). The landing passes an area gate, and then the question is
+// the whole area the page lists: under 10 events nothing is drawn, at 10 or
+// more (or once latched) every corridor with an event is drawn, lonely ones
+// included. That is the owner's call for this page and departs from the
+// per-corridor grain above on purpose. What does NOT change on that path: the
+// hexes still come from res-7 cell ids alone (attendeeMapAreas), no event
+// coordinate and no viewer location is read, and each hex's count is still
+// exactly the events it links. The area count also includes events with no
+// cell; those are listed in the cards and never drawn.
+//
 // PLACE NAMES (2026-10-03). A hexagon alone does not say where it is, so each
 // area carries a name taken from the events in it: the town in their public
 // address ("…, Blue Island, IL 60406" or "Venue, Chicago IL"), else "near
