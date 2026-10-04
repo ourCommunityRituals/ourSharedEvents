@@ -946,6 +946,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
+      ${renderTrustLine(row, 'event-trust')}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
@@ -1147,6 +1148,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
       ${renderEventTypeMeta(row, 'event-type-live')}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
+      ${renderTrustLine(row, 'event-trust-live')}
     </header>
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
@@ -1259,6 +1261,17 @@ ${NEVER_WHO_CSS}
 }
 
 /** Minimal shape for the "next at this venue" card. */
+/**
+ * OSE-1518: the trust line under the title of a live event page. Every claim is
+ * true by construction: the page is public (no account, no sign-in), and a page
+ * only renders for an event the organizer took live, which is what "verified
+ * event link" means here (the QR check that moves it to active).
+ */
+function renderTrustLine(row: PublicEventRow, testid: string): string {
+  const host = esc(row.who_host);
+  return `<p class="ose-meta" data-testid="${testid}">${host ? `Hosted by ${host} &middot; ` : ''}No account needed to view &middot; Verified event link</p>`;
+}
+
 interface NextEventRow {
   id: string;
   title: string;

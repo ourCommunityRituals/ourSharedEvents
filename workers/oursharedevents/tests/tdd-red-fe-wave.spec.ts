@@ -167,11 +167,22 @@ describe('OSE-1520 one events surface', () => {
 });
 
 describe('OSE-1518 event page: trust header and plain choices', () => {
-  redStory('OSE-1518', 'a live event page carries the trust header', async () => {
+  it('a live event page carries the trust header, with the host', async () => {
     await seedEvent('evt_1518_live', 'active', 'Trusted Night');
     const { html } = await pageText('/events/evt_1518_live');
     expect(html, '[OSE-1518] says no account is needed').toContain('No account needed to view');
     expect(html, '[OSE-1518] says the link is verified').toContain('Verified event link');
+    expect(html, '[OSE-1518] names the host').toContain('Hosted by The Host');
+  });
+
+  it('the trust header is on the page while the event is on now, too', async () => {
+    await seedEvent('evt_1518_now', 'active', 'Trusted Now');
+    await E.DB.prepare('UPDATE events SET start_date = ?, end_date = ? WHERE id = ?')
+      .bind(inDays(-1), inDays(1), 'evt_1518_now')
+      .run();
+    const { html } = await pageText('/events/evt_1518_now');
+    expect(html, 'the live render is the one under test').toContain('event-title-live');
+    expect(html, '[OSE-1518] live render carries it').toContain('Verified event link');
   });
 });
 
