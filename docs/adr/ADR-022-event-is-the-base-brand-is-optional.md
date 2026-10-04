@@ -54,9 +54,8 @@ when an event moves out of `draft`. Two code paths do that today (`PUT status` i
 `handlers/events.ts` and verify-qr in `handlers/qr-verify.ts`); both call one
 shared check (OSE-1560).
 
-**The map is never on by omission** (PO, 2026-10-03). Today `is_published`
-becomes 1 when a request leaves it out (`handlers/events.ts:725`). Under this
-ADR:
+**The map is never on by omission** (PO, 2026-10-03). Before OSE-1560,
+`is_published` became 1 when a request left it out. Under this ADR:
 
 - An event with no sponsors defaults to **map off**. A new event never has a
   sponsor, so every new event starts off the map.
@@ -72,6 +71,22 @@ ADR:
 - The toast carries a one-step way to turn the map back off, and the setting
   stays visible on the status panel after the toast goes.
 - Apart from this one rule, nothing switches the map on for the organizer.
+
+**Implemented (OSE-1560, 2026-10-04; the code is the record).** Create stores the
+event off the map unless the request says `is_published: true`; an absent or
+malformed value is "no choice". "Did the organizer choose?" is a server-managed
+marker `mapDefault: true` in `events.settings_json` (`lib/event-settings.ts`;
+no migration): set at create when no choice was sent, removed by any explicit
+map write (`POST`/`PUT` `is_published`) and by the flip, and rejected if a client
+sends it. It is a positive marker on purpose: every existing event has none, so
+an old explicit "off" is never flipped. The flip (`lib/map-default.ts`) is one
+conditional UPDATE, brand-bound through the sponsor row, run only when the
+organizer creates a sponsor with an event, attaches one, or approves a sponsor's
+request (never on a sponsor's own request, never on a decline). On a live event
+it starts a fresh publish grace window, so the event is still not listed until
+that ends. It is audited as `MAP_ON_BY_SPONSOR` and the response carries a `map`
+block with the heads-up words. The admin status panel states the setting and
+holds its control; the toast component itself is OSE-1564.
 
 **A place is required only when the map is on.** Map on needs a location that
 resolves to an area cell. Map off needs none.
@@ -254,7 +269,10 @@ are forgiving on purpose and expire by themselves (`lib/draft-expiry.ts`).
    all-day choice?
 4. **Map and sponsors, remaining details:** does removing the last sponsor turn
    the default back to off? What does the flip do for an event with no place to
-   put on the map?
+   put on the map? _Working proposals shipped with OSE-1560, for the PO to
+   confirm:_ removing the last sponsor leaves the map as it is (nothing turns it
+   off but the organizer); with no place, the setting turns on and the event stays
+   unmapped until its location resolves to an area cell (never a coordinate).
 
 ## References
 

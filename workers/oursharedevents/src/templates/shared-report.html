@@ -149,16 +149,7 @@
         color: var(--text-muted);
         white-space: nowrap;
       }
-      /* TOKEN-ADHERENCE NOTE: the remaining raw hex on this surface is the
-         STATUS/TIER BADGE palette — .tier-badge.mid (blue),
-         .tier-badge.enterprise (purple) below, plus .bar-fill.checkin (green).
-         These are MEANING-CARRYING
-         hues (like UEC category colors), not chrome, and have no @ocr/ui semantic
-         token today (--live is teal, there is no green/purple/tier token). Gated
-         at BASELINE shared-report:11 (8 status + 3 @media-print paper colors).
-         Closing them is a design decision — add status/tier tokens to @ocr/ui vs.
-         treat them as theme-invariant status hues — deferred to that decision
-         (informed by the QR/customization research). Chrome is fully tokenised. */
+      /* Raw hex left: tier badges + .bar-fill.checkin (no @ocr/ui status token), print paper. */
       .badge {
         display: inline-block;
         padding: 0.15rem 0.5rem;
@@ -882,6 +873,17 @@
           class="funnel-card"
         >
           <p class="loading" role="status" aria-live="polite">Loading&hellip;</p>
+        </div>
+      </section>
+      <section id="report-actions" class="report-section" aria-labelledby="section-next" data-testid="report-actions" hidden>
+        <h2 class="section-title" id="section-next">What next?</h2>
+        <p class="section-help">Make the next one from this one, or send the report on. Check-ins, scans and sign-ups are never copied.</p>
+        <p class="section-help" id="report-action-status" role="status" aria-live="polite" data-testid="report-action-status"></p>
+        <div class="action-bar" id="report-actions-bar" data-testid="report-actions-bar">
+          <button type="button" class="btn btn-outline" id="report-action-repeat" data-testid="report-action-repeat">Repeat this event</button>
+          <a class="btn btn-outline" href="/admin" data-testid="report-action-create-next" data-select="none">Create the next one</a>
+          <a class="btn btn-outline" href="/admin" data-testid="report-action-share" data-select="this">Share the report</a>
+          <a class="btn btn-outline" href="/admin" data-testid="report-action-invite" data-select="this">Invite a partner</a>
         </div>
       </section>
     </main>
@@ -1666,6 +1668,101 @@
         a.click();
         URL.revokeObjectURL(a.href);
       });
+    </script>
+    <script>
+      // OSE-1531: the organizer's "What next?" row. It shows only to a signed-in
+      // organizer looking at one event (?event=<id>): a signed-link viewer (a
+      // sponsor, a bar owner) never gets it, and is never asked about admin at all.
+      // "Repeat this event" asks the server for a draft copy; the server owns
+      // every rule (brand, draft state, what is never copied). The page only
+      // selects the new draft for the admin and links there.
+      (async () => {
+        if (window.__signedLinkMode) return;
+        const row = document.getElementById('report-actions');
+        const params = new URLSearchParams(location.search);
+        const eventId = params.get('event') || params.get('eventId') || params.get('id') || '';
+        if (!row || !eventId) return;
+        let admin = false;
+        try {
+          const r = await fetch('/api/v2/admin/flags/current-tier', {
+            headers: { Accept: 'application/json' },
+          });
+          const j = r.ok ? await r.json().catch(() => null) : null;
+          admin = !!(j && j.ok);
+        } catch {
+          admin = false;
+        }
+        if (!admin) return;
+        row.hidden = false;
+
+        // The admin remembers its selected event under this key (admin.html SELECTED_EVENT_KEY).
+        const KEY = 'ose_selected_event_id';
+        const select = (id) => {
+          try {
+            if (id) sessionStorage.setItem(KEY, id);
+            else sessionStorage.removeItem(KEY);
+          } catch {
+            /* the admin opens on its front door instead */
+          }
+        };
+        for (const a of row.querySelectorAll('a[data-select]')) {
+          a.addEventListener('click', () => select(a.dataset.select === 'this' ? eventId : ''));
+        }
+
+        const btn = document.getElementById('report-action-repeat');
+        const status = document.getElementById('report-action-status');
+        const bar = document.getElementById('report-actions-bar');
+        const WORDS = {
+          400: 'Some details of this event could not be copied. Nothing was made. Create the next one from the admin instead.',
+          401: 'Sign in to the admin to repeat this event.',
+          403: 'Sign in to the admin to repeat this event.',
+          404: 'We could not find that event.',
+          429: 'That was a lot of copies at once. Try again in a minute.',
+          DEFAULT: 'Nothing was copied. Try again in a moment.',
+          NETWORK:
+            'Could not reach the service. Nothing was copied. Check your connection and try again.',
+        };
+        const say = (text) => {
+          status.textContent = text;
+        };
+        btn.addEventListener('click', async () => {
+          if (btn.disabled) return;
+          btn.disabled = true;
+          say('Making your copy…');
+          let res;
+          try {
+            res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/repeat', {
+              method: 'POST',
+              headers: { Accept: 'application/json' },
+            });
+          } catch {
+            say(WORDS.NETWORK);
+            btn.disabled = false;
+            return;
+          }
+          const body = await res.json().catch(() => null);
+          if (!res.ok || !body || !body.ok || !body.id) {
+            say(WORDS[res.status] || WORDS.DEFAULT);
+            btn.disabled = false;
+            return;
+          }
+          select(String(body.id));
+          const when = body.start_date ? ', ' + window.formatReportDate(body.start_date) : '';
+          say(
+            'Your copy is ready as a draft: ' +
+              (body.title || 'your event') +
+              when +
+              '. Check the date, then go live when you are ready.'
+          );
+          btn.textContent = 'Copy made';
+          const open = document.createElement('a');
+          open.className = 'btn btn-outline';
+          open.href = '/admin';
+          open.textContent = 'Open the draft';
+          open.setAttribute('data-testid', 'report-action-open-draft');
+          bar.insertBefore(open, bar.firstChild);
+        });
+      })();
     </script>
     <!--OCR_LEGAL_FOOTER-->
   </body>

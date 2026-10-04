@@ -160,6 +160,8 @@ export const NODE_SPECS = [
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
+  // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
+  'tests/admin-map-setting.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
   'tests/admin-wizard-what-and-missing.spec.ts',
   'tests/poster-preview-mode.spec.ts',
@@ -211,6 +213,9 @@ export const NODE_SPECS = [
   // OSE-1363 shared-report client-JS date formatters force UTC. Imports
   // shared-report.html as Text (node loader) and asserts the template source.
   'tests/shared-report-date-utc.spec.ts',
+  // OSE-1531 — the report's action row + Repeat this event, run in jsdom over the
+  // real template with a stubbed fetch. No cloudflare:test.
+  'tests/shared-report-actions.spec.ts',
 
   // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
   // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.
