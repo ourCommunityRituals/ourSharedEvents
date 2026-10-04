@@ -266,6 +266,15 @@ describe('attendee map | shape', () => {
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(css).toMatch(/min-height:44px/);
   });
+
+  it('legend links take the accent token, not the browser default blue (OSE-1548)', () => {
+    const out = renderAttendeeMap(many(5), { now: NOW });
+    const css = out.html.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
+    const rule = /\.amap-legend a\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    // --accent is 6.51:1 on the dark page background (@ocr/ui tokens.ts) and the
+    // plain-web link blue in light, so a token colour is the measured contrast.
+    expect(rule).toMatch(/(^|;)color:var\(--accent\)/);
+  });
 });
 
 describe('attendee map | the landing area gate', () => {
