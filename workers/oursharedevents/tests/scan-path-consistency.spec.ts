@@ -70,14 +70,14 @@ describe('scan-path consistency | walkthrough 2026-09-03', () => {
     expect(html).not.toMatch(/#2563eb|#1d4ed8/i);
   });
 
-  test('display: the consent line is present, in the voice, outside the aria-hidden ticker', async () => {
+  test('display: the consent line is present, in the voice, and there is no ticker (OSE-1521)', async () => {
     const html = await (await SELF.fetch('https://t.test/display')).text();
     expect(html).toMatch(/data-testid="display-consent"[^>]*role="note"/);
     expect(html).toContain('We count the room, never the person.');
-    const consentIdx = html.indexOf('data-testid="display-consent"');
-    const tickerIdx = html.indexOf('data-testid="display-ticker"');
-    expect(consentIdx).toBeGreaterThan(-1);
-    expect(consentIdx, 'consent line precedes the decorative ticker').toBeLessThan(tickerIdx);
+    expect(html.indexOf('data-testid="display-consent"')).toBeGreaterThan(-1);
+    // The scrolling ticker carried the promise as decoration; it is gone, and the
+    // consent line is the one place the promise is made.
+    expect(html).not.toContain('data-testid="display-ticker"');
   });
 });
 
@@ -115,7 +115,9 @@ describe('counts are post-event only | attendee surfaces carry no tally', () => 
       );
     }
     for (const re of COUNT_COPY) expect(html).not.toMatch(re);
-    // The sponsor ROTATION counter ("2 / 3") is not an attendance count and stays.
+    // OSE-1521: no number at all, so the sponsor rotation counter ("2 / 3") is
+    // gone too; the sponsor strip stays.
+    expect(html).not.toContain('display-sponsor-counter');
     expect(html).toContain('display-sponsor-banner');
   });
 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Display – OurSharedEvents</title>
+    <link rel="stylesheet" href="/ui.css" />
     <style>
       *,
       *::before,
@@ -17,370 +18,253 @@
         height: 100%;
       }
       body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
         display: flex;
         flex-direction: column;
-      }
-      header {
-        padding: 1rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      header h1 {
-        font-size: 1.4rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-      }
-      .clock {
-        font-size: 1rem;
-        font-variant-numeric: tabular-nums;
-      }
-      main {
-        flex: 1;
-        max-width: 1200px;
-        width: 100%;
-        margin: 0 auto;
-        padding: 2rem 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-      }
-      .event-card {
-        border-radius: 12px;
-        padding: 2rem 2.5rem;
-        border: 1px solid;
-      }
-      .event-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
-      .event-card h2 {
-        font-size: clamp(1.5rem, 4vw, 2.5rem);
-        font-weight: 800;
-        line-height: 1.15;
-        margin-bottom: 0.75rem;
-      }
-      .event-card .meta {
-        font-size: 1.1rem;
-        display: flex;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-      }
-      .next-events {
-        display: grid;
-        gap: 1rem;
-      }
-      .next-events h3 {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 0.25rem;
-      }
-      .next-card {
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        border: 1px solid;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .next-card .name { font-weight: 600; font-size: 1rem; }
-      .next-card .date { font-size: 0.85rem; }
-      .sponsor-line { margin-top: 0.25rem; font-size: 1rem; color: var(--text-muted); }
-      .empty { text-align: center; padding: 4rem; font-size: 1.1rem; }
-      .display-consent {
-        margin: 0;
-        padding: 0.75rem 2rem;
-        background: var(--surface);
+        min-height: 100vh;
+        background: var(--bg);
         color: var(--text);
-        font-size: 1.25rem;
-        text-align: center;
-        letter-spacing: 0.01em;
+        font: max(22px, 1.15vw) / 1.35 system-ui, -apple-system, sans-serif;
       }
-      @media (min-width: 1600px) {
-        .display-consent {
-          font-size: 2rem;
-          padding: 1.25rem 3rem;
-        }
-      }
-      .ticker {
-        padding: 0.6rem 2rem;
-        font-size: 0.85rem;
-        border-top: 1px solid;
-        overflow: hidden;
-        white-space: nowrap;
-      }
-      .ticker-inner {
-        display: inline-block;
-        animation: scroll 30s linear infinite;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .ticker { white-space: normal; }
-      }
-      @keyframes scroll {
-        from {
-          transform: translateX(100vw);
-        }
-        to {
-          transform: translateX(-100%);
-        }
-      }
-      .display-sponsor-banner {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 2rem;
-        padding: 0.75rem 1.5rem;
-        border-radius: 8px;
-        border: 1px solid;
-        min-height: 48px;
-      }
-      .display-sponsor-banner:empty {
-        display: none;
-      }
-      .display-sponsor-sidebar {
-        position: fixed;
-        right: 0;
-        top: 60px;
-        width: 200px;
-        padding: 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        z-index: 10;
-      }
-      .display-sponsor-sidebar:empty {
-        display: none;
-      }
-      .display-sponsor-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem;
-        border-radius: 6px;
-        border: 1px solid;
-        transition: opacity 0.6s ease-in-out;
-      }
-      .display-sponsor-item.fade-out {
-        opacity: 0;
-      }
-      /* OSE-878/#25: one logo box for every sponsor, tier-blind (WALL-3b). */
-      .display-sponsor-item img {
-        height: clamp(32px, 3.5vw, 56px);
-        width: auto;
-        max-width: clamp(80px, 12vw, 160px);
-        object-fit: contain;
-        filter: brightness(1.1);
-      }
-      .display-sponsor-item .name {
-        font-size: 0.8rem;
-      }
-      /* OSE-878/#25: the per-tier treatment blocks (title/platinum gold accent
-         border + background + padding + 48px/64px logos + brighter/bolder name;
-         gold mid-strength border + 42px logo) are DELETED. Every sponsor item
-         renders identically; `data-tier` stays for rotation identity but NO CSS
-         keys off it. Rotation FREQUENCY (buildShareRotation) is the only diff. */
-      .sponsor-counter {
-        font-size: 0.65rem;
-        color: var(--text-muted);
-        text-align: center;
-        margin-top: 0.25rem;
-        font-variant-numeric: tabular-nums;
-      }
-      @media (min-width: 1920px) {
-        header h1 {
-          font-size: 2rem;
-        }
-        .clock {
-          font-size: 1.4rem;
-        }
-        main {
-          max-width: 1600px;
-          padding: 3rem 2.5rem;
-          gap: 2rem;
-        }
-        .event-card {
-          padding: 3rem 3.5rem;
-        }
-        .event-card h2 {
-          font-size: 3rem;
-        }
-        .event-card .meta {
-          font-size: 1.4rem;
-        }
-        .display-sponsor-sidebar {
-          width: 280px;
-          padding: 1.5rem;
-          top: 80px;
-        }
-        /* OSE-878/#25: per-breakpoint sponsor logo sizes removed — the tier-blind
-           clamp() on .display-sponsor-item img already scales to the TV; the old
-           uniform 48px + tier 64px overrides here would (a) freeze the clamp and
-           (b) reintroduce a tier-keyed dimension. Only the uniform name bump stays. */
-        .display-sponsor-item .name {
-          font-size: 1rem;
-        }
-        .display-sponsor-banner {
-          padding: 1rem 2rem;
-          gap: 3rem;
-          min-height: 64px;
-        }
-        .ticker {
-          font-size: 1.1rem;
-          padding: 0.8rem 2rem;
-        }
-      }
+      .vh,
       .skip-link {
         position: absolute;
         left: -9999px;
-        top: auto;
         width: 1px;
         height: 1px;
         overflow: hidden;
       }
       .skip-link:focus {
         position: fixed;
-        top: 0;
         left: 0;
+        top: 0;
         width: auto;
         height: auto;
-        padding: 0.5rem 1rem;
-        font-size: 1rem;
+        padding: 0.5em 1em;
         z-index: 9999;
-        text-decoration: none;
-        border-bottom: 2px solid;
-      }
-    </style>
-    <link rel="stylesheet" href="/ui.css" />
-    <style>
-      body {
-        background: var(--bg);
-        color: var(--text);
-      }
-      header {
         background: var(--surface);
-        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        border-bottom: 2px solid var(--accent);
       }
-      .event-card {
-        background: var(--surface-hover);
-        border-color: var(--border);
+      .board {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3vw;
+        padding: 5vh 5vw 2vh;
+      }
+      main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3vh;
+        text-align: center;
+      }
+      .display-panes {
+        width: 100%;
+      }
+      [data-pane],
+      .event-card,
+      .next-events,
+      .qr,
+      .league-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2.5vh;
+        width: 100%;
+      }
+      [data-pane][hidden] {
+        display: none;
+      }
+      .hd {
+        font-size: max(48px, min(6.25vw, 11.12vh));
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+        max-width: 100%;
+      }
+      .hd-m {
+        font-size: max(36px, min(4.7vw, 8.4vh));
+      }
+      .hd-s {
+        font-size: max(26px, min(3.45vw, 6.1vh));
+      }
+      .sub,
+      .link,
+      .league-card {
+        font-size: max(30px, 2.4vw);
+      }
+      .sub {
+        color: var(--text-muted);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0 1.2em;
+      }
+      .sponsor-line {
+        font-size: max(26px, 2vw);
+        color: var(--text-muted);
+      }
+      .label,
+      .pane-paused,
+      .empty,
+      .next-card .date {
+        color: var(--text-muted);
+      }
+      .label {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .empty {
+        font-size: max(30px, 2.4vw);
+        padding: 4vh 0;
+      }
+      .qr {
+        gap: 1vh;
+      }
+      .qr img,
+      .league-card img {
+        width: max(160px, min(26vh, 20vw));
+        height: max(160px, min(26vh, 20vw));
+        border-radius: 0.4em;
+        image-rendering: pixelated;
+      }
+      .link {
+        font-weight: 600;
+        color: var(--accent);
+        overflow-wrap: anywhere;
       }
       .next-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: min(100%, 70vw);
+        padding: 1.4vh 2vw;
         background: var(--surface);
-        border-color: var(--border);
+        border: 1px solid var(--border);
+        border-radius: 0.5em;
       }
-      .event-card .label,
-      .next-card .date,
-      .clock,
-      .empty {
-        color: var(--text-muted);
+      .next-card .name {
+        font-size: max(30px, 2.4vw);
+        font-weight: 700;
       }
-      .event-card .meta {
-        color: var(--text-muted);
-      }
-      .event-card h2 {
-        color: var(--text);
-      }
-      .next-events h3 {
-        color: var(--text-muted);
-      }
-      .ticker {
-        background: var(--surface);
-        color: var(--accent);
-        border-top-color: var(--border);
+      .sponsor-wall,
+      .display-sponsor-banner {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2vh 2vw;
       }
       .display-sponsor-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.4em 0.8em;
         background: var(--surface);
-        border-color: var(--border);
+        border: 1px solid var(--border);
+        border-radius: 0.5em;
+        transition: opacity 0.6s ease-in-out;
       }
-      .display-sponsor-item .name {
-        color: var(--text-muted);
+      .display-sponsor-item.fade-out {
+        opacity: 0;
       }
-      .display-sponsor-banner {
-        background: var(--surface);
-        border-color: var(--border);
+      /* One logo box for every sponsor, tier-blind (OSE-878/#25). */
+      .display-sponsor-item img {
+        height: max(40px, 5vh);
+        width: auto;
+        max-width: 12vw;
+        object-fit: contain;
       }
-      .skip-link:focus {
-        background: var(--surface);
-        color: var(--text);
-        border-bottom-color: var(--accent);
+      .sponsor-wall .display-sponsor-item img {
+        height: max(64px, 9vh);
+        max-width: 22vw;
+      }
+      .sponsor-wall .name {
+        font-size: max(30px, 2.4vw);
+      }
+      .display-sponsor-sidebar {
+        flex: 0 0 17vw;
+        display: flex;
+        flex-direction: column;
+        gap: 2vh;
+      }
+      .display-sponsor-sidebar .display-sponsor-item {
+        flex-direction: column;
+        text-align: center;
+      }
+      .display-sponsor-sidebar:empty,
+      .display-sponsor-banner:empty {
+        display: none;
+      }
+      .sp-logo {
+        height: min(34vh, 24vw);
+        width: auto;
+        max-width: 70vw;
+        object-fit: contain;
+      }
+      /* An equal spacer opposite the side rail keeps the board on the centre line. */
+      .board:has(.display-sponsor-sidebar:not(:empty))::before {
+        content: '';
+        flex: 0 0 17vw;
       }
       .pane-dots {
         display: flex;
         justify-content: center;
-        gap: 0.75rem;
+        gap: 1.2vw;
         list-style: none;
+        padding-top: 2vh;
       }
       .pane-dots li {
-        width: 0.75rem;
-        height: 0.75rem;
+        width: 0.6em;
+        height: 0.6em;
         border-radius: 50%;
         background: var(--border);
       }
       .pane-dots li[aria-current='true'] {
         background: var(--accent);
       }
-      .pane-paused {
+      .display-consent {
+        padding: 1.2vh 5vw 3vh;
         text-align: center;
-        color: var(--text-muted);
+        background: var(--surface);
+        color: var(--text);
       }
-      .league-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .league-card img {
-        width: clamp(140px, 14vw, 240px);
-      }
-      .sponsor-wall {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 1.5rem;
+      @media (prefers-reduced-motion: reduce) {
+        .display-sponsor-item {
+          transition: none;
+        }
       }
     </style>
   </head>
   <body>
     <a href="#main-content" class="skip-link" data-testid="display-skip-link">Skip to content</a>
-    <header data-testid="display-header" aria-label="OurSharedEvents live display">
-      <h1 data-testid="display-title">OurSharedEvents</h1>
-      <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
+    <header class="vh" data-testid="display-header" aria-label="OurSharedEvents live display">
+      <h1 data-testid="display-title">OurSharedEvents live display</h1>
     </header>
-    <aside
-      id="display-sponsor-sidebar"
-      class="display-sponsor-sidebar"
-      data-testid="display-sponsor-sidebar"
-      aria-label="Side sponsors"
-    ></aside>
-    <main id="main-content" data-testid="display-main" aria-live="polite" aria-atomic="false">
-      <p class="empty" data-testid="display-loading">Loading&hellip;</p>
-    </main>
-    <div
-      id="display-sponsor-banner"
-      class="display-sponsor-banner"
-      data-testid="display-sponsor-banner"
-    ></div>
+    <div class="board">
+      <main id="main-content" data-testid="display-main" aria-live="polite" aria-atomic="false">
+        <p class="empty" data-testid="display-loading">Loading&hellip;</p>
+      </main>
+      <aside
+        id="display-sponsor-sidebar"
+        class="display-sponsor-sidebar"
+        data-testid="display-sponsor-sidebar"
+        aria-label="Side sponsors"
+      ></aside>
+    </div>
     <!-- Walkthrough 2026-09-03: the TV is the one surface a whole room looks at,
-         and it carried no privacy line. The promise, in 10-foot type, in the voice. -->
+         and it carried no privacy line. The promise, in the voice, and in the
+         small type: the event's date and venue lead (OSE-1521). -->
     <p class="display-consent" data-testid="display-consent" role="note">
       We count the room, never the person. Nothing about you is collected to show this screen.
     </p>
-    <div class="ticker" aria-hidden="true" data-testid="display-ticker">
-      <span class="ticker-inner" id="ticker" data-testid="display-ticker-text"
-        >OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside &mdash; We count the room, never the person</span
-      >
-    </div>
     <script>
-      // Clock
-      function updateClock() {
-        const el = document.getElementById('clock');
-        if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      }
-      updateClock();
-      setInterval(updateClock, 30_000);
-
       // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
       // scopedSurfaceUrl() emits /display?event=<id>, but this page used to ignore
       // location.search entirely and always feature items[0] — so a kiosk pointed
@@ -404,14 +288,21 @@
       // The order and seconds per pane are what the organiser saved in /admin
       // (GET /api/v2/events/:id/display-config, re-checked every minute with its
       // ETag: unchanged means no re-render). The kiosk URL can still override:
-      //   ?panes=event,upcoming,sponsors,league  picks and orders them
+      //   ?panes=event,upcoming,sponsors,league,donate,sponsor
+      //                                          picks and orders them
       //                                          (allowlisted; others ignored)
       //   ?dwell=15                              seconds per pane, 5..120
       // Space pauses, the arrow keys step: the remote a host actually holds.
       // The panes are a VISIBILITY layer: every pane renders the same data,
       // escaped the same way, as the board did before; rotation only hides.
-      var PANE_TYPES = ['event', 'upcoming', 'sponsors', 'league'];
-      var PANE_LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Our sponsors', league: 'League' };
+      // OSE-1521: 'donate' (the saved donation link as a QR) and 'sponsor' (one
+      // whole screen per consented sponsor, expanded at render time) join the
+      // allowlist. 'sponsor' is not in the default: the sponsors wall already
+      // shows everyone. Fundraiser ARTWORK is a pane that does not exist yet (no
+      // artwork exists to show); it would join here and in renderBoard's paneHtml.
+      var PANE_TYPES = ['event', 'upcoming', 'sponsors', 'league', 'donate', 'sponsor'];
+      var DEFAULT_PANES = ['event', 'upcoming', 'sponsors', 'league', 'donate'];
+      var PANE_LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Our sponsors', league: 'League', donate: 'Donate' };
       function clampDwell(secs) {
         return Math.min(120, Math.max(5, secs));
       }
@@ -434,7 +325,7 @@
           if (PANE_TYPES.indexOf(t) !== -1 && order.indexOf(t) === -1) order.push(t);
         });
         var fixedOrder = order.length > 0;
-        if (!fixedOrder) order = PANE_TYPES.slice();
+        if (!fixedOrder) order = DEFAULT_PANES.slice();
         var secs = parseInt(params.get('dwell') || '', 10);
         var fixedDwell = secs > 0;
         if (!fixedDwell) secs = 15;
@@ -474,23 +365,44 @@
       }
       var ROTATION = rotationConfig(location.search);
       // board.items: the fetched events; board.sponsors: [{ title, src }] for
-      // the sponsors pane, filled by loadDisplaySponsors (logo rules live there).
+      // the sponsors pane, filled by loadDisplaySponsors (logo rules live there);
+      // board.topSponsors: the same shape, for the strip under the featured title.
       // board.config: the last display-config body, board.configEtag its ETag.
       // board.sponsorsFor: the event whose sponsors are on screen (loadDisplaySponsors).
-      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null };
-      // A league link's QR is a PNG data URI from our own endpoint; anything
-      // else is not put in an <img src>.
+      var board = { items: null, sponsors: [], topSponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null };
+      // A QR is a PNG data URI from our own endpoint; anything else is not put
+      // in an <img src>.
       function isQrDataUri(v) {
         return typeof v === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v);
       }
       // "league.example/standings" — enough to recognise, short enough for a TV.
-      function shortUrl(u) {
-        try { var x = new URL(u); var t = x.hostname.replace(/^www\./, '') + (x.pathname === '/' ? '' : x.pathname); return t.length > 40 ? t.slice(0, 39) + '…' : t; }
+      function shortUrl(u, max) {
+        max = max || 40;
+        try { var x = new URL(u); var t = x.hostname.replace(/^www\./, '') + (x.pathname === '/' ? '' : x.pathname); return t.length > max ? t.slice(0, max - 1) + '…' : t; }
         catch (err) { return ''; }
       }
       // Quote-safe: sponsor values land inside attributes.
       function escAttr(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+      // OSE-1521: the one place a scan-to-open block is drawn (featured screen and
+      // donate screen). The QR is only an <img> when it is our PNG data URI; the
+      // short link always shows, so a link too long to encode is still readable.
+      function qrBlock(kind, link, prompt) {
+        if (!link || typeof link.url !== 'string') return '';
+        return '<div class="qr" data-testid="display-' + kind + '-scan">' +
+          (isQrDataUri(link.qr) ? '<img src="' + escAttr(link.qr) + '" alt="' + escAttr(prompt) + '" data-testid="display-' + kind + '-qr">' : '') +
+          '<p class="label">' + escAttr(prompt) + '</p>' +
+          '<p class="link" data-testid="display-' + kind + '-link">' + escAttr(shortUrl(link.url, 64)) + '</p></div>';
+      }
+      // A wrapped (finished) event has no place on a board about what is coming up.
+      function isShowable(e) {
+        return !!e && e.phase !== 'post_event';
+      }
+      // Long names step down one size so a two-line title still fits the screen.
+      function headSize(text) {
+        var n = String(text || '').length;
+        return n > 48 ? ' hd-s' : n > 24 ? ' hd-m' : '';
       }
       function showPane(type, index, paused) {
         document.querySelectorAll('[data-pane]').forEach(function (el) {
@@ -548,32 +460,53 @@
           return t ? '<div class="sponsor-line" data-testid="' + testid + '">Supported by ' + esc(t) + '</div>' : '';
         };
         const paneHtml = {};
+        const featuredName = featured.name || '';
+        // The sponsor sits by the title (PO rule): below the title and date,
+        // above the QR. Tier-blind: one box per sponsor, by its title.
+        const strip = board.topSponsors.length
+          ? '<div class="display-sponsor-banner" data-testid="display-sponsor-banner">' +
+            board.topSponsors.map(s => '<div class="display-sponsor-item" data-tier="' + escAttr(s.tier || 'primary') + '" data-testid="display-sponsor-item">' +
+              '<img src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-sponsor-logo">' +
+              '<span class="name" data-testid="display-sponsor-name">' + escAttr(s.title) + '</span></div>').join('') +
+            '</div>'
+          : '';
         paneHtml.event = '<section data-pane="event" data-testid="display-pane-event" aria-label="Featured event" hidden>' +
           '<div class="event-card" data-testid="display-featured-card">' +
-          '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
-          '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
-          '<div class="meta" data-testid="display-featured-meta">' +
+          '<p class="label" data-testid="display-featured-label">' + (featured.phase === 'event' ? 'Happening now' : 'Coming up') + '</p>' +
+          '<h2 class="hd' + headSize(featuredName) + '" data-testid="display-featured-title">' + esc(featuredName) + '</h2>' +
+          '<div class="sub" data-testid="display-featured-meta">' +
           (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
           (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
-          '</div>' + sponsorLine(featured.id, 'display-featured-sponsor') + '</div></section>';
+          '</div>' + sponsorLine(featured.id, 'display-featured-sponsor') + '</div>' + strip +
+          qrBlock('featured', cfg && cfg.event_page, 'Scan for details') + '</section>';
         if (rest.length) {
           paneHtml.upcoming = '<section data-pane="upcoming" data-testid="display-pane-upcoming" aria-label="Also coming up" hidden>' +
-            '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
-            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
-              sponsorLine(e.id, 'display-upcoming-sponsor') + '</div>' +
+            '<div class="next-events" data-testid="display-upcoming"><h2 class="hd hd-m" data-testid="display-upcoming-heading">Also Coming Up</h2>' +
+            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' + sponsorLine(e.id, 'display-upcoming-sponsor') +
               '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
             '</div></section>';
         }
         // Tier-blind (OSE-878/#25): one uniform box per sponsor, no data-tier,
         // no size or order treatment. Impressions are NOT logged again here:
         // loadDisplaySponsors already counted each sponsor once per placement.
+        const sponsorKeys = [];
         if (board.sponsors.length) {
           paneHtml.sponsors = '<section data-pane="sponsors" data-testid="display-pane-sponsors" aria-label="Our sponsors" hidden>' +
-            '<div class="next-events"><h3 data-testid="display-wall-heading">Thanks to our sponsors</h3><div class="sponsor-wall">' +
+            '<div class="next-events"><h2 class="hd hd-m" data-testid="display-wall-heading">Thanks to our sponsors</h2><div class="sponsor-wall">' +
             board.sponsors.map(s => '<div class="display-sponsor-item" data-testid="display-wall-sponsor">' +
               '<img src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-wall-sponsor-logo">' +
               '<span class="name" data-testid="display-wall-sponsor-name">' + escAttr(s.title) + '</span></div>').join('') +
             '</div></div></section>';
+          // OSE-1521: a whole screen per sponsor, same logo rule, by its title.
+          // Each sponsor appears once (board.sponsors is already de-duplicated);
+          // no tier, no number, no impression beacon (counted once on load).
+          board.sponsors.forEach(function (s, i) {
+            sponsorKeys.push('sponsor-' + i);
+            paneHtml['sponsor-' + i] = '<section data-pane="sponsor-' + i + '" data-testid="display-pane-sponsor" aria-label="Sponsor" hidden>' +
+              '<p class="label">Thanks to our sponsor</p>' +
+              '<img class="sp-logo" src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-sponsor-screen-logo">' +
+              '<h2 class="hd' + headSize(s.title) + '" data-testid="display-sponsor-screen-title">' + escAttr(s.title) + '</h2></section>';
+          });
         }
         // League: the links the organiser saved (the league keeps its own
         // tools; we link out). Each card: label, scan-to-open QR, short link.
@@ -581,18 +514,33 @@
           .filter(l => l && typeof l.url === 'string');
         if (league.length) {
           paneHtml.league = '<section data-pane="league" data-testid="display-pane-league" aria-label="League" hidden>' +
-            '<div class="next-events"><h3 data-testid="display-league-heading">League</h3><div class="sponsor-wall">' +
+            '<div class="next-events"><h2 class="hd hd-m" data-testid="display-league-heading">League</h2><div class="sponsor-wall">' +
             league.map(l => '<div class="league-card" data-testid="display-league-item">' +
               (isQrDataUri(l.qr) ? '<img src="' + escAttr(l.qr) + '" alt="Scan for the ' + escAttr(l.label) + '" data-testid="display-league-qr">' : '') +
               '<strong data-testid="display-league-label">' + escAttr(l.label) + '</strong>' +
               '<span data-testid="display-league-url">' + escAttr(shortUrl(l.url)) + '</span></div>').join('') +
             '</div></div></section>';
         }
+        // Donate: the organiser's saved link as a QR, and nothing numeric (the
+        // display shows no counts, so no amount, goal or progress).
+        if (cfg && cfg.donate && typeof cfg.donate.url === 'string') {
+          paneHtml.donate = '<section data-pane="donate" data-testid="display-pane-donate" aria-label="Donate" hidden>' +
+            '<h2 class="hd" data-testid="display-donate-heading">' + escAttr(cfg.donate.label || 'Donate') + '</h2>' +
+            qrBlock('donate', cfg.donate, 'Scan to give') + '</section>';
+        }
         const rot = effectiveRotation(ROTATION, cfg);
-        const panes = rot.order.filter(type => paneHtml[type]);
+        // 'sponsor' stands for one screen per sponsor (none when there are none).
+        const panes = [];
+        rot.order.forEach(type => {
+          if (type === 'sponsor') sponsorKeys.forEach(k => panes.push(k));
+          else if (paneHtml[type]) panes.push(type);
+        });
         // The featured event always exists, so a narrowed ?panes= that matches
         // nothing renderable still shows it rather than a blank TV.
         if (!panes.length) panes.push('event');
+        const dotLabel = key => /^sponsor-\d+$/.test(key)
+          ? (board.sponsors[Number(key.slice(8))] || {}).title || 'Sponsor'
+          : PANE_LABELS[key];
         const prev = board.rotation;
         const keepType = prev ? prev.current() : null;
         const keepPaused = prev ? prev.isPaused() : false;
@@ -601,7 +549,7 @@
           panes.map(type => paneHtml[type]).join('') + '</div>' +
           (panes.length > 1
             ? '<ol class="pane-dots" data-testid="display-pane-dots" aria-label="Screens">' +
-              panes.map(type => '<li aria-label="' + PANE_LABELS[type] + '" aria-current="false"></li>').join('') + '</ol>' +
+              panes.map(type => '<li aria-label="' + escAttr(dotLabel(type)) + '" aria-current="false"></li>').join('') + '</ol>' +
               '<p class="pane-paused" data-testid="display-pane-paused" hidden>Paused. Press Space to resume.</p>'
             : '');
         board.rotation = createPaneRotation(panes, rot.dwellMs, showPane);
@@ -609,9 +557,8 @@
         board.rotation.start(Math.max(panes.indexOf(keepType), 0), keepPaused);
       }
       // Nothing is featured any more (the list came back empty): drop every
-      // piece of state that belonged to the previous event, so its sponsors,
-      // ticker and saved config are not left on screen or polled.
-      const TICKER_DEFAULT = (document.getElementById('ticker') || {}).textContent || '';
+      // piece of state that belonged to the previous event, so its sponsors
+      // and saved config are not left on screen or polled.
       function clearEventState() {
         if (board.rotation) board.rotation.stop();
         board.rotation = null;
@@ -625,12 +572,9 @@
         board.sideRailVisibility = null;
         board.sponsorsFor = null; // also drops a sponsor load in flight
         board.sponsors = [];
-        const banner = document.getElementById('display-sponsor-banner');
+        board.topSponsors = [];
         const sidebar = document.getElementById('display-sponsor-sidebar');
-        if (banner) banner.innerHTML = '';
         if (sidebar) sidebar.innerHTML = '';
-        const ticker = document.getElementById('ticker');
-        if (ticker) ticker.textContent = TICKER_DEFAULT;
       }
       async function loadEvents() {
         const main = document.getElementById('main-content');
@@ -652,6 +596,10 @@
               if (oneData && oneData.ok && oneData.item && oneData.item.id === wanted) items = [oneData.item].concat(items);
             } catch { /* fall back to the list */ }
           }
+          // OSE-1521: a wrapped event is not "upcoming" (a May event was shown as
+          // "Upcoming event" in October). Dropped here, before anything is
+          // featured, so the screen, the sponsors and the config all agree.
+          items = items.filter(isShowable);
           if (!items.length) {
             clearEventState();
             main.innerHTML = '<p class="empty">No upcoming events scheduled.</p>';
@@ -663,9 +611,6 @@
           renderBoard();
           loadDisplayConfig();
           loadDisplaySponsors();
-          // Update ticker
-          const ticker = document.getElementById('ticker');
-          if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
         } catch {
           // A failed refresh keeps the last good board (rotation, sponsors,
           // config) on screen; it is retried in five minutes. Only a TV that
@@ -737,11 +682,10 @@
       // refresh of the same event never reloads, never restarts the side rail and
       // never logs impressions twice. When the featured event does change (the
       // leading event ended, say), the previous event's sponsors are cleared
-      // from the banner, the side rail and the sponsors pane before the new
+      // from the strip, the side rail and the sponsors panes before the new
       // event's load; a failed load is retried on the next refresh.
       async function loadDisplaySponsors() {
         const sidebar = document.getElementById('display-sponsor-sidebar');
-        const banner = document.getElementById('display-sponsor-banner');
         const items = board.items || [];
         if (!items.length) return;
         // OSE-1081: sponsors follow the FEATURED event, so a ?event=<id> kiosk
@@ -756,9 +700,9 @@
           if (board.stopSideRail) board.stopSideRail();
           board.stopSideRail = null;
           board.sideRailVisibility = null;
-          if (banner) banner.innerHTML = '';
           if (sidebar) sidebar.innerHTML = '';
           board.sponsors = [];
+          board.topSponsors = [];
           renderBoard();
         }
         const stale = () => board.sponsorsFor !== eventId;
@@ -779,26 +723,21 @@
             : SPONSOR_DEFAULT_LOGO;
           const tvTop = bundle.surface_sponsors?.tvTop || [];
           const tvSide = bundle.surface_sponsors?.tvSide || [];
-          // The sponsors pane: every display sponsor once (a sponsor in both
-          // slots is one tile), same proxy + default-logo rule as the banner.
+          // The sponsors panes: every display sponsor once (a sponsor in both
+          // slots is one tile), same proxy + default-logo rule as the strip.
           const seen = new Set();
           board.sponsors = tvTop.concat(tvSide).filter(s => s && s.id && !seen.has(s.id) && seen.add(s.id))
             // The header logo, else the compact one (the proxy's slot=sidebar
             // serves compact-or-header), else the OSE default.
             .map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : logoSrc(s, 'sidebar') }));
+          // The strip under the featured title (OSE-1521): the top-slot sponsors,
+          // by title, drawn inside the featured screen by renderBoard.
+          board.topSponsors = tvTop.map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO, tier: s.tier }));
           renderBoard();
-          if (banner && tvTop.length) {
-            banner.innerHTML = tvTop.map(s => {
-              // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
-              const title = s.title || s.name;
-              const logo = '<img src="' + esc(s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO) + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="display-sponsor-logo">';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name" data-testid="display-sponsor-name">' + esc(title) + '</span></div>';
-            }).join('');
-          }
           if (sidebar && tvSide.length) {
             let idx = 0;
             const total = tvSide.length;
-            function renderSideItem(s, num) {
+            function renderSideItem(s) {
               // OSE-R-015 + OSE-R-011 (2026-05-15): referrerpolicy +
               // onerror — when the sponsor host 404s, the broken-image
               // listener attached below advances the rotation immediately
@@ -806,10 +745,10 @@
               // OSE-1317: the side rail is the compact slot, so it prefers the
               // sidebar logo and falls back to the header logo (the proxy's
               // slot=sidebar does both), then — 0083 — to the OSE default.
+              // OSE-1521: no "2/5" counter. The display shows no counts.
               const title = s.title || s.name;
               const logo = '<img src="' + esc(logoSrc(s, 'sidebar')) + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="display-sponsor-sidebar-logo">';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(title) + '</span></div>' +
-                (total > 1 ? '<div class="sponsor-counter" data-testid="display-sponsor-counter">' + num + '/' + total + '</div>' : '');
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(title) + '</span></div>';
             }
             function attachErrorAdvance() {
               // OSE-R-011: hide the broken image immediately + advance to
@@ -848,11 +787,11 @@
                 current.classList.add('fade-out');
                 setTimeout(function() {
                   if (stale()) return; // this event's rail was replaced
-                  sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+                  sidebar.innerHTML = renderSideItem(s);
                   attachErrorAdvance();
                 }, 600);
               } else {
-                sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+                sidebar.innerHTML = renderSideItem(s);
                 attachErrorAdvance();
               }
               idx++;

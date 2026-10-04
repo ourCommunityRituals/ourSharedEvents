@@ -70,7 +70,7 @@
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
- *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league links/sheets (ETag, 304)
+ *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
  *
  *   Poster Deployments Admin (auth required):
  *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging)
@@ -80,7 +80,7 @@
  *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
- *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league links, any status (admin)
+ *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league/donate links, any status (admin)
  *   PUT    /api/v2/admin/events/:id/poster-codes        → save codes + targets (tier-limited)
  *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
  *                                                         posters/places + scans per day

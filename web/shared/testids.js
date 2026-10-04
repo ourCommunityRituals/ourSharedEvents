@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-04 — 587 ids.
+ * Generated 2026-10-04 — 589 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 394 ids
+    // admin.html — 395 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -368,6 +368,7 @@
       'surface-cards',
       'tier-badge',
       'tv-display-card',
+      'tv-donate',
       'tv-dwell',
       'tv-intro',
       'tv-league-bracket',
@@ -462,10 +463,10 @@
       'public-sponsor-section',
       'public-title',
     ]),
-    // display.html — 47 ids
+    // display.html — 48 ids
     DISPLAY: Object.freeze([
-      'display-clock',
       'display-consent',
+      'display-donate-heading',
       'display-empty',
       'display-featured-card',
       'display-featured-date',
@@ -481,26 +482,27 @@
       'display-league-url',
       'display-loading',
       'display-main',
+      'display-pane-donate',
       'display-pane-dots',
       'display-pane-event',
       'display-pane-league',
       'display-pane-paused',
+      'display-pane-sponsor',
       'display-pane-sponsors',
       'display-pane-upcoming',
       'display-panes',
       'display-skip-link',
       'display-sponsor-banner',
-      'display-sponsor-counter',
       'display-sponsor-error',
       'display-sponsor-item',
       'display-sponsor-logo',
       'display-sponsor-name',
       'display-sponsor-rotate',
+      'display-sponsor-screen-logo',
+      'display-sponsor-screen-title',
       'display-sponsor-sidebar',
       'display-sponsor-sidebar-logo',
       'display-sponsor-sidebar-name',
-      'display-ticker',
-      'display-ticker-text',
       'display-title',
       'display-upcoming',
       'display-upcoming-card',

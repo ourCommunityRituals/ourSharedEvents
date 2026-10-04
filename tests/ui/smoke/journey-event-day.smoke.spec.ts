@@ -32,13 +32,12 @@ test.describe('Journey: Event Day — Display + Poster + Check-in', () => {
     expect(hasEvent || hasEmpty, 'Display must show content, not blank').toBe(true);
   });
 
-  test('Step 2: /display clock is showing time', async ({ page }) => {
+  test('Step 2: /display has no clock and no ticker (OSE-1521)', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'networkidle', timeout: 20_000 });
 
-    const clock = page.locator('[data-testid="display-clock"]');
-    await expect(clock).toBeVisible();
-    const text = await clock.textContent();
-    expect(text).toMatch(/\d{1,2}:\d{2}/);
+    await expect(page.locator('[data-testid="display-main"]')).toBeVisible();
+    await expect(page.locator('[data-testid="display-clock"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="display-ticker"]')).toHaveCount(0);
   });
 
   // ── Poster: Printable with QR codes ────────────────────────────────────
@@ -101,6 +100,6 @@ test.describe('Journey: Event Day — Display + Poster + Check-in', () => {
 
     await expect(page.locator('[data-testid="display-header"]')).toBeVisible();
     await expect(page.locator('[data-testid="display-main"]')).toBeVisible();
-    await expect(page.locator('[data-testid="display-ticker"]')).toBeVisible();
+    await expect(page.locator('[data-testid="display-consent"]')).toBeVisible();
   });
 });

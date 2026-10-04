@@ -69,6 +69,7 @@ on:
       # without ever being exercised (found on #555, the admin-csp de-flake).
       - 'tests/playwright/mobile-workability.spec.ts'
       - 'tests/playwright/a11y-profile.spec.ts'
+      - 'tests/playwright/display-tv-board.spec.ts'
       - 'tests/playwright/admin-wizard-isolation.spec.ts'
       - 'tests/playwright/admin-csp-controls.spec.ts'
       - 'tests/playwright/admin-sponsor-form.spec.ts'
