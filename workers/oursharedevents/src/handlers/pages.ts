@@ -221,7 +221,10 @@ export function renderErrorPage(
   title: string,
   body: string,
   ctaHref: string = '/events',
-  ctaLabel: string = 'Browse upcoming events'
+  ctaLabel: string = 'Browse upcoming events',
+  // OSE-1519: a page that names a real event is not an error to the reader, so
+  // it drops the "Error 4xx" label and may carry a short list of what is next.
+  opts: { label?: string | null; extraHtml?: string } = {}
 ): Response {
   const esc = (s: string) =>
     s
@@ -261,10 +264,11 @@ export function renderErrorPage(
 <body>
   <header data-testid="error-header"><a href="/" data-testid="error-brand">OurSharedEvents</a></header>
   <main data-testid="error-main">
-    <p class="error-status" data-testid="error-status">Error ${status}</p>
+    ${opts.label === null ? '' : `<p class="error-status" data-testid="error-status">${opts.label ? esc(opts.label) : `Error ${status}`}</p>`}
     <h1 class="error-title" data-testid="error-title">${safeTitle}</h1>
     <p class="error-body" data-testid="error-body">${safeBody}</p>
     <a class="error-cta" data-testid="error-cta" href="${safeCtaHref}">${safeCtaLabel}</a>
+    ${opts.extraHtml ?? ''}
   </main>
   <footer data-testid="error-footer">OurSharedEvents — community gatherings</footer>
 </body>
@@ -380,6 +384,8 @@ export interface PublicEventRow {
   timezone: string | null;
   /** OSE-1313 — canonical UTC start instant; null for date-only events. */
   starts_at?: string | null;
+  /** 0093 — when the event first went on the list; null = never listed. */
+  listed_from?: string | null;
   what_short: string | null;
   who_host: string | null;
   why_purpose: string | null;
@@ -1623,6 +1629,55 @@ async function fetchEventPageSocialData(
 }
 
 /**
+ * A curated few upcoming events at the same venue. A public list, like /events:
+ * brand-scoped (OSE-1242, Invariant #9), and listed events only (is_published +
+ * publish grace window). Fails to [] so the page around it always renders.
+ */
+async function fetchNextEventsAtVenue(
+  env: PublicEventEnv,
+  row: PublicEventRow
+): Promise<NextEventRow[]> {
+  try {
+    if (!row.location || !env.DB) return [];
+    const rs = await env.DB.prepare(
+      `SELECT id, title, start_date, location FROM events
+       WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
+         AND is_published = 1 AND ${listedSql()}
+         AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
+       ORDER BY datetime(start_date) ASC LIMIT ?4`
+    )
+      .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
+      .all<NextEventRow>();
+    return rs.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** OSE-1519: the named page for an event that was live and has been archived. */
+async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): Promise<Response> {
+  const next = await fetchNextEventsAtVenue(env, row);
+  const list = next.length
+    ? `<ul class="ose-suggestions" data-testid="ended-next-events">${next
+        .map(
+          (ev) =>
+            `<li><a href="/events/${esc(ev.id)}" data-testid="ended-next-event-link">${esc(ev.title)}</a></li>`
+        )
+        .join('')}</ul>`
+    : '';
+  const res = renderErrorPage(
+    410,
+    `${row.title} has ended`,
+    next.length ? 'Here is what is on next at this venue.' : 'See what is coming up next.',
+    '/events',
+    'Browse upcoming events',
+    { label: null, extraHtml: list }
+  );
+  res.headers.set('Cache-Control', 'public, max-age=60');
+  return res;
+}
+
+/**
  * GET /events/:id — public event landing page. Phase-aware.
  *
  * Recipients land here from `/s/:code` shortlinks. The page renders the
@@ -1670,7 +1725,7 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
-              e.event_type_id, etr.name AS event_type_name
+              e.event_type_id, etr.name AS event_type_name, e.listed_from
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
        WHERE e.id = ?`
@@ -1703,6 +1758,13 @@ export async function handlePublicEventPage(
   // The friendly copy MUST be byte-identical to the not-found case above so
   // a probe attacker can't differentiate a missing row from a draft row.
   const status = (row.status || '').toLowerCase();
+  // OSE-1519: an event that was live and is now archived is named, as ended. The
+  // "was live" test is `listed_from`: an event archived straight from draft was
+  // never public, so naming it would leak a draft's title; it stays the generic
+  // 404 below. (A published archived event still renders its recap, below.)
+  if (status === 'archived' && row.is_published !== 1 && row.listed_from) {
+    return renderEndedEventPage(env, row);
+  }
   if (row.is_published !== 1 || status === 'draft' || status === 'ready') {
     return renderErrorPage(
       404,
@@ -1754,25 +1816,7 @@ export async function handlePublicEventPage(
     // only — do NOT delete (Invariant #10 deprecation_lock).
     // OSE-657: a curated few upcoming events at the same venue — the subtle
     // margin, bounded by MAX_POST_EVENT_SUGGESTIONS (never an exhaustive list).
-    let nextEvents: NextEventRow[] = [];
-    try {
-      if (row.location) {
-        // A public list, like /events: brand-scoped (OSE-1242, Invariant #9),
-        // and listed events only (is_published + publish grace window).
-        const rs = await env.DB.prepare(
-          `SELECT id, title, start_date, location FROM events
-           WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
-             AND is_published = 1 AND ${listedSql()}
-             AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-           ORDER BY datetime(start_date) ASC LIMIT ?4`
-        )
-          .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
-          .all<NextEventRow>();
-        nextEvents = rs.results ?? [];
-      }
-    } catch {
-      nextEvents = []; // recap must render even if the lookup fails
-    }
+    const nextEvents = await fetchNextEventsAtVenue(env, row);
     body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
   }
 
