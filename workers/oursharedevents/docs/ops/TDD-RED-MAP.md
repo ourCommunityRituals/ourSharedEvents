@@ -21,7 +21,7 @@ So the suite goes red exactly when a story lands, and stays red until the test i
 | OSE-1519 | P3         | W     | an archived event says it has ended, with no error-code label           | Open   |
 | OSE-1520 | P1         | W     | `/public` redirects to `/events`                                        | Done   |
 | OSE-1520 | P1         | W     | the `/events` tab title says what the page is                           | Done   |
-| OSE-1518 | P3         | W     | a live event page carries the trust header                              | Open   |
+| OSE-1518 | P3         | W     | a live event page carries the trust header                              | Done   |
 | OSE-1522 | S4, P1, P3 | W     | the `/events` card shows the consented sponsor by the title             | Open   |
 
 Guards that are green today and must survive the fixes: a title-only draft can be created (OSE-1560); an unknown event id keeps the generic not-found page, and a draft is not named to an anonymous visitor (OSE-1519; the story leaves what a draft may show to the PO, so this guard turns an accidental leak into a decision).
