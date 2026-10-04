@@ -151,6 +151,9 @@ export function buildRepeatBody(
   }
 
   const settings = parseEventSettings(src.settings_json);
+  // `mapDefault` is the server's own "the organizer did not choose the map" marker. A client
+  // may not write it, and the copy's map choice is the explicit `is_published: false` above.
+  delete settings.mapDefault;
   if (Object.keys(settings).length > 0) body.settings = settings;
 
   return body;

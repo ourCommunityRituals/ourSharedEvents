@@ -264,6 +264,28 @@ describe('POST /api/v2/admin/events/:id/repeat — the copy', () => {
     });
   });
 
+  test('a source with the server-managed map marker still repeats, and the copy does not carry it', async () => {
+    // New events store `mapDefault: true` in settings_json; a client may not write it.
+    await tenv.DB.prepare(
+      `UPDATE events SET settings_json = '{"showQRSection":false,"mapDefault":true}' WHERE id = ?`
+    )
+      .bind(SRC)
+      .run();
+    try {
+      const res = await repeat(SRC, asEmail(OWNER_A));
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as { id: string };
+      const row = await rowOf(body.id);
+      expect(JSON.parse(row.settings_json as string)).toEqual({ showQRSection: false });
+    } finally {
+      await tenv.DB.prepare(
+        `UPDATE events SET settings_json = '{"showQRSection":false,"displayPanes":["event","sponsors"],"displayDwellSeconds":20}' WHERE id = ?`
+      )
+        .bind(SRC)
+        .run();
+    }
+  });
+
   test('the date moves to the same weekday ahead; the start time and zone stay', async () => {
     const body = (await (await repeat(SRC, asEmail(OWNER_A))).json()) as {
       id: string;
