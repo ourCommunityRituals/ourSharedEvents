@@ -133,6 +133,50 @@ test('on the event page the sponsor sits below the title and above the content, 
   await expect(page.getByTestId('poster-sponsor-item')).toHaveCount(1);
 });
 
+// OSE-1435: the location a sponsor chose to show reads as its own muted line
+// under the name. It was a bare <small> beside the name in a flex row, at the
+// browser's default size and the body text colour.
+test('the sponsor location is its own muted line under the name, and wraps', async ({
+  page,
+  request,
+}) => {
+  const address = '1234 West One Hundred Eleventh Street, Suite 200, Blue Island';
+  const put = await request.put(`/api/v2/admin/sponsors/${encodeURIComponent(seeded.sponsorId)}`, {
+    headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
+    data: { address_line: address },
+  });
+  expect(put.status(), 'set the sponsor location').toBe(200);
+
+  await page.setViewportSize(PHONE);
+  await page.goto(`/events/${encodeURIComponent(seeded.eventId)}`);
+  const item = page.getByTestId('sponsor-item').filter({ hasText: seeded.sponsorName });
+  const line = item.getByTestId('sponsor-item-address');
+  await expect(line).toHaveText(address);
+
+  const name = await item.locator('a').first().boundingBox();
+  const box = await line.boundingBox();
+  expect(box!.y, 'the location starts below the name').toBeGreaterThanOrEqual(
+    name!.y + name!.height - 1
+  );
+  expect(box!.x + box!.width, 'the location stays on the screen').toBeLessThanOrEqual(PHONE.width);
+  const style = await line.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--text-muted)';
+    el.appendChild(probe);
+    const muted = getComputedStyle(probe).color;
+    probe.remove();
+    return { color: cs.color, muted, size: parseFloat(cs.fontSize) };
+  });
+  expect(style.color, 'the location is muted').toBe(style.muted);
+  expect(style.size, 'the location is small text, at or above the 13px floor').toBe(13);
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(scrollWidth, 'no sideways scroll').toBeLessThanOrEqual(clientWidth + 1);
+});
+
 test('Decline (changed their mind): the sponsor leaves all four surfaces', async ({ page }) => {
   await answer(page, 'decline');
   await expectEverySurface(page, false, 'after Decline');

@@ -119,7 +119,7 @@ const H = 360;
 // Under the 400-char inline budget (ADR-008 design check); tokens only, no hex.
 // One literal style block so the design check measures exactly what ships.
 const MAP_STYLE =
-  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
+  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px}</style>';
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);

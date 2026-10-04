@@ -713,15 +713,16 @@ interface EventPageSocialData {
 function renderSponsorItem(s: SponsorBasicRow): string {
   const name = esc(sponsorTitle(s));
   const url = s.website_url ?? '';
-  // 0083: the location the sponsor chose to show, after the name.
-  const place = s.address_line
-    ? ` <small data-testid="sponsor-item-address">${esc(s.address_line)}</small>`
-    : '';
-  if (url.startsWith('https://')) {
-    return `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>${place}`;
-  }
-  // No website: a tap opens the sponsor's own card (title, location, contact).
-  return `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link">${name}</a>${place}`;
+  // A website when there is one; otherwise a tap opens the sponsor's own card
+  // (title, location, contact).
+  const link = url.startsWith('https://')
+    ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>`
+    : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link">${name}</a>`;
+  if (!s.address_line) return link;
+  // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted
+  // line under the name. The list item is a flex row, so name and location sit
+  // in one block: .sub-line (@ocr/ui) is display:block and takes the next line.
+  return `<div>${link}<small class="sub-line" data-testid="sponsor-item-address">${esc(s.address_line)}</small></div>`;
 }
 
 /**
