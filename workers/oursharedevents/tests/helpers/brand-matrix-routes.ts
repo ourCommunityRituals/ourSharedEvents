@@ -304,6 +304,12 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
  */
 export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
   '/admin': 'HTML shell; carries no rows. The data calls it makes are the routes above.',
+  '/api/v2/admin/screens/logs':
+    'HTML shell; carries no rows. Its data call is /api/v2/admin/audit-log?scope=brand, which is in the matrix.',
+  '/api/v2/admin/screens/settings':
+    'HTML shell; carries no rows. Its data call is /api/v2/admin/settings, exempted below.',
+  '/api/v2/admin/settings':
+    'Read-only platform constants and the plan; reads no brand-scoped table (tests/admin-settings.spec.ts).',
   '/api/v2/admin/event-templates':
     'Global read-only catalogue of layout templates; no brand_id column.',
   '/api/v2/admin/event-types': 'Global read-only event-type registry; no brand_id column.',
