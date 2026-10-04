@@ -23,10 +23,10 @@ let eventId = '';
 let eventTitle = '';
 
 test.beforeAll(async ({ request }) => {
-  test.skip(
-    !ADMIN_BEARER,
-    'Needs OSE_ADMIN_BEARER (set by playwright.mobile.config.ts for the local worker).'
-  );
+  expect(
+    ADMIN_BEARER,
+    'OSE_ADMIN_BEARER must be set (playwright.mobile.config.ts sets it)'
+  ).not.toBe('');
   eventTitle = `Choices night ${Date.now().toString(36)}`;
   eventId = (await createLiveEvent(request, ADMIN_BEARER, eventTitle)).id;
 });
