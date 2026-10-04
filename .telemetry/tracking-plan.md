@@ -113,8 +113,8 @@ Until OSE-1615 publishes the fixtures, no other repository should compute these 
 Decision 3 says OW receives the keys on the pool it reads. That collides with three statements in force today:
 
 - `OCR_ARCHITECTURE_oerAggregationBoundary.md` (OCR-docs, line 57): location is "corridor-level only (`corridor_id`)" for what OSE emits.
-- `lib/export-geography.ts` (header): "every row that crosses the D1 to BigQuery boundary is at corridor grain or coarser". `assertCorridorGrainRow` does not list `venue_canonical_id` as forbidden, so it would not stop the key, but the header is the contract it enforces.
-- OSE-1460 (PO, 2026-10-01), in `lib/shared-report-export.ts:289`: "The venue never leaves"; the exports carry `venue_id = 'corridor-aggregate'`.
+- `lib/export-geography.ts` (lines 10-11): "every row that crosses the D1 to BigQuery boundary is at corridor grain or coarser". `assertCorridorGrainRow` does not list `venue_canonical_id` as forbidden, so it would not stop the key, but the header is the contract it enforces.
+- OSE-1460 (PO, 2026-10-01), in `lib/shared-report-export.ts:291-292`: "The venue never leaves"; the exports carry `venue_id = 'corridor-aggregate'`.
 
 ADR-010 (Proposed) section 3 assumes the opposite: that data meets in BigQuery keyed on the spine. So a Proposed ADR and an implemented boundary disagree, and this plan cannot settle it. The three options:
 
