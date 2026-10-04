@@ -267,7 +267,6 @@ export function renderErrorPage(
     .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: var(--accent); color: var(--on-accent); text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
     .error-cta:hover { background: var(--accent-hover); }
     header a:focus-visible, .error-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -279,10 +278,12 @@ export function renderErrorPage(
     <a class="error-cta" data-testid="error-cta" href="${safeCtaHref}">${safeCtaLabel}</a>
     ${opts.extraHtml ?? ''}
   </main>
-  <footer data-testid="error-footer">OurSharedEvents — community gatherings</footer>
+  <!--OCR_LEGAL_FOOTER-->
 </body>
 </html>`;
-  return html(content, status);
+  // OSE-1519: the shared footer (© + Browse Events + Privacy), the same partial
+  // every other public page uses, instead of a line of its own.
+  return html(injectLegalFooter(content, 'error'), status);
 }
 
 // ─── Public list page — OSE-1243 ──────────────────────────────────────────────
@@ -783,6 +784,176 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-link { color: var(--accent); font-weight: 600; }
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
 
+/**
+ * Share + Add to calendar: one pair on a row. At phone width each takes half
+ * (flex-basis 120px, so two fit even at 320px); a single control takes the row.
+ */
+const EVENT_ACTIONS_CSS = `
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
+    .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus, .ose-calendar-link:focus, .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-menu { flex: 1 1 120px; }
+    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-summary::-webkit-details-marker { display: none; }
+    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }`;
+
+/**
+ * OSE-1518: the three plain choices. Register (or check-in while the event is
+ * on) is the one filled, full-width button; the other two are outlined and
+ * full width as well, each with one line of what it asks.
+ */
+const EVENT_CHOICES_CSS = `
+    .ose-choices { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.25rem 0 0.5rem; }
+    .ose-choice { display: flex; flex-direction: column; gap: 0.25rem; }
+    .ose-choice-btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; background: transparent; color: var(--ose-accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-choice-primary { background: var(--ose-accent); color: var(--on-accent); font-weight: 700; }
+    .ose-choice-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-choice-note { margin: 0; font-size: 0.85rem; color: var(--ose-muted); }`;
+
+/** The "Next at this venue" list, shared by the event page and the recap. */
+const NEXT_AT_VENUE_CSS = `
+    .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
+    .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .ose-suggestion-link { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; min-height: 44px; padding: 0.4rem 0; text-decoration: none; color: var(--ose-text); }
+    .ose-suggestion-title { font-size: 0.95rem; }
+    .ose-suggestion-when { font-size: 0.8rem; color: var(--ose-muted); white-space: nowrap; }
+    .ose-venue-next { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); }`;
+
+/** One row of a "next at this venue" list. */
+function renderSuggestionItems(
+  events: NextEventRow[],
+  ids: (i: number) => { item: string; link: string }
+): string {
+  return events
+    .map((ev, i) => {
+      const t = ids(i);
+      return `<li class="ose-suggestion" data-testid="${t.item}">
+          <a class="ose-suggestion-link" data-testid="${t.link}" href="/events/${esc(ev.id)}">
+            <span class="ose-suggestion-title">${esc(ev.title)}</span>
+            <span class="ose-suggestion-when">${formatHumanDate(ev.start_date)}</span>
+          </a>
+        </li>`;
+    })
+    .join('');
+}
+
+/**
+ * OSE-1518: a curated few other events at this venue, as a quiet aside below
+ * the deeper detail (the recap has had the same since OSE-657). Nothing renders
+ * when there are none: no empty heading.
+ */
+function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): string {
+  const curated = (events ?? []).slice(0, MAX_POST_EVENT_SUGGESTIONS);
+  if (!curated.length) return '';
+  return `<aside class="ose-venue-next" data-testid="venue-next-events" aria-labelledby="venue-next-heading">
+      <h2 id="venue-next-heading" class="ose-suggestions-heading">Next at ${venue || 'this venue'}</h2>
+      <ul class="ose-suggestion-list">${renderSuggestionItems(curated, (i) => ({ item: `venue-next-event-${i}`, link: `venue-next-event-link-${i}` }))}</ul>
+    </aside>`;
+}
+
+const CHOICE_COPY = {
+  en: {
+    registerNote: 'Save a spot. We ask for your name and an email.',
+    checkinLabel: 'Count me in, anonymously',
+    checkinNote: 'One tap. You are counted, never named.',
+    lookingLabel: 'Just looking',
+    lookingNote: 'Nothing to fill in. See what else is on.',
+    heading: 'How would you like to take part?',
+  },
+  es: {
+    registerNote: 'Guarda tu lugar. Pedimos tu nombre y un correo.',
+    checkinLabel: 'Cuenta conmigo, de forma anónima',
+    checkinNote: 'Un toque. Te contamos, nunca te nombramos.',
+    lookingLabel: 'Solo estoy mirando',
+    lookingNote: 'Nada que llenar. Mira qué más hay.',
+    heading: '¿Cómo quieres participar?',
+  },
+} as const;
+
+/**
+ * OSE-1518: three plain choices under the facts: register, count me in
+ * anonymously (the check-in form), or just looking (asks for nothing). The first
+ * button, filled and full width, is the one the page is for: Register before the
+ * event, Check in while it is on, or the form a poster scan asked for
+ * (?type=). Whichever of register / check-in is not first follows it, so the
+ * three are always on offer. Links only: no field of ours, and "plant my flag"
+ * stays a link out to ourWKRP, never a profile flow here. In an admin draft
+ * preview every choice is shown but switched off (no href).
+ */
+function renderEventChoices(
+  row: PublicEventRow,
+  ctx: EventFormContext,
+  phase: 'pre' | 'live',
+  lang: 'en' | 'es',
+  inert: boolean
+): string {
+  const t = CHOICE_COPY[lang];
+  const first = phase === 'pre' ? 'event-rsvp' : 'event-checkin';
+  const href = (type: EventFormType) =>
+    inert ? '' : ` href="${esc(eventFormHref(row.id, { type, deploymentId: ctx.deploymentId }))}"`;
+  const off = inert ? ' data-preview-inert="true" aria-disabled="true"' : '';
+  const choice = (
+    testid: string,
+    cls: string,
+    link: string,
+    label: string,
+    note: string,
+    noteId: string
+  ) => `<div class="ose-choice">
+      <a class="ose-choice-btn${cls}" data-testid="${testid}"${link}${off} aria-describedby="${noteId}">${label}</a>
+      <p class="ose-choice-note" id="${noteId}">${note}</p>
+    </div>`;
+  const items: string[] = [
+    choice(
+      first,
+      ' ose-choice-primary',
+      href(ctx.type),
+      eventFormCtaLabel(ctx.type),
+      ctx.type === 'register' ? t.registerNote : t.checkinNote,
+      'choice-note-first'
+    ),
+  ];
+  if (ctx.type !== 'register') {
+    items.push(
+      choice(
+        'event-choice-register',
+        '',
+        href('register'),
+        eventFormCtaLabel('register'),
+        t.registerNote,
+        'choice-note-register'
+      )
+    );
+  }
+  if (ctx.type !== 'checkin') {
+    items.push(
+      choice(
+        'event-choice-checkin',
+        '',
+        href('checkin'),
+        t.checkinLabel,
+        t.checkinNote,
+        'choice-note-checkin'
+      )
+    );
+  }
+  items.push(
+    choice(
+      'event-choice-looking',
+      '',
+      inert ? '' : ' href="/events"',
+      t.lookingLabel,
+      t.lookingNote,
+      'choice-note-looking'
+    )
+  );
+  return `<section class="ose-choices" data-testid="event-choices" aria-label="${esc(t.heading)}">
+    ${items.join('\n    ')}
+  </section>`;
+}
+
 function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
   if (!sponsors.length) return '';
   return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="Event sponsors">
@@ -870,6 +1041,8 @@ export function renderPreEventHtml(
     formContext?: EventFormContext;
     /** OSE-1355 admin draft preview: noindex, and the RSVP + share are inert. */
     preview?: boolean;
+    /** OSE-1518: other events at this venue, listed below the deeper detail. */
+    nextEvents?: NextEventRow[];
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -937,20 +1110,9 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
-    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
-    .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
-    .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
-    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
-    .ose-calendar-summary::-webkit-details-marker { display: none; }
-    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
-    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+${EVENT_CHOICES_CSS}
+${EVENT_ACTIONS_CSS}
+${NEXT_AT_VENUE_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
     .ose-section p { margin: 0; }
@@ -1027,9 +1189,9 @@ ${SPONSOR_LIST_CSS}
        the room for the host, sponsor and report — never to persuade the room.
        The post-event recap card keeps its counts (OSE-657 keepsake). -->
 
-    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview })}
+    ${renderEventChoices(row, formContext, 'pre', lang, preview)}
 
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" ${preview ? 'data-preview-inert="true" aria-disabled="true"' : `href="${esc(eventFormHref(row.id, formContext))}"`}>${eventFormCtaLabel(formContext.type)}</a>
+    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview })}
 
     ${
       whyPurpose
@@ -1048,6 +1210,8 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
+
+    ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1075,7 +1239,13 @@ export function renderEventLiveHtml(
   row: PublicEventRow,
   shareUrl: string,
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es'; formContext?: EventFormContext }
+  opts?: {
+    nonce?: string;
+    lang?: 'en' | 'es';
+    formContext?: EventFormContext;
+    /** OSE-1518: other events at this venue, listed below the deeper detail. */
+    nextEvents?: NextEventRow[];
+  }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
@@ -1136,20 +1306,9 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
-    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
-    .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
-    .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
-    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
-    .ose-calendar-summary::-webkit-details-marker { display: none; }
-    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
-    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+${EVENT_CHOICES_CSS}
+${EVENT_ACTIONS_CSS}
+${NEXT_AT_VENUE_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
     .ose-section p { margin: 0; }
@@ -1220,9 +1379,9 @@ ${SPONSOR_LIST_CSS}
          </section>`;
     })()}
 
-    ${renderEventActions(row, shareUrl, nonce, lang)}
+    ${renderEventChoices(row, formContext, 'live', lang, false)}
 
-    <a class="ose-checkin-btn" data-testid="event-checkin" href="${esc(eventFormHref(row.id, formContext))}">${eventFormCtaLabel(formContext.type)}</a>
+    ${renderEventActions(row, shareUrl, nonce, lang)}
 
     ${
       whyPurpose
@@ -1241,6 +1400,8 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
+
+    ${renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1376,18 +1537,10 @@ export function renderPostEventHtml(
   // The first item keeps the OSE-454 next-event-card testids for continuity; any
   // further items are indexed. When none exist, the corridor fallback stands in.
   const curated = nextEvents.slice(0, MAX_POST_EVENT_SUGGESTIONS);
-  const suggestionItems = curated
-    .map((ev, i) => {
-      const testid = i === 0 ? 'next-event-card' : `next-event-suggestion-${i}`;
-      const linkTestid = i === 0 ? 'next-event-link' : `next-event-suggestion-link-${i}`;
-      return `<li class="ose-suggestion" data-testid="${testid}">
-          <a class="ose-suggestion-link" data-testid="${linkTestid}" href="/events/${esc(ev.id)}">
-            <span class="ose-suggestion-title">${esc(ev.title)}</span>
-            <span class="ose-suggestion-when">${formatHumanDate(ev.start_date)}</span>
-          </a>
-        </li>`;
-    })
-    .join('');
+  const suggestionItems = renderSuggestionItems(curated, (i) => ({
+    item: i === 0 ? 'next-event-card' : `next-event-suggestion-${i}`,
+    link: i === 0 ? 'next-event-link' : `next-event-suggestion-link-${i}`,
+  }));
   const suggestionsInner = curated.length
     ? `<h2 id="next-heading" class="ose-suggestions-heading">Next at ${venueDisplay || 'this venue'}</h2>
         <ul class="ose-suggestion-list">${suggestionItems}</ul>`
@@ -1423,27 +1576,12 @@ ${ogMeta}
        loud enough to compete with the keepsake above it. Palette-agnostic. */
     .ose-recap-primary { margin: 0 0 1.5rem; }
     .ose-suggestions { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); }
-    .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
+${NEXT_AT_VENUE_CSS}
     .ose-suggestions-note { font-size: 0.85rem; color: var(--ose-muted); margin: 0 0 0.5rem; }
-    .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-    .ose-suggestion-link { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; min-height: 44px; padding: 0.4rem 0; text-decoration: none; color: var(--ose-text); }
-    .ose-suggestion-title { font-size: 0.95rem; }
-    .ose-suggestion-when { font-size: 0.8rem; color: var(--ose-muted); white-space: nowrap; }
     .ose-suggestions-connect { margin-top: 0.75rem; }
     .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: var(--on-accent); border-radius: 6px; text-decoration: none; font-weight: 600; }
     .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
-    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 0; text-decoration: none; flex: 1 1 180px; }
-    .ose-share-btn:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-link:hover { background: var(--ose-accent-tint); }
-    .ose-share-btn:focus, .ose-calendar-link:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 180px; align-self: flex-start; }
-    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
-    .ose-calendar-summary::-webkit-details-marker { display: none; }
-    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
-    .ose-calendar-option:hover { background: var(--ose-accent-tint); }
-    .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+${EVENT_ACTIONS_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
     /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
@@ -1836,8 +1974,12 @@ export async function handlePublicEventPage(
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
-  // Fetch social data (sponsors + counts) in parallel; fail-open on any error.
-  const social = await fetchEventPageSocialData(env, row.id);
+  // Fetch social data (sponsors + counts) and the other events at this venue
+  // (OSE-1518) in parallel; both fail open, so the page always renders.
+  const [social, nextEvents] = await Promise.all([
+    fetchEventPageSocialData(env, row.id),
+    fetchNextEventsAtVenue(env, row),
+  ]);
 
   let body: string;
   if (phase === 'pre_event') {
@@ -1845,12 +1987,14 @@ export async function handlePublicEventPage(
       nonce,
       lang,
       formContext: preEventFormContext,
+      nextEvents,
     });
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl, social, {
       nonce,
       lang,
       formContext: liveEventFormContext,
+      nextEvents,
     });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
@@ -1858,7 +2002,7 @@ export async function handlePublicEventPage(
     // only — do NOT delete (Invariant #10 deprecation_lock).
     // OSE-657: a curated few upcoming events at the same venue — the subtle
     // margin, bounded by MAX_POST_EVENT_SUGGESTIONS (never an exhaustive list).
-    const nextEvents = await fetchNextEventsAtVenue(env, row);
+    // Read above, in parallel with the social data.
     body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
   }
 
