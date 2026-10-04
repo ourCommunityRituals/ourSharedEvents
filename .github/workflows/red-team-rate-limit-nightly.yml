@@ -1,0 +1,37 @@
+# Nightly live rate-limit check (RL-001..RL-004) against the deployed env.
+# Split out of T5 (red-team-adversarial.yml) to keep merges fast and cheap: the
+# bursts are slow, and the limit they test (a Cloudflare WAF rule, OSE-1509;
+# scripts/ci/cf-waf-rate-limit.mjs) cannot be seen by any earlier tier.
+# Uses no secrets: it only sends public requests.
+name: Red Team — Rate Limit (nightly)
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: red-team-rate-limit
+  cancel-in-progress: false
+
+jobs:
+  rate-limit-live:
+    name: 'Rate limit: live bursts → deployed env'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: 'RL-*: burst past the limit, expect 429 within 3 s'
+        env:
+          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
+        run: npx playwright test --config=playwright.red-team.config.ts --grep "RL-"
