@@ -67,7 +67,10 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-        run: npx playwright test --config=playwright.red-team.config.ts
+        # RL-* (live rate-limit bursts, ~6 min of 180-request floods) run nightly in
+        # red-team-rate-limit-nightly.yml, not on every merge: they test the edge
+        # rule, which no earlier tier can see, and they need not gate each push.
+        run: npx playwright test --config=playwright.red-team.config.ts --grep-invert "RL-"
 
   security-closing:
     name: 'T6 Closing Security (post-test integrity)'

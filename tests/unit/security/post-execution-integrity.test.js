@@ -147,19 +147,19 @@ describe('S2 integrity placement is migration-correct (workflow structure)', () 
     expect(wf.jobs['security-post-scan']).toBeUndefined();
   });
 
-  test('the integrity check is the TAIL step of the execution job (functional-staging)', () => {
-    const steps = wf.jobs['functional-staging'].steps;
+  test('the integrity check is the TAIL step of the execution job (functional-staging-sub)', () => {
+    const steps = wf.jobs['functional-staging-sub'].steps;
     const last = steps[steps.length - 1];
     expect(last.run).toContain('scripts/check-post-execution-integrity.sh');
     expect(last.if).toBe('always()'); // runs even if a test failed — tamper is orthogonal
   });
 
-  test('exactly one job runs the check, and it is functional-staging (no re-homed copy)', () => {
+  test('exactly one job runs the check, and it is functional-staging-sub (no re-homed copy)', () => {
     const runners = Object.entries(wf.jobs)
       .filter(([, j]) =>
         (j.steps || []).some((s) => (s.run || '').includes('check-post-execution-integrity.sh'))
       )
       .map(([name]) => name);
-    expect(runners).toEqual(['functional-staging']);
+    expect(runners).toEqual(['functional-staging-sub']);
   });
 });

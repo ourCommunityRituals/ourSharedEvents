@@ -163,12 +163,18 @@ defaults:
   run:
     shell: bash
 
+# Least privilege by default (CodeQL: workflow without permissions). Jobs that need more
+# (security-events, checks: write) declare it themselves.
+permissions:
+  contents: read
+
 jobs:
   # ============================================================================
   # S0: SECURITY — CodeQL SAST + SBOM (runs before test pyramid)
   # ============================================================================
   security:
     name: 'S0 Security'
+    timeout-minutes: 20 # job ceiling; slowest observed run is far below it
     runs-on: ubuntu-24.04 # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
     permissions:
       security-events: write
@@ -353,7 +359,7 @@ jobs:
           retention-days: 90
 
   # ============================================================================
-  # TIER 0: GATE — Every push, every PR
+  # T0 GATE — Every push, every PR
   #
   # Sweep 9 (2026-05-14): sharded into 4 parallel matrix children so the
   # 3-runner Bloodraven pool can execute lint / typecheck / tests / a11y in
@@ -374,6 +380,7 @@ jobs:
   # ============================================================================
   gate:
     name: 'T0 Gate (${{ matrix.shard }})'
+    timeout-minutes: 15 # job ceiling; slowest observed run is far below it
     needs: [security]
     # OSE-954 (F2 slice, completes OSE-977): the ENTIRE T0 gate now runs on
     # ephemeral GitHub-hosted ubuntu-latest VMs. OSE-977 moved only the heavy
@@ -840,6 +847,7 @@ jobs:
   # independently visible and parallel sections.
   gate-tests-sub:
     name: "T0 Tests (${{ matrix.section }}${{ matrix.shard && format(' {0}', matrix.shard) || '' }})"
+    timeout-minutes: 20 # job ceiling; slowest observed run is far below it
     needs: [security]
     runs-on: ubuntu-24.04
     strategy:
@@ -975,6 +983,7 @@ jobs:
 
   gate-tests:
     name: 'T0 Gate (tests)'
+    timeout-minutes: 5 # job ceiling; slowest observed run is far below it
     needs: [gate-tests-sub]
     runs-on: ubuntu-24.04
     if: always()
@@ -1052,10 +1061,11 @@ jobs:
           include-hidden-files: true
 
   # ============================================================================
-  # TIER 1: DEPLOY — Push to main or dispatch
+  # T1 DEPLOY → Staging — Push to main or dispatch
   # ============================================================================
   deploy-staging:
     name: 'T1 Deploy → Staging'
+    timeout-minutes: 20 # job ceiling; slowest observed run is far below it
     # OSE-1257 source pattern: GitHub-hosted staging deploy. wrangler deploy + D1 migrations authenticate with
     # CLOUDFLARE_API_TOKEN (a repo secret, IP-independent), so an ephemeral runner
     # deploys exactly as the self-hosted box did — there is no source-IP allow-list
@@ -1275,16 +1285,313 @@ jobs:
           # signing secret is unset/short (CCR-PR567 re-run item 5, revised).
 
   # ============================================================================
-  # TIER 2: SMOKE — Post-deploy + nightly + dispatch
+  # T2 CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191). First post-deploy gate.
+  # ============================================================================
+  contract-staging-sub:
+    name: 'T2 Contract (${{ matrix.section }})'
+    timeout-minutes: 15 # job ceiling; slowest observed run is far below it
+    # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
+    # seed only; no deploy. Staging auth is the header-based CF Access service
+    # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
+    # CLOUDFLARE_API_TOKEN — all repo secrets, all IP-independent, so the
+    # ephemeral runner reaches staging exactly as the self-hosted box did.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      checks: write # dorny/test-reporter publishes the results as a check
+    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Bruno API + Pages
+    # contract. Contract-first — nail the API contract, THEN perpetuate into the
+    # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
+    # so a broken API contract is fixed before any FE layer runs.
+    needs: [security, gate, gate-tests, deploy-staging]
+    if: |
+      always() &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      needs.gate-tests.result == 'success' &&
+      (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - section: api
+            label: 'T2: Bruno API contract'
+            collection: bruno/ose-api
+            junit: bru-api-junit.xml
+          - section: pages
+            label: 'T2: Bruno Pages contract'
+            collection: bruno/ose-pages
+            junit: bru-pages-junit.xml
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # Root-only job: nothing here imports @ocr/ui, so staging stays
+        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
+        # root npm ci tolerates a missing @ocr/flags (OSE-341).
+        continue-on-error: true
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
+      # Delegates to the shared classifier so the in-CI probe and the scheduled
+      # canary (.github/workflows/cf-access-canary.yml) can never drift into two
+      # copies of the anti-drift tool. Here it runs WITHOUT --gate: the Bruno
+      # contract stays the source of truth per the tests-surface-truth doctrine, and this step
+      # only auto-classifies the next failure into the step summary.
+      - name: CF Access preflight probe
+        if: matrix.section == 'api'
+        id: preflight
+        shell: bash
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          chmod +x scripts/ci/cf-access-probe.sh
+          scripts/ci/cf-access-probe.sh
+
+      # OSE-1419: migration 0086 removes 0013's test-event-001 from any database
+      # where nothing references it, so the event is no longer something a
+      # migration guarantees. The api, pages and sharedreport collections all target it.
+      # Seed it here on purpose. NOT continue-on-error: a missing event fails at
+      # this step, by name, not as a 404 in a later tier.
+      # Upsert keyed on the id: an existing row only gets data_class='synthetic';
+      # any other conflict (e.g. a slug clash) fails the step.
+      - name: 'Seed test-event-001 (OSE-1419 fixture)'
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # Two legs (platform, forms) run this upsert at once; one bounded retry covers a transient D1 error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../tests/ui/smoke/fixtures/test-event-001.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
+
+      # OSE-891: geo-tag test-event-001 so the OSE-INV5 covenant can seed
+      # genuinely-local sponsors. is_local is GEO-DERIVED server-side (sponsor
+      # h3_res7 == event h3_res7); the event fixture ships without coordinates,
+      # so without this its cell is NULL and every sponsor resolves non-local.
+      # A standalone fixture (not a migration) on purpose — see the file header
+      # (bruno/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
+      - name: Seed covenant event geo (OSE-891 fixture)
+        if: matrix.section == 'api'
+        id: seed-covenant-geo
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../bruno/fixtures/covenant-event-geo.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
+
+      - name: Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)
+        if: matrix.section == 'api'
+        id: reset-covenant-sponsors
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../bruno/fixtures/covenant-sponsors-reset.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
+
+      # CCR-PR567 Stage-2: seed the 4 canonical covenant sponsors ALREADY ACCEPTED
+      # (sponsor_accepted=1) so the covenant Bruno block is a pure ASSERT. Under ADR-019
+      # strict consent an organizer-created placement is PENDING until the sponsor
+      # accepts; the old API-seed-then-mint-then-respond flow could not run reliably on
+      # Bruno CLI (multi-request after-response scripts silently skipped), so consent is
+      # now established in the fixture. Runs AFTER the reset (which clears stale rows by
+      # name) so exactly these 4 exist at read time. Idempotent.
+      - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
+        if: matrix.section == 'api'
+        id: seed-covenant-sponsors
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../bruno/fixtures/covenant-sponsors-seed.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
+
+      # OSE-1432: one fixed-id sponsor per case for the Bruno folder "14. Public
+      # Sponsor Card & Logo" (on show / no logo / dead logo host / pool / draft-only),
+      # on its own active-but-unlisted event so the covenant order on
+      # test-event-001 is untouched. Idempotent. NOT continue-on-error, like the
+      # OSE-1419 event seed: a missing fixture fails here by name, not as a 404 in
+      # the contract run.
+      - name: 'Seed public sponsor card fixtures (OSE-1432)'
+        if: matrix.section == 'api'
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../bruno/fixtures/sponsor-public-card-seed.sql
+
+      # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
+      # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
+      # from the collection root, so each step sets working-directory. Secrets are
+      # still injected via --env-var (same keys as the Postman env), never inlined.
+      #
+      # `bru run` writes --reporter-junit to $GITHUB_WORKSPACE/.test-results and
+      # EXITS 2 if that directory does not exist — even when every assertion passes
+      # (OSE-1191: masked the green result until created). Make the dir first.
+      - name: Prepare contract report dir
+        run: mkdir -p "$GITHUB_WORKSPACE/.test-results"
+
+      - name: Bruno contract section
+        working-directory: ${{ matrix.collection }}
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          # CF Access service token — required for section 11 (Sponsor Covenant)
+          # which seeds + cleans up admin sponsors. The seed/cleanup POSTs hit
+          # /api/v2/admin/* which CF Access shadows at the edge with a 302/HTML
+          # redirect before the request reaches the worker. Forwarding the
+          # service token bypasses CF Access at the edge while preserving the
+          # worker-side Bearer auth check. Without these secrets the covenant
+          # test fails loudly (not silently) — see section 11 seed tests.
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          npx bru run . -r --env ose-staging \
+            --env-var "adminKey=$ADMIN_KEY" \
+            --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
+            --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
+            --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
+        timeout-minutes: 5
+
+      # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
+      # upload a report that recorded one. Upload runs only if this passes.
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh .test-results/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        if: always() && steps.artifact-scan.outcome == 'success'
+        with:
+          name: contract-staging-${{ matrix.section }}-${{ github.run_number }}
+          path: .test-results/
+          retention-days: 14
+          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
+          # default, which silently dropped every JUnit/JSON result uploaded here.
+          include-hidden-files: true
+
+      # Surface per-assertion Bruno results as a GitHub Check (visible in the
+      # PR/Checks tab), so a contract failure shows the failing request + message
+      # by name instead of being buried in the CLI log.
+      - name: Report results (Bruno contract)
+        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
+        uses: dorny/test-reporter@v3
+        continue-on-error: true
+        with:
+          name: '${{ matrix.label }} Results (Bruno)'
+          path: '.test-results/bru-*-junit.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Collection:** \`${{ matrix.collection }}\`" >> $GITHUB_STEP_SUMMARY
+
+  contract-staging:
+    name: 'T2 Contract → Staging (Bruno)'
+    timeout-minutes: 5 # job ceiling; slowest observed run is far below it
+    needs: [contract-staging-sub]
+    runs-on: ubuntu-24.04
+    if: always() && needs.contract-staging-sub.result != 'skipped'
+    steps:
+      - name: Summarize T2 contract sub-gates
+        run: |
+          echo "## T2 Contract → Staging (Bruno)" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Sub-gates finished with result: \`${{ needs.contract-staging-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.contract-staging-sub.result }}" != "success" ]; then
+            echo "::error::One or more T2 contract sub-gates failed or were cancelled"
+            exit 1
+          fi
+
+  # ============================================================================
+  # T3 SMOKE — Playwright E2E smoke (post-deploy + nightly + dispatch). Runs after T2 is green.
   # ============================================================================
   smoke-staging-sub:
     name: 'T3 Smoke (${{ matrix.section }})'
+    timeout-minutes: 15 # job ceiling; slowest observed run is far below it
     # OSE-954: runs on ephemeral ubuntu-latest. This job only READS live staging
     # (Playwright smoke) — it does not deploy. Staging auth is header-based CF
     # Access service token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY, all
     # repo secrets) which is IP-independent, so an ephemeral runner authenticates
     # exactly as the box did — there is no source-IP allow-list to lose.
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      checks: write # dorny/test-reporter publishes the results as a check
     # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Bruno
     # contract (T2) is green. A red here SKIPS functional (T4). Depends on
     # contract-staging so the API contract is proven before the FE E2E layer.
@@ -1428,6 +1735,7 @@ jobs:
 
   smoke-staging:
     name: 'T3 E2E Smoke → Staging (Playwright)'
+    timeout-minutes: 5 # job ceiling; slowest observed run is far below it
     needs: [smoke-staging-sub]
     runs-on: ubuntu-24.04
     if: always() && needs.smoke-staging-sub.result != 'skipped'
@@ -1444,279 +1752,11 @@ jobs:
           fi
 
   # ============================================================================
-  # TIER 3: CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191)
+  # T4 FUNCTIONAL — Playwright API + UI (push to main, tag, or dispatch). Runs after T3 is green.
   # ============================================================================
-  contract-staging-sub:
-    name: 'T2 Contract (${{ matrix.section }})'
-    # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
-    # seed only; no deploy. Staging auth is the header-based CF Access service
-    # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
-    # CLOUDFLARE_API_TOKEN — all repo secrets, all IP-independent, so the
-    # ephemeral runner reaches staging exactly as the self-hosted box did.
-    runs-on: ubuntu-24.04
-    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Bruno API + Pages
-    # contract. Contract-first — nail the API contract, THEN perpetuate into the
-    # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
-    # so a broken API contract is fixed before any FE layer runs.
-    needs: [security, gate, gate-tests, deploy-staging]
-    if: |
-      always() &&
-      needs.security.result == 'success' &&
-      needs.gate.result == 'success' &&
-      needs.gate-tests.result == 'success' &&
-      (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - section: api
-            label: 'T2: Bruno API contract'
-            collection: bruno/ose-api
-            junit: bru-api-junit.xml
-          - section: pages
-            label: 'T2: Bruno Pages contract'
-            collection: bruno/ose-pages
-            junit: bru-pages-junit.xml
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          clean: true
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            workers/oursharedevents/package-lock.json
-
-      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
-        # Root-only job: nothing here imports @ocr/ui, so staging stays
-        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
-        # root npm ci tolerates a missing @ocr/flags (OSE-341).
-        continue-on-error: true
-        shell: bash
-        timeout-minutes: 3
-        env:
-          GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
-        run: bash scripts/ci-stage-ocr-workspace.sh
-
-      - name: Install dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
-
-      # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
-      # Delegates to the shared classifier so the in-CI probe and the scheduled
-      # canary (.github/workflows/cf-access-canary.yml) can never drift into two
-      # copies of the anti-drift tool. Here it runs WITHOUT --gate: the Bruno
-      # contract stays the source of truth per the tests-surface-truth doctrine, and this step
-      # only auto-classifies the next failure into the step summary.
-      - name: CF Access preflight probe
-        if: matrix.section == 'api'
-        id: preflight
-        shell: bash
-        env:
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          chmod +x scripts/ci/cf-access-probe.sh
-          scripts/ci/cf-access-probe.sh
-
-      # OSE-1419: migration 0086 removes 0013's test-event-001 from any database
-      # where nothing references it, so the event is no longer something a
-      # migration guarantees. The api, pages and sharedreport collections all target it.
-      # Seed it here on purpose. NOT continue-on-error: a missing event fails at
-      # this step, by name, not as a 404 in a later tier.
-      # Upsert keyed on the id: an existing row only gets data_class='synthetic';
-      # any other conflict (e.g. a slug clash) fails the step.
-      - name: 'Seed test-event-001 (OSE-1419 fixture)'
-        timeout-minutes: 2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/test-event-001.sql
-
-      # OSE-891: geo-tag test-event-001 so the OSE-INV5 covenant can seed
-      # genuinely-local sponsors. is_local is GEO-DERIVED server-side (sponsor
-      # h3_res7 == event h3_res7); the event fixture ships without coordinates,
-      # so without this its cell is NULL and every sponsor resolves non-local.
-      # A standalone fixture (not a migration) on purpose — see the file header
-      # (bruno/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
-      - name: Seed covenant event geo (OSE-891 fixture)
-        if: matrix.section == 'api'
-        id: seed-covenant-geo
-        continue-on-error: true
-        timeout-minutes: 2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/covenant-event-geo.sql
-
-      - name: Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)
-        if: matrix.section == 'api'
-        id: reset-covenant-sponsors
-        continue-on-error: true
-        timeout-minutes: 2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/covenant-sponsors-reset.sql
-
-      # CCR-PR567 Stage-2: seed the 4 canonical covenant sponsors ALREADY ACCEPTED
-      # (sponsor_accepted=1) so the covenant Bruno block is a pure ASSERT. Under ADR-019
-      # strict consent an organizer-created placement is PENDING until the sponsor
-      # accepts; the old API-seed-then-mint-then-respond flow could not run reliably on
-      # Bruno CLI (multi-request after-response scripts silently skipped), so consent is
-      # now established in the fixture. Runs AFTER the reset (which clears stale rows by
-      # name) so exactly these 4 exist at read time. Idempotent.
-      - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
-        if: matrix.section == 'api'
-        id: seed-covenant-sponsors
-        continue-on-error: true
-        timeout-minutes: 2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/covenant-sponsors-seed.sql
-
-      # OSE-1432: one fixed-id sponsor per case for the Bruno folder "14. Public
-      # Sponsor Card & Logo" (on show / no logo / dead logo host / pool / draft-only),
-      # on its own active-but-unlisted event so the covenant order on
-      # test-event-001 is untouched. Idempotent. NOT continue-on-error, like the
-      # OSE-1419 event seed: a missing fixture fails here by name, not as a 404 in
-      # the contract run.
-      - name: 'Seed public sponsor card fixtures (OSE-1432)'
-        if: matrix.section == 'api'
-        timeout-minutes: 2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/sponsor-public-card-seed.sql
-
-      # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
-      # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
-      # from the collection root, so each step sets working-directory. Secrets are
-      # still injected via --env-var (same keys as the Postman env), never inlined.
-      #
-      # `bru run` writes --reporter-junit to $GITHUB_WORKSPACE/.test-results and
-      # EXITS 2 if that directory does not exist — even when every assertion passes
-      # (OSE-1191: masked the green result until created). Make the dir first.
-      - name: Prepare contract report dir
-        run: mkdir -p "$GITHUB_WORKSPACE/.test-results"
-
-      - name: Bruno contract section
-        working-directory: ${{ matrix.collection }}
-        env:
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-          # CF Access service token — required for section 11 (Sponsor Covenant)
-          # which seeds + cleans up admin sponsors. The seed/cleanup POSTs hit
-          # /api/v2/admin/* which CF Access shadows at the edge with a 302/HTML
-          # redirect before the request reaches the worker. Forwarding the
-          # service token bypasses CF Access at the edge while preserving the
-          # worker-side Bearer auth check. Without these secrets the covenant
-          # test fails loudly (not silently) — see section 11 seed tests.
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          npx bru run . -r --env ose-staging \
-            --env-var "adminKey=$ADMIN_KEY" \
-            --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
-            --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
-            --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
-            --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
-        timeout-minutes: 5
-
-      # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
-      # upload a report that recorded one. Upload runs only if this passes.
-      - name: Scan artifacts for credentials
-        id: artifact-scan
-        if: always()
-        env:
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: bash scripts/ci/scan-artifacts-for-secrets.sh .test-results/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        if: always() && steps.artifact-scan.outcome == 'success'
-        with:
-          name: contract-staging-${{ matrix.section }}-${{ github.run_number }}
-          path: .test-results/
-          retention-days: 14
-          # .test-results/ is a dot-dir: upload-artifact skips hidden files by
-          # default, which silently dropped every JUnit/JSON result uploaded here.
-          include-hidden-files: true
-
-      # Surface per-assertion Bruno results as a GitHub Check (visible in the
-      # PR/Checks tab), so a contract failure shows the failing request + message
-      # by name instead of being buried in the CLI log.
-      - name: Report results (Bruno contract)
-        if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
-        uses: dorny/test-reporter@v3
-        continue-on-error: true
-        with:
-          name: '${{ matrix.label }} Results (Bruno)'
-          path: '.test-results/bru-*-junit.xml'
-          reporter: java-junit
-          fail-on-error: false
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "## ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
-          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Collection:** \`${{ matrix.collection }}\`" >> $GITHUB_STEP_SUMMARY
-
-  contract-staging:
-    name: 'T2 Contract → Staging (Bruno)'
-    needs: [contract-staging-sub]
-    runs-on: ubuntu-24.04
-    if: always() && needs.contract-staging-sub.result != 'skipped'
-    steps:
-      - name: Summarize T2 contract sub-gates
-        run: |
-          echo "## T2 Contract → Staging (Bruno)" >> $GITHUB_STEP_SUMMARY
-          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Sub-gates finished with result: \`${{ needs.contract-staging-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.contract-staging-sub.result }}" != "success" ]; then
-            echo "::error::One or more T2 contract sub-gates failed or were cancelled"
-            exit 1
-          fi
-
-  # ============================================================================
-  # TIER 4: FUNCTIONAL — Playwright API + UI (push to main, tag, or dispatch)
-  # ============================================================================
-  functional-staging:
-    name: 'T4 Functional → Staging'
+  functional-staging-sub:
+    name: 'T4 Functional (${{ matrix.label }})'
+    timeout-minutes: 30 # job ceiling; slowest observed run is far below it
     # OSE-954: GitHub-hosted. Staging auth is a HEADER-based CF Access service token
     # (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY, repo secrets) = IP-independent
     # (proven by the T2/T3 slice), so ephemeral runners reach staging unchanged. The
@@ -1733,6 +1773,23 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true') ||
         (needs.deploy-staging.result == 'success' && needs.smoke-staging.result == 'success')
       )
+    # OSE-1171/1186: T4 is split into three child legs that run in PARALLEL. Each leg
+    # owns the staging fixtures it seeds, and no two legs read or write the same
+    # event: platform = SMOKE_EVENT_SPONSORED + test-event-001 sponsors; forms =
+    # test-event-001 registrations + evt_forms_phase1/2 (FORMS_DB); surfaces = the
+    # evt_smoke_* events, evt_smoke_tiers, the Eagles Hall poster and launch-story
+    # events. If a new spec reads data another leg writes, put it in that leg.
+    # The required check `T4 Functional → Staging` is the aggregator below.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - section: platform
+            label: 'platform: invariants + journeys'
+          - section: forms
+            label: 'forms: register, check-in, survey, email'
+          - section: surfaces
+            label: 'surfaces: UI, attendee arc, SharedReport, launch story, poster'
     permissions:
       contents: read
       checks: write
@@ -1813,14 +1870,20 @@ jobs:
       # Upsert keyed on the id: an existing row only gets data_class='synthetic';
       # any other conflict (e.g. a slug clash) fails the step.
       - name: 'Seed test-event-001 for T4 (OSE-1419 fixture)'
+        if: matrix.section == 'platform' || matrix.section == 'forms'
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/test-event-001.sql
+          # Two legs (platform, forms) run this upsert at once; one bounded retry covers a transient D1 error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../tests/ui/smoke/fixtures/test-event-001.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
 
       # OSE-616 (QR Path rung 5): scan the Eagles Hall test poster on staging and
       # confirm the scan lands at the poster's res9 node / res7 corridor. The
@@ -1829,6 +1892,7 @@ jobs:
       # (workers/oursharedevents/tests/scan-to-export-trace.spec.ts).
       # NOT continue-on-error: a scan that does not land is a real failure.
       - name: 'Seed Eagles Hall trace poster (OSE-616 fixture)'
+        if: matrix.section == 'surfaces'
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1839,6 +1903,7 @@ jobs:
             --file ../../tests/ui/smoke/fixtures/trace-eagles-poster.sql
 
       - name: 'Trace one scan on staging (OSE-616)'
+        if: matrix.section == 'surfaces'
         timeout-minutes: 4
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1853,16 +1918,21 @@ jobs:
         run: bash scripts/ci/trace-scan-staging.sh
 
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)
+        if: matrix.section == 'platform'
         id: reset-journey-sponsors
-        continue-on-error: true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/covenant-sponsors-reset.sql
+          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
+          for attempt in 1 2; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --file ../../bruno/fixtures/covenant-sponsors-reset.sql && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::fixture step failed once; retrying"; sleep 5
+          done
 
       # OSE-551: durable "a real sponsor exists here" fixture. Gives the write-path
       # invariants (anonymous-id + ncr-accumulation impression/click) a real,
@@ -1871,6 +1941,7 @@ jobs:
       # must surface loudly (the specs also fail — not skip — when SMOKE_EVENT_SPONSORED
       # is set but exposes no sponsor, so green != true holds end-to-end).
       - name: Seed sponsored-event fixture (OSE-551)
+        if: matrix.section == 'platform'
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1886,6 +1957,7 @@ jobs:
       # the edge cache together. No spec depends on it yet, so a failed seed does
       # not hide a red test; it is still not continue-on-error, so it is seen.
       - name: Seed sponsor logo check fixture (OSE-1436)
+        if: matrix.section == 'surfaces'
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1901,6 +1973,7 @@ jobs:
       # Does NOT touch test-event-001 or any real event. A failed seed must
       # surface (specs would 403 and, once blocking, fail — green != true holds).
       - name: Seed forms Phase-2 fixture (OSE-1004)
+        if: matrix.section == 'forms'
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1916,6 +1989,7 @@ jobs:
             --file ../../tests/ui/smoke/fixtures/forms-phase2-flags.sql
 
       - name: 'T4a: Architecture Invariants'
+        if: matrix.section == 'platform'
         id: arch-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -1936,6 +2010,7 @@ jobs:
         timeout-minutes: 3
 
       - name: 'T4b: Core Journeys'
+        if: matrix.section == 'platform'
         id: journey-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -1943,6 +2018,11 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # OSE-1197: prefer the dedicated sponsored event when it is publicly listed.
+          # Today it is NOT listed (its seeded window has passed; checked 2026-10-04), so the
+          # journey falls back to the first listed event, test-event-001. No forms-leg spec
+          # reads sponsors, so that fallback does not cross legs; keep it that way.
+          SMOKE_EVENT_SPONSORED: evt_smoke_sponsored
           # OSE-834 ARM: an unmet precondition (no admin key, a CF Access edge block)
           # is a FAILURE here, not a green skip — "a tier that cannot fail is not a
           # tier." The skipped-ratio ceiling (repo var T4_MAX_SKIP_RATIO, unset = no
@@ -1969,6 +2049,7 @@ jobs:
       # them matches that filter, so they ran 0 tests in T4c (OSE-1507).
       # T4c-phase2 below is their home.
       - name: 'T4c: Form E2E — register/checkin + validation (blocking)'
+        if: matrix.section == 'forms'
         id: form-e2e-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -1995,6 +2076,7 @@ jobs:
       # OSE-1007. PHASE1_EVENT_ID (tier-1) still asserts PHASE_REQUIRED here, so the
       # legal-clearance gate is exercised, not bypassed.
       - name: 'T4c-phase2: Survey/Email E2E — synthetic Phase-2 fixture (blocking — OSE-1004/1169)'
+        if: matrix.section == 'forms'
         id: form-e2e-phase2
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -2018,6 +2100,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Seed smoke fixtures
+        if: matrix.section == 'surfaces'
         id: seed-fixtures
         # OSE-834 ARM: continue-on-error removed — a failed seed now reds the tier
         # instead of letting downstream skip green on absent fixtures. Requires the
@@ -2040,6 +2123,7 @@ jobs:
             --file ../../tests/ui/smoke/fixtures/forms-smoke.sql
 
       - name: 'T4d: UI Smoke — Tier-1 page smoke'
+        if: matrix.section == 'surfaces'
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -2081,6 +2165,7 @@ jobs:
       # Tests skip cleanly if fixtures are absent — continue-on-error protects CI
       # when staging has not been manually seeded for the run.
       - name: 'T4e: Attendee Arc Journey'
+        if: matrix.section == 'surfaces'
         id: attendee-arc-tests
         # continue-on-error REMOVED (OSE-852 / MINE-0). This step was insulated from
         # going red three separate ways: its positional path lay outside the config's
@@ -2113,6 +2198,7 @@ jobs:
       # the whole gate — the OSE-349 token-shadow family). The mint step exports the
       # four tokens + the local sponsor id via $GITHUB_ENV for the gate step below.
       - name: 'T4f-mint: SharedReport run-time tokens'
+        if: matrix.section == 'surfaces'
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
@@ -2127,6 +2213,7 @@ jobs:
         timeout-minutes: 2
 
       - name: 'T4f: SharedReport Depth Gate'
+        if: matrix.section == 'surfaces'
         id: sharedreport-depth-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -2141,6 +2228,7 @@ jobs:
         timeout-minutes: 5
 
       - name: 'T4g: Launch Story Smoke'
+        if: matrix.section == 'surfaces'
         id: launch-story-smoke
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -2163,6 +2251,7 @@ jobs:
       # newly-wired gate does not also inherit any unaudited failure from the
       # file's OTHER (pre-existing, unrelated) describes.
       - name: 'T4h: Poster Print Layout'
+        if: matrix.section == 'surfaces'
         id: poster-print-layout
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -2193,7 +2282,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always() && steps.artifact-scan.outcome == 'success'
         with:
-          name: functional-staging-${{ github.run_number }}
+          name: functional-staging-${{ matrix.section }}-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             playwright-report-e2e-smoke/
@@ -2210,7 +2299,7 @@ jobs:
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: 'Functional Results'
+          name: 'Functional Results (${{ matrix.label }})'
           path: '.test-results/*-junit.xml'
           reporter: jest-junit
           fail-on-error: false
@@ -2218,7 +2307,8 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## T4 Functional Results" >> $GITHUB_STEP_SUMMARY
+          echo "## T4 Functional — ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
+          echo "Steps that belong to another leg show as skipped here." >> $GITHUB_STEP_SUMMARY
           echo "| Step | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| T4a Architecture Invariants | \`${{ steps.arch-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -2231,22 +2321,16 @@ jobs:
           echo "| T4g Launch Story Smoke | \`${{ steps.launch-story-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
-      # ── OSE-1171: split the T4 umbrella into per-gate NAMED CHECKS ───────────────
-      # This job stays ONE job (one setup, serialized D1 seeds — no new shared-staging
-      # contention, the constraint that rules out a matrix/per-gate-job split until the
-      # ephemeral-per-PR env lands, OSE-1186). It publishes a check-run per sub-gate so
-      # a red names ITS OWN gate instead of the opaque "T4 Functional → Staging" umbrella
-      # — the exact log-dive that OSE-1170's #450 forced three times.
+      # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
+      # Each leg publishes a check-run for the gates IT ran, so a red names its own
+      # gate instead of the opaque aggregator (the log-dive OSE-1170's #450 forced
+      # three times). Pass/fail semantics are unchanged: the blocking gates above
+      # still fail the leg directly (T4a/T4b stay fail-fast; T4e keeps its OSE-852
+      # no-continue-on-error invariant). A gate that did not run because an earlier
+      # blocking gate halted its leg posts `neutral`, never a false green. A leg
+      # posts nothing for another leg's gates. Mirrors security-human-gate.yml.
       #
-      # PURELY ADDITIVE: pass/fail semantics are unchanged. The blocking gates above
-      # still fail the job directly (fail-fast preserved, T4e's no-continue-on-error
-      # invariant from OSE-852 untouched); this step only SURFACES which gate. A gate
-      # that did not run because an earlier blocking gate halted the job posts as
-      # `neutral` — an honest "did not run", never a false green. Mirrors the gh-api
-      # check-run pattern in security-human-gate.yml.
-      #
-      # `if: always()` is load-bearing: without it, a halted job would skip this step
-      # and publish nothing — the failing gate would never name itself.
+      # `if: always()` is load-bearing: without it a halted leg would publish nothing.
       - name: 'Post T4 named checks'
         if: always()
         env:
@@ -2266,16 +2350,23 @@ jobs:
               -f "output[title]=$name" -f "output[summary]=T4 sub-gate — ${summary}." \
               >/dev/null && echo "posted: ${name} -> ${conclusion}"
           }
-          post "T4a: Architecture Invariants"                     "${{ steps.arch-tests.outcome }}"
-          post "T4b: Core Journeys"                               "${{ steps.journey-tests.outcome }}"
-          post "T4c: Form E2E (register/checkin + validation)"    "${{ steps.form-e2e-tests.outcome }}"
-          post "T4c-phase2: Survey/Email E2E (synthetic Phase-2)" "${{ steps.form-e2e-phase2.outcome }}"
-          post "T4d: UI Smoke (Tier-1)"                           "${{ steps.ui-tests.outcome }}"
-          post "T4e: Attendee Arc Journey"                        "${{ steps.attendee-arc-tests.outcome }}"
-          post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
-          post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
-          post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
-
+          case "${{ matrix.section }}" in
+            platform)
+              post "T4a: Architecture Invariants"                     "${{ steps.arch-tests.outcome }}"
+              post "T4b: Core Journeys"                               "${{ steps.journey-tests.outcome }}"
+              ;;
+            forms)
+              post "T4c: Form E2E (register/checkin + validation)"    "${{ steps.form-e2e-tests.outcome }}"
+              post "T4c-phase2: Survey/Email E2E (synthetic Phase-2)" "${{ steps.form-e2e-phase2.outcome }}"
+              ;;
+            surfaces)
+              post "T4d: UI Smoke (Tier-1)"                           "${{ steps.ui-tests.outcome }}"
+              post "T4e: Attendee Arc Journey"                        "${{ steps.attendee-arc-tests.outcome }}"
+              post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
+              post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
+              post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
+              ;;
+          esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
       # the untrusted T4 execution (OSE-1056/1057). This is the migration-correct home
       # for the check the retired self-hosted `security-post` job used to attempt:
@@ -2292,11 +2383,30 @@ jobs:
         shell: bash
         run: bash scripts/check-post-execution-integrity.sh
 
+  functional-staging:
+    name: 'T4 Functional → Staging'
+    timeout-minutes: 5 # job ceiling; the legs carry the real work
+    needs: [functional-staging-sub]
+    runs-on: ubuntu-24.04
+    if: always() && needs.functional-staging-sub.result != 'skipped'
+    steps:
+      - name: Summarize T4 functional legs
+        run: |
+          echo "## T4 Functional → Staging" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 3 of the fail-fast chain — runs only after T3 smoke is green. Three parallel legs (platform, forms, surfaces); each names its own gates as check-runs." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Legs finished with result: \`${{ needs.functional-staging-sub.result }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.functional-staging-sub.result }}" != "success" ]; then
+            echo "::error::One or more T4 functional legs failed or were cancelled"
+            exit 1
+          fi
+
   # ============================================================================
-  # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
+  # T1 DEPLOY → Production (tag vX.Y.Z only)
   # ============================================================================
   deploy-production:
     name: 'T1 Deploy → Production'
+    timeout-minutes: 20 # job ceiling; slowest observed run is far below it
     # OSE-1257: production applies the hosted staging deploy pattern. The
     # Cloudflare API token is IP-independent, so production can run on the same
     # fresh ubuntu-latest shape as deploy-staging without relying on a carried
@@ -2499,7 +2609,7 @@ jobs:
         run: node scripts/assert-access-routing.mjs
 
   # ============================================================================
-  # TIER 2P: SMOKE → Production (tag only)
+  # T2 SMOKE → Production (tag only)
   #
   # OSE-1257: mirrors the staging smoke shape on its own fresh GitHub-hosted
   # workspace. Install dependencies explicitly; no state is carried over from
@@ -2507,6 +2617,7 @@ jobs:
   # ============================================================================
   smoke-production:
     name: 'T2 Smoke → Production'
+    timeout-minutes: 15 # job ceiling; slowest observed run is far below it
     runs-on: ubuntu-24.04
     needs: [security, gate, gate-tests, deploy-production]
     steps:
@@ -2620,6 +2731,7 @@ jobs:
   # ============================================================================
   gate-execution-reconciler:
     name: 'Gate-execution reconciler'
+    timeout-minutes: 10 # job ceiling; slowest observed run is far below it
     # OSE-1255 (Detect model): assert every gate EXPECTED for THIS trigger actually
     # executed (from needs.*.result). The arm (OSE-834) stops a gate lying when it
     # runs; this stops a gate silently NOT running — a tier skipped/absent for no
@@ -2682,6 +2794,7 @@ jobs:
 
   summary:
     name: 'Pipeline Summary'
+    timeout-minutes: 10 # job ceiling; slowest observed run is far below it
     runs-on: ubuntu-24.04
     needs:
       [
