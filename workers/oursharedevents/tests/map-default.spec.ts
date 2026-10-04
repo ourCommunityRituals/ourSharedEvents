@@ -379,7 +379,6 @@ describe('a sponsor asking never changes the map; the organizer approving does',
   async function seedRequestable(opts: { marker: boolean; published: number }) {
     const eventId = uid('req-ev');
     const sponsorId = uid('req-sp');
-    const placementId = uid('req-spl');
     const settings = opts.marker ? '{"mapDefault":true}' : '{}';
     const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
     await E.DB.batch([
