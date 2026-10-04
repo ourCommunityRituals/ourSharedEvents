@@ -29,7 +29,7 @@
  */
 
 const { existsSync, readFileSync, readdirSync } = require('fs');
-const { join, dirname, relative } = require('path');
+const { join, dirname } = require('path');
 const semver = require('semver');
 const yaml = require('js-yaml');
 const { execFileSync } = require('child_process');
