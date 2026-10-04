@@ -404,6 +404,16 @@ const FORM_JS_SPONSOR = `
         }).join('');
         strip.innerHTML = '<span class="strip-label">Supported by</span>' + items;
         strip.classList.add('has-sponsors');
+        // OSE-1566: the strip owns its fallback. It does not lean on the capture
+        // listener in the form script (a different script block), and it also
+        // covers an image that already failed before any listener could see it.
+        // Fixed same-origin default; never read back from the DOM.
+        var dflt = '/sponsor-default-logo.svg';
+        Array.prototype.forEach.call(strip.querySelectorAll('img[data-default-src]'), function(im) {
+          var swap = function() { if (im.getAttribute('src') !== dflt) im.setAttribute('src', dflt); };
+          im.addEventListener('error', swap);
+          if (im.complete && im.naturalWidth === 0) swap();
+        });
       })
       .catch(function() { /* silently no-op — sponsor strip is non-critical */ });
   })(EVENT_ID_PLACEHOLDER);

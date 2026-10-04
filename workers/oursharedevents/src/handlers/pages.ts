@@ -1351,7 +1351,7 @@ export function renderPostEventHtml(
         <ul class="ose-suggestion-list">${suggestionItems}</ul>`
     : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
         <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/public">See what's coming up</a>`;
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">See what's coming up</a>`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}" data-surface="ose-public">

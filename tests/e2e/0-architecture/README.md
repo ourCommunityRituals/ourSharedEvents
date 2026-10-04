@@ -20,8 +20,11 @@ not WHAT they are.
 The 0-architecture suite is the runtime mirror of the brain canonical at
 `OCR-docs/ocr-docs-brain/architectural-invariants.yaml`. Each row below is one
 brain-listed invariant whose enforcement mechanism has shipped + has a
-dedicated test file here. Brain invariants whose mechanisms are still
-unshipped (currently 6, 7, 9) do not yet have a row.
+dedicated test file here. This table is narrative and is not exhaustive; the
+authoritative, complete list is the **Gate index (generated)** at the bottom of
+this file, derived from the brain YAML and this directory by
+`scripts/check-invariant-registry.py` (OSE-1604). A brain invariant's current
+status is the YAML's `status:` field, not anything written here.
 
 | #   | Invariant                            | Test File                                       | Kind       | Enforces                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --- | ------------------------------------ | ----------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -174,3 +177,47 @@ and is wired — and let the mechanism do the scanning.
    exceptions exist — dynamically-built `WHERE` clauses, correlated sub-selects,
    cross-brand OER emission. A gate that cannot express them gets deleted
    instead of fixed.
+
+## Gate index (generated)
+
+<!-- prettier-ignore-start -->
+<!-- BEGIN GENERATED: gate-index (scripts/check-invariant-registry.py --write) -->
+
+| Gate spec | Brain invariant that names it |
+| --------- | ----------------------------- |
+| `aggregate-only.invariant.spec.ts` | #7 aggregate_only_reporting |
+| `anonymous-id.invariant.spec.ts` | #1 anonymous_id |
+| `api-response-schema.invariant.spec.ts` | #16 api_response_schema_stability |
+| `ci-approval-gate-safety.invariant.spec.ts` | #28 ci_approval_gate_secret_surface |
+| `cors-allowlist.invariant.spec.ts` | #15 cors_allowlist_immutability |
+| `cost-metric-never-who.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `csp-connect-src.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `deprecation-lock.invariant.spec.ts` | #10 deprecation_lock |
+| `edge-token-verification.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `geo-resolution.invariant.spec.ts` | #2 hyperlocal_geo_resolution |
+| `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `log-redaction.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `migration-monotonicity.invariant.spec.ts` | #19 migration_monotonicity |
+| `monetization-inert.invariant.spec.ts` | #6 inert_monetization_hooks |
+| `ncr-accumulation.invariant.spec.ts` | #4 ncr_data_accumulation |
+| `ncr-accumulation.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `oer-emission-boundary.invariant.spec.ts` | #17 oer_emission_boundary |
+| `pii-retention.invariant.spec.ts` | #8 bounded_pii_retention |
+| `qr-decode-matrix.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `rendered-surface-lexicon.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `runtime-llm-free.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `scan-path-split.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `shared-report-schema.invariant.spec.ts` | #21 shared_report_schema_stability |
+| `slug-permanence.invariant.spec.ts` | #18 slug_permanence |
+| `sponsor-identity-split.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `sponsor-share-covenant.invariant.spec.ts` | #25 sponsor_share_covenant |
+| `sponsor-signal-never-who.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `tenant-isolation.invariant.spec.ts` | #9 tenant_isolation |
+| `tier-equity.invariant.spec.ts` | #5 tier_equity |
+| `uec-codes.invariant.spec.ts` | #3 uec_encoding |
+| `uec-poster-color.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `worker-claude-md.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `workflow-injection.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+
+<!-- END GENERATED: gate-index -->
+<!-- prettier-ignore-end -->
