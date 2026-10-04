@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:383':
+  'handlers/events.ts:394':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -116,7 +116,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
     'one-line event-settings import lands above it; 371→373 by the publish grace ' +
     'window, whose publish-grace import and EventsEnv field land above it; ' +
-    '373→383 by OSE-1560, whose map-default / event-settings imports land above it. Scope ' +
+    '373→383 by OSE-1560, whose map-default / event-settings imports land above it, ' +
+    'then →394 by OSE-1522, whose sponsor-titles import and the `sponsor_titles` block in the ' +
+    'public list handler land above it. Scope ' +
     'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':

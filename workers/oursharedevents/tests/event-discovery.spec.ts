@@ -146,7 +146,7 @@ describe('GET /events carries the bar server-side', () => {
     const html = await res.text();
     expect(html).toMatch(/disc-when-weekend"[^>]*aria-current="true"/);
     expect(html).toContain('value="trivia"');
-    expect(html).toContain('href="/events?when=today&amp;q=trivia"');
+    expect(html).toContain('href="/events?when=week&amp;q=trivia"');
   });
   test('hostile q never lands unescaped', async () => {
     const res = await SELF.fetch('https://t.test/events?q=%3Cscript%3Ealert(1)%3C/script%3E');

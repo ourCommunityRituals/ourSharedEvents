@@ -54,12 +54,7 @@
         padding: 2rem 2.5rem;
         border: 1px solid;
       }
-      .event-card .label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 0.5rem;
-      }
+      .event-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
       .event-card h2 {
         font-size: clamp(1.5rem, 4vw, 2.5rem);
         font-weight: 800;
@@ -90,18 +85,10 @@
         justify-content: space-between;
         align-items: center;
       }
-      .next-card .name {
-        font-weight: 600;
-        font-size: 1rem;
-      }
-      .next-card .date {
-        font-size: 0.85rem;
-      }
-      .empty {
-        text-align: center;
-        padding: 4rem;
-        font-size: 1.1rem;
-      }
+      .next-card .name { font-weight: 600; font-size: 1rem; }
+      .next-card .date { font-size: 0.85rem; }
+      .sponsor-line { margin-top: 0.25rem; font-size: 1rem; color: var(--text-muted); }
+      .empty { text-align: center; padding: 4rem; font-size: 1.1rem; }
       .display-consent {
         margin: 0;
         padding: 0.75rem 2rem;
@@ -490,7 +477,7 @@
       // the sponsors pane, filled by loadDisplaySponsors (logo rules live there).
       // board.config: the last display-config body, board.configEtag its ETag.
       // board.sponsorsFor: the event whose sponsors are on screen (loadDisplaySponsors).
-      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, stopSideRail: null, sideRailVisibility: null };
+      var board = { items: null, sponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null };
       // A league link's QR is a PNG data URI from our own endpoint; anything
       // else is not put in an <img src>.
       function isQrDataUri(v) {
@@ -548,6 +535,18 @@
         // The saved TV config applies only to the event it was loaded for; while
         // the featured event's own config is on its way, the defaults are shown.
         const cfg = board.config && board.configFor === featured.id ? board.config : null;
+        // OSE-1522: the consented sponsor by an event title, as on every other
+        // surface. The list says which sponsor each listed event has (one rule,
+        // one source: GET /api/v2/events sponsor_titles); an event fetched by id
+        // is not in that list, so the featured one falls back to the sponsors
+        // its own bundle loaded. Escaped as text; no sponsor, no line.
+        const sponsorLine = (id, testid) => {
+          let t = board.sponsorTitles && board.sponsorTitles[id];
+          if (!t && id === featured.id && board.listedIds.indexOf(id) === -1 && board.sponsorsFor === id && board.sponsors.length) {
+            t = board.sponsors.map(s => s.title).join(', ');
+          }
+          return t ? '<div class="sponsor-line" data-testid="' + testid + '">Supported by ' + esc(t) + '</div>' : '';
+        };
         const paneHtml = {};
         paneHtml.event = '<section data-pane="event" data-testid="display-pane-event" aria-label="Featured event" hidden>' +
           '<div class="event-card" data-testid="display-featured-card">' +
@@ -556,11 +555,12 @@
           '<div class="meta" data-testid="display-featured-meta">' +
           (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
           (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
-          '</div></div></section>';
+          '</div>' + sponsorLine(featured.id, 'display-featured-sponsor') + '</div></section>';
         if (rest.length) {
           paneHtml.upcoming = '<section data-pane="upcoming" data-testid="display-pane-upcoming" aria-label="Also coming up" hidden>' +
             '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
-            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
+            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
+              sponsorLine(e.id, 'display-upcoming-sponsor') + '</div>' +
               '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
             '</div></section>';
         }
@@ -658,6 +658,8 @@
             return;
           }
           board.items = items;
+          board.sponsorTitles = data && data.sponsor_titles && typeof data.sponsor_titles === 'object' ? data.sponsor_titles : {};
+          board.listedIds = (data.items || []).map(e => e.id);
           renderBoard();
           loadDisplayConfig();
           loadDisplaySponsors();

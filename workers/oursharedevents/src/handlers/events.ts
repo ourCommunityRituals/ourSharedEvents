@@ -36,6 +36,7 @@ import {
   withMapDefaultMarker,
 } from '../lib/event-settings';
 import { toPublicEvent } from '../lib/public-event-projection.js';
+import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
@@ -144,8 +145,18 @@ export async function handleListEvents(
     const items = result.data.map((e: unknown) =>
       toPublicEvent(enrichWithPhase(e as Record<string, unknown>))
     );
+    // OSE-1522: the consented sponsor's title per listed event, for surfaces
+    // that show many titles at once (the TV's "also coming up"). A sibling of
+    // `items`, not a field on them, so the public event projection (the
+    // allowlist, snapshot v1.3.0) is untouched. Same on-show rule as the cards
+    // (lib/sponsor-titles); fails to empty.
+    const listed = new Set(items.map((i) => String((i as { id?: unknown }).id ?? '')));
+    const sponsor_titles: Record<string, string> = {};
+    for (const [eventId, title] of await fetchSponsorTitles(env.DB, brand)) {
+      if (listed.has(eventId)) sponsor_titles[eventId] = title;
+    }
     return Response.json(
-      { ok: true, status: 200, items },
+      { ok: true, status: 200, items, sponsor_titles },
       {
         headers: {
           ...corsHeaders(request),

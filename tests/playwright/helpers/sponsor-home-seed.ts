@@ -21,6 +21,8 @@ export interface SeededSponsorHome {
   sponsorId: string;
   sponsorName: string;
   placementId: string;
+  /** When the event joins the public list (publish grace window); null = already listed. */
+  listedFrom: string | null;
   /** Absolute URL as minted (origin of the request). */
   url: string;
   /** The `t` value alone. */
@@ -134,6 +136,7 @@ export async function seedSponsorHome(
     sponsorId: sp.id,
     sponsorName,
     placementId: sp.placement_id,
+    listedFrom: ev.listedFrom,
     url: link.url,
     token,
   };

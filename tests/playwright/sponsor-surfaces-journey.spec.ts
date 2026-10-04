@@ -15,7 +15,11 @@
  * own event and sponsor, so it does not depend on any other spec's rows.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { seedSponsorHome, type SeededSponsorHome } from './helpers/sponsor-home-seed';
+import {
+  seedSponsorHome,
+  waitUntilListed,
+  type SeededSponsorHome,
+} from './helpers/sponsor-home-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const PHONE = { width: 375, height: 812 };
@@ -84,6 +88,40 @@ const surfaces: Record<string, (page: Page) => Promise<boolean>> = {
       .filter({ hasText: seeded.sponsorName })
       .isVisible();
   },
+  // OSE-1522: the title shows on the list surfaces too, so the sponsor does.
+  // The event must be on the list for these (publish grace window, waited out
+  // once in beforeAll).
+  'events list card': async (page) => {
+    await page.setViewportSize(PHONE);
+    await page.goto('/events');
+    const card = page.locator(
+      `[data-testid="public-event-card"][data-event-id="${seeded.eventId}"]`
+    );
+    await expect(card.getByTestId('public-event-name')).toContainText(seeded.eventTitle);
+    return card
+      .getByTestId('public-event-sponsor')
+      .filter({ hasText: seeded.sponsorName })
+      .isVisible();
+  },
+  'landing card': async (page) => {
+    await page.setViewportSize(PHONE);
+    await page.goto('/');
+    const card = page.locator(`[data-testid="area-card"][data-event-id="${seeded.eventId}"]`);
+    await expect(card.getByTestId('area-card-name')).toContainText(seeded.eventTitle);
+    return card
+      .getByTestId('public-event-sponsor')
+      .filter({ hasText: seeded.sponsorName })
+      .isVisible();
+  },
+  'TV featured event': async (page) => {
+    await page.setViewportSize(TV);
+    await page.goto(`/display?event=${encodeURIComponent(seeded.eventId)}`);
+    await expect(page.getByTestId('display-featured-title')).toHaveText(seeded.eventTitle);
+    return page
+      .getByTestId('display-featured-sponsor')
+      .filter({ hasText: seeded.sponsorName })
+      .isVisible();
+  },
 };
 
 async function expectEverySurface(page: Page, shown: boolean, when: string): Promise<void> {
@@ -100,6 +138,10 @@ test.beforeAll(async ({ request }) => {
     'Needs OSE_ADMIN_BEARER (set by playwright.mobile.config.ts for the local worker).'
   );
   seeded = await seedSponsorHome(request, ADMIN_BEARER, 'Surfaces');
+  // The list surfaces show the event only once the publish grace window is over
+  // (a minute on the local worker).
+  test.setTimeout(120_000);
+  await waitUntilListed(seeded.listedFrom);
 });
 
 test('placed but not answered: the sponsor is on no surface', async ({ page }) => {
@@ -109,6 +151,55 @@ test('placed but not answered: the sponsor is on no surface', async ({ page }) =
 test('Accept: the sponsor is on the event page, form page, poster and TV', async ({ page }) => {
   await answer(page, 'accept');
   await expectEverySurface(page, true, 'after Accept');
+});
+
+// OSE-1520: one card on /events and the landing. At phone width the button
+// drops under the text and the title keeps the card, instead of being squeezed
+// to a sliver beside the button (137px on staging).
+for (const [name, path, cardTestId] of [
+  ['events list', '/events', 'public-event-card'],
+  ['landing', '/', 'area-card'],
+] as const) {
+  test(`${name}: at 375px the button stacks under the text and the title keeps the card`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(PHONE);
+    await page.goto(path);
+    const card = page.locator(`[data-testid="${cardTestId}"][data-event-id="${seeded.eventId}"]`);
+    await expect(card).toBeVisible();
+    const box = (await card.boundingBox())!;
+    const info = (await card.getByTestId('public-event-info').boundingBox())!;
+    const cta = (await card.getByTestId('public-event-cta').boundingBox())!;
+    expect(cta.y, 'the button starts below the text').toBeGreaterThanOrEqual(
+      info.y + info.height - 1
+    );
+    expect(info.width / box.width, 'the title has most of the card').toBeGreaterThan(0.8);
+    expect(cta.height, 'the button is a 44px target').toBeGreaterThanOrEqual(44);
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(scrollWidth, 'no sideways scroll').toBeLessThanOrEqual(clientWidth + 1);
+  });
+}
+
+test('events list and landing offer the same date, place and Register on the same card', async ({
+  page,
+}) => {
+  const facts: string[][] = [];
+  for (const [path, cardTestId] of [
+    ['/events', 'public-event-card'],
+    ['/', 'area-card'],
+  ] as const) {
+    await page.goto(path);
+    const card = page.locator(`[data-testid="${cardTestId}"][data-event-id="${seeded.eventId}"]`);
+    await expect(card.getByTestId('public-event-cta')).toHaveText('Register');
+    facts.push([
+      (await card.getByTestId('public-event-date').innerText()).trim(),
+      (await card.getByTestId('public-event-venue').innerText()).trim(),
+    ]);
+  }
+  expect(facts[1], 'the landing card says what /events says').toEqual(facts[0]);
 });
 
 test('on the event page the sponsor sits below the title and above the content, and the poster names it', async ({
