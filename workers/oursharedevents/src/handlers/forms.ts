@@ -47,6 +47,7 @@ import {
   type FormType,
 } from '../lib/form-validation';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
+import { parsePagingParams, encodeRegistrationsCursor } from '../lib/registrations-paging';
 
 export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -561,29 +562,44 @@ export async function handleAdminRegistrations(
   env: FormsEnv,
   eventId: string
 ): Promise<Response> {
+  const paging = parsePagingParams(new URL(request.url));
+  if (!paging.ok) return errorResponse(paging.code, paging.message, 400, request);
   try {
-    const result = await env.FORMS_DB.prepare(
-      'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC'
+    // OSE-1442: one bounded page (newest first, (created_at, id) keyset), not
+    // every row of the event. One extra row tells us whether a next page exists.
+    const after = paging.after;
+    // Fixed fragments only; every value reaches SQL through .bind().
+    const pageQuery =
+      'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ?' +
+      (after ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : '') +
+      ' ORDER BY created_at DESC, id DESC LIMIT ?';
+    const result = await env.FORMS_DB.prepare(pageQuery)
+      .bind(...(after ? [eventId, after.c, after.c, after.i] : [eventId]), paging.limit + 1)
+      .all();
+    const totalRow = await env.FORMS_DB.prepare(
+      'SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ?'
     )
       .bind(eventId)
-      .all();
+      .first<{ cnt: number }>();
+    const total = totalRow?.cnt ?? 0;
+
+    const fetched = result.results as Record<string, unknown>[];
+    const hasMore = fetched.length > paging.limit;
+    const pageRows = hasMore ? fetched.slice(0, paging.limit) : fetched;
+    const nextCursor = hasMore ? encodeRegistrationsCursor(pageRows[pageRows.length - 1]) : null;
 
     // DE-01 / A-5: attendee_name is now stored encrypted. Decrypt for the
     // organizer's first-party list (keep the response field named attendee_name),
     // falling back to the legacy cleartext column for pre-existing rows. The
     // encrypted column is never surfaced in the response.
-    const items = await decryptAttendeeNames(
-      result.results as Record<string, unknown>[],
-      env,
-      eventId
-    );
+    const items = await decryptAttendeeNames(pageRows, env, eventId);
 
-    logFormEvent('register', eventId, 'admin_read', { count: items.length });
+    logFormEvent('register', eventId, 'admin_read', { count: items.length, paged: true });
     // OSE-665: the aggregate `count` is floored uniformly (same K as the
     // SharedReport surface) so every viewer sees the same representation of a
-    // sub-5 cohort. `items` remains the organizer's first-party operational
-    // list (#1/#8), exact — running the event needs the actual attendees.
-    const floored = applyCountFloor(items.length);
+    // sub-5 cohort. It is the event's TOTAL, not this page's size. `items`
+    // remains the organizer's first-party operational list (#1/#8), exact.
+    const floored = applyCountFloor(total);
     return jsonResponse(
       {
         ok: true,
@@ -591,6 +607,8 @@ export async function handleAdminRegistrations(
         count: floored.count,
         suppressed: floored.suppressed,
         floor: floored.floor,
+        limit: paging.limit,
+        next_cursor: nextCursor,
       },
       request
     );
