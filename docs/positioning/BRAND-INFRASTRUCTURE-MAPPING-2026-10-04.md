@@ -10,6 +10,20 @@ A visitor sees one name, one place and one promise ("Counted, never known"). The
 
 The brand is a **presentation-plane** thing. The architecture is an **identity-regime** thing. Keep them on different axes so neither bends the other. The hub owns _how everything looks and is governed_ (tokens, `@ocr/ui`, flags, standards, the public front door). Each spoke owns _a regime of data and identity_ (anonymous, named, hybrid). A public "door" is a name and a route that points at one spoke. A door never merges two spokes' data, and a spoke never needs to know the brand's public name.
 
+## Templates: two kinds, one rule
+
+There are **event templates** (OSE: `event_templates`, 32 of them, ADR-010) and **profile templates** (OW and the ourAirwaves editor: artist, team, business, academic, athlete, leader and so on). They are two catalogs of the same thing: a preset of defaults chosen at creation, always overridable. The ADR-010 rule applies to both: templates give breadth and never gate; tiers give depth and layer features on top. Today only the event side is written down (ADR-010 is OSE-local) and OW has no preset system in code, only page files. One hub-level statement of the rule would cover both and any future format (games, records, tournament nights).
+
+## Why OSE and OW stay separate (PO, 2026-10-04)
+
+The separation is the point, and it stays: each runtime respects its own invariants, has its own code and has its own tests. Everything in this doc reduces repos, pipelines and public naming; none of it merges runtimes or databases.
+
+- **Profile templates** (who someone is) belong to OW. A person matches one however they choose. OSE never sees them.
+- **Event templates and the event's mode** (physical, digital or hybrid) belong to OSE. The mode is a field on the event. OSE holds no field that refers to a person or a profile, and an event never inherits settings from one.
+- OW may run its own events under its own invariants and tests.
+- The only connection is a link a person chooses to share, one way, from an OW page out to an OSE event page or an anonymous report. OSE learns nothing from it. A digital check-in reads no IP and no location (OSE already forbids `CF-IP*` headers).
+- OSE has no physical, digital or hybrid mode today (checked 2026-10-04: no such column or handler). Adding one is an OSE story with its own tests, not a cross-product change.
+
 ## Two axes
 
 |              | Hub                                                                            | Spoke                                                      |
