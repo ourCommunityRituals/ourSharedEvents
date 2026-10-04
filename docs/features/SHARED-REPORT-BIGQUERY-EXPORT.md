@@ -44,7 +44,7 @@ Session 4 ships the daily export of those aggregates into BigQuery so downstream
 
 ### `src/handlers/bigquery.ts` (existing scheduled export)
 
-- `runBigQueryBackup(env)` — daily backup of events updated in last 24h. Writes to `events_backup` table.
+- `runBigQueryBackup(env)` — daily backup of **listed** events (published, `status = 'active'`, past the publish grace window: `BACKUP_LISTED_EVENTS_SQL`) updated in last 24h. Writes to `events_backup` table. Drafts, ready, archived and unpublished events are never sent, because the row carries `title` and `slug`. An archived event is not re-exported, so the dataset keeps its last `active` row.
 - Called from `scheduled()` in `index.ts` alongside Session 3's `runSharedReportMaterialization`.
 
 ### `src/lib/pool-contract.ts` (regulatory pool routing)
