@@ -5,689 +5,829 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Event Poster – OurSharedEvents</title>
     <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
-        background: var(--bg);
-        color: var(--text);
-      }
-      .page-header {
-        background: var(--surface);
-        color: var(--text);
-        padding: 1rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        white-space: nowrap;
-      }
-      .poster-kind {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.25rem;
-      }
-      .page-header .poster-kind a[aria-current] {
-        color: var(--text);
-        font-weight: 700;
-        text-decoration: underline;
-      }
-      .page-header a,
-      .page-header .print-btn {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        font-size: 0.85rem;
-        text-decoration: none;
-      }
-      .page-header a {
-        padding: 0 0.5rem;
-      }
-      .page-header a:hover,
-      .page-header .print-btn:not(:disabled):hover {
-        color: var(--text);
-      }
-      /* OSE-286: the Print control became a <button>; reset native chrome so
-         it reads as the header link it replaced, and dim it while disabled. */
-      .print-controls {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.6rem;
-      }
-      /* display:inline-flex beats the UA's [hidden]; Digital hides Print. */
-      .print-controls[hidden] {
-        display: none;
-      }
-      .print-btn {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        background: none;
-        border: none;
-        padding: 0 0.5rem;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      .print-btn:disabled,
-      .print-btn[disabled] {
-        cursor: not-allowed;
-        opacity: 0.45;
-      }
-      .print-status {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-      .container {
-        max-width: 680px;
-        margin: 2rem auto;
-        padding: 0 1rem;
-      }
-      .poster {
-        background: var(--surface);
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-        border: 1px solid var(--border);
-      }
-      .poster-header {
-        background: var(--surface);
-        color: var(--text);
-        padding: 2.5rem 2rem 2rem;
-        text-align: center;
-      }
-      .poster-header h2 {
-        font-size: clamp(1.75rem, 5.6vw, 2.75rem);
-        font-weight: 800;
-        line-height: 1.12;
-      }
-      .poster-body {
-        padding: 2rem;
-      }
-      .poster-meta {
-        display: grid;
-        gap: 0.75rem;
-        margin-bottom: 2rem;
-      }
-      .meta-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-      }
-      .meta-icon {
-        width: 24px;
-        flex-shrink: 0;
-        text-align: center;
-        font-size: 1rem;
-        padding-top: 0.1rem;
-      }
-      .meta-text {
-        font-size: 1rem;
-        color: var(--text-muted);
-      }
-      /* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
-         --border, --text-muted), not hardcoded hex — so the poster art viewport
-         can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
-      .poster-art {
-        margin: 1rem 0 1.25rem;
-        border-radius: 10px;
-        overflow: hidden;
-        background: var(--surface-hover);
-      }
-      .poster-art-img {
-        display: block;
-        width: 100%;
-        max-height: min(88vh, 1100px);
-        object-fit: contain;
-      }
-      .poster-art--empty {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 140px;
-        border: 2px dashed var(--border);
-      }
-      .poster-art-placeholder {
-        font-size: 2rem;
-        color: var(--text-muted);
-        opacity: 0.5;
-      }
-      /* #poster-qr-slots: the one flex child of .qr-section. */
-      .qr-slots {
-        display: flex;
-        justify-content: center;
-        gap: 2rem;
-        flex-wrap: wrap;
-        width: 100%;
-      }
-      /* Printed /s link under each QR (not .qr-link-url, so print keeps it). */
-      .qr-slot-code {
-        display: block;
-        margin: 0.35rem auto 0;
-        max-width: 120px;
-        font-size: 0.62rem;
-        line-height: 1.3;
-        color: var(--text-muted);
-        word-break: break-all;
-        text-align: center;
-      }
-      /* OSE-1357: one word per code; same size for every kind. */
-      .code-card {
-        border-top: 6px solid var(--border);
-      }
-      .code-word {
-        font-size: 1rem;
-        font-weight: 800;
-        color: var(--text);
-      }
-      .qr-section {
-        display: flex;
-        justify-content: center;
-        gap: 2rem;
-        flex-wrap: wrap;
-        padding: 1.5rem 0;
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-      }
-      .qr-item {
-        text-align: center;
-      }
-      .qr-loading {
-        width: 120px;
-        height: 120px;
-        background: var(--surface-hover);
-        border: 2px dashed var(--border);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 0.5rem;
-        font-size: 1.25rem;
-        color: var(--text-muted);
-      }
-      .qr-img {
-        width: 120px;
-        height: 120px;
-        display: block;
-        margin: 0 auto 0.5rem;
-        image-rendering: pixelated;
-      }
-      .qr-link {
-        display: block;
-        color: inherit;
-        text-decoration: none;
-      }
-      .qr-link:hover .qr-img {
-        opacity: 0.85;
-      }
-      .qr-link-url {
-        display: block;
-        font-size: 0.6rem;
-        color: var(--text-muted);
-        word-break: break-all;
-        margin-top: 0.25rem;
-        max-width: 120px;
-        text-align: center;
-      }
-      .qr-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      /* OSE-887: GAS .qr-card frame (archive/v2-code/components/QRRegenerator.html)
-         wrapping each poster QR — header carries the label, body holds the QR that
-         loadPosterQR injects into #qr-img-{type}. Themed in the token-overlay block
-         below; flattened for print (see @media print). */
-      .qr-card {
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        overflow: hidden;
-        background: var(--surface);
-      }
-      .qr-card-header {
-        padding: 0.4rem 0.75rem;
-        background: var(--surface-hover);
-        border-bottom: 1px solid var(--border);
-      }
-      .qr-card-body {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 1rem 0.9rem;
-      }
-      /* OSE-1200: UEC word + path + consent tier. Plain text, prints in black —
-         the hue lives on the code and the frame; the words carry it for everyone. */
-      .qr-uec {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.15rem;
-        margin-top: 0.5rem;
-        text-align: center;
-      }
-      .qr-uec-word {
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        font-size: 0.8rem;
-      }
-      .qr-uec-path {
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-size: 0.72rem;
-        color: var(--text-muted);
-      }
-      .qr-uec-tier {
-        font-size: 0.7rem;
-        line-height: 1.3;
-        color: var(--text-muted);
-        max-width: 16rem;
-      }
-      .poster--digital .poster-art-img {
-        max-height: min(92vh, 1200px);
-      }
-      .poster--digital .qr-img,
-      .poster--digital .qr-loading {
-        display: none;
-      }
-      .poster--digital .qr-slot-code {
-        max-width: none;
-        font-size: 0.85rem;
-      }
-      .meta-text a,
-      .poster--digital .qr-slot-code {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        color: var(--accent);
-      }
-      .poster-footer {
-        text-align: center;
-        padding: 1rem;
-        background: var(--surface-hover);
-        font-size: 0.8rem;
-        color: var(--text-muted);
-      }
-      .loading {
-        text-align: center;
-        padding: 4rem;
-        color: var(--text-muted);
-      }
-      .error {
-        text-align: center;
-        padding: 3rem;
-        color: var(--error);
-      }
-      .event-select {
-        margin-bottom: 1.5rem;
-      }
-      .event-select label {
-        display: block;
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 0.375rem;
-      }
-      .event-select select {
-        width: 100%;
-        min-height: 44px;
-        padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border-strong);
-        border-radius: 6px;
-        font-size: 16px;
-        background: var(--surface);
-        color: var(--text);
-      }
-      .poster-sponsors {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        padding: 1rem 2rem;
-        flex-wrap: wrap;
-      }
-      .poster-sponsors:empty {
-        display: none;
-      }
-      .poster-sponsor {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      /* OSE-864/#25: ONE uniform logo box for every sponsor regardless of tier.
-         Responsive (clamp) across viewports, tier-blind — money buys frequency,
-         never size. WALL-3b (OSE-835) fails CI on any tier-keyed sponsor geometry. */
-      .poster-sponsor img {
-        height: clamp(24px, 4.5vw, 40px);
-        width: auto;
-        max-width: clamp(80px, 14vw, 140px);
-        object-fit: contain;
-      }
-      .poster-sponsor-name {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        font-weight: 500;
-      }
-      .poster-sponsor-label {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        text-align: center;
-        margin-bottom: 0.35rem;
-      }
-      .poster-sponsor-tier-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-        padding: 0.2rem 0;
-      }
-      .poster-sponsor-tier-label {
-        font-size: 0.6rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        text-align: center;
-        width: 100%;
-        margin-bottom: 0.15rem;
-      }
-      /* OSE-864/#25: no tier-keyed sponsor CSS (WALL-3b). */
-      .page-header a:focus-visible,
-      .page-header .print-btn:focus-visible {
-        outline: 2px solid var(--text);
-        outline-offset: 2px;
-      }
-      .event-select select:focus {
-        border-color: var(--accent);
-        outline: 2px solid var(--accent);
-        outline-offset: 0;
-      }
-      .skip-link {
-        position: absolute;
-        left: -9999px;
-        top: auto;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-      }
-      .skip-link:focus {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: auto;
-        height: auto;
-        padding: 0.5rem 1rem;
-        background: var(--surface);
-        color: var(--text);
-        font-size: 1rem;
-        z-index: 9999;
-        text-decoration: none;
-        border-bottom: 2px solid var(--accent);
-      }
-      /* OSE-300: phone layout (tighter padding, 100px QR, 44px/16px controls). */
-      @media (max-width: 768px) {
-        .page-header {
-          padding: 0.75rem 1rem;
-        }
-        .container {
-          padding: 0 .75rem;
-          margin: 1rem auto;
-        }
-        .poster-header {
-          padding: 1.75rem 1.25rem 1.5rem;
-        }
-        .poster-body {
-          padding: 1.25rem 1rem;
-        }
-        .event-select select {
-          padding: 0.65rem 0.75rem;
-        }
-        .qr-section {
-          gap: 1rem;
-          padding: 1.25rem 0;
-        }
-        .qr-img,
-        .qr-loading {
-          width: 100px;
-          height: 100px;
-        }
-        .poster-art-img,
-        .poster--digital .poster-art-img {
-          max-height: 80vh;
-        }
-        .qr-link-url {
-          max-width: 100px;
-          word-break: break-all;
-        }
-        .poster-sponsors {
-          padding: 1rem;
-          gap: 1rem;
-        }
-      }
-      @media print {
-        @page {
-          size: 11in 14in;
-          margin: 0.35in;
-        }
-        /* Raw hex here is deliberate + baseline-gated: print is PAPER (white,
-           dark ink, theme-invariant). A theme token would print dark-on-dark.
-           Goes to 0 when /ui.css gains a print :root of light tokens. */
-        .page-header,
-        .event-select,
-        .no-print {
-          display: none !important;
-        }
-        body {
-          background: #fff !important;
-          color: #1e293b !important;
-        }
-        .poster {
-          background: #fff !important;
-        }
-        /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
-         colors. Sponsors paid for full-color logo placement; pre-fix the
-         print rule grayscaled them and the dark-navy poster header dropped
-         to white-on-white. Both broke the printed-poster value promise. */
-        body,
-        .poster,
-        .poster-header,
-        .poster-sponsors,
-        .poster-sponsor,
-        .poster-sponsor img,
-        .code-card {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-          color-adjust: exact;
-        }
-        body {
-          background: #fff;
-        }
-        .container {
-          margin: 0;
-          max-width: 100%;
-        }
-        /* Keep the whole poster on one page when it fits; otherwise allow
-         orderly breaks at the major section boundaries. */
-        .poster {
-          box-shadow: none;
-          border: none;
-          page-break-inside: avoid;
-          min-height: 13.25in;
-        }
-        .poster-header {
-          padding: 0.45in 0.35in 0.3in;
-        }
-        .poster-header h2 {
-          font-size: 38pt;
-          line-height: 1.05;
-        }
-        .poster-body {
-          padding: 0.3in 0.35in 0.25in;
-        }
-        .poster-meta {
-          margin-bottom: 0.2in;
-        }
-        .qr-section {
-          page-break-inside: avoid;
-          padding: 0.18in 0;
-          gap: 0.3in;
-        }
-        .poster-sponsors {
-          page-break-inside: avoid;
-          border-top: 1px solid #ccc;
-          padding: 0.75rem 1rem;
-        }
-        /* OSE-R-006: NO grayscale on sponsor logos in print. Keep the
-         max-height clamp so logos still fit a printed A4 page — that part
-         was a layout decision, separate from the color issue. */
-        .poster-sponsor img {
-          max-height: 20px;
-        }
-        .poster-sponsor-name,
-        .poster-sponsor-label {
-          color: #000;
-        }
-        .qr-loading {
-          display: none !important;
-        }
-        /* R4: art prints when present; an empty placeholder must never print a
-           dashed box where artwork would go. */
-        .poster-art--empty {
-          display: none !important;
-        }
-        .poster-art {
-          page-break-inside: avoid;
-          margin: 0.12in 0 0.2in;
-        }
-        .poster-art-img {
-          max-height: 7in;
-          object-fit: contain;
-        }
-        /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
-           if ANY QR is still a loading placeholder, hide the whole section so
-           the poster never prints empty labeled boxes where codes belong. */
-        .qr-section:has(.qr-loading) {
-          display: none !important;
-        }
-        .qr-link-url {
-          display: none !important;
-        }
-        /* OSE-887: flatten the .qr-card chrome for print so the poster keeps its
-           clean label-over-QR look (no card borders/fills on the page). */
-        .qr-card {
-          border: none;
-        }
-        .qr-card-header {
-          background: transparent;
-          border-bottom: none;
-          padding: 0 0 0.2rem;
-        }
-        .qr-card-body {
-          padding: 0.12in;
-          background: white;
-        }
-        .qr-img {
-          width: 1.25in;
-          height: 1.25in;
-          margin: 0 auto 0.08in;
-          padding: 0.08in;
-          background: white;
-        }
-      }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.page-header {
+  background: var(--surface);
+  color: var(--text);
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.poster-kind {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.page-header .poster-kind a[aria-current] {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.page-header a,
+.page-header .print-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.page-header a {
+  padding: 0 0.5rem;
+}
+.page-header a:hover,
+.page-header .print-btn:not(:disabled):hover {
+  color: var(--text);
+}
+/* OSE-286: the Print control became a <button>; reset native chrome so
+   it reads as the header link it replaced, and dim it while disabled. */
+.print-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* display:inline-flex beats the UA's [hidden]; Digital hides Print. */
+.print-controls[hidden] {
+  display: none;
+}
+.print-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  background: none;
+  border: none;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.print-btn:disabled,
+.print-btn[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.print-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.container {
+  max-width: 680px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+.poster {
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border);
+}
+.poster-header {
+  background: var(--surface);
+  color: var(--text);
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+}
+.poster {
+  --title-base: clamp(1.75rem, 5.6vw, 2.75rem);
+}
+.poster[data-art='0'] {
+  --title-base: clamp(2.25rem, 7.5vw, 3.75rem);
+}
+.poster-header h2 {
+  font-size: calc(var(--title-base) * var(--title-scale, 1));
+  font-weight: 800;
+  line-height: 1.12;
+  white-space: nowrap;
+}
+.poster-header h2[data-title-step='1'] {
+  --title-scale: 0.86;
+}
+.poster-header h2[data-title-step='2'] {
+  --title-scale: 0.74;
+}
+.poster-header h2[data-title-step='3'] {
+  --title-scale: 0.62;
+}
+.poster-header h2[data-title-step='4'] {
+  --title-scale: 0.52;
+  white-space: normal;
+}
+.poster-body {
+  padding: 2rem;
+}
+.poster-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  column-gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  text-align: center;
+}
+.meta-item + .meta-item::before {
+  content: '\00b7';
+  margin-right: 0.6rem;
+  color: var(--text-muted);
+}
+.poster[data-art='0'] .poster-meta .meta-text {
+  font-size: 1.35rem;
+}
+.meta-text {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+/* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
+   --border, --text-muted), not hardcoded hex — so the poster art viewport
+   can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+.poster-art {
+  margin: 1rem 0 1.25rem;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-hover);
+}
+.poster-art-img {
+  display: block;
+  width: 100%;
+  max-height: min(88vh, 1100px);
+  object-fit: contain;
+}
+/* #poster-qr-slots: the one flex child of .qr-section. */
+.qr-slots {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+/* Printed /s link under each QR (not .qr-link-url, so print keeps it). */
+.qr-slot-code {
+  display: block;
+  margin: 0.35rem auto 0;
+  max-width: 120px;
+  font-size: 0.62rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+  word-break: break-all;
+  text-align: center;
+}
+/* OSE-1357: one word per code; same size for every kind. */
+.code-card {
+  border-top: 6px solid var(--border);
+}
+.code-word {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.code-action {
+  display: block;
+  margin: 0.1rem auto 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  text-align: center;
+}
+.qr-section {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.qr-item {
+  text-align: center;
+}
+.qr-loading {
+  width: 120px;
+  height: 120px;
+  background: var(--surface-hover);
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.5rem;
+  font-size: 1.25rem;
+  color: var(--text-muted);
+}
+.qr-img {
+  width: 120px;
+  height: 120px;
+  display: block;
+  margin: 0 auto 0.5rem;
+  image-rendering: pixelated;
+}
+.qr-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.qr-link:hover .qr-img {
+  opacity: 0.85;
+}
+.qr-link-url {
+  display: block;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-top: 0.25rem;
+  max-width: 120px;
+  text-align: center;
+}
+.qr-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+/* OSE-887: GAS .qr-card frame (archive/v2-code/components/QRRegenerator.html)
+   wrapping each poster QR — header carries the label, body holds the QR that
+   loadPosterQR injects into #qr-img-{type}. Themed in the token-overlay block
+   below; flattened for print (see @media print). */
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.qr-card-header {
+  padding: 0.4rem 0.75rem;
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+}
+.qr-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0.9rem;
+}
+.poster--digital .poster-art-img {
+  max-height: min(92vh, 1200px);
+}
+.poster--digital .qr-img,
+.poster--digital .qr-loading {
+  display: none;
+}
+.poster--digital .qr-slot-code {
+  max-width: none;
+  font-size: 0.85rem;
+}
+.meta-text a,
+.poster--digital .qr-slot-code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+}
+.poster-stage {
+  position: relative;
+  margin: 1rem 0 1.25rem;
+}
+.poster-art {
+  margin: 0 0 1.25rem;
+}
+.poster-stage .qr-section {
+  margin-bottom: 0;
+}
+.poster[data-layout] .qr-img,
+.poster[data-layout] .qr-loading {
+  width: var(--code-size);
+  height: var(--code-size);
+}
+.poster[data-layout='row'],
+.poster[data-layout='corners'] {
+  --code-size: clamp(100px, 24vw, 144px);
+}
+.poster[data-layout='side'] {
+  --code-size: clamp(100px, 16vw, 130px);
+}
+.poster[data-layout='grid'] {
+  --code-size: clamp(100px, 18vw, 130px);
+}
+.poster[data-layout='row'] .qr-card,
+.poster[data-layout='side'] .qr-card,
+.poster[data-layout='corners'] .qr-card {
+  width: calc(var(--code-size) + 1.5rem);
+  overflow-wrap: anywhere;
+}
+.poster[data-layout='row'] .qr-card-body,
+.poster[data-layout='side'] .qr-card-body {
+  padding: 0.75rem 0.4rem;
+}
+.poster[data-layout='row'] .qr-slots {
+  gap: 0.75rem;
+}
+.poster[data-layout='corners'] .poster-art {
+  margin: 0;
+  min-height: 15rem;
+}
+.poster[data-layout='corners'] .qr-section {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.6rem;
+  margin: 0;
+  border: 0;
+  pointer-events: none;
+}
+.poster[data-layout='corners'] .qr-slots {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.poster[data-layout='corners'] .qr-card {
+  pointer-events: auto;
+  background: white;
+  border-color: var(--border);
+}
+.poster[data-layout='corners'] .qr-card-header {
+  background: transparent;
+  border-bottom: 0;
+  padding: 0.3rem 0.5rem 0;
+}
+.poster[data-layout='corners'] .qr-card-body {
+  padding: 0.3rem 0.5rem 0.5rem;
+}
+.poster[data-layout='corners'] .qr-card,
+.poster[data-layout='corners'] .qr-card span,
+.poster[data-layout='corners'] .qr-card a {
+  color: black;
+}
+.poster[data-layout='side'] .poster-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  align-items: start;
+}
+.poster[data-layout='side'] .poster-art {
+  margin: 0;
+}
+.poster[data-layout='side'] .qr-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.poster[data-layout='side'] .qr-slots {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 1rem;
+}
+.poster[data-layout='grid'] .qr-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  justify-items: center;
+}
+.poster[data-layout='grid'] .qr-card {
+  width: min(100%, 15rem);
+}
+.poster-footer {
+  text-align: center;
+  padding: 1rem;
+  background: var(--surface-hover);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.loading {
+  text-align: center;
+  padding: 4rem;
+  color: var(--text-muted);
+}
+.error {
+  text-align: center;
+  padding: 3rem;
+  color: var(--error);
+}
+.event-select {
+  margin-bottom: 1.5rem;
+}
+.event-select label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.375rem;
+}
+.event-select select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 16px;
+  background: var(--surface);
+  color: var(--text);
+}
+.poster-sponsors {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1rem 2rem;
+  flex-wrap: wrap;
+}
+.poster-sponsors:empty {
+  display: none;
+}
+.poster-sponsor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* OSE-864/#25: ONE uniform logo box for every sponsor regardless of tier.
+   Responsive (clamp) across viewports, tier-blind — money buys frequency,
+   never size. WALL-3b (OSE-835) fails CI on any tier-keyed sponsor geometry. */
+.poster-sponsor img {
+  height: clamp(24px, 4.5vw, 40px);
+  width: auto;
+  max-width: clamp(80px, 14vw, 140px);
+  object-fit: contain;
+}
+.poster-sponsor-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.poster-sponsor-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 0.35rem;
+}
+/* OSE-864/#25: no tier-keyed sponsor CSS (WALL-3b). */
+.page-header a:focus-visible,
+.page-header .print-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.event-select select:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.skip-link:focus {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  z-index: 9999;
+  text-decoration: none;
+  border-bottom: 2px solid var(--accent);
+}
+/* OSE-300: phone layout (tighter padding, 100px QR, 44px/16px controls). */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 0.75rem 1rem;
+  }
+  .container {
+    padding: 0 .75rem;
+    margin: 1rem auto;
+  }
+  .poster-header {
+    padding: 1.75rem 1.25rem 1.5rem;
+  }
+  .poster-meta {
+    flex-direction: column;
+    align-items: center;
+  }
+  .meta-item + .meta-item::before {
+    content: none;
+  }
+  .poster[data-art='0'] .poster-meta .meta-text {
+    font-size: 1.1rem;
+  }
+  .poster-body {
+    padding: 1.25rem 1rem;
+  }
+  .event-select select {
+    padding: 0.65rem 0.75rem;
+  }
+  .qr-section {
+    gap: 1rem;
+    padding: 1.25rem 0;
+  }
+  .qr-img,
+  .qr-loading {
+    width: 100px;
+    height: 100px;
+  }
+  .poster-art-img,
+  .poster--digital .poster-art-img {
+    max-height: 80vh;
+  }
+  .qr-link-url {
+    max-width: 100px;
+    word-break: break-all;
+  }
+  .poster-sponsors {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+@media print {
+  @page {
+    size: 11in 14in;
+    margin: 0.35in;
+  }
+  /* Raw hex here is deliberate + baseline-gated: print is PAPER (white,
+     dark ink, theme-invariant). A theme token would print dark-on-dark.
+     Goes to 0 when /ui.css gains a print :root of light tokens. */
+  .page-header,
+  .event-select,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #1e293b !important;
+  }
+  .poster {
+    background: #fff !important;
+  }
+  /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
+   colors. Sponsors paid for full-color logo placement; pre-fix the
+   print rule grayscaled them and the dark-navy poster header dropped
+   to white-on-white. Both broke the printed-poster value promise. */
+  body,
+  .poster,
+  .poster-header,
+  .poster-sponsors,
+  .poster-sponsor,
+  .poster-sponsor img,
+  .code-card {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  body {
+    background: #fff;
+  }
+  .container {
+    margin: 0;
+    max-width: 100%;
+  }
+  /* Keep the whole poster on one page when it fits; otherwise allow
+   orderly breaks at the major section boundaries. */
+  .poster {
+    box-shadow: none;
+    border: none;
+    page-break-inside: avoid;
+    min-height: 13.25in;
+  }
+  .poster-header {
+    padding: 0.45in 0.35in 0.3in;
+  }
+  .poster {
+    --title-base: 38pt;
+  }
+  .poster[data-art='0'] {
+    --title-base: 46pt;
+  }
+  .poster-header h2 {
+    line-height: 1.05;
+  }
+  .poster-body {
+    padding: 0.3in 0.35in 0.25in;
+  }
+  .poster-meta {
+    margin-bottom: 0.2in;
+  }
+  .poster .poster-meta .meta-text {
+    font-size: 14pt;
+  }
+  .poster[data-art='0'] .poster-meta .meta-text {
+    font-size: 18pt;
+  }
+  .qr-section {
+    page-break-inside: avoid;
+    padding: 0.18in 0;
+    gap: 0.3in;
+  }
+  .poster-sponsors {
+    page-break-inside: avoid;
+    border-top: 1px solid #ccc;
+    padding: 0.75rem 1rem;
+  }
+  /* OSE-R-006: NO grayscale on sponsor logos in print. Keep the
+   max-height clamp so logos still fit a printed A4 page — that part
+   was a layout decision, separate from the color issue. */
+  .poster-sponsor img {
+    max-height: 20px;
+  }
+  .poster-sponsor-name,
+  .poster-sponsor-label {
+    color: #000;
+  }
+  .qr-loading {
+    display: none !important;
+  }
+  .poster-art {
+    page-break-inside: avoid;
+    margin: 0.12in 0 0.2in;
+  }
+  .poster-art-img {
+    max-height: 7in;
+    object-fit: contain;
+  }
+  /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
+     if ANY QR is still a loading placeholder, hide the whole section so
+     the poster never prints empty labeled boxes where codes belong. */
+  .qr-section:has(.qr-loading) {
+    display: none !important;
+  }
+  .qr-link-url {
+    display: none !important;
+  }
+  /* OSE-887: flatten the .qr-card chrome for print so the poster keeps its
+     clean label-over-QR look (no card borders/fills on the page). */
+  .qr-card {
+    border: none;
+  }
+  .qr-card-header {
+    background: transparent;
+    border-bottom: none;
+    padding: 0 0 0.2rem;
+  }
+  .qr-card-body {
+    padding: 0.12in;
+    background: white;
+  }
+  .qr-img {
+    width: 1.25in;
+    height: 1.25in;
+    margin: 0 auto 0.08in;
+    padding: 0.08in;
+    background: white;
+  }
+  .poster[data-layout] .qr-img,
+  .poster[data-layout] .qr-loading {
+    width: var(--code-in, 1.25in);
+    height: var(--code-in, 1.25in);
+  }
+  .poster[data-layout='grid'] .poster-art-img {
+    max-height: calc(var(--art-max-in, 7) * 1in);
+  }
+  .poster[data-layout='corners'] .poster-art {
+    min-height: 2.6in;
+  }
+  .poster[data-layout='corners'] .qr-card {
+    width: 1.9in;
+  }
+  .poster[data-layout='row'] .qr-card,
+  .poster[data-layout='side'] .qr-card {
+    width: calc(var(--code-in, 1.25in) + 0.5in);
+  }
+  .poster[data-layout='corners'] .qr-section {
+    padding: 0.15in;
+  }
+  .poster[data-layout='corners'] .qr-card-header {
+    padding: 0.05in 0.1in 0;
+  }
+  .poster[data-layout='corners'] .qr-card-body {
+    padding: 0.05in 0.1in 0.1in;
+  }
+  .poster[data-layout='grid'] .qr-section {
+    padding: 0.08in 0;
+  }
+  .poster[data-layout='grid'] .qr-slots {
+    gap: 0.1in 0.2in;
+  }
+  .poster[data-layout='grid'] .qr-card-header {
+    padding: 0 0 0.04in;
+  }
+  .poster[data-layout='grid'] .qr-card-body {
+    padding: 0.04in 0.1in;
+  }
+  .poster[data-layout='grid'] .qr-img {
+    margin-bottom: 0.04in;
+  }
+  .poster[data-layout='grid'] .qr-slot-code {
+    max-width: none;
+    margin-top: 0.1rem;
+    font-size: 0.55rem;
+    line-height: 1.2;
+  }
+}
     </style>
     <link rel="stylesheet" href="/ui.css" />
     <style>
-      body {
-        background: var(--bg);
-        color: var(--text);
-      }
-      .page-header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-      }
-      .page-header a,
-      .page-header .print-btn {
-        color: var(--text-muted);
-      }
-      .page-header a:hover,
-      .page-header .print-btn:not(:disabled):hover {
-        color: var(--text);
-      }
-      .poster {
-        background: var(--surface);
-        border-color: var(--border);
-        box-shadow: none;
-      }
-      .poster-header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-      }
-      .meta-text {
-        color: var(--text-muted);
-      }
-      .qr-section {
-        border-color: var(--border);
-      }
-      .qr-loading {
-        background: var(--surface-hover);
-        border-color: var(--border);
-        color: var(--text-muted);
-      }
-      .qr-label {
-        color: var(--text-muted);
-      }
-      .qr-card {
-        background: var(--surface);
-        border-color: var(--border);
-      }
-      .qr-card-header {
-        background: var(--surface-hover);
-        border-bottom-color: var(--border);
-      }
-      .qr-link-url {
-        color: var(--text-muted);
-      }
-      .poster-footer {
-        background: var(--surface-hover);
-        color: var(--text-muted);
-      }
-      .event-select label {
-        color: var(--text-muted);
-      }
-      .event-select select {
-        background: var(--surface);
-        border-color: var(--border-strong);
-        color: var(--text);
-      }
-      .poster-sponsor-name,
-      .poster-sponsor-label,
-      .poster-sponsor-tier-label {
-        color: var(--text-muted);
-      }
-      .skip-link:focus {
-        background: var(--surface);
-        color: var(--text);
-        border-bottom-color: var(--accent);
-      }
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+.page-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.page-header a,
+.page-header .print-btn {
+  color: var(--text-muted);
+}
+.page-header a:hover,
+.page-header .print-btn:not(:disabled):hover {
+  color: var(--text);
+}
+.poster {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.poster-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.meta-text {
+  color: var(--text-muted);
+}
+.qr-section {
+  border-color: var(--border);
+}
+.qr-loading {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+.qr-label {
+  color: var(--text-muted);
+}
+.qr-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.qr-card-header {
+  background: var(--surface-hover);
+  border-bottom-color: var(--border);
+}
+.qr-link-url {
+  color: var(--text-muted);
+}
+.poster-footer {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+.event-select label {
+  color: var(--text-muted);
+}
+.event-select select {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.poster-sponsor-name,
+.poster-sponsor-label,
+.skip-link:focus {
+  background: var(--surface);
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
     </style>
   </head>
   <body>
@@ -817,6 +957,152 @@
         if (controls) controls.hidden = KIND === 'digital';
       }
 
+      /* poster-layout:begin */
+      // OSE-1516 — the poster arranges itself from what the event has: how many
+      // codes, whether there is artwork, whether there are sponsors. The
+      // organizer picks nothing. Pure and DOM-free (tests run it as a function).
+      //
+      // Layouts: no artwork -> 'row' (the art area is not drawn at all); artwork
+      // and no codes yet -> 'art'; 1-2 codes -> 'corners' (on top of the art, on
+      // white tiles); 3 -> 'side' (a column beside the art); 4-8 -> 'grid' (two
+      // columns under the art). Codes keep their size ahead of the artwork: none
+      // is ever under 100px, and with many codes it is the ARTWORK that gives
+      // way (eight codes = four rows of two; the art shrinks to what is left of
+      // the sheet but is never dropped; the sheet does not get taller).
+      //
+      // A placement is a NAMED SPOT ('art-bottom-left', 'side-2', 'grid-5'),
+      // never a pixel position, so a later drag-and-drop only has to say which
+      // spot a code takes.
+      var POSTER_MAX_CODES = 8;
+      var POSTER_CODE_FLOOR_PX = 100;
+      var POSTER_SHEET_IN = 13.3; // 14in sheet less its 0.35in margins
+      var POSTER_ART_FULL_IN = 7;
+      var POSTER_CHROME_IN = 3.25; // title, details, footer and padding (measured in print, 2026-10-04)
+      var POSTER_SPONSORS_IN = 0.5; // the sponsor strip
+      var POSTER_GRID_PAD_IN = 0.3; // the code section's own padding
+      var POSTER_GRID_ROW_IN = 1.85; // one row of two codes, label and link included
+      // What scanning each kind does, by kind. Allowlist; unknown kinds read as
+      // 'learn more'. The label never comes from the bundle.
+      var POSTER_ACTIONS = Object.assign(Object.create(null), {
+        public: 'see the event',
+        checkin: 'check in',
+        register: 'register',
+        donation: 'donate',
+        sponsor: 'become a sponsor',
+        signup: 'sign up',
+        tickets: 'get tickets',
+        ow: 'hear the music',
+        league: 'see the league',
+        workshop: 'register',
+        substack: 'subscribe',
+        menu: 'see the menu',
+        website: 'learn more'
+      });
+      function posterActionLabel(kind, digital) {
+        var what = POSTER_ACTIONS[String(kind == null ? '' : kind)] || 'learn more';
+        return (digital ? 'Tap to ' : 'Scan to ') + what;
+      }
+      // Where the title starts (0 = full size .. 4 = smallest, may wrap), from
+      // its length. The page then steps further down while it still overflows.
+      function posterTitleStep(name) {
+        var n = String(name == null ? '' : name).length;
+        return n <= 20 ? 0 : n <= 28 ? 1 : n <= 38 ? 2 : n <= 50 ? 3 : 4;
+      }
+      function posterLayout(input) {
+        var i = input || {};
+        var n = Math.floor(Number(i.codes));
+        if (isNaN(n) || n < 0) n = 0;
+        if (n > POSTER_MAX_CODES) n = POSTER_MAX_CODES;
+        var art = !!i.hasArt;
+        var sponsors = !!i.hasSponsors;
+        var out = {
+          layout: 'row', count: n, art: art, sponsors: sponsors,
+          columns: 0, rows: 0, spots: [],
+          codeIn: 1.5, codeMinPx: POSTER_CODE_FLOOR_PX,
+          artMaxIn: null, titleSize: art ? 'normal' : 'large'
+        };
+        var k;
+        if (!art) {
+          out.columns = Math.min(n, 4);
+          out.rows = Math.ceil(n / 4);
+          out.codeIn = n > 4 ? 1.3 : 1.5;
+          for (k = 1; k <= n; k++) out.spots.push('row-' + k);
+          return out;
+        }
+        out.artMaxIn = POSTER_ART_FULL_IN;
+        if (n === 0) {
+          out.layout = 'art';
+        } else if (n <= 2) {
+          out.layout = 'corners';
+          out.columns = n;
+          out.rows = 1;
+          out.spots = ['art-bottom-left', 'art-bottom-right'].slice(0, n);
+        } else if (n === 3) {
+          out.layout = 'side';
+          out.columns = 1;
+          out.rows = 3;
+          out.codeIn = 1.25;
+          out.spots = ['side-1', 'side-2', 'side-3'];
+        } else {
+          out.layout = 'grid';
+          out.columns = 2;
+          out.rows = Math.ceil(n / 2);
+          out.codeIn = 1.05;
+          for (k = 1; k <= n; k++) out.spots.push('grid-' + k);
+          var chrome = sponsors ? POSTER_CHROME_IN + POSTER_SPONSORS_IN : POSTER_CHROME_IN;
+          var left = POSTER_SHEET_IN - chrome - POSTER_GRID_PAD_IN - out.rows * POSTER_GRID_ROW_IN;
+          out.artMaxIn = Math.round(Math.min(POSTER_ART_FULL_IN, left) * 10) / 10; // never under 1.5in: the unit tests hold it
+        }
+        return out;
+      }
+      /* poster-layout:end */
+
+      // Hold the title to one line: start on the step its length suggests, then
+      // step down while it is still wider than its room (with a little spare,
+      // because paper is a touch tighter than the screen it was measured on).
+      function fitPosterTitle() {
+        const h = document.querySelector('[data-testid="poster-title"]');
+        if (!h) return;
+        let step = posterTitleStep(h.textContent);
+        h.setAttribute('data-title-step', String(step));
+        // The width of the text itself (the block's own scrollWidth is never
+        // less than its box, so it cannot say whether the text fits).
+        const textWidth = function () {
+          const r = document.createRange();
+          r.selectNodeContents(h);
+          return typeof r.getBoundingClientRect === 'function' ? r.getBoundingClientRect().width : 0;
+        };
+        while (step < 4 && h.clientWidth > 0 && textWidth() * 1.06 > h.clientWidth) {
+          step++;
+          h.setAttribute('data-title-step', String(step));
+        }
+      }
+      // Re-read what the poster has (codes drawn, artwork on screen, sponsors)
+      // and set the layout. Called once the bundle is drawn and whenever the
+      // artwork drops out (the image failed).
+      function relayoutPoster() {
+        const p = document.querySelector('[data-testid="poster-card"]');
+        if (!p) return;
+        const cards = Array.prototype.slice.call(p.querySelectorAll('#poster-qr-slots .code-card'));
+        const l = posterLayout({
+          codes: cards.length,
+          hasArt: !!p.querySelector('.poster-art'),
+          hasSponsors: !!p.querySelector('[data-testid="poster-sponsor-item"]')
+        });
+        p.setAttribute('data-layout', l.layout);
+        p.setAttribute('data-codes', String(l.count));
+        p.setAttribute('data-art', l.art ? '1' : '0');
+        p.style.setProperty('--code-in', l.codeIn + 'in');
+        if (l.artMaxIn === null) p.style.removeProperty('--art-max-in');
+        else p.style.setProperty('--art-max-in', String(l.artMaxIn));
+        cards.forEach(function (c, idx) {
+          if (l.spots[idx]) c.setAttribute('data-spot', l.spots[idx]);
+          else c.removeAttribute('data-spot');
+        });
+        fitPosterTitle();
+      }
+      window.addEventListener('resize', fitPosterTitle);
+
       function renderPoster(event) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
         // directly (mapped in enrichWithPhase). The old `const data = event.data
@@ -824,7 +1110,6 @@
         // `data` column — so it is removed and the banned 'Event' fallback with
         // it. A genuinely-missing value renders its empty state, not a literal.
         const venue = event.venue || '';
-        const address = '';
         const startDate = fmtEventDate(event);
         const startTime = fmtEventTime(event);
         const name = event.name || '';
@@ -846,7 +1131,11 @@
           ? '<a href="' + esc(mapHref) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">' + esc(venue) + ' &middot; Map</a>'
           : esc(venue);
 
-        return '<div class="poster' + (digital ? ' poster--digital' : '') + '" data-testid="poster-card" data-kind="' + KIND + '" role="article" aria-label="' + esc(name) + ' event poster">' +
+        // OSE-1516: the layout starts from the artwork alone (the codes are not
+        // here yet); relayoutPoster() redoes it once they and the sponsors are.
+        const first = posterLayout({ codes: 0, hasArt: !!art, hasSponsors: false });
+
+        return '<div class="poster' + (digital ? ' poster--digital' : '') + '" data-testid="poster-card" data-kind="' + KIND + '" data-layout="' + first.layout + '" data-codes="0" data-art="' + (art ? '1' : '0') + '" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
             '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
           '</div>' +
@@ -854,15 +1143,19 @@
           // and codes — the same place as on the public event page.
           '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
           '<div class="poster-body" data-testid="poster-body">' +
+            // OSE-1516: date, start time and venue are ONE line.
             '<div class="poster-meta" data-testid="poster-meta">' +
-            (startDate ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + whenHtml + '</div></div>' : '') +
-            (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + venueHtml + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+            (startDate ? '<span class="meta-item" data-testid="poster-meta-date"><span class="meta-text">' + whenHtml + '</span></span>' : '') +
+            (venue ? '<span class="meta-item" data-testid="poster-meta-venue"><span class="meta-text">' + venueHtml + '</span></span>' : '') +
             '</div>' +
-            '<div class="poster-art' + (art ? '' : ' poster-art--empty') + '" data-testid="poster-art-viewport">' +
-              (art
-                ? '<img class="poster-art-img" src="' + esc(art) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">'
-                : '<span class="poster-art-placeholder" data-testid="poster-art-empty" aria-hidden="true">&#x1F3A8;</span>') +
-            '</div>' +
+            // The stage holds the artwork and the codes. No artwork: the art area
+            // is not drawn at all (nothing dashed, nothing to hide in print).
+            '<div class="poster-stage" data-testid="poster-stage">' +
+            (art
+              ? '<div class="poster-art" data-testid="poster-art-viewport">' +
+                '<img class="poster-art-img" src="' + esc(art) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">' +
+                '</div>'
+              : '') +
             '<div class="qr-section" data-testid="poster-qr-section">' +
               // Typed destination slots (/q tracking + /s routing → Public /
               // Donate / Sign Up). loadPosterBundle fills this from bundle.slots. The
@@ -870,6 +1163,7 @@
               // settle. NOT the forms (register/checkin/survey/feedback are a
               // separate, destroyed-by-cron implementation — off the poster).
               '<div id="poster-qr-slots" class="qr-slots" data-testid="poster-qr-slots"><div class="qr-loading" aria-busy="true">&#x23F3;</div></div>' +
+            '</div>' +
             '</div>' +
           '</div>' +
           '<div class="poster-footer" data-testid="poster-footer"><span data-testid="poster-org">OurSharedEvents</span> &middot; oursharedevents.com</div>' +
@@ -1190,7 +1484,8 @@
         function slotHex(s) {
           return /^#[0-9A-Fa-f]{6}$/.test(String((s.uec && s.uec.scan_hex) || '')) ? String(s.uec.scan_hex) : '';
         }
-        const shown = slots.filter(function (s) { return slotLink(s) !== ''; });
+        // At most eight codes are drawn (the largest plan's allotment).
+        const shown = slots.filter(function (s) { return slotLink(s) !== ''; }).slice(0, POSTER_MAX_CODES);
         container.innerHTML = shown
           .map(function (s) {
             const kind = String(s.kind || 'slot').replace(/[^a-z0-9-]/gi, '');
@@ -1201,6 +1496,8 @@
             const label = esc(s.label || s.word || kind);
             const link = slotLink(s);
             const url = esc(link);
+            // What scanning does ("Scan to register"), from the page's own list.
+            const action = '<span class="code-action" data-testid="poster-qr-slot-action-' + kind + '">' + esc(posterActionLabel(kind, KIND === 'digital')) + '</span>';
             const shortText = esc(link);
             const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
             return (
@@ -1208,10 +1505,10 @@
               '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + (uecName && uecName !== String(s.word || '') ? ' <span class="code-uec meta-text" data-testid="poster-qr-slot-uec-' + kind + '">&middot; ' + uecName + '</span>' : '') + '</span></div>' +
               '<div class="qr-card-body">' +
               (KIND === 'digital'
-                ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>'
+                ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>' + action
                 : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
                   '<img src="' + qr + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
-                  '</a>' +
+                  '</a>' + action +
                   '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
               '</div>' +
               '</div>'
@@ -1263,6 +1560,7 @@
           } else {
             renderPosterSlots(data.slots);
           }
+          relayoutPoster();
           shown = true;
         } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {
@@ -1300,6 +1598,14 @@
         'error',
         function (ev) {
           var el = ev.target;
+          // OSE-1516: artwork that fails to load is the same as no artwork: the
+          // art area drops out and the poster lays itself out again.
+          if (el && el.tagName === 'IMG' && el.classList.contains('poster-art-img')) {
+            var box = el.closest('.poster-art');
+            if (box) box.remove();
+            if (typeof relayoutPoster === 'function') relayoutPoster();
+            return;
+          }
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
             // 0083: a sponsor logo that fails becomes the OSE default instead of
             // vanishing; only if the default itself fails is the image hidden.

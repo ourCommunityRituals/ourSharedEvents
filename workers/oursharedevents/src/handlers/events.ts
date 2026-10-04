@@ -29,7 +29,12 @@ import {
   type EventState,
 } from '../domain/event-state';
 import { enrichWithPhase } from '../lib/event-enrich.js';
-import { validateSettingsPatch } from '../lib/event-settings';
+import {
+  clearMapDefaultSql,
+  mapStillDefaultSql,
+  validateSettingsPatch,
+  withMapDefaultMarker,
+} from '../lib/event-settings';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
@@ -48,6 +53,7 @@ import {
 } from '../lib/event-type-catalog';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 import { listedFromForPublish } from '../lib/publish-grace';
+import { explicitMapChoice, mapState } from '../lib/map-default';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -344,7 +350,10 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
       ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
-      ' e.is_published, e.created_by, e.listed_from';
+      ' e.is_published, e.created_by, e.listed_from,' +
+      // OSE-1560 — is the map setting still the default (the organizer has not
+      // chosen)? A flag, not the raw settings blob.
+      ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default`;
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
@@ -719,22 +728,20 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // OSE-1245 — publication is an act (OCR_VISION.md §6.2c). The host decides
   // whether this event appears on public discovery surfaces at all.
   //
-  // ACCEPTED, NOT REQUIRED, and the distinction is deliberate. Requiring it
-  // would break every existing API client, and a 400 is a poor way to teach a
-  // policy. It defaults to published, which matches the column default and
-  // preserves current behaviour.
+  // OSE-1560 (PO, 2026-10-03): a new event is OFF the map unless the organizer
+  // says otherwise. Nothing is listed publicly by omission: the default-on map
+  // was the risk (a home event listed because nobody chose).
   //
-  // The default is therefore NOT where the guarantee lives. The guarantee is
-  // that the human path always asks: `admin.html` sends an explicit value from
-  // both the wizard and the advanced form, and a test asserts it always does.
-  // A default nobody is asked about is how a home address ends up on a public
-  // map without anyone having decided that — which is the whole finding this
-  // work came from.
-  //
-  // Anything other than an explicit `false`/0 publishes, so a malformed or
-  // absent value fails toward the existing behaviour rather than silently
-  // hiding an organiser's event from the world.
-  const isPublished = body.is_published === false || body.is_published === 0 ? 0 : 1;
+  // Only an explicit true/1 turns it on. An absent or malformed value is "no
+  // choice": the event is stored off and carries the `mapDefault` marker
+  // (lib/map-default.ts), which is what lets a sponsor the organizer adds LATER
+  // turn the map on. An explicit false/0 is a choice (no marker), so a later
+  // sponsor can never override it. Existing rows keep whatever they have.
+  const mapChoice = explicitMapChoice(body.is_published);
+  const isPublished = mapChoice === true ? 1 : 0;
+  if (mapChoice === null) {
+    settingsJson = withMapDefaultMarker(settingsJson);
+  }
 
   // Migration 0075 — record WHO made this row (the server-verified admin actor:
   // CF Access email, or key:admin / key:ocr-internal for automation). This is
@@ -842,7 +849,18 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   }
 
   return Response.json(
-    { ok: true, status: 201, id, slug, shortcode, starts_at: startsAt, timezone, warnings },
+    {
+      ok: true,
+      status: 201,
+      id,
+      slug,
+      shortcode,
+      starts_at: startsAt,
+      timezone,
+      warnings,
+      // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
+      map: mapState(isPublished === 1, mapChoice === null),
+    },
     {
       status: 201,
       headers: { ...corsHeaders(request), 'X-Request-Id': rid },
@@ -978,24 +996,39 @@ export async function handleUpdateEvent(
 
   // OSE-869 — per-event section switches. A partial patch: keys the body does
   // not name keep their stored value. Strict on write (400 INVALID_SETTINGS).
+  let settingsPatchJson: string | null = null;
   if ('settings' in body) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
-    // Merged in SQL (json_patch, RFC 7396) so two concurrent toggles cannot
-    // lose each other's write the way a read-modify-write would (CCR PR701 F6).
-    sets.push("settings_json = json_patch(COALESCE(settings_json, '{}'), ?)");
-    values.push(JSON.stringify(v.value));
+    settingsPatchJson = JSON.stringify(v.value);
   }
 
   // Set when this PUT turns listing on (see the grace window below).
   let listingOn = false;
+  // OSE-1560 — any explicit map write is the organizer choosing: it drops the
+  // `mapDefault` marker, so a sponsor added later never overrides it.
+  let mapChosenNow: boolean | null = null;
   if ('is_published' in body) {
-    const v = body.is_published;
-    if (typeof v === 'boolean' || v === 0 || v === 1) {
+    const v = explicitMapChoice(body.is_published);
+    if (v !== null) {
       sets.push('is_published = ?');
-      values.push(v === true || v === 1 ? 1 : 0);
-      listingOn = v === true || v === 1;
+      values.push(v ? 1 : 0);
+      listingOn = v;
+      mapChosenNow = v;
     }
+  }
+  // ONE settings_json assignment (a column may be SET once): the merge patch,
+  // then the marker removal when the map was just chosen. json_patch is RFC
+  // 7396, so two concurrent toggles cannot lose each other's write the way a
+  // read-modify-write would (CCR PR701 F6).
+  {
+    let expr: string | null = null;
+    if (settingsPatchJson !== null) {
+      expr = "json_patch(COALESCE(settings_json, '{}'), ?)";
+      values.push(settingsPatchJson);
+    }
+    if (mapChosenNow !== null) expr = clearMapDefaultSql(expr ?? undefined);
+    if (expr !== null) sets.push('settings_json = ' + expr);
   }
 
   // OSE-489: lat/lon are REAL columns — handle separately from string allowedFields.
@@ -1344,6 +1377,7 @@ export async function handleUpdateEvent(
       status: 200,
       id: eventId,
       ...(listedFrom !== undefined ? { listedFrom } : {}),
+      ...(mapChosenNow !== null ? { map: mapState(mapChosenNow, false) } : {}),
     },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );

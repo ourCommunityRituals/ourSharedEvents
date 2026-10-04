@@ -1,0 +1,37 @@
+info:
+  name: OSE-1560 | admin events | PUT settings refuses the server-managed map marker (400)
+  type: http
+  seq: 12
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"settings":{"mapDefault":false}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: whether the map setting is still the default is the server's
+        // record, not a setting a client can write. Refused before any write, so
+        // an organizer's own choice can never be forged back to "unchosen" (which
+        // is what would let a later sponsor flip it on).
+        test('400 INVALID_SETTINGS', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('INVALID_SETTINGS');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

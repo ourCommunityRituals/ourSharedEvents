@@ -54,7 +54,14 @@ export async function createLiveEvent(
   const ev = await ok<{ id: string }>(
     await request.post('/api/v2/admin/events', {
       headers,
-      data: { title, start_date: start, location: 'Eagles Hall', ...(where ?? {}) },
+      // OSE-1560: a new event is off the map unless asked; these journeys need it on (discoverable, listed).
+      data: {
+        title,
+        start_date: start,
+        location: 'Eagles Hall',
+        is_published: true,
+        ...(where ?? {}),
+      },
     }),
     'create event'
   );
