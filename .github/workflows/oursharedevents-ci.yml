@@ -993,6 +993,69 @@ jobs:
           fi
 
   # ============================================================================
+  # LOCAL VETTING — T2/T3 (API contract + smoke) on THIS branch's code, PRs only
+  # ============================================================================
+  # T2 (Bruno) and T3 (Playwright smoke) used to run only after merge, against
+  # shared staging. This runs the same collections and specs on every PR against a
+  # local worker with a local D1 (the way the mobile audit does), so the diff under
+  # review is what gets tested, no deploy and no secrets are involved, and PRs
+  # cannot step on each other's staging. The script fails a section that ran zero
+  # tests. The post-merge staging T2/T3 still run unchanged (deployed-surface
+  # verdict); whether they stay is a pending decision, not part of this change.
+  local-vetting:
+    name: 'T2/T3 Local (PR code)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [security, gate, gate-tests]
+    if: |
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      needs.gate-tests.result == 'success'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # The worker bundles @ocr/ui from the pinned hub commit (ADR-008), so this is
+        # REQUIRED, never continue-on-error.
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+      - name: Install root dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install worker dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Vet this branch (T2 Bruno + T3 smoke on a local worker)
+        run: bash scripts/ci/run-local-vetting.sh
+      - name: Scan artifacts for credentials
+        id: artifact-scan
+        if: always()
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh .test-results/
+      - name: Upload local vetting results
+        uses: actions/upload-artifact@v7
+        if: always() && steps.artifact-scan.outcome == 'success'
+        with:
+          name: local-vetting-${{ github.run_number }}
+          path: .test-results/
+          retention-days: 14
+          include-hidden-files: true
+
+  # ============================================================================
   # T1 DEPLOY → Staging — Push to main or dispatch
   # ============================================================================
   deploy-staging:
@@ -2667,6 +2730,7 @@ jobs:
     needs:
       - security
       - gate
+      - local-vetting
       - deploy-staging
       - contract-staging
       - smoke-staging
@@ -2724,6 +2788,7 @@ jobs:
         security,
         gate,
         gate-tests,
+        local-vetting,
         deploy-staging,
         smoke-staging,
         contract-staging,

@@ -25,9 +25,23 @@ runtime:
 
         
 
-        \    test('Has count field', function() {
+        \    test('Has count field (number when >= K-anon floor, else suppressed to null)', function() {
 
-        \        expect(json.count).to.be.a('number');
+        \        // Below K=5 the count is withheld (null + suppressed), never zero. A fresh
+
+        \        // database is below the floor; staging only has a number from accumulated smoke check-ins.
+
+        \        if (json.suppressed) {
+
+        \            expect(json.count).to.eql(null);
+
+        \            expect(json.floor).to.eql(5);
+
+        \        } else {
+
+        \            expect(json.count).to.be.a('number');
+
+        \        }
 
         \    });
 
