@@ -182,7 +182,7 @@ test.describe('OSE-1516 poster layout, measured', () => {
           // Two columns under the artwork.
           for (const c of cards) expect(c.y).toBeGreaterThanOrEqual(art!.y + art!.h - 1);
           const xs = Array.from(new Set(cards.map((c) => Math.round(c.x / 4))));
-          expect(xs.length, 'two columns').toBe(n === 1 ? 1 : 2);
+          expect(xs.length, 'two columns').toBe(2);
         }
       });
     }
