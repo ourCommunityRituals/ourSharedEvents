@@ -146,8 +146,8 @@ function escapeHtml(text: string): string {
 const FORM_CSS = `
   body { line-height: 1.4; }
   header { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; text-align: center; }
-  header h1 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
-  header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; }
+  header h1 { overflow-wrap: anywhere; font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; overflow-wrap: anywhere; }
   main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
   .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
   .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }

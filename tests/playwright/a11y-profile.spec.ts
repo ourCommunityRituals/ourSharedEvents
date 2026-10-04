@@ -7,9 +7,9 @@
  *   1. No sideways scroll at 320px with normal text (WCAG 1.4.10 Reflow).
  *   2. axe WCAG 2.1 AA: no serious or critical finding, in light and in dark.
  *   3. Nothing keeps moving on the TV when the system asks for reduced motion.
- *   4. At 200% text the header and its navigation still fit a 320px screen
- *      (WCAG 1.4.4 with 1.4.10). Body content at 200% text is a separate,
- *      harsher bar than either criterion alone and is tracked on its own.
+ *   4. At 200% text the whole page, header to body, still fits a 320px screen
+ *      (WCAG 1.4.4 with 1.4.10; OSE-1558 widened this from header and
+ *      navigation only).
  *
  * The dark-mode contrast of the landing map's legend links needs ten mapped
  * events to draw, so that check lives beside the map seed in
@@ -52,7 +52,10 @@ const SURFACES: Surface[] = [
   { name: 'register form', path: () => `/forms/${eventId}?type=register` },
   { name: 'sponsor home', path: () => `/sponsor?t=${SPONSOR_HOME_TOKEN}` },
   { name: 'sponsor card', path: () => `/sponsors/${SPONSOR_CARD_ID}` },
+  { name: 'organizer sign-in', path: () => '/admin' },
   { name: 'admin', path: () => '/admin', admin: true },
+  { name: 'admin logs', path: () => '/api/v2/admin/screens/logs', admin: true },
+  { name: 'admin settings', path: () => '/api/v2/admin/screens/settings', admin: true },
 ];
 
 async function open(page: Page, surface: Surface): Promise<void> {
@@ -92,31 +95,17 @@ for (const surface of SURFACES) {
       ).toBeLessThanOrEqual(o.clientWidth + 1);
     });
 
-    test('320px, 200% text: the header and its navigation wrap', async ({ page }) => {
+    test('320px, 200% text: the whole page fits, no sideways scroll', async ({ page }) => {
       await page.setViewportSize({ width: 320, height: 700 });
       await open(page, surface);
       await page.evaluate(() => {
         document.documentElement.style.fontSize = '200%';
       });
-      const offEdge = await page.evaluate(() => {
-        const max = document.documentElement.clientWidth + 1;
-        const out: string[] = [];
-        for (const el of Array.from(
-          document.querySelectorAll<HTMLElement>('header, header *, nav, nav *')
-        )) {
-          const r = el.getBoundingClientRect();
-          if (r.width > 0 && r.right > max) {
-            out.push(
-              `${el.tagName.toLowerCase()}[${el.dataset.testid ?? ''}] right=${Math.round(r.right)}`
-            );
-          }
-        }
-        return out;
-      });
+      const o = await overflow(page);
       expect(
-        offEdge,
-        `${surface.name} at 200% text runs off the edge: ${offEdge.join(', ')}`
-      ).toEqual([]);
+        o.scrollWidth,
+        `${surface.name} at 200% text: ${o.scrollWidth}px wide on a ${o.clientWidth}px screen (${o.widest})`
+      ).toBeLessThanOrEqual(o.clientWidth + 1);
     });
 
     for (const colorScheme of ['light', 'dark'] as const) {

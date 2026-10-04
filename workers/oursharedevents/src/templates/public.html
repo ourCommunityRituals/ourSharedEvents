@@ -6,59 +6,14 @@
     <title>Upcoming events | OurSharedEvents</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>
-      header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-        padding: 1.25rem 2rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-      }
-      header h1 {
-        overflow-wrap: anywhere;
-        font-size: 1.4rem;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-      }
-      main {
-        max-width: 900px;
-        margin: 2rem auto;
-        padding: 0 1rem;
-      }
-      h2 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 1rem;
-      }
-      #events {
-        display: grid;
-        gap: 1rem;
-      }
-      .event-card {
-        min-height: var(--tap-min);
-        position: relative;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        padding: 1.25rem 1.5rem;
-        border-left: 3px solid var(--accent);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        transition: background 0.15s;
-      }
-      .event-card:hover {
-        background: var(--surface-hover);
-      }
-      .event-card-link {
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        border-radius: var(--radius-sm);
-      }
+      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem; }
+      header h1 { overflow-wrap: anywhere; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
+      main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 1rem; }
+      #events { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+      .event-card { min-height: var(--tap-min); position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; border-left: 3px solid var(--accent); display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 1rem; transition: background 0.15s; }
+      .event-card:hover { background: var(--surface-hover); }
+      .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 3px;
@@ -67,10 +22,11 @@
         position: relative;
         z-index: 2;
         pointer-events: none;
-        flex: 1;
+        flex: 1 1 10rem;
         min-width: 0;
       }
       .event-card h3 {
+        overflow-wrap: anywhere;
         font-size: 1rem;
         font-weight: 600;
         margin-bottom: 0.35rem;

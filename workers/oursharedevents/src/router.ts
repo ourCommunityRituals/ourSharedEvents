@@ -93,6 +93,12 @@
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
+ *                                             (?scope=brand&source=&since=&brand= for the Logs screen)
+ *
+ *   Admin Logs + Settings screens (auth required; handlers/admin-screens.ts):
+ *   GET    /api/v2/admin/screens/logs       → Logs page (HTML; reads the audit-log route above)
+ *   GET    /api/v2/admin/screens/settings   → Settings page (HTML, read only)
+ *   GET    /api/v2/admin/settings           → Settings data: defaults, plan, timings, fixed rules
  *
  *   Security Monitoring (auth required — OSE-SEC-1):
  *   GET    /api/v2/admin/security/rate-limit-stats → top-10 currently rate-limited buckets (active 60 s windows, from KV; keyed ids, not IPs)
@@ -237,7 +243,18 @@ import {
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
 import { handlePrivacyPage } from './handlers/privacy';
-import { isFeatureEnabled, type FeatureFlagEnv } from './lib/feature-flags';
+import {
+  isFeatureEnabled,
+  listFlags,
+  detectCurrentTier,
+  type FeatureFlagEnv,
+} from './lib/feature-flags';
+import {
+  handleAdminLogsPage,
+  handleAdminSettingsPage,
+  handleAdminSettings,
+} from './handlers/admin-screens';
+import type { AdminSettingsEnv } from './lib/admin-settings';
 import {
   handleListFlags,
   handleListTiers,
@@ -1495,6 +1512,39 @@ export async function route(
       return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
     }
     return handleListAuditLog(request, env, auditView, reqId);
+  }
+
+  // ── Admin Logs + Settings screens (first slice) ────────────────────────────
+  // The pages carry no rows: the Logs page reads the audit-log route above
+  // (brand-scoped by the server), and Settings reads /api/v2/admin/settings,
+  // which holds platform constants and the plan, never a tenant table.
+  if (
+    (pathname === '/api/v2/admin/screens/logs' || pathname === '/api/v2/admin/screens/settings') &&
+    method === 'GET'
+  ) {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) {
+      return (request.headers.get('Accept') ?? '').includes('text/html')
+        ? handleAdminSignInPage(env)
+        : deny;
+    }
+    return pathname.endsWith('/logs') ? handleAdminLogsPage() : handleAdminSettingsPage();
+  }
+
+  if (pathname === '/api/v2/admin/settings' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    // detectCurrentTier fails OPEN (an unreadable flag table reads as every flag
+    // on, i.e. Enterprise). The page must never claim a plan it could not read,
+    // so prove the flag table answers first, and refuse with a 503 if it does not.
+    let tier;
+    try {
+      await listFlags(env.FORMS_DB, { scope: 'global' });
+      tier = await detectCurrentTier(env.FORMS_DB);
+    } catch {
+      return errorResponse('DB_UNAVAILABLE', 'The plan could not be read right now.', 503, request);
+    }
+    return handleAdminSettings(tier, env as unknown as AdminSettingsEnv);
   }
 
   // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
