@@ -19,8 +19,8 @@ So the suite goes red exactly when a story lands, and stays red until the test i
 | OSE-1560 | O1, O2     | W     | a new event is off the map unless someone turns it on                   | Open   |
 | OSE-1560 | O1, O6     | W     | leaving draft without a time and an event type is refused by name (409) | Open   |
 | OSE-1519 | P3         | W     | an archived event says it has ended, with no error-code label           | Open   |
-| OSE-1520 | P1         | W     | `/public` redirects to `/events`                                        | Open   |
-| OSE-1520 | P1         | W     | the `/events` tab title says what the page is                           | Open   |
+| OSE-1520 | P1         | W     | `/public` redirects to `/events`                                        | Done   |
+| OSE-1520 | P1         | W     | the `/events` tab title says what the page is                           | Done   |
 | OSE-1518 | P3         | W     | a live event page carries the trust header                              | Open   |
 | OSE-1522 | S4, P1, P3 | W     | the `/events` card shows the consented sponsor by the title             | Open   |
 
