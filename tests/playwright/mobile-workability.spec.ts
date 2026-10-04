@@ -189,6 +189,13 @@ const SURFACES: Surface[] = [
       '[data-testid="email-submit"], [data-testid$="-submit"], form button[type="submit"]',
   },
   {
+    // OSE-1529: what an organizer sees before sign-in (the Worker's 401 page; no
+    // auth header on purpose). Its CTA is the sign-in button.
+    path: '/admin',
+    name: 'organizer sign-in page',
+    primaryCtaSelector: '[data-testid="signin-cta"]',
+  },
+  {
     path: '/admin',
     name: 'admin dashboard',
     authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },

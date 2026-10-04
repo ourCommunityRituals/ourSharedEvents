@@ -52,6 +52,7 @@ const SURFACES: Surface[] = [
   { name: 'register form', path: () => `/forms/${eventId}?type=register` },
   { name: 'sponsor home', path: () => `/sponsor?t=${SPONSOR_HOME_TOKEN}` },
   { name: 'sponsor card', path: () => `/sponsors/${SPONSOR_CARD_ID}` },
+  { name: 'organizer sign-in', path: () => '/admin' },
   { name: 'admin', path: () => '/admin', admin: true },
 ];
 
