@@ -78,6 +78,14 @@ jobs:
         working-directory: ocr-docs/ocr-docs-brain
         run: python3 scripts/invariant.py validate
 
+      # OSE-1604: join every brain invariant's `test_file` to this repo. A named
+      # test that does not exist fails (unless baselined with a reason, ratchet
+      # only shrinks), and the 0-architecture README gate index must match the
+      # YAML + directory (generated, never hand-written).
+      - name: Invariant registry reconciliation (test_file exists, gate index generated)
+        working-directory: ${{ github.workspace }}/ose
+        run: python3 scripts/check-invariant-registry.py --brain ../ocr-docs/ocr-docs-brain
+
       # Invariant #22 (OCR-ENF-23) is enforced by the canonical, live-read brain
       # guard (OCR-docs check_cross_repo_imports.py, #22 enforcement_kind:
       # brain_script). One reviewed brain edit re-arms/disarms the fleet. The

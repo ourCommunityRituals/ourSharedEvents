@@ -1,0 +1,8 @@
+{
+  "_comment": "Ratchet (OSE-1604): brain invariants whose named test_file does not exist in this repo. May only shrink; an entry whose file resolves must be deleted. Each needs a reason. Brain-side fixes land in OCR-docs.",
+  "missing_test_file": {
+    "14": "Brain names tests/e2e/0-architecture/mobile-workability.invariant.spec.ts, but mobile workability is enforced by the blocking phone audit (playwright.mobile.config.ts, *-mobile-workability.spec.ts, OSE-1236). Fix: re-point the brain test_file at the real audit, or add a thin meta-gate like qr-decode-matrix.",
+    "24": "Brain names tests/audit-layer.spec.ts ('in construction'). The audit layer shipped as workers/oursharedevents/tests/audit-log-brand-scope.invariant.spec.ts, conformance-report.yml (OSE-560) and the audit-log suites. Fix: re-point the brain test_file, then flip status if the invariant is met.",
+    "27": "Brain names no-biometrics.invariant.test.ts, the gate OW shipped (ourWKRP). OSE applies to #27 but has no biometric-absence gate of its own. Fix: add an OSE gate (or re-point the brain at a shared one), then delete this entry."
+  }
+}
