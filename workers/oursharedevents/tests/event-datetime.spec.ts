@@ -15,6 +15,7 @@ import {
   zonedDatePart,
   zonedTimePart,
   phaseTimesFor,
+  zoneDisplayName,
 } from '../src/lib/event-datetime';
 
 // The ticket's parameterized zone list.
@@ -333,5 +334,29 @@ describe('OSE-1313 phaseTimesFor — what the phase resolver sees', () => {
         timezone: 'America/Chicago',
       }).end_date
     ).toBeNull();
+  });
+});
+
+describe('OSE-1518 zoneDisplayName: a zone by its everyday name', () => {
+  test('US zones read as their common names, the same in winter and summer', () => {
+    for (const at of [new Date('2026-01-15T12:00:00Z'), new Date('2026-07-15T12:00:00Z')]) {
+      expect(zoneDisplayName('America/Chicago', at)).toBe('Central Time');
+      expect(zoneDisplayName('America/New_York', at)).toBe('Eastern Time');
+      expect(zoneDisplayName('America/Los_Angeles', at)).toBe('Pacific Time');
+    }
+  });
+
+  test('every zone the create form offers has a name that is not its IANA id', () => {
+    for (const tz of ZONES) {
+      const name = zoneDisplayName(tz);
+      expect(name, tz).not.toBe('');
+      expect(name, tz).not.toContain('/');
+    }
+  });
+
+  test('a value that is not a zone gives an empty name', () => {
+    for (const bad of [null, undefined, '', 'Mars/Olympus', 'CST6CDT; DROP']) {
+      expect(zoneDisplayName(bad)).toBe('');
+    }
   });
 });
