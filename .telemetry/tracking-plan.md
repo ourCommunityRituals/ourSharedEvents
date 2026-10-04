@@ -133,12 +133,30 @@ The daily batch has no status filter, so draft and archived events' titles alrea
 
 Not chosen, and why: a new per-event keyed count export (A2) needs the full floor, rounding and no-subtraction design of OSE-1460 at event grain, a far smaller cell than corridor x type, and is its own story; keeping the keys inside OSE (B) would meet decision 3 only at corridor grain; a separate keyed dataset (C) needs a new pool and a change to the pool contract. A2 can be reopened later without undoing A1.
 
-**Pre-conditions before OSE-1617 builds the two columns** (each is its own artifact with its own review):
+**Pre-conditions before OSE-1617 builds the two columns** (each is its own artifact with its own review). The first audit of A1 against the invariants, code, CI and docs (2026-10-04) added items 2, 3, 4, 5 and 8 to the list I first wrote.
 
-1. The boundary doc's location row is amended in OCR-docs to "corridor-level for counts; event identity keys for listed events" (a Tier 2 change).
-2. `lib/export-geography.ts` gets an allowlist for exactly the two key names on the `events_backup` table, and a gate fails on any other venue-grain field, and on either key name in an aggregate export.
-3. OSE-1615 has computed the keys and published the normalisation and hash fixtures.
-4. OSE-1460's sentence "The venue never leaves" stays true for the returns export and is not edited; the new keys are on a different table.
+1. **Boundary doc.** The location row of `OCR_ARCHITECTURE_oerAggregationBoundary.md` is amended in OCR-docs to "corridor-level for counts; event identity keys for listed events" (Tier 2).
+2. **ADR-011 (Accepted, PO 2026-10-01).** Rule 4 says every export carries res7 or coarser, and its "Neutral" section records that `venue_id` may not cross the OER boundary (OSE-1460). A1 needs a dated note there saying that a venue hash and an event hash on listed event rows are identity keys, not geography, and are allowed. If the PO reads rule 4 more strictly, A1 does not stand. (Tier 2.)
+3. **A structural gate at L0.** Invariant #17's gate (`oer-emission-boundary.invariant.spec.ts`) only locks the `wrangler.toml` bindings. **No invariant gate enforces export grain today**: only `lib/export-geography.ts` and the workers-pool tests do. A1 adds an allowlist for exactly the two key names on the `events_backup` table, and a gate in the T0 invariants shard that fails on any other venue-grain field, and on either key name in an aggregate export.
+4. **Schema before code.** Add the two NULLABLE STRING columns to `bigquery/events_backup.schema.json` (the workers-pool test `poolSchemaViolations` then covers the row). Apply `bq update` to every existing table (dev and staging exist; production tables are created with the new schema, OSE-1511 step 7). Then deploy. Reason: `insertAll` is called without `ignoreUnknownValues`, so a field with no column rejects the row, the cron phase fails and the backup stops; and `bq-create-pool-tables.sh` never alters a live table.
+5. **Listing time.** The daily batch reads `updated_at` in the last 24 hours and does not select `is_published` or `listed_from`. The query adds both and applies `listedSql()`, and includes events whose listing window ended in the last 24 hours. Without that, an event that becomes listed after the batch exports null keys and keeps them until its next edit. Keys already exported are not retracted if the event is later unlisted; that is accepted and written down.
+6. **OSE-1615** has computed the keys and published the normalisation and hash fixtures.
+7. **OSE-1460's sentence** "The venue never leaves" stays true for the returns export and is not edited; the new keys are on a different table.
+8. **Doc follow-through when built:** the `CLAUDE.md` line "No `anon_id_hash` or real venue crosses" gets the A1 qualifier; ADR-010's sentence that the keys map onto the `venue_id` tag is superseded (the tag stays the event id, the keys are new columns).
+
+**How A1 is tested, level by level.** Levels 6 and 7 cannot prove it:
+
+| Level              | What proves A1                                                                                                                                                                        | State          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 1 Security         | The L0 gate of item 3; keys never client-supplied; listed-only                                                                                                                        | to write       |
+| 2 Lint             | formatting only                                                                                                                                                                       | n/a            |
+| 3 Contract         | `events_backup.schema.json` and `poolSchemaViolations`                                                                                                                                | exists, extend |
+| 4 Unit             | key functions against the fixtures (OSE-1615); the listed-only selection                                                                                                              | to write       |
+| 5 Integration      | `oer-boundary.spec.ts` runtime cases: add a listed event (keys present), a draft (null), an event inside its grace window (null), one listed after the last batch (exported next run) | exists, extend |
+| 6 API (Bruno)      | **no Bruno request covers the backup route**, and the route returns 503 when BigQuery is not configured; whether staging holds the GCP credentials is not verified                    | gap            |
+| 7 E2E (Playwright) | not applicable to an export                                                                                                                                                           | n/a            |
+
+So the staging chain (T2, T3, T4) can go green without touching the BigQuery path. The story needs one recorded manual check against the staging dataset (`bq query` on the `_stg` table showing both columns for a listed event and null for a draft), and born-red proof for the gate and the listing cases.
 
 ## 5. Roll-up recipes, one per buyer
 
