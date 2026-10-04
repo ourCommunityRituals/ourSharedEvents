@@ -47,7 +47,7 @@
     },
     "workers/oursharedevents/src/templates/display.html": {
       "own-tokens": 0,
-      "own-stylesheet": 8307,
+      "own-stylesheet": 8264,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -77,7 +77,7 @@
     },
     "workers/oursharedevents/src/templates/sponsor-home.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3334,
+      "own-stylesheet": 3270,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     }

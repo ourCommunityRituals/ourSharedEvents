@@ -362,7 +362,7 @@
               const logo =
                 '<img src="' + attr(src) + '" alt="' + attr(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="public-sponsor-logo">';
               const place = s.address_line
-                ? '<small data-testid="public-sponsor-address">' + attr(s.address_line) + '</small>'
+                ? '<small class="sub-line" data-testid="public-sponsor-address">' + attr(s.address_line) + '</small>'
                 : '';
               // A tap goes to the https website when there is one, otherwise to
               // the sponsor's own card (title, location, contact). OSE-1438: the
