@@ -1773,7 +1773,7 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true') ||
         (needs.deploy-staging.result == 'success' && needs.smoke-staging.result == 'success')
       )
-    # OSE-1171/1186: T4 is split into three child legs that run in PARALLEL. Each leg
+    # OSE-1171 / OSE-1567: T4 is split into three child legs that run in PARALLEL. Each leg
     # owns the staging fixtures it seeds, and no two legs read or write the same
     # event: platform = SMOKE_EVENT_SPONSORED + test-event-001 sponsors; forms =
     # test-event-001 registrations + evt_forms_phase1/2 (FORMS_DB); surfaces = the
