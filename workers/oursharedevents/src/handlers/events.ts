@@ -12,6 +12,7 @@
  * Data source: D1 database (DB binding)
  */
 
+import { coreValuesMissing, coreValuesRefusal, isPublishStep } from '../lib/core-values';
 import { corsHeaders } from '../lib/cors';
 import {
   cursorAfter,
@@ -1191,9 +1192,11 @@ export async function handleUpdateEvent(
       return errorResponse('INVALID_STATUS', 'status must be an event-state string', 400, rid);
     }
     if (typeof body.status === 'string') {
-      const current = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+      const current = await env.DB.prepare(
+        'SELECT status, starts_at, event_type_id FROM events WHERE id = ?'
+      )
         .bind(eventId)
-        .first<{ status: string }>();
+        .first<{ status: string; starts_at: string | null; event_type_id: string | null }>();
       if (!current) {
         return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
       }
@@ -1214,6 +1217,21 @@ export async function handleUpdateEvent(
           },
           { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
         );
+      }
+      // OSE-1560 � leaving draft (or coming back from archived) needs a start
+      // time and an event type. The same check runs in verify-qr. Read against
+      // what THIS request sets, so one PUT may supply the values and move on.
+      if (isPublishStep(from, to)) {
+        const missing = coreValuesMissing(current, {
+          ...('start_time' in body ? { start_time: body.start_time } : {}),
+          ...('event_type_id' in body ? { event_type_id: body.event_type_id } : {}),
+        });
+        if (missing.length > 0) {
+          return Response.json(coreValuesRefusal(missing, rid), {
+            status: 409,
+            headers: { ...corsHeaders(request), 'X-Request-Id': rid },
+          });
+        }
       }
       // Publish grace window (lib/publish-grace.ts). A move INTO active starts
       // it; a move out clears it. active → active (a no-op) leaves it alone, so

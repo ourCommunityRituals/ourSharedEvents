@@ -26,6 +26,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
+import { giveCoreValues } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -74,6 +75,7 @@ async function seed(
   )
     .bind(id, opts.brand ?? BRAND, opts.title ?? TITLE, id, status, opts.published ?? 1)
     .run();
+  await giveCoreValues(env.DB, id);
 }
 
 function b64url(obj: unknown): string {

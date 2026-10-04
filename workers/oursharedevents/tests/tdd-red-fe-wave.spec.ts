@@ -81,26 +81,73 @@ describe('OSE-1560 core values at publish; map defaults to off', () => {
     expect(row?.is_published, '[OSE-1560] a new event starts off the map').toBe(0);
   });
 
-  redStory(
-    'OSE-1560',
-    'leaving draft without a time and an event type is refused by name',
-    async () => {
-      const id = await createDraft('No time, no type');
-      const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
-        method: 'PUT',
-        headers: { ...BEARER, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ready' }),
-      });
-      expect(res.status, '[OSE-1560] leaving draft with core values missing is a 409').toBe(409);
-      const body = (await res.json()) as { code?: string; missing?: string[] };
-      expect(body.code, '[OSE-1560] the refusal is CORE_VALUES_MISSING').toBe(
-        'CORE_VALUES_MISSING'
-      );
-      expect(body.missing, '[OSE-1560] it lists what is missing').toEqual(
-        expect.arrayContaining(['time', 'event_type'])
-      );
-    }
-  );
+  it('leaving draft without a time and an event type is refused by name', async () => {
+    const id = await createDraft('No time, no type');
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ready' }),
+    });
+    expect(res.status, '[OSE-1560] leaving draft with core values missing is a 409').toBe(409);
+    const body = (await res.json()) as { code?: string; missing?: string[] };
+    expect(body.code, '[OSE-1560] the refusal is CORE_VALUES_MISSING').toBe('CORE_VALUES_MISSING');
+    expect(body.missing, '[OSE-1560] it lists what is missing').toEqual(
+      expect.arrayContaining(['time', 'event_type'])
+    );
+  });
+
+  it('verify-qr is the same door: a draft is refused', async () => {
+    const id = await createDraft('Verify door');
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
+      method: 'POST',
+      headers: BEARER,
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('one PUT may supply the time and the type and move on', async () => {
+    const id = await createDraft('Supply and go');
+    const type = await E.DB.prepare('SELECT id FROM event_type_registry LIMIT 1').first<{
+      id: string;
+    }>();
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'ready',
+        start_date: '2027-05-01',
+        start_time: '18:00',
+        timezone: 'America/Chicago',
+        event_type_id: type?.id,
+      }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('a title-only draft can still be archived without the values', async () => {
+    const id = await createDraft('Archive a draft');
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    });
+    expect(res.status).not.toBe(409);
+  });
+
+  it('a type without a start time is refused as time only', async () => {
+    const id = await createDraft('Type but no time');
+    const type = await E.DB.prepare('SELECT id FROM event_type_registry LIMIT 1').first<{
+      id: string;
+    }>();
+    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ready', event_type_id: type?.id }),
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { missing?: string[] };
+    expect(body.missing).toEqual(['time']);
+  });
 });
 
 describe('OSE-1519 a scanned code for a non-public event names the page', () => {

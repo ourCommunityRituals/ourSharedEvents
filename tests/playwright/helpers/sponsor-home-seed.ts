@@ -56,12 +56,21 @@ export async function createLiveEvent(
     }),
     'create event'
   );
+  // OSE-1560: leaving draft needs a start time and an event type.
+  const catalog = await ok<{ categories: { types: { id: string }[] }[] }>(
+    await request.get('/api/v2/admin/event-types', { headers }),
+    'event types'
+  );
+  const eventTypeId = catalog.categories[0]?.types[0]?.id;
   let listedFrom: string | null = null;
   for (const status of ['ready', 'active']) {
     const res = await ok<{ listedFrom?: string | null }>(
       await request.put(`/api/v2/admin/events/${encodeURIComponent(ev.id)}`, {
         headers,
-        data: { status },
+        data:
+          status === 'ready'
+            ? { status, start_time: '18:00', event_type_id: eventTypeId }
+            : { status },
       }),
       `event -> ${status}`
     );
