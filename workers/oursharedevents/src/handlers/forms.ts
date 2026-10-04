@@ -48,6 +48,7 @@ import {
 } from '../lib/form-validation';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import { parsePagingParams, encodeRegistrationsCursor } from '../lib/registrations-paging';
+import { REGISTRATION_TTL_DAYS, EMAIL_RETENTION_DAYS } from '../lib/retention-windows';
 
 export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -58,8 +59,10 @@ export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-const REGISTRATION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
-const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// The day counts live in lib/retention-windows.ts so the admin Settings page
+// quotes the same numbers this handler enforces.
+const REGISTRATION_TTL_MS = REGISTRATION_TTL_DAYS * 24 * 60 * 60 * 1000;
+const EMAIL_RETENTION_MS = EMAIL_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 // ─── Rate limiter (per-isolate, sliding window) ─────────────────────────────
 // Keys: `${ip}:${eventId}` — different eventIds have independent limits.

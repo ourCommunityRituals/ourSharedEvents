@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Settings · OurSharedEvents Admin</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      main{max-width:760px;margin:0 auto;padding:1rem 16px 3rem}
+      .st-list{list-style:none;display:grid;gap:8px;padding:0}
+      .st-section{margin-bottom:28px}
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>Settings</h1>
+      <nav aria-label="Admin pages">
+        <a class="btn btn-link" href="/admin" data-testid="settings-nav-admin">Admin</a>
+        <a class="btn btn-link" href="/api/v2/admin/screens/logs" data-testid="settings-nav-logs">Logs</a>
+      </nav>
+    </header>
+    <main id="main-content" data-testid="settings-screen">
+      <p class="list-sub" data-testid="settings-readonly">
+        Read only for now. Nothing on this page can be changed yet, so nothing here saves.
+      </p>
+      <p id="settings-status" role="status" aria-live="polite" data-testid="settings-status">Loading settings.</p>
+
+      <section class="st-section" aria-labelledby="st-defaults-h" data-testid="settings-defaults" hidden>
+        <h2 id="st-defaults-h">Defaults for new events</h2>
+        <p class="list-sub" id="st-defaults-note" data-testid="settings-defaults-note"></p>
+        <ul class="st-list" id="st-defaults-list"></ul>
+      </section>
+
+      <section class="st-section" aria-labelledby="st-plan-h" data-testid="settings-plan" hidden>
+        <h2 id="st-plan-h">Your plan</h2>
+        <p class="list-name" id="st-plan-name" data-testid="settings-plan-name"></p>
+        <p class="list-sub" id="st-plan-desc"></p>
+        <ul class="st-list" id="st-plan-list"></ul>
+      </section>
+
+      <section class="st-section" aria-labelledby="st-timings-h" data-testid="settings-timings" hidden>
+        <h2 id="st-timings-h">Platform timings</h2>
+        <p class="list-sub">Set for the whole platform. You can see them; you cannot change them here.</p>
+        <ul class="st-list" id="st-timings-list"></ul>
+      </section>
+
+      <section class="st-section" aria-labelledby="st-fixed-h" data-testid="settings-fixed" hidden>
+        <h2 id="st-fixed-h">What is fixed for everyone</h2>
+        <p class="list-sub">No plan and no setting changes these.</p>
+        <ul class="st-list" id="st-fixed-list"></ul>
+      </section>
+    </main>
+    <!--OCR_LEGAL_FOOTER-->
+    <script>
+      // Settings screen: one read of GET /api/v2/admin/settings, shown as four
+      // sections. Every value is written with textContent, so no value is ever read as markup.
+      (function () {
+        var $ = function (id) { return document.getElementById(id); };
+        var status = $('settings-status');
+
+        function item(list, title, detail, testid) {
+          var li = document.createElement('li');
+          li.className = 'card';
+          if (testid) li.setAttribute('data-testid', testid);
+          var a = document.createElement('div');
+          a.className = 'list-name';
+          a.textContent = title;
+          li.appendChild(a);
+          if (detail) {
+            var b = document.createElement('div');
+            b.className = 'list-sub';
+            b.textContent = detail;
+            li.appendChild(b);
+          }
+          list.appendChild(li);
+          return li;
+        }
+
+        var TIER_NAME = { free: 'Free', mid: 'Mid', enterprise: 'Enterprise' };
+
+        function show(id) { document.querySelector('[data-testid="' + id + '"]').hidden = false; }
+
+        function render(s) {
+          $('st-defaults-note').textContent = s.defaults.note;
+          s.defaults.items.forEach(function (d) {
+            item($('st-defaults-list'), d.label, d.value + (d.source === 'plan' ? ' (follows your plan)' : ''), 'settings-default-' + d.key);
+          });
+          $('st-plan-name').textContent = s.plan.name;
+          $('st-plan-desc').textContent = s.plan.description;
+          s.plan.items.forEach(function (p) {
+            var detail = p.included ? 'Included' : 'Not on your plan. Starts on ' + (TIER_NAME[p.lowest_tier] || p.lowest_tier) + '.';
+            item($('st-plan-list'), p.label, detail, 'settings-plan-item').setAttribute('data-included', p.included ? '1' : '0');
+          });
+          s.timings.forEach(function (t) {
+            var v = t.value === 0 ? 'Off' : t.value + ' ' + (t.value === 1 ? t.unit.replace(/s$/, '') : t.unit);
+            item($('st-timings-list'), t.label, v, 'settings-timing-' + t.key);
+          });
+          s.fixed.forEach(function (f) { item($('st-fixed-list'), f.text, '', 'settings-fixed-' + f.key); });
+          ['settings-defaults', 'settings-plan', 'settings-timings', 'settings-fixed'].forEach(show);
+          status.textContent = '';
+        }
+
+        function fail(text) {
+          status.setAttribute('role', 'alert');
+          status.setAttribute('data-testid', 'settings-error');
+          status.textContent = text;
+        }
+
+        fetch('/api/v2/admin/settings', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+          .then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) {
+              if (!res.ok || !data || !data.ok) {
+                fail('Settings could not be loaded (the server said ' + res.status + '). Nothing is shown rather than a guess.');
+                return;
+              }
+              render(data);
+            });
+          })
+          .catch(function () { fail('No connection. Settings were not loaded. Try again.'); });
+      })();
+    </script>
+  </body>
+</html>

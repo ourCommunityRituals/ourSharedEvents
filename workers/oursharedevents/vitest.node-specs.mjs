@@ -232,4 +232,7 @@ export const NODE_SPECS = [
   // OSE-1447 follow-up — rate-limit KV keys are HMAC under RATE_LIMIT_KEY_PEPPER.
   // Pure module + in-memory KV fake + node:fs source reads; no runtime.
   'tests/rate-limit-pepper.spec.ts',
+  // Logs + Settings pages: each page's script run in jsdom with a stubbed fetch
+  // (tabs, filters, honest empty/error states, text-only rendering).
+  'tests/admin-logs-settings-ui.spec.ts',
 ];
