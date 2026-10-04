@@ -51,6 +51,7 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
 import { maybeTag } from '../lib/h3-tagging';
+import { MAP_FLIP_NOTE, auditMapFlip, flipFired, mapFlipStatement } from '../lib/map-default';
 import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
 import { mintBeaconToken, verifyBeaconToken, type BeaconTokenEnv } from '../lib/beacon-token';
 
@@ -60,6 +61,7 @@ export interface SponsorsEnv
   extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv, InvalidTrafficEnv, BeaconTokenEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
 }
 
 function requestId(): string {
@@ -656,14 +658,39 @@ export async function handleAdminCreateSponsor(
     );
   }
 
+  // OSE-1560: the organizer adding a sponsor turns the map on, if the organizer
+  // has not chosen the map themselves (lib/map-default.ts). It rides in the same
+  // batch, after the placement row it depends on, so the two land together.
+  if (eventId && placementId) {
+    stmts.push(
+      mapFlipStatement(env.DB, {
+        eventId,
+        sponsorId: businessId,
+        graceMinutes: env.PUBLISH_GRACE_MINUTES,
+      })
+    );
+  }
+
+  let batchResults: D1Result[];
   try {
-    await env.DB.batch(stmts);
+    batchResults = await env.DB.batch(stmts);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(
       JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreateSponsor', error: msg })
     );
     return errorResponse('DB_ERROR', 'Failed to create sponsor', 503, rid);
+  }
+  const mapFlipped =
+    Boolean(eventId && placementId) && flipFired(batchResults[batchResults.length - 1]);
+  if (mapFlipped && eventId) {
+    await auditMapFlip(env as { DB: D1Database }, {
+      actor: extractAdminActor(request, env),
+      requestId: rid,
+      eventId,
+      via: 'organizer_add',
+      sponsorId: businessId,
+    });
   }
 
   // OSE-1000: bust the cache-fronted public sponsors list so the just-created
@@ -692,6 +719,8 @@ export async function handleAdminCreateSponsor(
   if (sponsorH3Res7 !== null && eventH3Res7 !== null) {
     responseBody.is_local_suggested = isLocal === 1;
   }
+  // OSE-1560: the heads-up for the admin, only when the map was just turned on.
+  if (mapFlipped) responseBody.map = MAP_FLIP_NOTE;
 
   return Response.json(responseBody, {
     status: 201,
@@ -987,10 +1016,20 @@ export async function handleAdminUpdateSponsor(
             AND source = 'sponsor_request' AND is_active = 0`
       ).bind(now, sponsorId, attach.eventId)
     );
+    // OSE-1560: the organizer adding a sponsor turns the default map on (see
+    // lib/map-default.ts). Last in the batch, so it reads the placement above.
+    stmts.push(
+      mapFlipStatement(env.DB, {
+        eventId: attach.eventId,
+        sponsorId,
+        graceMinutes: env.PUBLISH_GRACE_MINUTES,
+      })
+    );
   }
 
+  let updateResults: D1Result[] = [];
   try {
-    if (stmts.length > 0) await env.DB.batch(stmts);
+    if (stmts.length > 0) updateResults = await env.DB.batch(stmts);
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -1009,6 +1048,16 @@ export async function handleAdminUpdateSponsor(
   // ── is_local_suggested (advisory, only when H3 was updated) ──────────────
   // Advisory only — reported against the business's first placement's event.
   const updateResponseBody: Record<string, unknown> = { ok: true, status: 200, id: sponsorId };
+  if (attach && flipFired(updateResults[updateResults.length - 1])) {
+    updateResponseBody.map = MAP_FLIP_NOTE;
+    await auditMapFlip(env as { DB: D1Database }, {
+      actor: extractAdminActor(request, env),
+      requestId: rid,
+      eventId: attach.eventId,
+      via: 'organizer_add',
+      sponsorId,
+    });
+  }
 
   if (updateH3Res7 !== null) {
     try {

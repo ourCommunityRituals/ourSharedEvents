@@ -2175,6 +2175,9 @@
           'event-status': function (el) {
             if (window.changeEventStatus) window.changeEventStatus(argOf(el, 'event-id'), argOf(el, 'to'), el);
           },
+          'event-map': function (el) {
+            if (window.changeEventMap) window.changeEventMap(argOf(el, 'event-id'), el.getAttribute('data-want-on') === '1', el);
+          },
           'reload-page': function () {
             location.reload();
           },
@@ -2489,8 +2492,8 @@
             <div class="wizard-signup-grid">
               <button
                 type="button"
-                aria-pressed="true"
-                class="wizard-publish-option selected"
+                aria-pressed="false"
+                class="wizard-publish-option"
                 data-option="published"
                 data-testid="wizard-publish-yes"
               >
@@ -2501,8 +2504,8 @@
               </button>
               <button
                 type="button"
-                aria-pressed="false"
-                class="wizard-publish-option"
+                aria-pressed="true"
+                class="wizard-publish-option selected"
                 data-option="unpublished"
                 data-testid="wizard-publish-no"
               >
@@ -2676,6 +2679,7 @@
         <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
         <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
           <div class="wizard-summary" id="wizardEventSummary"></div>
+          <p class="wizard-step-help" id="wizard-map-note" data-testid="wizard-map-note" role="status" aria-live="polite" hidden></p>
           <!-- Every event is created as a DRAFT (handleCreateEvent). The public
                page, poster and display refuse drafts, so the links on step 4
                do nothing until the event is live. This step is where that
@@ -2847,7 +2851,12 @@
             // Kept in sync deliberately: a mismatch would mean the highlighted
             // card and the value actually sent disagree, which on THIS question
             // means publishing an address the organizer believes they declined.
-            published: true,
+            // OSE-1560 — a new event is off the map until the organizer says
+            // otherwise, so "No" starts selected and nothing is sent until a
+            // card is clicked (publishedChosen). An omitted value is what lets a
+            // sponsor the organizer adds later turn the map on.
+            published: false,
+            publishedChosen: false,
             // OSE-1315 — wizard entries this page pushed onto the session
             // history. Browser Back walks them (step 3 → 2 → 1 → front door)
             // instead of skipping past the front door to the Cloudflare Access
@@ -3131,11 +3140,10 @@
             if (timeVal) body.start_time = timeVal;
             var venueVal = document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
-            // OSE-1245 — ALWAYS sent, never omitted. The API defaults an absent
-            // value to published, so leaving it out when the organizer chose
-            // "keep it off the map" would silently publish them. Sending it
-            // explicitly every time is what makes the question mean anything.
-            body.is_published = wiz.published;
+            // OSE-1245 / OSE-1560 — sent exactly as the organizer chose it, and
+            // omitted when they did not (the API then keeps the event off the
+            // map and remembers that nobody chose). Never sent as a guess.
+            if (wiz.publishedChosen) body.is_published = wiz.published;
             // OSE-1344 — only when the organizer actually picked a type; the
             // API treats an absent value as "no type", never as an error.
             var wizTypeId = window.oseTypePicker ? window.oseTypePicker.value('wizard-event-type') : '';
@@ -3243,6 +3251,14 @@
                     (venueVal ? ' at ' + venueVal : '') +
                     (whenTxt ? ' for ' + whenTxt : '');
                   summary.textContent = wiz.summaryBase + ' as a draft.';
+                }
+                // OSE-1560 — the map heads-up, as plain persistent text (the toast
+                // component is OSE-1564). Said only when the default applied.
+                var mapNoteEl = document.getElementById('wizard-map-note');
+                if (mapNoteEl) {
+                  var mapNote = data.map && data.map.note ? String(data.map.note) : '';
+                  mapNoteEl.textContent = mapNote;
+                  mapNoteEl.hidden = !mapNote;
                 }
                 wiz.step = 4;
                 // Post-save transition: replace, never push — Back must not
@@ -3529,7 +3545,7 @@
               syncWizardSummary();
               btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false) : ''); msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : ''); msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
@@ -3609,6 +3625,7 @@
           document.querySelectorAll('.wizard-publish-option').forEach(function (el) {
             el.addEventListener('click', function () {
               wiz.published = el.getAttribute('data-option') !== 'unpublished';
+              wiz.publishedChosen = true;
               document.querySelectorAll('.wizard-publish-option').forEach(function (c) {
                 c.classList.toggle('selected', c === el);
                 c.setAttribute('aria-pressed', String(c === el));
@@ -3909,7 +3926,6 @@
                   id="create-published"
                   name="is_published"
                   data-testid="create-published"
-                  checked
                 />
                 <span>List this publicly &mdash; show it on the map and in search</span>
               </label>
@@ -4763,7 +4779,10 @@
               return;
             }
             if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ')');
-            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(approve ? 'Approved. The sponsor is now on this event.' : 'Declined. The sponsor will see your answer on their page.', 'ok');
+            // OSE-1560: approving can turn the event's default map on; the note says so.
+            const flipped = data.map && data.map.changed;
+            if (flipped && window.oseMapFlipped && window.OSE_selection && window.OSE_selection.id) window.oseMapFlipped(window.OSE_selection.id);
+            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(approve ? 'Approved. The sponsor is now on this event.' + (flipped && data.map.note ? ' ' + data.map.note : '') : 'Declined. The sponsor will see your answer on their page.', 'ok');
             if (window._loadSponsors) await window._loadSponsors();
             if (window.OSE_selection && window.OSE_selection.id && window.renderEventTimeline) window.renderEventTimeline(window.OSE_selection.id);
             focusAfter();
@@ -4872,7 +4891,10 @@
               throw new Error(data.error || 'Save failed');
             }
             msg.className = 'create-msg success';
-            msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) +
+            // OSE-1560: the organizer adding a sponsor turned the map on; say so and bring the panel in line.
+            const mapFlipNote = data.map && data.map.changed && data.map.note ? ' ' + esc(data.map.note) : '';
+            if (data.map && data.map.changed && window.oseMapFlipped) window.oseMapFlipped(body.event_id || event_id);
+            msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) + mapFlipNote +
               ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
             loadSponsors();
           } catch (err) {
@@ -6908,6 +6930,11 @@
           </div>
           <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
           <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
+          <!-- OSE-1560 — the map setting, always visible, with its one control.
+               The toast that announces a change is OSE-1564; this is the part
+               that has to stay true after any toast is gone. -->
+          <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
+          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
           <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -7471,6 +7498,24 @@
         active: [ { to: 'draft', label: 'Back to draft' }, { to: 'ready', label: 'Take offline' }, { to: 'archived', label: 'Archive' } ],
         archived: [ { to: 'draft', label: 'Reopen as draft', primary: true }, { to: 'active', label: 'Publish again' } ],
       };
+      /**
+       * OSE-1560 — the map setting in words, from an admin list row. A row with
+       * no value (an older one) reads as on, never as a surprise off.
+       */
+      window.mapSettingView = function (e) {
+        var on = e.is_published == null ? true : Number(e.is_published) !== 0;
+        var dflt = Number(e.map_default) === 1;
+        return {
+          on: on,
+          text: on
+            ? 'This event is on the map.'
+            : dflt
+              ? "This event isn't on the map. You can turn that on any time."
+              : "This event isn't on the map, as you chose. You can turn that on any time.",
+          actionLabel: on ? 'Turn off the map' : 'Put on the map',
+          wantOn: !on,
+        };
+      };
       window.renderEventStatus = function (id) {
         var card = document.getElementById('event-status-card');
         var e = window._oseList.byId[String(id)];
@@ -7485,9 +7530,65 @@
         document.getElementById('event-status-actions').innerHTML = (STATUS_ACTIONS[st] || []).map(function (a) {
           return '<button type="button" class="event-status-btn' + (a.primary ? ' primary' : '') + '" data-action="event-status" data-event-id="' + esc(e.id) + '" data-to="' + a.to + '" data-testid="event-status-' + a.to + '">' + esc(a.label) + '</button>';
         }).join('');
+        var mapView = window.mapSettingView(e);
+        var mapState = document.getElementById('event-map-state');
+        var mapToggle = document.getElementById('event-map-toggle');
+        if (mapState) mapState.textContent = mapView.text;
+        if (mapToggle) {
+          mapToggle.textContent = mapView.actionLabel;
+          mapToggle.setAttribute('data-event-id', String(e.id));
+          mapToggle.setAttribute('data-want-on', mapView.wantOn ? '1' : '0');
+          mapToggle.disabled = false;
+          mapToggle.hidden = false;
+        }
         var msg = document.getElementById('event-status-msg');
         if (msg) { msg.textContent = ''; msg.className = 'create-msg'; }
         card.hidden = false;
+      };
+      /** OSE-1560 — turn the map on or off for an event: one PUT, then the panel says what is true. */
+      window.changeEventMap = async function (id, wantOn, btn) {
+        var e = window._oseList.byId[String(id)];
+        if (!e) return;
+        if (btn) btn.disabled = true;
+        var failure = '';
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_published: !!wantOn }),
+          });
+          var data = null;
+          try { data = await res.json(); } catch (x) { data = null; }
+          if (!res.ok || !data || !data.ok) {
+            throw new Error((data && (data.error || data.code)) || 'Could not change the map setting (server said ' + res.status + ')');
+          }
+          e.is_published = wantOn ? 1 : 0;
+          e.map_default = 0;
+        } catch (err) {
+          failure = err && err.message ? err.message : 'Could not change the map setting.';
+        }
+        window.renderEventStatus(id);
+        window.renderEventTimeline(id);
+        var m = document.getElementById('event-status-msg');
+        if (m) {
+          if (failure) { m.textContent = failure; m.className = 'create-msg error'; }
+          else {
+            m.textContent = wantOn ? 'This event is now on the map.' : 'This event is off the map.' + (e.status === 'active' ? ' Its public page is closed to guests until you turn it back on.' : '');
+            m.className = 'create-msg success';
+          }
+        }
+      };
+      /**
+       * OSE-1560 — the server turned the map on because the organizer added or
+       * approved a sponsor. Bring the row and the panel in line, no reload.
+       */
+      window.oseMapFlipped = function (eventId) {
+        var e = window._oseList.byId[String(eventId)];
+        if (!e) return;
+        e.is_published = 1;
+        e.map_default = 0;
+        window.renderEventStatus(eventId);
+        window.renderEventTimeline(eventId);
       };
       window.addEventListener('ose:event-selected', function (ev) {
         var d = ev.detail || {};
@@ -7811,7 +7912,9 @@
        * Undo before then and nobody else will have found it." Empty when the
        * event lists at once (window off).
        */
-      window.graceNote = function (listedFrom, listed) {
+      window.graceNote = function (listedFrom, listed, byDefault) {
+        // OSE-1560: off because nobody turned it on (the default), not because they chose.
+        if (listed === false && byDefault) return ' It is not on the map or list, and its public page stays closed to guests until you put it on the map.';
         // Kept off the map by the organizer's choice: never promise a listing.
         if (listed === false) return ' It stays off the map and list, as you chose, and its public page stays closed to guests. Turn on listing when you want people to find it.';
         var t = listedFrom ? new Date(listedFrom) : null;
@@ -7849,7 +7952,7 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
-          var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
+          var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0, Number(e.map_default) === 1), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
           if (m2) {
@@ -7959,6 +8062,12 @@
         updateSlotPreview();
       }
       wireLinkControls();
+      // OSE-1560 — remember that the operator touched the map box, so an
+      // untouched box is omitted from the create request (see the body below).
+      (function () {
+        var publishedEl = document.getElementById('create-published');
+        if (publishedEl) publishedEl.addEventListener('change', function () { publishedEl.dataset.chosen = '1'; });
+      })();
 
       document.getElementById('create-event-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -8033,11 +8142,12 @@
             if (val) body[apiField] = val;
           }
 
-          // OSE-1245 — sent on every create, never conditionally. The API
-          // defaults an absent value to published, so omitting it when the box
-          // is unchecked would publish an event the operator declined to list.
+          // OSE-1245 / OSE-1560 — sent as the operator set it once they have
+          // touched the box, omitted when they have not (the API then keeps the
+          // event off the map and remembers nobody chose, so a sponsor added
+          // later can turn it on). Unchecked at the start: off is the default.
           const publishedEl = document.getElementById('create-published');
-          body.is_published = publishedEl ? publishedEl.checked : true;
+          if (publishedEl && publishedEl.dataset.chosen === '1') body.is_published = publishedEl.checked;
 
           // OSE-1344 — the picked type, when there is one.
           const typeId = window.oseTypePicker ? window.oseTypePicker.value('create-event-type') : '';
@@ -8065,7 +8175,7 @@
             // OSE-R-005: bar owners don't need to see (or copy) internal event
             // IDs. Stash the id in a dataset attribute for support/test access
             // while the visible toast stays in plain English.
-            msg.textContent = 'Event created.';
+            msg.textContent = 'Event created.' + (data.map && data.map.note ? ' ' + data.map.note : '');
             if (data.id) {
               msg.dataset.eventId = String(data.id);
               // OSE-667: remember the new event so the forced reload re-selects

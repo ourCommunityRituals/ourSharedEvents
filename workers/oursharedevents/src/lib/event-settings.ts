@@ -37,6 +37,30 @@
 // json_patch (RFC 7396): a null member deletes the stored key, and inside
 // leagueLinks a null link deletes just that link.
 
+// OSE-1560 — the one server-managed key. `mapDefault: true` means "this event's
+// map setting is still the default (off); the organizer has not chosen it". It is
+// written at create when no map choice was sent, removed by any explicit map
+// write and by the sponsor flip (lib/map-default.ts), and never client-writable:
+// validateSettingsPatch rejects it. Its SQL lives here with the rest of the
+// settings_json readers so the column keeps one home.
+export const MAP_DEFAULT_KEY = 'mapDefault';
+
+/** SQL (on the events table, optional alias): the map setting is still the default. */
+export function mapStillDefaultSql(alias = ''): string {
+  const col = alias ? `${alias}.settings_json` : 'settings_json';
+  return `json_extract(COALESCE(${col}, '{}'), '$.${MAP_DEFAULT_KEY}') = 1`;
+}
+
+/** SQL SET expression: `inner` (default: the stored settings) without the default marker. */
+export function clearMapDefaultSql(inner = "COALESCE(settings_json, '{}')"): string {
+  return `json_remove(${inner}, '$.${MAP_DEFAULT_KEY}')`;
+}
+
+/** `settingsJson` (a serialised settings object) with the default marker added. */
+export function withMapDefaultMarker(settingsJson: string): string {
+  return JSON.stringify({ ...JSON.parse(settingsJson), [MAP_DEFAULT_KEY]: true });
+}
+
 /** The boolean section switches. Additions are decisions. */
 export const EVENT_SETTING_KEYS = ['showQRSection'] as const;
 export type EventSettingKey = (typeof EVENT_SETTING_KEYS)[number];
@@ -59,6 +83,8 @@ export const DWELL_DEFAULT_SECONDS = 15;
 export const MAX_LINK_BYTES = 154;
 
 export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
+  /** Server-managed (OSE-1560): the map setting is still the default. */
+  mapDefault?: true;
   displayPanes?: DisplayPane[];
   displayDwellSeconds?: number;
   leagueLinks?: LeagueLinks;
@@ -124,7 +150,9 @@ export function parseEventSettings(raw: unknown): EventSettings {
   const out: EventSettings = {};
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
     if (KNOWN.has(k) && typeof v === 'boolean') out[k as EventSettingKey] = v;
-    else if (k === 'displayPanes') {
+    else if (k === MAP_DEFAULT_KEY) {
+      if (v === true) out.mapDefault = true;
+    } else if (k === 'displayPanes') {
       const panes = cleanPanes(v);
       if (panes) out.displayPanes = panes;
     } else if (k === 'displayDwellSeconds' && isDwell(v)) out.displayDwellSeconds = v;

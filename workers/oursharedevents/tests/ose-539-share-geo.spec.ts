@@ -69,6 +69,8 @@ async function createEventWithGeo(
     body: JSON.stringify({
       title,
       status: 'active',
+      // OSE-1560: a new event is off the map unless asked.
+      is_published: true,
       start_date: futureStart,
       end_date: futureEnd,
       lat: lat ?? null,

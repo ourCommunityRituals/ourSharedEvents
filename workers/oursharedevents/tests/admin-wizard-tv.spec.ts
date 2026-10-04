@@ -429,7 +429,7 @@ describe('publish grace window: the organiser is told when it lists', () => {
         to: string,
         from: string
       ): Promise<{ ok: boolean; listedFrom: string | null }>;
-      graceNote(listedFrom: string | null, listed?: boolean): string;
+      graceNote(listedFrom: string | null, listed?: boolean, byDefault?: boolean): string;
     };
   }
 
@@ -463,12 +463,22 @@ describe('publish grace window: the organiser is told when it lists', () => {
     expect(w.graceNote(soon, true)).toContain('goes on the map and list at');
   });
 
+  test('off because nobody turned it on (the default) is not described as a choice the organizer made', () => {
+    const w = mountRouter({ ok: true });
+    const soon = new Date(Date.now() + 10 * 60_000).toISOString();
+    const note = w.graceNote(soon, false, true);
+    expect(note).not.toContain('as you chose');
+    expect(note).not.toContain('goes on the map');
+    expect(note).toContain('not on the map or list');
+    expect(note).toContain('public page stays closed');
+  });
+
   test('the wizard and the status panel both add the note to their Published message', () => {
     expect(ADMIN_HTML).toContain(
-      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false) : '')"
+      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : '')"
     );
     expect(ADMIN_HTML).toContain(
-      "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0)"
+      "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0, Number(e.map_default) === 1)"
     );
   });
 });
