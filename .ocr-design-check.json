@@ -35,7 +35,7 @@
     },
     "workers/oursharedevents/src/templates/admin-signin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3907,
+      "own-stylesheet": 3846,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -53,7 +53,7 @@
     },
     "workers/oursharedevents/src/templates/landing.html": {
       "own-tokens": 0,
-      "own-stylesheet": 6501,
+      "own-stylesheet": 6223,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },

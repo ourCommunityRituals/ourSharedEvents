@@ -212,6 +212,7 @@ npm run test:prod:smoke
 1. Domain `oursharedevents.com`, one destination per path above. `www` needs none: it 301s to the apex.
 2. Policy: **Allow**, Include → **Emails** → `mzdano@gmail.com`. Use the single email, not the `oursharedevents.com` domain: `ALLOWED_ADMIN_DOMAINS` admits that whole domain at the Worker, so the Access policy is the narrower gate.
 3. Copy the app's **Application Audience (AUD) tag** for the pin step below.
+4. Name the sign-in page the organizer sees (OSE-1529; staging and production apps both). Cloudflare hosts that page, so it is configured on the app, not in this repo. Under the app's **Basic information** set a human-readable **Application name** (for example `OurSharedEvents organizer sign-in`, not `oursharedevents-staging-admin`). Under **Login page** set the **logo**, the **background colour**, and the **header text**: `Enter your email and we'll send a one-time code. Organizer access is by invitation.` and the **footer text**: `Not an organizer? You do not need to sign in to browse events: https://oursharedevents.com/events`. Keep the copy free of contact details (no email, no phone). The Worker's own 401 sign-in page (`templates/admin-signin.html`) says the same things, so an organizer reads one story whichever page they land on.
 
 **Verify:** every path is challenged by the production app (`access_ok`). The 6-hourly `cf-access-canary.yml` runs the same loop, so dispatch it afterwards and confirm the production row is green.
 
