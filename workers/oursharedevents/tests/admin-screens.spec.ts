@@ -100,7 +100,7 @@ for (const page of PAGES) {
       const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
       expect(nonce, 'a nonce in script-src').toBeTruthy();
       const body = await res.text();
-      const scripts = body.match(/<script\b[^>]*>/g) ?? [];
+      const scripts = body.match(/<script\b[^>]*>/gi) ?? [];
       expect(scripts.length).toBeGreaterThan(0);
       for (const s of scripts) expect(s, s).toContain(`nonce="${nonce}"`);
       expect(body).not.toMatch(/\son[a-z]+\s*=/i);
@@ -117,10 +117,10 @@ for (const page of PAGES) {
     });
 
     test('tokens only: no raw colour, no local :root, no own stylesheet beyond the page budget', () => {
-      const css = (page.source.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) ?? []).join(' ');
-      expect(css.replace(/<\/?style[^>]*>/gi, '').replace(/\s+/g, '').length).toBeLessThanOrEqual(
-        400
-      );
+      const css = [...page.source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+        .map((m) => m[1])
+        .join(' ');
+      expect(css.replace(/\s+/g, '').length).toBeLessThanOrEqual(400);
       expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
       expect(css).not.toMatch(/:root\s*\{/);
       expect(page.source).toContain('href="/ui.css"');
