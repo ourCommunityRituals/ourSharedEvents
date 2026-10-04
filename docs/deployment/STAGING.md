@@ -97,4 +97,4 @@ Staging is shared. A change that deletes or archives events can break the next C
 
 - Production is a separate Worker (`oursharedevents-prod`) and is not launched yet. See `docs/runbooks/RUNBOOK-DEPLOYMENT.md`, "First Production Launch".
 - CI design: `docs/architecture/ci-cd-architecture.md`.
-- Secrets: `docs/deployment/CLOUDFLARE_SECRETS.md`. Never put a secret in this file.
+- Worker configuration values are documented in [CLOUDFLARE_SECRETS.md](CLOUDFLARE_SECRETS.md). Never put one in this file.
