@@ -40,8 +40,14 @@ function block(html: string, testid: string): string {
 }
 
 /** Comments in the served templates mention <h1> and <script>; the page itself does not. */
-const stripComments = (s: string) =>
-  s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+const stripComments = (s: string) => {
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  } while (s !== prev);
+  return s;
+};
 
 const text = (s: string) =>
   s
