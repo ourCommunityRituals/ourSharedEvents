@@ -1609,18 +1609,12 @@ jobs:
         include:
           - section: security
             label: 'T3: Security smoke'
-            config: playwright.e2e-smoke.config.ts
-            specs: tests/e2e/1-smoke/security-smoke.spec.js
             installBrowser: true
           - section: iac
             label: 'T3: IAC health + fail-fast'
-            config: playwright.smoke.config.ts
-            specs: tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
             installBrowser: false
           - section: forms
             label: 'T3: Forms endpoint smoke'
-            config: playwright.smoke.config.ts
-            specs: tests/api/smoke/form-endpoints.spec.ts
             installBrowser: false
     steps:
       - uses: actions/checkout@v7
@@ -1680,7 +1674,9 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=${{ matrix.config }} ${{ matrix.specs }}
+        # Same entry point as `npm run test:t3:staging` on a laptop; specs live in
+        # scripts/ci/t3-sections.json.
+        run: node scripts/ci/run-t3.mjs --section ${{ matrix.section }}
         timeout-minutes: 10
 
       # OSE-1470: the suites above send CF Access / admin credentials. Refuse to
@@ -1730,8 +1726,7 @@ jobs:
           echo "## ${{ matrix.label }}" >> $GITHUB_STEP_SUMMARY
           echo "Stage 2 of the fail-fast chain — runs only after T2 contract is green; a red sub-gate makes the aggregate T3 gate red and skips T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Config:** \`${{ matrix.config }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Specs:** \`${{ matrix.specs }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Section:** \`${{ matrix.section }}\` (specs in \`scripts/ci/t3-sections.json\`; locally: \`npm run test:t3:staging -- --section ${{ matrix.section }}\`)" >> $GITHUB_STEP_SUMMARY
 
   smoke-staging:
     name: 'T3 E2E Smoke → Staging (Playwright)'

@@ -1,0 +1,23 @@
+{
+  "_comment": "The T3 smoke sections. One list, read by scripts/ci/run-t3.mjs (CI matrix step and `npm run test:t3:staging`) and by scripts/ci/run-local-vetting.sh. Add a spec here, not in a workflow.",
+  "sections": {
+    "security": {
+      "label": "T3: Security smoke",
+      "config": "playwright.e2e-smoke.config.ts",
+      "specs": ["tests/e2e/1-smoke/security-smoke.spec.js"],
+      "browser": true
+    },
+    "iac": {
+      "label": "T3: IAC health + fail-fast",
+      "config": "playwright.smoke.config.ts",
+      "specs": ["tests/api/smoke/api-health.spec.ts", "tests/api/smoke/fail-fast-gates.spec.ts"],
+      "browser": false
+    },
+    "forms": {
+      "label": "T3: Forms endpoint smoke",
+      "config": "playwright.smoke.config.ts",
+      "specs": ["tests/api/smoke/form-endpoints.spec.ts"],
+      "browser": false
+    }
+  }
+}

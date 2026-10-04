@@ -100,9 +100,12 @@ pw_section() { # name config specs...
   elif [ "$passed" -eq 0 ]; then record "T3 ${name}" "vacuous" "0 tests ran; a gate that cannot fail is not green"
   else record "T3 ${name}" "passed" "${passed} passed, ${skipped} skipped, ${flaky} flaky"; fi
 }
-pw_section security playwright.e2e-smoke.config.ts tests/e2e/1-smoke/security-smoke.spec.js
-pw_section iac playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
-pw_section forms playwright.smoke.config.ts tests/api/smoke/form-endpoints.spec.ts
+# Sections come from scripts/ci/t3-sections.json, the same list the staging T3 runs.
+while IFS=$'	' read -r t3name t3config t3specs; do
+  t3name="${t3name%$''}"; t3specs="${t3specs%$''}"
+  # shellcheck disable=SC2086
+  pw_section "$t3name" "$t3config" $t3specs
+done < <(node "$ROOT/scripts/ci/run-t3.mjs" --tsv)
 
 # ── T2: Bruno ────────────────────────────────────────────────────────────────
 # `bru run` prints "Tests 0/0" for these scripts, so the JUnit file is the only honest
