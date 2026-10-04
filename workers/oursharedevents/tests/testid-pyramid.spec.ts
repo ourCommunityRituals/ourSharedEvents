@@ -584,6 +584,8 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
       body: JSON.stringify({
         title: 'E2E Pyramid Test Event',
         status: 'active',
+        // OSE-1560: a new event is off the map unless asked.
+        is_published: true,
         location: 'Beverly Arts Center',
         start_date: '2026-06-15',
         template_id: 'community_day',

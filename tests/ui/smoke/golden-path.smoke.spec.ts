@@ -54,6 +54,7 @@ test.describe('Golden Path — First-Time Organizer', () => {
         start_date: '2026-08-15',
         location: 'Beverly Arts Center',
         status: 'active',
+        is_published: true,
       },
     });
 

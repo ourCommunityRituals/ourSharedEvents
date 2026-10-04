@@ -112,7 +112,13 @@ async function createEvent(request, fields) {
     timeout: TIMEOUT,
     maxRedirects: 0,
     headers: adminHeaders(),
-    data: { brand_id: BRAND, status: 'active', start_date: futureDate(), ...fields },
+    data: {
+      brand_id: BRAND,
+      status: 'active',
+      is_published: true,
+      start_date: futureDate(),
+      ...fields,
+    },
   });
   let json = null;
   try {

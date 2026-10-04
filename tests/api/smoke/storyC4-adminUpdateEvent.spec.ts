@@ -548,7 +548,12 @@ test.describe('Update Event — Round-Trip Verification', () => {
   });
 
   test('status change from active to archived removes from public list', async ({ request }) => {
-    const id = await seedEvent(request, { status: 'active', brand_id: 'root' });
+    const id = await seedEvent(request, {
+      status: 'active',
+      brand_id: 'root',
+      // OSE-1560: a new event is off the map unless asked.
+      is_published: true,
+    });
 
     // Verify it's in public list
     let listRes = await request.get('/api/v2/events?brand=root');

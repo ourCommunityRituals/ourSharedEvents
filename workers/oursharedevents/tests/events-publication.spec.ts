@@ -196,21 +196,24 @@ describe('the create API honours the answer', () => {
     expect(bound[0]).toContain(1);
   });
 
-  test('an absent value publishes — the documented, backward-compatible default', async () => {
-    // Asserted rather than assumed, because it is the reason the create flow
-    // has to ask: a client that says nothing gets published.
+  test('an absent value does NOT publish (OSE-1560: a new event is off the map)', async () => {
+    // Asserted rather than assumed: nothing is listed publicly by omission. The
+    // default-on map was the risk; a client that says nothing now gets an event
+    // that is off the map (and a record that nobody chose, so a sponsor the
+    // organizer adds later can turn it on). tests/map-default.spec.ts runs it
+    // against real D1.
     const bound: unknown[][] = [];
     await create({ title: 'Legacy client event' }, bound);
-    expect(bound[0]).toContain(1);
+    expect(bound[0]).not.toContain(1);
   });
 
-  test('a malformed value publishes rather than silently hiding the event', async () => {
-    // Fails toward existing behaviour. Hiding an organizer's event because a
-    // client sent "no" as a string would be a worse failure than the default.
-    for (const bad of ['false', 'no', null, {}, []]) {
+  test('a malformed value does not publish either: it fails toward off, never on', async () => {
+    // A client that sent "yes" as a string has not chosen. Listing an organizer's
+    // event publicly on a guess is the worse failure.
+    for (const bad of ['true', 'yes', 2, null, {}, []]) {
       const bound: unknown[][] = [];
       await create({ title: 'Odd client', is_published: bad }, bound);
-      expect(bound[0], String(bad)).toContain(1);
+      expect(bound[0], String(bad)).not.toContain(1);
     }
   });
 

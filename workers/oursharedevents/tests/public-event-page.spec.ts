@@ -618,6 +618,8 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
         title: 'OSE-243a chain test',
         brand_id: BRAND,
         status: 'active',
+        // OSE-1560: a new event is off the map unless asked.
+        is_published: true,
         start_date: startDate,
         what_short: 'End-to-end chain proves anonymity holds across hops.',
         where_address: '123 Chain Test Lane',
