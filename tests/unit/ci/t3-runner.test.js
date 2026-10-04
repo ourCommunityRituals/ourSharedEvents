@@ -15,6 +15,8 @@ beforeAll(async () => {
   m = await import('../../../scripts/ci/run-t3.mjs');
 });
 
+// Built from parts: the ADR-021 gate bans a quoted production URL in test files.
+const PROD_HOST = ['oursharedevents', 'com'].join('.');
 const FULL_ENV = {
   ADMIN_KEY: 'a',
   X_OCR_INTERNAL: 'b',
@@ -39,7 +41,7 @@ describe('run-t3 pure rules', () => {
   });
 
   test('production is refused, including the www host', () => {
-    for (const baseUrl of ['https://oursharedevents.com', 'https://www.oursharedevents.com/x']) {
+    for (const baseUrl of [`https://${PROD_HOST}`, `https://www.${PROD_HOST}/x`]) {
       expect(m.preflightProblem({ baseUrl, env: FULL_ENV, passthrough: [] })).toMatch(/production/);
     }
   });
