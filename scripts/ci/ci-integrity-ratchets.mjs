@@ -97,10 +97,10 @@ export function findOrphanSpecs(root) {
       const re = new RegExp(
         '^' +
           t
-            .replace(/[.+?^${}()|[\]]/g, '\\$&')
-            .replace(/\*\*/g, '\@@GLOB@@')
+            .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*\*/g, '@@GLOB@@')
             .replace(/\*/g, '[^/]*')
-            .replace(/\@@GLOB@@/g, '.*') +
+            .replace(/@@GLOB@@/g, '.*') +
           '$'
       );
       return (p) => re.test(p);
