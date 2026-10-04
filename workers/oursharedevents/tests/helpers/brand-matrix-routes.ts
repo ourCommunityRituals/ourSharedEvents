@@ -194,6 +194,8 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     'GET',
     '/forms/registrations'
   ),
+  // OSE-1531: the copy lands in the SOURCE's brand, so a cross-brand call must 404 and make nothing.
+  eventRoute('/api/v2/admin/events/:id/repeat', 'POST', '/repeat'),
   eventRoute('/api/v2/admin/events/:id/verify-qr', 'POST', '/verify-qr'),
   eventRoute('/api/v2/admin/events/:id/unverify-qr', 'POST', '/unverify-qr'),
   eventRoute('/api/v2/admin/events/:id/backup', 'POST', '/backup'),

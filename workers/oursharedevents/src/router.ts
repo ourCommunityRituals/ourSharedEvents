@@ -24,6 +24,7 @@
  *   GET /api/v2/admin/event-types     → Category → Type catalog for the picker (auth, OSE-1344)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
+ *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -157,6 +158,7 @@ import {
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
+import { handleAdminRepeatEvent } from './handlers/event-repeat';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -919,6 +921,36 @@ export async function route(
       _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);
     } else {
       _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
+    }
+    return response;
+  }
+
+  // POST /api/v2/admin/events/:id/repeat — OSE-1531 "Repeat this event": a DRAFT
+  // copy of the event (name, place, kind, time, settings; a new date; never who
+  // took part). Rate-limited like the report mint, and the limit runs before auth
+  // so a stranger cannot spend an organizer's bucket by trying. The source's brand
+  // scope is guardAdminObjectScope above; the create path re-checks the target.
+  const adminEventRepeatMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/repeat$/);
+  if (adminEventRepeatMatch && method === 'POST') {
+    if (env.RATE_LIMIT_KV) {
+      const repeatKey = `repeat-event:${clientIp(request)}:${adminEventRepeatMatch[1]}`;
+      if (await checkRateLimit(env, repeatKey, RATE_LIMIT_MINT_MAX)) {
+        return rateLimitResponse();
+      }
+    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'REPEAT_EVENT', 'denied', 'event', adminEventRepeatMatch[1]);
+      return authRes;
+    }
+    const response = await handleAdminRepeatEvent(request, env, adminEventRepeatMatch[1]);
+    // Audited on the NEW event when there is one (so the row carries its brand);
+    // a refusal is recorded against the source, as 'denied'.
+    if (response.status < 400) {
+      _audit(reqId, 'REPEAT_EVENT', 'success', 'event', await _createdId(response));
+    } else {
+      _audit(reqId, 'REPEAT_EVENT', 'denied', 'event', adminEventRepeatMatch[1]);
     }
     return response;
   }
