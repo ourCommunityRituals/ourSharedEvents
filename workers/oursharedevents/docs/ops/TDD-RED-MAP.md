@@ -14,15 +14,15 @@ So the suite goes red exactly when a story lands, and stays red until the test i
 
 ## Red now (written, failing on the right assertion)
 
-| Story    | Flow       | Level | Test (in `tests/tdd-red-fe-wave.spec.ts`)                                                     | Status |
-| -------- | ---------- | ----- | --------------------------------------------------------------------------------------------- | ------ |
-| OSE-1560 | O1, O2     | W     | a new event is off the map unless someone turns it on                                         | Open   |
-| OSE-1560 | O1, O6     | W     | leaving draft without a time and an event type is refused by name (409)                       | Open   |
-| OSE-1519 | P3         | W     | a once-live archived event says it has ended (410, named, no error label, next events listed) | Done   |
-| OSE-1520 | P1         | W     | `/public` redirects to `/events`                                                              | Done   |
-| OSE-1520 | P1         | W     | the `/events` tab title says what the page is                                                 | Done   |
-| OSE-1518 | P3         | W     | a live event page carries the trust header                                                    | Done   |
-| OSE-1522 | S4, P1, P3 | W     | the `/events` card shows the consented sponsor by the title                                   | Done   |
+| Story    | Flow       | Level | Test (in `tests/tdd-red-fe-wave.spec.ts`)                                                                               | Status |
+| -------- | ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------- | ------ |
+| OSE-1560 | O1, O2     | W     | a new event is off the map unless someone turns it on                                                                   | Open   |
+| OSE-1560 | O1, O6     | W     | leaving draft without a time and an event type is refused by name (409; promoted, story stays open for the map default) | Open   |
+| OSE-1519 | P3         | W     | a once-live archived event says it has ended (410, named, no error label, next events listed)                           | Done   |
+| OSE-1520 | P1         | W     | `/public` redirects to `/events`                                                                                        | Done   |
+| OSE-1520 | P1         | W     | the `/events` tab title says what the page is                                                                           | Done   |
+| OSE-1518 | P3         | W     | a live event page carries the trust header                                                                              | Done   |
+| OSE-1522 | S4, P1, P3 | W     | the `/events` card shows the consented sponsor by the title                                                             | Done   |
 
 Guards that are green today and must survive the fixes: a title-only draft can be created (OSE-1560); an unknown event id keeps the generic not-found page, and a draft is not named to an anonymous visitor (OSE-1519; the story leaves what a draft may show to the PO, so this guard turns an accidental leak into a decision).
 

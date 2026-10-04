@@ -11,6 +11,7 @@
  * State transition validity is guarded by isValidTransition from the domain model.
  */
 
+import { coreValuesMissing, coreValuesRefusal, isPublishStep } from '../lib/core-values';
 import { isValidTransition } from '../domain/event-state';
 import { listedFromForPublish } from '../lib/publish-grace';
 
@@ -41,9 +42,11 @@ export async function handleV2AdminVerifyQr(
   env: QrVerifyEnv,
   eventId: string
 ): Promise<Response> {
-  const row = await env.DB.prepare('SELECT id, status FROM events WHERE id = ?')
+  const row = await env.DB.prepare(
+    'SELECT id, status, starts_at, event_type_id FROM events WHERE id = ?'
+  )
     .bind(eventId)
-    .first<EventRow>();
+    .first<EventRow & { starts_at: string | null; event_type_id: string | null }>();
 
   if (!row) {
     return Response.json({ ok: false, code: 'EVENT_NOT_FOUND' }, { status: 404 });
@@ -54,6 +57,12 @@ export async function handleV2AdminVerifyQr(
       { ok: false, code: 'INVALID_TRANSITION', from: row.status, to: 'active' },
       { status: 409 }
     );
+  }
+
+  // OSE-1560 � same check as PUT status: a start time and an event type.
+  if (isPublishStep(row.status, 'active')) {
+    const missing = coreValuesMissing(row);
+    if (missing.length > 0) return Response.json(coreValuesRefusal(missing), { status: 409 });
   }
 
   // Publish grace window (lib/publish-grace.ts): live by link now, listed later.

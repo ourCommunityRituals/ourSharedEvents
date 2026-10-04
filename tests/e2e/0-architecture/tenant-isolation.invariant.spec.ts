@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:373':
+  'handlers/events.ts:374':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +

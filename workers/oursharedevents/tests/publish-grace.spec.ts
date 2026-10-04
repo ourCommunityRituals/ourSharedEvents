@@ -18,6 +18,7 @@ import { handleUpdateEvent, type EventsEnv } from '../src/handlers/events';
 import { handleSitemapXml } from '../src/lib/crawl-policy';
 import { readDiscoverableEvents } from '../src/lib/sponsor-discovery';
 import { latchReadyCorridors, LATCH_SETTLE_HOURS } from '../src/lib/corridor-latch';
+import { giveCoreValues } from './helpers/core-values';
 import {
   DEFAULT_PUBLISH_GRACE_MINUTES,
   listedFromForPublish,
@@ -54,6 +55,7 @@ async function insertEvent(id: string, status: string, opts: { h3_res7?: string 
   )
     .bind(id, BRAND, `Grace ${id}`, id, status, inDays(3), opts.h3_res7 ?? null)
     .run();
+  await giveCoreValues(E.DB, id);
 }
 
 async function listedFromOf(id: string): Promise<string | null> {

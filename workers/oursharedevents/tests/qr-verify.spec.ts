@@ -11,6 +11,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { giveCoreValues } from './helpers/core-values';
 
 // ── DB setup ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ async function insertEvent(id: string, status: string): Promise<void> {
     )
     .bind(id, id, status)
     .run();
+  await giveCoreValues(db(), id);
 }
 
 async function json<T = Record<string, unknown>>(res: Response): Promise<T> {
