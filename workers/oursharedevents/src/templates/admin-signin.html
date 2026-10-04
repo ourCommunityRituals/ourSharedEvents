@@ -28,6 +28,7 @@
         color: var(--text);
         padding: 1rem 2rem;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
       }
@@ -38,6 +39,7 @@
         font-size: 1.1rem;
         font-weight: 700;
         letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
         text-decoration: none;
         color: var(--text);
       }
@@ -45,7 +47,6 @@
         display: flex;
         gap: 1.5rem;
       }
-      /* OSE-292: signin/public secondary nav links also need 44px floor. */
       nav a {
         color: var(--text-muted);
         text-decoration: none;
@@ -78,6 +79,7 @@
         border-radius: var(--radius);
         padding: 2.5rem 2rem;
         border: 1px solid var(--border);
+        overflow-wrap: anywhere;
       }
       .signin-card h1 {
         font-size: 1.5rem;
@@ -90,10 +92,6 @@
         font-size: 0.95rem;
         margin-bottom: 1.75rem;
       }
-      /* Foreground comes from the canonical .btn-primary in /ui.css (the CTA
-         adopts `btn btn-primary` below), so no on-accent hex lives here. The
-         .cta keeps only its layout deltas (font-size, padding, margin); its
-         higher specificity preserves those over .btn's defaults. */
       .signin-card .cta {
         display: inline-flex;
         align-items: center;
@@ -123,11 +121,21 @@
       }
       .signin-card .helper a {
         color: var(--accent);
-        text-decoration: none;
         font-weight: 500;
       }
-      .signin-card .helper a:hover {
-        text-decoration: underline;
+      .signin-card h2 {
+        font-size: 1rem;
+        margin-bottom: 0.25rem;
+      }
+      .signin-card ol {
+        padding-left: 1.25rem;
+      }
+      .signin-card ol,
+      .signin-card .who {
+        margin-bottom: 1.25rem;
+      }
+      .signin-card .helper p + p {
+        margin-top: 0.5rem;
       }
       footer {
         background: var(--surface);
@@ -167,8 +175,11 @@
         nav {
           gap: 1rem;
         }
+        main {
+          padding: 1.5rem 0.75rem;
+        }
         .signin-card {
-          padding: 2rem 1.5rem;
+          padding: 1.5rem 1rem;
         }
       }
     </style>
@@ -185,17 +196,41 @@
       <section class="signin-card" data-testid="signin-card">
         <h1 data-testid="signin-heading">Admin sign-in required</h1>
         <p class="lede" data-testid="signin-lede">
-          This page is for event organizers. Sign in with your authorized work email to manage your
-          events and access reports.
+          This is the organizer sign-in for OurSharedEvents. This page is for event organizers: it
+          opens the tools to create events, print posters and read your reports.
         </p>
+        <div class="who" data-testid="signin-who">
+          <h2>Who this is for</h2>
+          <p>
+            Event organizers. Organizer access is by invitation. A sponsor with a private link from
+            an organizer does not sign in here: open that link instead. Attendees and visitors never
+            sign in, and nothing on the public pages names them.
+          </p>
+        </div>
+        <h2>What happens next</h2>
+        <ol data-testid="signin-next">
+          <li>Press Sign in. Cloudflare Access asks for your email address.</li>
+          <li>It emails you a one-time code. Enter the code.</li>
+          <li>
+            You land on your events. OurSharedEvents never sees or stores a password; there is none.
+          </li>
+        </ol>
         <a href="/admin" class="cta btn btn-primary" data-testid="signin-cta" rel="noopener"
           >Sign in to admin</a
         >
-        <p class="helper" data-testid="signin-helper">
-          New to OurSharedEvents?
-          <a href="/" data-testid="signin-request-access">Request access from the home page</a>
-          &mdash; subscribe and we&#x2019;ll be in touch.
-        </p>
+        <div class="helper" data-testid="signin-help">
+          <h2>Locked out, or not an organizer?</h2>
+          <p>
+            Locked out: use the email address you were invited with, and the latest email, because
+            codes expire. If it still fails, ask the person who invited you to check your
+            invitation. There is no password to reset.
+          </p>
+          <p>
+            Not an organizer: you do not need to sign in to look around.
+            <a href="/events" data-testid="signin-browse-events">Browse events</a>, or
+            <a href="/" data-testid="signin-request-access">see how OurSharedEvents works</a>.
+          </p>
+        </div>
       </section>
     </main>
     <!--OCR_LEGAL_FOOTER-->

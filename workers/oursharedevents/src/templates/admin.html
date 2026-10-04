@@ -2044,6 +2044,10 @@
         >
       </h1>
       <span>Admin</span>
+      <nav aria-label="More admin pages">
+        <a class="btn btn-link" href="/api/v2/admin/screens/logs" data-testid="admin-nav-logs">Logs</a>
+        <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="admin-nav-settings">Settings</a>
+      </nav>
     </header>
     <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
     <!-- ── CSP-safe event dispatcher (OSE-1239) ────────────────────────────
@@ -3521,7 +3525,7 @@
             if (status >= 200 && status < 300 && data && data.ok) {
               var whenTxt = timeVal && window.oseWizardPreview ? window.oseWizardPreview.whenText() : '';
               wiz.summaryBase =
-                '✅ "' + title + '" is saved' + (venueVal ? ' at ' + venueVal : '') + (whenTxt ? ' for ' + whenTxt : '');
+                '✅ "' + title + '" is saved' + ' at ' + venueVal + (whenTxt ? ' for ' + whenTxt : '');
               syncWizardSummary();
               setMsg('');
               leaveEdit();

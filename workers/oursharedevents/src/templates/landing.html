@@ -93,7 +93,6 @@
         margin: 0 auto;
         padding: 1.5rem 1.25rem 3rem;
       }
-      /* ── Two doors ─────────────────────────────────────────────────────────── */
       .doors {
         display: grid;
         grid-template-columns: 1fr;
@@ -135,7 +134,20 @@
         color: var(--muted);
         font-size: 0.95rem;
       }
-      /* ── Area view ─────────────────────────────────────────────────────────── */
+      .door-note,
+      .doors-note {
+        margin: 0.75rem 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .doors-note {
+        grid-column: 1 / -1;
+        margin: 0;
+      }
+      .door-cta {
+        width: 100%;
+        margin-top: 1rem;
+      }
       .area-heading {
         font-size: 1.15rem;
         margin: 0 0 0.75rem;
@@ -152,7 +164,6 @@
         border: 1px solid var(--line);
         border-radius: 8px;
         overflow: hidden;
-        /* reset UA <fieldset> chrome so the pill row renders flush */
         margin: 0;
         padding: 0;
         min-inline-size: 0;
@@ -196,7 +207,6 @@
         color: var(--on-accent);
         font-weight: 600;
       }
-      /* Map view = a note above the SAME list; cards never hide (OSE-1354). */
       .view-map {
         display: none;
       }
@@ -250,10 +260,7 @@
         text-align: center;
         color: var(--muted);
       }
-      /* ── Never-who disclosure (OSE-1372) — one partial, lib/never-who.ts ── */
       /*OCR_NEVER_WHO_CSS*/
-      /* Page-level heading — the one <h1>. Visible text = accessible name (WCAG
-         2.4.6 / 1.3.1 heading hierarchy: h1 → the section h2s below). */
       .lead {
         font-size: clamp(1.5rem, 4vw, 2rem);
         font-weight: 800;
@@ -285,14 +292,31 @@
            orderLandingSections), so the map leads. -->
       <!--OCR_DOORS_START-->
       <section class="doors" data-testid="landing-doors" aria-label="Get started">
-        <a class="door" href="/admin" data-testid="door-create-event">
+        <a class="door" href="/admin#create-event" data-testid="door-create-event">
           <p class="door-title">Create an event</p>
           <p class="door-sub">Host a gathering and get a poster, QR codes, and a shareable page.</p>
+          <p class="door-note" data-testid="door-event-note">
+            Sign-in required. You get a one-time code by email, then you start your event.
+          </p>
+          <span class="door-cta btn btn-primary" data-testid="door-event-cta"
+            >Sign in to create an event</span
+          >
         </a>
-        <a class="door" href="/admin" data-testid="door-create-sponsor">
+        <a class="door" href="/admin#sponsors-card" data-testid="door-create-sponsor">
           <p class="door-title">Create a sponsor</p>
           <p class="door-sub">Support events in your area. You choose which events you appear on.</p>
+          <p class="door-note" data-testid="door-sponsor-note">
+            Sign-in required. You get a one-time code by email, then the sponsors card opens.
+          </p>
+          <span class="door-cta btn btn-primary" data-testid="door-sponsor-cta"
+            >Sign in to add a sponsor</span
+          >
         </a>
+        <p class="doors-note" data-testid="doors-signin-note">
+          Why sign in? Organizer tools are private and by invitation. Cloudflare Access emails you a
+          one-time code, so OurSharedEvents never sees or stores a password. Attendees never sign
+          in, and nothing here names them.
+        </p>
       </section>
       <!--OCR_DOORS_END-->
 
