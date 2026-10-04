@@ -38,6 +38,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-020](ADR-020-copilot-ci-human-approval-gate.md)             | Keep the human approval gate on Copilot-authored CI         | Accepted | 2026-09-26 |
 | [ADR-021](ADR-021-production-read-only-test-data.md)             | Keep production read-only for every test suite              | Proposed | 2026-10-01 |
 | [ADR-022](ADR-022-event-is-the-base-brand-is-optional.md)        | Event is the base unit; brand is an optional tracking layer | Proposed | 2026-10-03 |
+| [ADR-023](ADR-023-public-entity-tenants-entity-decides.md)       | Public-entity tenants: the entity decides about its data    | Proposed | 2026-10-03 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

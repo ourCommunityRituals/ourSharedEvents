@@ -122,7 +122,7 @@ describe('L1: logAdminAction — inserts audit row', () => {
     expect(row!.actor).toBe('ops@example.com');
     expect(row!.resource_type).toBe('sponsor');
     expect(row!.resource_id).toBe('spon-x');
-    expect(row!.ip).toBe('1.2.3.4');
+    expect(row!.ip).toBe('1.2.3.0/24'); // masked at write, never the raw address
     expect(JSON.parse(row!.details as string)).toEqual({ tier: 'premium' });
   });
 

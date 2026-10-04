@@ -156,6 +156,7 @@ export const NODE_SPECS = [
   // TV display settings (order, seconds per screen, league links) — pure over
   // lib/event-settings.ts.
   'tests/display-settings.spec.ts',
+  'tests/log-never-who.spec.ts',
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
   'tests/admin-wizard-step1.spec.ts',

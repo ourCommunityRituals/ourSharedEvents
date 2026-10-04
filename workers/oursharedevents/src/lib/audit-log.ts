@@ -7,6 +7,8 @@
  * request logs are the primary audit trail; this D1 log is an operational layer.
  */
 
+import { maskIp } from './ip-mask';
+
 export interface AuditLogEnv {
   DB: D1Database;
 }
@@ -61,7 +63,9 @@ export async function logAdminAction(env: AuditLogEnv, entry: AuditEntry): Promi
     entry.resource_id ?? null,
     entry.request_id,
     entry.outcome,
-    entry.ip ?? null,
+    // Never-who: keep the network (/24 or /48), not the machine. An unparseable
+    // value is dropped, not stored.
+    maskIp(entry.ip),
     entry.details ? JSON.stringify(entry.details) : null,
   ];
   try {
@@ -124,9 +128,7 @@ export async function logReportAccess(
       .bind(id, date, eventId, role, outcome)
       .run();
   } catch {
-    console.warn(
-      JSON.stringify({ type: 'REPORT_ACCESS_LOG_FAILURE', eventId, role, outcome })
-    );
+    console.warn(JSON.stringify({ type: 'REPORT_ACCESS_LOG_FAILURE', eventId, role, outcome }));
   }
 }
 
