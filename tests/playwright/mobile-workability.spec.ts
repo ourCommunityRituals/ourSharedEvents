@@ -189,12 +189,36 @@ const SURFACES: Surface[] = [
       '[data-testid="email-submit"], [data-testid$="-submit"], form button[type="submit"]',
   },
   {
+    // OSE-1529: what an organizer sees before sign-in (the Worker's 401 page; no
+    // auth header on purpose). Its CTA is the sign-in button.
+    path: '/admin',
+    name: 'organizer sign-in page',
+    primaryCtaSelector: '[data-testid="signin-cta"]',
+  },
+  {
     path: '/admin',
     name: 'admin dashboard',
     authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
     // Entry-view CTA is the path chooser — see ADMIN_CTA_NOTE above (OSE-1236).
     primaryCtaSelector:
       '[data-testid="admin-path-wizard"], [data-testid="wizard-next-btn"], [data-testid="create-submit"], #admin-action-bar button, main button',
+    skipReason: ADMIN_SKIP_REASON,
+  },
+  {
+    // Logs screen (read-only): filters are 44px+ selects, tabs are filter chips.
+    path: '/api/v2/admin/screens/logs',
+    name: 'admin logs',
+    authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
+    primaryCtaSelector: '[data-testid="logs-tab-activity"], main button',
+    skipReason: ADMIN_SKIP_REASON,
+  },
+  {
+    // Settings screen (read-only): headings and cards only, plus the header links.
+    path: '/api/v2/admin/screens/settings',
+    name: 'admin settings',
+    authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
+    primaryCtaSelector:
+      '[data-testid="settings-nav-admin"], [data-testid="settings-nav-logs"], header a',
     skipReason: ADMIN_SKIP_REASON,
   },
   {

@@ -66,6 +66,35 @@ export type AuditView =
 /** `?scope=` allowlist. */
 export const AUDIT_SCOPES = ['brand'] as const;
 
+/**
+ * Who an action belongs to, by KIND (Logs screen). Derived from the actor before
+ * any masking, so it never says which person: another tenant's operator, shown as
+ * null, is still just "person". An action with no verified actor is "unknown".
+ */
+export const AUDIT_SOURCES = ['person', 'sponsor', 'system', 'key', 'unknown'] as const;
+export type AuditSource = (typeof AUDIT_SOURCES)[number];
+
+export function auditSourceOf(actor: string | null): AuditSource {
+  if (!actor) return 'unknown';
+  if (actor.startsWith('system:')) return 'system';
+  if (actor.startsWith('key:')) return 'key';
+  if (actor.startsWith('sponsor:')) return 'sponsor';
+  return 'person';
+}
+
+/** SQL for `?source=` over the actor column. Constant text; nothing is interpolated. */
+const SOURCE_SQL: Record<AuditSource, string> = {
+  unknown: 'actor IS NULL',
+  system: "actor LIKE 'system:%'",
+  key: "actor LIKE 'key:%'",
+  sponsor: "actor LIKE 'sponsor:%'",
+  person:
+    "(actor IS NOT NULL AND actor NOT LIKE 'system:%' AND actor NOT LIKE 'key:%' AND actor NOT LIKE 'sponsor:%')",
+};
+
+const BRAND_FILTER_SHAPE = /^[A-Za-z0-9._:-]{1,64}$/;
+const SINCE_DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
 const MAX_FILTER_LEN = 128;
 const FILTER_SHAPES: Record<'action' | 'actor' | 'resource_type', RegExp> = {
   action: /^[A-Z0-9_]+$/,
@@ -97,6 +126,18 @@ function parseCursor(raw: string): { at: string; id: string | null } | null {
   if (!Number.isFinite(t) || new Date(t).toISOString() !== at) return null;
   if (id !== null && !CURSOR_ID_SHAPE.test(id)) return null;
   return { at, id };
+}
+
+/**
+ * `?since=` is a day (YYYY-MM-DD, the start of that UTC day) or a full instant in
+ * the stored form. Either way it must be a real instant: it parses and round-trips.
+ */
+function parseSince(raw: string): string | null {
+  const at = SINCE_DAY_SHAPE.test(raw) ? `${raw}T00:00:00.000Z` : raw;
+  if (!CURSOR_SHAPE.test(at)) return null;
+  const t = Date.parse(at);
+  if (!Number.isFinite(t) || new Date(t).toISOString() !== at) return null;
+  return at;
 }
 
 /**
@@ -213,23 +254,70 @@ export async function handleListAuditLog(
   if (filterOutcome !== null && filterOutcome !== 'success' && filterOutcome !== 'denied') {
     return errorResponse('INVALID_FILTER', 'outcome must be success or denied', 400, request);
   }
+  const rawSource = url.searchParams.get('source');
+  if (
+    rawSource !== null &&
+    rawSource !== '' &&
+    !(AUDIT_SOURCES as readonly string[]).includes(rawSource)
+  ) {
+    return errorResponse(
+      'INVALID_FILTER',
+      `source must be one of: ${AUDIT_SOURCES.join(', ')}`,
+      400,
+      request
+    );
+  }
+  const filterSource = rawSource ? (rawSource as AuditSource) : null;
+  const rawSince = url.searchParams.get('since');
+  const filterSince = rawSince ? parseSince(rawSince) : null;
+  if (rawSince && filterSince === null) {
+    return errorResponse(
+      'INVALID_FILTER',
+      'since must be a day (YYYY-MM-DD) or YYYY-MM-DDTHH:MM:SS.sssZ',
+      400,
+      request
+    );
+  }
+  const rawBrand = url.searchParams.get('brand');
+  if (rawBrand && !BRAND_FILTER_SHAPE.test(rawBrand)) {
+    return errorResponse('INVALID_FILTER', 'invalid brand filter', 400, request);
+  }
+  const filterBrand = rawBrand || null;
 
   const conditions: string[] = [];
   const bindings: (string | number | null)[] = [];
 
   if (view.kind === 'brand') {
     let brandIds = view.brandIds;
+    // The caller's own brands, echoed so the screen can offer a brand filter.
+    const listed: string[] | null = view.brandIds === 'all' ? null : view.brandIds;
+    // A brand filter can only NARROW the caller's own brands. Asking for a brand
+    // you do not hold is the empty page, exactly like a brand with no rows, so
+    // the answer never confirms that the brand exists.
+    if (filterBrand) {
+      brandIds = brandIds === 'all' ? [filterBrand] : brandIds.filter((b) => b === filterBrand);
+      if (brandIds.length === 0) {
+        return Response.json({
+          ok: true,
+          scope: 'brand',
+          brands: listed,
+          entries: [],
+          pagination: { limit, hasMore: false, nextCursor: null },
+        });
+      }
+    }
     // An actor filter must not confirm an identity the reader may not see, not
     // even through hasMore/nextCursor. A human actor is visible only on rows of
     // brands they belong to, so narrow the query to those brands BEFORE it runs;
     // none in common → the canonical empty page.
     if (view.maskIps && filters.actor && !isServiceActor(filters.actor)) {
       const theirs = (await membershipsOf([filters.actor], env)).get(filters.actor) ?? [];
-      brandIds = view.brandIds.filter((b) => theirs.includes(b));
+      brandIds = (brandIds as string[]).filter((b) => theirs.includes(b));
       if (brandIds.length === 0) {
         return Response.json({
           ok: true,
           scope: 'brand',
+          brands: listed,
           entries: [],
           pagination: { limit, hasMore: false, nextCursor: null },
         });
@@ -243,6 +331,16 @@ export async function handleListAuditLog(
       conditions.push('brand_id IN (SELECT value FROM json_each(?))');
       bindings.push(JSON.stringify(brandIds));
     }
+  } else if (filterBrand) {
+    conditions.push('brand_id = ?');
+    bindings.push(filterBrand);
+  }
+  if (filterSince) {
+    conditions.push('created_at >= ?');
+    bindings.push(filterSince);
+  }
+  if (filterSource) {
+    conditions.push(SOURCE_SQL[filterSource]);
   }
   if (cursor && cursor.id !== null) {
     conditions.push('(created_at < ? OR (created_at = ? AND id < ?))');
@@ -303,7 +401,11 @@ export async function handleListAuditLog(
   if (view.kind === 'platform') {
     return Response.json({
       ok: true,
-      entries: page.map((row) => ({ ...row, details: parseDetails(row.details) })),
+      entries: page.map((row) => ({
+        ...row,
+        source: auditSourceOf(row.actor),
+        details: parseDetails(row.details),
+      })),
       pagination: { limit, hasMore, nextCursor },
     });
   }
@@ -323,6 +425,8 @@ export async function handleListAuditLog(
     return {
       ...row,
       actor,
+      // Derived from the real actor, so masking the name never changes the kind.
+      source: auditSourceOf(row.actor),
       ip: view.maskIps ? maskIp(row.ip) : row.ip,
       details: parseDetails(row.details),
     };
@@ -331,6 +435,9 @@ export async function handleListAuditLog(
   return Response.json({
     ok: true,
     scope: 'brand',
+    // The caller's own brands (null: every brand). Lets the screen offer a brand
+    // filter without another endpoint; it can only ever list what they hold.
+    brands: view.brandIds === 'all' ? null : view.brandIds,
     entries,
     pagination: { limit, hasMore, nextCursor },
   });
