@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Logs · OurSharedEvents Admin</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      main{max-width:760px;margin:0 auto;padding:1rem 16px 3rem}
+      .lg-tabs,.lg-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+      .lg-list{list-style:none;display:grid;gap:8px;padding:0}
+      .lg-filters .form-field{flex:1 1 150px;margin:0}
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>Logs</h1>
+      <nav aria-label="Admin pages">
+        <a class="btn btn-link" href="/admin" data-testid="logs-nav-admin">Admin</a>
+        <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="logs-nav-settings">Settings</a>
+      </nav>
+    </header>
+    <main id="main-content" data-testid="logs-screen">
+      <p class="list-sub" data-testid="logs-intro">
+        Everything that happened, newest first. The log counts and names kinds of action; it never
+        lists an attendee.
+      </p>
+
+      <div class="lg-filters" role="group" aria-label="Filter the log">
+        <div class="form-field">
+          <label for="logs-view">Whose log</label>
+          <select id="logs-view" class="input" data-testid="logs-view">
+            <option value="brand">My brands</option>
+            <option value="platform">Whole platform</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="logs-time">Time</label>
+          <select id="logs-time" class="input" data-testid="logs-time">
+            <option value="24">Last 24 hours</option>
+            <option value="168" selected>Last 7 days</option>
+            <option value="720">Last 30 days</option>
+            <option value="0">All time</option>
+          </select>
+        </div>
+        <div class="form-field" id="logs-brand-field" hidden>
+          <label for="logs-brand">Brand</label>
+          <select id="logs-brand" class="input" data-testid="logs-brand">
+            <option value="">All my brands</option>
+          </select>
+        </div>
+        <div class="form-field" id="logs-who-field">
+          <label for="logs-who">Who did it</label>
+          <select id="logs-who" class="input" data-testid="logs-who">
+            <option value="">Anyone</option>
+            <option value="person">A person</option>
+            <option value="sponsor">A sponsor</option>
+            <option value="system">The system</option>
+            <option value="key">An automation key</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="lg-tabs" role="tablist" aria-label="Kinds of log">
+        <button type="button" class="filter-chip active" role="tab" id="logs-tab-activity" aria-selected="true" aria-controls="logs-panel" tabindex="0" data-tab="activity" data-testid="logs-tab-activity">Activity</button>
+        <button type="button" class="filter-chip" role="tab" id="logs-tab-system" aria-selected="false" aria-controls="logs-panel" tabindex="-1" data-tab="system" data-testid="logs-tab-system">System jobs</button>
+        <button type="button" class="filter-chip" role="tab" id="logs-tab-security" aria-selected="false" aria-controls="logs-panel" tabindex="-1" data-tab="security" data-testid="logs-tab-security">Security</button>
+        <button type="button" class="filter-chip" role="tab" id="logs-tab-cost" aria-selected="false" aria-controls="logs-panel" tabindex="-1" data-tab="cost" data-testid="logs-tab-cost">Cost</button>
+      </div>
+
+      <section id="logs-panel" role="tabpanel" aria-labelledby="logs-tab-activity" data-testid="logs-panel">
+        <h2 id="logs-heading" data-testid="logs-heading">Activity</h2>
+        <p class="list-sub" id="logs-note" data-testid="logs-note"></p>
+        <p id="logs-status" role="status" aria-live="polite" data-testid="logs-status">Loading the log.</p>
+        <ul class="lg-list" id="logs-list" data-testid="logs-list"></ul>
+        <button type="button" class="btn btn-secondary" id="logs-more" data-testid="logs-more" hidden>Show more</button>
+      </section>
+    </main>
+    <!--OCR_LEGAL_FOOTER-->
+    <script>
+      // Logs screen. Reads GET /api/v2/admin/audit-log and nothing else: the
+      // server decides which rows a caller may see (their own brands, another
+      // tenant's operator as null, IPs masked). This page only asks and shows.
+      // Every value is written with textContent, so no value is ever read as markup.
+      (function () {
+        var TABS = {
+          activity: {
+            heading: 'Activity',
+            note: 'Who did what: published, changed codes, sent a sponsor link, shared a report.',
+          },
+          system: {
+            heading: 'System jobs',
+            note: 'What the nightly clean-up archived or removed on your brands. Platform-wide jobs, and the form-data clean-up, which keeps its own record, are not shown here yet.',
+          },
+          security: {
+            heading: 'Security',
+            note: 'Actions that were refused on your brands. Refused sign-ins and rate-limit trips are not recorded per brand yet.',
+          },
+          cost: {
+            heading: 'Cost',
+            note: 'Billable use against its free allowance, for example venue map images.',
+          },
+        };
+        var TAG = { person: 'Person', sponsor: 'Sponsor', system: 'System', key: 'Key', unknown: 'Not signed in' };
+        var PAGE = 25;
+
+        var tab = 'activity';
+        var cursor = null;
+        var seq = 0;
+        var $ = function (id) { return document.getElementById(id); };
+        var list = $('logs-list');
+        var status = $('logs-status');
+        var more = $('logs-more');
+        var brandsKnown = false;
+
+        function setStatus(text, isError) {
+          status.textContent = text;
+          if (isError) { status.setAttribute('role', 'alert'); status.setAttribute('data-testid', 'logs-error'); }
+          else { status.setAttribute('role', 'status'); status.setAttribute('data-testid', 'logs-status'); }
+        }
+
+        function humanAction(a) {
+          var s = String(a || '').toLowerCase().replace(/_/g, ' ');
+          return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        function who(e) {
+          if (e.source === 'system') return 'The system';
+          if (e.source === 'sponsor') return 'A sponsor';
+          if (e.source === 'unknown') return 'Nobody signed in';
+          if (e.actor) return e.actor;
+          return 'Someone outside your brands';
+        }
+
+        // Only numbers from the details, e.g. "deleted 3, errors 0". Free text in
+        // a details blob is never shown, so a log line cannot carry a name.
+        function counts(d) {
+          if (!d || typeof d !== 'object') return '';
+          var out = [];
+          Object.keys(d).forEach(function (k) {
+            if (typeof d[k] === 'number') out.push(k.replace(/_/g, ' ') + ' ' + d[k]);
+          });
+          return out.join(', ');
+        }
+
+        function line(parent, text, cls) {
+          var p = document.createElement('div');
+          if (cls) p.className = cls;
+          p.textContent = text;
+          parent.appendChild(p);
+          return p;
+        }
+
+        function row(e) {
+          var li = document.createElement('li');
+          li.className = 'card';
+          li.setAttribute('data-testid', 'logs-row');
+          li.setAttribute('data-source', e.source || '');
+          var head = document.createElement('div');
+          head.className = 'list-name';
+          var t = document.createElement('time');
+          t.setAttribute('datetime', e.created_at);
+          t.textContent = e.created_at.replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
+          head.appendChild(t);
+          li.appendChild(head);
+          var tagLine = document.createElement('div');
+          var tag = document.createElement('span');
+          tag.className = 'meta-badge';
+          tag.setAttribute('data-testid', 'logs-row-source');
+          tag.textContent = TAG[e.source] || 'Other';
+          tagLine.appendChild(tag);
+          tagLine.appendChild(document.createTextNode(' ' + humanAction(e.action)));
+          if (e.outcome === 'denied') {
+            var ref = document.createElement('span');
+            ref.className = 'meta-badge';
+            ref.setAttribute('data-testid', 'logs-row-refused');
+            ref.textContent = 'Refused';
+            tagLine.appendChild(document.createTextNode(' '));
+            tagLine.appendChild(ref);
+          }
+          li.appendChild(tagLine);
+          var target = [e.resource_type, e.resource_id].filter(Boolean).join(' ');
+          if (target) line(li, target, 'list-sub');
+          line(li, who(e), 'list-sub');
+          if (e.ip) line(li, 'Network ' + e.ip, 'list-sub');
+          var c = counts(e.details);
+          if (c) line(li, c, 'list-sub');
+          return li;
+        }
+
+        function url() {
+          var q = [];
+          if ($('logs-view').value === 'brand') q.push('scope=brand');
+          q.push('limit=' + PAGE);
+          if (tab === 'activity' && $('logs-who').value) q.push('source=' + $('logs-who').value);
+          if (tab === 'system') q.push('source=system');
+          if (tab === 'security') q.push('outcome=denied');
+          var hours = Number($('logs-time').value);
+          if (hours > 0) q.push('since=' + encodeURIComponent(new Date(Date.now() - hours * 3600000).toISOString()));
+          var b = $('logs-brand').value;
+          if (b && $('logs-view').value === 'brand') q.push('brand=' + encodeURIComponent(b));
+          if (cursor) q.push('cursor=' + encodeURIComponent(cursor));
+          return '/api/v2/admin/audit-log?' + q.join('&');
+        }
+
+        function offerBrands(brands) {
+          if (brandsKnown || !brands || brands.length < 2) return;
+          brandsKnown = true;
+          var sel = $('logs-brand');
+          brands.forEach(function (b) {
+            var o = document.createElement('option');
+            o.value = b;
+            o.textContent = b;
+            sel.appendChild(o);
+          });
+          $('logs-brand-field').hidden = false;
+        }
+
+        async function load(append) {
+          var mine = ++seq;
+          if (!append) { cursor = null; list.textContent = ''; }
+          more.hidden = true;
+          if (tab === 'cost') return;
+          setStatus('Loading the log.', false);
+          var res, data;
+          try {
+            res = await fetch(url(), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            data = await res.json().catch(function () { return null; });
+          } catch (err) {
+            if (mine !== seq) return;
+            setStatus('No connection. The log was not loaded. Try again.', true);
+            return;
+          }
+          if (mine !== seq) return;
+          if (res.status === 404 && $('logs-view').value === 'platform') {
+            setStatus('The whole-platform view is only for the platform owner. Choose My brands.', true);
+            return;
+          }
+          if (res.status === 404) {
+            setStatus('Your account does not own a brand, so there is no brand log to show.', true);
+            return;
+          }
+          if (!res.ok || !data || !data.ok) {
+            setStatus('The log could not be loaded (the server said ' + res.status + '). Nothing is shown rather than a wrong count.', true);
+            return;
+          }
+          offerBrands(data.brands);
+          data.entries.forEach(function (e) { list.appendChild(row(e)); });
+          cursor = data.pagination && data.pagination.hasMore ? data.pagination.nextCursor : null;
+          more.hidden = !cursor;
+          var n = list.children.length;
+          if (n === 0) setStatus('Nothing recorded for this view yet.', false);
+          else setStatus(n + (n === 1 ? ' entry shown.' : ' entries shown.'), false);
+        }
+
+        function showCost() {
+          setStatus('', false);
+          list.textContent = '';
+          var li = document.createElement('li');
+          li.className = 'card';
+          li.setAttribute('data-testid', 'logs-cost-empty');
+          line(li, 'Not recorded yet.', 'list-name');
+          line(
+            li,
+            'Billable use, such as venue map images, goes to the server log stream only today, so this page cannot read it back. Nothing is estimated or made up here. When a record exists, it will show here against the free allowance.',
+            'list-sub'
+          );
+          list.appendChild(li);
+        }
+
+        function select(next) {
+          tab = next;
+          Object.keys(TABS).forEach(function (k) {
+            var b = $('logs-tab-' + k);
+            var on = k === next;
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.setAttribute('tabindex', on ? '0' : '-1');
+            b.classList.toggle('active', on);
+          });
+          $('logs-panel').setAttribute('aria-labelledby', 'logs-tab-' + next);
+          $('logs-heading').textContent = TABS[next].heading;
+          $('logs-note').textContent = TABS[next].note;
+          $('logs-who-field').hidden = next !== 'activity';
+          if (next === 'cost') { seq++; more.hidden = true; showCost(); }
+          else load(false);
+        }
+
+        document.querySelectorAll('[role="tab"]').forEach(function (b) {
+          b.addEventListener('click', function () { select(b.getAttribute('data-tab')); });
+          b.addEventListener('keydown', function (ev) {
+            var order = Object.keys(TABS);
+            var i = order.indexOf(b.getAttribute('data-tab'));
+            var j = ev.key === 'ArrowRight' ? (i + 1) % order.length : ev.key === 'ArrowLeft' ? (i + order.length - 1) % order.length : -1;
+            if (j < 0) return;
+            ev.preventDefault();
+            select(order[j]);
+            $('logs-tab-' + order[j]).focus();
+          });
+        });
+        ['logs-view', 'logs-time', 'logs-brand', 'logs-who'].forEach(function (id) {
+          $(id).addEventListener('change', function () {
+            if (id === 'logs-view') { $('logs-brand').value = ''; }
+            if (tab === 'cost') return;
+            load(false);
+          });
+        });
+        more.addEventListener('click', function () { load(true); });
+
+        $('logs-note').textContent = TABS.activity.note;
+        load(false);
+      })();
+    </script>
+  </body>
+</html>

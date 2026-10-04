@@ -52,7 +52,10 @@ const SURFACES: Surface[] = [
   { name: 'register form', path: () => `/forms/${eventId}?type=register` },
   { name: 'sponsor home', path: () => `/sponsor?t=${SPONSOR_HOME_TOKEN}` },
   { name: 'sponsor card', path: () => `/sponsors/${SPONSOR_CARD_ID}` },
+  { name: 'organizer sign-in', path: () => '/admin' },
   { name: 'admin', path: () => '/admin', admin: true },
+  { name: 'admin logs', path: () => '/api/v2/admin/screens/logs', admin: true },
+  { name: 'admin settings', path: () => '/api/v2/admin/screens/settings', admin: true },
 ];
 
 async function open(page: Page, surface: Surface): Promise<void> {

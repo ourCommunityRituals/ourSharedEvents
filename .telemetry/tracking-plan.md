@@ -1,7 +1,7 @@
 # Tracking plan: which spine keys each measure carries
 
 **Story:** OSE-1614, part of epic OSE-1612 (measurement tracking plan).
-**Status:** Decisions 1, 2 and 3 are made (PO, 2026-10-04). The Dr of Security sign-off (section 6) is still pending.
+**Status:** Decisions 1, 2 and 3 are made (PO, 2026-10-04). Decision 4 (do venue-grain keys cross the BigQuery boundary) is made: option A1 (PO, 2026-10-04); its pre-conditions block OSE-1617. The Dr of Security sign-off (section 6) is still pending.
 **Source of facts:** the tracking audit of 2026-10-04 (`.telemetry/current-state.yaml`, `.telemetry/audits/2026-10-04.md`), re-read against the code the same day. Every "today" statement below names its file.
 
 ## 1. What this plan decides
@@ -31,15 +31,15 @@ A corridor is a res-7 H3 cell, never a slug. `canonicalCorridorId(r.h3_res7 ?? r
 
 Privacy classes: **entity** (a row about an organizer or sponsor action, not about attendees), **anonymous exact** (a count of anonymous visits, exact in the store, never shown below the floor outside admin), **floored K=5** (count withheld below 5, `lib/count-floor.ts`).
 
-| Measure           | Grain of one write                                                                                     | Store                                                         | Join to `events`                         | Privacy class                                                              | Spine keys reachable                                                                    | Who buys it                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `qr_scan`         | one scan of a poster code, two split rows: placement (where) and node return (anonymous id, hashed UA) | `scan_placement_events`, `scan_node_returns` (main `DB`)      | `event_id` on both                       | anonymous exact in the store; floored K=5 in SharedReport and exports      | `brand_id`, `corridor_id`, `uec_code`, `venue_canonical_id`\*, `event_correlation_id`\* | venue, sponsor, league, chamber, OW                         |
-| `shortlink_click` | one redirect; stored as one counter per link per UTC day, no per-click row                             | `shortlinks.clicks`, `shortlink_click_daily` (migration 0094) | `shortlinks.event_id`                    | anonymous exact; the day series follows the floor wherever it leaves admin | same five                                                                               | venue, sponsor, the Oct 24 report (pre-event reach by week) |
-| `impression`      | one sponsor card shown (beacon, filtered by `classifyBeacon`)                                          | `sponsor_impressions`, `event_type='impression'`              | `event_id`                               | anonymous exact, then floored K=5 per event before any sum                 | same five, plus the sponsor's own `brand_id`                                            | sponsor                                                     |
-| `click`           | one sponsor card clicked                                                                               | `sponsor_impressions`, `event_type='click'`                   | `event_id`                               | as `impression`                                                            | as `impression`                                                                         | sponsor                                                     |
-| `checkin`         | running total per event, plus the last anonymous id                                                    | `checkin_counts` (`FORMS_DB`)                                 | `event_id`, no SQL join across databases | anonymous exact                                                            | same five, reached by the application reading `events`                                  | venue, league                                               |
-| `email_signup`    | one signup, email stored hashed and encrypted, hour bucket                                             | `email_signups` (`FORMS_DB`)                                  | `event_id`, no SQL join across databases | entity (PII, retention-limited)                                            | `brand_id`, `event_id`; never exported as rows                                          | organizer only                                              |
-| `report_access`   | one SharedReport read, granted or denied                                                               | `report_access_log`                                           | `event_id`                               | entity                                                                     | `brand_id`                                                                              | operations (our own audit)                                  |
+| Measure           | Grain of one write                                                                                     | Store                                                         | Join to `events`                         | Privacy class                                                                                                          | Spine keys reachable                                                                    | Who buys it                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `qr_scan`         | one scan of a poster code, two split rows: placement (where) and node return (anonymous id, hashed UA) | `scan_placement_events`, `scan_node_returns` (main `DB`)      | `event_id` on both                       | anonymous exact in the store; floored K=5 in SharedReport and exports                                                  | `brand_id`, `corridor_id`, `uec_code`, `venue_canonical_id`\*, `event_correlation_id`\* | venue, sponsor, league, chamber, OW                         |
+| `shortlink_click` | one redirect; stored as one counter per link per UTC day, no per-click row                             | `shortlinks.clicks`, `shortlink_click_daily` (migration 0094) | `shortlinks.event_id`                    | anonymous exact; no read path for the day series exists yet, and any added must apply the floor before it leaves admin | same five                                                                               | venue, sponsor, the Oct 24 report (pre-event reach by week) |
+| `impression`      | one sponsor card shown (beacon, filtered by `classifyBeacon`)                                          | `sponsor_impressions`, `event_type='impression'`              | `event_id`                               | anonymous exact, then floored K=5 per event before any sum                                                             | same five, plus the sponsor's own `brand_id`                                            | sponsor                                                     |
+| `click`           | one sponsor card clicked                                                                               | `sponsor_impressions`, `event_type='click'`                   | `event_id`                               | as `impression`                                                                                                        | as `impression`                                                                         | sponsor                                                     |
+| `checkin`         | running total per event, plus the last anonymous id                                                    | `checkin_counts` (`FORMS_DB`)                                 | `event_id`, no SQL join across databases | anonymous exact                                                                                                        | same five, reached by the application reading `events`                                  | venue, league                                               |
+| `email_signup`    | one signup, email stored hashed and encrypted, hour bucket                                             | `email_signups` (`FORMS_DB`)                                  | `event_id`, no SQL join across databases | entity (PII, retention-limited)                                                                                        | `brand_id`, `event_id`; never exported as rows                                          | organizer only                                              |
+| `report_access`   | one SharedReport read, granted or denied                                                               | `report_access_log`                                           | `event_id`                               | entity                                                                                                                 | `brand_id`                                                                              | operations (our own audit)                                  |
 
 \* reachable once OSE-1615 adds the two columns. Today `venue_canonical_id` and `event_correlation_id` appear nowhere in `workers/oursharedevents/src`.
 
@@ -64,14 +64,27 @@ Public read surfaces set **no cookie**: the landing page, `/events`, the event p
 
 ADR-010 defines `event_correlation_id = hash(venue + uec_code + time_bucket)`. The bucket has to keep one league night as one id, and keep two different nights apart.
 
-| Option                                                                                          | A league night that runs past midnight                                 | Two leagues, same venue, same type, Tuesday and Thursday | Verdict         |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- | --------------- |
-| Calendar day, UTC                                                                               | splits when UTC midnight falls mid-event (any evening event in the US) | kept apart                                               | no              |
-| Calendar day, event local time                                                                  | splits if the event crosses local midnight                             | kept apart                                               | close           |
-| **Local day with a 04:00 rollover** (the bucket is the local date of `starts_at` minus 4 hours) | stays one night                                                        | kept apart                                               | **recommended** |
-| ISO week                                                                                        | one id                                                                 | **merged**, wrong                                        | no              |
+| Option                                                                                       | A league night that runs past midnight                                 | Two leagues, same venue, same type, Tuesday and Thursday | Verdict    |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- | ---------- |
+| Calendar day, UTC                                                                            | splits when UTC midnight falls mid-event (any evening event in the US) | kept apart                                               | no         |
+| Calendar day, event local time                                                               | splits if the event crosses local midnight                             | kept apart                                               | close      |
+| **Local day with a 04:00 rollover** (a start before 04:00 local belongs to the previous day) | stays one night                                                        | kept apart                                               | **chosen** |
+| ISO week                                                                                     | one id                                                                 | **merged**, wrong                                        | no         |
 
-Decision: the local date of `starts_at - 4h` in the event's own IANA zone, written `YYYY-MM-DD`. `starts_at` and the zone already exist (OSE-1313, `lib/event-datetime.ts`). A date-only event (no `starts_at`) uses `start_date`. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
+Decision: **the local date of `starts_at` in the event's own IANA zone, minus one day when the local start time is before 04:00.** Written `YYYY-MM-DD`. The rule works on the wall clock, not on a subtraction of 4 hours from the instant, because the two disagree by an hour on a daylight-saving day and OSE and OW must compute the same id. `starts_at` and the zone already exist (OSE-1313); `zonedDatePart` and `zonedTimePart` in `lib/event-datetime.ts` give the local date and time. A date-only event (no `starts_at`) uses `start_date`. The id is recomputed when the start changes, so adding a start time to a date-only event can move its bucket. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
+
+Test vectors (zone `America/Chicago`), the cases OSE-1615 must pass and OW should run too:
+
+| Start (UTC)            | Local start                       | Bucket       |
+| ---------------------- | --------------------------------- | ------------ |
+| `2026-10-22T23:30:00Z` | Oct 22, 18:30                     | `2026-10-22` |
+| `2026-10-23T06:30:00Z` | Oct 23, 01:30 (a late night)      | `2026-10-22` |
+| `2026-10-23T09:00:00Z` | Oct 23, 04:00 (exactly the edge)  | `2026-10-23` |
+| `2026-11-01T09:30:00Z` | Nov 1, 03:30 (fall-back day)      | `2026-10-31` |
+| `2026-11-01T10:30:00Z` | Nov 1, 04:30 (fall-back day)      | `2026-11-01` |
+| `2026-03-08T09:30:00Z` | Mar 8, 04:30 (spring-forward day) | `2026-03-08` |
+
+Known limit, accepted: two separate sessions of the same type at the same venue on the same night (a 7pm and a 10pm trivia) share one id. They are one night to a league or a chamber; if a buyer needs them apart, the bucket gains a session part in `v2`.
 
 ### Decision 2: where `venue_canonical_id` lives (DECIDED, PO 2026-10-04)
 
@@ -81,50 +94,114 @@ Decision: **a new nullable column on `events`, computed by the server, not a new
 
 Known weakness, accepted for now: the same venue geocoded into two neighbouring res-7 cells gets two ids, and two same-named venues in one cell share one. Both are rare at the current scale and are visible in the data. If either shows up, the fix is a registry, and the column becomes its foreign key.
 
-Per ADR-010 the normalisation is a shared contract between OSE and OW. OSE-1615 should publish its test fixtures (names in, id out) so the OW side can run the same cases.
+**Missing inputs mean no key.** `venue_canonical_id` is null when the event has no `location` or no `h3_res7`. `event_correlation_id` is null when `venue_canonical_id`, the event type (`event_type_id`, which gives `uec_code` through the type registry) or the start date is missing. A key is never computed from part of its inputs, so an untyped event never joins an `unknown` bucket with other untyped events. (Exports today write `uec_code` as `'unknown'` for such rows, `handlers/bigquery.ts:143`; the key stays null.)
+
+Per ADR-010 the normalisation is a shared contract between OSE and OW, so "hash" and "normalise" must be exact. OSE-1615 pins and publishes the following, with fixtures (names in, id out) the OW side can run. These are the proposed defaults:
+
+- **Normalised name:** Unicode NFKC, lower-cased; `&` becomes `and`; every character that is not a letter or digit becomes a space; a leading `the ` is dropped; runs of spaces collapse to one and the ends are trimmed. ("Joe's Tavern" and "Joes Tavern" agree; "Tom & Jerry's" and "Tom and Jerrys" agree; "St." and "Street" do not, and that is accepted.)
+- **Hash:** SHA-256 over the UTF-8 bytes of the joined string, fields separated by `|`, written as the first 32 lower-case hex characters. Venue: `v1|<normalised name>|<res-7 cell, lower case>`. Event: `v1|<venue_canonical_id>|<uec_code>|<bucket>`.
+- **No secret key.** OSE and OW must agree without sharing a secret (section 6 gives the consequence).
+
+Until OSE-1615 publishes the fixtures, no other repository should compute these keys.
 
 ### Decision 3: do the keys reach OW? (SETTLED, PO 2026-10-04)
 
 **Leagues, chambers and the OW side must all be supported** by the spine keys. OW receives the keys, never person-level rows. Section 5 gives one recipe per buyer.
 
+### Decision 4: do venue-grain keys cross the BigQuery boundary? (DECIDED, PO 2026-10-04: option A1)
+
+Decision 3 says OW receives the keys on the pool it reads. That collides with three statements in force today:
+
+- `OCR_ARCHITECTURE_oerAggregationBoundary.md` (OCR-docs, line 57): location is "corridor-level only (`corridor_id`)" for what OSE emits.
+- `lib/export-geography.ts` (lines 10-11): "every row that crosses the D1 to BigQuery boundary is at corridor grain or coarser". `assertCorridorGrainRow` does not list `venue_canonical_id` as forbidden, so it would not stop the key, but those lines are the contract it enforces.
+- OSE-1460 (PO, 2026-10-01), in `lib/shared-report-export.ts:291-292`: "The venue never leaves"; the aggregate exports carry `venue_id = 'corridor-aggregate'`.
+
+ADR-010 (Proposed) section 3 assumes the opposite: that data meets in BigQuery keyed on the spine. So a Proposed ADR and an implemented boundary disagreed, and the PO settled it as set out below.
+
+**What leaves OSE today** (read from code, 2026-10-04):
+
+| Export                                                                                                                                                                                                  | Grain                                                                                                                         | Venue or event identity                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `corridor_returns_export`                                                                                                                                                                               | corridor x event type x pool, 90-day window, floored and rounded                                                              | none: `venue_id='corridor-aggregate'`                                                                                                                                                |
+| `corridor_density_baseline_export`                                                                                                                                                                      | corridor x weekday x hour                                                                                                     | none: same sentinel                                                                                                                                                                  |
+| `event_series_export`                                                                                                                                                                                   | corridor x event type                                                                                                         | none: same sentinel                                                                                                                                                                  |
+| `events_backup` (`handlers/bigquery.ts:107-191`, per-event on an admin call, plus a daily batch of every event updated in the last 24 hours, any status, `bigquery.ts:282`; routed to the pool dataset) | **one row per event**: `id`, `brand_id`, `title`, `slug`, `status`, dates, `timezone`, `legal_clearance_tier`, corridor, type | **event id and title already cross.** The required tag `venue_id` is set to the event id (`venue_id: r.id`, line 141), although `pool-contract.ts` defines it as a venue identifier. |
+
+The daily batch has no status filter, so draft and archived events' titles already reach the pool dataset today. That is an existing question outside this plan and is raised separately; under A1 the two keys are still sent for listed events only. There is no per-event scan, click or impression export. So "keys cross" has two different sizes, and the options below keep them apart.
+
+**Decision: A1.** `venue_canonical_id` and `event_correlation_id` are added to the `events_backup` row, **for listed events only** (null otherwise). The event id and title already cross on that row, so this adds a venue hash and a night hash, not a new category of data. Nothing else changes: the three aggregate exports stay at corridor grain, the returns export is untouched, the `venue_id` tag keeps its current value (changing its meaning would break consumers), and **no per-event or per-venue count leaves OSE**. OW joins its events to OSE's by key and brings its own counts. Per-venue and per-night counts for chambers and leagues are produced inside OSE (admin and SharedReport) under the consent rules of section 5.
+
+Not chosen, and why: a new per-event keyed count export (A2) needs the full floor, rounding and no-subtraction design of OSE-1460 at event grain, a far smaller cell than corridor x type, and is its own story; keeping the keys inside OSE (B) would meet decision 3 only at corridor grain; a separate keyed dataset (C) needs a new pool and a change to the pool contract. A2 can be reopened later without undoing A1.
+
+**Pre-conditions before OSE-1617 builds the two columns** (each is its own artifact with its own review). The first audit of A1 against the invariants, code, CI and docs (2026-10-04) added items 2, 3, 4, 5 and 8 to the list I first wrote.
+
+1. **Boundary doc.** The location row of `OCR_ARCHITECTURE_oerAggregationBoundary.md` is amended in OCR-docs to "corridor-level for counts; event identity keys for listed events" (Tier 2).
+2. **ADR-011 (Accepted, PO 2026-10-01).** Rule 4 says every export carries res7 or coarser, and its "Neutral" section records that `venue_id` may not cross the OER boundary (OSE-1460). A1 needs a dated note there saying that a venue hash and an event hash on listed event rows are identity keys, not geography, and are allowed. If the PO reads rule 4 more strictly, A1 does not stand. (Tier 2.)
+3. **A structural gate at L0.** Invariant #17's gate (`oer-emission-boundary.invariant.spec.ts`) only locks the `wrangler.toml` bindings. **No invariant gate enforces export grain today**: only `lib/export-geography.ts` and the workers-pool tests do. A1 adds an allowlist for exactly the two key names on the `events_backup` table, and a gate in the T0 invariants shard that fails on any other venue-grain field, and on either key name in an aggregate export.
+4. **Schema before code.** Add the two NULLABLE STRING columns to `bigquery/events_backup.schema.json` (the workers-pool test `poolSchemaViolations` then covers the row). Apply `bq update` to every existing table (dev and staging exist; production tables are created with the new schema, OSE-1511 step 7). Then deploy. Reason: `insertAll` is called without `ignoreUnknownValues`, so a field with no column rejects the row, the cron phase fails and the backup stops; and `bq-create-pool-tables.sh` never alters a live table.
+5. **Listing time.** The daily batch reads `updated_at` in the last 24 hours and does not select `is_published` or `listed_from`. The query adds both and applies `listedSql()`, and includes events whose listing window ended in the last 24 hours. Without that, an event that becomes listed after the batch exports null keys and keeps them until its next edit. Keys already exported are not retracted if the event is later unlisted; that is accepted and written down.
+6. **OSE-1615** has computed the keys and published the normalisation and hash fixtures.
+7. **OSE-1460's sentence** "The venue never leaves" stays true for the returns export and is not edited; the new keys are on a different table.
+8. **Doc follow-through when built:** the `CLAUDE.md` line "No `anon_id_hash` or real venue crosses" gets the A1 qualifier; ADR-010's sentence that the keys map onto the `venue_id` tag is superseded (the tag stays the event id, the keys are new columns).
+
+**How A1 is tested, level by level.** Levels 6 and 7 cannot prove it:
+
+| Level              | What proves A1                                                                                                                                                                        | State          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 1 Security         | The L0 gate of item 3; keys never client-supplied; listed-only                                                                                                                        | to write       |
+| 2 Lint             | formatting only                                                                                                                                                                       | n/a            |
+| 3 Contract         | `events_backup.schema.json` and `poolSchemaViolations`                                                                                                                                | exists, extend |
+| 4 Unit             | key functions against the fixtures (OSE-1615); the listed-only selection                                                                                                              | to write       |
+| 5 Integration      | `oer-boundary.spec.ts` runtime cases: add a listed event (keys present), a draft (null), an event inside its grace window (null), one listed after the last batch (exported next run) | exists, extend |
+| 6 API (Bruno)      | **no Bruno request covers the backup route**, and the route returns 503 when BigQuery is not configured; whether staging holds the GCP credentials is not verified                    | gap            |
+| 7 E2E (Playwright) | not applicable to an export                                                                                                                                                           | n/a            |
+
+So the staging chain (T2, T3, T4) can go green without touching the BigQuery path. The story needs one recorded manual check against the staging dataset (`bq query` on the `_stg` table showing both columns for a listed event and null for a draft), and born-red proof for the gate and the listing cases.
+
 ## 5. Roll-up recipes, one per buyer
 
 Each recipe states the key it joins on and what the buyer may see. All of them stay inside the K=5 floor and the 90-day window rules of OSE-1460: a key never makes a withheld count visible.
 
+**No back door by subtraction.** A roll-up returns the cells that clear the floor and the sum of those cells. It never returns an independent total, a count of events, or a share that would let a withheld cell be worked out by subtraction. If any cell is withheld the response says "some not shown", and does not say how many. The same applies to a league across its nights and a chamber across its venues.
+
 ### Chamber of commerce
 
-- **Joins on:** `corridor_id` (the res-7 cell) and `venue_canonical_id`.
-- **May see:** floored counts per corridor and per venue, by event type, over the window. Which venues are in a corridor is public by design (they are on the map).
-- **May not see:** anything below K=5, any per-event row for an event under the floor, any anonymous id.
-- **Shape:** `GROUP BY corridor_id, venue_canonical_id, uec_code`, each count floored before it is summed across venues.
+- **Joins on:** `corridor_id` (the res-7 cell), and `venue_canonical_id` for venues that opted in.
+- **May see, without any consent step:** floored counts per corridor and event type over the window, for **listed events only** (`is_published` and past the publish grace window, `listedSql()` in `lib/publish-grace.ts`). This is the grain the landing map and the corridor dashboard already publish.
+- **May see only for a venue that opted in:** that venue's own floored counts. A venue is a separate tenant, so a chamber reading it per venue is a cross-tenant read and needs the venue owner's consent, recorded and audited in the same way as the league mapping below. A venue that only has draft or unlisted events never appears.
+- **May not see:** anything below K=5, any per-event row for an event under the floor, any anonymous id, a venue that did not opt in.
+- **Shape:** `GROUP BY corridor_id, uec_code` for everyone; `GROUP BY corridor_id, venue_canonical_id, uec_code` for opted-in venues. Each count is floored before it is summed. These counts are produced inside OSE (SharedReport and admin). No per-venue count reaches BigQuery (decision 4, A1).
 
 ### League
 
 - **Joins on:** `brand_id` (the league as a tenant, with its events as children) and `uec_code`, over a date range. It does **not** join on `event_correlation_id`.
 - **May see:** floored counts per night and for the season, across the venues where its teams played.
 - **May not see:** another league's events at a shared venue; an attendee, or a team member, by identity.
-- **Needs a league mapping.** A league's nights happen at venues that belong to other brands, so `brand_id` on the event alone does not say which events are the league's. The mapping says it: rows of (league brand, member event or venue brand, season start, season end). Anonymity comes first, so the mapping is held to these rules:
+- **Two cases.**
+  - **A. The league owns its events** (the founding case: the league creates its Thursday nights and names the bar in `location`). Every event already carries the league's `brand_id`. No mapping is needed, and no consent step applies, because there is no other brand.
+  - **B. The venues own the events** (each bar creates its own league night under its own brand). The league's `brand_id` is on none of them, so a mapping is needed: rows of (league brand, member event or venue brand, season start, season end). ADR-023 treats a venue and a league as separate private tenants, so a venue owner exists to consent. Whether a venue is a tenant in the code today is not verified; case A does not depend on it.
+- **The mapping, where needed (case B), is held to these rules**, anonymity first:
   - **Identifiers of organisations and events only.** No person, team roster, player name, email, anonymous id or hash of one. A column outside the allowed set fails the gate OSE-1616 adds (its denylist covers `*_person*`, `email`, `ip`, `lat`, `lon`).
   - **Two-sided consent.** The league's owner proposes a member; the venue's brand owner accepts. Until both agree the row has no effect (the same rule as sponsor placements, ADR-019). Either side can remove it.
-  - **Tenant isolation (invariant #9).** A league reads only events whose brand accepted the mapping. A venue never sees another member's numbers.
+  - **Tenant isolation (invariant #9).** A league reads only events whose brand accepted the mapping, and only listed ones. A venue never sees another member's numbers.
   - **Audited writes.** Every add, accept and remove goes to `admin_audit_log` with the actor.
-  - **The floor is applied per event before any sum**, so the mapping cannot be used to narrow a league down to a group under 5. A mapping that selects one night at one venue returns a withheld count, not a small one.
+  - **The floor is applied per event before any sum**, and the no-subtraction rule above applies, so the mapping cannot be used to narrow a league down to a group under 5. A mapping that selects one night at one venue returns "not shown", not a small number.
   - **Held as tenant data, not a committed file.** Membership is a business fact with consent and an audit trail, so it belongs in a D1 table behind an admin route. A file in the repository is fine for test fixtures and for seeding the founding league, and nowhere else.
 
 **Finding (resolved).** OSE-1617 words the league recipe as "by `event_correlation_id` across venues in a season". With the ADR-010 definition the venue is inside the hash, so a league night played at two venues yields two correlation ids. They cannot be joined by that key. `event_correlation_id` answers "is this the same event" (the same venue, type and night, entered once by OSE and once by OW). A season across venues is a tenant question, so it joins on `brand_id` plus `uec_code` plus dates. The PO agreed on 2026-10-04 and OSE-1617 was reworded to match.
 
 ### OW
 
-- **Joins on:** all five keys, through the pool dataset OW reads (`oureventring_general`, per-environment names per OSE-1416). OW stamps the same `venue_canonical_id` and `event_correlation_id` at write time from the shared normalisation, so the halves agree by construction (ADR-010 section 1). There is no cross-database join.
-- **May see:** the keys plus floored, windowed aggregates (the `corridor_returns_export`, `corridor_density_baseline_export` and `event_series_export` shapes).
+- **Joins on:** all five keys, through the pool dataset OW reads (`oureventring_general`, per-environment names per OSE-1416). OW is to stamp the same `venue_canonical_id` and `event_correlation_id` at write time from the shared normalisation, so the halves agree by construction (ADR-010 section 1). That is design intent: no code in `ourWKRP` reads or writes either key today (searched 2026-10-04). There is no cross-database join. Under decision 4 (A1) OW joins events by key on `events_backup` and brings its own counts; OSE sends no per-event counts.
+- **May see:** the keys on listed events, plus the floored, windowed aggregates that exist today (the `corridor_returns_export`, `corridor_density_baseline_export` and `event_series_export` shapes). No per-event counts leave OSE.
 - **May not see:** `anon_id`, its hash, a per-person row, a count below K=5. Person-level participation on the OW side is the person's own opt-in declaration (the covenant in ADR-010 section 2), never inferred from a scan.
 
 ## 6. Dr of Security review
 
 Claim to be checked: no key can single out a person.
 
-- `venue_canonical_id` is derived from a venue name and an area cell. `event_correlation_id` adds an event type and a day. None of the inputs is about a person. The keys are unkeyed hashes (they must agree across OSE and OW), so anyone who knows a venue and a night can compute the id. That reveals nothing the public event page does not already say.
-- A one-person event is the edge case: its id plus any exact count would identify that attendee's presence. The defence is the floor, which withholds any count under 5 on every surface that leaves admin. A key never relaxes it (OSE-1617 acceptance).
+- `venue_canonical_id` is derived from a venue name and an area cell. `event_correlation_id` adds an event type and a day. None of the inputs is about a person. The keys are unkeyed hashes (they must agree across OSE and OW), so anyone who knows a venue and a night can compute the id and test whether an event exists. For a listed event that reveals nothing the public page does not say. For a draft, unlisted or archived event it would confirm something that is not public. So: the keys are stored for every event, but **exports and roll-ups carry them only for listed events** (OSE-1617 acceptance, added 2026-10-04), and no public surface shows them.
+- A one-person event is the edge case: its id plus any exact count would identify that attendee's presence. The defence is the floor (`lib/count-floor.ts`), applied today by the SharedReport read, the dashboards, event stats, poster reach and the corridor map. This plan does not claim that every existing surface applies it; the rule is that any surface or export that shows a count next to a key must. A key never relaxes it (OSE-1617 acceptance), and exports also follow the no-subtraction rule of section 5.
 - The hash input must not contain coordinates or res-9 cells (OSE-1615 security test).
 - Keys are server-computed and never client-supplied (400 on a supplied value, as for `starts_at`).
 
@@ -132,14 +209,15 @@ Claim to be checked: no key can single out a person.
 
 ## 7. Changes this plan implies
 
-| Where                                          | Change                                                                                                                    | Story                                                           |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ADR-010 (OCR-docs repo, status Proposed)       | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story, after the PO decides; a separate change in OCR-docs |
-| `events`                                       | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                                                        |
-| `lib/pool-contract.ts`, exports                | carry both keys, joined from `events` at export time                                                                      | OSE-1617                                                        |
-| league mapping (new table, admin route, audit) | league roll-up of section 5                                                                                               | to be written: not in the epic yet                              |
-| `lib/measurement-registry.ts` and a gate       | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                                                        |
-| alerts                                         | a measure that stops writing                                                                                              | OSE-1618                                                        |
+| Where                                                                   | Change                                                                                                                         | Story                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| ADR-010 (OCR-docs repo, status Proposed)                                | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id`      | this story; OCR-docs#156           |
+| `events`                                                                | `venue_canonical_id`, `event_correlation_id`, indexes                                                                          | OSE-1615                           |
+| `events_backup` row (`handlers/bigquery.ts`), `lib/export-geography.ts` | add the two keys for listed events only; allowlist exactly those names on that table; gate against any other venue-grain field | OSE-1617, after OSE-1615           |
+| boundary doc, location row (OCR-docs)                                   | "corridor-level for counts; event identity keys for listed events"                                                             | separate OCR-docs change, Tier 2   |
+| league mapping (new table, admin route, audit)                          | league roll-up of section 5                                                                                                    | to be written: not in the epic yet |
+| `lib/measurement-registry.ts` and a gate                                | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                       | OSE-1616                           |
+| alerts                                                                  | a measure that stops writing                                                                                                   | OSE-1618                           |
 
 ## 8. Still open
 
