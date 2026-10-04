@@ -103,6 +103,13 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 - **Joins on:** `brand_id` (the league as a tenant, with its events as children) and `uec_code`, over a date range. It does **not** join on `event_correlation_id`.
 - **May see:** floored counts per night and for the season, across the venues where its teams played.
 - **May not see:** another league's events at a shared venue; an attendee, or a team member, by identity.
+- **Needs a league mapping.** A league's nights happen at venues that belong to other brands, so `brand_id` on the event alone does not say which events are the league's. The mapping says it: rows of (league brand, member event or venue brand, season start, season end). Anonymity comes first, so the mapping is held to these rules:
+  - **Identifiers of organisations and events only.** No person, team roster, player name, email, anonymous id or hash of one. A column outside the allowed set fails the gate OSE-1616 adds (its denylist covers `*_person*`, `email`, `ip`, `lat`, `lon`).
+  - **Two-sided consent.** The league's owner proposes a member; the venue's brand owner accepts. Until both agree the row has no effect (the same rule as sponsor placements, ADR-019). Either side can remove it.
+  - **Tenant isolation (invariant #9).** A league reads only events whose brand accepted the mapping. A venue never sees another member's numbers.
+  - **Audited writes.** Every add, accept and remove goes to `admin_audit_log` with the actor.
+  - **The floor is applied per event before any sum**, so the mapping cannot be used to narrow a league down to a group under 5. A mapping that selects one night at one venue returns a withheld count, not a small one.
+  - **Held as tenant data, not a committed file.** Membership is a business fact with consent and an audit trail, so it belongs in a D1 table behind an admin route. A file in the repository is fine for test fixtures and for seeding the founding league, and nowhere else.
 
 **Finding (resolved).** OSE-1617 words the league recipe as "by `event_correlation_id` across venues in a season". With the ADR-010 definition the venue is inside the hash, so a league night played at two venues yields two correlation ids. They cannot be joined by that key. `event_correlation_id` answers "is this the same event" (the same venue, type and night, entered once by OSE and once by OW). A season across venues is a tenant question, so it joins on `brand_id` plus `uec_code` plus dates. The PO agreed on 2026-10-04 and OSE-1617 was reworded to match.
 
@@ -125,13 +132,14 @@ Claim to be checked: no key can single out a person.
 
 ## 7. Changes this plan implies
 
-| Where                                    | Change                                                                                                                    | Story                                                           |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ADR-010 (OCR-docs repo, status Proposed) | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story, after the PO decides; a separate change in OCR-docs |
-| `events`                                 | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                                                        |
-| `lib/pool-contract.ts`, exports          | carry both keys, joined from `events` at export time                                                                      | OSE-1617                                                        |
-| `lib/measurement-registry.ts` and a gate | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                                                        |
-| alerts                                   | a measure that stops writing                                                                                              | OSE-1618                                                        |
+| Where                                          | Change                                                                                                                    | Story                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| ADR-010 (OCR-docs repo, status Proposed)       | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story, after the PO decides; a separate change in OCR-docs |
+| `events`                                       | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                                                        |
+| `lib/pool-contract.ts`, exports                | carry both keys, joined from `events` at export time                                                                      | OSE-1617                                                        |
+| league mapping (new table, admin route, audit) | league roll-up of section 5                                                                                               | to be written: not in the epic yet                              |
+| `lib/measurement-registry.ts` and a gate       | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                                                        |
+| alerts                                         | a measure that stops writing                                                                                              | OSE-1618                                                        |
 
 ## 8. Still open
 
