@@ -1,0 +1,79 @@
+# Pulse — scheduled, read-only health and latency check per environment.
+#
+# The same Bruno collection the PR pipeline uses, pointed at one environment per
+# job, with only the folders that make no write and need no seeded data. Each run
+# is reduced to one compact record (scripts/pulse/summarize.mjs): when, which
+# environment, pass/fail and latency per request. No bodies, headers, tokens or
+# visitor data. Records are kept as workflow artifacts and are what a dashboard
+# reads. No third-party monitoring service receives anything.
+#
+# Production is read-only for every test suite (ADR-021); the Bruno collections
+# refuse writes to production before sending. Production joins the pulse only
+# once the repo variable PRODUCTION_LIVE is 'true' (the same switch as
+# security-monitoring.yml).
+
+name: Pulse
+
+on:
+  schedule:
+    - cron: '17 * * * *' # hourly, off the top of the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulse-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pulse:
+    name: Pulse → ${{ matrix.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        # Production only after launch. Staging always.
+        environment: ${{ fromJSON(vars.PRODUCTION_LIVE == 'true' && '["staging","production"]' || '["staging"]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bruno read-only folders
+        working-directory: bruno/ose-api
+        env:
+          # Staging also checks the public events API (test-event-001 is seeded
+          # there). Production has no seeded event, so it runs the folders that
+          # need none.
+          FOLDERS_STAGING: '1. Health & Status|2. Public Events API|7. CORS Preflight'
+          FOLDERS_PRODUCTION: '1. Health & Status|7. CORS Preflight'
+        run: |
+          set -o pipefail
+          if [ "${{ matrix.environment }}" = "production" ]; then
+            ENVFILE=ose; FOLDERS="$FOLDERS_PRODUCTION"
+          else
+            ENVFILE=ose-staging; FOLDERS="$FOLDERS_STAGING"
+          fi
+          IFS='|' read -r -a ARGS <<< "$FOLDERS"
+          mkdir -p "$GITHUB_WORKSPACE/pulse"
+          npx --yes @usebruno/cli@4.2.0 run "${ARGS[@]}" -r --env "$ENVFILE" \
+            --reporter-json "$GITHUB_WORKSPACE/pulse/bru-${{ matrix.environment }}.json" \
+            || echo "bru exited non-zero; the summary below decides the verdict"
+
+      - name: Summarize
+        run: |
+          node scripts/pulse/summarize.mjs \
+            "pulse/bru-${{ matrix.environment }}.json" "${{ matrix.environment }}" \
+            | tee "pulse/pulse-${{ matrix.environment }}.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-${{ matrix.environment }}-${{ github.run_number }}
+          path: pulse/pulse-${{ matrix.environment }}.json
+          retention-days: 90
