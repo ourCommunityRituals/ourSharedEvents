@@ -17,7 +17,7 @@ import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
-import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
+import { sponsorTitle, sponsorCardPath, PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -290,6 +290,33 @@ export function renderErrorPage(
 // and the reader only learned otherwise once their own fetch failed too.
 type PublicListEnv = PagesEnv & DataProviderEnv;
 
+/**
+ * OSE-1522: one consented sponsor title per listed event, for the card. Same
+ * on-show rule as the sponsor card and the dashboards (PLACEMENT_ON_SHOW_SQL),
+ * the list's own brand ('root'), the sponsor's display name else business name.
+ * One query for the whole list. Fails to empty: a card without its sponsor line
+ * is correct, a list that errors because of it is not.
+ */
+async function fetchSponsorTitlesForList(env: PublicListEnv): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  try {
+    if (!env.DB) return titles;
+    const rs = await env.DB.prepare(
+      `SELECT sp.event_id AS event_id, COALESCE(NULLIF(sb.display_name, ''), sb.name) AS title
+         FROM sponsor_placement sp
+         JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+         JOIN events e ON e.id = sp.event_id
+        WHERE ${PLACEMENT_ON_SHOW_SQL} AND e.brand_id = 'root'
+        ORDER BY sb.name ASC, sb.id ASC
+        LIMIT 500`
+    ).all<{ event_id: string; title: string }>();
+    for (const r of rs.results ?? []) if (!titles.has(r.event_id)) titles.set(r.event_id, r.title);
+  } catch {
+    /* fail open */
+  }
+  return titles;
+}
+
 export async function handlePublicPage(
   env: PagesEnv,
   ctx?: DataProviderCtx | null,
@@ -324,7 +351,7 @@ export async function handlePublicPage(
             countText: '0 events',
             upcoming: 0,
           }
-        : renderEventList(filtered);
+        : renderEventList(filtered, await fetchSponsorTitlesForList(env as PublicListEnv));
   } catch {
     list = renderEventListError();
   }

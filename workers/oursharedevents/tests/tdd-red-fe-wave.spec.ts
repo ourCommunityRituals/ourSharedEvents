@@ -153,7 +153,7 @@ describe('OSE-1518 event page: trust header and plain choices', () => {
 });
 
 describe('OSE-1522 a consented sponsor shows wherever the title shows', () => {
-  redStory('OSE-1522', 'the /events card shows the sponsor by the title', async () => {
+  it('the /events card shows the sponsor by the title', async () => {
     await seedEvent('evt_1522_card', 'active', 'Sponsored Card Night');
     await seedSplitSponsor(E.DB, {
       id: 'sp_1522_card',
@@ -166,5 +166,37 @@ describe('OSE-1522 a consented sponsor shows wherever the title shows', () => {
     expect(html, '[OSE-1522] the consented sponsor shows on the card').toContain(
       'Card Sponsor 1522'
     );
+  });
+
+  it('a sponsor that has not said yes (ADR-019) is not on the card', async () => {
+    await seedEvent('evt_1522_pending', 'active', 'Pending Sponsor Night');
+    await seedSplitSponsor(E.DB, {
+      id: 'sp_1522_pending',
+      eventId: 'evt_1522_pending',
+      name: 'Pending Sponsor 1522',
+      brandId: BRAND,
+      sponsorAccepted: 0,
+    });
+    const { html } = await pageText('/events');
+    expect(html).toContain('Pending Sponsor Night');
+    expect(html, '[OSE-1522] silence is not consent').not.toContain('Pending Sponsor 1522');
+  });
+
+  it('the card shows the sponsor display name, not the business name', async () => {
+    await seedEvent('evt_1522_title', 'active', 'Titled Sponsor Night');
+    await seedSplitSponsor(E.DB, {
+      id: 'sp_1522_title',
+      eventId: 'evt_1522_title',
+      name: 'Legal Name 1522 LLC',
+      brandId: BRAND,
+    });
+    await E.DB.prepare(
+      "UPDATE sponsor_business SET display_name = 'Friendly Title 1522' WHERE id = ?"
+    )
+      .bind('sp_1522_title')
+      .run();
+    const { html } = await pageText('/events');
+    expect(html, '[OSE-1522] display name shows').toContain('Friendly Title 1522');
+    expect(html, 'the legal name does not').not.toContain('Legal Name 1522 LLC');
   });
 });

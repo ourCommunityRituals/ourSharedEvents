@@ -114,7 +114,9 @@ function str(v: unknown): string {
  * discover is the worst possible answer to the question it exists to answer.
  */
 export function renderEventList(
-  items: readonly EventListItem[] | null | undefined
+  items: readonly EventListItem[] | null | undefined,
+  /** OSE-1522: event id → the consented sponsor's title, shown by the event title. */
+  sponsorTitles?: ReadonlyMap<string, string>
 ): RenderedEventList {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyEventList();
 
@@ -148,12 +150,17 @@ export function renderEventList(
       const wrappedTag = wrapped
         ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>'
         : '';
+      const sponsorTitle = sponsorTitles?.get(str(e.id));
+      const sponsorLine = sponsorTitle
+        ? `<p class="meta" data-testid="public-event-sponsor">Supported by ${escapeHtml(sponsorTitle)}</p>`
+        : '';
       return `
           <article class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="public-event-name">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>
+              ${sponsorLine}
             </div>
             ${cta}
           </article>`;
