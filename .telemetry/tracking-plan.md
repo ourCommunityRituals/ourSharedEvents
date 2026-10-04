@@ -1,7 +1,7 @@
 # Tracking plan: which spine keys each measure carries
 
 **Story:** OSE-1614, part of epic OSE-1612 (measurement tracking plan).
-**Status:** Decisions 1, 2 and 3 are made (PO, 2026-10-04). Decision 4 (do venue-grain keys cross the BigQuery boundary) is open and blocks OSE-1617. The Dr of Security sign-off (section 6) is still pending.
+**Status:** Decisions 1, 2 and 3 are made (PO, 2026-10-04). Decision 4 (do venue-grain keys cross the BigQuery boundary) is made: option A1 (PO, 2026-10-04); its pre-conditions block OSE-1617. The Dr of Security sign-off (section 6) is still pending.
 **Source of facts:** the tracking audit of 2026-10-04 (`.telemetry/current-state.yaml`, `.telemetry/audits/2026-10-04.md`), re-read against the code the same day. Every "today" statement below names its file.
 
 ## 1. What this plan decides
@@ -108,7 +108,7 @@ Until OSE-1615 publishes the fixtures, no other repository should compute these 
 
 **Leagues, chambers and the OW side must all be supported** by the spine keys. OW receives the keys, never person-level rows. Section 5 gives one recipe per buyer.
 
-### Decision 4: do venue-grain keys cross the BigQuery boundary? (OPEN, needs PO)
+### Decision 4: do venue-grain keys cross the BigQuery boundary? (DECIDED, PO 2026-10-04: option A1)
 
 Decision 3 says OW receives the keys on the pool it reads. That collides with three statements in force today:
 
@@ -116,7 +116,7 @@ Decision 3 says OW receives the keys on the pool it reads. That collides with th
 - `lib/export-geography.ts` (lines 10-11): "every row that crosses the D1 to BigQuery boundary is at corridor grain or coarser". `assertCorridorGrainRow` does not list `venue_canonical_id` as forbidden, so it would not stop the key, but those lines are the contract it enforces.
 - OSE-1460 (PO, 2026-10-01), in `lib/shared-report-export.ts:291-292`: "The venue never leaves"; the aggregate exports carry `venue_id = 'corridor-aggregate'`.
 
-ADR-010 (Proposed) section 3 assumes the opposite: that data meets in BigQuery keyed on the spine. So a Proposed ADR and an implemented boundary disagree, and this plan cannot settle it.
+ADR-010 (Proposed) section 3 assumes the opposite: that data meets in BigQuery keyed on the spine. So a Proposed ADR and an implemented boundary disagreed, and the PO settled it as set out below.
 
 **What leaves OSE today** (read from code, 2026-10-04):
 
@@ -129,14 +129,16 @@ ADR-010 (Proposed) section 3 assumes the opposite: that data meets in BigQuery k
 
 The daily batch has no status filter, so draft and archived events' titles already reach the pool dataset today. That is an existing question outside this plan and is raised separately; under A1 the two keys are still sent for listed events only. There is no per-event scan, click or impression export. So "keys cross" has two different sizes, and the options below keep them apart.
 
-| Option                                            | What crosses                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cost                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **A1. Keys on the event rows only** (recommended) | `venue_canonical_id` and `event_correlation_id` are added to `events_backup` rows, **for listed events only** (null otherwise). Nothing else changes: the three aggregate exports stay at corridor grain, the returns export is untouched, no new counts leave. OW joins its events to OSE's by key and brings its own counts. Per-venue and per-night counts for chambers and leagues are produced inside OSE (admin, SharedReport), with the consent rules of section 5. | PO amends the boundary doc's location row to "corridor-level for counts; event identity keys for listed events"; `export-geography.ts` gets an allowlist for exactly two key names on this one table, with a gate that fails on any other venue-grain field or on those names in an aggregate export; the `venue_id` tag keeps its current value (changing its meaning would break consumers). The event id and title already cross, so this adds a venue hash and a night hash, not a new category of data. |
-| A2. A1 plus a new per-event keyed count export    | Floored, weekly counts per listed event (scans, shortlink clicks by day rolled to weeks, impressions), carrying the keys.                                                                                                                                                                                                                                                                                                                                                  | Everything in A1, plus a new export phase, a new BigQuery table, and the full floor, rounding and no-subtraction design of OSE-1460 applied to event grain (a far smaller cell than corridor x type, so the floor bites far more often). Its own story and review.                                                                                                                                                                                                                                           |
-| B. Keys stay inside OSE                           | Nothing finer than today. League, chamber and OW roll-ups needing a venue or an event run in OSE.                                                                                                                                                                                                                                                                                                                                                                          | OW cannot join on events in BigQuery; Decision 3 is met only at corridor grain.                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| C. A separate keyed dataset                       | Keys cross into their own dataset with its own floor and access list.                                                                                                                                                                                                                                                                                                                                                                                                      | A new pool and dataset; the pool contract changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+**Decision: A1.** `venue_canonical_id` and `event_correlation_id` are added to the `events_backup` row, **for listed events only** (null otherwise). The event id and title already cross on that row, so this adds a venue hash and a night hash, not a new category of data. Nothing else changes: the three aggregate exports stay at corridor grain, the returns export is untouched, the `venue_id` tag keeps its current value (changing its meaning would break consumers), and **no per-event or per-venue count leaves OSE**. OW joins its events to OSE's by key and brings its own counts. Per-venue and per-night counts for chambers and leagues are produced inside OSE (admin and SharedReport) under the consent rules of section 5.
 
-Until this is decided OSE-1617 must not build any export. The recipes in section 5 are written for A1 and say where another option changes them.
+Not chosen, and why: a new per-event keyed count export (A2) needs the full floor, rounding and no-subtraction design of OSE-1460 at event grain, a far smaller cell than corridor x type, and is its own story; keeping the keys inside OSE (B) would meet decision 3 only at corridor grain; a separate keyed dataset (C) needs a new pool and a change to the pool contract. A2 can be reopened later without undoing A1.
+
+**Pre-conditions before OSE-1617 builds the two columns** (each is its own artifact with its own review):
+
+1. The boundary doc's location row is amended in OCR-docs to "corridor-level for counts; event identity keys for listed events" (a Tier 2 change).
+2. `lib/export-geography.ts` gets an allowlist for exactly the two key names on the `events_backup` table, and a gate fails on any other venue-grain field, and on either key name in an aggregate export.
+3. OSE-1615 has computed the keys and published the normalisation and hash fixtures.
+4. OSE-1460's sentence "The venue never leaves" stays true for the returns export and is not edited; the new keys are on a different table.
 
 ## 5. Roll-up recipes, one per buyer
 
@@ -150,7 +152,7 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 - **May see, without any consent step:** floored counts per corridor and event type over the window, for **listed events only** (`is_published` and past the publish grace window, `listedSql()` in `lib/publish-grace.ts`). This is the grain the landing map and the corridor dashboard already publish.
 - **May see only for a venue that opted in:** that venue's own floored counts. A venue is a separate tenant, so a chamber reading it per venue is a cross-tenant read and needs the venue owner's consent, recorded and audited in the same way as the league mapping below. A venue that only has draft or unlisted events never appears.
 - **May not see:** anything below K=5, any per-event row for an event under the floor, any anonymous id, a venue that did not opt in.
-- **Shape:** `GROUP BY corridor_id, uec_code` for everyone; `GROUP BY corridor_id, venue_canonical_id, uec_code` for opted-in venues. Each count is floored before it is summed. These counts are produced inside OSE (SharedReport and admin). Under A1 and B no per-venue count reaches BigQuery; under A2 floored per-event counts do.
+- **Shape:** `GROUP BY corridor_id, uec_code` for everyone; `GROUP BY corridor_id, venue_canonical_id, uec_code` for opted-in venues. Each count is floored before it is summed. These counts are produced inside OSE (SharedReport and admin). No per-venue count reaches BigQuery (decision 4, A1).
 
 ### League
 
@@ -172,8 +174,8 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 
 ### OW
 
-- **Joins on:** the keys (all five under A1 and A2), through the pool dataset OW reads (`oureventring_general`, per-environment names per OSE-1416). OW is to stamp the same `venue_canonical_id` and `event_correlation_id` at write time from the shared normalisation, so the halves agree by construction (ADR-010 section 1). That is design intent: no code in `ourWKRP` reads or writes either key today (searched 2026-10-04). There is no cross-database join. Everything here is subject to decision 4. Under A1 OW joins events by key on `events_backup` and brings its own counts; under B it joins at corridor x event type only; only under A2 does OSE send per-event counts.
-- **May see:** the keys on listed events, plus the floored, windowed aggregates that exist today (the `corridor_returns_export`, `corridor_density_baseline_export` and `event_series_export` shapes). Per-event counts only under A2.
+- **Joins on:** all five keys, through the pool dataset OW reads (`oureventring_general`, per-environment names per OSE-1416). OW is to stamp the same `venue_canonical_id` and `event_correlation_id` at write time from the shared normalisation, so the halves agree by construction (ADR-010 section 1). That is design intent: no code in `ourWKRP` reads or writes either key today (searched 2026-10-04). There is no cross-database join. Under decision 4 (A1) OW joins events by key on `events_backup` and brings its own counts; OSE sends no per-event counts.
+- **May see:** the keys on listed events, plus the floored, windowed aggregates that exist today (the `corridor_returns_export`, `corridor_density_baseline_export` and `event_series_export` shapes). No per-event counts leave OSE.
 - **May not see:** `anon_id`, its hash, a per-person row, a count below K=5. Person-level participation on the OW side is the person's own opt-in declaration (the covenant in ADR-010 section 2), never inferred from a scan.
 
 ## 6. Dr of Security review
@@ -189,17 +191,17 @@ Claim to be checked: no key can single out a person.
 
 ## 7. Changes this plan implies
 
-| Where                                          | Change                                                                                                                    | Story                              |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| ADR-010 (OCR-docs repo, status Proposed)       | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story; OCR-docs#156           |
-| `events`                                       | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                           |
-| `lib/pool-contract.ts`, exports                | carry both keys, joined from `events` at export time, **only after decision 4**                                           | OSE-1617                           |
-| league mapping (new table, admin route, audit) | league roll-up of section 5                                                                                               | to be written: not in the epic yet |
-| `lib/measurement-registry.ts` and a gate       | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                           |
-| alerts                                         | a measure that stops writing                                                                                              | OSE-1618                           |
+| Where                                                                   | Change                                                                                                                         | Story                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| ADR-010 (OCR-docs repo, status Proposed)                                | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id`      | this story; OCR-docs#156           |
+| `events`                                                                | `venue_canonical_id`, `event_correlation_id`, indexes                                                                          | OSE-1615                           |
+| `events_backup` row (`handlers/bigquery.ts`), `lib/export-geography.ts` | add the two keys for listed events only; allowlist exactly those names on that table; gate against any other venue-grain field | OSE-1617, after OSE-1615           |
+| boundary doc, location row (OCR-docs)                                   | "corridor-level for counts; event identity keys for listed events"                                                             | separate OCR-docs change, Tier 2   |
+| league mapping (new table, admin route, audit)                          | league roll-up of section 5                                                                                                    | to be written: not in the epic yet |
+| `lib/measurement-registry.ts` and a gate                                | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                       | OSE-1616                           |
+| alerts                                                                  | a measure that stops writing                                                                                                   | OSE-1618                           |
 
 ## 8. Still open
 
-1. PO: decision 4, the boundary. OSE-1617 waits on it.
-2. Dr of Security: the sign-off in section 6.
-3. ADR-010 is in the OCR-docs repo, so its update is a second pull request there. It records decisions 1 and 2 and the league join.
+1. Dr of Security: the sign-off in section 6.
+2. ADR-010 is in the OCR-docs repo, so its update is a second pull request there. It records decisions 1 and 2 and the league join.
