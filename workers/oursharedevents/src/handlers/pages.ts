@@ -791,14 +791,14 @@ const SPONSOR_LIST_CSS = `
 
 /**
  * Share + Add to calendar: one pair on a row. At phone width each takes half
- * (flex-basis 140px, so two fit in 335px); a single control takes the row.
+ * (flex-basis 120px, so two fit even at 320px); a single control takes the row.
  */
 const EVENT_ACTIONS_CSS = `
     .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 140px; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
     .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus, .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 140px; }
+    .ose-calendar-menu { flex: 1 1 120px; }
     .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
     .ose-calendar-summary::-webkit-details-marker { display: none; }
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
