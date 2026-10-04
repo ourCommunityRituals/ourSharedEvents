@@ -72,6 +72,11 @@ defaults:
   run:
     shell: bash
 
+# Least privilege (OSE-1466 0.6): jobs read the repo and nothing else unless they
+# declare more. No job here writes to GitHub with its token.
+permissions:
+  contents: read
+
 jobs:
   # ============================================================================
   # BESPOKE SECURITY SCANNERS
@@ -92,7 +97,7 @@ jobs:
 
     steps:
     - name: Harden runner
-      uses: step-security/harden-runner@v2
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
       continue-on-error: true  # Must not block audit if harden-runner itself fails
       with:
         egress-policy: audit

@@ -1542,7 +1542,7 @@ jobs:
       # by name instead of being buried in the CLI log.
       - name: Report results (Bruno contract)
         if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3
         continue-on-error: true
         with:
           name: '${{ matrix.label }} Results (Bruno)'
@@ -1716,7 +1716,7 @@ jobs:
       # the PR/Checks tab), matching the T4 functional reporter.
       - name: Report results (E2E smoke)
         if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3
         continue-on-error: true
         with:
           name: '${{ matrix.label }} Results (Playwright)'
@@ -2296,7 +2296,7 @@ jobs:
 
       - name: Report results
         if: always() && steps.artifact-scan.outcome == 'success' # never publish a report the scan refused (OSE-1470)
-        uses: dorny/test-reporter@v3
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3
         continue-on-error: true
         with:
           name: 'Functional Results (${{ matrix.label }})'
