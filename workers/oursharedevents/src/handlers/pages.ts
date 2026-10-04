@@ -237,6 +237,11 @@ export function renderErrorPage(
   const safeBody = esc(body);
   const safeCtaHref = esc(ctaHref);
   const safeCtaLabel = esc(ctaLabel);
+  const statusText = opts.label ? esc(opts.label) : 'Error ' + status;
+  const statusLine =
+    opts.label === null
+      ? ''
+      : '<p class="error-status" data-testid="error-status">' + statusText + '</p>';
   const content = `<!DOCTYPE html>
 <html lang="en" data-surface="ose-error">
 <head>
@@ -264,7 +269,7 @@ export function renderErrorPage(
 <body>
   <header data-testid="error-header"><a href="/" data-testid="error-brand">OurSharedEvents</a></header>
   <main data-testid="error-main">
-    ${opts.label === null ? '' : `<p class="error-status" data-testid="error-status">${opts.label ? esc(opts.label) : `Error ${status}`}</p>`}
+    ${statusLine}
     <h1 class="error-title" data-testid="error-title">${safeTitle}</h1>
     <p class="error-body" data-testid="error-body">${safeBody}</p>
     <a class="error-cta" data-testid="error-cta" href="${safeCtaHref}">${safeCtaLabel}</a>
