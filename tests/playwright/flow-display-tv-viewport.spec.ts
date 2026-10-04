@@ -12,8 +12,9 @@
  * What this spec validates at TV viewport (1920x1080):
  *
  *   1. /display renders 200 + text/html
- *   2. Core display-* testids present (header, main, featured-card,
- *      upcoming, ticker, clock, sponsor-banner, sponsor-sidebar)
+ *   2. Core display-* testids present (header, main, consent, sponsor-sidebar;
+ *      OSE-1521 removed the clock, the ticker and the global sponsor banner,
+ *      which now sits inside the featured screen)
  *   3. Async event-data chain completes — featured-card OR empty-
  *      state visible (one of the two MUST be true after settle)
  *   4. Featured-card title is non-empty when present (real event data
@@ -76,9 +77,7 @@ test.describe('OSE-312 /display venue-TV surface at 1920x1080', () => {
     for (const testid of [
       'display-header',
       'display-main',
-      'display-clock',
-      'display-ticker',
-      'display-sponsor-banner',
+      'display-consent',
       'display-sponsor-sidebar',
     ]) {
       await expect(

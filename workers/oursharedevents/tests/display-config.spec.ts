@@ -64,6 +64,8 @@ interface Config {
   panes: string[];
   dwell_seconds: number;
   league: Array<{ kind: string; label: string; url: string; qr: string | null }>;
+  event_page: { url: string; qr: string | null };
+  donate: { label: string; url: string; qr: string | null } | null;
 }
 
 async function config(id: string, headers: Record<string, string> = {}) {
@@ -77,9 +79,54 @@ describe('display-config: what the TV reads', () => {
     const res = await config(id);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Config;
-    expect(body.panes).toEqual(['event', 'upcoming', 'sponsors', 'league']);
+    expect(body.panes).toEqual(['event', 'upcoming', 'sponsors', 'league', 'donate']);
     expect(body.dwell_seconds).toBe(15);
     expect(body.league).toEqual([]);
+    // No donate link saved: no donate screen. The event's own page is always there.
+    expect(body.donate).toBeNull();
+    expect(body.event_page.url).toBe(`https://t.test/events/${id}`);
+    expect(body.event_page.qr).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test('OSE-1521: the donate link round-trips with a QR; the sponsor screens are chosen, never default', async () => {
+    const id = await createEvent();
+    const saved = await put(id, {
+      displayPanes: ['event', 'donate', 'sponsor'],
+      donateLink: 'https://donate.example/give',
+    });
+    expect(saved.status).toBe(200);
+    const body = (await (await config(id)).json()) as Config;
+    expect(body.panes).toEqual(['event', 'donate', 'sponsor']);
+    expect(body.donate).toMatchObject({ label: 'Donate', url: 'https://donate.example/give' });
+    expect(body.donate!.qr).toMatch(/^data:image\/png;base64,/);
+    // null clears it again: the screen goes away, the order stays.
+    expect((await put(id, { donateLink: null })).status).toBe(200);
+    const after = (await (await config(id)).json()) as Config;
+    expect(after.donate).toBeNull();
+    expect(after.panes).toEqual(['event', 'donate', 'sponsor']);
+  });
+
+  test('OSE-1521: a donate link that is not https, or too long for the QR, is a 400 and nothing changes', async () => {
+    const id = await createEvent({ settings: { donateLink: 'https://donate.example/ok' } });
+    const before = await (await config(id)).text();
+    for (const bad of [
+      'http://donate.example/',
+      'javascript:alert(1)',
+      `https://donate.example/${'x'.repeat(155 - 23 + 1)}`,
+    ]) {
+      const res = await put(id, { donateLink: bad });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code?: string }).code).toBe('INVALID_SETTINGS');
+    }
+    expect(await (await config(id)).text()).toBe(before);
+  });
+
+  test('OSE-1521: nothing numeric about a fundraiser is stored or served (no counts on the TV)', async () => {
+    const id = await createEvent();
+    expect((await put(id, { donateGoal: 5000 })).status).toBe(400);
+    expect((await put(id, { donateRaised: 1200 })).status).toBe(400);
+    const text = await (await config(id)).text();
+    expect(text).not.toMatch(/goal|raised|progress|amount/i);
   });
 
   test('the admin save round-trips: order, dwell and league links with QR codes', async () => {
@@ -118,7 +165,7 @@ describe('display-config: what the TV reads', () => {
       200
     );
     const body = (await (await config(id)).json()) as Config;
-    expect(body.panes).toEqual(['event', 'upcoming', 'sponsors', 'league']);
+    expect(body.panes).toEqual(['event', 'upcoming', 'sponsors', 'league', 'donate']);
     expect(body.league.map((l) => l.kind)).toEqual(['bracket']);
   });
 

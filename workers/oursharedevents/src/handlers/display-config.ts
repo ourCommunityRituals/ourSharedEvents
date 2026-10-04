@@ -16,6 +16,12 @@
 // order or league links, the hash changes and the TV picks it
 // up on its next check.
 //
+// OSE-1521 adds two more QR screens: `event_page` (the featured screen's QR: the
+// event's own public page, on the host the TV loaded from) and `donate` (the
+// organiser's saved donation link, settings.donateLink). Both are drawn only on a
+// 200, exactly like the league QRs, and both are covered by the ETag. No amount,
+// goal or progress is carried: the display shows no counts.
+//
 // Same visibility as the poster bundle: an event that is not live is 404/403.
 // Public read: rate-limited at the route (publicReadLimited), like every other.
 //
@@ -34,6 +40,7 @@ import {
 } from '../lib/event-settings';
 import { generateQrCode } from '../lib/qr';
 import { getCode } from '../lib/uec';
+import { internalTarget, posterCodeUec } from '../lib/poster-codes';
 
 export interface DisplayConfigEnv {
   DB: D1Database;
@@ -51,6 +58,17 @@ const LEAGUE_LABELS: Record<LeagueLinkKind, string> = {
   bracket: 'Bracket',
 };
 
+// The donate and event-page QRs print in the UEC colour the poster uses for the
+// same kind of link (donation → SHOP, event page → UTILITY), read from the
+// registry per call so the colour is never a literal here (Invariant #3).
+const DONATE_LABEL = 'Donate';
+
+export interface QrLink {
+  url: string;
+  /** PNG data URI, or null if the link is too long to encode (the text still shows). */
+  qr: string | null;
+}
+
 export interface LeagueItem {
   kind: LeagueLinkKind;
   label: string;
@@ -59,9 +77,9 @@ export interface LeagueItem {
   qr: string | null;
 }
 
-function qrFor(url: string): string | null {
+function qrFor(url: string, fgColor: string = LEAGUE_HEX): string | null {
   try {
-    return generateQrCode(url, { fgColor: LEAGUE_HEX, errorCorrection: 'L', scale: 6 });
+    return generateQrCode(url, { fgColor, errorCorrection: 'L', scale: 6 });
   } catch {
     return null; // longer than QR version 7 holds: the link text still shows
   }
@@ -107,6 +125,15 @@ export async function handleDisplayConfig(
   return withEtag(request, headers, row, { withQr: true });
 }
 
+/** The colours the QR images are drawn in, read from the registry now. */
+function qrColours() {
+  return {
+    league: LEAGUE_HEX,
+    donate: posterCodeUec('donation').scan_hex,
+    event: posterCodeUec('public').scan_hex,
+  };
+}
+
 /**
  * Everything the response depends on except the QR images. A QR is a pure
  * function of its link and the options in qrFor() (the UEC LIVE colour,
@@ -116,8 +143,8 @@ export async function handleDisplayConfig(
  * once-a-minute check get its 304 WITHOUT the PNGs being generated: they
  * are only drawn on a 200.
  */
-const QR_VERSION = 'qr-utility-L-6';
-function configShape(row: { id: string; settings_json: string | null }) {
+const QR_VERSION = 'qr-L-6';
+function configShape(row: { id: string; settings_json: string | null }, origin: string) {
   const display = resolveDisplaySettings(parseEventSettings(row.settings_json));
   const league = LEAGUE_LINK_KINDS.filter((kind) => display.leagueLinks[kind]).map((kind) => ({
     kind,
@@ -130,6 +157,10 @@ function configShape(row: { id: string; settings_json: string | null }) {
     panes: display.panes,
     dwell_seconds: display.dwellSeconds,
     league,
+    // The featured screen's QR: this event's public page on the host serving
+    // the TV (so a staging TV never prints a production link).
+    event_page: { url: internalTarget(origin, row.id, 'public') },
+    donate: display.donateLink ? { label: DONATE_LABEL, url: display.donateLink } : null,
   };
 }
 
@@ -139,8 +170,11 @@ async function withEtag(
   row: { id: string; settings_json: string | null },
   { withQr }: { withQr: boolean }
 ): Promise<Response> {
-  const shape = configShape(row);
-  const etag = await strongEtag(`${QR_VERSION}|${LEAGUE_HEX}|${JSON.stringify(shape)}`);
+  const shape = configShape(row, new URL(request.url).origin);
+  const colours = qrColours();
+  const etag = await strongEtag(
+    `${QR_VERSION}|${colours.league}|${colours.donate}|${colours.event}|${JSON.stringify(shape)}`
+  );
   const cacheHeaders = {
     ...headers,
     ETag: etag,
@@ -155,6 +189,10 @@ async function withEtag(
     ? JSON.stringify({
         ...shape,
         league: shape.league.map((l): LeagueItem => ({ ...l, qr: qrFor(l.url) })),
+        event_page: { ...shape.event_page, qr: qrFor(shape.event_page.url, colours.event) },
+        donate: shape.donate
+          ? { ...shape.donate, qr: qrFor(shape.donate.url, colours.donate) }
+          : null,
       })
     : JSON.stringify(shape);
   return new Response(body, {

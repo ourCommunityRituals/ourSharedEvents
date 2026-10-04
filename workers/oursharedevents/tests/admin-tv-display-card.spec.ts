@@ -36,6 +36,7 @@ const SAVED = {
   panes: ['league', 'event'],
   dwell_seconds: 30,
   league: [{ kind: 'standings', label: 'Standings', url: 'https://docs.google.com/x', qr: null }],
+  donate: { label: 'Donate', url: 'https://donate.example/give' },
 };
 
 function mount(load: Reply = { body: SAVED }, save: Reply = { body: { ok: true } }) {
@@ -86,8 +87,11 @@ describe('admin TV display card', () => {
       ['event', true],
       ['upcoming', false],
       ['sponsors', false],
+      ['donate', false],
+      ['sponsor', false],
     ]);
     expect($<HTMLInputElement>('tv-dwell').value).toBe('30');
+    expect($<HTMLInputElement>('tv-donate').value).toBe('https://donate.example/give');
     expect($<HTMLInputElement>('tv-league-standings').value).toBe('https://docs.google.com/x');
     expect($<HTMLInputElement>('tv-league-schedule').value).toBe('');
     expect($('tv-open').getAttribute('href')).toBe(`/display?event=${EVT}`);
@@ -102,12 +106,26 @@ describe('admin TV display card', () => {
       (rows()[0].querySelector('[data-testid="tv-screen-up"]') as HTMLButtonElement).disabled
     ).toBe(true);
     expect(
-      (rows()[3].querySelector('[data-testid="tv-screen-down"]') as HTMLButtonElement).disabled
+      (rows()[5].querySelector('[data-testid="tv-screen-down"]') as HTMLButtonElement).disabled
     ).toBe(true);
     (rows()[1].querySelector('[data-testid="tv-screen-up"]') as HTMLButtonElement).click();
-    expect(order().map((r) => r[0])).toEqual(['event', 'league', 'upcoming', 'sponsors']);
+    expect(order().map((r) => r[0])).toEqual([
+      'event',
+      'league',
+      'upcoming',
+      'sponsors',
+      'donate',
+      'sponsor',
+    ]);
     (rows()[0].querySelector('[data-testid="tv-screen-down"]') as HTMLButtonElement).click();
-    expect(order().map((r) => r[0])).toEqual(['league', 'event', 'upcoming', 'sponsors']);
+    expect(order().map((r) => r[0])).toEqual([
+      'league',
+      'event',
+      'upcoming',
+      'sponsors',
+      'donate',
+      'sponsor',
+    ]);
   });
 
   test('Save sends only the ON screens in order, the seconds, and every league link (blank → null)', async () => {
@@ -133,9 +151,52 @@ describe('admin TV display card', () => {
           standings: 'https://docs.google.com/x',
           bracket: null,
         },
+        donateLink: 'https://donate.example/give',
       },
     });
     expect($('tv-msg').textContent).toContain('within a minute');
+  });
+
+  test('OSE-1521: the donate link and the screen per sponsor are saved like any other screen', async () => {
+    const { doc, $, calls, load, w } = await mount();
+    await load();
+    for (const pane of ['donate', 'sponsor']) {
+      const box = doc.querySelector(
+        `[data-pane="${pane}"] [data-testid="tv-screen-on"]`
+      ) as HTMLInputElement;
+      box.checked = true;
+      box.dispatchEvent(new w.Event('change', { bubbles: true }));
+    }
+    $<HTMLInputElement>('tv-donate').value = '  https://donate.example/new  ';
+    $<HTMLButtonElement>('tv-save').click();
+    await flush();
+    const put = calls.find((c) => c.method === 'PUT')!;
+    const settings = (put.body as { settings: Record<string, unknown> }).settings;
+    expect(settings.displayPanes).toEqual(['league', 'event', 'donate', 'sponsor']);
+    expect(settings.donateLink).toBe('https://donate.example/new');
+  });
+
+  test('OSE-1521: a blank donate link is sent as null (it clears), and no amount or goal is ever sent', async () => {
+    const { $, calls, load } = await mount();
+    await load();
+    $<HTMLInputElement>('tv-donate').value = '';
+    $<HTMLButtonElement>('tv-save').click();
+    await flush();
+    const put = calls.find((c) => c.method === 'PUT')!;
+    const settings = (put.body as { settings: Record<string, unknown> }).settings;
+    expect(settings.donateLink).toBeNull();
+    expect(Object.keys(settings).sort()).toEqual([
+      'displayDwellSeconds',
+      'displayPanes',
+      'donateLink',
+      'leagueLinks',
+    ]);
+  });
+
+  test('OSE-1521: the card says what the new screens are, in plain words', () => {
+    const doc = new JSDOM(cardMarkup(ADMIN_HTML)).window.document;
+    expect(doc.querySelector('label[for="tv-donate"]')?.textContent).toMatch(/donat/i);
+    expect(cardScript(ADMIN_HTML)).toContain("sponsor: 'One screen per sponsor'");
   });
 
   test('nothing ON, or seconds out of range: not sent, and the organiser is told why', async () => {
@@ -228,7 +289,15 @@ describe('admin TV display card: review fixes', () => {
     await load('evt-B');
     expect($<HTMLInputElement>('tv-league-standings').value).toBe('');
     expect($<HTMLInputElement>('tv-dwell').value).toBe('15');
-    expect(order().map((r) => r[0])).toEqual(['event', 'upcoming', 'sponsors', 'league']);
+    expect(order()).toEqual([
+      ['event', true],
+      ['upcoming', true],
+      ['sponsors', true],
+      ['league', true],
+      ['donate', true],
+      ['sponsor', false],
+    ]);
+    expect($<HTMLInputElement>('tv-donate').value).toBe('');
     expect($<HTMLButtonElement>('tv-save').disabled).toBe(true);
   });
 
