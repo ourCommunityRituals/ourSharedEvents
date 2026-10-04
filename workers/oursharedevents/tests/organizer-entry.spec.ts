@@ -40,14 +40,20 @@ function block(html: string, testid: string): string {
 }
 
 /** Comments in the served templates mention <h1> and <script>; the page itself does not. */
-const stripComments = (s: string) => {
-  let prev: string;
-  do {
-    prev = s;
-    s = s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  } while (s !== prev);
-  return s;
+/** Cut every `open ... close` span with a scan, not a regex: an unclosed opener drops the rest. */
+const cutSpans = (s: string, open: string, close: string) => {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const a = s.indexOf(open, i);
+    if (a < 0) return out + s.slice(i);
+    out += s.slice(i, a);
+    const b = s.indexOf(close, a + open.length);
+    if (b < 0) return out;
+    i = b + close.length;
+  }
 };
+const stripComments = (s: string) => cutSpans(cutSpans(s, '<!--', '-->'), '/*', '*/');
 
 const text = (s: string) =>
   s
