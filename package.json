@@ -86,6 +86,7 @@
     "test:arch": "playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architecture/",
     "test:journeys": "playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts",
     "test:local:launch-contracts": "cd workers/oursharedevents && npm run test:local:launch-contracts",
+    "test:t3:staging": "node scripts/ci/run-t3.mjs",
     "test:local:launch-smoke": "playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/launch-story-smoke.spec.ts",
     "test:local:poster-print": "playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/2-pages/poster-print.data.spec.ts --grep \"Print Layout\"",
     "test:local:red-team-launch": "playwright test --config=playwright.red-team.config.ts launch-story-adversarial.spec.ts",

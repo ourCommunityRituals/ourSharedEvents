@@ -25,6 +25,28 @@ to rediscover it.
 | T5 (red-team adversarial)           | Partially      | Auth-bypass and leakage-shape assertions are provable locally. CF Access edge behavior, Cloudflare WAF, and Bot Management are NOT reproducible locally — those assertions only prove something on staging. |
 | T6 (security finale)                | No             | Staging-only by design, per the standing team rule.                                                                                                                                                         |
 
+## T3 against staging from your laptop (same entry point as CI)
+
+```bash
+npm run test:t3:staging                          # security + iac + forms
+npm run test:t3:staging -- --section iac         # one section
+npm run test:t3:staging -- --section forms -- --grep register   # extra Playwright args
+```
+
+CI's `T3 Smoke` matrix runs `node scripts/ci/run-t3.mjs --section <name>`, so a local pass
+runs the same configs and specs. They are listed once, in `scripts/ci/t3-sections.json`
+(`run-local-vetting.sh` reads it too). Target is `BASE_URL` (default staging); production is refused.
+
+- **Credentials:** `ADMIN_KEY`, `X_OCR_INTERNAL`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`. If they are
+  not in the environment and the Doppler CLI is installed and logged in, the runner re-runs itself under
+  `doppler run --project oursharedevents --config stg`. No `.env` file. A token that CF rejects is
+  an expiry question first (OSE-349, `docs/doppler/CF-ACCESS-SECRETS-SOURCE-OF-TRUTH.md`).
+- **Traces:** off in every config (OSE-1470); the runner refuses `--trace` unless it is `off`.
+- **UA / bot challenge:** the e2e-smoke config already sends a real-browser UA (OSE-306/1310).
+- **Browser:** `npx playwright install chromium` once (security section only).
+- **Staging writes:** these sections are read-mostly; the security smoke deletes what it creates.
+- Local green is for iteration; CI on Ubuntu is the verdict.
+
 ## One-time local setup
 
 ```bash
