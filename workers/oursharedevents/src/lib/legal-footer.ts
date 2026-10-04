@@ -54,7 +54,8 @@ export const LEGAL_LINKS: ReadonlyArray<{ href: string; label: string; slug: str
 ];
 
 /** Surfaces that render the footer. Anything absent here simply has no marker. */
-export type FooterSurface = 'landing' | 'public' | 'admin' | 'admin-signin' | 'shared-report';
+export type FooterSurface =
+  'landing' | 'public' | 'admin' | 'admin-signin' | 'shared-report' | 'error';
 
 /**
  * Surfaces whose footer keeps a wayfinding link back to the event listing.
@@ -62,7 +63,7 @@ export type FooterSurface = 'landing' | 'public' | 'admin' | 'admin-signin' | 's
  * a report being read by a sponsor are not looking for the public index, and
  * the audit's finding was that surfaces are busy on first view.
  */
-const BROWSE_SURFACES = new Set<FooterSurface>(['landing', 'public', 'admin-signin']);
+const BROWSE_SURFACES = new Set<FooterSurface>(['landing', 'public', 'admin-signin', 'error']);
 
 /** Test-id prefix for a surface — matches the ids the templates already emitted. */
 function prefixFor(surface: FooterSurface): string {

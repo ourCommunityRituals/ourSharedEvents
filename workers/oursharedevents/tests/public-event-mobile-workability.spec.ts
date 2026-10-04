@@ -21,7 +21,7 @@
  *   - html, body { overflow-x: hidden; }
  *   - body { overflow-wrap: anywhere; word-break: break-word; }
  *   - .ose-venue-map { max-width: 100%; }
- *   - .ose-rsvp-btn / .ose-checkin-btn { min-height: 44px; }
+ *   - .ose-choice-btn { min-height: 44px; } (OSE-1518: register, check-in and just-looking share it)
  *     (touch-target floor, invariant 14)
  *
  * The defensive rules are deliberately applied at the html/body
@@ -116,7 +116,7 @@ describe('OSE-298 public event page mobile workability — API layer', () => {
 
   test('OSE-298 | API | GET /events/:id (pre_event) | RSVP CTA hits the 44px touch-target floor', async () => {
     const html = await fetchEventHtml(PRE_EVENT_ID);
-    expect(html).toMatch(/\.ose-rsvp-btn\s*\{[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.ose-choice-btn\s*\{[^}]*min-height:\s*44px/);
   });
 
   test('OSE-298 | API | GET /events/:id (event live) | html+body have overflow-x:hidden defensive guard', async () => {
@@ -126,6 +126,6 @@ describe('OSE-298 public event page mobile workability — API layer', () => {
 
   test('OSE-298 | API | GET /events/:id (event live) | check-in CTA hits the 44px touch-target floor', async () => {
     const html = await fetchEventHtml(LIVE_EVENT_ID);
-    expect(html).toMatch(/\.ose-checkin-btn\s*\{[^}]*min-height:\s*44px/);
+    expect(html).toMatch(/\.ose-choice-btn\s*\{[^}]*min-height:\s*44px/);
   });
 });

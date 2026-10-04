@@ -16,11 +16,16 @@ describe('OSE-R-008 — public event page registration CTA copy', () => {
       'utf8'
     );
 
-    // OSE-1355: one CTA element whose href is present on the public page and
-    // absent (inert) in the admin draft preview. The public branch must still
-    // link to the registration form and say what it does.
+    // OSE-1355 / OSE-1518: the registration CTA is the first of the three plain
+    // choices. Its href is present on the public page and absent (inert) in the
+    // admin draft preview, and it links to the registration form.
+    expect(pagesSource).toContain("renderEventChoices(row, formContext, 'pre', lang, preview)");
     expect(pagesSource).toContain(
-      '<a class="ose-rsvp-btn" data-testid="event-rsvp" ${preview ? \'data-preview-inert="true" aria-disabled="true"\' : `href="${esc(eventFormHref(row.id, formContext))}"`}>${eventFormCtaLabel(formContext.type)}</a>'
+      `const first = phase === 'pre' ? 'event-rsvp' : 'event-checkin';`
+    );
+    expect(pagesSource).toContain('data-preview-inert="true" aria-disabled="true"');
+    expect(pagesSource).toContain(
+      'eventFormHref(row.id, { type, deploymentId: ctx.deploymentId })'
     );
     expect(pagesSource).toContain("const formContext = opts?.formContext ?? { type: 'register' };");
     expect(pagesSource).toContain("return 'Register for this event';");
