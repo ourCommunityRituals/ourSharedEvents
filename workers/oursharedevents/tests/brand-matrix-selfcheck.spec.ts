@@ -102,7 +102,7 @@ describe('OSE-1554 self-check: the matrix route list covers the router', () => {
     const src = routerSource();
     for (const p of Object.keys(PUBLIC_ROUTE_NOTES)) {
       const probe = p.replace('/:id', '');
-      expect(src.includes(probe) || src.includes(probe.replace(/\//g, '\\/')), p).toBe(true);
+      expect(src.includes(probe), p).toBe(true);
     }
   });
 });
