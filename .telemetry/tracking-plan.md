@@ -1,7 +1,7 @@
 # Tracking plan: which spine keys each measure carries
 
 **Story:** OSE-1614, part of epic OSE-1612 (measurement tracking plan).
-**Status:** DRAFT for PO sign-off. Decision 3 is settled. Decisions 1 and 2 carry a recommendation, not a decision.
+**Status:** Decisions 1, 2 and 3 are made (PO, 2026-10-04). The Dr of Security sign-off (section 6) is still pending.
 **Source of facts:** the tracking audit of 2026-10-04 (`.telemetry/current-state.yaml`, `.telemetry/audits/2026-10-04.md`), re-read against the code the same day. Every "today" statement below names its file.
 
 ## 1. What this plan decides
@@ -60,7 +60,7 @@ Public read surfaces set **no cookie**: the landing page, `/events`, the event p
 
 ## 4. Decisions
 
-### Decision 1: the time bucket in `event_correlation_id` (OPEN, recommendation)
+### Decision 1: the time bucket in `event_correlation_id` (DECIDED, PO 2026-10-04)
 
 ADR-010 defines `event_correlation_id = hash(venue + uec_code + time_bucket)`. The bucket has to keep one league night as one id, and keep two different nights apart.
 
@@ -71,13 +71,13 @@ ADR-010 defines `event_correlation_id = hash(venue + uec_code + time_bucket)`. T
 | **Local day with a 04:00 rollover** (the bucket is the local date of `starts_at` minus 4 hours) | stays one night                                                        | kept apart                                               | **recommended** |
 | ISO week                                                                                        | one id                                                                 | **merged**, wrong                                        | no              |
 
-Recommendation: the local date of `starts_at - 4h` in the event's own IANA zone, written `YYYY-MM-DD`. `starts_at` and the zone already exist (OSE-1313, `lib/event-datetime.ts`). A date-only event (no `starts_at`) uses `start_date`. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
+Decision: the local date of `starts_at - 4h` in the event's own IANA zone, written `YYYY-MM-DD`. `starts_at` and the zone already exist (OSE-1313, `lib/event-datetime.ts`). A date-only event (no `starts_at`) uses `start_date`. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
 
-### Decision 2: where `venue_canonical_id` lives (OPEN, recommendation)
+### Decision 2: where `venue_canonical_id` lives (DECIDED, PO 2026-10-04)
 
 Today there is no canonical venue entity. An event carries free text (`location` and `where_address`), `lat`/`lon`, and the cells `h3_res9` / `h3_res7`.
 
-Recommendation: **a new nullable column on `events`, computed by the server, not a new venue table.** It is `hash('v1' + normalised venue name (`location`) + h3_res7)`. Normalisation lower-cases, strips punctuation and leading "the", and collapses whitespace. No coordinates enter the hash. This is what OSE-1615 already assumes, and it avoids building a venue registry before there is a second consumer that needs one.
+Decision: **a new nullable column on `events`, computed by the server, not a new venue table.** It is `hash('v1' + normalised venue name (`location`) + h3_res7)`. Normalisation lower-cases, strips punctuation and leading "the", and collapses whitespace. No coordinates enter the hash. This is what OSE-1615 already assumes, and it avoids building a venue registry before there is a second consumer that needs one.
 
 Known weakness, accepted for now: the same venue geocoded into two neighbouring res-7 cells gets two ids, and two same-named venues in one cell share one. Both are rare at the current scale and are visible in the data. If either shows up, the fix is a registry, and the column becomes its foreign key.
 
@@ -104,7 +104,7 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 - **May see:** floored counts per night and for the season, across the venues where its teams played.
 - **May not see:** another league's events at a shared venue; an attendee, or a team member, by identity.
 
-**Finding for the PO.** OSE-1617 words the league recipe as "by `event_correlation_id` across venues in a season". With the ADR-010 definition the venue is inside the hash, so a league night played at two venues yields two correlation ids. They cannot be joined by that key. `event_correlation_id` answers "is this the same event" (the same venue, type and night, entered once by OSE and once by OW). A season across venues is a tenant question, so it joins on `brand_id` plus `uec_code` plus dates. I recommend OSE-1617 is reworded that way. This needs a PO yes, because it changes a sentence in a ticket the PO wrote.
+**Finding (resolved).** OSE-1617 words the league recipe as "by `event_correlation_id` across venues in a season". With the ADR-010 definition the venue is inside the hash, so a league night played at two venues yields two correlation ids. They cannot be joined by that key. `event_correlation_id` answers "is this the same event" (the same venue, type and night, entered once by OSE and once by OW). A season across venues is a tenant question, so it joins on `brand_id` plus `uec_code` plus dates. The PO agreed on 2026-10-04 and OSE-1617 was reworded to match.
 
 ### OW
 
@@ -133,9 +133,7 @@ Claim to be checked: no key can single out a person.
 | `lib/measurement-registry.ts` and a gate | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                                                        |
 | alerts                                   | a measure that stops writing                                                                                              | OSE-1618                                                        |
 
-## 8. Open items before this can be marked signed
+## 8. Still open
 
-1. PO: decision 1 (bucket) and decision 2 (stored column).
-2. PO: the OSE-1617 league wording (section 5).
-3. Dr of Security: the sign-off in section 6.
-4. ADR-010 is in the OCR-docs repo, so its update is a second pull request there, opened once 1 and 2 are decided.
+1. Dr of Security: the sign-off in section 6.
+2. ADR-010 is in the OCR-docs repo, so its update is a second pull request there. It records decisions 1 and 2 and the league join.
