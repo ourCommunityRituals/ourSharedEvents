@@ -76,6 +76,10 @@ const BASELINE = {
   // sponsor-card.html (0083): the public sponsor card — /ui.css classes plus a
   // sub-400-char page style on tokens. Zero raw hex; keep at 0.
   'sponsor-card.html': 0,
+  // admin-logs.html / admin-settings.html: the admin Logs and Settings screens —
+  // /ui.css classes plus a sub-400-char page style on tokens. Zero raw hex; keep at 0.
+  'admin-logs.html': 0,
+  'admin-settings.html': 0,
 };
 
 function rawHexCount(html) {

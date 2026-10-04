@@ -205,6 +205,23 @@ const SURFACES: Surface[] = [
     skipReason: ADMIN_SKIP_REASON,
   },
   {
+    // Logs screen (read-only): filters are 44px+ selects, tabs are filter chips.
+    path: '/api/v2/admin/screens/logs',
+    name: 'admin logs',
+    authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
+    primaryCtaSelector: '[data-testid="logs-tab-activity"], main button',
+    skipReason: ADMIN_SKIP_REASON,
+  },
+  {
+    // Settings screen (read-only): headings and cards only, plus the header links.
+    path: '/api/v2/admin/screens/settings',
+    name: 'admin settings',
+    authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
+    primaryCtaSelector:
+      '[data-testid="settings-nav-admin"], [data-testid="settings-nav-logs"], header a',
+    skipReason: ADMIN_SKIP_REASON,
+  },
+  {
     // OSE-309: /sharedReport returns 403 (Content-Type: application/json)
     // when the audit bearer is unset OR the analytics.shared-report
     // feature flag is off on staging. The audit then has no DOM to
