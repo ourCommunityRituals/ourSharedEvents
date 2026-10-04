@@ -438,12 +438,12 @@ describe('AUD-3 B — GET /audit-log?scope=brand access matrix', () => {
     expect((await call('GET', '/api/v2/admin/audit-log', asEmail(OWNER_A))).status).toBe(404);
   });
 
-  test('a key actor in scope mode all sees every brand row with full IPs, still no NULL rows', async () => {
+  test('a key actor in scope mode all sees every brand row, IPs as stored (masked at write), still no NULL rows', async () => {
     const body = (await (await call('GET', BRAND_PATH, KEY)).json()) as ListBody;
     const ids = body.entries.map((e) => e.id);
     expect(ids).toEqual(expect.arrayContaining(['alb-1', 'alb-5']));
     expect(body.entries.every((e) => e.brand_id !== null)).toBe(true);
-    expect(body.entries.find((e) => e.id === 'alb-1')?.ip).toBe('203.0.113.77');
+    expect(body.entries.find((e) => e.id === 'alb-1')?.ip).toBe('203.0.113.0/24');
     expect(body.entries.find((e) => e.id === 'alb-3')?.actor).toBe(OWNER_B);
   });
 });

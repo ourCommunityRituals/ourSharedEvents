@@ -37,6 +37,11 @@ export function maskIp(raw: string | null | undefined): string | null {
   const ip = raw.trim();
   if (ip.length === 0) return null;
 
+  // Already masked (the audit log masks at write): return it unchanged, so
+  // masking on read is idempotent and old raw rows and new masked rows both work.
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.0\/24$/.test(ip) && maskIpv4(ip.slice(0, -3))) return ip;
+  if (/^[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::\/48$/i.test(ip)) return ip.toLowerCase();
+
   const v4 = maskIpv4(ip);
   if (v4) return v4;
 
