@@ -20,6 +20,11 @@ defaults:
   run:
     shell: bash
 
+# Least privilege (OSE-1466 0.6): jobs read the repo and nothing else unless they
+# declare more. No job here writes to GitHub with its token.
+permissions:
+  contents: read
+
 jobs:
   lint-and-check:
     name: Markdown lint + DAC compliance

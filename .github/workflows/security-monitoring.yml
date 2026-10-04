@@ -65,6 +65,11 @@ env:
   INCLUDE_PRODUCTION: ${{ vars.PRODUCTION_LIVE == 'true' || inputs.include_production == true }}
 
 # ─── Job 1: npm audit ────────────────────────────────────────────────────────
+# Least privilege (OSE-1466 0.6): jobs read the repo and nothing else unless they
+# declare more. No job here writes to GitHub with its token.
+permissions:
+  contents: read
+
 jobs:
   npm-audit:
     name: npm audit — all packages
