@@ -314,6 +314,77 @@ describe('OSE-240: createShortlink + resolveCode lib round-trip', () => {
   });
 });
 
+describe('OSE-1613: shortlink clicks by day (aggregate series, never per-click)', () => {
+  async function seedLink(tag: string): Promise<string> {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose1613_${tag}_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, `Daily ${tag}`, `daily-${tag}`, 'active')
+      .run();
+    return (await createShortlink(tenv, eventId)).code;
+  }
+
+  test('each click adds one to today bucket and to the total', async () => {
+    const tenv = env as unknown as TestEnv;
+    const code = await seedLink('bucket');
+    await incrementClick(tenv, code);
+    await incrementClick(tenv, code);
+    await incrementClick(tenv, code);
+
+    const rows = await tenv.DB.prepare(
+      `SELECT day, clicks FROM shortlink_click_daily WHERE code = ?`
+    )
+      .bind(code)
+      .all<{ day: string; clicks: number }>();
+    expect(rows.results).toHaveLength(1);
+    expect(rows.results[0].day).toBe(new Date().toISOString().slice(0, 10));
+    expect(rows.results[0].clicks).toBe(3);
+
+    const total = await tenv.DB.prepare(`SELECT clicks FROM shortlinks WHERE code = ?`)
+      .bind(code)
+      .first<{ clicks: number }>();
+    expect(total?.clicks).toBe(3);
+  });
+
+  test('an unknown code creates no bucket', async () => {
+    const tenv = env as unknown as TestEnv;
+    await incrementClick(tenv, 'ZzNone');
+    const row = await tenv.DB.prepare(
+      `SELECT COUNT(*) AS n FROM shortlink_click_daily WHERE code = ?`
+    )
+      .bind('ZzNone')
+      .first<{ n: number }>();
+    expect(row?.n).toBe(0);
+  });
+
+  test('a bucket write failure never breaks the click or the redirect path', async () => {
+    const tenv = env as unknown as TestEnv;
+    const code = await seedLink('fail');
+    await tenv.DB.prepare(
+      `ALTER TABLE shortlink_click_daily RENAME TO shortlink_click_daily_off`
+    ).run();
+    try {
+      const count = await incrementClick(tenv, code);
+      expect(count).toBe(1);
+    } finally {
+      await tenv.DB.prepare(
+        `ALTER TABLE shortlink_click_daily_off RENAME TO shortlink_click_daily`
+      ).run();
+    }
+  });
+
+  test('table holds only code, day and clicks: no identity, no finer time', async () => {
+    const tenv = env as unknown as TestEnv;
+    const info = await tenv.DB.prepare(`PRAGMA table_info('shortlink_click_daily')`).all<{
+      name: string;
+    }>();
+    expect((info.results ?? []).map((r) => r.name)).toEqual(['code', 'day', 'clicks']);
+  });
+});
+
 describe('OSE-240: POST /api/v2/admin/events returns shortcode', () => {
   test('newly-created event response carries a base62 shortcode', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
