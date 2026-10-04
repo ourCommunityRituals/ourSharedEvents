@@ -95,6 +95,8 @@ test('create from the full form: the event is a draft only the organizer can see
   await page.getByTestId('create-date').fill(start);
   await page.getByTestId('create-time').fill('18:30');
   await page.getByTestId('create-venue').fill('Eagles Hall');
+  // OSE-1560: a new event is off the map unless the operator says otherwise; this journey puts it on.
+  await page.getByTestId('create-published').check();
   await page.getByTestId('create-submit').click();
 
   expect((await created).status()).toBe(201);
@@ -210,4 +212,109 @@ test('archiving an event before its date does not tell the public it happened', 
   await move(page, 'archived', 'Archived');
   const res = await page.request.get(`/events/${encodeURIComponent(eventId)}`);
   expect(await res.text()).not.toContain('Happened');
+});
+
+// OSE-1560: the map is off by default, the panel says so and says it stays true,
+// and the organizer adding a sponsor turns it on without a reload.
+test.describe('the map setting', () => {
+  const headers = () => ({
+    Authorization: `Bearer ${ADMIN_BEARER}`,
+    'Content-Type': 'application/json',
+  });
+
+  async function newEvent(request: import('@playwright/test').APIRequestContext, label: string) {
+    const res = await request.post('/api/v2/admin/events', {
+      headers: headers(),
+      data: {
+        title: `${label} ${Date.now().toString(36)}`,
+        start_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+        location: 'Eagles Hall',
+      },
+    });
+    expect(res.status()).toBe(201);
+    const body = (await res.json()) as { id: string; map: { on: boolean; note: string | null } };
+    return { id: body.id, title: label, map: body.map };
+  }
+
+  async function open(page: Page, id: string, title: string) {
+    await openAdvanced(page);
+    await page.getByTestId('events-filter-all').click();
+    const row = page.locator(`[data-testid="event-row-${id}"]`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+    await expect(page.getByTestId('event-status-name')).toContainText(title);
+    await page.waitForLoadState('networkidle');
+  }
+
+  test('a new event is off the map; the panel says so, and Put on the map / Turn off work', async ({
+    page,
+    request,
+  }) => {
+    const ev = await newEvent(request, 'Map off');
+    expect(ev.map.on).toBe(false);
+    expect(ev.map.note).toBe("This event isn't on the map. You can turn that on any time.");
+    await open(page, ev.id, 'Map off');
+
+    const state = page.getByTestId('event-map-state');
+    const toggle = page.getByTestId('event-map-toggle');
+    await expect(state).toHaveText("This event isn't on the map. You can turn that on any time.");
+    await expect(toggle).toHaveText('Put on the map');
+    expect((await toggle.boundingBox())!.height, 'map toggle touch target').toBeGreaterThanOrEqual(
+      MIN_TOUCH
+    );
+
+    await toggle.click();
+    await expect(state).toHaveText('This event is on the map.');
+    await expect(toggle).toHaveText('Turn off the map');
+    const listed = await request.get('/api/v2/admin/events?limit=100', { headers: headers() });
+    const row = (
+      (await listed.json()) as { items: { id: string; is_published: number }[] }
+    ).items.find((e) => e.id === ev.id);
+    expect(row!.is_published).toBe(1);
+
+    await toggle.click();
+    await expect(state).toContainText('as you chose');
+    await expect(toggle).toHaveText('Put on the map');
+  });
+
+  test('the organizer adding a sponsor turns the default map on, and the panel shows it', async ({
+    page,
+    request,
+  }) => {
+    const ev = await newEvent(request, 'Map sponsor');
+    await open(page, ev.id, 'Map sponsor');
+    await expect(page.getByTestId('event-map-state')).toContainText("isn't on the map");
+
+    const sp = await request.post('/api/v2/admin/sponsors', {
+      headers: headers(),
+      data: { name: `Map sponsor co ${Date.now().toString(36)}`, tier: 'gold', event_id: ev.id },
+    });
+    expect(sp.status()).toBe(201);
+    expect(((await sp.json()) as { map?: { changed: boolean } }).map?.changed).toBe(true);
+
+    // A reload shows what the server now says (the dashboard opens straight
+    // away on the second visit, so the front door is skipped).
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('events-filter-all').click();
+    await page.locator(`[data-testid="event-row-${ev.id}"]`).click();
+    await expect(page.getByTestId('event-status-name')).toContainText('Map sponsor');
+    await expect(page.getByTestId('event-map-state')).toHaveText('This event is on the map.');
+  });
+
+  test("a sponsor never overrides the organizer's own off", async ({ page, request }) => {
+    const ev = await newEvent(request, 'Map chose off');
+    const off = await request.put(`/api/v2/admin/events/${encodeURIComponent(ev.id)}`, {
+      headers: headers(),
+      data: { is_published: false },
+    });
+    expect(off.status()).toBe(200);
+    const sp = await request.post('/api/v2/admin/sponsors', {
+      headers: headers(),
+      data: { name: `Map off co ${Date.now().toString(36)}`, tier: 'gold', event_id: ev.id },
+    });
+    expect(sp.status()).toBe(201);
+    expect(((await sp.json()) as { map?: unknown }).map).toBeUndefined();
+    await open(page, ev.id, 'Map chose off');
+    await expect(page.getByTestId('event-map-state')).toContainText('as you chose');
+  });
 });

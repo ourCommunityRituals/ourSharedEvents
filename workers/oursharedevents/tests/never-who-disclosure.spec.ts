@@ -159,7 +159,8 @@ describe('OSE-1372 | /events chip, count line, and empty copy agree for every `w
       expect(bar).toContain(`>${discoveryChipLabel(when)}</a>`);
       // The count line is keyed to the same value.
       const summary = bar.match(/data-testid="disc-summary">([^<]*)</)?.[1] ?? '';
-      expect(summary).toBe(discoveryCountLabel(when, 0));
+      // The default view counts upcoming events (OSE-1520), the windows count what they name.
+      expect(summary).toBe(when === 'all' ? '0 upcoming events' : discoveryCountLabel(when, 0));
       const empty = discoveryEmptyCopy({ when, q: '' });
       expect(empty).not.toContain('else');
       // Both name the same window (the default names none).

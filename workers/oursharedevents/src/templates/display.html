@@ -107,6 +107,10 @@
         justify-content: center;
         gap: 0 1.2em;
       }
+      .sponsor-line {
+        font-size: max(26px, 2vw);
+        color: var(--text-muted);
+      }
       .label,
       .pane-paused,
       .empty,
@@ -365,7 +369,7 @@
       // board.topSponsors: the same shape, for the strip under the featured title.
       // board.config: the last display-config body, board.configEtag its ETag.
       // board.sponsorsFor: the event whose sponsors are on screen (loadDisplaySponsors).
-      var board = { items: null, sponsors: [], topSponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, stopSideRail: null, sideRailVisibility: null };
+      var board = { items: null, sponsors: [], topSponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null };
       // A QR is a PNG data URI from our own endpoint; anything else is not put
       // in an <img src>.
       function isQrDataUri(v) {
@@ -443,6 +447,18 @@
         // The saved TV config applies only to the event it was loaded for; while
         // the featured event's own config is on its way, the defaults are shown.
         const cfg = board.config && board.configFor === featured.id ? board.config : null;
+        // OSE-1522: the consented sponsor by an event title, as on every other
+        // surface. The list says which sponsor each listed event has (one rule,
+        // one source: GET /api/v2/events sponsor_titles); an event fetched by id
+        // is not in that list, so the featured one falls back to the sponsors
+        // its own bundle loaded. Escaped as text; no sponsor, no line.
+        const sponsorLine = (id, testid) => {
+          let t = board.sponsorTitles && board.sponsorTitles[id];
+          if (!t && id === featured.id && board.listedIds.indexOf(id) === -1 && board.sponsorsFor === id && board.sponsors.length) {
+            t = board.sponsors.map(s => s.title).join(', ');
+          }
+          return t ? '<div class="sponsor-line" data-testid="' + testid + '">Supported by ' + esc(t) + '</div>' : '';
+        };
         const paneHtml = {};
         const featuredName = featured.name || '';
         // The sponsor sits by the title (PO rule): below the title and date,
@@ -461,12 +477,12 @@
           '<div class="sub" data-testid="display-featured-meta">' +
           (fmt(featured) ? '<span data-testid="display-featured-date">' + esc(fmt(featured)) + '</span>' : '') +
           (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
-          '</div></div>' + strip +
+          '</div>' + sponsorLine(featured.id, 'display-featured-sponsor') + '</div>' + strip +
           qrBlock('featured', cfg && cfg.event_page, 'Scan for details') + '</section>';
         if (rest.length) {
           paneHtml.upcoming = '<section data-pane="upcoming" data-testid="display-pane-upcoming" aria-label="Also coming up" hidden>' +
             '<div class="next-events" data-testid="display-upcoming"><h2 class="hd hd-m" data-testid="display-upcoming-heading">Also Coming Up</h2>' +
-            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
+            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' + sponsorLine(e.id, 'display-upcoming-sponsor') +
               '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
             '</div></section>';
         }
@@ -590,6 +606,8 @@
             return;
           }
           board.items = items;
+          board.sponsorTitles = data && data.sponsor_titles && typeof data.sponsor_titles === 'object' ? data.sponsor_titles : {};
+          board.listedIds = (data.items || []).map(e => e.id);
           renderBoard();
           loadDisplayConfig();
           loadDisplaySponsors();

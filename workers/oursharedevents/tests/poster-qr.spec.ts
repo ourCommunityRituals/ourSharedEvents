@@ -122,7 +122,8 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(pages).toContain('size: 11in 14in');
     // Art viewport raised 6.2in → 7in (dogfooding: 'print needs a larger viewport').
     expect(pages).toContain('max-height: 7in');
-    expect(pages).toContain('font-size: 38pt');
+    // OSE-1516: the print title is a base size times its step (the steps keep it on one line).
+    expect(pages).toContain('--title-base: 38pt');
     expect(pages).toContain('padding: 0.08in');
     expect(pages).toContain('background: #fff');
   });

@@ -60,6 +60,7 @@ import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import { logAdminAction } from '../lib/audit-log';
+import { MAP_FLIP_NOTE, auditMapFlip } from '../lib/map-default';
 import {
   mintSponsorHomeToken,
   verifySponsorHomeToken,
@@ -82,6 +83,7 @@ export interface SponsorHomeEnv
     SharedReportAuthEnv,
     PublicReadLimitEnv {
   DB?: D1Database;
+  PUBLISH_GRACE_MINUTES?: string;
 }
 
 function rid(): string {
@@ -462,7 +464,8 @@ export async function handleAdminAnswerSponsorRequest(
     env.DB,
     placementId,
     body.approve,
-    scope.mode === 'scoped' ? scope.brandIds : null
+    scope.mode === 'scoped' ? scope.brandIds : null,
+    env.PUBLISH_GRACE_MINUTES
   );
   if (!answer.ok) {
     return answer.code === 'NOT_FOUND'
@@ -483,9 +486,25 @@ export async function handleAdminAnswerSponsorRequest(
     outcome: 'success',
     details: { approved: answer.approved, event_id: answer.event_id },
   });
+  // OSE-1560: approving can turn the event's default map on; say so, and audit it.
+  if (answer.map_flipped) {
+    await auditMapFlip(env as { DB: D1Database }, {
+      actor,
+      requestId: id,
+      eventId: answer.event_id,
+      via: 'request_approved',
+      sponsorId: answer.sponsor_id,
+    });
+  }
 
   return Response.json(
-    { ok: true, status: 200, id: placementId, approved: answer.approved },
+    {
+      ok: true,
+      status: 200,
+      id: placementId,
+      approved: answer.approved,
+      ...(answer.map_flipped ? { map: MAP_FLIP_NOTE } : {}),
+    },
     { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': id } }
   );
 }

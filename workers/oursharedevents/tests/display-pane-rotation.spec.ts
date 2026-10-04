@@ -284,6 +284,8 @@ async function bootPage(
     etag,
     configBodiesRead: 0,
     events,
+    /** The list's consented sponsor title per event id (OSE-1522). */
+    sponsorTitles: {} as Record<string, string>,
     /** Sponsor bundle per event id; falls back to `sponsors` for any event. */
     bundles: {} as Record<string, unknown>,
     bundleFetches: [] as string[],
@@ -344,7 +346,7 @@ async function bootPage(
         ? (server.bundles[m[1]] ?? sponsors)
         : m
           ? {}
-          : { ok: true, items: server.events };
+          : { ok: true, items: server.events, sponsor_titles: server.sponsorTitles };
     return {
       ok: true,
       status: 200,
@@ -1172,5 +1174,52 @@ describe('display page: a whole screen per sponsor (OSE-1521)', () => {
     const perSponsor = server.impressions.filter((i) => i.endsWith(':sp-2'));
     // sp-2 is in the side slot only: one impression, however many screens show it.
     expect(perSponsor).toHaveLength(1);
+  });
+});
+
+describe('OSE-1522 | the TV shows the consented sponsor by an event title', () => {
+  const lineOf = (doc: Document, pane: string) =>
+    [...doc.querySelectorAll(`[data-testid="${pane}"]`)].map((el) => el.textContent);
+
+  test('the featured event: "Supported by" its consented sponsor, from the list', async () => {
+    const { doc } = await bootPage('', {
+      seed: (server) => {
+        server.sponsorTitles = { 'evt-1': 'Hall Bakery' };
+      },
+    });
+    expect(lineOf(doc, 'display-featured-sponsor')).toEqual(['Supported by Hall Bakery']);
+  });
+
+  test('"Also coming up": each card carries its own sponsor, escaped like every other value', async () => {
+    const { doc } = await bootPage('', {
+      seed: (server) => {
+        server.sponsorTitles = { 'evt-2': 'Corner <i>Hardware</i>' };
+      },
+    });
+    const card = doc.querySelector('[data-testid="display-upcoming-card"]')!;
+    expect(card.querySelector('[data-testid="display-upcoming-sponsor"]')?.textContent).toBe(
+      'Supported by Corner <i>Hardware</i>'
+    );
+    expect(card.querySelector('i'), 'a sponsor title is never parsed as markup').toBeNull();
+    // Only the event that has a consented sponsor shows one.
+    expect(lineOf(doc, 'display-featured-sponsor')).toEqual([]);
+  });
+
+  test('no consented sponsor, no line (silence is not consent)', async () => {
+    const { doc } = await bootPage();
+    expect(doc.querySelector('[data-testid="display-featured-sponsor"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-upcoming-sponsor"]')).toBeNull();
+  });
+
+  test('a featured event that is not in the list (fetched by id) still shows its sponsors, from its bundle', async () => {
+    const { doc } = await bootPage('?event=evt-9', {
+      seed: (server) => {
+        server.single['evt-9'] = { id: 'evt-9', name: 'By Id', venue: 'Elsewhere' };
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe('By Id');
+    expect(lineOf(doc, 'display-featured-sponsor')).toEqual([
+      'Supported by Hall Bakery, Corner "Hardware"',
+    ]);
   });
 });

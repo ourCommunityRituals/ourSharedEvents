@@ -103,6 +103,8 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
         brand_id: BRAND,
         slug: uniqueSlug,
         status: 'active',
+        // OSE-1560: a new event is off the map unless asked; the gate reads the public list.
+        is_published: true,
       },
       headers: getAccessHeaders(),
     });

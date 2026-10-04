@@ -294,14 +294,18 @@ function svgFor(areas: AttendeeMapArea[]): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${shapes}</svg>`;
 }
 
-function legendFor(areas: AttendeeMapArea[]): string {
+function legendFor(areas: AttendeeMapArea[], sponsorTitles?: ReadonlyMap<string, string>): string {
   const rows = areas
     .map((a) => {
+      // OSE-1522: an event title shown here carries its consented sponsor.
       const links = a.events
-        .map(
-          (e) =>
-            `<a href="/events/${escapeHtml(e.id)}" data-testid="amap-event">${escapeHtml(e.name)}</a>`
-        )
+        .map((e) => {
+          const sponsor = sponsorTitles?.get(e.id);
+          const by = sponsor
+            ? ` <span data-testid="amap-event-sponsor">(Supported by ${escapeHtml(sponsor)})</span>`
+            : '';
+          return `<a href="/events/${escapeHtml(e.id)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
+        })
         .join(' &middot; ');
       const k = a.events.length;
       const place = a.name
@@ -320,7 +324,13 @@ function legendFor(areas: AttendeeMapArea[]): string {
  */
 export function renderAttendeeMap(
   items: readonly AttendeeMapItem[] | null | undefined,
-  opts?: { now?: number; latched?: ReadonlySet<string>; area?: AreaGate }
+  opts?: {
+    now?: number;
+    latched?: ReadonlySet<string>;
+    area?: AreaGate;
+    /** OSE-1522: event id to the consented sponsor's title, shown by the event title. */
+    sponsorTitles?: ReadonlyMap<string, string>;
+  }
 ): RenderedAttendeeMap {
   const now = new Date(opts?.now ?? Date.now());
   const latched = opts?.latched ?? new Set<string>();
@@ -352,7 +362,7 @@ export function renderAttendeeMap(
   const html = `<figure class="amap" data-testid="amap">
               ${MAP_STYLE}
               ${svgFor(drawn)}
-              ${legendFor(drawn)}
+              ${legendFor(drawn, opts?.sponsorTitles)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>
             </figure>`;
   return { html, state: 'map', count, areas: drawn };
