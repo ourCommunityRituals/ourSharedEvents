@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-04 — 575 ids.
+ * Generated 2026-10-04 — 590 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 389 ids
+    // admin.html — 404 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -376,6 +376,7 @@
       'tv-save',
       'tv-screens',
       'wizard-back-btn',
+      'wizard-cancel-edit-btn',
       'wizard-category',
       'wizard-copy-display',
       'wizard-copy-poster',
@@ -401,8 +402,18 @@
       'wizard-missing',
       'wizard-msg',
       'wizard-next-btn',
+      'wizard-preview',
+      'wizard-preview-card',
+      'wizard-preview-map',
       'wizard-preview-poster',
       'wizard-preview-public',
+      'wizard-preview-sponsors',
+      'wizard-preview-title',
+      'wizard-preview-toggle',
+      'wizard-preview-type',
+      'wizard-preview-what',
+      'wizard-preview-when',
+      'wizard-preview-where',
       'wizard-progress-1',
       'wizard-progress-2',
       'wizard-progress-3',
@@ -412,6 +423,10 @@
       'wizard-publish-no',
       'wizard-publish-note',
       'wizard-publish-yes',
+      'wizard-review',
+      'wizard-review-list',
+      'wizard-review-missing',
+      'wizard-save-edit-btn',
       'wizard-signup-create',
       'wizard-signup-none',
       'wizard-skip-btn',

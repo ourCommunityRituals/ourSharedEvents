@@ -161,6 +161,7 @@ export const NODE_SPECS = [
   'tests/admin-tv-display-card.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
+  'tests/admin-wizard-preview-review.spec.ts',
   'tests/admin-wizard-what-and-missing.spec.ts',
   'tests/poster-preview-mode.spec.ts',
   // display-config ETag computed before QR generation (handler called directly,
