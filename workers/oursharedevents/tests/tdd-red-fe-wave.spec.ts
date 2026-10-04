@@ -128,13 +128,15 @@ describe('OSE-1519 a scanned code for a non-public event names the page', () => 
 });
 
 describe('OSE-1520 one events surface', () => {
-  redStory('OSE-1520', '/public redirects to /events (one address)', async () => {
-    const res = await SELF.fetch('https://localhost/public', { redirect: 'manual' });
+  it('/public redirects to /events (one address), keeping the query', async () => {
+    const res = await SELF.fetch('https://localhost/public?when=week', { redirect: 'manual' });
     expect(res.status, '[OSE-1520] /public redirects').toBeGreaterThanOrEqual(300);
-    expect(res.headers.get('location') ?? '', '[OSE-1520] to /events').toMatch(/\/events\/?$/);
+    expect(res.headers.get('location') ?? '', '[OSE-1520] to /events').toMatch(
+      /\/events\?when=week$/
+    );
   });
 
-  redStory('OSE-1520', 'the /events tab title says what the page is', async () => {
+  it('the /events tab title says what the page is', async () => {
     const { html } = await pageText('/events');
     const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? '';
     expect(title, '[OSE-1520] not just the product name').not.toBe('OurSharedEvents');
