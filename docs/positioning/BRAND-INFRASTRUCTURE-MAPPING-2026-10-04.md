@@ -2,6 +2,8 @@
 
 # Brand and infrastructure: one look, separate regimes
 
+> **Terminology (PO, 2026-10-04):** in this doc, "hub" was used the way ADR-008 uses it, for the shared-packages repo. The PO's words are **spine** for `ourCommunityRituals` and **hub** for `OCR-docs`. Read "hub owns the look" as "spine owns the look" and "hub owns the rules" as the OCR-docs hub. See `docs/architecture/ECOSYSTEM-LAYERS.md`.
+
 ## Governing rule (PO, 2026-10-04): to the public it is one system
 
 A visitor sees one name, one place and one promise ("Counted, never known"). They never see hub, spoke, regime, OSE, OW or any product code, and they are not asked to pick a "door". What they see adapts to what they are doing: finding an event, putting one on, or backing one. Everything below is the engineering reference for how that one system is built behind the scenes. Where this doc says "door" or "public name per spoke", read it as an internal routing term only; the public surface is a single product. Naming and hostname choices must pass this test: could a stranger describe the site in one sentence after five seconds?

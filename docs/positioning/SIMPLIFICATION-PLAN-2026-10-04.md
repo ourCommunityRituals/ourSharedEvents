@@ -20,7 +20,7 @@ Only OSE and OW have running code. The other five carry their own CI and propaga
 
 1. **Keep OSE and OW separate.** No change. Written down in the mapping doc.
 2. **Cheap simplifications, now.**
-   - Move the content of the five code-less repos into the hub as docs, then archive the repos read-only with a pointer. Needs a per-repo check first (open issues, Linear links, anything the GAS-era docs still cite). Archiving is outward-facing: do it only on an explicit go-ahead per repo.
+   - **Superseded by PO, 2026-10-04: do not archive the child repos.** OSM, OA, OSG, OSR and OSP stay present in the infrastructure. Reduce their cost by sharing the spine's CI bracket instead of removing repos (see `docs/architecture/ECOSYSTEM-LAYERS.md`).
    - Adopt one public name and one front page (branch canvas, front page boards). The name is the PO's to set; `[YOUR NAME]` until then.
    - Put the naming map and the templates rule (event templates in OSE, profile templates in OW, never gating) in the hub, once.
 3. **Hold new OW and OA feature work until OSE has launched.** The launch (Oct 24, the bocce client, the first corridors) needs OSE only.
