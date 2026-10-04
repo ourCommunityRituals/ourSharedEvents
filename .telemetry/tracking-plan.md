@@ -64,14 +64,27 @@ Public read surfaces set **no cookie**: the landing page, `/events`, the event p
 
 ADR-010 defines `event_correlation_id = hash(venue + uec_code + time_bucket)`. The bucket has to keep one league night as one id, and keep two different nights apart.
 
-| Option                                                                                          | A league night that runs past midnight                                 | Two leagues, same venue, same type, Tuesday and Thursday | Verdict         |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- | --------------- |
-| Calendar day, UTC                                                                               | splits when UTC midnight falls mid-event (any evening event in the US) | kept apart                                               | no              |
-| Calendar day, event local time                                                                  | splits if the event crosses local midnight                             | kept apart                                               | close           |
-| **Local day with a 04:00 rollover** (the bucket is the local date of `starts_at` minus 4 hours) | stays one night                                                        | kept apart                                               | **recommended** |
-| ISO week                                                                                        | one id                                                                 | **merged**, wrong                                        | no              |
+| Option                                                                                       | A league night that runs past midnight                                 | Two leagues, same venue, same type, Tuesday and Thursday | Verdict    |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- | ---------- |
+| Calendar day, UTC                                                                            | splits when UTC midnight falls mid-event (any evening event in the US) | kept apart                                               | no         |
+| Calendar day, event local time                                                               | splits if the event crosses local midnight                             | kept apart                                               | close      |
+| **Local day with a 04:00 rollover** (a start before 04:00 local belongs to the previous day) | stays one night                                                        | kept apart                                               | **chosen** |
+| ISO week                                                                                     | one id                                                                 | **merged**, wrong                                        | no         |
 
-Decision: the local date of `starts_at - 4h` in the event's own IANA zone, written `YYYY-MM-DD`. `starts_at` and the zone already exist (OSE-1313, `lib/event-datetime.ts`). A date-only event (no `starts_at`) uses `start_date`. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
+Decision: **the local date of `starts_at` in the event's own IANA zone, minus one day when the local start time is before 04:00.** Written `YYYY-MM-DD`. The rule works on the wall clock, not on a subtraction of 4 hours from the instant, because the two disagree by an hour on a daylight-saving day and OSE and OW must compute the same id. `starts_at` and the zone already exist (OSE-1313); `zonedDatePart` and `zonedTimePart` in `lib/event-datetime.ts` give the local date and time. A date-only event (no `starts_at`) uses `start_date`. The id is recomputed when the start changes, so adding a start time to a date-only event can move its bucket. The hash input is versioned (`v1`), so a later change to the rule is visible rather than silent.
+
+Test vectors (zone `America/Chicago`), the cases OSE-1615 must pass and OW should run too:
+
+| Start (UTC)            | Local start                       | Bucket       |
+| ---------------------- | --------------------------------- | ------------ |
+| `2026-10-22T23:30:00Z` | Oct 22, 18:30                     | `2026-10-22` |
+| `2026-10-23T06:30:00Z` | Oct 23, 01:30 (a late night)      | `2026-10-22` |
+| `2026-10-23T09:00:00Z` | Oct 23, 04:00 (exactly the edge)  | `2026-10-23` |
+| `2026-11-01T09:30:00Z` | Nov 1, 03:30 (fall-back day)      | `2026-10-31` |
+| `2026-11-01T10:30:00Z` | Nov 1, 04:30 (fall-back day)      | `2026-11-01` |
+| `2026-03-08T09:30:00Z` | Mar 8, 04:30 (spring-forward day) | `2026-03-08` |
+
+Known limit, accepted: two separate sessions of the same type at the same venue on the same night (a 7pm and a 10pm trivia) share one id. They are one night to a league or a chamber; if a buyer needs them apart, the bucket gains a session part in `v2`.
 
 ### Decision 2: where `venue_canonical_id` lives (DECIDED, PO 2026-10-04)
 
@@ -80,6 +93,8 @@ Today there is no canonical venue entity. An event carries free text (`location`
 Decision: **a new nullable column on `events`, computed by the server, not a new venue table.** It is `hash('v1' + normalised venue name (`location`) + h3_res7)`. Normalisation lower-cases, strips punctuation and leading "the", and collapses whitespace. No coordinates enter the hash. This is what OSE-1615 already assumes, and it avoids building a venue registry before there is a second consumer that needs one.
 
 Known weakness, accepted for now: the same venue geocoded into two neighbouring res-7 cells gets two ids, and two same-named venues in one cell share one. Both are rare at the current scale and are visible in the data. If either shows up, the fix is a registry, and the column becomes its foreign key.
+
+**Missing inputs mean no key.** `venue_canonical_id` is null when the event has no `location` or no `h3_res7`. `event_correlation_id` is null when `venue_canonical_id`, the event type (`event_type_id`, which gives `uec_code` through the type registry) or the start date is missing. A key is never computed from part of its inputs, so an untyped event never joins an `unknown` bucket with other untyped events. (Exports today write `uec_code` as `'unknown'` for such rows, `handlers/bigquery.ts:143`; the key stays null.)
 
 Per ADR-010 the normalisation is a shared contract between OSE and OW. OSE-1615 should publish its test fixtures (names in, id out) so the OW side can run the same cases.
 
@@ -91,10 +106,12 @@ Per ADR-010 the normalisation is a shared contract between OSE and OW. OSE-1615 
 
 Each recipe states the key it joins on and what the buyer may see. All of them stay inside the K=5 floor and the 90-day window rules of OSE-1460: a key never makes a withheld count visible.
 
+**No back door by subtraction.** A roll-up returns the cells that clear the floor and the sum of those cells. It never returns an independent total, a count of events, or a share that would let a withheld cell be worked out by subtraction. If any cell is withheld the response says "some not shown", and does not say how many. The same applies to a league across its nights and a chamber across its venues.
+
 ### Chamber of commerce
 
 - **Joins on:** `corridor_id` (the res-7 cell) and `venue_canonical_id`.
-- **May see:** floored counts per corridor and per venue, by event type, over the window. Which venues are in a corridor is public by design (they are on the map).
+- **May see:** floored counts per corridor and per venue, by event type, over the window, for **listed events only** (`is_published` and past the publish grace window, `listedSql()` in `lib/publish-grace.ts`). A venue that only has draft or unlisted events does not appear.
 - **May not see:** anything below K=5, any per-event row for an event under the floor, any anonymous id.
 - **Shape:** `GROUP BY corridor_id, venue_canonical_id, uec_code`, each count floored before it is summed across venues.
 
@@ -103,12 +120,15 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 - **Joins on:** `brand_id` (the league as a tenant, with its events as children) and `uec_code`, over a date range. It does **not** join on `event_correlation_id`.
 - **May see:** floored counts per night and for the season, across the venues where its teams played.
 - **May not see:** another league's events at a shared venue; an attendee, or a team member, by identity.
-- **Needs a league mapping.** A league's nights happen at venues that belong to other brands, so `brand_id` on the event alone does not say which events are the league's. The mapping says it: rows of (league brand, member event or venue brand, season start, season end). Anonymity comes first, so the mapping is held to these rules:
+- **Two cases.**
+  - **A. The league owns its events** (the founding case: the league creates its Thursday nights and names the bar in `location`). Every event already carries the league's `brand_id`. No mapping is needed, and no consent step applies, because there is no other brand.
+  - **B. The venues own the events** (each bar creates its own league night under its own brand). The league's `brand_id` is on none of them, so a mapping is needed: rows of (league brand, member event or venue brand, season start, season end). ADR-023 treats a venue and a league as separate private tenants, so a venue owner exists to consent. Whether a venue is a tenant in the code today is not verified; case A does not depend on it.
+- **The mapping, where needed (case B), is held to these rules**, anonymity first:
   - **Identifiers of organisations and events only.** No person, team roster, player name, email, anonymous id or hash of one. A column outside the allowed set fails the gate OSE-1616 adds (its denylist covers `*_person*`, `email`, `ip`, `lat`, `lon`).
   - **Two-sided consent.** The league's owner proposes a member; the venue's brand owner accepts. Until both agree the row has no effect (the same rule as sponsor placements, ADR-019). Either side can remove it.
-  - **Tenant isolation (invariant #9).** A league reads only events whose brand accepted the mapping. A venue never sees another member's numbers.
+  - **Tenant isolation (invariant #9).** A league reads only events whose brand accepted the mapping, and only listed ones. A venue never sees another member's numbers.
   - **Audited writes.** Every add, accept and remove goes to `admin_audit_log` with the actor.
-  - **The floor is applied per event before any sum**, so the mapping cannot be used to narrow a league down to a group under 5. A mapping that selects one night at one venue returns a withheld count, not a small one.
+  - **The floor is applied per event before any sum**, and the no-subtraction rule above applies, so the mapping cannot be used to narrow a league down to a group under 5. A mapping that selects one night at one venue returns "not shown", not a small number.
   - **Held as tenant data, not a committed file.** Membership is a business fact with consent and an audit trail, so it belongs in a D1 table behind an admin route. A file in the repository is fine for test fixtures and for seeding the founding league, and nowhere else.
 
 **Finding (resolved).** OSE-1617 words the league recipe as "by `event_correlation_id` across venues in a season". With the ADR-010 definition the venue is inside the hash, so a league night played at two venues yields two correlation ids. They cannot be joined by that key. `event_correlation_id` answers "is this the same event" (the same venue, type and night, entered once by OSE and once by OW). A season across venues is a tenant question, so it joins on `brand_id` plus `uec_code` plus dates. The PO agreed on 2026-10-04 and OSE-1617 was reworded to match.
@@ -123,7 +143,7 @@ Each recipe states the key it joins on and what the buyer may see. All of them s
 
 Claim to be checked: no key can single out a person.
 
-- `venue_canonical_id` is derived from a venue name and an area cell. `event_correlation_id` adds an event type and a day. None of the inputs is about a person. The keys are unkeyed hashes (they must agree across OSE and OW), so anyone who knows a venue and a night can compute the id. That reveals nothing the public event page does not already say.
+- `venue_canonical_id` is derived from a venue name and an area cell. `event_correlation_id` adds an event type and a day. None of the inputs is about a person. The keys are unkeyed hashes (they must agree across OSE and OW), so anyone who knows a venue and a night can compute the id and test whether an event exists. For a listed event that reveals nothing the public page does not say. For a draft, unlisted or archived event it would confirm something that is not public. So: the keys are stored for every event, but **exports and roll-ups carry them only for listed events** (OSE-1617 acceptance, to be added), and no public surface shows them.
 - A one-person event is the edge case: its id plus any exact count would identify that attendee's presence. The defence is the floor, which withholds any count under 5 on every surface that leaves admin. A key never relaxes it (OSE-1617 acceptance).
 - The hash input must not contain coordinates or res-9 cells (OSE-1615 security test).
 - Keys are server-computed and never client-supplied (400 on a supplied value, as for `starts_at`).
@@ -132,14 +152,14 @@ Claim to be checked: no key can single out a person.
 
 ## 7. Changes this plan implies
 
-| Where                                          | Change                                                                                                                    | Story                                                           |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ADR-010 (OCR-docs repo, status Proposed)       | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story, after the PO decides; a separate change in OCR-docs |
-| `events`                                       | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                                                        |
-| `lib/pool-contract.ts`, exports                | carry both keys, joined from `events` at export time                                                                      | OSE-1617                                                        |
-| league mapping (new table, admin route, audit) | league roll-up of section 5                                                                                               | to be written: not in the epic yet                              |
-| `lib/measurement-registry.ts` and a gate       | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                                                        |
-| alerts                                         | a measure that stops writing                                                                                              | OSE-1618                                                        |
+| Where                                          | Change                                                                                                                    | Story                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| ADR-010 (OCR-docs repo, status Proposed)       | record the chosen bucket and that `venue_canonical_id` is a stored column; record that league roll-ups join on `brand_id` | this story; OCR-docs#156           |
+| `events`                                       | `venue_canonical_id`, `event_correlation_id`, indexes                                                                     | OSE-1615                           |
+| `lib/pool-contract.ts`, exports                | carry both keys, joined from `events` at export time                                                                      | OSE-1617                           |
+| league mapping (new table, admin route, audit) | league roll-up of section 5                                                                                               | to be written: not in the epic yet |
+| `lib/measurement-registry.ts` and a gate       | the seven measures declared; regenerates `.telemetry/current-state.yaml`                                                  | OSE-1616                           |
+| alerts                                         | a measure that stops writing                                                                                              | OSE-1618                           |
 
 ## 8. Still open
 
