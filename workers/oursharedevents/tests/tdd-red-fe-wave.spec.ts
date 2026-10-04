@@ -119,11 +119,34 @@ describe('OSE-1519 a scanned code for a non-public event names the page', () => 
     ).not.toContain('Secret Draft Gala');
   });
 
-  redStory('OSE-1519', 'an archived event says it has ended, with no ERROR 404 label', async () => {
-    await seedEvent('evt_1519_archived', 'archived', 'Finished Bocce Night');
-    const { html } = await pageText('/events/evt_1519_archived');
+  async function seedArchived(id: string, title: string, listedFrom: string | null) {
+    await seedEvent(id, 'archived', title);
+    await E.DB.prepare('UPDATE events SET is_published = 0, listed_from = ? WHERE id = ?')
+      .bind(listedFrom, id)
+      .run();
+  }
+
+  it('an archived event that was once live says it has ended, with no ERROR 404 label', async () => {
+    await seedArchived('evt_1519_archived', 'Finished Bocce Night', '2026-09-01T00:00:00Z');
+    const { status, html } = await pageText('/events/evt_1519_archived');
+    expect(status, '[OSE-1519] a known, ended event is gone, not "not found"').toBe(410);
+    expect(html, '[OSE-1519] names the event').toContain('Finished Bocce Night');
     expect(html, '[OSE-1519] names the event as ended').toMatch(/has ended/i);
-    expect(html, '[OSE-1519] no error-code label on a known event').not.toMatch(/error 404/i);
+    expect(html, '[OSE-1519] no error-code label on a known event').not.toMatch(/error 4\d\d/i);
+  });
+
+  it('guard (privacy): an archived event that was never live is not named', async () => {
+    await seedArchived('evt_1519_never_live', 'Never Live Gala', null);
+    const { status, html } = await pageText('/events/evt_1519_never_live');
+    expect(status).toBe(404);
+    expect(html).not.toContain('Never Live Gala');
+  });
+
+  it('an ended event lists the next events at its venue', async () => {
+    await seedArchived('evt_1519_venue', 'Old Bocce Night', '2026-09-01T00:00:00Z');
+    await seedEvent('evt_1519_next', 'active', 'Next Bocce Night');
+    const { html } = await pageText('/events/evt_1519_venue');
+    expect(html, '[OSE-1519] next event at the same venue').toContain('Next Bocce Night');
   });
 });
 
