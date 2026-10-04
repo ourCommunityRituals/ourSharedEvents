@@ -40,6 +40,8 @@ Staging chain evidence (read with `gh run view <id> --json jobs`; T1 Deploy, T2 
 - 📬 #810 OSE-1531 SharedReport ends with next actions; "Repeat this event" is a server-side clone (`POST /api/v2/admin/events/:id/repeat`) that lands as a draft. Left: same-campaign and sponsor carry-over (needs OSE-1552), the map-preview banner, a dedicated prefill screen, WebKit coverage.
 - 📬 #811 OSE-1516 Poster layout follows what the event has (art, code count 1 to 8). Left: persisting named spots, drag and drop (separate story), a real printed PDF, WebKit coverage.
 - 📬 #812 OSE-1520 + OSE-1522 One event card and one chip control for landing and `/events`, upcoming first; sponsor by the title on landing cards, the landing map legend and the TV. Left: SharedReport sponsor line (depth-gated per reader; PO data-contract decision), an empty-window message on the landing. Review note: most of the design-check baseline drop moved CSS into a TS constant, which the ratchet does not measure.
+- 📬 #814 OSE-1521 TV display board rebuilt for distance (120px headline at 1080p, 22px floor, QR to the event page, sponsor under the title); donate-QR pane from a saved https link; opt-in per-sponsor screens. The clock, ticker and "1/3" sponsor counter are removed. Left: fundraiser art (no artwork exists), any amount or goal on screen (needs a data source and a never-who review), a per-screen dwell. Known gap: the admin wizard's TV step still saves its own pane list and drops `donate` until the TV card is saved again.
+- 📬 #815 OSE-1528 Create flow: live preview beside the form (no network on typing), a review step with the core values, and in-place edits. Left: poster beside the fields, participation and partner steps, empty/failed states, editing after publish. It raised the wizard-fits-one-viewport ceiling from 2 to 2.5 screens because the preview sits below the form on a phone. Edits `admin.html`, so expect conflicts with #809 and #814 when one of them merges.
 - 📬 hub #51 OSE-1564 Toast component in `@ocr/ui` (success, failure, neutral). Left: after it merges, bump `.ocr-hub-ref` (also refresh `package-lock.json`), add the `/ui-toast.js` route, adopt it in admin and sponsor home, request-reference round trip, browser tests on both engines.
 
 ## Still in progress, no new PR
@@ -52,8 +54,6 @@ Staging chain evidence (read with `gh run view <id> --json jobs`; T1 Deploy, T2 
 ## Not started or waiting ⬜
 
 - OSE-1557 Tablet columns: waiting on a PO decision (a, b or c in the ticket)
-- OSE-1521 TV display rebuild + fundraiser screens: first slice being built (donate QR pane and per-sponsor screen; no fundraiser progress amounts or art until a data source and a never-who review exist)
-- OSE-1528 Create flow: live preview, review step, quick edits: first slice being built
 - OSE-1524 Live view and OSE-1525 Manager home: wait for the `admin.html` PRs above to merge
 - OSE-1578 Browser-level red tests; OSE-1601 levels 1, 3, 6; OSE-1591 to 1600 pyramid tickets
 
@@ -68,4 +68,6 @@ Staging chain evidence (read with `gh run view <id> --json jobs`; T1 Deploy, T2 
 
 ## Tally
 
-Done in Linear: 7 stories (wave 1 plus OSE-1558) · 7 merged slices green on staging, stories still open · 8 PRs open (one held, one in the hub repo) · 2 first slices being built · 2 waiting on admin PRs · 1 waiting on a PO decision.
+Done in Linear: 7 stories (wave 1 plus OSE-1558) · 7 merged slices green on staging, stories still open · 10 PRs open (one held, one in the hub repo) · OSE-1620 filed for the revised toast (hub PR #51 needs rework first) · 2 waiting on admin PRs · 1 waiting on a PO decision.
+
+Toast: the PO revised the look and behaviour on 2026-10-04; the spec is OSE-1620 (child of OSE-1564) and replaces the 2026-10-03 table.
