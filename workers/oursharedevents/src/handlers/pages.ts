@@ -306,10 +306,12 @@ async function fetchSponsorTitlesForList(env: PublicListEnv): Promise<Map<string
          FROM sponsor_placement sp
          JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
          JOIN events e ON e.id = sp.event_id
-        WHERE ${PLACEMENT_ON_SHOW_SQL} AND e.brand_id = 'root'
+        WHERE sb.brand_id = ?1 AND e.brand_id = ?1 AND ${PLACEMENT_ON_SHOW_SQL}
         ORDER BY sb.name ASC, sb.id ASC
         LIMIT 500`
-    ).all<{ event_id: string; title: string }>();
+    )
+      .bind('root')
+      .all<{ event_id: string; title: string }>();
     for (const r of rs.results ?? []) if (!titles.has(r.event_id)) titles.set(r.event_id, r.title);
   } catch {
     /* fail open */
