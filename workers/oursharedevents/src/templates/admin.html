@@ -5321,6 +5321,11 @@
             <label for="tv-league-bracket">Bracket</label>
             <input type="url" id="tv-league-bracket" data-testid="tv-league-bracket" placeholder="https://" inputmode="url" />
           </div>
+          <h3 class="pd-card-title full-width" id="tv-donate-title">Donations</h3>
+          <div class="full-width">
+            <label for="tv-donate">Donation link (shown as a QR code on its own screen)</label>
+            <input type="url" id="tv-donate" data-testid="tv-donate" placeholder="https://" inputmode="url" />
+          </div>
         </div>
         <div class="form-actions">
           <button type="button" class="copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
@@ -5332,12 +5337,14 @@
     </div>
     <script>
       (function () {
-        var LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Sponsors', league: 'League links' };
-        var ALL = ['event', 'upcoming', 'sponsors', 'league'];
+        var LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Sponsors', league: 'League links', donate: 'Donate', sponsor: 'One screen per sponsor' };
+        var ALL = ['event', 'upcoming', 'sponsors', 'league', 'donate', 'sponsor'];
+        // What a TV with nothing saved rotates: every screen but one per sponsor.
+        var DEFAULT_ON = ['event', 'upcoming', 'sponsors', 'league', 'donate'];
         var KINDS = ['schedule', 'standings', 'bracket'];
         // rows: every screen, in order, each on or off. Order of the ON rows is
         // what is saved; OFF rows keep their place so turning one back on is easy.
-        var tv = { eventId: null, rows: ALL.map(function (p) { return { pane: p, on: true }; }) };
+        var tv = { eventId: null, rows: ALL.map(function (p) { return { pane: p, on: DEFAULT_ON.indexOf(p) !== -1 }; }) };
         function $(id) { return document.getElementById(id); }
         function msg(text, kind) {
           var m = $('tv-msg');
@@ -5389,7 +5396,7 @@
           });
         }
         function fill(data) {
-          var saved = Array.isArray(data.panes) ? data.panes.filter(function (p) { return ALL.indexOf(p) !== -1; }) : ALL;
+          var saved = Array.isArray(data.panes) ? data.panes.filter(function (p) { return ALL.indexOf(p) !== -1; }) : DEFAULT_ON;
           tv.rows = saved.map(function (p) { return { pane: p, on: true }; })
             .concat(ALL.filter(function (p) { return saved.indexOf(p) === -1; }).map(function (p) { return { pane: p, on: false }; }));
           var dwell = $('tv-dwell');
@@ -5402,6 +5409,8 @@
             var hit = league.find(function (l) { return l && l.kind === k && typeof l.url === 'string'; });
             if (el) el.value = hit ? hit.url : '';
           });
+          var donate = $('tv-donate');
+          if (donate) donate.value = data.donate && typeof data.donate.url === 'string' ? data.donate.url : '';
           render();
         }
         window.loadTvDisplay = async function (eventId) {
@@ -5410,7 +5419,7 @@
           msg('');
           // Clear the previous event's values first, so a failed load never
           // shows event A's configuration under event B.
-          fill({ panes: ALL, dwell_seconds: 15, league: [] });
+          fill({ panes: DEFAULT_ON, dwell_seconds: 15, league: [], donate: null });
           setDisabled(true);
           var open = $('tv-open');
           if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
@@ -5463,6 +5472,7 @@
           if (!Number.isInteger(dwell) || dwell < 5 || dwell > 120) { msg('Seconds per screen must be a whole number from 5 to 120.', 'error'); return; }
           var leagueLinks = {};
           KINDS.forEach(function (k) { var v = (($('tv-league-' + k) || {}).value || '').trim(); leagueLinks[k] = v || null; });
+          var donateLink = ((($('tv-donate') || {}).value) || '').trim() || null;
           var eventId = tv.eventId;
           setDisabled(true);
           msg('Saving…');
@@ -5470,7 +5480,7 @@
             var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks } }),
+              body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks, donateLink: donateLink } }),
             });
             var data = await res.json().catch(function () { return null; });
             // Another event was selected while this saved: its card is on

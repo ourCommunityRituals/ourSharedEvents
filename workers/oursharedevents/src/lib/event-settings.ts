@@ -31,6 +31,18 @@
 //   leagueLinks         — { schedule, standings, bracket }: https links to
 //                         where the league already keeps them (PO: "links out").
 //
+// OSE-1521 (2026-10-04) — fundraiser screens. Two more panes and one more key:
+//
+//   donate (pane)       — a screen with the organiser's donation link as a QR.
+//   sponsor (pane)      — one whole screen per consented sponsor.
+//   donateLink          — the ONE https link the donate screen shows, held to the
+//                         same rule and the same 154-byte QR budget as a league link.
+//
+// There is deliberately no amount, goal or progress key. The display shows no
+// counts (a number on the room's TV is a count), so "raised so far" would need
+// its own data source and a never-who review before it could exist. Fundraiser
+// ARTWORK is likewise not a setting yet: no artwork exists to point at.
+//
 // Unlike showQRSection these are not on/off switches, so the reader still
 // never throws and drops anything it cannot trust, and a write may send `null`
 // for any of them to go back to the default. PUT merges with SQLite
@@ -42,8 +54,27 @@ export const EVENT_SETTING_KEYS = ['showQRSection'] as const;
 export type EventSettingKey = (typeof EVENT_SETTING_KEYS)[number];
 
 /** The TV screens the display can rotate through, in default order. */
-export const DISPLAY_PANES = ['event', 'upcoming', 'sponsors', 'league'] as const;
+export const DISPLAY_PANES = [
+  'event',
+  'upcoming',
+  'sponsors',
+  'league',
+  'donate',
+  'sponsor',
+] as const;
 export type DisplayPane = (typeof DISPLAY_PANES)[number];
+/**
+ * What rotates when the organiser has saved no order. `donate` joins (it shows
+ * only when a donate link is saved); `sponsor` is opt-in, since one screen per
+ * sponsor would repeat the sponsors wall on every TV that already has one.
+ */
+export const DEFAULT_DISPLAY_PANES: readonly DisplayPane[] = [
+  'event',
+  'upcoming',
+  'sponsors',
+  'league',
+  'donate',
+];
 
 export const LEAGUE_LINK_KINDS = ['schedule', 'standings', 'bracket'] as const;
 export type LeagueLinkKind = (typeof LEAGUE_LINK_KINDS)[number];
@@ -62,6 +93,7 @@ export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
   displayPanes?: DisplayPane[];
   displayDwellSeconds?: number;
   leagueLinks?: LeagueLinks;
+  donateLink?: string;
 };
 
 /** A stored settings write: like EventSettings, but null clears a key. */
@@ -69,6 +101,7 @@ export type EventSettingsPatch = Partial<Record<EventSettingKey, boolean>> & {
   displayPanes?: DisplayPane[] | null;
   displayDwellSeconds?: number | null;
   leagueLinks?: Partial<Record<LeagueLinkKind, string | null>> | null;
+  donateLink?: string | null;
 };
 
 const KNOWN = new Set<string>(EVENT_SETTING_KEYS);
@@ -128,7 +161,10 @@ export function parseEventSettings(raw: unknown): EventSettings {
       const panes = cleanPanes(v);
       if (panes) out.displayPanes = panes;
     } else if (k === 'displayDwellSeconds' && isDwell(v)) out.displayDwellSeconds = v;
-    else if (k === 'leagueLinks' && v && typeof v === 'object' && !Array.isArray(v)) {
+    else if (k === 'donateLink') {
+      const clean = cleanLink(v);
+      if (clean) out.donateLink = clean;
+    } else if (k === 'leagueLinks' && v && typeof v === 'object' && !Array.isArray(v)) {
       const links: LeagueLinks = {};
       for (const [kind, url] of Object.entries(v as Record<string, unknown>)) {
         const clean = LINK_KINDS.has(kind) ? cleanLink(url) : null;
@@ -154,14 +190,17 @@ export interface DisplaySettings {
   panes: DisplayPane[];
   dwellSeconds: number;
   leagueLinks: LeagueLinks;
+  /** The https link the donate screen shows as a QR, or null (no donate screen). */
+  donateLink: string | null;
 }
 
 /** The resolved TV display config: defaults filled, never undefined. */
 export function resolveDisplaySettings(settings: EventSettings): DisplaySettings {
   return {
-    panes: settings.displayPanes ? [...settings.displayPanes] : [...DISPLAY_PANES],
+    panes: settings.displayPanes ? [...settings.displayPanes] : [...DEFAULT_DISPLAY_PANES],
     dwellSeconds: settings.displayDwellSeconds ?? DWELL_DEFAULT_SECONDS,
     leagueLinks: { ...(settings.leagueLinks ?? {}) },
+    donateLink: settings.donateLink ?? null,
   };
 }
 
@@ -204,6 +243,19 @@ export function validateSettingsPatch(
         };
       }
       out.displayDwellSeconds = v as number | null;
+    } else if (k === 'donateLink') {
+      if (v === null || v === '') {
+        out.donateLink = null;
+        continue;
+      }
+      const clean = cleanLink(v);
+      if (!clean) {
+        return {
+          ok: false,
+          error: `settings.donateLink must be an https:// link with no username or password, of at most ${MAX_LINK_BYTES} bytes once encoded, so it fits in a QR code (plain letters and digits are 1 byte each; spaces and accented letters count for more). Try your donation page's share link or a short link`,
+        };
+      }
+      out.donateLink = clean;
     } else if (k === 'leagueLinks') {
       if (v === null) {
         out.leagueLinks = null;

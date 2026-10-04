@@ -51,7 +51,9 @@ function extract(): {
 }
 
 const { rotationConfig, effectiveRotation, createPaneRotation } = extract();
-const ALL = ['event', 'upcoming', 'sponsors', 'league'];
+// What rotates when nothing is saved and the URL names nothing. 'sponsor' (a whole
+// screen per sponsor) is opt-in, so it is on the allowlist but not in here.
+const ALL = ['event', 'upcoming', 'sponsors', 'league', 'donate'];
 
 function fakeTimers() {
   let nextId = 1;
@@ -93,6 +95,10 @@ describe('rotationConfig: the kiosk URL is the configuration', () => {
       'sponsors',
       'event',
     ]);
+  });
+
+  test('OSE-1521: donate and sponsor are allowlisted panes; nothing else is', () => {
+    expect(rotationConfig('?panes=sponsor,donate,bogus,tv').order).toEqual(['sponsor', 'donate']);
   });
 
   test('?panes= with nothing valid falls back to every pane, never to none', () => {
@@ -237,6 +243,8 @@ interface DisplayConfig {
   panes: string[];
   dwell_seconds: number;
   league: Array<{ kind: string; label: string; url: string; qr: string | null }>;
+  event_page?: { url: string; qr: string | null };
+  donate?: { label: string; url: string; qr: string | null } | null;
 }
 const DEFAULT_CONFIG: DisplayConfig = { ok: true, panes: ALL, dwell_seconds: 15, league: [] };
 const QR = 'data:image/png;base64,iVBORw0KGgo=';
@@ -703,9 +711,8 @@ describe('display page: the right event and its own config (review fixes)', () =
 });
 
 describe('display page: an empty event list clears the previous event (review fix)', () => {
-  test("no events left: sponsors, ticker and config are cleared and the old event isn't polled", async () => {
+  test("no events left: sponsors and config are cleared and the old event isn't polled", async () => {
     const { doc, server, refreshEvents, recheckConfig, paneTimers } = await bootPage();
-    const tickerBefore = doc.querySelector('[data-testid="display-ticker-text"]')!.textContent;
     expect(doc.querySelector('[data-testid="display-sponsor-item"]')).not.toBeNull();
     server.events = [];
     await refreshEvents();
@@ -714,9 +721,10 @@ describe('display page: an empty event list clears the previous event (review fi
     );
     expect(doc.querySelector('[data-testid="display-sponsor-item"]')).toBeNull();
     expect(doc.querySelector('[data-testid="display-sponsor-rotate"]')).toBeNull();
-    const ticker = doc.querySelector('[data-testid="display-ticker-text"]')!.textContent;
-    expect(ticker).not.toBe(tickerBefore);
-    expect(ticker).toContain('We count the room');
+    // The privacy line stays; there is no ticker left to carry the old event's name.
+    expect(doc.querySelector('[data-testid="display-consent"]')?.textContent).toContain(
+      'We count the room'
+    );
     expect(paneTimers()).toHaveLength(0);
     const fetches = server.configFetches;
     await recheckConfig();
@@ -771,5 +779,398 @@ describe('display page: an HTTP error on refresh is a failure, not an empty list
     expect(doc.querySelector('[data-testid="display-empty"]')?.textContent).toBe(
       'Could not load events.'
     );
+  });
+});
+
+// ── OSE-1521: the board rebuilt for the room, plus the fundraiser screens ────
+//
+// The TV's rules, as tests: no clock, no ticker, no number of any kind (the
+// display shows no counts), wrapped events never featured, the featured screen
+// carries a QR and a short link, the sponsor sits by the title (below the title
+// and date), and the two new screens (donate, one per sponsor) are tier-blind,
+// escaped and only drawn when there is something to draw.
+describe('display page: the canvas board (OSE-1521)', () => {
+  const EVENT_CFG: DisplayConfig = {
+    ...DEFAULT_CONFIG,
+    event_page: { url: 'https://stg.oursharedevents.com/events/evt-1', qr: QR },
+  };
+  const WRAPPED = {
+    id: 'evt-0',
+    name: 'May Bocce',
+    venue: 'Eagles Hall',
+    startDateISO: '2026-05-02',
+    phase: 'post_event',
+  };
+
+  test('no clock, no ticker, and nothing that keeps moving on its own', async () => {
+    const { doc } = await bootPage();
+    for (const id of ['display-clock', 'display-ticker', 'display-ticker-text']) {
+      expect(doc.querySelector(`[data-testid="${id}"]`), id).toBeNull();
+    }
+    expect(DISPLAY_HTML).not.toMatch(/@keyframes/);
+    expect(DISPLAY_HTML).not.toMatch(/animation\s*:/);
+  });
+
+  test('the clock is gone too (nothing wakes the page every 30 s)', async () => {
+    const { doc } = await bootPage();
+    expect(doc.getElementById('clock')).toBeNull();
+    expect(DISPLAY_HTML).not.toContain('updateClock');
+  });
+
+  test('no number is shown for the sponsors either: the rotation counter is gone', async () => {
+    const { doc } = await bootPage();
+    expect(doc.querySelector('[data-testid="display-sponsor-counter"]')).toBeNull();
+    expect(DISPLAY_HTML).not.toContain('sponsor-counter');
+  });
+
+  test('a wrapped event is never featured or listed as coming up', async () => {
+    const { doc, visible, tick } = await bootPage('', { events: [WRAPPED, ...EVENTS] });
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Bocce Night'
+    );
+    expect(doc.body.textContent).not.toContain('May Bocce');
+    tick();
+    expect(visible()).toEqual(['upcoming']);
+    expect(doc.body.textContent).not.toContain('May Bocce');
+  });
+
+  test('only wrapped events left: the empty board, not an "Upcoming event" from May', async () => {
+    const { doc } = await bootPage('', { events: [WRAPPED] });
+    expect(doc.querySelector('[data-testid="display-main"]')?.textContent).toContain(
+      'No upcoming events'
+    );
+    expect(doc.body.textContent).not.toContain('May Bocce');
+  });
+
+  test('a ?event= link to a wrapped event does not feature it', async () => {
+    const { doc } = await bootPage('?event=evt-0', {
+      events: EVENTS,
+      seed: (server) => {
+        server.single['evt-0'] = WRAPPED;
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Bocce Night'
+    );
+    expect(doc.body.textContent).not.toContain('May Bocce');
+  });
+
+  test('the label says what the event is: happening now, or coming up', async () => {
+    const a = await bootPage('', { events: [{ ...EVENTS[0], phase: 'event' }] });
+    expect(a.doc.querySelector('[data-testid="display-featured-label"]')?.textContent).toBe(
+      'Happening now'
+    );
+    const b = await bootPage('', { events: [{ ...EVENTS[1], phase: 'pre_event' }] });
+    expect(b.doc.querySelector('[data-testid="display-featured-label"]')?.textContent).toBe(
+      'Coming up'
+    );
+  });
+
+  test('the featured screen carries a QR of the event page and its short link', async () => {
+    const { doc } = await bootPage('', { config: EVENT_CFG });
+    const img = doc.querySelector('[data-testid="display-featured-qr"]');
+    expect(img?.getAttribute('src')).toBe(QR);
+    expect(doc.querySelector('[data-testid="display-featured-link"]')?.textContent).toBe(
+      'stg.oursharedevents.com/events/evt-1'
+    );
+  });
+
+  test('a QR that is not our PNG data URI never reaches an <img src>; the link still shows', async () => {
+    const { doc } = await bootPage('', {
+      config: {
+        ...EVENT_CFG,
+        event_page: { url: EVENT_CFG.event_page!.url, qr: 'javascript:alert(1)' },
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-featured-qr"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-featured-link"]')).not.toBeNull();
+  });
+
+  test("another event's QR is never shown on this event's screen", async () => {
+    const { doc, server, refreshEvents } = await bootPage('', { config: EVENT_CFG });
+    server.holdConfig.add('evt-2');
+    server.events = [EVENTS[1]];
+    await refreshEvents();
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Trivia <b>Tuesday</b>'
+    );
+    expect(doc.querySelector('[data-testid="display-featured-qr"]')).toBeNull();
+    expect(doc.body.textContent).not.toContain('events/evt-1');
+  });
+
+  test('the sponsor sits by the title: below the title and date, above the QR, inside the featured screen', async () => {
+    const { doc } = await bootPage('', { config: EVENT_CFG });
+    const pane = doc.querySelector('[data-testid="display-pane-event"]')!;
+    const order = [
+      '[data-testid="display-featured-title"]',
+      '[data-testid="display-featured-meta"]',
+      '[data-testid="display-sponsor-banner"]',
+      '[data-testid="display-featured-qr"]',
+    ].map((sel) => {
+      const el = pane.querySelector(sel);
+      expect(el, sel).not.toBeNull();
+      return el!;
+    });
+    for (let i = 1; i < order.length; i++) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & 4,
+        `${i} follows ${i - 1} in the document`
+      ).toBeTruthy();
+    }
+    // One strip only (not a second copy outside the pane), by the sponsor's name.
+    expect(doc.querySelectorAll('[data-testid="display-sponsor-banner"]')).toHaveLength(1);
+    expect(doc.querySelector('[data-testid="display-sponsor-name"]')?.textContent).toBe(
+      'Hall Bakery'
+    );
+  });
+
+  test('a sponsor with a display title shows that title, not the business name', async () => {
+    const { doc } = await bootPage('', {
+      sponsors: {
+        ok: true,
+        bundle: {
+          surface_sponsors: {
+            tvTop: [{ id: 'sp-9', name: 'Hall Bakery LLC', title: 'The Hall Bakery' }],
+            tvSide: [],
+          },
+        },
+      },
+    });
+    expect(doc.querySelector('[data-testid="display-sponsor-name"]')?.textContent).toBe(
+      'The Hall Bakery'
+    );
+  });
+
+  test('exactly one <h1> and one privacy line', async () => {
+    const { doc } = await bootPage();
+    expect(doc.querySelectorAll('h1')).toHaveLength(1);
+    expect(doc.querySelectorAll('[data-testid="display-consent"]')).toHaveLength(1);
+  });
+
+  test('CSP: no inline handler, no external script, no stylesheet other than /ui.css', () => {
+    const dom = new JSDOM(DISPLAY_HTML);
+    const d = dom.window.document;
+    expect(d.querySelectorAll('script[src]')).toHaveLength(0);
+    // A parser, not a regex over the source: the page script legitimately says "on…".
+    const handlers = [...d.querySelectorAll('*')].flatMap((el) =>
+      [...el.attributes].filter((a) => /^on/i.test(a.name)).map((a) => `${el.tagName}.${a.name}`)
+    );
+    expect(handlers).toEqual([]);
+    const sheets = [...d.querySelectorAll('link[rel="stylesheet"]')].map((l) =>
+      l.getAttribute('href')
+    );
+    expect(sheets).toEqual(['/ui.css']);
+  });
+
+  test('both themes come from tokens: no literal colour in the page style', () => {
+    const styles = [...DISPLAY_HTML.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(
+      (m) => m[1]
+    );
+    expect(styles.length).toBeGreaterThan(0);
+    for (const css of styles) {
+      expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+      expect(css).not.toMatch(/\b(rgb|rgba|hsl|hsla)\(/i);
+    }
+  });
+});
+
+describe('display page: the donate screen (OSE-1521)', () => {
+  const DONATE_CFG: DisplayConfig = {
+    ...DEFAULT_CONFIG,
+    panes: ['event', 'donate'],
+    donate: { label: 'Donate', url: 'https://www.givesomething.example/bocce-fund', qr: QR },
+  };
+
+  test('a saved donate link adds a screen: heading, scan-to-give QR, short link', async () => {
+    const { doc, visible, tick } = await bootPage('', { config: DONATE_CFG });
+    expect(doc.querySelector('[data-testid="display-pane-donate"]')).not.toBeNull();
+    expect(doc.querySelector('[data-testid="display-donate-qr"]')?.getAttribute('src')).toBe(QR);
+    expect(doc.querySelector('[data-testid="display-donate-link"]')?.textContent).toBe(
+      'givesomething.example/bocce-fund'
+    );
+    expect(doc.querySelectorAll('.pane-dots li')).toHaveLength(2);
+    tick();
+    expect(visible()).toEqual(['donate']);
+    tick();
+    expect(visible()).toEqual(['event']);
+  });
+
+  test('no donate link: no donate screen, even when the order names it', async () => {
+    const { doc } = await bootPage('', {
+      config: { ...DEFAULT_CONFIG, panes: ['event', 'donate'], donate: null },
+    });
+    expect(doc.querySelector('[data-testid="display-pane-donate"]')).toBeNull();
+  });
+
+  test('the screen carries no amount, goal or progress: the display shows no counts', async () => {
+    const { doc } = await bootPage('', { config: DONATE_CFG });
+    const pane = doc.querySelector('[data-testid="display-pane-donate"]')!;
+    expect(pane.textContent).not.toMatch(/raised|goal|progress|\$\s*\d|\d+\s*%/i);
+    expect(pane.querySelector('[data-testid="display-donate-heading"]')?.textContent).not.toMatch(
+      /\d/
+    );
+  });
+
+  test('a QR that is not our PNG data URI never reaches an <img src>', async () => {
+    const { doc } = await bootPage('', {
+      config: { ...DONATE_CFG, donate: { ...DONATE_CFG.donate!, qr: 'javascript:alert(1)' } },
+    });
+    expect(doc.querySelector('[data-testid="display-donate-qr"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-donate-link"]')).not.toBeNull();
+  });
+
+  test('the link text is escaped, never parsed as markup', async () => {
+    const { doc } = await bootPage('', {
+      config: {
+        ...DONATE_CFG,
+        donate: {
+          label: 'Donate',
+          url: 'https://x.example/"><img src=x onerror=alert(1)>',
+          qr: null,
+        },
+      },
+    });
+    const pane = doc.querySelector('[data-testid="display-pane-donate"]')!;
+    expect(pane.querySelector('img[src="x"]')).toBeNull();
+  });
+
+  test("another event's donate link is not shown while this event's own config is on its way", async () => {
+    const { doc, server, refreshEvents } = await bootPage('', { config: DONATE_CFG });
+    server.holdConfig.add('evt-2');
+    server.events = [EVENTS[1]];
+    await refreshEvents();
+    expect(doc.querySelector('[data-testid="display-pane-donate"]')).toBeNull();
+    expect(doc.body.textContent).not.toContain('givesomething');
+  });
+
+  test('a new ETag with a changed donate link re-renders; the same ETag does not', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', { config: DONATE_CFG });
+    const panes = doc.querySelector('[data-testid="display-panes"]');
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-panes"]')).toBe(panes);
+    server.config = {
+      ...DONATE_CFG,
+      donate: { label: 'Donate', url: 'https://other.example/give', qr: QR },
+    };
+    server.etag = '"c2"';
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-donate-link"]')?.textContent).toBe(
+      'other.example/give'
+    );
+  });
+
+  test('?panes=donate on the kiosk URL shows it when a link is saved (the URL picks, the config supplies)', async () => {
+    const { visible } = await bootPage('?panes=donate', { config: DONATE_CFG });
+    expect(visible()).toEqual(['donate']);
+  });
+});
+
+describe('display page: a whole screen per sponsor (OSE-1521)', () => {
+  const HALL = {
+    id: 'sp-1',
+    name: 'Hall Bakery LLC',
+    title: 'The Hall Bakery',
+    logo_url: 'https://x.test/a.png',
+    tier: 'title',
+  };
+  const SPONSORS = {
+    ok: true,
+    bundle: {
+      surface_sponsors: {
+        tvTop: [HALL],
+        tvSide: [
+          HALL,
+          { id: 'sp-2', name: 'Corner "Hardware"', tier: 'community' },
+          { id: 'sp-3', name: 'Third <i>Place</i>', tier: 'community' },
+        ],
+      },
+    },
+  };
+  const SAVED: DisplayConfig = { ...DEFAULT_CONFIG, panes: ['event', 'sponsor'] };
+
+  test('each consented sponsor gets one screen, once, in the rotation', async () => {
+    const { doc, visible, tick } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    const screens = doc.querySelectorAll('[data-pane^="sponsor-"]');
+    expect(screens, 'a sponsor in both TV slots is one screen').toHaveLength(3);
+    expect(doc.querySelectorAll('.pane-dots li')).toHaveLength(4);
+    expect(visible()).toEqual(['event']);
+    tick();
+    expect(visible()).toEqual(['sponsor-0']);
+    tick();
+    expect(visible()).toEqual(['sponsor-1']);
+    tick();
+    expect(visible()).toEqual(['sponsor-2']);
+    tick();
+    expect(visible()).toEqual(['event']);
+  });
+
+  test('the sponsor appears by its title, with its logo through the proxy or the OSE default', async () => {
+    const { doc } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    const titles = [...doc.querySelectorAll('[data-testid="display-sponsor-screen-title"]')].map(
+      (e) => e.textContent
+    );
+    expect(titles).toEqual(['The Hall Bakery', 'Corner "Hardware"', 'Third <i>Place</i>']);
+    const logos = [...doc.querySelectorAll('[data-testid="display-sponsor-screen-logo"]')].map(
+      (i) => i.getAttribute('src')
+    );
+    expect(logos).toEqual([
+      '/api/v2/sponsors/sp-1/logo',
+      '/sponsor-default-logo.svg',
+      '/sponsor-default-logo.svg',
+    ]);
+  });
+
+  test('tier-blind: every sponsor screen is the same markup, no tier anywhere', async () => {
+    const { doc } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    const screens = [...doc.querySelectorAll('[data-pane^="sponsor-"]')];
+    const shape = (el: Element) =>
+      [...el.querySelectorAll('*')].map((n) => `${n.tagName}.${n.className}`).join('>');
+    expect(new Set(screens.map(shape)).size, 'one shape for every sponsor').toBe(1);
+    for (const el of screens) {
+      expect(el.outerHTML).not.toMatch(/data-tier|platinum|gold|silver/i);
+    }
+    expect(DISPLAY_HTML).not.toMatch(/\[data-tier/);
+  });
+
+  test('sponsor text is escaped, never parsed as markup', async () => {
+    const { doc } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    expect(doc.querySelector('[data-pane^="sponsor-"] i')).toBeNull();
+    expect(
+      doc.querySelector('[data-pane="sponsor-1"] img[alt="Corner \\"Hardware\\""]')
+    ).not.toBeNull();
+  });
+
+  test('a screen shows no number: no "2 of 5", no count of sponsors', async () => {
+    const { doc } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    for (const el of doc.querySelectorAll('[data-pane^="sponsor-"]')) {
+      expect(el.textContent).not.toMatch(/\d\s*(\/|of)\s*\d/);
+    }
+  });
+
+  test('no sponsors: no sponsor screens (nothing to draw is nothing in the rotation)', async () => {
+    const { doc } = await bootPage('', {
+      config: SAVED,
+      sponsors: { ok: true, bundle: { surface_sponsors: { tvTop: [], tvSide: [] } } },
+    });
+    expect(doc.querySelector('[data-pane^="sponsor-"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-pane-dots"]')).toBeNull();
+  });
+
+  test('the default order does not add them (the sponsors wall already shows everyone)', async () => {
+    const { doc } = await bootPage('', { sponsors: SPONSORS });
+    expect(doc.querySelector('[data-pane^="sponsor-"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="display-pane-sponsors"]')).not.toBeNull();
+  });
+
+  test('?panes=sponsor on the kiosk URL asks for them', async () => {
+    const { visible } = await bootPage('?panes=sponsor', { sponsors: SPONSORS });
+    expect(visible()).toEqual(['sponsor-0']);
+  });
+
+  test('impressions are not logged again for a screen: each sponsor was counted once on load', async () => {
+    const { server } = await bootPage('', { config: SAVED, sponsors: SPONSORS });
+    const perSponsor = server.impressions.filter((i) => i.endsWith(':sp-2'));
+    // sp-2 is in the side slot only: one impression, however many screens show it.
+    expect(perSponsor).toHaveLength(1);
   });
 });

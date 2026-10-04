@@ -38,11 +38,10 @@ function pubHtml(): Promise<string> {
 describe('AS-3: Display page has 10+ data-testid values (OSE-48)', () => {
   const requiredIds = [
     'display-header',
-    'display-clock',
     'display-sponsor-sidebar',
     'display-main',
     'display-sponsor-banner',
-    'display-ticker',
+    'display-consent',
     'display-featured-card',
     'display-featured-title',
     'display-featured-meta',
@@ -85,10 +84,10 @@ describe('AS-7: ARIA attributes on Display page (OSE-52)', () => {
     expect(await displayHtml()).toContain('aria-atomic="false"');
   });
 
-  test('display ticker is aria-hidden', async () => {
-    expect(await displayHtml()).toMatch(
-      /data-testid="display-ticker"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-testid="display-ticker"/
-    );
+  test('OSE-1521: the clock and the scrolling ticker are gone', async () => {
+    const body = await displayHtml();
+    expect(body).not.toContain('data-testid="display-clock"');
+    expect(body).not.toContain('data-testid="display-ticker"');
   });
 });
 

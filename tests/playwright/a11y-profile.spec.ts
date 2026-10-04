@@ -141,7 +141,7 @@ test('the TV holds still when the system asks for reduced motion', async ({ page
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(`/display?event=${eventId}`);
-  await expect(page.getByTestId('display-ticker-text')).toBeAttached();
+  await expect(page.getByTestId('display-featured-title')).toBeAttached();
   await page.waitForTimeout(500);
   const running = await page.evaluate(() =>
     document
