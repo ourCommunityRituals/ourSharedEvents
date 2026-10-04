@@ -13,12 +13,11 @@ import { createLiveEvent } from './helpers/sponsor-home-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 
-test.skip(
-  !ADMIN_BEARER,
-  'needs the local audit worker (playwright.mobile.config.ts seeds the bearer)'
-);
-
 test.beforeEach(async ({ page }) => {
+  expect(
+    ADMIN_BEARER,
+    'OSE_ADMIN_BEARER must be set (playwright.mobile.config.ts sets it)'
+  ).not.toBe('');
   await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
 });
 
