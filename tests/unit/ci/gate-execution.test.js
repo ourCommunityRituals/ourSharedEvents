@@ -17,6 +17,7 @@ beforeAll(async () => {
 const ALL_RAN = {
   security: 'success',
   gate: 'success',
+  'local-vetting': 'success',
   'deploy-staging': 'success',
   'contract-staging': 'success',
   'smoke-staging': 'success',
@@ -24,9 +25,9 @@ const ALL_RAN = {
 };
 
 describe('OSE-1255 — expectedGates (trigger-aware)', () => {
-  test('a ci/* PR expects only S0 + T0 (staging tiers legitimately skip)', () => {
+  test('a ci/* PR expects S0 + T0 + local vetting (staging tiers legitimately skip)', () => {
     const e = expectedGates({ eventName: 'pull_request', headRef: 'ci/some-fix' });
-    expect([...e].sort()).toEqual(['gate', 'security']);
+    expect([...e].sort()).toEqual(['gate', 'local-vetting', 'security']);
   });
 
   test('a push to main expects the full staging chain incl functional', () => {
@@ -94,6 +95,21 @@ describe('OSE-1255 — findViolations (legit-skip rule)', () => {
     expect(V(MAIN, partial)).toBe(true);
   });
 
+  test('PR with local vetting silently skipped, nothing upstream failed → VIOLATION', () => {
+    expect(
+      V(
+        { eventName: 'pull_request', headRef: 'ci/x' },
+        { security: 'success', gate: 'success', 'local-vetting': 'skipped' }
+      )
+    ).toBe(true);
+  });
+
+  test('push to main does not expect local vetting (PR-only gate)', () => {
+    expect(expectedGates({ eventName: 'push', ref: 'refs/heads/main' }).has('local-vetting')).toBe(
+      false
+    );
+  });
+
   test('PR with staging tiers skipped → no violation (not expected)', () => {
     expect(
       V(
@@ -101,6 +117,7 @@ describe('OSE-1255 — findViolations (legit-skip rule)', () => {
         {
           security: 'success',
           gate: 'success',
+          'local-vetting': 'success',
           'deploy-staging': 'skipped',
           'functional-staging': 'skipped',
         }

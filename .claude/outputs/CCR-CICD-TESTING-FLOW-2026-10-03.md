@@ -81,3 +81,48 @@ L3's rise comes from one fact checked (required checks) and the L2 amendments, n
 
 - [ ] `gh run view` on a merge shows T1 → T4 → T5 → T6 executed, none `skipped` unintentionally; reconciler green
 - [ ] A PR run shows S0, T0, T2, T3, UI smoke all executed against the local worker
+
+---
+
+# Re-run — extended Scrum team (2026-10-04)
+
+Scope narrowed on purpose: **step 1 only** (PR-local T2/T3 job, additive). The post-merge chain is untouched, so the dependency-chain and staging-fidelity findings are not triggered by this change; they come back with step 2 and the pending decision.
+
+Team: PO, Lead BE, Lead FE, Sr Design FE, Sr Automation QA, SRE/SDET, DevOps, plus Dr of Security, Sr SDET/SRE, DevOps Mgr, Sr Data Scientist.
+
+## What was done (evidence)
+
+- Ran T3 against a healthy local worker: IAC 21/21, security smoke 10/10, forms 12/12 (after fix). Ran T2: Bruno pages 54/54 requests, 243 checks; Bruno API 73 requests, 390 checks, 0 failed (after fix).
+- Two real defects found by running locally, both fixed: `form-endpoints.spec.ts` and the Bruno "GET Check-in Count" check demanded a numeric count, but below the K=5 floor the API correctly returns `{count:null, suppressed:true, floor:5}`; they only passed on staging through accumulated smoke check-ins. Test-data dependence, not a product bug.
+- New `scripts/ci/run-local-vetting.sh` + CI job `T2/T3 Local (PR code)` (`oursharedevents-ci.yml`, PRs only, needs S0/T0). Each section is counted from Playwright JSON / Bruno JUnit and **fails if zero tests ran** (the Dr of Security rule: a gate that cannot fail is absent).
+- Reconciler now expects `local-vetting` on every pull request. 16 self-test cases pass; removing the rule turns 2 unit cases and the self-test red (born-red verified). Board has the new stage; 150 CI unit/infra tests pass.
+- Flaky poll: `publish-loop-journey.spec.ts` retries once on `ECONNRESET`.
+
+## Extended-team findings
+
+| Role                | Finding                                                                                                                                                                                                                                                               | State    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Dr of Security      | No Security Critical open. The job uses no secrets (random local keys), runs the credential scan before upload, and cannot pass vacuously. It does use `OCR_PROPAGATE_TOKEN` to stage the pinned hub, same as the mobile audit                                        | V        |
+| Sr SDET/SRE         | Local run found two floor-dependence defects (fixed). Script's own Linux boot path has **not** run in CI yet. A worker started from my Windows shell hung on every request after the first two starts (cause not found), so the script's boot step is unproven off-CI | P        |
+| DevOps Mgr          | No new secrets or bindings. 20-minute timeout. No path filter yet, so it runs on every PR                                                                                                                                                                             | P (cost) |
+| Sr Data Scientist   | Per-section counts now reach the summary (JUnit/JSON), so cost and flake rate can be measured from runs; none measured yet                                                                                                                                            | P        |
+| Lead FE / Design FE | Local vetting covers API and smoke only. The front-end journeys stay in the mobile audit (already blocking); UI smoke is **not** yet in the PR job                                                                                                                    | P        |
+| PO                  | Two decisions still open (staging T2/T3 after merge; step 2). Not needed to ship step 1                                                                                                                                                                               | open     |
+
+## Score (step 1)
+
+| Item                                                                | Sev    | State | Deduction |
+| ------------------------------------------------------------------- | ------ | ----- | --------- |
+| Environmental assumptions (script boot on Linux CI, 3 green runs)   | Base   | P     | 7.5       |
+| Full surface mapped                                                 | Base   | V     | 0         |
+| Partial-fix risk (additive; post-merge unchanged)                   | Base   | V     | 0         |
+| Chunk scope / human gate                                            | Base   | V     | 0         |
+| Flake retry unverified over repeated runs                           | Medium | P     | 2.5       |
+| Cost: no path filter, boot not shared with mobile audit, unmeasured | Medium | P     | 2.5       |
+| Cost increase vs measured baseline                                  | Medium | P     | 2.5       |
+| UI smoke not in the PR job                                          | Low    | U     | 2         |
+| Local/CI divergence (Windows worker hang unexplained)               | Low    | P     | 1         |
+| **Total**                                                           |        |       | **18**    |
+| **Score**                                                           |        |       | **82%**   |
+
+**Not at 95.** The gap is evidence, not design: 7.5 points are "the script has not yet run on the Linux runner" and 5 more are cost and flake numbers that only repeated CI runs produce. Closing path: push, three consecutive green runs of `T2/T3 Local (PR code)` (removes 7.5 + 2.5 + 2.5 with the measured duration), then add UI smoke (2) and a path filter. Done in that order the score is 100 − (1 + 2.5) ≈ 96%.

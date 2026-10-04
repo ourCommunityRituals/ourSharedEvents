@@ -19,6 +19,7 @@ const PR = { eventName: 'pull_request', headRef: 'ci/some-fix' };
 const ALL_RAN = {
   security: 'success',
   gate: 'success',
+  'local-vetting': 'success',
   'deploy-staging': 'success',
   'contract-staging': 'success',
   'smoke-staging': 'success',
@@ -37,6 +38,7 @@ describe('pipeline board', () => {
     expect(STAGES.map((s) => s.id)).toEqual([
       'S0',
       'T0',
+      'L',
       'T1',
       'T2',
       'T3',
@@ -69,9 +71,14 @@ describe('pipeline board', () => {
   });
 
   test('on a PR, the staging stages are "not part of this run", not a problem', () => {
-    const results = { security: 'success', gate: 'success' };
+    const results = { security: 'success', gate: 'success', 'local-vetting': 'success' };
     expect(state(PR, 'T3', results).state).toBe('not part of this run');
     expect(renderBoard(PR, results)).toContain('Every stage expected for this trigger ran');
+  });
+
+  test('on a PR, a silently skipped local vetting is flagged', () => {
+    const results = { security: 'success', gate: 'success', 'local-vetting': 'skipped' };
+    expect(state(PR, 'L', results).glyph).toBe('⚠️');
   });
 
   test('T5 and T6 are shown as a separate workflow, never as a result of this run', () => {
