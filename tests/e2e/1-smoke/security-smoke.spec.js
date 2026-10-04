@@ -187,7 +187,14 @@ test.beforeAll(() => {
   if (!ADMIN_KEY && !IS_PRODUCTION) {
     throw new Error('ADMIN_KEY is not set; security smoke cannot authenticate');
   }
-  if (process.env.CI && !IS_PRODUCTION && !(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET)) {
+  // A local worker has no Access edge in front of it (the helper above sends a stand-in token),
+  // so only a deployed non-production target needs the real service token.
+  if (
+    process.env.CI &&
+    !IS_PRODUCTION &&
+    !IS_LOCAL &&
+    !(CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET)
+  ) {
     throw new Error('CF_ACCESS_CLIENT_ID/SECRET not set; staging admin API is behind CF Access');
   }
 });

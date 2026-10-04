@@ -182,7 +182,14 @@ test.describe('Form Endpoints — Admin Read (auth required)', () => {
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.ok).toBe(true);
-    expect(typeof json.count).toBe('number');
+    // Below the floor (K=5) the count is withheld, not zero. A fresh database is below the floor;
+    // staging only returns a number because smoke check-ins have piled up there.
+    if (json.suppressed === true) {
+      expect(json.count).toBeNull();
+      expect(json.floor).toBe(5);
+    } else {
+      expect(typeof json.count).toBe('number');
+    }
   });
 
   test('GET /forms/surveys returns items array', async ({ request }) => {

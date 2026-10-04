@@ -20,6 +20,7 @@ import { expectedGates } from '../assert-gate-execution.mjs';
 export const STAGES = [
   { id: 'S0', key: 'security', label: 'S0 Security', proves: 'No known vulnerability or secret in the diff' },
   { id: 'T0', key: 'gate', label: 'T0 Gate', proves: 'Lint, types, invariants, unit and component tests' },
+  { id: 'L', key: 'local-vetting', label: 'T2/T3 Local (PR code)', proves: 'API contract and smoke pass on this branch, local worker (PRs only)' },
   { id: 'T1', key: 'deploy-staging', label: 'T1 Deploy → Staging', proves: 'Migrations apply, worker deploys, /health is ok' },
   { id: 'T2', key: 'contract-staging', label: 'T2 Contract → Staging (Bruno)', proves: 'API and page contracts hold' },
   { id: 'T3', key: 'smoke-staging', label: 'T3 Smoke → Staging (Playwright)', proves: 'Security smoke, health, form endpoints' },

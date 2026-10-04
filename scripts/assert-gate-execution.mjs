@@ -40,6 +40,8 @@ const EXECUTED = new Set(['success', 'failure']);
 export function expectedGates({ eventName, ref, headRef, inputs } = {}) {
   const inp = inputs || {};
   const set = new Set(['security', 'gate']); // always
+  // Local vetting (T2/T3 on the PR's own code) runs on every pull request, never on a push.
+  if (eventName === 'pull_request') set.add('local-vetting');
 
   const onMain = eventName === 'push' && ref === 'refs/heads/main';
   const fullPipelinePr =
@@ -88,7 +90,7 @@ function runSelfTest() {
   const fp = { eventName: 'pull_request', headRef: 'full-pipeline/x' };
   const disp = { eventName: 'workflow_dispatch', inputs: { deploy_staging: 'true', run_functional: 'true' } };
   const allRan = {
-    security: 'success', gate: 'success', 'deploy-staging': 'success',
+    security: 'success', gate: 'success', 'local-vetting': 'success', 'deploy-staging': 'success',
     'contract-staging': 'success', 'smoke-staging': 'success', 'functional-staging': 'success',
   };
   const cases = [
@@ -99,7 +101,11 @@ function runSelfTest() {
     ['main-push, deploy FAILED so T2-T4 skipped → OK (explained cascade)', main, { security: 'success', gate: 'success', 'deploy-staging': 'failure', 'contract-staging': 'skipped', 'smoke-staging': 'skipped', 'functional-staging': 'skipped' }, false],
     ['main-push, T4 cancelled, nothing failed → VIOLATION', main, { ...allRan, 'functional-staging': 'cancelled' }, true],
     ['main-push, T4 absent from results → VIOLATION', main, { security: 'success', gate: 'success', 'deploy-staging': 'success', 'contract-staging': 'success', 'smoke-staging': 'success' }, true],
-    ['PR (ci/*), staging tiers skipped → OK (not expected on a PR)', pr, { security: 'success', gate: 'success', 'deploy-staging': 'skipped', 'contract-staging': 'skipped', 'smoke-staging': 'skipped', 'functional-staging': 'skipped' }, false],
+    ['PR (ci/*), staging tiers skipped → OK (not expected on a PR)', pr, { security: 'success', gate: 'success', 'local-vetting': 'success', 'deploy-staging': 'skipped', 'contract-staging': 'skipped', 'smoke-staging': 'skipped', 'functional-staging': 'skipped' }, false],
+    ['PR (ci/*), local vetting SILENTLY skipped, nothing upstream failed → VIOLATION', pr, { security: 'success', gate: 'success', 'local-vetting': 'skipped' }, true],
+    ['PR (ci/*), local vetting executed-but-FAILED → OK (executed, outcome is its own concern)', pr, { security: 'success', gate: 'success', 'local-vetting': 'failure' }, false],
+    ['PR (ci/*), T0 FAILED so local vetting skipped → OK (explained cascade)', pr, { security: 'success', gate: 'failure', 'local-vetting': 'skipped' }, false],
+    ['main-push, local vetting absent → OK (PR-only gate)', main, allRan, false],
     ['PR (ci/*), S0 skipped → VIOLATION (S0 always expected)', pr, { security: 'skipped', gate: 'success' }, true],
     ['full-pipeline/* PR, everything ran → OK', fp, allRan, false],
     ['full-pipeline/* PR, T4 silently skipped → VIOLATION', fp, { ...allRan, 'functional-staging': 'skipped' }, true],

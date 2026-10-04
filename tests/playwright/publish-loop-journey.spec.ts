@@ -137,8 +137,19 @@ test.describe('publish loop: draft → preview → publish → undo → republis
 
     // Live by link at once; not on the list yet (grace window respected).
     expect((await request.get(`/events/${id}`)).status()).toBe(200);
+    // The poll below waits 5 s between calls, which is also when a keep-alive socket goes idle;
+    // a request that lands on a socket the server just closed gets ECONNRESET before it reaches the
+    // worker (no server log line). That is a transport race, not an answer, so retry once.
+    const get = async (url: string) => {
+      try {
+        return await request.get(url);
+      } catch (e) {
+        if (!/ECONNRESET/.test(String(e))) throw e;
+        return await request.get(url);
+      }
+    };
     const listed = async () => {
-      const r = await request.get('/api/v2/events?brand=root');
+      const r = await get('/api/v2/events?brand=root');
       const items = ((await r.json()) as { items: { id: string }[] }).items;
       return items.some((e) => e.id === id);
     };
