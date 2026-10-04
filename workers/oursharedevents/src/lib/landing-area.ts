@@ -10,9 +10,16 @@
 //   1. view     list | map            (default chosen by count; see LIST_MAX)
 //   2. window   LANDING_WINDOWS — the SAME `when` values + labels as the /events
 //               chips (lib/event-discovery, OSE-1362), default DEFAULT_WINDOW
-//   3. type     one pill per event-type present, plus "All"  (niche discovery)
-//   4. product  All | OSE | OSE+OW hybrid                    (anon / non-anon pole)
-//   5. modality All | online | in-person                    ("in reality")
+//   3. type     one pill per event-type present, plus "All"  (niche discovery);
+//               offered only when there are two or more types to choose between
+//   4. modality All | online | in-person                    ("in reality");
+//               offered only when the list holds both kinds
+//
+// OSE-1520: the old fifth group, "Kind" (All / OSE / Hybrid), is gone. Every OSE
+// event is the anonymous pole and no event carries the hybrid composition, so it
+// was a control whose only possible answer was "all of them". The tags stay on
+// the cards (`product-ose`) for the day an event can be hybrid; the control
+// returns with that backing, not before.
 //
 // WHY A RENDERER, NOT A TEMPLATE EDIT (same reasoning as event-list.ts): the
 // filtering is CSS-only — hidden radios + `:checked ~` sibling rules — precisely
@@ -49,7 +56,13 @@
 
 import { escapeHtml } from './html-escape.js';
 import { injectMarker } from './inject-marker.js';
-import { inWhenWindow, discoveryChipLabel, type WhenOption } from './event-discovery.js';
+import {
+  inWhenWindow,
+  discoveryChipLabel,
+  orderUpcomingFirst,
+  type WhenOption,
+} from './event-discovery.js';
+import { renderEventCard } from './event-list.js';
 import { renderAttendeeMap } from './attendee-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 
@@ -76,6 +89,7 @@ export interface LandingAreaItem {
  * "Next 7 days" here is exactly "Next 7 days" there. Widest LAST.
  */
 export const LANDING_WINDOWS = [
+  'weekend',
   'week',
   'month',
   'next-90',
@@ -195,7 +209,13 @@ export function renderEmptyLandingArea(): RenderedLandingArea {
  */
 export function renderLandingArea(
   items: readonly LandingAreaItem[] | null | undefined,
-  opts?: { now?: number; latched?: ReadonlySet<string>; areaLatched?: boolean }
+  opts?: {
+    now?: number;
+    latched?: ReadonlySet<string>;
+    areaLatched?: boolean;
+    /** OSE-1522: event id → the consented sponsor's title, shown by the event title. */
+    sponsorTitles?: ReadonlyMap<string, string>;
+  }
 ): RenderedLandingArea {
   if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
 
@@ -203,41 +223,36 @@ export function renderLandingArea(
 
   // Forward-looking: wrapped events belong on /events + the event page, not on
   // the "what's coming together" surface. phase is authoritative.
-  const live = items.filter((e) => str(e.phase) !== 'post_event');
+  // Upcoming first, soonest first, undated last (OSE-1520), as on /events.
+  const live = orderUpcomingFirst(items.filter((e) => str(e.phase) !== 'post_event')).upcoming;
   if (live.length === 0) return renderEmptyLandingArea();
 
   const typeMap = new Map<string, string>(); // slug → label
+  const modalities = new Set<string>();
   let windowCount = 0;
 
+  // The same card /events renders (OSE-1520): date, venue, state-aware button,
+  // and the consented sponsor by the title (OSE-1522). The tags the CSS-only
+  // filters hang on ride along as extra classes.
   const cards = live
     .map((e) => {
-      const phase = str(e.phase);
       const windows = windowClasses(e, now);
       if (windows.includes(`when-${DEFAULT_WINDOW}`)) windowCount += 1;
 
       const { slug: typeSlug, label: typeLabel } = typeOf(e);
       typeMap.set(typeSlug, typeLabel);
       const modality = modalityOf(e);
+      modalities.add(modality);
 
-      const classes = [
-        'event-card',
-        ...windows,
-        typeSlug,
-        'product-ose',
-        `modality-${modality}`,
-      ].join(' ');
-
-      const safeId = escapeHtml(str(e.id));
-      const safeName = escapeHtml(str(e.name)) || 'Untitled event';
-      const venue = str(e.venue) || str(e.location);
-      const meta = venue ? escapeHtml(venue) : modality === 'online' ? 'Online' : '';
-      const metaPart = meta ? `<p class="event-meta" data-testid="area-card-meta">${meta}</p>` : '';
-
-      return `
-          <a class="${classes}" href="/events/${safeId}" data-testid="area-card" data-event-id="${safeId}" data-phase="${escapeHtml(phase)}">
-            <p class="event-name" data-testid="area-card-name">${safeName}</p>
-            ${metaPart}
-          </a>`;
+      return renderEventCard(
+        { ...e, venue: str(e.venue) || str(e.location) },
+        {
+          variant: 'landing',
+          extraClasses: [...windows, typeSlug, 'product-ose', `modality-${modality}`],
+          sponsorTitle: opts?.sponsorTitles?.get(str(e.id)),
+          venueFallback: modality === 'online' ? 'Online' : '',
+        }
+      );
     })
     .join('');
 
@@ -262,26 +277,51 @@ export function renderLandingArea(
       now: now.getTime(),
       latched: opts?.latched,
       area: { count: windowCount, min: LIST_MAX, latched: areaLatched },
+      sponsorTitles: opts?.sponsorTitles,
     }
   ).html;
 
-  const html = buildAreaMarkup({ cards, types, defaultView, mapHtml });
+  const html = buildAreaMarkup({
+    cards,
+    types,
+    defaultView,
+    mapHtml,
+    mixedModality: modalities.size > 1,
+  });
   return { html, types, windowCount, defaultView, leadsWithMap };
 }
 
 // ── markup assembly ──────────────────────────────────────────────────────────
 //
 // All radios are emitted as siblings that PRECEDE `.toggles` and `.area`, so the
-// head stylesheet's `#id:checked ~ .toggles label` / `~ .area .event-card` rules
-// resolve. Type radios are dynamic, so their selected-pill + hide rules are
-// emitted here as an inline style element (CSP allows style-src 'unsafe-inline').
+// `#id:checked ~ .toggles label` / `~ .area .event-card` rules resolve. The
+// rules are emitted here, from the same lists that emit the radios (inline style
+// elements; CSP allows style-src 'unsafe-inline'), so a pill can never exist
+// without its selected look, its focus ring and its hide rule.
+//
+// The pills are the shared filter chips (`.disc-chip`, lib/event-list's
+// stylesheet), the same control /events renders as links.
 
 function radio(id: string, group: string, checked: boolean): string {
   return `<input type="radio" name="${group}" id="${id}" class="toggle-radio"${checked ? ' checked' : ''} />`;
 }
 
 function pill(id: string, text: string): string {
-  return `<label for="${id}">${text}</label>`;
+  return `<label class="disc-chip" for="${id}">${text}</label>`;
+}
+
+/**
+ * The selected chip look, plus a keyboard focus ring. The radios sit before
+ * `.toggles`, not next to their labels, so `:focus-visible + label` can never
+ * match; the ring is a general-sibling rule per radio id instead.
+ */
+function chipRules(id: string): string {
+  const label = `.toggles label[for='${id}']`;
+  return (
+    `#${id}:checked ~ ${label}{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}` +
+    `#${id}:checked ~ ${label}::before{content:'\\2713';margin-right:.35rem}` +
+    `#${id}:focus-visible ~ ${label}{outline:3px solid var(--accent);outline-offset:2px}`
+  );
 }
 
 function buildAreaMarkup(args: {
@@ -289,9 +329,13 @@ function buildAreaMarkup(args: {
   types: { slug: string; label: string }[];
   defaultView: 'list' | 'map';
   mapHtml: string;
+  /** Both online and in-person events are listed, so the Where choice can differ. */
+  mixedModality: boolean;
 }): string {
-  const { cards, types, defaultView, mapHtml } = args;
+  const { cards, types, defaultView, mapHtml, mixedModality } = args;
   const listChecked = defaultView === 'list';
+  // A refinement is offered only when it can change what is shown.
+  const showTypes = types.length > 1;
 
   // ── radios (all groups, before .toggles / .area) ──
   const viewRadios =
@@ -299,47 +343,66 @@ function buildAreaMarkup(args: {
   const winRadios = LANDING_WINDOWS.map((w) => radio(`win-${w}`, 'win', w === DEFAULT_WINDOW)).join(
     ''
   );
-  const typeRadios =
-    radio('type-all', 'type', true) + types.map((t) => radio(t.slug, 'type', false)).join('');
-  const modRadios =
-    radio('mod-all', 'mod', true) +
-    radio('mod-online', 'mod', false) +
-    radio('mod-inperson', 'mod', false);
-  const prodRadios =
-    radio('prod-all', 'prod', true) +
-    radio('prod-ose', 'prod', false) +
-    radio('prod-hybrid', 'prod', false);
+  const typeRadios = showTypes
+    ? radio('type-all', 'type', true) + types.map((t) => radio(t.slug, 'type', false)).join('')
+    : '';
+  const modRadios = mixedModality
+    ? radio('mod-all', 'mod', true) +
+      radio('mod-online', 'mod', false) +
+      radio('mod-inperson', 'mod', false)
+    : '';
 
-  // ── dynamic type CSS (selected pill + hide non-matching) ──
-  const typeCss = types
-    .map(
-      (t) =>
-        `#${t.slug}:checked ~ .toggles label[for='${t.slug}']{background:var(--accent);color:var(--on-accent);font-weight:600}` +
-        `#${t.slug}:checked ~ .area .event-card:not(.${t.slug}){display:none}`
-    )
-    .join('\n');
-  const typeStyle = types.length ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
-  // Window pills come from LANDING_WINDOWS, so their selected + hide rules do too.
-  const winCss = LANDING_WINDOWS.map(
-    (w) =>
-      `#win-${w}:checked ~ .toggles label[for='win-${w}']{background:var(--accent);color:var(--on-accent);font-weight:600}` +
-      `#win-${w}:checked ~ .area .event-card:not(.when-${w}){display:none}`
-  ).join('\n');
-  const winStyle = `<style data-testid="area-window-css">\n${winCss}\n</style>`;
+  // ── generated rules: selected look + focus ring + (for filters) the hide rule ──
+  const rules: string[] = [];
+  for (const id of ['view-list', 'view-map']) rules.push(chipRules(id));
+  for (const w of LANDING_WINDOWS) {
+    rules.push(
+      chipRules(`win-${w}`) + `#win-${w}:checked ~ .area .event-card:not(.when-${w}){display:none}`
+    );
+  }
+  if (mixedModality) {
+    rules.push(chipRules('mod-all'));
+    rules.push(
+      chipRules('mod-online') +
+        '#mod-online:checked ~ .area .event-card:not(.modality-online){display:none}'
+    );
+    rules.push(
+      chipRules('mod-inperson') +
+        '#mod-inperson:checked ~ .area .event-card:not(.modality-inperson){display:none}'
+    );
+  }
+  const winStyle = `<style data-testid="area-window-css">\n${rules.join('\n')}\n</style>`;
+  // Type pills are dynamic, so their rules are too.
+  const typeCss = showTypes
+    ? [
+        chipRules('type-all'),
+        ...types.map(
+          (t) =>
+            chipRules(t.slug) +
+            `#${t.slug}:checked ~ .area .event-card:not(.${t.slug}){display:none}`
+        ),
+      ].join('\n')
+    : '';
+  const typeStyle = showTypes ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
 
   // ── toggle bar (labels) ──
-  const typePills = types.length
-    ? `<fieldset class="toggle-group" data-testid="toggle-type"><legend>Event type</legend>${pill('type-all', 'All types')}${types
+  // View and When say what they are to assistive tech; Type and Where are the
+  // refinements, so they carry a visible label (the old bar had four groups,
+  // two of them unlabelled, such as "All / OSE / Hybrid").
+  const typePills = showTypes
+    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend>${pill('type-all', 'All types')}${types
         .map((t) => pill(t.slug, escapeHtml(t.label)))
         .join('')}</fieldset>`
     : '';
+  const modPills = mixedModality
+    ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">Where</legend>${pill('mod-all', 'All')}${pill('mod-online', 'Online')}${pill('mod-inperson', 'In person')}</fieldset>`
+    : '';
 
   const toggles = `<div class="toggles" data-testid="area-toggles">
-          <fieldset class="toggle-group" data-testid="toggle-view"><legend>View</legend>${pill('view-list', 'List')}${pill('view-map', 'Map')}</fieldset>
-          <fieldset class="toggle-group" data-testid="toggle-window"><legend>When</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w))).join('')}</fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend>${pill('view-list', 'List')}${pill('view-map', 'Map')}</fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">When</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w))).join('')}</fieldset>
           ${typePills}
-          <fieldset class="toggle-group" data-testid="toggle-modality"><legend>Where</legend>${pill('mod-all', 'All')}${pill('mod-online', 'Online')}${pill('mod-inperson', 'In person')}</fieldset>
-          <fieldset class="toggle-group" data-testid="toggle-product"><legend>Kind</legend>${pill('prod-all', 'All')}${pill('prod-ose', 'OSE')}${pill('prod-hybrid', 'Hybrid')}</fieldset>
+          ${modPills}
         </div>`;
 
   // OSE-1354: the map view never hides the cards. The map (lib/attendee-map) sits
@@ -352,7 +415,7 @@ function buildAreaMarkup(args: {
           </div>
         </div>`;
 
-  return `${viewRadios}${winRadios}${typeRadios}${modRadios}${prodRadios}
+  return `${viewRadios}${winRadios}${typeRadios}${modRadios}
         ${winStyle}${typeStyle}
         ${toggles}
         ${area}`;

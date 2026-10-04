@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-04 — 592 ids.
+ * Generated 2026-10-04 — 602 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 406 ids
+    // admin.html — 409 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -134,6 +134,8 @@
       'event-inbox',
       'event-inbox-list',
       'event-live-link',
+      'event-map-state',
+      'event-map-toggle',
       'event-name',
       'event-preview',
       'event-preview-link',
@@ -401,6 +403,7 @@
       'wizard-link-public',
       'wizard-link-report',
       'wizard-link-signup',
+      'wizard-map-note',
       'wizard-missing',
       'wizard-msg',
       'wizard-next-btn',
@@ -528,7 +531,6 @@
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
-      'poster-art-empty',
       'poster-art-img',
       'poster-art-viewport',
       'poster-body',
@@ -564,9 +566,10 @@
       'poster-sponsor-name',
       'poster-sponsor-strip',
       'poster-sponsors-loading',
+      'poster-stage',
       'poster-title',
     ]),
-    // shared-report.html — 81 ids
+    // shared-report.html — 88 ids
     SHARED_REPORT: Object.freeze([
       'advanced-metrics-content',
       'advanced-metrics-section',
@@ -604,6 +607,13 @@
       'premium-displays',
       'premium-sponsor-count',
       'report-action-bar',
+      'report-action-create-next',
+      'report-action-invite',
+      'report-action-repeat',
+      'report-action-share',
+      'report-action-status',
+      'report-actions',
+      'report-actions-bar',
       'report-event-date',
       'report-event-name',
       'report-event-row',

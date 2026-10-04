@@ -48,11 +48,13 @@ async function noSidewaysScroll(page: Page, label: string): Promise<void> {
 /** Name, place and date, then to the step with the event type; Create; on to step 5. */
 async function createAndReview(
   page: Page,
-  o: { time?: string; type?: boolean }
+  o: { time?: string; type?: boolean; map?: boolean }
 ): Promise<{ id: string; title: string }> {
   const title = `Preview night ${Date.now()}`;
   await page.getByTestId('wizard-event-name').fill(title);
   await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+  // A new event is off the map unless the organizer says yes; this journey wants it reachable.
+  if (o.map) await page.getByTestId('wizard-publish-yes').click();
   const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
   await page.getByTestId('wizard-event-date').fill(start);
   if (o.time) await page.getByTestId('wizard-event-time').fill(o.time);
@@ -151,7 +153,7 @@ test.describe('create flow: live preview and review', () => {
     await openWizard(page, PHONE);
     const pageErrors: string[] = [];
     page.on('pageerror', (e) => pageErrors.push(e.message));
-    const { id } = await createAndReview(page, {});
+    const { id } = await createAndReview(page, { map: true });
 
     // The review names what the server would refuse, in the server's words.
     await expect(page.getByTestId('wizard-review-missing')).toHaveText(

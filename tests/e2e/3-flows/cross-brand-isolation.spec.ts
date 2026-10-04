@@ -121,6 +121,8 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
     title: `Cross-Brand Isolation Test (${suffix} ${RUN_ID})`,
     slug: `isolation-test-${suffix}-${RUN_ID}`,
     status: 'active',
+    // OSE-1560: a new event is off the map unless asked; this test reads the public list.
+    is_published: true,
     description:
       'Temporary test event — cross-brand-isolation.spec.ts. Safe to delete (start_date 2099).',
     location: 'Test Location',

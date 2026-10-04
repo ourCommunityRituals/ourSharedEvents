@@ -220,7 +220,13 @@ describe('Publish starts the window; the event is live by link but not listed', 
     const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
       method: 'POST',
       headers: { ...BEARER, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Created live', status: 'active', start_date: inDays(3) }),
+      // OSE-1560: a new event is off the map unless asked; this one asks.
+      body: JSON.stringify({
+        title: 'Created live',
+        status: 'active',
+        start_date: inDays(3),
+        is_published: true,
+      }),
     });
     expect(res.status).toBeLessThan(300);
     const id = ((await res.json()) as { id: string }).id;
@@ -361,7 +367,13 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
       const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
         method: 'POST',
         headers: { ...BEARER, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `Live ${i}`, status: 'active', start_date: inDays(2) }),
+        // OSE-1560: a new event is off the map unless asked; the latch counts listed events.
+        body: JSON.stringify({
+          title: `Live ${i}`,
+          status: 'active',
+          start_date: inDays(2),
+          is_published: true,
+        }),
       });
       ids.push(((await res.json()) as { id: string }).id);
     }

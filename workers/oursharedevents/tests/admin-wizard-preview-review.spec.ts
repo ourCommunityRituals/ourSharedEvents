@@ -227,11 +227,12 @@ describe('OSE-1528: the live preview', () => {
 
   test('the map note follows the on-the-map choice', () => {
     const { $, txt } = mount();
-    expect(txt('wizard-preview-map')).toContain('On the map');
-    $('wizard-publish-no').click();
+    // A new event is off the map until the organizer says otherwise.
     expect(txt('wizard-preview-map')).toContain('Off the map');
     $('wizard-publish-yes').click();
     expect(txt('wizard-preview-map')).toContain('On the map');
+    $('wizard-publish-no').click();
+    expect(txt('wizard-preview-map')).toContain('Off the map');
   });
 
   test('the sponsor strip holds its place below the title and date, above the facts', () => {
@@ -298,7 +299,7 @@ describe('OSE-1528: the review before publish', () => {
     expect(row('when')).toContain('6:30 PM');
     expect(row('type')).toContain('Sports > Bocce');
     expect(row('where')).toContain('Eagles Hall');
-    expect(row('map')).toMatch(/on the map/i);
+    expect(row('map')).toMatch(/off the map/i);
     expect(row('codes')).toMatch(/poster/i);
     expect(m.$('wizard-review-missing').hidden).toBe(true);
   });

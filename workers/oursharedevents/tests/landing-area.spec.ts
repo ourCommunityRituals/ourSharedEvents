@@ -135,10 +135,10 @@ describe('OSE-1312 | product tagging (anon pole; hybrid inert)', () => {
   it('every OSE event is product-ose', () => {
     expect(render([ev()]).html).toContain('product-ose');
   });
-  it('renders the product toggle but no card carries product-hybrid yet', () => {
+  it('no Kind control (OSE-1520: its only possible answer was "all"), and no card carries product-hybrid', () => {
     const html = render([ev(), ev({ id: 'e2' })]).html;
-    expect(html).toContain('data-testid="toggle-product"');
-    expect(html).toContain('id="prod-hybrid"');
+    expect(html).not.toContain('data-testid="toggle-product"');
+    expect(html).not.toContain('id="prod-hybrid"');
     expect(html).not.toContain(' product-hybrid'); // leading space = the card class, not the radio id
   });
 });

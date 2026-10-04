@@ -45,7 +45,7 @@ const ev = (
 });
 
 describe('OSE-1362 | chip order on /events', () => {
-  test('Everything · Today · This weekend · Next 7 days · This month · Next month · Next 90 days · Recently wrapped', () => {
+  test('every window still parses (shared links keep working); five are chips (OSE-1520)', () => {
     expect([...WHEN_OPTIONS]).toEqual([
       'all',
       'today',
@@ -57,15 +57,12 @@ describe('OSE-1362 | chip order on /events', () => {
       'past',
     ]);
     const bar = renderDiscoveryFilters({ when: 'all', q: '' }, 0);
-    const labels = [...bar.matchAll(/class="disc-chip[^"]*"[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
+    const labels = [...bar.matchAll(/class="disc-chip[ "][^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
     expect(labels).toEqual([
       'Everything',
-      'Today',
       'This weekend',
       'Next 7 days',
       'This month',
-      'Next month',
-      'Next 90 days',
       'Recently wrapped',
     ]);
   });
@@ -110,7 +107,9 @@ describe('OSE-1362 | next-90 boundaries (event-local, injected now)', () => {
     expect(bar).toMatch(/data-testid="disc-when-next-90" aria-current="true">Next 90 days</);
     expect(bar).toContain('data-testid="disc-summary">0 events in the next 90 days<');
     expect(discoveryCountLabel('next-90', 1)).toBe('1 event in the next 90 days');
-    expect(discoveryEmptyCopy({ when: 'next-90', q: '' })).toBe('Nothing in the next 90 days yet.');
+    expect(discoveryEmptyCopy({ when: 'next-90', q: '' })).toContain(
+      'Nothing in the next 90 days yet.'
+    );
   });
 });
 
@@ -124,7 +123,9 @@ describe('OSE-1362 | landing and /events share one `when` definition', () => {
   test('landing pills carry the /events chip labels, in order', () => {
     const html = renderLandingArea([ev('a', '2026-09-18')], { now: NOW.getTime() }).html;
     const fieldset = html.match(/data-testid="toggle-window">([^]*?)<\/fieldset>/)?.[1] ?? '';
-    const pills = [...fieldset.matchAll(/<label for="win-([a-z0-9-]+)">([^<]*)<\/label>/g)];
+    const pills = [
+      ...fieldset.matchAll(/<label class="disc-chip" for="win-([a-z0-9-]+)">([^<]*)<\/label>/g),
+    ];
     expect(pills.map((m) => m[1])).toEqual([...LANDING_WINDOWS]);
     expect(pills.map((m) => m[2])).toEqual(LANDING_WINDOWS.map(discoveryChipLabel));
     expect(html).toContain(`id="win-${DEFAULT_WINDOW}" class="toggle-radio" checked`);
@@ -144,7 +145,9 @@ describe('OSE-1362 | landing and /events share one `when` definition', () => {
     const html = renderLandingArea(items, { now: NOW.getTime() }).html;
     for (const e of items) {
       const cls =
-        html.match(new RegExp(`class="([^"]*)" href="/events/${e.id}"`))?.[1]?.split(' ') ?? [];
+        html
+          .match(new RegExp(`class="([^"]*)" data-testid="area-card" data-event-id="${e.id}"`))?.[1]
+          ?.split(' ') ?? [];
       for (const w of LANDING_WINDOWS) {
         const onEvents = applyDiscoveryFilters([e], { when: w, q: '' }, NOW).length === 1;
         expect(cls.includes(`when-${w}`), `${e.id} / ${w}`).toBe(onEvents);

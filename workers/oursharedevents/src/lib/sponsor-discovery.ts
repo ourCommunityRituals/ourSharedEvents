@@ -31,6 +31,7 @@
 import { maybeTag } from './h3-tagging';
 import { toPublicEvent } from './public-event-projection';
 import { listedSql } from './publish-grace';
+import { flipFired, mapFlipStatement } from './map-default';
 
 /** Waiting (organizer has not answered) requests one sponsor may hold at once. */
 export const MAX_OPEN_REQUESTS = 5;
@@ -247,7 +248,14 @@ export async function createSponsorRequest(
 }
 
 export type OrganizerAnswer =
-  | { ok: true; event_id: string; approved: boolean }
+  | {
+      ok: true;
+      event_id: string;
+      approved: boolean;
+      sponsor_id: string;
+      /** OSE-1560: this approval turned the event's default map on. */
+      map_flipped: boolean;
+    }
   | { ok: false; code: 'NOT_FOUND' | 'ALREADY_ANSWERED' };
 
 /**
@@ -259,12 +267,13 @@ export async function answerSponsorRequest(
   db: D1Database,
   placementId: string,
   approve: boolean,
-  brandIds: readonly string[] | null
+  brandIds: readonly string[] | null,
+  graceMinutes?: string
 ): Promise<OrganizerAnswer> {
   const scopeSql = brandIds ? ` AND e.brand_id IN (${brandIds.map(() => '?').join(', ')})` : '';
   const row = await db
     .prepare(
-      `SELECT sp.id, sp.event_id, sp.is_active, sp.organizer_accepted
+      `SELECT sp.id, sp.event_id, sp.sponsor_business_id, sp.is_active, sp.organizer_accepted
          FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
         WHERE sp.id = ? AND sp.source = ?${scopeSql}`
     )
@@ -272,6 +281,7 @@ export async function answerSponsorRequest(
     .first<{
       id: string;
       event_id: string;
+      sponsor_business_id: string;
       is_active: number;
       organizer_accepted: number | null;
     }>();
@@ -292,5 +302,22 @@ export async function answerSponsorRequest(
     .bind(approve ? 1 : 0, approve ? 1 : 0, placementId, SPONSOR_REQUEST_SOURCE, approve ? 1 : 0)
     .run();
   if ((res.meta?.changes ?? 0) === 0) return { ok: false, code: 'ALREADY_ANSWERED' };
-  return { ok: true, event_id: row.event_id, approved: approve };
+  // OSE-1560: the organizer approving a sponsor turns the default map on (lib/map-default.ts).
+  // A decline never does, and the sponsor's own request never reaches here.
+  let mapFlipped = false;
+  if (approve) {
+    const flip = await mapFlipStatement(db, {
+      eventId: row.event_id,
+      sponsorId: row.sponsor_business_id,
+      graceMinutes,
+    }).run();
+    mapFlipped = flipFired(flip);
+  }
+  return {
+    ok: true,
+    event_id: row.event_id,
+    approved: approve,
+    sponsor_id: row.sponsor_business_id,
+    map_flipped: mapFlipped,
+  };
 }

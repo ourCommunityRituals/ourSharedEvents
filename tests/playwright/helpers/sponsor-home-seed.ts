@@ -21,6 +21,8 @@ export interface SeededSponsorHome {
   sponsorId: string;
   sponsorName: string;
   placementId: string;
+  /** When the event joins the public list (publish grace window); null = already listed. */
+  listedFrom: string | null;
   /** Absolute URL as minted (origin of the request). */
   url: string;
   /** The `t` value alone. */
@@ -52,7 +54,14 @@ export async function createLiveEvent(
   const ev = await ok<{ id: string }>(
     await request.post('/api/v2/admin/events', {
       headers,
-      data: { title, start_date: start, location: 'Eagles Hall', ...(where ?? {}) },
+      // OSE-1560: a new event is off the map unless asked; these journeys need it on (discoverable, listed).
+      data: {
+        title,
+        start_date: start,
+        location: 'Eagles Hall',
+        is_published: true,
+        ...(where ?? {}),
+      },
     }),
     'create event'
   );
@@ -127,6 +136,7 @@ export async function seedSponsorHome(
     sponsorId: sp.id,
     sponsorName,
     placementId: sp.placement_id,
+    listedFrom: ev.listedFrom,
     url: link.url,
     token,
   };
