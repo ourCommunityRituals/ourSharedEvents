@@ -329,6 +329,12 @@ export async function resolveCode(
  * clicked, this many times, last at this moment" — group-level
  * temporal data, never per-attendee.
  *
+ * It also adds one to the link's UTC-day bucket in `shortlink_click_daily`
+ * (OSE-1613), so reach can be shown week by week. That is a counter per link
+ * per day, not a per-click row. The two writes are independent statements run
+ * in parallel: a failed bucket write never loses the total, and a missing
+ * link creates no bucket.
+ *
  * Returns the post-increment click count for observability (handlers
  * can log it; admin UI can render it). Never throws on D1 errors —
  * the redirect MUST succeed even if the counter increment fails, so
@@ -336,20 +342,8 @@ export async function resolveCode(
  */
 export async function incrementClick(env: ShortlinksEnv, code: string): Promise<number> {
   if (!env.DB) return 0;
-  try {
-    // One round trip: RETURNING reads the post-increment value in the same
-    // statement (was an UPDATE then a second SELECT on the redirect path).
-    const row = await env.DB.prepare(
-      `UPDATE shortlinks
-       SET clicks = clicks + 1,
-           last_clicked_at = datetime('now')
-       WHERE code = ?
-       RETURNING clicks`
-    )
-      .bind(code)
-      .first<{ clicks: number }>();
-    return row?.clicks ?? 0;
-  } catch (err) {
+  const db = env.DB;
+  const logError = (err: unknown) =>
     console.warn(
       JSON.stringify({
         type: 'SHORTLINK_CLICK_LOG_ERROR',
@@ -358,6 +352,35 @@ export async function incrementClick(env: ShortlinksEnv, code: string): Promise<
         timestamp: new Date().toISOString(),
       })
     );
-    return 0;
-  }
+
+  // One round trip: RETURNING reads the post-increment value in the same
+  // statement (was an UPDATE then a second SELECT on the redirect path).
+  const total = db
+    .prepare(
+      `UPDATE shortlinks
+       SET clicks = clicks + 1,
+           last_clicked_at = datetime('now')
+       WHERE code = ?
+       RETURNING clicks`
+    )
+    .bind(code)
+    .first<{ clicks: number }>()
+    .then((row) => row?.clicks ?? 0)
+    .catch((err) => {
+      logError(err);
+      return 0;
+    });
+
+  const bucket = db
+    .prepare(
+      `INSERT INTO shortlink_click_daily (code, day, clicks)
+       SELECT code, date('now'), 1 FROM shortlinks WHERE code = ?
+       ON CONFLICT (code, day) DO UPDATE SET clicks = clicks + 1`
+    )
+    .bind(code)
+    .run()
+    .catch(logError);
+
+  const [count] = await Promise.all([total, bucket]);
+  return count;
 }

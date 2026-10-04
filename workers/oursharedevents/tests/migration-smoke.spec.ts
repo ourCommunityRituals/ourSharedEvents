@@ -67,6 +67,7 @@ const DB_TABLES = [
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side; no session-derived column)
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
+  'shortlink_click_daily', // 0094 (OSE-1613 — clicks per link per UTC day, aggregate only)
   'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020 (0067: FK repointed to sponsor_business)
   'sponsor_asset', // 0066 (OSE-799 A2 — durable creative, one row per format)
