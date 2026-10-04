@@ -127,10 +127,10 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
     'from any request path.',
-  'handlers/bigquery.ts:280':
+  'handlers/bigquery.ts:296':
     'OER emission cron, second read: the 24h recent-events backup joined to the ' +
     'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
-    'as bigquery.ts:83; not reachable from any request path. (Re-keyed 268→280 by OSE-616: the h3_res7 column + corridor guard sit above it.) Previously passed the ' +
+    'as bigquery.ts:83; not reachable from any request path. (Re-keyed 268→280 by OSE-616: the h3_res7 column + corridor guard sit above it; 280→296 by the backup-scope fix, whose BACKUP_LISTED_EVENTS_SQL + publish-grace import land above it.) Previously passed the ' +
     'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
     'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
   'handlers/sponsors.ts:671':
@@ -489,7 +489,7 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
           // its ON-clause and drops its brand/held-id clause genuinely goes red.
           // (CCR-PR567 M3: the earlier "now goes red" claim was FALSE — the
           // ON-clause `t.id = other.col` satisfied the old regex; the OER backup at
-          // bigquery.ts:280 that leaned on it is now an explicit exemption.)
+          // bigquery.ts:296 that leaned on it is now an explicit exemption.)
           const re = new RegExp('(?:FROM|JOIN)\\s+' + table + '\\b', 'gi');
           for (const m of src.matchAll(re)) {
             // Read a bounded window after the FROM, the way a reviewer does.

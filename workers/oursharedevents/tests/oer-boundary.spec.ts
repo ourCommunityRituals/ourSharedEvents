@@ -500,4 +500,76 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
     expect(bqCalls, 'no insertAll may run when a row is finer than res7').toEqual([]);
     await tenvDb().DB.prepare(`DELETE FROM events WHERE id LIKE 'ose616-evt-%'`).run();
   });
+
+  // The nightly backup streams `title` and `slug` into the dataset OER and OW
+  // read. It must send only what a stranger could already find: published, active
+  // and past its publish grace window (the same rule the list, the map and the
+  // sitemap use). Drafts, ready events, archived events, unpublished events and
+  // events still inside the grace window stay in D1.
+  describe('backup scope — only listed events leave D1', () => {
+    async function seedWith(
+      id: string,
+      cols: { status: string; is_published?: number; listed_from?: string | null }
+    ): Promise<void> {
+      await tenvDb()
+        .DB.prepare(
+          `INSERT INTO events
+             (id, brand_id, title, slug, status, is_published, listed_from,
+              legal_clearance_tier, created_at, updated_at)
+           VALUES (?, 'ds02-brand', ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`
+        )
+        .bind(
+          id,
+          `Secret title ${id}`,
+          id,
+          cols.status,
+          cols.is_published ?? 1,
+          cols.listed_from ?? null
+        )
+        .run();
+    }
+
+    const exportedIds = (): string[] =>
+      bqCalls.flatMap((c) => c.rows.map((r) => String(r.json.id)));
+
+    test('a draft, ready or archived event is never exported', async () => {
+      const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+      await seedWith('ds02-evt-live', { status: 'active' });
+      await seedWith('ds02-evt-draft', { status: 'draft' });
+      await seedWith('ds02-evt-ready', { status: 'ready' });
+      await seedWith('ds02-evt-archived', { status: 'archived' });
+
+      await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+      expect(exportedIds(), 'the listed event is still exported').toContain('ds02-evt-live');
+      for (const id of ['ds02-evt-draft', 'ds02-evt-ready', 'ds02-evt-archived']) {
+        expect(exportedIds(), `${id} reached the OER dataset`).not.toContain(id);
+      }
+      expect(JSON.stringify(bqCalls)).not.toContain('Secret title ds02-evt-draft');
+    });
+
+    test('an unpublished event is never exported, even when active', async () => {
+      const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+      await seedWith('ds02-evt-unpub', { status: 'active', is_published: 0 });
+
+      await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+      expect(exportedIds()).not.toContain('ds02-evt-unpub');
+    });
+
+    test('an active event still inside its publish grace window is not exported yet', async () => {
+      const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+      const inTenMinutes = new Date(Date.now() + 10 * 60_000).toISOString();
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+      await seedWith('ds02-evt-graced', { status: 'active', listed_from: inTenMinutes });
+      await seedWith('ds02-evt-settled', { status: 'active', listed_from: tenMinutesAgo });
+
+      await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+      expect(exportedIds(), 'Undo inside the window must leave no trace in OER').not.toContain(
+        'ds02-evt-graced'
+      );
+      expect(exportedIds()).toContain('ds02-evt-settled');
+    });
+  });
 });

@@ -19,6 +19,7 @@ import {
 } from '../cloud/bigquery';
 import { logExportManifest } from '../lib/audit-log';
 import { assertCorridorGrainRow, canonicalCorridorId } from '../lib/export-geography';
+import { listedSql } from '../lib/publish-grace';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import {
   PRODUCT_ID,
@@ -63,6 +64,21 @@ const BACKUP_EVENT_COLUMNS = [
 ] as const;
 
 const BACKUP_SELECT_COLUMNS = BACKUP_EVENT_COLUMNS.map((c) => `e.${c}`).join(', ');
+
+/**
+ * Which events the nightly backup may send. The row carries `title` and `slug`
+ * into the dataset OER and OW read, so the scope is the one the list, the map
+ * and the sitemap already use: published, active, and past the publish grace
+ * window. A draft, ready, archived or unpublished event, or one still inside its
+ * grace window (Undo must leave no public trace), stays in D1. Before this the
+ * query had no status or listed filter, so draft titles reached the dataset.
+ * `e` is the events alias in the backup query.
+ *
+ * Consequence: an event that is archived stops being re-exported, so the
+ * dataset keeps its last `active` row. The boundary doc's event index lists
+ * `status`, which this does not yet refresh for archived events.
+ */
+const BACKUP_LISTED_EVENTS_SQL = `e.is_published = 1 AND e.status = 'active' AND ${listedSql('e')}`;
 
 interface BackupEventJoinRow {
   id: string;
@@ -258,8 +274,8 @@ export async function handleAdminBackupEvent(
 
 /**
  * Daily scheduled BigQuery event backup.
- * Reads events updated in the last 24 hours from the main DB and streams
- * them to BigQuery. Intentionally separate from runFormDataLifecycle so
+ * Reads listed events (BACKUP_LISTED_EVENTS_SQL) updated in the last 24 hours
+ * from the main DB and streams them to BigQuery. Intentionally separate from runFormDataLifecycle so
  * the lifecycle function stays FORMS_DB-only (forms-security isolation gate).
  */
 export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> {
@@ -279,7 +295,8 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
       `SELECT ${BACKUP_SELECT_COLUMNS}, etr.uec_code
          FROM events e
          LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-        WHERE e.updated_at > datetime('now', '-24 hours')`
+        WHERE e.updated_at > datetime('now', '-24 hours')
+          AND ${BACKUP_LISTED_EVENTS_SQL}`
     ).all<BackupEventJoinRow>();
     // DS-02: route every row through the fail-closed pool contract. Tier 4/5 /
     // malformed rows are WITHHELD (never exported); permitted rows go to the
