@@ -568,11 +568,12 @@ export async function handleAdminRegistrations(
     // OSE-1442: one bounded page (newest first, (created_at, id) keyset), not
     // every row of the event. One extra row tells us whether a next page exists.
     const after = paging.after;
-    const result = await env.FORMS_DB.prepare(
+    // Fixed fragments only; every value reaches SQL through .bind().
+    const pageQuery =
       'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ?' +
-        (after ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : '') +
-        ' ORDER BY created_at DESC, id DESC LIMIT ?'
-    )
+      (after ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : '') +
+      ' ORDER BY created_at DESC, id DESC LIMIT ?';
+    const result = await env.FORMS_DB.prepare(pageQuery)
       .bind(...(after ? [eventId, after.c, after.c, after.i] : [eventId]), paging.limit + 1)
       .all();
     const totalRow = await env.FORMS_DB.prepare(
