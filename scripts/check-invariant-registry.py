@@ -12,7 +12,8 @@ The brain registry (OCR-docs/ocr-docs-brain/architectural-invariants.yaml) names
      removed (the count may fall, never rise, and a fall must be recorded).
   3. `tests/e2e/0-architecture/README.md` carries a GENERATED gate index between
      BEGIN/END markers: every `*.invariant.spec.ts` in that folder, joined to the
-     brain invariant(s) that name it. Hand edits inside the markers fail the check.
+     brain invariant(s) that name it (id + name only, so a status change in the
+     brain cannot stale it). Hand edits inside the markers fail the check.
      Regenerate with `--write`.
 
 Generated, never written: the index is derived from the YAML and the directory.
@@ -62,6 +63,15 @@ def resolve(test_file, repo, brain):
     return None
 
 
+def in_scope(inv):
+    """The registry is cross-product. Check an invariant here when it applies to ose
+    (or names no products), or when its named enforcement lives in the brain itself."""
+    applies = inv.get("applies_to")
+    token = clean_path(inv.get("test_file", ""))
+    brain_owned = token.startswith("ocr-docs-brain/") or ("/" not in token and token.endswith(".py"))
+    return applies is None or "ose" in applies or brain_owned or not applies
+
+
 def load_invariants(brain):
     doc = yaml.safe_load((brain / "architectural-invariants.yaml").read_text(encoding="utf-8"))
     return doc["invariants"]
@@ -75,7 +85,7 @@ def render_index(invs, repo):
     for spec in sorted(p.name for p in (repo / GATE_DIR).glob("*.invariant.spec.ts")):
         owners = by_file.get(spec, []) + by_file.get(str(GATE_DIR / spec).replace("\\", "/"), [])
         if owners:
-            cell = ", ".join(f"#{o['id']} {o['name']} ({o['status']})" for o in owners)
+            cell = ", ".join(f"#{o['id']} {o['name']}" for o in owners)
         else:
             cell = "— (OSE-local or derived gate, not the named test of a brain invariant)"
         rows.append(f"| `{spec}` | {cell} |")
@@ -114,7 +124,7 @@ def main():
 
     seen_missing = set()
     for inv in invs:
-        if inv.get("status") == "retired":
+        if inv.get("status") == "retired" or not in_scope(inv):
             continue
         key = str(inv["id"])
         tf = inv.get("test_file")

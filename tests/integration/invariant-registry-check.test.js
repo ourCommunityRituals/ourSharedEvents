@@ -37,6 +37,11 @@ const YAML = `invariants:
     name: brain_guard
     status: live
     test_file: ocr-docs-brain/scripts/guard.py (OCR-docs brain)
+  - id: 5
+    name: other_product_only
+    status: partial
+    applies_to: [wkrp]
+    test_file: other-product.invariant.test.ts
   - id: 4
     name: retired_one
     status: retired
@@ -83,6 +88,31 @@ maybe('OSE-1604 | invariant registry check', () => {
     const r = run(fx);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('clean');
+  });
+
+  test('an invariant that does not apply to ose is not required to resolve here', () => {
+    fx = fixture();
+    run(fx, ['--write']);
+    const r = run(fx);
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('other_product_only');
+  });
+
+  test('the generated index carries id and name only, so a brain status change cannot stale it', () => {
+    fx = fixture();
+    run(fx, ['--write']);
+    const readme = readFileSync(join(fx.repo, 'tests/e2e/0-architecture/README.md'), 'utf-8');
+    expect(readme).toContain('#1 anonymous_id |');
+    expect(readme).not.toMatch(/anonymous_id \((live|partial)\)/);
+    const yamlPath = join(fx.brain, 'architectural-invariants.yaml');
+    const yaml = readFileSync(yamlPath, 'utf-8');
+    const flipped = yaml.replace(
+      'status: live\n    test_file: anonymous',
+      'status: partial\n    test_file: anonymous'
+    );
+    expect(flipped).not.toBe(yaml);
+    writeFileSync(yamlPath, flipped);
+    expect(run(fx).status).toBe(0);
   });
 
   test('retired invariants are not required to resolve', () => {
