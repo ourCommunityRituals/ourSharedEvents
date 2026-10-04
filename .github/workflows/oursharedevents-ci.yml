@@ -2633,6 +2633,27 @@ jobs:
       ]
     if: always()
     steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+      # The testing flow in execution order, with a reason for every stage that did
+      # not run. Built on the reconciler's expected set, so the board and the gate agree.
+      - name: Testing flow board
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          INPUT_DEPLOY_STAGING: ${{ github.event.inputs.deploy_staging }}
+          INPUT_RUN_FUNCTIONAL: ${{ github.event.inputs.run_functional }}
+          RESULTS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/render-pipeline-board.mjs >> "$GITHUB_STEP_SUMMARY"
       - name: Summary
         run: |
           echo "## OurSharedEvents CI/CD Summary" >> $GITHUB_STEP_SUMMARY
