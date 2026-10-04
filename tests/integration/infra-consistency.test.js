@@ -93,6 +93,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     expect(workflow.jobs['deploy-staging']['runs-on']).toBe(PINNED_RUNNER);
     expect(workflow.jobs['contract-staging-sub']['runs-on']).toBe(PINNED_RUNNER);
     expect(workflow.jobs['smoke-staging-sub']['runs-on']).toBe(PINNED_RUNNER);
+    expect(workflow.jobs['functional-staging-sub']['runs-on']).toBe(PINNED_RUNNER);
     expect(workflow.jobs['functional-staging']['runs-on']).toBe(PINNED_RUNNER);
     expect(workflow.jobs['deploy-production']['runs-on']).toBe(PINNED_RUNNER);
     expect(workflow.jobs['smoke-production']['runs-on']).toBe(PINNED_RUNNER);
@@ -601,12 +602,15 @@ describe('T4d smoke exercises the admin sign-in worker gate', () => {
   const yaml = require('js-yaml');
   const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
   const smokeSteps =
-    (wf.jobs && wf.jobs['functional-staging'] && wf.jobs['functional-staging'].steps) || [];
+    (wf.jobs && wf.jobs['functional-staging-sub'] && wf.jobs['functional-staging-sub'].steps) || [];
   const tier1Step = smokeSteps.find((s) => s && s.name === 'T4d: UI Smoke — Tier-1 page smoke');
   const run = (tier1Step && tier1Step.run) || '';
 
   test('T4d Tier-1 smoke step exists', () => {
-    expect(tier1Step, 'functional-staging must include the T4d Tier-1 smoke step').toBeDefined();
+    expect(
+      tier1Step,
+      'functional-staging-sub must include the T4d Tier-1 smoke step'
+    ).toBeDefined();
   });
 
   test('T4d no longer grep-inverts the admin sign-in route', () => {
@@ -794,8 +798,10 @@ describe('T3 smoke sub-gates remain split and aggregated', () => {
   });
 
   test('functional staging waits for the T3 aggregate, not raw sub-gates', () => {
-    expect(wf.jobs['functional-staging'].needs).toEqual(expect.arrayContaining(['smoke-staging']));
-    expect(wf.jobs['functional-staging'].needs).not.toContain('smoke-staging-sub');
+    expect(wf.jobs['functional-staging-sub'].needs).toEqual(
+      expect.arrayContaining(['smoke-staging'])
+    );
+    expect(wf.jobs['functional-staging-sub'].needs).not.toContain('smoke-staging-sub');
   });
 });
 
@@ -884,7 +890,7 @@ describe('Playwright browser installs use cache on staging and PR gates', () => 
   });
 
   test('T4 functional restores the Playwright cache before installing browser engines', () => {
-    const steps = wf.jobs['functional-staging'].steps || [];
+    const steps = wf.jobs['functional-staging-sub'].steps || [];
     assertCacheStep(steps, 'Restore Playwright browser cache');
     expect(stepIndex(steps, 'Restore Playwright browser cache')).toBeLessThan(
       stepIndex(steps, 'Install Playwright browsers')

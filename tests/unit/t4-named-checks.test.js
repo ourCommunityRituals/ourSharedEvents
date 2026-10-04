@@ -22,7 +22,7 @@ const REPO = path.resolve(__dirname, '../..');
 const WORKFLOW = path.join(REPO, '.github', 'workflows', 'oursharedevents-ci.yml');
 
 const wf = YAML.parse(readFileSync(WORKFLOW, 'utf8'));
-const job = wf.jobs?.['functional-staging'];
+const job = wf.jobs?.['functional-staging-sub'];
 const steps = job?.steps ?? [];
 
 // A T4 sub-gate = a step whose name is "T4<x>: …" and which carries an `id`
@@ -36,8 +36,8 @@ const postRun = postStep?.run ?? '';
 const postLines = postRun.match(/^\s*post\s+"/gm) ?? [];
 
 describe('OSE-1171 — T4 umbrella is split into named checks', () => {
-  it('the functional-staging job exists and has T4 sub-gates (else this is vacuous)', () => {
-    expect(job, 'functional-staging job must exist').toBeDefined();
+  it('the functional-staging-sub job exists and has T4 sub-gates (else this is vacuous)', () => {
+    expect(job, 'functional-staging-sub job must exist').toBeDefined();
     expect(gateSteps.length, 'expected the T4a–T4f sub-gates').toBeGreaterThanOrEqual(6);
   });
 
@@ -78,5 +78,56 @@ describe('OSE-1171 — T4 umbrella is split into named checks', () => {
     expect(byToken['arch-tests'], 'T4a must stay fail-fast (no continue-on-error)').toBe(false);
     expect(byToken['journey-tests'], 'T4b must stay fail-fast (no continue-on-error)').toBe(false);
     expect(job['continue-on-error'], 'no job-level continue-on-error').toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T4 is three parallel legs under one required aggregate. These lock the shape so
+// a gate cannot silently run in no leg (green-while-skipping) or in two (shared
+// staging fixtures, OSE-1186).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('T4 legs — one leg per gate, one required aggregate', () => {
+  const sections = (job?.strategy?.matrix?.include ?? []).map((m) => m.section);
+  const legsOf = (step) => {
+    const cond = String(step.if ?? '');
+    return sections.filter((s) => cond.includes(`matrix.section == '${s}'`));
+  };
+
+  it('has the three legs and does not fail fast across them', () => {
+    expect(sections).toEqual(['platform', 'forms', 'surfaces']);
+    expect(job.strategy['fail-fast']).toBe(false);
+  });
+
+  it('every T4 gate step runs in exactly one leg', () => {
+    for (const g of gateSteps) {
+      const step = steps.find((s) => s.id === g.id);
+      expect(legsOf(step), `${g.token} must be scoped to exactly one leg`).toHaveLength(1);
+    }
+  });
+
+  it('each leg posts named checks only for the gates it runs', () => {
+    for (const s of sections) {
+      const body = postRun.split(new RegExp('^\\s*' + s + '\\)', 'm'))[1]?.split(';;')[0] ?? '';
+      const posted = [...body.matchAll(/steps\.([a-z0-9-]+)\.outcome/g)].map((m) => m[1]);
+      const owned = gateSteps
+        .filter((g) => legsOf(steps.find((x) => x.id === g.id))[0] === s)
+        .map((g) => g.id);
+      expect(posted.sort(), `leg ${s} must post exactly its own gates`).toEqual(owned.sort());
+    }
+  });
+
+  it('seed steps are leg-scoped, so no leg seeds another leg’s fixtures', () => {
+    const seeds = steps.filter((s) => /^(Seed|Reset|Trace)\b/.test(String(s.name ?? '')));
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const s of seeds) {
+      expect(legsOf(s).length, `${s.name} must be scoped to a leg`).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('the required check T4 Functional → Staging aggregates the legs and fails when any leg does not pass', () => {
+    const agg = wf.jobs['functional-staging'];
+    expect(agg.name).toBe('T4 Functional → Staging');
+    expect(agg.needs).toEqual(['functional-staging-sub']);
+    expect(String(agg.steps[0].run)).toMatch(/!= "success"[\s\S]*exit 1/);
   });
 });
