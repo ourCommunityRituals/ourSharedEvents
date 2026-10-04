@@ -1,0 +1,819 @@
+{
+  "_comment": "CI integrity ratchet baseline (OSE-1606). Counts may only fall; every entry carries a reason.",
+  "continueOnError": {
+    "total": 22,
+    "byFile": {
+      ".github/workflows/advanced-security-scan.yml": {
+        "count": 2,
+        "reason": "Advisory scanner steps (upload / optional scans); findings are reported elsewhere, not a merge gate."
+      },
+      ".github/workflows/claude-review.yml": {
+        "count": 4,
+        "reason": "AI review is advisory by design (claude-review-switch); a review outage must not block merges."
+      },
+      ".github/workflows/dependency-review.yml": {
+        "count": 1,
+        "reason": "Advisory dependency-review annotation; audit gates are the blocking path."
+      },
+      ".github/workflows/mobile-workability-audit.yml": {
+        "count": 1,
+        "reason": "Nightly deployed-staging audit is advisory; the PR-code mobile audit in oursharedevents-ci.yml blocks."
+      },
+      ".github/workflows/oursharedevents-ci.yml": {
+        "count": 10,
+        "reason": "Root-only hub staging steps (best-effort, @ocr/ui not imported, OSE-341) and dorny/test-reporter check publishers; reporters never gate, the test step does."
+      },
+      ".github/workflows/red-team-adversarial.yml": {
+        "count": 1,
+        "reason": "Report-publishing step; the red-team run itself decides the result."
+      },
+      ".github/workflows/security-regression.yml": {
+        "count": 1,
+        "reason": "Advisory reporting step; regression assertions run in blocking steps."
+      },
+      ".github/workflows/security-scan.yml": {
+        "count": 2,
+        "reason": "Scanner upload/annotation steps; the scan verdict gates elsewhere."
+      }
+    }
+  },
+  "skipsUnconditional": {
+    "total": 30,
+    "byFile": {
+      "tests/e2e/2-pages/sponsor-page-gating.spec.js": {
+        "count": 10,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/2-pages/sponsor-page.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/3-flows/forms-shortlinks-qr.spec.js": {
+        "count": 2,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/3-flows/sponsor-management-flows.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/api/events-crud-api.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/api/multi-brand-api.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/api/sponsors-crud-api.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/api/system-api.spec.js": {
+        "count": 2,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/examples/dry-test-example.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/shared/shared-components.spec.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/e2e/stage-2/staging-worker-cutover.spec.js": {
+        "count": 6,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/unit/worker/sec-iac-03-adminOAuth.test.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/unit/worker/sec-iac-04-public-read-only.test.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      },
+      "tests/unit/worker/sec-iac-05-signed-mutations.test.js": {
+        "count": 1,
+        "reason": "Pre-existing unconditional skip; triage under OSE-1606 (fix or delete)."
+      }
+    }
+  },
+  "skipsConditional": {
+    "total": 364,
+    "byFile": {
+      "tests/api/smoke/archive/bundles.spec.ts": {
+        "count": 17,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/archive/sec-iac-07-smoke.spec.ts": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/archive/staging-data-validation.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/archive/story3.1-adminAuth.spec.ts": {
+        "count": 15,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/archive/storyF5-sponsor-analytics.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/form-endpoints.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/storyC1-adminAuth.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/storyC3-adminCreateEvent.spec.ts": {
+        "count": 11,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/storyC4-adminUpdateEvent.spec.ts": {
+        "count": 10,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/api/smoke/storyC5-createEventGate.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/0-architecture/anonymous-id.invariant.spec.ts": {
+        "count": 7,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/0-architecture/geo-resolution.invariant.spec.ts": {
+        "count": 17,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/0-architecture/ncr-accumulation.invariant.spec.ts": {
+        "count": 7,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/1-smoke/full-triangle-smoke.spec.js": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/1-smoke/security-smoke.spec.js": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/2-pages/admin-dashboard.spec.ts": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/2-pages/display-sponsor-live.spec.ts": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/2-pages/poster-print.data.spec.ts": {
+        "count": 8,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/2-pages/poster-print.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/2-pages/public-events.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/admin-event-management.spec.ts": {
+        "count": 11,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/admin-surface-sharedreport.spec.js": {
+        "count": 9,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/launch-story-smoke.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/poster-event-selection.spec.ts": {
+        "count": 7,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/public-to-registration.spec.ts": {
+        "count": 9,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/shared-report-name-resolution.spec.js": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/sharedreport-depth.spec.ts": {
+        "count": 9,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/3-flows/sponsor-journey.spec.ts": {
+        "count": 29,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/4-negative/admin-error-states.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/4-negative/events-error-handling.spec.js": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/accessibility.spec.js": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/api/backend-validation.spec.js": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/examples/sustainable-pattern-example.spec.js": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/qa-routes/analytics-path.spec.js": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/qa-routes/create-publish-view-display-loop.spec.js": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/qa-routes/poster-print-qr-chain.spec.js": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/qa-routes/sponsor-path.spec.js": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/e2e/stage-2/staging-worker-cutover.spec.js": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/a11y-profile.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/admin-csp-controls.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/admin-deep-dive-journey.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/admin-friendly-labels.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/admin-sponsor-form.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/admin-wizard-isolation.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/attendee-forms-journey.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/flow-display-tv-viewport.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/landing-theme.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/mobile-workability.spec.ts": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/poster-print-colors.spec.ts": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/publish-loop-journey.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/report-counts-journey.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/sponsor-home-flow.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/sponsor-render-hardening.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/sponsor-surfaces-journey.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/playwright/surfaces.visual.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/auth-attacks.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/input-injection.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/launch-story-adversarial.spec.ts": {
+        "count": 12,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/public-list-stored-xss.spec.ts": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/rate-limit-live.spec.ts": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/red-team/security-headers.spec.ts": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/admin-archive-event.spec.ts": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/admin-create-event.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/admin-default-event.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/admin-update-event.spec.ts": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/asset-integrity-gate.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/asset-integrity.spec.ts": {
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/asset-state.spec.ts": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/display-rotation.spec.ts": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/display-safety.spec.ts": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/lifecycle.spec.ts": {
+        "count": 1,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/public-failure-states.spec.ts": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/qr-verification.spec.ts": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/smoke/sharedreport-deepdive.spec.ts": {
+        "count": 11,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/journey-attendee-arc.smoke.spec.ts": {
+        "count": 5,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/journey-cross-surface.smoke.spec.ts": {
+        "count": 10,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/journey-event-day.smoke.spec.ts": {
+        "count": 2,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/journey-post-event.smoke.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/journey-pre-event.smoke.spec.ts": {
+        "count": 4,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      },
+      "tests/ui/smoke/tier1.spec.ts": {
+        "count": 3,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+      }
+    }
+  },
+  "orphanSpecs": {
+    "total": 97,
+    "files": [
+      {
+        "path": "tests/e2e/1-smoke/Admin.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/Display.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/Poster.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/Public.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/SharedReport.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/admin-seven-cards.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/api-contract.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/brand-branding.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/coverage-matrix.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/critical-smoke.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/full-triangle-smoke.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/1-smoke/mvp-surfaces-smoke.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/accessibility.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/admin-dashboard.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/admin-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/config-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/display-kiosk.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/display-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/display-sponsor-live.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/display-sponsor-overlay.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/display-tv-phone-e2e.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/poster-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/poster-qr-layout.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/public-events.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/public-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/public-surface-e2e.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/shared-report-mobile.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/sponsor-page-gating.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/2-pages/sponsor-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/admin-event-management.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/admin-flows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/admin-surface-sharedreport.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/admin-wizard-flow.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/admin-wizard-journey.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/advanced-display-features.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/customer-flows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/display-kiosk-runtime.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/forms-shortlinks-qr.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/forms-templates.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/landing-to-events.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/poster-event-selection.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/poster-maps-integration.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/public-events-rendering.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/public-to-registration.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/shared-report-name-resolution.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/shared-reporting.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/sponsor-flows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/sponsor-lifecycle.matrix.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/sponsor-management-flows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/template-scenarios.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/3-flows/triangle-framework.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/admin-error-states.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/admin-negative-paths.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/api-error-responses.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/client-error-recovery.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/cloudflare-worker-errors.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/display-error-states.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/events-error-handling.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/invalid-data-handling.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/missing-event-ids.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/network-failures.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/poster-error-states.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/public-events-errors.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/section-visibility-negative.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/4-negative/surface-navigation-negative.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/accessibility.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/admin-buttons.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/admin-mobile-polish.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/admin-workflows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api-docs-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/backend-validation.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/events-crud-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/multi-brand-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/portfolio-analytics-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/portfolio-analytics-v2-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/sponsors-crud-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/api/system-api.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/authentication.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/critical-flows.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/diagnostics-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/examples/dry-test-example.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/examples/sustainable-pattern-example.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/mobile-performance.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/qa-routes/analytics-path.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/qa-routes/create-publish-view-display-loop.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/qa-routes/offline-rendering.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/qa-routes/poster-print-qr-chain.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/qa-routes/sponsor-path.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/scenarios/quick-start-10-min.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/scenarios/scenario-1-first-time-admin.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/scenarios/scenario-2-mobile-user.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/scenarios/scenario-3-tv-display.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/shared/shared-components.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/stage-2/html-surfaces.spec.ts",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/stage-2/staging-worker-cutover.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/story-3.3-critical-user-journeys.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      },
+      {
+        "path": "tests/e2e/test-page.spec.js",
+        "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
+      }
+    ]
+  }
+}
