@@ -516,7 +516,6 @@
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
-      'poster-art-empty',
       'poster-art-img',
       'poster-art-viewport',
       'poster-body',
@@ -552,6 +551,7 @@
       'poster-sponsor-name',
       'poster-sponsor-strip',
       'poster-sponsors-loading',
+      'poster-stage',
       'poster-title',
     ]),
     // shared-report.html — 88 ids

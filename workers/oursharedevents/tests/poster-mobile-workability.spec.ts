@@ -116,21 +116,24 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
     expect(Number(m![1])).toBeLessThanOrEqual(80);
   });
 
-  test('R4 | API | GET /poster (any) | art viewport + empty-state render (no broken-image slot; failed art is hidden)', async () => {
+  test('R4 | API | GET /poster (any) | art viewport render (no broken-image slot; failed art drops out)', async () => {
     const html = await fetchPosterHtml();
     expect(html).toContain('data-testid="poster-art-viewport"');
-    // error path: when no art (or art fails to load) the poster shows an
-    // empty-state placeholder, never a raw broken-image box.
-    expect(html).toContain('data-testid="poster-art-empty"');
     expect(html).toMatch(/event\.cover_image_url\s*\|\|\s*event\.coverImageUrl/);
     expect(html).toMatch(/class="poster-art-img"[^>]*data-hide-on-error="1"/);
+    // OSE-1516: art that fails to load is removed and the poster is laid out
+    // again, instead of leaving a raw broken-image box.
+    expect(html).toContain("el.classList.contains('poster-art-img')");
+    expect(html).toContain('relayoutPoster()');
   });
 
-  test('R4 | API | GET /poster (print) | empty art placeholder never prints a dashed box', async () => {
+  test('OSE-1516 | API | GET /poster (any) | no artwork means no placeholder: nothing dashed on screen or on paper', async () => {
     const html = await fetchPosterHtml();
-    // screen .poster-art--empty is display:flex; the print rule flips it
-    // to display:none so an artless poster prints clean.
-    expect(html).toMatch(/\.poster-art--empty\s*\{[^}]*display:\s*none\s*!important/);
+    // The art area is simply not drawn without artwork. It used to be a dashed
+    // empty box on screen that only print hid; now there is nothing to hide.
+    expect(html).not.toContain('poster-art-empty');
+    expect(html).not.toContain('poster-art--empty');
+    expect(html).not.toMatch(/\.poster-art[^{]*\{[^}]*dashed/);
   });
 });
 

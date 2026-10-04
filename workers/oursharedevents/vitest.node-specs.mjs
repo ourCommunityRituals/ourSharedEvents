@@ -172,6 +172,9 @@ export const NODE_SPECS = [
   // admin card + /poster scripts run in jsdom with a stubbed fetch.
   'tests/poster-codes-parse.spec.ts',
   'tests/poster-multi-code-ui.spec.ts',
+  // OSE-1516 - the poster layout rules (pure, extracted from poster.html) and the
+  // page script in jsdom at 0..8 codes, with and without artwork.
+  'tests/poster-layout.spec.ts',
   // OSE-1357 poster tiers — REGISTER/SPONSOR codes, venue vs community
   // placements and the pre-event Reach section, run in jsdom (stubbed fetch).
   'tests/poster-tiers-ui.spec.ts',

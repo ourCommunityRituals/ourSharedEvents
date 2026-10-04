@@ -78,7 +78,7 @@ describe('Print | Digital — the URL is the state', () => {
   });
 
   test('Digital: no QR images, bigger art, the short link is the tap', () => {
-    expect(rule('.poster--digital .qr-img,\n      .poster--digital .qr-loading')).toMatch(
+    expect(rule('.poster--digital .qr-img,\n.poster--digital .qr-loading')).toMatch(
       /display:\s*none/
     );
     expect(html).toContain('max-height: min(92vh, 1200px)');
