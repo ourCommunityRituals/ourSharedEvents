@@ -45,7 +45,8 @@ export interface PlacementRow {
 export function humanDate(iso: string | null): string {
   if (!iso) return 'Date to be announced';
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  // An unreadable value is treated as no date: the page never prints a stored string as is.
+  if (Number.isNaN(d.getTime())) return 'Date to be announced';
   return d.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',

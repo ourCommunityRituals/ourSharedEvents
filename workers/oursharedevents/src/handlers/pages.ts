@@ -503,6 +503,19 @@ function jsStr(s: string | null | undefined): string {
 }
 
 /**
+ * A stored event time as an ISO 8601 value fit for `og:event:*_time`, or '' when
+ * it is not one. A row written outside the API can hold "2026-08-25 02:25:18";
+ * that is published as its calendar date. Anything else is left out: metadata
+ * never carries a stored string as is.
+ */
+function ogEventTime(value: string | null | undefined): string {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/.test(value))
+    return value;
+  return /^\d{4}-\d{2}-\d{2}(?= )/.exec(value)?.[0] ?? '';
+}
+
+/**
  * OSE-637 (MKTB-1) — Build complete OpenGraph + Twitter Card meta block.
  *
  * Call once per page render; drop the output into <head> after <title>.
@@ -544,10 +557,11 @@ function buildOgMeta(opts: {
     lines.push(`  <meta property="og:image" content="${image}" />`);
     lines.push(`  <meta name="twitter:image" content="${image}" />`);
   }
-  if (opts.startTime)
-    lines.push(`  <meta property="og:event:start_time" content="${esc(opts.startTime)}" />`);
-  if (opts.endTime)
-    lines.push(`  <meta property="og:event:end_time" content="${esc(opts.endTime)}" />`);
+  const startTime = ogEventTime(opts.startTime);
+  const endTime = ogEventTime(opts.endTime);
+  if (startTime)
+    lines.push(`  <meta property="og:event:start_time" content="${esc(startTime)}" />`);
+  if (endTime) lines.push(`  <meta property="og:event:end_time" content="${esc(endTime)}" />`);
   return lines.join('\n');
 }
 
@@ -763,14 +777,15 @@ function formatEventWhen(row: {
 
 function formatHumanDate(iso: string | null): string {
   if (!iso) return '';
-  // Callers pass date-only values — `row.start_date`, or `zonedDatePart(starts_at)`
-  // (already "YYYY-MM-DD"). formatDateOnly anchors them at UTC so the rendered day
-  // can't drift with the runtime zone (OSE-1363 — this was correct only because
-  // the Worker runtime happens to be UTC). Anything not date-only falls back to
-  // the raw string, matching the prior NaN/catch behaviour.
-  return (
-    formatDateOnly(iso, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) || iso
-  );
+  // Callers pass `row.start_date` or `zonedDatePart(starts_at)`. Both are meant
+  // to be "YYYY-MM-DD", and formatDateOnly anchors that at UTC so the rendered
+  // day can't drift with the runtime zone (OSE-1363). A row written outside the
+  // API can hold a full timestamp ("2026-08-25 02:25:18"); read its leading
+  // calendar date. A value with no leading date renders nothing: the page never
+  // prints a stored string as is.
+  const day = /^\d{4}-\d{2}-\d{2}(?=$|[T ])/.exec(iso)?.[0];
+  if (!day) return '';
+  return formatDateOnly(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 /**
