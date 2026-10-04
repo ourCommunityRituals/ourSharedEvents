@@ -1,16 +1,13 @@
 /**
  * OSE-1245 — the create flow ASKS about publication.
  *
- * WHY THIS FILE EXISTS AT ALL. `events.is_published` defaults to 1, at the
- * column and in the API, for backward compatibility. So the default is NOT
- * where the guarantee lives — a default nobody is asked about is exactly how a
- * home address reaches a public map without anyone deciding it should.
- *
- * The guarantee is that the human path always asks and always sends an explicit
- * answer. These tests assert that property against the template itself, because
- * that is where it can silently stop being true: someone tidies the create body,
- * drops a line that "looks like it defaults anyway", and the question becomes
- * decorative while still appearing on screen.
+ * WHY THIS FILE EXISTS AT ALL. A default nobody is asked about is exactly how a
+ * home address reaches a public map without anyone deciding it should. The
+ * guarantee is that the human path asks, and never guesses: it sends the
+ * organizer's answer, or sends nothing (OSE-1560: the API then keeps the event
+ * OFF the map). These tests assert that against the template itself, because
+ * that is where it can silently stop being true: someone tidies the create body
+ * and the question becomes decorative while still appearing on screen.
  */
 import { describe, test, expect } from 'vitest';
 import { env } from 'cloudflare:test';
@@ -75,34 +72,38 @@ describe('both create paths ask the question', () => {
   });
 });
 
-describe('the answer is always sent, never omitted', () => {
-  test('the wizard body sets is_published unconditionally', () => {
-    expect(ADMIN).toContain('body.is_published = wiz.published;');
-    // Not inside an `if` — an omitted value publishes by default, so a
-    // conditional send is the same bug as not asking.
-    const line = ADMIN.slice(
-      ADMIN.indexOf('body.is_published = wiz.published;') - 200,
-      ADMIN.indexOf('body.is_published = wiz.published;')
-    );
-    expect(line).not.toMatch(/if\s*\([^)]*\)\s*$/);
+describe('the answer is sent as the organizer made it, and omitted when they did not', () => {
+  // OSE-1560 (PO, 2026-10-03): a new event is OFF the map, and the API keeps
+  // that default (and remembers that nobody chose) when the field is omitted.
+  // The old rule here, "always send an explicit value", existed because the
+  // default was ON; with the default off, an omitted value is the safe one and
+  // a guessed value is the risk. The behaviour is run in
+  // tests/admin-map-setting.spec.ts; these pin the markup it relies on.
+  test('the wizard body sends is_published only once a card was clicked', () => {
+    expect(ADMIN).toContain('if (wiz.publishedChosen) body.is_published = wiz.published;');
   });
 
-  test('the advanced form body reads the checkbox and sends it unconditionally', () => {
+  test('the advanced form body sends the checkbox only once it was touched', () => {
     expect(ADMIN).toMatch(
-      /body\.is_published\s*=\s*publishedEl\s*\?\s*publishedEl\.checked\s*:\s*true;/
+      /if \(publishedEl && publishedEl\.dataset\.chosen === '1'\) body\.is_published = publishedEl\.checked;/
     );
   });
 
-  test('the wizard default matches the card marked selected', () => {
+  test('the wizard default matches the card marked selected: off', () => {
     // A mismatch here means the highlighted card and the value sent disagree —
     // on this question that publishes an address the organizer believes they
     // declined.
-    expect(ADMIN).toMatch(/published:\s*true,/);
+    expect(ADMIN).toMatch(/published:\s*false,/);
+    const noCard = ADMIN.slice(
+      ADMIN.indexOf('data-option="unpublished"') - 200,
+      ADMIN.indexOf('data-option="unpublished"')
+    );
+    expect(noCard).toContain('selected');
     const yesCard = ADMIN.slice(
       ADMIN.indexOf('data-option="published"') - 200,
       ADMIN.indexOf('data-option="published"')
     );
-    expect(yesCard).toContain('selected');
+    expect(yesCard).not.toContain('selected');
   });
 });
 

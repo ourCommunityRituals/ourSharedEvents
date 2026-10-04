@@ -93,6 +93,8 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     const title = `Loop night ${Date.now()}`;
     await page.getByTestId('wizard-event-name').fill(title);
     await page.locator('#wizard-event-venue').fill('Eagles Hall');
+    // OSE-1560: a new event is off the map unless the organizer says otherwise; this journey puts it on.
+    await page.getByTestId('wizard-publish-yes').click();
     const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
     await page.getByTestId('wizard-event-date').fill(start);
     // OSE-1560: leaving draft needs a start time and an event type.

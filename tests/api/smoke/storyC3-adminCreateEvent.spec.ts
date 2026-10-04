@@ -673,7 +673,13 @@ test.describe('Create Event — Round-Trip Verification', () => {
 
   test('created active event appears in public list', async ({ request }) => {
     const title = `Public RT ${Date.now()}`;
-    const createRes = await createEvent(request, { title, status: 'active', brand_id: 'root' });
+    const createRes = await createEvent(request, {
+      title,
+      status: 'active',
+      brand_id: 'root',
+      // OSE-1560: a new event is off the map unless asked.
+      is_published: true,
+    });
     expect(createRes.status()).toBe(201);
     const { id } = await createRes.json();
 
