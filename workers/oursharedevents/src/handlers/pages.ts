@@ -17,7 +17,8 @@ import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
-import { sponsorTitle, sponsorCardPath, PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
+import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
+import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -44,11 +45,14 @@ import {
   renderDiscoveryFilters,
   injectDiscoveryFilters,
   discoveryEmptyCopy,
+  injectDiscoveryHeading,
+  discoverySummaryText,
 } from '../lib/event-discovery';
 import {
   renderEventList,
   renderEventListError,
   injectEventList,
+  injectEventCardCss,
   type EventListItem,
   type RenderedEventList,
 } from '../lib/event-list.js';
@@ -299,35 +303,6 @@ export function renderErrorPage(
 // and the reader only learned otherwise once their own fetch failed too.
 type PublicListEnv = PagesEnv & DataProviderEnv;
 
-/**
- * OSE-1522: one consented sponsor title per listed event, for the card. Same
- * on-show rule as the sponsor card and the dashboards (PLACEMENT_ON_SHOW_SQL),
- * the list's own brand ('root'), the sponsor's display name else business name.
- * One query for the whole list. Fails to empty: a card without its sponsor line
- * is correct, a list that errors because of it is not.
- */
-async function fetchSponsorTitlesForList(env: PublicListEnv): Promise<Map<string, string>> {
-  const titles = new Map<string, string>();
-  try {
-    if (!env.DB) return titles;
-    const rs = await env.DB.prepare(
-      `SELECT sp.event_id AS event_id, COALESCE(NULLIF(sb.display_name, ''), sb.name) AS title
-         FROM sponsor_placement sp
-         JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
-         JOIN events e ON e.id = sp.event_id
-        WHERE sb.brand_id = ?1 AND e.brand_id = ?1 AND ${PLACEMENT_ON_SHOW_SQL}
-        ORDER BY sb.name ASC, sb.id ASC
-        LIMIT 500`
-    )
-      .bind('root')
-      .all<{ event_id: string; title: string }>();
-    for (const r of rs.results ?? []) if (!titles.has(r.event_id)) titles.set(r.event_id, r.title);
-  } catch {
-    /* fail open */
-  }
-  return titles;
-}
-
 export async function handlePublicPage(
   env: PagesEnv,
   ctx?: DataProviderCtx | null,
@@ -342,6 +317,8 @@ export async function handlePublicPage(
   );
   let list: RenderedEventList;
   let shown = 0;
+  let wrappedShown = 0;
+  let counted = false;
   try {
     const dp = getDataProvider(env as PublicListEnv, ctx ?? null);
     const result = await dp.listEvents('root');
@@ -355,23 +332,41 @@ export async function handlePublicPage(
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
     const filtered = applyDiscoveryFilters(items as EventListItem[], filters);
     shown = filtered.length;
+    wrappedShown = filtered.filter((e) => e.phase === 'post_event').length;
+    counted = true;
     list =
       filtered.length === 0 && items.length > 0
         ? {
             html: `<p class="empty" data-testid="public-events-empty">${discoveryEmptyCopy(filters)}</p>`,
-            countText: '0 events',
+            countText: '',
             upcoming: 0,
           }
-        : renderEventList(filtered, await fetchSponsorTitlesForList(env as PublicListEnv));
+        : renderEventList(filtered, await fetchSponsorTitles((env as PublicListEnv).DB, 'root'), {
+            // On the wrapped filter the page heading already says so.
+            wrappedHeading: filters.when !== 'past',
+          });
   } catch {
     list = renderEventListError();
   }
-  const shell = injectNeverWho(
-    injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'),
-    'events'
+  // OSE-1520: the visible line and the screen-reader count are one sentence.
+  // (Left alone for the error and no-events-at-all states: nothing was counted.)
+  if (counted) {
+    list = { ...list, countText: discoverySummaryText(filters, shown, wrappedShown) };
+  }
+  const shell = injectEventCardCss(
+    injectDiscoveryHeading(
+      injectNeverWho(
+        injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'),
+        'events'
+      ),
+      filters
+    )
   );
   return html(
-    injectEventList(injectDiscoveryFilters(shell, renderDiscoveryFilters(filters, shown)), list)
+    injectEventList(
+      injectDiscoveryFilters(shell, renderDiscoveryFilters(filters, shown, wrappedShown)),
+      list
+    )
   );
 }
 
@@ -2367,12 +2362,17 @@ export async function handleLandingPage(
         latched = new Set();
       }
     }
-    area = renderLandingArea(items as LandingAreaItem[], { latched, areaLatched });
+    // OSE-1522: the consented sponsor by the title on each card, as on /events.
+    const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
+    area = renderLandingArea(items as LandingAreaItem[], { latched, areaLatched, sponsorTitles });
   } catch {
     area = renderEmptyLandingArea();
   }
   return html(
-    injectLandingArea(injectNeverWho(injectLegalFooter(LANDING_HTML, 'landing'), 'landing'), area)
+    injectLandingArea(
+      injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
+      area
+    )
   );
 }
 

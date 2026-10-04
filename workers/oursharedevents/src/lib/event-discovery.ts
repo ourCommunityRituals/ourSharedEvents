@@ -31,6 +31,13 @@ import { injectMarker } from './inject-marker';
 import { zonedDatePart } from './event-datetime';
 import type { EventListItem } from './event-list';
 
+/**
+ * The chips /events offers (OSE-1520: four or five, not eight). The other
+ * allowlisted values still parse, so a shared link such as `?when=today` keeps
+ * working; the bar then shows that window as the active choice.
+ */
+export const DISCOVERY_CHIPS = ['all', 'weekend', 'week', 'month', 'past'] as const;
+
 export const WHEN_OPTIONS = [
   'all',
   'today',
@@ -57,32 +64,135 @@ export interface DiscoveryFilters {
  * phrase that finishes "N events …" and "Nothing … yet."; '' for the undated
  * default.
  */
-const WHEN_COPY: Record<WhenOption, { chip: string; span: string; empty: string }> = {
-  all: { chip: 'Everything', span: '', empty: 'Nothing scheduled right now. Check back soon.' },
-  today: {
-    chip: 'Today',
-    span: 'today',
-    empty: 'Nothing on today. Try this weekend or the next 7 days.',
+const WHEN_COPY: Record<
+  WhenOption,
+  { chip: string; span: string; empty: string; heading: string }
+> = {
+  all: {
+    chip: 'Everything',
+    span: '',
+    empty: 'Nothing scheduled right now. Check back soon.',
+    heading: 'Upcoming events',
   },
-  weekend: { chip: 'This weekend', span: 'this weekend', empty: 'Nothing this weekend yet.' },
+  today: { chip: 'Today', span: 'today', empty: 'Nothing on today.', heading: 'Today' },
+  weekend: {
+    chip: 'This weekend',
+    span: 'this weekend',
+    empty: 'Nothing this weekend yet.',
+    heading: 'This weekend',
+  },
   week: {
     chip: 'Next 7 days',
     span: 'in the next 7 days',
     empty: 'Nothing in the next 7 days yet.',
+    heading: 'In the next 7 days',
   },
-  month: { chip: 'This month', span: 'this month', empty: 'Nothing this month yet.' },
-  'next-month': { chip: 'Next month', span: 'next month', empty: 'Nothing next month yet.' },
+  month: {
+    chip: 'This month',
+    span: 'this month',
+    empty: 'Nothing this month yet.',
+    heading: 'This month',
+  },
+  'next-month': {
+    chip: 'Next month',
+    span: 'next month',
+    empty: 'Nothing next month yet.',
+    heading: 'Next month',
+  },
   'next-90': {
     chip: 'Next 90 days',
     span: 'in the next 90 days',
     empty: 'Nothing in the next 90 days yet.',
+    heading: 'In the next 90 days',
   },
   past: {
     chip: 'Recently wrapped',
     span: 'recently wrapped',
     empty: 'Nothing has wrapped recently.',
+    heading: 'Recently wrapped',
   },
 };
+
+/**
+ * The next wider window an empty state offers (OSE-1520): every dead end links
+ * to a range that can hold more. `all` is the widest; it offers nothing.
+ */
+const WIDER: Partial<Record<WhenOption, { to: WhenOption; text: string }>> = {
+  today: { to: 'weekend', text: 'Try this weekend' },
+  weekend: { to: 'week', text: 'Try the next 7 days' },
+  week: { to: 'month', text: 'Try this month' },
+  month: { to: 'next-90', text: 'Try the next 90 days' },
+  'next-month': { to: 'next-90', text: 'Try the next 90 days' },
+  'next-90': { to: 'all', text: 'See everything' },
+  past: { to: 'all', text: 'See everything' },
+};
+
+/** The page heading follows the filter (OSE-1520). Plain text; the caller escapes. */
+export function discoveryHeading(f: DiscoveryFilters): string {
+  return f.q ? `Matches for “${f.q}”` : WHEN_COPY[f.when].heading;
+}
+
+/**
+ * The one sentence that counts what is listed, for the visible line and the
+ * screen-reader live region alike, so they cannot disagree (staging: a hidden
+ * "1 upcoming event" beside a visible "2 events"). `wrapped` is how many of the
+ * `shown` events are wrapped. Plain text; the caller escapes.
+ */
+export function discoverySummaryText(f: DiscoveryFilters, shown: number, wrapped = 0): string {
+  if (f.q) return `${shown} match${shown === 1 ? '' : 'es'} for “${f.q}”`;
+  if (f.when === 'all') {
+    const up = shown - wrapped;
+    const base = `${up} upcoming event${up === 1 ? '' : 's'}`;
+    return wrapped > 0 ? `${base}, ${wrapped} wrapped` : base;
+  }
+  return discoveryCountLabel(f.when, shown);
+}
+
+interface OrderItem extends WhenItem {
+  id?: unknown;
+  name?: unknown;
+}
+
+/**
+ * Upcoming first, soonest first, undated last; wrapped apart, most recent first
+ * (OSE-1520). A live event that began earlier sorts first by its own start date,
+ * so a multi-day event stays at the top while it runs without a rule of its own.
+ * Stable on ties: full start instant, then name, then id. Pure: no clock.
+ */
+export function orderUpcomingFirst<T extends OrderItem>(
+  items: readonly T[]
+): {
+  upcoming: T[];
+  wrapped: T[];
+} {
+  const s = (v: unknown) => (typeof v === 'string' ? v : '');
+  const day = (e: T): string | null => eventDate(e);
+  const tie = (a: T, b: T) =>
+    s(a.startDateISO).localeCompare(s(b.startDateISO)) ||
+    s(a.name).localeCompare(s(b.name)) ||
+    s(a.id).localeCompare(s(b.id));
+  const upcoming = items
+    .filter((e) => e.phase !== 'post_event')
+    .sort((a, b) => {
+      const da = day(a);
+      const db = day(b);
+      if (da === db) return tie(a, b);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da < db ? -1 : 1;
+    });
+  const wrapped = items
+    .filter((e) => e.phase === 'post_event')
+    .sort((a, b) => {
+      const da = eventDate(a);
+      const db = eventDate(b);
+      if (da === db) return tie(a, b);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da < db ? 1 : -1;
+    });
+  return { upcoming, wrapped };
+}
 
 /** The count line for a `when` value: "3 events this month", "1 event", "0 events next month". */
 export function discoveryCountLabel(when: WhenOption, n: number): string {
@@ -285,20 +395,28 @@ export const EVENT_FILTERS_MARKER = '<!--OCR_EVENT_FILTERS-->';
  * nonce CSP has nothing to allow) plus one chip per `when`, as links that
  * preserve `q`. The active chip carries aria-current so it is announced.
  */
-export function renderDiscoveryFilters(f: DiscoveryFilters, resultCount: number): string {
+export function renderDiscoveryFilters(
+  f: DiscoveryFilters,
+  resultCount: number,
+  wrappedCount = 0
+): string {
   const qEsc = escapeHtml(f.q);
   const qParam = f.q ? `&amp;q=${encodeURIComponent(f.q)}` : '';
-  const chips = WHEN_OPTIONS.map((w) => {
-    const active = w === f.when;
-    return `<a class="disc-chip${active ? ' active' : ''}" href="/events?when=${w}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${WHEN_COPY[w].chip}</a>`;
-  }).join('');
+  // The chips, plus the active window when a link carries one that is not a chip.
+  const shown: readonly WhenOption[] = (DISCOVERY_CHIPS as readonly string[]).includes(f.when)
+    ? DISCOVERY_CHIPS
+    : [...DISCOVERY_CHIPS, f.when];
+  const chips = shown
+    .map((w) => {
+      const active = w === f.when;
+      return `<a class="disc-chip${active ? ' active' : ''}" href="/events?when=${w}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${WHEN_COPY[w].chip}</a>`;
+    })
+    .join('');
   const clear =
     f.q || f.when !== 'all'
       ? `<a class="disc-clear" href="/events" data-testid="disc-clear">Clear</a>`
       : '';
-  const summary = f.q
-    ? `${resultCount} match${resultCount === 1 ? '' : 'es'} for &ldquo;${qEsc}&rdquo;`
-    : discoveryCountLabel(f.when, resultCount);
+  const summary = escapeHtml(discoverySummaryText(f, resultCount, wrappedCount));
   return `
         <form class="disc-search" method="get" action="/events" role="search" data-testid="disc-search">
           <input type="hidden" name="when" value="${escapeHtml(f.when)}" />
@@ -312,9 +430,24 @@ export function renderDiscoveryFilters(f: DiscoveryFilters, resultCount: number)
 
 /** Empty-state copy that names the question that had no answer. */
 export function discoveryEmptyCopy(f: DiscoveryFilters): string {
-  if (f.q)
-    return `Nothing matches &ldquo;${escapeHtml(f.q)}&rdquo;. Try a shorter word, or clear the search.`;
-  return WHEN_COPY[f.when].empty;
+  if (f.q) {
+    const keep = f.when === 'all' ? '/events' : `/events?when=${f.when}`;
+    return `Nothing matches &ldquo;${escapeHtml(f.q)}&rdquo;. Try a shorter word, or <a href="${keep}" data-testid="disc-empty-wider">clear the search</a>.`;
+  }
+  const wider = WIDER[f.when];
+  if (!wider) return WHEN_COPY[f.when].empty;
+  const href = wider.to === 'all' ? '/events' : `/events?when=${wider.to}`;
+  return `${WHEN_COPY[f.when].empty} <a href="${href}" data-testid="disc-empty-wider">${wider.text}</a>.`;
+}
+
+/** Where the page heading goes (inside the `<h2>`). */
+export const EVENTS_HEADING_MARKER = '<!--OCR_EVENTS_HEADING-->';
+
+/** Put the filter's heading at its marker, escaped. A template without the marker is untouched. */
+export function injectDiscoveryHeading(html: string, f: DiscoveryFilters): string {
+  return html.includes(EVENTS_HEADING_MARKER)
+    ? injectMarker(html, EVENTS_HEADING_MARKER, escapeHtml(discoveryHeading(f)))
+    : html;
 }
 
 export function injectDiscoveryFilters(html: string, bar: string): string {

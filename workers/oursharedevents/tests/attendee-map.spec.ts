@@ -513,3 +513,33 @@ describe('landing | which leads: the create doors or the map (PO 2026-10-03)', (
     expect(at(LIST_MAX)).toBe('map');
   });
 });
+
+describe('attendee map | OSE-1522: the legend names the consented sponsor by an event title', () => {
+  const legendOf = (html: string) => html.match(/<ol class="amap-legend"[^]*?<\/ol>/)?.[0] ?? '';
+  const sponsorTitles = new Map([['e0', 'Hall <b>Bakery</b>']]);
+
+  it('a sponsored event is followed by "Supported by <title>", escaped; the others are not', () => {
+    const legend = legendOf(
+      renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW, sponsorTitles }).html
+    );
+    expect(legend).toContain('data-testid="amap-event-sponsor"');
+    expect(legend).toContain('Supported by Hall &lt;b&gt;Bakery&lt;/b&gt;');
+    expect(legend).not.toContain('<b>Bakery');
+    expect(legend.split('Supported by').length - 1).toBe(1);
+    // it sits right after its own event's link
+    expect(legend).toMatch(
+      /data-testid="amap-event">Event 0<\/a> <span data-testid="amap-event-sponsor">/
+    );
+  });
+
+  it('no sponsor titles, no sponsor text', () => {
+    const legend = legendOf(renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS), { now: NOW }).html);
+    expect(legend).not.toContain('Supported by');
+  });
+
+  it('the landing hands its sponsor titles to the map legend as well as to the cards', () => {
+    const html = renderLandingArea(many(LIST_MAX), { now: NOW, sponsorTitles }).html;
+    expect(legendOf(html)).toContain('Supported by Hall');
+    expect(html.split('Supported by Hall').length - 1).toBe(2); // one card, one legend entry
+  });
+});

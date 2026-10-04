@@ -126,18 +126,15 @@ describe('OSE-1354 | drafts and ready events are never listed', () => {
 });
 
 describe('OSE-1354 | every listing card is a whole-card link to /events/:id', () => {
-  test('landing: each card IS an <a href="/events/:id">', async () => {
+  test('landing: each card is the shared card, with a stretched link to /events/:id', async () => {
     const { body } = await text('/');
     const cards = [
       ...body.matchAll(
-        /<(\w+) class="event-card[^"]*" href="([^"]*)" data-testid="area-card" data-event-id="([^"]*)"/g
+        /<article class="event-card[^"]*" data-testid="area-card" data-event-id="([^"]*)"[^>]*>\s*<a class="event-card-link" href="([^"]*)"/g
       ),
     ];
     expect(cards.length).toBeGreaterThan(0);
-    for (const [, tag, href, id] of cards) {
-      expect(tag).toBe('a');
-      expect(href).toBe(`/events/${id}`);
-    }
+    for (const [, id, href] of cards) expect(href).toBe(`/events/${id}`);
     // And no card-shaped element escaped the pattern above.
     expect(cards.length).toBe(body.split('data-testid="area-card"').length - 1);
   });
@@ -181,7 +178,9 @@ describe('OSE-1354 | every listing card is a whole-card link to /events/:id', ()
   });
 
   test('both card targets keep a 44px floor', async () => {
-    expect(rule((await text('/')).body, '.event-card')).toMatch(/min-height: 44px/);
+    expect(rule((await text('/')).body, '.event-card')).toMatch(
+      /min-height: (44px|var\(--tap-min\))/
+    );
     expect(rule((await text('/events')).body, '.event-card')).toMatch(
       /min-height: (44px|var\(--tap-min\))/
     );
