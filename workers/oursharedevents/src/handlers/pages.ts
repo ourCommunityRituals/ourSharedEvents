@@ -70,6 +70,7 @@ import {
   formatDateOnly,
   phaseTimesFor,
   zonedDatePart,
+  zoneDisplayName,
 } from '../lib/event-datetime.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 
@@ -773,7 +774,9 @@ function formatEventWhen(row: {
   }
   const date = formatHumanDate(row.start_date);
   if (!date) return '';
-  return row.timezone ? `${date} · ${row.timezone}` : date;
+  // OSE-1518: the zone by its everyday name ("Central Time"), not the IANA id.
+  const zone = zoneDisplayName(row.timezone);
+  return zone ? `${date} · ${zone}` : date;
 }
 
 function formatHumanDate(iso: string | null): string {

@@ -253,7 +253,9 @@ describe('OSE-1313 public surfaces render the event zone', () => {
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     const when = html.match(/data-testid="event-when">([^<]*)</)?.[1] ?? '';
     expect(when).toContain('October 24, 2099');
-    expect(when).toContain('America/Chicago');
+    // OSE-1518: the zone reads as a name, not the IANA id.
+    expect(when).toContain('Central Time');
+    expect(when).not.toContain('America/Chicago');
   });
 
   test('public JSON projection carries starts_at', async () => {

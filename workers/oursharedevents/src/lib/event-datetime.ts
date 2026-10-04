@@ -122,6 +122,21 @@ export function formatEventDateTime(utcIso: string | null | undefined, tz: strin
  * Render only the wall-clock time in the event's zone (e.g. "6:00 PM CDT"),
  * for surfaces that already show the date separately (poster, cards).
  */
+/**
+ * A zone's everyday name: "Central Time" for America/Chicago. '' when the value
+ * is not a real zone, so a caller never prints a stored string as is.
+ */
+export function zoneDisplayName(tz: string | null | undefined, at: Date = new Date()): string {
+  if (!isValidIanaTimezone(tz)) return '';
+  const part = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz as string,
+    timeZoneName: 'longGeneric',
+  })
+    .formatToParts(at)
+    .find((p) => p.type === 'timeZoneName');
+  return part?.value ?? '';
+}
+
 export function formatEventTime(utcIso: string | null | undefined, tz: string | null): string {
   if (!utcIso) return '';
   const d = new Date(utcIso);

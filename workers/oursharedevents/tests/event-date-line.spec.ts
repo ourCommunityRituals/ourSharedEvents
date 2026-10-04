@@ -41,13 +41,18 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-async function seed(id: string, startDate: string, endDate: string): Promise<void> {
+async function seed(
+  id: string,
+  startDate: string,
+  endDate: string,
+  timezone: string | null = null
+): Promise<void> {
   await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
   await tenv.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, what_short, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'active', 'Test Venue', ?, ?, 'A community gathering.', datetime('now'), datetime('now'))`
+    `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, timezone, what_short, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'active', 'Test Venue', ?, ?, ?, 'A community gathering.', datetime('now'), datetime('now'))`
   )
-    .bind(id, BRAND, `Event ${id}`, id, startDate, endDate)
+    .bind(id, BRAND, `Event ${id}`, id, startDate, endDate, timezone)
     .run();
 }
 
@@ -123,6 +128,21 @@ describe('sponsor home date', () => {
   test('an unreadable value says the date is to be announced, never the raw string', () => {
     expect(humanDate('not-a-date')).toBe('Date to be announced');
     expect(humanDate(null)).toBe('Date to be announced');
+  });
+});
+
+// OSE-1518: a date-only event named its zone by the raw IANA id ("America/Chicago").
+describe('the zone on a date-only event reads as a name', () => {
+  test('America/Chicago shows as Central Time', async () => {
+    await seed('evt-dl-zone', '2099-03-07', '2099-03-07', 'America/Chicago');
+    const line = await whenLine('evt-dl-zone', 'event-when');
+    expect(line).toBe('Saturday, March 7, 2099 · Central Time');
+  });
+
+  test('a zone that is not a real zone is left out, never printed', async () => {
+    await seed('evt-dl-badzone', '2099-03-07', '2099-03-07', 'Mars/Olympus');
+    const line = await whenLine('evt-dl-badzone', 'event-when');
+    expect(line).toBe('Saturday, March 7, 2099');
   });
 });
 

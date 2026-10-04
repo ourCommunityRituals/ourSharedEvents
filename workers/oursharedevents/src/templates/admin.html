@@ -2569,6 +2569,20 @@
               <span class="wizard-card-desc">Start blank — describe it your way.</span>
             </button>
           </div>
+          <!-- OSE-1518: asked, never required. A card above fills this line; the
+               organizer's own words replace it and are kept. -->
+          <div class="create-form">
+            <div class="full-width">
+              <label for="wizard-event-what">In one line, what is it? <span class="muted-sm">(optional)</span></label>
+              <input
+                type="text"
+                id="wizard-event-what"
+                data-testid="wizard-event-what"
+                placeholder="Bocce and a potluck in the back yard"
+                maxlength="300"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- Step 3 — sign-ups. Honest options only: the built-in sign-up page
@@ -2576,6 +2590,8 @@
              "yes" simply surfaces its link in step 4. No pretend-saved
              external URLs (provenance/honesty doctrine). -->
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
+          <!-- OSE-1518 (PO 2026-10-03): ask, do not block. Create stays enabled. -->
+          <p class="wizard-step-help" id="wizard-missing" data-testid="wizard-missing" role="status" hidden></p>
           <p class="wizard-step-help">Want people to sign up ahead of time?</p>
           <div class="wizard-signup-grid">
             <button aria-pressed="true" type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
@@ -2941,6 +2957,7 @@
             finish.hidden = wiz.step !== 5;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
+            showMissing();
             // The TV step's optional demo stops the moment the wizard leaves it.
             window.dispatchEvent(new CustomEvent('ose:wizard-step', { detail: { step: wiz.step } }));
           }
@@ -2963,6 +2980,30 @@
             });
             var msg = document.getElementById('wizard-msg');
             if (!missing && msg && msg.textContent === STEP1_MSG) setMsg('');
+          }
+
+          // Step 3 is the last screen before Create. Say what the public page
+          // will not say, and leave Create enabled: asked, never required
+          // (OSE-1518, PO 2026-10-03).
+          function showMissing() {
+            var note = document.getElementById('wizard-missing');
+            if (!note) return;
+            var missing = [];
+            if (!document.getElementById('wizard-event-what').value.trim()) missing.push('what it is');
+            var timeEl = document.getElementById('wizard-event-time');
+            if (!(timeEl && timeEl.value)) missing.push('what time it starts');
+            if (wiz.step !== 3 || wiz.createdId || !missing.length) {
+              note.hidden = true;
+              note.textContent = '';
+              return;
+            }
+            note.textContent =
+              "Your page won't say " +
+              missing.join(' or ') +
+              '. You can go Back to add ' +
+              (missing.length > 1 ? 'them' : 'it') +
+              ', or create the event as it is.';
+            note.hidden = false;
           }
 
           // True when step 1 may not move on yet; says why and puts focus there.
@@ -3101,6 +3142,11 @@
             if (wizTypeId) body.event_type_id = wizTypeId;
             var prefill = TEMPLATE_PREFILL[wiz.template] || {};
             for (var k in prefill) body[k] = prefill[k];
+            // OSE-1518: the what line is the organizer's to edit, so it is what
+            // is saved. Empty means the event has no What yet, which is allowed.
+            var whatVal = document.getElementById('wizard-event-what').value.trim();
+            if (whatVal) body.what_short = whatVal;
+            else delete body.what_short;
 
             next.disabled = true;
             next.textContent = 'Creating…';
@@ -3537,6 +3583,12 @@
                 c.classList.toggle('selected', c === el);
                 c.setAttribute('aria-pressed', String(c === el));
               });
+              // The card's line goes into the what field, unless the organizer
+              // has written their own there (OSE-1518).
+              var what = document.getElementById('wizard-event-what');
+              if (what && !wiz.whatEdited) {
+                what.value = (TEMPLATE_PREFILL[wiz.template] || {}).what_short || '';
+              }
             });
           });
           document.querySelectorAll('.wizard-signup-option').forEach(function (el) {
@@ -3569,6 +3621,11 @@
             el.addEventListener('click', function () {
               copyLink(el);
             });
+          });
+          // A what line the organizer typed is theirs: a card no longer replaces
+          // it. Emptying it hands the line back to the cards.
+          document.getElementById('wizard-event-what').addEventListener('input', function (ev) {
+            wiz.whatEdited = ev.target.value.trim() !== '';
           });
           // Live-validate step 1 as the organizer types, and let Enter act as
           // Next there (OSE-1515).
