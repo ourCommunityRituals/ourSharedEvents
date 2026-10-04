@@ -116,6 +116,29 @@ test('create from the full form: the event is a draft only the organizer can see
   expect(await publicStatus(page)).toBe(404);
 });
 
+test('Mark ready without an event type says what is missing and changes nothing', async ({
+  page,
+  request,
+}) => {
+  await selectEvent(page);
+  await page.getByTestId('event-status-ready').click();
+  const msg = page.getByTestId('event-status-msg');
+  await expect(msg).toContainText('event type');
+  await expect(msg).toHaveAttribute('data-missing', 'event_type');
+  await expect(page.getByTestId('event-status-badge')).toHaveText('Draft');
+  // Give it a type the way the form would (OSE-1344), then the rest of the journey can go on.
+  const catalog = await request.get('/api/v2/admin/event-types', {
+    headers: { Authorization: `Bearer ${ADMIN_BEARER}` },
+  });
+  const typeId = ((await catalog.json()) as { categories: { types: { id: string }[] }[] })
+    .categories[0]?.types[0]?.id;
+  const put = await request.put(`/api/v2/admin/events/${encodeURIComponent(eventId)}`, {
+    headers: { Authorization: `Bearer ${ADMIN_BEARER}` },
+    data: { event_type_id: typeId },
+  });
+  expect(put.status()).toBe(200);
+});
+
 test('Mark ready → Undo → Mark ready: each move is one tap and reversible', async ({ page }) => {
   await selectEvent(page);
   await move(page, 'ready', 'Ready');

@@ -95,7 +95,12 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     await page.locator('#wizard-event-venue').fill('Eagles Hall');
     const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
     await page.getByTestId('wizard-event-date').fill(start);
-    for (let i = 0; i < 3; i++) await page.getByTestId('wizard-next-btn').click();
+    // OSE-1560: leaving draft needs a start time and an event type.
+    await page.getByTestId('wizard-event-time').fill('18:30');
+    await page.getByTestId('wizard-next-btn').click();
+    await page.getByTestId('wizard-category').selectOption({ index: 1 });
+    await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
+    for (let i = 0; i < 2; i++) await page.getByTestId('wizard-next-btn').click();
 
     // ── Step 4: the event exists as a draft; see it before publishing ───────
     const previewPublic = page.getByTestId('wizard-preview-public');

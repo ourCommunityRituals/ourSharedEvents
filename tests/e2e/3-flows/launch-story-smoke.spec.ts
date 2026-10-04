@@ -81,6 +81,16 @@ async function createEvent(
   return json.id;
 }
 
+/** OSE-1560: leaving draft needs an event type; read one from the live catalog. */
+async function anyEventTypeId(request: any): Promise<string> {
+  const resp = await adminFetch(request, 'GET', '/api/v2/admin/event-types');
+  expect(resp.status(), 'event type catalog').toBe(200);
+  const json = await resp.json();
+  const id = json.categories?.[0]?.types?.[0]?.id;
+  expect(id, 'catalog has a type').toBeTruthy();
+  return id;
+}
+
 async function createPosterDeployment(
   request: any,
   eventId: string,
@@ -208,7 +218,12 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
       request,
       'PUT',
       `/api/v2/admin/events/${encodeURIComponent(draftEventId)}`,
-      { status: 'ready', is_published: true }
+      {
+        status: 'ready',
+        is_published: true,
+        start_time: '18:00',
+        event_type_id: await anyEventTypeId(request),
+      }
     );
     expect(ready.status(), 'preview go-live publishes readiness').toBe(200);
     const verify = await adminFetch(
