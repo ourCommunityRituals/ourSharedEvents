@@ -102,7 +102,7 @@ Loop 3 found two new items, both Low. That is a confirmation pass that mostly co
 - [ ] CI green on the final commits of both PRs.
 - [ ] Two more loops on #156 after decision 4 (Tier 2), or a written PO acceptance of the deviation.
 - [ ] Dr of Security signs section 6 of the plan (story acceptance; separate from this score).
-- [ ] OSE-1617 acceptance gets "listed events only" and the no-subtraction rule (not edited by this run).
+- [x] OSE-1617 acceptance gets "listed events only" and the no-subtraction rule (done 2026-10-04 with the PO's yes).
 - [ ] A story for the league mapping (case B) is written; none exists.
 
 ## Commit sequence
