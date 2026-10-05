@@ -49,6 +49,13 @@ export const PUBLIC_READ_MAX = 360;
 export type PublicReadLimitEnv = Partial<RateLimitEnv> & EdgeRateLimitEnv;
 
 /**
+ * Names the caller's bucket when it is something other than the address (a
+ * bearer token). Return null to fall back to the address. The edge layer keeps
+ * keying on the address either way: it is the flood layer, not the polling one.
+ */
+export type BucketKey = (request: Request) => string | null;
+
+/**
  * Identify the caller.
  *
  * `CF-Connecting-IP` is Cloudflare's client address. It is used as a RATE
@@ -61,7 +68,14 @@ export type PublicReadLimitEnv = Partial<RateLimitEnv> & EdgeRateLimitEnv;
  * share one bucket. That is the conservative direction: a shared bucket
  * throttles more, never less.
  */
-function callerKey(request: Request, scope: string): string {
+function callerKey(request: Request, scope: string, bucketKey?: BucketKey): string {
+  // A route that authenticates with a bearer credential can bucket on THAT
+  // instead of the address (OSE-1421: a signed-link holder polling a report is
+  // one caller wherever they connect from). It is hashed with the rest of the
+  // key before it touches KV (rate-limit.ts), so the credential is never stored.
+  // No credential -> the address, as before.
+  const own = bucketKey?.(request);
+  if (own) return `publicread:${scope}:${own}`;
   const ip =
     request.headers.get('CF-Connecting-IP') ??
     request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ??
@@ -108,7 +122,8 @@ export async function isPublicReadLimited(
   request: Request,
   env: PublicReadLimitEnv,
   scope: string,
-  max: number = PUBLIC_READ_MAX
+  max: number = PUBLIC_READ_MAX,
+  bucketKey?: BucketKey
 ): Promise<boolean> {
   // Edge layer first (OSE-1509): blocks a burst within its first fraction of a
   // second. Routes that raise the limit above the default (the sponsor logo
@@ -123,7 +138,7 @@ export async function isPublicReadLimited(
   }
   try {
     // checkRateLimit fails open with no KV bound — see the header.
-    return await checkRateLimit(env, callerKey(request, scope), max);
+    return await checkRateLimit(env, callerKey(request, scope, bucketKey), max);
   } catch {
     return false;
   }
@@ -140,13 +155,14 @@ export async function isPublicReadLimited(
 export function publicReadLimited<E>(
   scope: string,
   handler: (request: Request, env: E) => Promise<Response>,
-  max: number = PUBLIC_READ_MAX
+  max: number = PUBLIC_READ_MAX,
+  bucketKey?: BucketKey
 ): (request: Request, env: E & PublicReadLimitEnv) => Promise<Response> {
   // The wrapper ADDS the KV requirement to whatever env the handler already
   // needs, rather than constraining the handler to know about rate limiting.
   // A handler should not have to declare a binding it never touches.
   return async (request: Request, env: E & PublicReadLimitEnv) => {
-    if (await isPublicReadLimited(request, env, scope, max)) {
+    if (await isPublicReadLimited(request, env, scope, max, bucketKey)) {
       return publicReadLimitResponse();
     }
     return handler(request, env);

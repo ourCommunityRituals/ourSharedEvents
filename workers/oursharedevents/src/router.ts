@@ -337,6 +337,7 @@ import {
   handleAdminMintSharedReportLink,
   handleGetSharedReport,
   handleBatchSharedReports,
+  sharedReportBucketKey,
   type SharedReportReadEnv,
 } from './handlers/shared-report-read';
 
@@ -1657,7 +1658,18 @@ export async function route(
   // Signed-link-authenticated single-event SharedReport read.
   const sharedReportMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/shared-report$/);
   if (sharedReportMatch && method === 'GET') {
-    return handleGetSharedReport(request, env, sharedReportMatch[1], ctx);
+    // OSE-1421: `poster_attribution` is a live join, so an unlimited poll lets a
+    // link holder watch one poster's floored count tick. 60 per minute, keyed on
+    // the signed-link token (address when there is none). The limit lives HERE
+    // at the route, like the other public reads, so an unlimited report read is
+    // visibly unlimited when you read this file.
+    const id = sharedReportMatch[1];
+    return publicReadLimited(
+      'shared-report',
+      (req, e: typeof env) => handleGetSharedReport(req, e, id, ctx),
+      RATE_LIMIT_MAX,
+      sharedReportBucketKey
+    )(request, env);
   }
 
   // /api/v2/events/:id

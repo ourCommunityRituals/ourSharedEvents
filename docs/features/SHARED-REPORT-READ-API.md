@@ -52,7 +52,7 @@ Two endpoints land:
 - `403 Forbidden` — token's `event_id` claim does not match path `:id`
 - `404 Not Found` — event does not exist
 - `409 Conflict` — event is too recent (materialization hasn't run yet); response body suggests retry after the next cron tick
-- `429 Too Many Requests` — rate-limit triggered
+- `429 Too Many Requests` — more than 60 requests in a minute (`RATE_LIMIT_MAX`, owner ruling 2026-10-01). The bucket is the signed-link token; a request with no bearer token falls back to the caller's address. The refusal carries `Retry-After`, `Cache-Control: no-store`, and no report data. The limit exists because `poster_attribution` is a live join: an unbounded poll would let a link holder watch one poster's floored count tick (OSE-1421). It is applied at the route in `router.ts` through `publicReadLimited` (`lib/public-read-limit.ts`)
 
 **Cache headers:** `Cache-Control: private, max-age=3600` (S5-Q4)
 
@@ -298,6 +298,7 @@ Cloudflare's `cf.cacheTtl` or response `Cache-Control` header. Single-event endp
 - `POST batch` with 51 IDs → 400
 - `POST batch` with mixed valid/invalid IDs → 200, `reports` and `errors` populated correctly
 - `POST batch` with no service token → 401
+- `GET` the 61st time in a minute with one token → 429 with `Retry-After`; a second token from the same address is still served (`tests/shared-report-get-rate-limit.spec.ts`)
 - Cache header presence per endpoint
 
 **Gate (static-invariant test):**

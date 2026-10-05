@@ -41,6 +41,17 @@ export type SharedReportReadEnv = SharedReportAuthEnv &
 
 const BATCH_MAX_IDS = 50; // S5-Q3 ratified
 
+/**
+ * Rate-limit bucket for the single-event report read (OSE-1421): the signed-link
+ * token, so one holder polling a live join is one caller wherever they connect
+ * from; null (no bearer token) falls back to the address. The router applies it
+ * through `publicReadLimited` at RATE_LIMIT_MAX (owner ruling, 2026-10-01).
+ */
+export function sharedReportBucketKey(request: Request): string | null {
+  const token = extractBearerToken(request.headers.get('Authorization'));
+  return token ? `report-token:${token}` : null;
+}
+
 function jsonResponse(
   body: unknown,
   status: number,

@@ -139,3 +139,48 @@ describe('the limiter does not become a place an address is kept', () => {
     expect(key).not.toContain('203.0.113.10');
   });
 });
+
+describe('a route can bucket on a credential instead of the address (OSE-1421)', () => {
+  const byToken = (r: Request) => {
+    const t = r.headers.get('Authorization');
+    return t ? `token:${t}` : null;
+  };
+  const withToken = (token: string, ip = '203.0.113.10') =>
+    new Request('https://t.test/api/v2/events/e/shared-report', {
+      headers: { 'CF-Connecting-IP': ip, Authorization: `Bearer ${token}` },
+    });
+
+  test('two credentials from one address are two callers; each is limited on its own', async () => {
+    const { RATE_LIMIT_KV } = kv();
+    const wrapped = publicReadLimited('r', ok, 5, byToken);
+    for (let i = 0; i < 5; i++) {
+      expect((await wrapped(withToken('a'), { RATE_LIMIT_KV })).status).toBe(200);
+    }
+    expect((await wrapped(withToken('a'), { RATE_LIMIT_KV })).status).toBe(429);
+    expect((await wrapped(withToken('b'), { RATE_LIMIT_KV })).status).toBe(200);
+  });
+
+  test('one credential from two addresses is ONE caller', async () => {
+    const { RATE_LIMIT_KV } = kv();
+    const wrapped = publicReadLimited('r', ok, 5, byToken);
+    for (let i = 0; i < 5; i++) {
+      await wrapped(withToken('a', `203.0.113.${i + 1}`), { RATE_LIMIT_KV });
+    }
+    expect((await wrapped(withToken('a', '198.51.100.9'), { RATE_LIMIT_KV })).status).toBe(429);
+  });
+
+  test('no credential falls back to the address bucket', async () => {
+    const { RATE_LIMIT_KV } = kv();
+    const wrapped = publicReadLimited('r', ok, 5, byToken);
+    for (let i = 0; i < 5; i++) await wrapped(req(), { RATE_LIMIT_KV });
+    expect((await wrapped(req(), { RATE_LIMIT_KV })).status).toBe(429);
+    expect((await wrapped(req('198.51.100.7'), { RATE_LIMIT_KV })).status).toBe(200);
+  });
+
+  test('the credential never reaches KV as a key', async () => {
+    const { RATE_LIMIT_KV, store } = kv();
+    await publicReadLimited('r', ok, 5, byToken)(withToken('s3cr3t-token'), { RATE_LIMIT_KV });
+    expect(store.size).toBeGreaterThan(0);
+    for (const k of store.keys()) expect(k).not.toContain('s3cr3t-token');
+  });
+});
