@@ -15,6 +15,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import {
   buildRobotsTxt,
+  handleRobotsTxt,
   handleSitemapXml,
   CRAWL_DISALLOW,
   SITEMAP_STATIC_PATHS,
@@ -203,6 +204,41 @@ describe('robots.txt (production) | what a crawler may fetch (OSE-1625)', () => 
   test('the sponsor rules take the token page and nothing broader', () => {
     const sponsorRules = CRAWL_DISALLOW.filter((r) => r.startsWith('/sponsor'));
     expect(sponsorRules).toEqual(['/sponsor?', '/sponsor$']);
+  });
+});
+
+describe('robots.txt and sitemap.xml | one host, the canonical one', () => {
+  const via = (host: string, path: string) => new Request(`https://${host}${path}`);
+
+  test('production robots names the production sitemap even when fetched via www', async () => {
+    const body = await handleRobotsTxt(
+      via('www.oursharedevents.com', '/robots.txt'),
+      prodEnv()
+    ).text();
+    expect(body).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+    expect(body).not.toContain('www.oursharedevents.com');
+  });
+
+  test('production sitemap lists production URLs even when fetched via www', async () => {
+    await applyMigrations();
+    await seedEvent('crawl-www', 'root', 'active', 1);
+    const xml = await (
+      await handleSitemapXml(via('www.oursharedevents.com', '/sitemap.xml'), prodEnv())
+    ).text();
+    for (const p of SITEMAP_STATIC_PATHS) expect(xml).toContain(`<loc>${ORIGIN}${p}</loc>`);
+    expect(xml).toContain(`<loc>${ORIGIN}/events/crawl-www</loc>`);
+    expect(xml).not.toContain('www.oursharedevents.com');
+  });
+
+  test('a non-production host is not rewritten to production', async () => {
+    const xml = await (
+      await handleSitemapXml(via('stg.oursharedevents.com', '/sitemap.xml'), {
+        DB: (env as unknown as TestEnv).DB,
+        WORKER_ENV: 'staging',
+      })
+    ).text();
+    expect(xml).toContain('<loc>https://stg.oursharedevents.com/</loc>');
+    expect(xml).not.toContain(ORIGIN);
   });
 });
 

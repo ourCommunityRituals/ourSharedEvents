@@ -11,8 +11,7 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "test('/schedule answers 301 (one address for the events page)', function() { expect(res.getStatus()).to.equal(301); }); test('/schedule redirects to /events and keeps the query', function() { expect(String(res.getHeader('location')).endsWith('/events?when=week')).to.equal(true); });"
-
+      code: "test('/schedule answers 301 (or 403 when the edge challenges a script client; never the page itself)', function() { expect([301, 403]).to.include(res.getStatus()); }); if (res.getStatus() === 301) { test('/schedule redirects to /events and keeps the query', function() { expect(String(res.getHeader('location')).endsWith('/events?when=week')).to.equal(true); }); }"
 settings:
   encodeUrl: true
   timeout: 0

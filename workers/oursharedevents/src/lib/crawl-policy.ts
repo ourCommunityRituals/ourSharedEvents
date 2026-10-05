@@ -27,6 +27,7 @@
 
 import { HARDENING_HEADERS } from './security-headers.js';
 import { listedSql } from './publish-grace';
+import { canonicalOrigin } from './canonical';
 
 export interface CrawlPolicyEnv {
   DB?: D1Database;
@@ -187,7 +188,9 @@ function textHeaders(contentType: string, maxAge: number): Headers {
 }
 
 export function handleRobotsTxt(request: Request, env: CrawlPolicyEnv): Response {
-  const origin = new URL(request.url).origin;
+  // Production names one host (the zone also routes www.), the same one every
+  // page's canonical names, so a crawler on either host is sent to one sitemap.
+  const origin = canonicalOrigin(request, env) ?? new URL(request.url).origin;
   return new Response(buildRobotsTxt(origin, isIndexable(env)), {
     status: 200,
     headers: textHeaders('text/plain; charset=utf-8', 86400),
@@ -195,7 +198,7 @@ export function handleRobotsTxt(request: Request, env: CrawlPolicyEnv): Response
 }
 
 export async function handleSitemapXml(request: Request, env: CrawlPolicyEnv): Promise<Response> {
-  const origin = new URL(request.url).origin;
+  const origin = canonicalOrigin(request, env) ?? new URL(request.url).origin;
   const entries: SitemapEntry[] = SITEMAP_STATIC_PATHS.map((p) => ({ loc: origin + p }));
 
   if (isIndexable(env) && env.DB) {
