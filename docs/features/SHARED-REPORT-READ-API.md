@@ -106,7 +106,9 @@ interface SharedReport {
   // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
   unique_gatherings: number | null;
 
-  // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor
+  // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor.
+  //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
+  //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
   return_rate: {
     venue_pct: number | null; // returners seen at THIS venue before
     corridor_pct: number | null; // returners seen at corridor before
@@ -122,7 +124,9 @@ interface SharedReport {
     density_ratio_90d: number | null;
   };
 
-  // 4. Sponsor impressions — per sponsor × surface
+  // 4. Sponsor impressions — per sponsor × surface. A row whose count is below K = 5 is
+  //    omitted, not nulled: the same per-bucket floor the campaign and class rollups apply,
+  //    so rows and rollups always agree (OSE-1421).
   sponsor_impressions: Array<{
     sponsor_id: string;
     sponsor_name: string;
@@ -162,7 +166,9 @@ interface SharedReport {
       // S5-Q5
       field: string; // e.g., "corridor_density.baseline_30d"
       reason: 'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
-      detail?: string; // e.g., "3 of 10 required events at this corridor"
+      // Says THAT a floor was not met, never by how much — a detail that printed the
+      // observed count would be the count. e.g. "fewer than 5 distinct attendees" (OSE-1421)
+      detail?: string;
     }>;
     // OSE-1376 — the zone every hour label is rendered in: the event's own IANA
     // zone, or 'America/Chicago' (platform home zone) with source

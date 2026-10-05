@@ -200,15 +200,18 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     await seedAnonReturn({ hash: 'a'.repeat(32), venueId: 'test-evt-read-full', visit_count: 2 });
     await seedAnonReturn({ hash: 'b'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'c'.repeat(32), venueId: 'test-evt-read-full' });
+    await seedAnonReturn({ hash: 'd'.repeat(32), venueId: 'test-evt-read-full' });
+    await seedAnonReturn({ hash: 'e'.repeat(32), venueId: 'test-evt-read-full' });
 
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-full');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.event_id).toBe('test-evt-read-full');
     expect(r.report.unique_gatherings).toBe(42);
-    // 3 distinct anons → meets RETURN_RATE_MIN_SAMPLE; venue_pct based on visit_count > 1
-    expect(r.report.return_rate.sample_size).toBe(3);
-    expect(r.report.return_rate.venue_pct).toBeCloseTo((1 / 3) * 100, 1);
+    // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
+    // was a private 3); venue_pct based on visit_count > 1
+    expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
+    expect(r.report.return_rate.venue_pct).toBeCloseTo((1 / 5) * 100, 1);
     // No baseline seeded → corridor_density_30d/90d nulled with reason
     const reasons = r.report._meta.suppression_reasons.map((s) => s.field);
     expect(reasons).toContain('corridor_density');

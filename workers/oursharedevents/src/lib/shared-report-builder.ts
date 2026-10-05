@@ -83,12 +83,6 @@ function bucketToHour(iso: string): string {
   return d.toISOString().replace('.000Z', 'Z');
 }
 
-// Minimum number of distinct anons before return_rate is computed. Below
-// this, the denominator is so small that the percentage is identifying
-// (e.g., return_rate=50% with sample_size=2 narrows a returner to one
-// of two specific people). Suppressed per S5-Q5.
-const RETURN_RATE_MIN_SAMPLE = 3;
-
 export type SuppressionReasonCode =
   'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
 
@@ -313,7 +307,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     .bind(eventId)
     .first<{ c: number }>();
   const distinctAnonsHere = air?.c ?? 0;
-  if (distinctAnonsHere >= RETURN_RATE_MIN_SAMPLE) {
+  // Part of OSE-1421: return_rate gates at the platform floor K, the same one
+  // every other aggregate here uses (it had a private constant of 3). Below it
+  // the denominator is so small that the percentage is identifying (50% over 2
+  // narrows a returner to one of two specific people). Suppressed per S5-Q5.
+  if (distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT) {
     sampleSize = distinctAnonsHere;
     // venue_pct — same-venue means same event_id in v1 (no separate venues
     // table). So venue_pct asks: of the anons at THIS event, what fraction
@@ -361,7 +359,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     suppression.push({
       field: 'return_rate',
       reason: 'below_min_sample_size',
-      detail: `${distinctAnonsHere} of ${RETURN_RATE_MIN_SAMPLE} required distinct anons`,
+      // Says THAT the floor was not met, never by how much: a string that prints
+      // the observed count is the count (OSE-1421).
+      detail: `fewer than ${CORRIDOR_MAP_MIN_COUNT} distinct attendees`,
     });
   }
 
@@ -426,7 +426,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         suppression.push({
           field: 'corridor_density.baseline_30d',
           reason: 'below_min_sample_size',
-          detail: `${baseline.window_30d_count} of ${CORRIDOR_BASELINE_MIN_SAMPLE} required`,
+          detail: `fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees in the corridor baseline`,
         });
       }
       if (baseline.window_90d_count >= CORRIDOR_BASELINE_MIN_SAMPLE) {
@@ -438,7 +438,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         suppression.push({
           field: 'corridor_density.baseline_90d',
           reason: 'below_min_sample_size',
-          detail: `${baseline.window_90d_count} of ${CORRIDOR_BASELINE_MIN_SAMPLE} required`,
+          detail: `fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees in the corridor baseline`,
         });
       }
     } else {
@@ -495,21 +495,30 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       surface: string;
       count: number;
     }>();
-  const sponsorImpressions = (impressions.results ?? []).map((r) => ({
-    sponsor_id: r.sponsor_id,
-    sponsor_name: r.sponsor_name ?? 'unknown',
-    // OSE-1431: sponsor_name stays the business name (identity stays with the name).
-    sponsor_title: sponsorTitle({
-      name: r.sponsor_name ?? 'unknown',
-      display_name: r.sponsor_display_name,
-    }),
-    campaign_id: r.campaign_id ?? null,
-    campaign_title: r.campaign_title ?? null,
-    sponsor_tier: r.sponsor_tier ?? null,
-    is_local: r.is_local === 1,
-    surface: r.surface,
-    count: r.count,
-  }));
+  // Part of OSE-1421: the per-(sponsor x surface) row is a contributing bucket,
+  // and it passes the same floor as the rollups computed from it below. A sub-K
+  // row is DROPPED, not nulled: a row that is present with its count withheld
+  // still says "this sponsor was seen on this surface by a small crowd" (the
+  // OSE-711 reasoning for poster rows). Dropping also keeps the rows and the
+  // campaign / class totals in agreement, so a reader cannot subtract one
+  // against the other down to a sub-K cohort.
+  const sponsorImpressions = (impressions.results ?? [])
+    .filter((r) => !applyCountFloor(r.count).suppressed)
+    .map((r) => ({
+      sponsor_id: r.sponsor_id,
+      sponsor_name: r.sponsor_name ?? 'unknown',
+      // OSE-1431: sponsor_name stays the business name (identity stays with the name).
+      sponsor_title: sponsorTitle({
+        name: r.sponsor_name ?? 'unknown',
+        display_name: r.sponsor_display_name,
+      }),
+      campaign_id: r.campaign_id ?? null,
+      campaign_title: r.campaign_title ?? null,
+      sponsor_tier: r.sponsor_tier ?? null,
+      is_local: r.is_local === 1,
+      surface: r.surface,
+      count: r.count,
+    }));
 
   // Derive campaign_summary by aggregating sponsorImpressions rows that have
   // a campaign_id. No extra DB call — the data is already fetched above.
@@ -695,11 +704,13 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length, source };
     // Q: strip H3 cell IDs from suppression detail — cell IDs are trivially reverse-geocoded,
     // which would undermine the privacy floor's intent. Count is enough context.
-    for (let i = 0; i < suppressedCells.length; i++) {
+    // One count-free line: how many areas were hidden is itself a count of small
+    // crowds (OSE-1421), so the string says only that the floor was not met.
+    if (suppressedCells.length > 0) {
       suppression.push({
         field: 'corridor_map',
         reason: 'below_min_sample_size',
-        detail: `area ${i + 1} of ${suppressedCells.length} suppressed — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
+        detail: `some areas not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
       });
     }
   }
@@ -737,7 +748,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     suppression.push({
       field: 'corridor_map',
       reason: 'below_min_sample_size',
-      detail: `${hiddenCells} area${hiddenCells === 1 ? '' : 's'} not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
+      detail: `some areas not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
     });
   }
 
