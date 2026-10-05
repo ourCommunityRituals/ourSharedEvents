@@ -43,6 +43,7 @@ status is the YAML's `status:` field, not anything written here.
 | —   | CSP connect-src Same-Origin          | `csp-connect-src.invariant.spec.ts`             | structural | Derived: every `Content-Security-Policy` in worker `src/` (header literals + any `<meta http-equiv>`) has an effective connect-src of `'self'`/`'none'` only; a non-literal policy fails; `connect-src` may not be spelled outside an audited CSP literal. An external origin needs ADR + CCR + Dr-of-Security and an exemption entry.                                                                                                    |
 | —   | Log Redaction                        | `log-redaction.invariant.spec.ts`               | structural | Derived: every `console.log/warn/error/info` call in worker `src/`, plus every derived log wrapper (a function that spreads its own parameter into a console call, e.g. `logFormEvent`), must not carry `anonId`, `anonymous_id`, `emailHash`, `email_hash`, `request.url` (only `new URL(request.url).pathname`), a `token:` key or `cookie`. Workers Logs are on. Zero exemptions.                                                      |
 | —   | Workflow Script-Injection Lock       | `workflow-injection.invariant.spec.ts`          | structural | Derived: parses every `.github/workflows/*.yml` and `.github/actions/**/action.yml`; no step `run:` may contain `${{` with `github.event.*`, `inputs.*` or `github.head_ref` — such values go through the step `env:` as a quoted `"$VAR"`. Negative controls: workflows parsed, run steps found, detector flags each form. Added OSE-1470.                                                                                               |
+| 17  | OER Emission Boundary (export grain) | `export-grain.invariant.spec.ts`                | structural | Derived: nothing finer than a corridor crosses D1 → BigQuery. Every `bigQueryInsertRows*`/`backupEvents` caller and every `bigquery/*.schema.json`: no column or SELECT list may carry a venue-grain or sub-corridor name; `SELECT *` fails closed; `venue_id` stays the event id or `'corridor-aggregate'`. Empty `KEY_ALLOWLIST` (OSE-1617: two keys, `events_backup`).                                                                 |
 
 ## Structural vs runtime — and where each runs in CI (OSE-350)
 
@@ -194,6 +195,7 @@ and is wired — and let the mechanism do the scanning.
 | `csp-connect-src.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `deprecation-lock.invariant.spec.ts` | #10 deprecation_lock |
 | `edge-token-verification.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `export-grain.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `geo-resolution.invariant.spec.ts` | #2 hyperlocal_geo_resolution |
 | `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `log-redaction.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
