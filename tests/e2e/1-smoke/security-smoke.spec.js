@@ -306,11 +306,27 @@ test.describe('🔒 SECURITY: Injection is escaped on the public page', () => {
 
     await expect(page.locator('h1').first()).toContainText(payload);
     // Not a :has-text locator: Playwright's text matching skips <script> contents.
+    // Executable scripts only: the page's schema.org JSON-LD block is a data
+    // block that carries the title as a JSON string (checked just below).
     const injectedScripts = await page.evaluate(
-      (marker) => [...document.scripts].filter((s) => s.textContent.includes(marker)).length,
+      (marker) =>
+        [...document.scripts].filter(
+          (s) => s.type !== 'application/ld+json' && s.textContent.includes(marker)
+        ).length,
       `${RUN}-xss`
     );
     expect(injectedScripts, 'injected <script> elements').toBe(0);
+    // The JSON-LD block must hold the payload as plain data: it parses, has no
+    // `<` that could close the block, and round-trips the title exactly. An
+    // unescaped `</script>` would truncate it and fail the parse.
+    const ldBlocks = await page.evaluate(() =>
+      [...document.scripts]
+        .filter((s) => s.type === 'application/ld+json')
+        .map((s) => s.textContent)
+    );
+    expect(ldBlocks.length, 'one JSON-LD block').toBe(1);
+    expect(ldBlocks[0], 'no < inside the JSON-LD block').not.toContain('<');
+    expect(JSON.parse(ldBlocks[0]).name, 'JSON-LD name round-trips').toBe(payload);
   });
 
   test('HTML injection in event name is escaped', async ({ request, page }) => {
