@@ -60,3 +60,14 @@ VALUES
 -- the column default alone would not fix an already-seeded staging D1. Force the
 -- accepted state explicitly — idempotent, and effective on every re-seed.
 UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE id = 'spl_smoke_local';
+
+-- The event row above is INSERT OR IGNORE too, so a row seeded once keeps its first
+-- window ("now -1h .. now +3h" on the day it was seeded). Weeks later it is post_event,
+-- the TV drops wrapped events (OSE-1521) and never loads its sponsors, and the never-who
+-- display test fires no impression (T4a red on main from 2026-10-04). Re-open the window
+-- on every pass so the fixture is always a live event.
+UPDATE events
+  SET start_date = datetime('now','-1 hour'),
+      end_date   = datetime('now','+3 hours'),
+      status     = 'active'
+  WHERE id = 'evt_smoke_sponsored';
