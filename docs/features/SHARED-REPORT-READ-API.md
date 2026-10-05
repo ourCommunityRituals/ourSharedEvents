@@ -141,7 +141,11 @@ interface SharedReport {
     last_scan_label: string;
   }>;
 
-  // 6. Headcount trend — across confirmed event_series instances
+  // 6. Headcount trend — across confirmed event_series instances OF THE
+  //    REPORTED EVENT'S BRAND ONLY. A series never groups events across brands
+  //    (owner ruling 2026-10-01): the detector clusters per brand, and this read
+  //    drops any instance of another brand and withholds a series anchored at
+  //    another brand's event (`no_series`).
   headcount_trend: {
     series_id: string | null; // null if no confirmed series for this event
     series_name: string | null;
@@ -275,6 +279,7 @@ Cloudflare's `cf.cacheTtl` or response `Cache-Control` header. Single-event endp
 - Event with corridor below min-sample → `corridor_density.*` are null, suppression reason logged
 - Event without a confirmed series → `headcount_trend.series_id` is null with `no_series` reason
 - Event with confirmed series → `headcount_trend.instances[]` populated
+- Two brands sharing a venue, weekday and hour → each brand's trend holds only its own instances (`tests/shared-report-trend-brand-scope.spec.ts`)
 
 **Integration (`tests/shared-report-read.spec.ts`):**
 
