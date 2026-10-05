@@ -9,7 +9,7 @@
  * impression itself. The spec counts the beacons the server accepted (201) and
  * expects the report to show exactly that number.
  *
- * One caller counts once per placement per five minutes (lib/invalid-traffic),
+ * One caller counts once per placement per hour (lib/invalid-traffic),
  * so each "screen" is a browser context with its own forwarded address. That
  * header is honoured here only because nothing sits in front of the local
  * worker; behind Cloudflare the edge sets the caller's address.
