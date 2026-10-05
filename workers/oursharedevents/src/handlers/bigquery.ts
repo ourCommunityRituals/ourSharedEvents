@@ -227,15 +227,30 @@ export async function handleAdminBackupEvent(
   // event-type registry for the required tags, and route through the fail-closed
   // pool contract below — the raw geo-precision fields are never spread into OER.
   const event = await env.DB.prepare(
-    `SELECT ${BACKUP_SELECT_COLUMNS}, etr.uec_code
+    `SELECT ${BACKUP_SELECT_COLUMNS}, etr.uec_code,
+            CASE WHEN ${BACKUP_LISTED_EVENTS_SQL} THEN 1 ELSE 0 END AS backup_listed
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
       WHERE e.id = ?`
   )
     .bind(eventId)
-    .first<BackupEventJoinRow>();
+    .first<BackupEventJoinRow & { backup_listed: number }>();
   if (!event) {
     return Response.json({ ok: false, code: 'EVENT_NOT_FOUND' }, { status: 404 });
+  }
+  // Same scope as the nightly run (BACKUP_LISTED_EVENTS_SQL): the row carries
+  // `title` and `slug` into the dataset OER and OW read, so only a listed event
+  // may be sent. The event exists, so this is a 409, not a 404. Nothing leaves D1,
+  // and the router records the refusal in export_manifest as a failed export.
+  if (event.backup_listed !== 1) {
+    return Response.json(
+      {
+        ok: false,
+        code: 'EVENT_NOT_LISTED',
+        error: 'Only a published, active event past its grace window can be exported',
+      },
+      { status: 409 }
+    );
   }
 
   // DS-02: route through the same fail-closed pool contract as the export path.
