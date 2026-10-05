@@ -1077,11 +1077,11 @@ function venueMapImg(row: PublicEventRow, testId: string): string {
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
 // The current CSP policy (see `securityHeaders` below) allows
 // `style-src 'self' 'unsafe-inline'`. With `'unsafe-inline'` present,
-// every browser IGNORES nonces on <style> tags — putting `nonce="..."`
-// on the <style> tag was decoration, not defense. The honest fix is
+// every browser IGNORES nonces on style elements — putting `nonce="..."`
+// on the style element was decoration, not defense. The honest fix is
 // to NOT pretend to nonce the style. A follow-on story (CSP tightening
 // across ALL pages.ts handlers — every existing handler ships inline
-// <style>) needs to happen before <style nonce> means anything. Until
+// style element) needs to happen before a style nonce means anything. Until
 // then the nonce parameter remains on the function signature because
 // it IS real for inline <script> (which this page does not have, but
 // might later).
@@ -2022,7 +2022,7 @@ export async function handlePublicEventPage(
   // CSP header so any future inline <script> on this page is enforceable
   // immediately. The render functions don't take the nonce because the
   // current CSP allows `style-src 'unsafe-inline'` (see CSP-tightening
-  // follow-on story) — nonce on <style> would be theater today.
+  // follow-on story) — a style nonce would be theater today.
   const nonce = generateNonce();
   const lang = preferredLang(request);
   const url = new URL(request.url);
