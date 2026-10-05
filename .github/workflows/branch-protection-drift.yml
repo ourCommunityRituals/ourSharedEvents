@@ -1,0 +1,94 @@
+# Branch protection drift (OSE-1216)
+#
+# tools/ci/main-branch-protection.json is the source of truth for what `main`
+# requires. Two jobs keep GitHub honest to it:
+#
+#   required-checks  every run, default GITHUB_TOKEN. Compares the REQUIRED
+#                    CHECKS live with the JSON and flags a phantom (a required
+#                    context nothing emits, app_id null, which blocks every PR).
+#                    It reads GET /branches/main, which needs no admin scope.
+#                    An API error FAILS the job; it never skips.
+#   full-settings    nightly and on dispatch only. Also compares enforce_admins,
+#                    strict, force-push and deletion rules, which only the admin
+#                    endpoint exposes, so it needs the secret
+#                    BRANCH_PROTECTION_READ_TOKEN (fine-grained token, one repo,
+#                    Administration: read). Without the secret it FAILS and says
+#                    why: an unverifiable gate is an unenforced gate.
+#
+# It never writes. To change protection, edit the JSON and run
+# `node scripts/apply-branch-protection.mjs --apply` as a repo admin
+# (tools/ci/README-branch-protection.md).
+#
+# The pull_request and push triggers are path-filtered on purpose: this
+# workflow is not a required check, so it never gates a merge by itself. The
+# required list is tied to the workflows by
+# tests/unit/ci/branch-protection-contract.test.js, which runs in T0.
+name: Branch protection drift
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/ci/main-branch-protection.json'
+      - 'scripts/apply-branch-protection.mjs'
+      - '.github/workflows/branch-protection-drift.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/ci/main-branch-protection.json'
+      - 'scripts/apply-branch-protection.mjs'
+      - '.github/workflows/branch-protection-drift.yml'
+
+concurrency:
+  group: branch-protection-drift-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  required-checks:
+    name: 'Branch protection: required checks match the JSON'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Diff logic self-test
+        run: node scripts/apply-branch-protection.mjs --self-test
+      - name: Live required checks vs tools/ci/main-branch-protection.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/apply-branch-protection.mjs --check-checks
+
+  full-settings:
+    name: 'Branch protection: full settings match the JSON'
+    # Not on pull_request: a plain PR must not reach this secret
+    # (scripts/check-pr-secret-exposure.mjs). The required-checks job above
+    # already covers the list that blocks merges.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Live settings vs tools/ci/main-branch-protection.json
+        env:
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error title=Branch protection settings are not being verified::Secret BRANCH_PROTECTION_READ_TOKEN is not set. Reading enforce_admins, strict and the force-push and deletion rules needs repo-admin read, which GITHUB_TOKEN cannot have. Create a fine-grained token (this repo only, Administration: read) and store it as that secret."
+            exit 1
+          fi
+          node scripts/apply-branch-protection.mjs --check
