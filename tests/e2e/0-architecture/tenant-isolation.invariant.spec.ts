@@ -210,16 +210,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts:548':
-    'detectEventSeriesClusters cron — venue/day/hour event-count baseline across ' +
-    'brands, count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
-  'lib/shared-report.ts:583':
-    'Same cron — subselect `venue_id IN (SELECT id FROM events WHERE location=?)` ' +
-    '(a venue-geography key) for the confirmed/rejected series check. Cross-brand ' +
-    'geographic by design; never-who.',
-  'lib/shared-report.ts:607':
-    'Same cron, the `state=pending` twin of :582. Same venue-geography rationale.',
-  'lib/shared-report.ts:741':
+  'lib/shared-report.ts:553':
+    'detectEventSeriesClusters cron — brand/venue/day/hour event-count baseline, ' +
+    'GROUPED BY brand_id (OSE-1421: a series never groups events across brands), ' +
+    'count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
+  // OSE-1421: the two series-lookup subselects that were exempt here (:583, :607) now
+  // bind `AND brand_id = ?` themselves, so they no longer need an exemption.
+  'lib/shared-report.ts:748':
     // 666→673 by OSE-1460 (country cleanup statement added above; the
     // country-code twin query at :687 was removed with top_country).
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
@@ -228,36 +225,34 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // OSE-1459: aggregateScanCells (scans at the poster's own res9 cell). Same
   // cron class as aggregateScanBuckets (:740). Keys re-keyed after main's OSE-1459
   // and OSE-1460 (#737) merged together; the backfill moved 895/896/899 -> 943/944/947.
-  'lib/shared-report.ts:847':
+  'lib/shared-report.ts:854':
     'aggregateScanCells cron — COUNT of scans at posters with no cell yet (skipped, ' +
     'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
     '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
     'request-reachable.',
-  'lib/shared-report.ts:873':
+  'lib/shared-report.ts:880':
     'Same cron — DELETE of the window before the atomic re-insert, so a corrected ' +
     'poster location never double-counts. Same time window, same rationale.',
-  'lib/shared-report.ts:896':
+  'lib/shared-report.ts:903':
     'Same cron — the single INSERT ... SELECT that rebuilds the window: ' +
     'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
     'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
-  'lib/shared-report.ts:944':
+  'lib/shared-report.ts:951':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:945':
+  'lib/shared-report.ts:952':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:948':
+  'lib/shared-report.ts:955':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
-  'lib/shared-report-builder.ts:340':
+  'lib/shared-report-builder.ts:341':
     'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',
-  'lib/shared-report-builder.ts:811':
-    'Series instances keyed by `series_id = ?` — the held series id of the ' +
-    'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
+  // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
   // 296→303 and 554→611 by the PR #726 follow-ups (import list + withheld
