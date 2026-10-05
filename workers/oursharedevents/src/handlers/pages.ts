@@ -363,9 +363,14 @@ export async function handlePublicPage(
       filters
     )
   );
+  // One address per list: ?q= / ?when= variants all point search engines here.
+  const origin = request ? new URL(request.url).origin : '';
+  const withCanonical = origin
+    ? shell.replace('</head>', `  <link rel="canonical" href="${esc(origin)}/events" />\n</head>`)
+    : shell;
   return html(
     injectEventList(
-      injectDiscoveryFilters(shell, renderDiscoveryFilters(filters, shown, wrappedShown)),
+      injectDiscoveryFilters(withCanonical, renderDiscoveryFilters(filters, shown, wrappedShown)),
       list
     )
   );
@@ -599,6 +604,55 @@ function buildOgMeta(opts: {
   if (startTime)
     lines.push(`  <meta property="og:event:start_time" content="${esc(startTime)}" />`);
   if (endTime) lines.push(`  <meta property="og:event:end_time" content="${esc(endTime)}" />`);
+  return lines.join('\n');
+}
+
+/** JSON for an inline <script>: no `<`, `>`, `&` or line separators can end the block. */
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/**
+ * Search-engine head for a public event page: the one canonical URL, a meta
+ * description and schema.org/Event JSON-LD. The JSON-LD carries only the facts
+ * the page already shows (name, when, where, blurb) — never anything about who
+ * attends. It is left out when there is no start date, which Event requires.
+ * Admin previews skip all of it: they are noindex and have no public address.
+ */
+function buildSearchMeta(row: PublicEventRow, shareUrl: string): string {
+  const description = row.what_short || row.description || '';
+  const lines = [`  <link rel="canonical" href="${esc(shareUrl)}" />`];
+  if (description) lines.push(`  <meta name="description" content="${esc(description)}" />`);
+  const startDate = ogEventTime(row.starts_at ?? row.start_date);
+  if (startDate) {
+    const endDate = ogEventTime(phaseTimesFor(row).end_date);
+    const place = row.location || row.where_address;
+    const ld = {
+      '@context': 'https://schema.org',
+      '@type': 'Event',
+      name: row.title,
+      url: shareUrl,
+      startDate,
+      ...(endDate ? { endDate } : {}),
+      eventStatus: 'https://schema.org/EventScheduled',
+      ...(place
+        ? {
+            location: {
+              '@type': 'Place',
+              name: place,
+              ...(row.where_address ? { address: row.where_address } : {}),
+            },
+          }
+        : {}),
+      ...(description ? { description } : {}),
+    };
+    lines.push(`  <script type="application/ld+json">${jsonForScript(ld)}</script>`);
+  }
   return lines.join('\n');
 }
 
@@ -1089,7 +1143,7 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>${preview ? '<meta name="robots" content="noindex, nofollow" />' : ''}
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}${preview ? '' : '\n' + buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
@@ -1284,6 +1338,7 @@ export function renderEventLiveHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
 ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
+${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
@@ -1555,6 +1610,7 @@ export function renderPostEventHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title} — recap</title>
 ${ogMeta}
+${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
