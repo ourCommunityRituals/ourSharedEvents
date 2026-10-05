@@ -306,6 +306,27 @@ test.describe('OSE-1516 poster layout, measured', () => {
 // Whatever the count, with or without artwork and sponsors, it is one sheet.
 test.describe('OSE-1516 poster layout, on the printed sheet', () => {
   const SHEET = { width: Math.round(10.3 * 96), height: Math.round(13.3 * 96) };
+  // OSE-1356: a printed title is large enough to read across a room (48px, 36pt), however
+  // long the name. Past that floor it wraps rather than shrinks.
+  for (const art of [true, false]) {
+    test(`print: a long title never prints under 36pt (artwork ${art})`, async ({ page }) => {
+      await page.setViewportSize(SHEET);
+      await load(page, {
+        n: 2,
+        art,
+        name: 'The Annual Harbor County Summer Bocce League Night Fundraiser',
+      });
+      await page.emulateMedia({ media: 'print' });
+      const fs = await page.evaluate(() =>
+        parseFloat(
+          getComputedStyle(document.querySelector('[data-testid="poster-title"]') as HTMLElement)
+            .fontSize
+        )
+      );
+      expect(fs, `printed title is ${fs}px`).toBeGreaterThanOrEqual(48);
+    });
+  }
+
   for (const art of [true, false]) {
     for (const sponsors of [true, false]) {
       for (let n = 1; n <= 8; n++) {
