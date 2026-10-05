@@ -107,6 +107,8 @@ describe('OSE-1355 admin-only draft preview', () => {
     expect(html).toContain('data-testid="event-rsvp"');
     // OSE-1355: the RSVP is shown but inert in a preview — no live form link.
     expect(html).not.toContain(`/forms/${id}?type=register`);
+    // A preview is noindex, so it must not also name itself the page's canonical address.
+    expect(html).not.toContain('rel="canonical"');
   });
 
   test('opening the preview does not publish or change lifecycle state', async () => {

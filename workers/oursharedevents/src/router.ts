@@ -1940,7 +1940,7 @@ export async function route(
     pathname === '/about' ||
     pathname === '/info'
   ) {
-    return handleLandingPage(env, ctx);
+    return handleLandingPage(env, ctx, request);
   }
 
   // ── Public event calendar download (OSE-1358) ─────────────────────────────
@@ -2095,7 +2095,7 @@ export async function route(
 
   // ── Privacy policy (BE-10) ─────────────────────────────────────────────────
   if ((pathname === '/privacy' || pathname === '/privacy-policy') && method === 'GET') {
-    return handlePrivacyPage();
+    return handlePrivacyPage(request, env);
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────

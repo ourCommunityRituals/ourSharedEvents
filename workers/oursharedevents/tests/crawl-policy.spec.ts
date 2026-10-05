@@ -15,6 +15,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import {
   buildRobotsTxt,
+  handleRobotsTxt,
   handleSitemapXml,
   CRAWL_DISALLOW,
   SITEMAP_STATIC_PATHS,
@@ -107,6 +108,137 @@ describe('robots.txt (production)', () => {
 
   test('points at the sitemap on its own origin', () => {
     expect(txt).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+  });
+});
+
+/** RFC 9309 rule match: `*` any run, trailing `$` anchors, otherwise a prefix. */
+function ruleMatches(pattern: string, target: string): boolean {
+  const anchored = pattern.endsWith('$');
+  const body = anchored ? pattern.slice(0, -1) : pattern;
+  const re = body
+    .split('*')
+    .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${re}${anchored ? '$' : ''}`).test(target);
+}
+
+/** Longest matching rule wins; Allow wins a tie; no match means allowed. */
+function allowedBy(rules: string[], target: string): boolean {
+  let best = { len: -1, allow: true };
+  for (const r of rules) {
+    const m = /^(Allow|Disallow):\s*(.*)$/.exec(r);
+    if (!m || m[2] === '') continue;
+    const allow = m[1] === 'Allow';
+    if (!ruleMatches(m[2], target)) continue;
+    if (m[2].length > best.len || (m[2].length === best.len && allow && !best.allow)) {
+      best = { len: m[2].length, allow };
+    }
+  }
+  return best.allow;
+}
+
+// Real public addresses. A new public route under a blocked prefix goes red here.
+const MUST_BE_CRAWLABLE = [
+  ...SITEMAP_STATIC_PATHS,
+  '/events?when=week',
+  '/events/abc',
+  '/events/abc/calendar.ics',
+  '/sponsors/abc', // the public sponsor card, not the token page
+  '/sponsor-default-logo.svg',
+];
+
+// Every private address: scan/shortlink writers, admin, API, signed links.
+const MUST_BE_BLOCKED = [
+  '/q/abc',
+  '/s/abc',
+  '/api/v2/events',
+  '/admin',
+  '/admin/events',
+  '/manage',
+  '/dashboard',
+  '/create',
+  '/briefing',
+  '/overview',
+  '/summary',
+  '/sponsor', // sponsor home, bare
+  '/sponsor?t=signed-token', // sponsor home, signed link
+  '/forms/abc',
+  '/sharedReport',
+  '/sharedReport?t=signed-token',
+  '/report',
+  '/reports',
+  '/analytics',
+  '/insights',
+  '/stats',
+  '/ui-preview',
+];
+
+describe('robots.txt (production) | what a crawler may fetch (OSE-1625)', () => {
+  const open = groups(buildRobotsTxt(ORIGIN, true)).filter((g) => !g.rules.includes('Disallow: /'));
+
+  test('there are open groups to test', () => {
+    expect(open.length).toBeGreaterThanOrEqual(2);
+  });
+
+  for (const target of MUST_BE_CRAWLABLE) {
+    test(`crawlable: ${target}`, () => {
+      for (const g of open) expect(allowedBy(g.rules, target), g.agents.join(',')).toBe(true);
+    });
+  }
+
+  for (const target of MUST_BE_BLOCKED) {
+    test(`blocked: ${target}`, () => {
+      for (const g of open) expect(allowedBy(g.rules, target), g.agents.join(',')).toBe(false);
+    });
+  }
+
+  test('every Disallow rule is exercised by a blocked example (the list cannot drift from the rules)', () => {
+    for (const rule of CRAWL_DISALLOW) {
+      expect(
+        MUST_BE_BLOCKED.some((t) => ruleMatches(rule, t)),
+        `no blocked example for ${rule}`
+      ).toBe(true);
+    }
+  });
+
+  test('the sponsor rules take the token page and nothing broader', () => {
+    const sponsorRules = CRAWL_DISALLOW.filter((r) => r.startsWith('/sponsor'));
+    expect(sponsorRules).toEqual(['/sponsor?', '/sponsor$']);
+  });
+});
+
+describe('robots.txt and sitemap.xml | one host, the canonical one', () => {
+  const via = (host: string, path: string) => new Request(`https://${host}${path}`);
+
+  test('production robots names the production sitemap even when fetched via www', async () => {
+    const body = await handleRobotsTxt(
+      via('www.oursharedevents.com', '/robots.txt'),
+      prodEnv()
+    ).text();
+    expect(body).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+    expect(body).not.toContain('www.oursharedevents.com');
+  });
+
+  test('production sitemap lists production URLs even when fetched via www', async () => {
+    await applyMigrations();
+    await seedEvent('crawl-www', 'root', 'active', 1);
+    const xml = await (
+      await handleSitemapXml(via('www.oursharedevents.com', '/sitemap.xml'), prodEnv())
+    ).text();
+    for (const p of SITEMAP_STATIC_PATHS) expect(xml).toContain(`<loc>${ORIGIN}${p}</loc>`);
+    expect(xml).toContain(`<loc>${ORIGIN}/events/crawl-www</loc>`);
+    expect(xml).not.toContain('www.oursharedevents.com');
+  });
+
+  test('a non-production host is not rewritten to production', async () => {
+    const xml = await (
+      await handleSitemapXml(via('stg.oursharedevents.com', '/sitemap.xml'), {
+        DB: (env as unknown as TestEnv).DB,
+        WORKER_ENV: 'staging',
+      })
+    ).text();
+    expect(xml).toContain('<loc>https://stg.oursharedevents.com/</loc>');
+    expect(xml).not.toContain(ORIGIN);
   });
 });
 

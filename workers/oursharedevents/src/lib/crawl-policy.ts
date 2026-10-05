@@ -27,6 +27,7 @@
 
 import { HARDENING_HEADERS } from './security-headers.js';
 import { listedSql } from './publish-grace';
+import { canonicalOrigin } from './canonical';
 
 export interface CrawlPolicyEnv {
   DB?: D1Database;
@@ -38,7 +39,9 @@ export const SITEMAP_STATIC_PATHS: readonly string[] = ['/', '/events', '/privac
 
 /**
  * Never crawled, by any agent. Prefix match per RFC 9309, so `/admin` also
- * covers `/admin/…`, and `/report` also covers `/reports`.
+ * covers `/admin/…`, and `/report` also covers `/reports`. A prefix that takes a
+ * public page by accident is a bug: tests/crawl-policy.spec.ts matches every real
+ * public path against these rules.
  */
 export const CRAWL_DISALLOW: readonly string[] = [
   '/q/', // scan ingestion — a fetch IS a write (Invariant #4)
@@ -51,7 +54,12 @@ export const CRAWL_DISALLOW: readonly string[] = [
   '/briefing',
   '/overview',
   '/summary',
-  '/sponsor', // token-gated sponsor home
+  // The token-gated sponsor home is `/sponsor?t=…`. A bare `/sponsor` prefix would
+  // also take `/sponsors/:id` (the public card) and `/sponsor-default-logo.svg`, and
+  // a crawler that may not fetch a page cannot read its `noindex`. So: the query
+  // form and the bare path, nothing broader. `$` anchors the end (RFC 9309).
+  '/sponsor?',
+  '/sponsor$',
   '/forms/',
   '/sharedReport',
   '/report',
@@ -180,7 +188,9 @@ function textHeaders(contentType: string, maxAge: number): Headers {
 }
 
 export function handleRobotsTxt(request: Request, env: CrawlPolicyEnv): Response {
-  const origin = new URL(request.url).origin;
+  // Production names one host (the zone also routes www.), the same one every
+  // page's canonical names, so a crawler on either host is sent to one sitemap.
+  const origin = canonicalOrigin(request, env) ?? new URL(request.url).origin;
   return new Response(buildRobotsTxt(origin, isIndexable(env)), {
     status: 200,
     headers: textHeaders('text/plain; charset=utf-8', 86400),
@@ -188,7 +198,7 @@ export function handleRobotsTxt(request: Request, env: CrawlPolicyEnv): Response
 }
 
 export async function handleSitemapXml(request: Request, env: CrawlPolicyEnv): Promise<Response> {
-  const origin = new URL(request.url).origin;
+  const origin = canonicalOrigin(request, env) ?? new URL(request.url).origin;
   const entries: SitemapEntry[] = SITEMAP_STATIC_PATHS.map((p) => ({ loc: origin + p }));
 
   if (isIndexable(env) && env.DB) {
