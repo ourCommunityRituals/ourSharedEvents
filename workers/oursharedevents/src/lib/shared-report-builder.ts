@@ -244,6 +244,7 @@ export type BuildResult =
 
 interface EventRow {
   id: string;
+  brand_id: string;
   title: string;
   start_date: string | null;
   end_date: string | null;
@@ -258,7 +259,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // 1. Resolve the event.
   const event = await db
     .prepare(
-      `SELECT id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7, timezone
+      `SELECT id, brand_id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7, timezone
        FROM events WHERE id = ?`
     )
     .bind(eventId)
@@ -777,9 +778,19 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     unique_gatherings: number | null;
   }> = [];
   if (event.series_id) {
+    // Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
+    // across brands. `event_series` has no brand column, so the series' brand is
+    // its anchor event's brand; a series anchored at another brand's event is
+    // withheld whole (its name is another tenant's label), and the instances
+    // below are brand-fenced as well, so legacy cross-brand rows cannot leak.
     const series = await db
-      .prepare(`SELECT id, series_name, state FROM event_series WHERE id = ?`)
-      .bind(event.series_id)
+      .prepare(
+        `SELECT es.id, es.series_name, es.state
+           FROM event_series es
+           JOIN events anchor ON anchor.id = es.venue_id
+          WHERE es.id = ? AND anchor.brand_id = ?`
+      )
+      .bind(event.series_id, event.brand_id)
       .first<{ id: string; series_name: string; state: string }>();
     if (series && series.state === 'confirmed') {
       trendSeriesId = series.id;
@@ -799,10 +810,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
           `SELECT id AS event_id, start_date
              FROM events
             WHERE series_id = ?
+              AND brand_id = ?
               AND start_date IS NOT NULL
             ORDER BY start_date ASC`
         )
-        .bind(event.series_id)
+        .bind(event.series_id, event.brand_id)
         .all<{ event_id: string; start_date: string }>();
       for (const r of inst.results ?? []) {
         const instBuckets = await db
@@ -825,7 +837,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       suppression.push({
         field: 'headcount_trend',
         reason: 'no_series',
-        detail: 'event_series row is not in confirmed state',
+        detail: 'no confirmed event_series row for this event',
       });
     }
   } else {

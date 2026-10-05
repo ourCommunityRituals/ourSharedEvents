@@ -495,8 +495,8 @@ export async function refreshCorridorBaselines(
 /**
  * Phase 3 — auto-detector for hybrid event-series lifecycle (Q2 ratified).
  *
- * Clusters events from the last 8 weeks by (venue location, day-of-week,
- * hour-of-day ±1hr tolerance). Emits a `pending` row in event_series for
+ * Clusters events from the last 8 weeks by (brand, venue location, day-of-week,
+ * hour-of-day ±1hr tolerance). Never across brands (OSE-1421, owner ruling). Emits a `pending` row in event_series for
  * each cluster of >= 3 events that isn't already covered by a
  * `confirmed` or `rejected` row.
  *
@@ -536,11 +536,16 @@ export async function detectEventSeriesClusters(
   ).toISOString();
 
   try {
-    // Group recent events by (location, dow, hour). location is the venue
+    // Group recent events by (brand, location, dow, hour). location is the venue
     // proxy in v1 (no separate venues table). Q2 hybrid auto-detector spec.
+    // Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
+    // across brands, so brand_id is part of the cluster key — two brands that
+    // happen to share a venue string, weekday and hour are two clusters, and
+    // each one's anchor (MIN(id)) is an event of its own brand.
     const clusters = await env.DB.prepare(
       `SELECT
          MIN(id)                                AS anchor_event_id,
+         brand_id                                AS brand_id,
          location                                AS venue_location,
          CAST(strftime('%w', start_date) AS INTEGER) AS day_of_week,
          CAST(strftime('%H', start_date) AS INTEGER) AS hour_of_day,
@@ -550,12 +555,13 @@ export async function detectEventSeriesClusters(
          AND start_date >= ?
          AND location IS NOT NULL
          AND status IN ('active', 'archived')
-       GROUP BY venue_location, day_of_week, hour_of_day
+       GROUP BY brand_id, venue_location, day_of_week, hour_of_day
        HAVING event_count >= ?`
     )
       .bind(lookbackIso, SERIES_CLUSTER_MIN_EVENTS)
       .all<{
         anchor_event_id: string;
+        brand_id: string;
         venue_location: string;
         day_of_week: number;
         hour_of_day: number;
@@ -580,14 +586,15 @@ export async function detectEventSeriesClusters(
              WHERE state IN ('confirmed', 'rejected')
                AND day_of_week = ?
                AND hour_of_day BETWEEN ? AND ?
-               AND venue_id IN (SELECT id FROM events WHERE location = ?)
+               AND venue_id IN (SELECT id FROM events WHERE location = ? AND brand_id = ?)
              LIMIT 1`
         )
           .bind(
             c.day_of_week,
             c.hour_of_day - SERIES_HOUR_TOLERANCE,
             c.hour_of_day + SERIES_HOUR_TOLERANCE,
-            c.venue_location
+            c.venue_location,
+            c.brand_id
           )
           .first<{ id: string; state: string }>();
 
@@ -604,10 +611,10 @@ export async function detectEventSeriesClusters(
              WHERE state = 'pending'
                AND day_of_week = ?
                AND hour_of_day = ?
-               AND venue_id IN (SELECT id FROM events WHERE location = ?)
+               AND venue_id IN (SELECT id FROM events WHERE location = ? AND brand_id = ?)
              LIMIT 1`
         )
-          .bind(c.day_of_week, c.hour_of_day, c.venue_location)
+          .bind(c.day_of_week, c.hour_of_day, c.venue_location, c.brand_id)
           .first<{ id: string }>();
 
         if (pendingExists) {
