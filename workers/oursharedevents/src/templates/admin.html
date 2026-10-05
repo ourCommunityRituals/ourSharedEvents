@@ -1579,13 +1579,7 @@
         display: none;
       }
 
-      /* Front door (default). The page loads showing ONLY the path-chooser —
-         "What are you making?" — with the full dashboard hidden behind it. The
-         chooser's own copy ("Show me everything — the full dashboard") is the
-         promise this keeps: the dashboard is not there until you ask for it.
-         Picking a path removes .chooser-active (startSponsor / chooseAdvanced)
-         or starts the wizard, so the wizard/chooser and the dashboard are never
-         stacked on top of each other. Mirrors the .wizard-active scoping. */
+      /* Front door: only the path-chooser shows until a path is picked (picking one clears .chooser-active or starts the wizard, so the dashboard is never stacked up on it). */
       body.chooser-active #main-content > *:not(#admin-path-chooser):not(#launch-wizard):not(#admin-status) {
         display: none;
       }
@@ -2009,6 +2003,14 @@
         color: var(--text);
         margin-bottom: 1rem;
       }
+      .wizard-layout{display:grid;gap:1rem}
+      .wizard-main,.wizard-preview{min-width:0}
+      @media (min-width:768px){
+        .wizard-layout{grid-template-columns:minmax(0,1fr) minmax(16rem,20rem);align-items:start}
+        .wizard-preview{position:sticky;top:1rem}
+        .wizard-preview-toggle{display:none}
+        .wizard-preview-body[hidden]{display:flex}
+      }
       @media (max-width: 480px) {
         .path-chooser-options {
           grid-template-columns: 1fr;
@@ -2410,6 +2412,8 @@
           </button>
         </div>
 
+        <div class="wizard-layout">
+        <div class="wizard-main">
         <!-- Step 1 — the only must-answer questions. Date pre-fills to today. -->
         <div class="wizard-step active" id="wizard-step-1" data-testid="wizard-step-1">
           <p class="wizard-step-help">Tell us about your event. You can change any of this later.</p>
@@ -2683,6 +2687,13 @@
         <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
         <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
           <div class="wizard-summary" id="wizardEventSummary"></div>
+          <!-- OSE-1528: check before publish. Rows are drawn from the fields by
+               the preview script; Change goes back to that field. -->
+          <section class="wizard-review" data-testid="wizard-review" aria-labelledby="wizard-review-heading">
+            <h3 class="wizard-card-title" id="wizard-review-heading">Check before you publish</h3>
+            <ul class="wizard-checklist" data-testid="wizard-review-list"></ul>
+            <p class="create-msg error" data-testid="wizard-review-missing" role="status" hidden></p>
+          </section>
           <p class="wizard-step-help" id="wizard-map-note" data-testid="wizard-map-note" role="status" aria-live="polite" hidden></p>
           <!-- Every event is created as a DRAFT (handleCreateEvent). The public
                page, poster and display refuse drafts, so the links on step 4
@@ -2750,6 +2761,28 @@
           >
             Done
           </button>
+          <button type="button" class="create-btn" id="wizard-save-edit-btn" data-testid="wizard-save-edit-btn" hidden>Save and back to review</button>
+          <button type="button" class="wizard-back-btn" id="wizard-cancel-edit-btn" data-testid="wizard-cancel-edit-btn" hidden>Back to review</button>
+        </div>
+        </div>
+        <!-- OSE-1528: what guests will see, drawn here from the fields as they
+             are typed. No request is made to draw it; nothing is saved,
+             listed or published by it. Below the form on a phone (foldable),
+             beside it from tablet width. -->
+        <aside class="wizard-preview" id="wizard-preview" data-testid="wizard-preview" aria-labelledby="wizard-preview-heading">
+          <h3 class="wizard-card-title" id="wizard-preview-heading">What guests will see</h3>
+          <button type="button" class="wizard-copy-btn wizard-preview-toggle" data-testid="wizard-preview-toggle" aria-expanded="true" aria-controls="wizard-preview-card">Hide preview</button>
+          <div class="wizard-link-card wizard-preview-body" id="wizard-preview-card" data-testid="wizard-preview-card">
+            <span class="muted-sm" data-testid="wizard-preview-type"></span>
+            <strong class="wizard-card-title" data-testid="wizard-preview-title"></strong>
+            <span data-testid="wizard-preview-when"></span>
+            <span class="wizard-card-desc" data-testid="wizard-preview-sponsors">Sponsors who say yes are shown here, under the title and date.</span>
+            <span data-testid="wizard-preview-what"></span>
+            <span data-testid="wizard-preview-where"></span>
+            <span class="muted-sm" data-testid="wizard-preview-map"></span>
+          </div>
+          <p class="wizard-step-help muted-sm">The top of your event page. Drawn on this screen as you type; nothing is public until you publish.</p>
+        </aside>
         </div>
       </section>
 
@@ -2963,11 +2996,15 @@
             // Before the save, Back walks steps 1-3 (on step 1 it returns to the
             // front door, OSE-1315). After it, you can't un-create, but step 5
             // goes back to step 4 so links and TV can be changed and republished.
-            back.hidden = !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));
+            // OSE-1528: while a fact is being changed from the review, Save and
+            // Back to review replace Next and Back.
+            back.hidden = !!wiz.editing || !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));
             back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';
-            skip.hidden = wiz.step !== 3;
-            next.hidden = wiz.step === 5;
+            skip.hidden = wiz.step !== 3 || !!wiz.editing;
+            next.hidden = wiz.step === 5 || !!wiz.editing;
             finish.hidden = wiz.step !== 5;
+            document.getElementById('wizard-save-edit-btn').hidden = !wiz.editing;
+            document.getElementById('wizard-cancel-edit-btn').hidden = !wiz.editing;
             next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
             validate();
             showMissing();
@@ -3409,7 +3446,125 @@
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
 
+          // ── OSE-1528: change a fact from the review ─────────────────────────
+          // The event is already saved, so this is an edit: Save sends ONE PUT
+          // and returns to the review; it never reaches createEvent. The fields
+          // are the ones already on steps 1-2, so the preview beside them
+          // follows every keystroke.
+          var EDIT_FIELDS = ['wizard-event-name', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz', 'wizard-event-venue', 'wizard-event-what', 'wizard-category'];
+          function fire(el, type) {
+            el.dispatchEvent(new Event(type, { bubbles: true }));
+          }
+          function snapshotFields() {
+            wiz.snap = {};
+            EDIT_FIELDS.forEach(function (id) {
+              wiz.snap[id] = document.getElementById(id).value;
+            });
+            wiz.snap['wizard-event-type'] = document.getElementById('wizard-event-type').value;
+          }
+          function restoreFields() {
+            var snap = wiz.snap || {};
+            EDIT_FIELDS.forEach(function (id) {
+              var el = document.getElementById(id);
+              el.value = snap[id] || '';
+              fire(el, id === 'wizard-category' || id === 'wizard-event-tz' ? 'change' : 'input');
+            });
+            var typeEl = document.getElementById('wizard-event-type');
+            typeEl.value = snap['wizard-event-type'] || '';
+            fire(typeEl, 'change');
+          }
+          function leaveEdit() {
+            wiz.editing = false;
+            wiz.step = 5;
+            replaceWizardStep(5);
+            updateUI();
+          }
+          window.addEventListener('ose:wizard-edit', function (ev) {
+            var d = (ev && ev.detail) || {};
+            if (!wiz.createdId || wiz.step !== 5 || (d.step !== 1 && d.step !== 2)) return;
+            snapshotFields();
+            wiz.editing = true;
+            wiz.step = d.step;
+            replaceWizardStep(d.step);
+            setMsg('');
+            updateUI();
+            var f = document.getElementById(d.focus || '');
+            if (f) f.focus();
+          });
+          async function saveEdit() {
+            if (!wiz.createdId || wiz.saving) return;
+            if (wiz.step === 1 && step1Blocked()) return;
+            var title = document.getElementById('wizard-event-name').value.trim();
+            var venueVal = document.getElementById('wizard-event-venue').value.trim();
+            var dateVal = document.getElementById('wizard-event-date').value;
+            var timeVal = document.getElementById('wizard-event-time').value.slice(0, 5);
+            if (!title || !venueVal) {
+              setMsg(STEP1_MSG, 'error');
+              return;
+            }
+            if (timeVal && !dateVal) {
+              setMsg('Pick a date for that start time.', 'error');
+              return;
+            }
+            var body = {
+              title: title,
+              location: venueVal,
+              timezone: document.getElementById('wizard-event-tz').value,
+              start_date: dateVal || null,
+              start_time: timeVal || null,
+              what_short: document.getElementById('wizard-event-what').value.trim() || null,
+            };
+            var typeId = window.oseTypePicker ? window.oseTypePicker.value('wizard-event-type') : '';
+            if (typeId) body.event_type_id = typeId;
+            var save = document.getElementById('wizard-save-edit-btn');
+            wiz.saving = true;
+            save.disabled = true;
+            setMsg('Saving…');
+            var data = null;
+            var status = 0;
+            try {
+              var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(wiz.createdId), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              });
+              status = res.status;
+              data = await res.json().catch(function () { return null; });
+            } catch (err) {
+              setMsg('Can’t reach the server — check your connection and try again.', 'error');
+              wiz.saving = false;
+              save.disabled = false;
+              return;
+            }
+            wiz.saving = false;
+            save.disabled = false;
+            if (status >= 200 && status < 300 && data && data.ok) {
+              var whenTxt = timeVal && window.oseWizardPreview ? window.oseWizardPreview.whenText() : '';
+              wiz.summaryBase =
+                '✅ "' + title + '" is saved' + ' at ' + venueVal + (whenTxt ? ' for ' + whenTxt : '');
+              syncWizardSummary();
+              setMsg('');
+              leaveEdit();
+              return;
+            }
+            setMsg(((data && (data.error || data.code)) || 'Could not save') + ' (server said ' + status + ')', 'error');
+          }
+
+          // The review already knows what the server will refuse (CORE_VALUES_MISSING):
+          // say it, point at the row, and send nothing.
+          function refusedByReview(msgEl) {
+            var gap = window.oseWizardReview ? window.oseWizardReview.message() : '';
+            if (!gap) return false;
+            if (msgEl) { msgEl.textContent = gap; msgEl.className = 'create-msg error'; }
+            window.oseWizardReview.focusFirstMissing();
+            return true;
+          }
+
           function goNext() {
+            if (wiz.editing) {
+              saveEdit();
+              return;
+            }
             if (wiz.step === 1 && step1Blocked()) return;
             if (wiz.step === 3) {
               createEvent();
@@ -3525,6 +3680,12 @@
           document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
           document.getElementById('admin-path-events').addEventListener('click', startMyEvents);
           document.getElementById('wizard-next-btn').addEventListener('click', goNext);
+          document.getElementById('wizard-save-edit-btn').addEventListener('click', saveEdit);
+          document.getElementById('wizard-cancel-edit-btn').addEventListener('click', function () {
+            restoreFields();
+            setMsg('');
+            leaveEdit();
+          });
           document.getElementById('wizardBackBtn').addEventListener('click', goBack);
           document.getElementById('wizardSkipBtn').addEventListener('click', skipSignup);
           document.getElementById('wizard-finish-btn').addEventListener('click', function () {
@@ -3539,6 +3700,7 @@
             var btn = this;
             var msgEl = document.getElementById('wizard-go-live-msg');
             if (!wiz.createdId || typeof window.goLiveFromDraft !== 'function') return;
+            if (refusedByReview(msgEl)) return;
             btn.disabled = true;
             btn.textContent = 'Publishing\u2026';
             // The wizard just created it, so it knows the origin (a draft,
@@ -3819,6 +3981,187 @@
             demoStop();
             show();
           });
+        })();
+      </script>
+
+      <script>
+        // OSE-1528 — oseWizardPreview: the page you are making, drawn as you type,
+        // and the review before publish. Both read the wizard's own fields; this
+        // block makes NO request (no fetch, no beacon): nothing is saved, listed
+        // or published by looking. Every string goes in with textContent.
+        (function () {
+          var root = document.getElementById('launch-wizard');
+          if (!root) return;
+          function byId(id) { return document.getElementById(id); }
+          function q(t) { return document.querySelector('[data-testid="' + t + '"]'); }
+          function val(id) { var e = byId(id); return e ? String(e.value || '').trim() : ''; }
+          function put(t, text, empty) {
+            var e = q(t);
+            if (!e) return;
+            e.textContent = text;
+            if (empty) e.setAttribute('data-empty', 'true'); else e.removeAttribute('data-empty');
+          }
+
+          // ── the event's time, in the event's zone (same rule as the public page)
+          function offsetMs(tz, ms) {
+            var m = {};
+            new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+              .formatToParts(new Date(ms)).forEach(function (p) { if (p.type !== 'literal') m[p.type] = Number(p.value); });
+            if (m.hour === 24) m.hour = 0;
+            return Date.UTC(m.year, m.month - 1, m.day, m.hour, m.minute, m.second) - ms;
+          }
+          function zonePart(tz, ms, style) {
+            var part = null;
+            try {
+              part = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: style }).formatToParts(new Date(ms))
+                .filter(function (p) { return p.type === 'timeZoneName'; })[0];
+            } catch (e) { /* older engines lack longGeneric */ }
+            return part ? part.value : '';
+          }
+          function validZone(tz) {
+            try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch (e) { return false; }
+          }
+          function whenText() {
+            var d = val('wizard-event-date');
+            var t = val('wizard-event-time');
+            var tz = val('wizard-event-tz');
+            if (!validZone(tz)) tz = 'UTC';
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return t ? 'Pick a date for the start time.' : 'Add a date.';
+            var ymd = d.split('-').map(Number);
+            var dateTxt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              .format(new Date(Date.UTC(ymd[0], ymd[1] - 1, ymd[2])));
+            var hm = /^(\d{2}):(\d{2})/.exec(t);
+            if (!hm) return dateTxt + ' · ' + (zonePart(tz, Date.UTC(ymd[0], ymd[1] - 1, ymd[2], 12), 'longGeneric') || tz);
+            var naive = Date.UTC(ymd[0], ymd[1] - 1, ymd[2], Number(hm[1]), Number(hm[2]));
+            var o1 = offsetMs(tz, naive);
+            var at = naive - o1;
+            var o2 = offsetMs(tz, at);
+            if (o2 !== o1) at = naive - o2;
+            var timeTxt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' }).format(new Date(naive));
+            return dateTxt + ' · ' + timeTxt + ' ' + zonePart(tz, at, 'short');
+          }
+
+          // ── the event type, from the two selects
+          function typeInfo() {
+            var cat = byId('wizard-category');
+            var typ = byId('wizard-event-type');
+            var catName = cat && cat.value && cat.selectedIndex >= 0 ? cat.options[cat.selectedIndex].textContent.replace(/\s*\(\d+\)\s*$/, '') : '';
+            var typeName = typ && !typ.disabled && typ.value && typ.selectedIndex >= 0 ? typ.options[typ.selectedIndex].textContent : '';
+            return { cat: catName, type: typeName };
+          }
+          function typeLabel() {
+            var t = typeInfo();
+            if (t.type) return t.cat + ' > ' + t.type;
+            return t.cat ? t.cat + ' > choose a type' : '';
+          }
+          function mapOn() {
+            var off = root.querySelector('.wizard-publish-option.selected');
+            return !(off && off.getAttribute('data-option') === 'unpublished');
+          }
+          function signupOn() {
+            var s = root.querySelector('.wizard-signup-option.selected');
+            return !s || s.getAttribute('data-option') !== 'none';
+          }
+
+          // ── the preview
+          function render() {
+            var title = val('wizard-event-name');
+            var venue = val('wizard-event-venue');
+            var what = val('wizard-event-what');
+            var tl = typeLabel();
+            put('wizard-preview-type', tl || 'Pick an event type', !tl);
+            put('wizard-preview-title', title || 'Your event name', !title);
+            put('wizard-preview-when', whenText(), false);
+            put('wizard-preview-what', what, !what);
+            var whatEl = q('wizard-preview-what');
+            if (whatEl) whatEl.hidden = !what;
+            put('wizard-preview-where', venue || 'Add a place.', !venue);
+            put('wizard-preview-map', mapOn()
+              ? 'On the map and list. The place above is shown publicly.'
+              : 'Off the map and list. Only your links and codes reach it.', false);
+            var p5 = byId('wizard-step-5');
+            if (p5 && p5.classList.contains('active')) renderReview();
+          }
+
+          // ── the review: what the server will ask for, said the server's way
+          function missingCore() {
+            var m = [];
+            if (!(val('wizard-event-date') && val('wizard-event-time'))) m.push('time');
+            if (!typeInfo().type) m.push('event_type');
+            return m;
+          }
+          function sentence(m) {
+            return m.length
+              ? 'Add ' + m.map(function (k) { return k === 'event_type' ? 'an event type' : 'a start time'; }).join(' and ') + ' before this event goes further'
+              : '';
+          }
+          function row(key, label, value, miss, change) {
+            var li = document.createElement('li');
+            li.setAttribute('data-testid', 'wizard-review-row-' + key);
+            if (miss) li.setAttribute('data-missing', 'true');
+            var b = document.createElement('strong');
+            b.textContent = label + ': ';
+            li.appendChild(b);
+            li.appendChild(document.createTextNode(value));
+            if (change) {
+              li.appendChild(document.createTextNode(' '));
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'wizard-copy-btn';
+              btn.setAttribute('data-testid', 'wizard-review-change-' + key);
+              btn.textContent = 'Change';
+              btn.setAttribute('aria-label', 'Change ' + label.toLowerCase());
+              btn.addEventListener('click', function () {
+                window.dispatchEvent(new CustomEvent('ose:wizard-edit', { detail: change }));
+              });
+              li.appendChild(btn);
+            }
+            return li;
+          }
+          function renderReview() {
+            var list = q('wizard-review-list');
+            if (!list) return;
+            var m = missingCore();
+            var t = typeLabel();
+            var codes = 'poster and event page codes' + (signupOn() ? ', and a sign-up code' : '') + ' work once you publish';
+            var rows = [
+              row('title', 'Name', val('wizard-event-name') || 'not set', !val('wizard-event-name'), { step: 1, focus: 'wizard-event-name' }),
+              row('when', 'When', whenText() + (m.indexOf('time') >= 0 ? ' (no start time yet)' : ''), m.indexOf('time') >= 0,
+                { step: 1, focus: val('wizard-event-date') ? 'wizard-event-time' : 'wizard-event-date' }),
+              row('type', 'Event type', t || 'not chosen', m.indexOf('event_type') >= 0, { step: 2, focus: 'wizard-category' }),
+              row('where', 'Where', val('wizard-event-venue') || 'not set', !val('wizard-event-venue'), { step: 1, focus: 'wizard-event-venue' }),
+              row('map', 'Map', mapOn() ? 'on the map and list' : 'off the map and list', false, null),
+              row('codes', 'Codes', codes, false, null),
+            ];
+            list.replaceChildren.apply(list, rows);
+            var note = q('wizard-review-missing');
+            if (note) {
+              note.textContent = sentence(m);
+              note.hidden = !m.length;
+            }
+          }
+          window.oseWizardPreview = { whenText: whenText, render: render };
+          window.oseWizardReview = {
+            missing: missingCore,
+            message: function () { return sentence(missingCore()); },
+            focusFirstMissing: function () {
+              var m = missingCore();
+              var b = q('wizard-review-change-' + (m[0] === 'event_type' ? 'type' : 'when'));
+              if (b) b.focus();
+            },
+          };
+
+          // Any field, card or step change redraws; the wizard's own handlers run first.
+          ['input', 'change', 'click'].forEach(function (ev) { root.addEventListener(ev, render); });
+          window.addEventListener('ose:wizard-step', render);
+          var toggle = q('wizard-preview-toggle');
+          var body = q('wizard-preview-card');
+          if (toggle && body) toggle.addEventListener('click', function () {
+            body.hidden = !body.hidden;
+            toggle.setAttribute('aria-expanded', String(!body.hidden));
+            toggle.textContent = body.hidden ? 'Show preview' : 'Hide preview';
+          });
+          render();
         })();
       </script>
 

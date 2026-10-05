@@ -163,6 +163,7 @@ export const NODE_SPECS = [
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
+  'tests/admin-wizard-preview-review.spec.ts',
   'tests/admin-wizard-what-and-missing.spec.ts',
   'tests/poster-preview-mode.spec.ts',
   // display-config ETag computed before QR generation (handler called directly,

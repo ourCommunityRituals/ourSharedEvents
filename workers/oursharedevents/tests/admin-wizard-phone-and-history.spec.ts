@@ -112,9 +112,10 @@ describe('OSE-1314 — wizard choice cards stack one per row on phones', () => {
 
 describe('OSE-1315 — step 1 has Back, and browser Back returns to the front door', () => {
   test('Back is shown on every pre-create step, step 1 included', () => {
-    // Pre-create steps 1-3 (and, once saved, step 5 back to step 4).
+    // Pre-create steps 1-3 (and, once saved, step 5 back to step 4). While a saved event
+    // is being edited from the review step (OSE-1528) Back is replaced by "Back to review".
     expect(html).toContain(
-      'back.hidden = !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));'
+      'back.hidden = !!wiz.editing || !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));'
     );
     expect(html).not.toContain('back.hidden = !(wiz.step > 1 && wiz.step <= 3);');
     // Step 1's Back says where it goes.
