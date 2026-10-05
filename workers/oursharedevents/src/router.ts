@@ -1978,19 +1978,21 @@ export async function route(
   // ── Public pages ───────────────────────────────────────────────────────────
   // OSE-1520: /public was the same page as /events at a second address. One
   // address now; the query string (?when=, ?q=) rides along.
-  if (pathname === '/public' && (method === 'GET' || method === 'HEAD')) {
+  // /schedule, /calendar, /agenda and /lineup were the same page at four more
+  // addresses, indexable as duplicates; they join /public (technical-SEO audit).
+  if (
+    (pathname === '/public' ||
+      pathname === '/schedule' ||
+      pathname === '/calendar' ||
+      pathname === '/agenda' ||
+      pathname === '/lineup') &&
+    (method === 'GET' || method === 'HEAD')
+  ) {
     const target = new URL(request.url);
     target.pathname = '/events';
     return Response.redirect(target.toString(), 301);
   }
-  if (
-    pathname === '/events' ||
-    pathname === '/public' ||
-    pathname === '/schedule' ||
-    pathname === '/calendar' ||
-    pathname === '/agenda' ||
-    pathname === '/lineup'
-  ) {
+  if (pathname === '/events') {
     return handlePublicPage(env, ctx, request);
   }
 
