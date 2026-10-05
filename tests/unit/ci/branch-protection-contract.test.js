@@ -142,7 +142,7 @@ function emittedChecks(workflows) {
 
 /** @returns {string[]} one line per finding; empty = the contract holds */
 function contractFindings(required, workflows, allowedUnrequired = ALLOWED_UNREQUIRED) {
-  const { always, conditional, dynamic } = emittedChecks(workflows);
+  const { always, conditional } = emittedChecks(workflows);
   const findings = [];
   for (const ctx of required) {
     if (always.has(ctx)) continue;
