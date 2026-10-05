@@ -75,13 +75,20 @@ export interface IvtVerdict {
 export const IMPRESSION_WRITE_MAX = 20;
 
 /**
- * Dedup window in seconds for an identical beacon from the same caller.
- *
- * 300s matches the QR-scan dedup window in `handlers/qr-scan.ts` — the same
- * question ("is this the same person seeing the same thing again, or a new
- * seeing?") deserves the same answer on both surfaces.
+ * Dedup window in seconds for an identical IMPRESSION beacon from the same
+ * caller: one hour (OSE-1421). An impression is "this caller was shown this
+ * sponsor here", and nothing finer than the hour is ever kept or counted, so one
+ * caller adds at most one row per sponsor, surface and placement per hour. It
+ * was 300 s, which let one caller add a row every five minutes (12 an hour).
  */
-export const IMPRESSION_DEDUP_TTL_SECONDS = 300;
+export const IMPRESSION_DEDUP_TTL_SECONDS = 3600;
+
+/**
+ * Dedup window for an identical CLICK beacon: unchanged at 300 s, the same as
+ * the QR-scan dedup window in `handlers/qr-scan.ts`. The hour window above is
+ * for impressions only.
+ */
+export const CLICK_DEDUP_TTL_SECONDS = 300;
 
 /**
  * User-agent substrings that mark a non-human client.
@@ -195,7 +202,10 @@ async function isDuplicateBeacon(
   );
   const key = `ivt:dedup:${fingerprint}`;
   if ((await kv.get(key)) !== null) return true;
-  await kv.put(key, '1', { expirationTtl: IMPRESSION_DEDUP_TTL_SECONDS });
+  await kv.put(key, '1', {
+    expirationTtl:
+      beacon.kind === 'impression' ? IMPRESSION_DEDUP_TTL_SECONDS : CLICK_DEDUP_TTL_SECONDS,
+  });
   return false;
 }
 
