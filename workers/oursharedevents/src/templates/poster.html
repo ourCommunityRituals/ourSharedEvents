@@ -267,10 +267,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-/* OSE-887: GAS .qr-card frame (archive/v2-code/components/QRRegenerator.html)
-   wrapping each poster QR — header carries the label, body holds the QR that
-   loadPosterQR injects into #qr-img-{type}. Themed in the token-overlay block
-   below; flattened for print (see @media print). */
+/* OSE-887: GAS .qr-card frame around each poster QR (loadPosterQR). */
 .qr-card {
   display: flex;
   flex-direction: column;
@@ -632,6 +629,8 @@ body {
   }
   .poster-header h2 {
     line-height: 1.05;
+    font-size: max(36pt, calc(var(--title-base) * var(--title-scale, 1)));
+    white-space: normal;
   }
   .poster-body {
     padding: 0.3in 0.35in 0.25in;

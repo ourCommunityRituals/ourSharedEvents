@@ -572,4 +572,151 @@ describe('DS-02 (runtime) — tier-4/5 event is WITHHELD; permitted row lands in
       expect(exportedIds()).toContain('ds02-evt-settled');
     });
   });
+
+  // The on-demand route (POST /api/v2/admin/events/:id/backup) puts the same
+  // `title` and `slug` into the same dataset, so it follows the same rule as the
+  // nightly run: a row that is not listed is refused, not exported. An admin who
+  // asks for a draft gets a 409 EVENT_NOT_LISTED (the event exists, so not a 404)
+  // and nothing leaves D1.
+  describe('on-demand admin backup: same scope as the nightly run', () => {
+    async function seedFull(
+      id: string,
+      cols: {
+        status: string;
+        is_published?: number;
+        listed_from?: string | null;
+        tier?: number;
+      }
+    ): Promise<void> {
+      await tenvDb()
+        .DB.prepare(
+          `INSERT INTO events
+             (id, brand_id, title, slug, status, is_published, listed_from,
+              legal_clearance_tier, created_at, updated_at)
+           VALUES (?, 'ds02-brand', ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        )
+        .bind(
+          id,
+          `Secret title ${id}`,
+          id,
+          cols.status,
+          cols.is_published ?? 1,
+          cols.listed_from ?? null,
+          cols.tier ?? 1
+        )
+        .run();
+    }
+
+    async function adminBackup(
+      id: string,
+      envOverride: Record<string, string> = {}
+    ): Promise<{ status: number; body: Record<string, unknown> }> {
+      const { handleAdminBackupEvent } = await import('../src/handlers/bigquery');
+      const res = await handleAdminBackupEvent(
+        new Request(`https://localhost/api/v2/admin/events/${id}/backup`, { method: 'POST' }),
+        { DB: tenvDb().DB, ...BQ_ENV_CONFIGURED, ...envOverride } as never,
+        id
+      );
+      return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+    }
+
+    const exportedIds = (): string[] =>
+      bqCalls.flatMap((c) => c.rows.map((r) => String(r.json.id)));
+
+    test('a listed event is exported to the pool dataset', async () => {
+      await seedFull('ds02-evt-adm-live', { status: 'active' });
+
+      const { status, body } = await adminBackup('ds02-evt-adm-live');
+
+      expect(status).toBe(200);
+      expect(body.rowCount).toBe(1);
+      expect(exportedIds()).toEqual(['ds02-evt-adm-live']);
+      expect([...new Set(bqCalls.map((c) => c.dataset))]).toEqual([BIGQUERY_DATASETS.general]);
+    });
+
+    test.each(['draft', 'ready', 'archived'])(
+      'a %s event is refused (409 EVENT_NOT_LISTED) and nothing is sent',
+      async (status) => {
+        const id = `ds02-evt-adm-${status}`;
+        await seedFull(id, { status });
+
+        const res = await adminBackup(id);
+
+        expect(res.status, `${status} event must not be exported on demand`).toBe(409);
+        expect(res.body.code).toBe('EVENT_NOT_LISTED');
+        expect(bqCalls, 'no insertAll may run for an unlisted event').toEqual([]);
+        expect(JSON.stringify(bqCalls)).not.toContain(`Secret title ${id}`);
+      }
+    );
+
+    test('an active but unpublished event is refused', async () => {
+      await seedFull('ds02-evt-adm-unpub', { status: 'active', is_published: 0 });
+
+      const res = await adminBackup('ds02-evt-adm-unpub');
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('EVENT_NOT_LISTED');
+      expect(bqCalls).toEqual([]);
+    });
+
+    test('an active event inside its publish grace window is refused; once past it, exported', async () => {
+      const inTenMinutes = new Date(Date.now() + 10 * 60_000).toISOString();
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+      await seedFull('ds02-evt-adm-graced', { status: 'active', listed_from: inTenMinutes });
+      await seedFull('ds02-evt-adm-settled', { status: 'active', listed_from: tenMinutesAgo });
+
+      const graced = await adminBackup('ds02-evt-adm-graced');
+      expect(graced.status, 'Undo inside the window must leave no trace in OER').toBe(409);
+      expect(bqCalls).toEqual([]);
+
+      const settled = await adminBackup('ds02-evt-adm-settled');
+      expect(settled.status).toBe(200);
+      expect(exportedIds()).toEqual(['ds02-evt-adm-settled']);
+    });
+
+    test('an unknown event is still a 404, not a 409', async () => {
+      const res = await adminBackup('ds02-evt-adm-missing');
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('EVENT_NOT_FOUND');
+    });
+
+    test.each([4, 5])('a tier-%i listed event is withheld on demand, never sent', async (tier) => {
+      const id = `ds02-evt-adm-tier${tier}`;
+      await seedFull(id, { status: 'active', tier });
+
+      const { status, body } = await adminBackup(id);
+
+      expect(status).toBe(200);
+      expect(body.rowCount).toBe(0);
+      expect(body.rowsWithheld).toBe(1);
+      expect(bqCalls, 'a withheld tier must reach no dataset').toEqual([]);
+    });
+
+    test('on staging a listed event lands in the _stg pool dataset only', async () => {
+      await seedFull('ds02-evt-adm-stg', { status: 'active' });
+
+      const { status } = await adminBackup('ds02-evt-adm-stg', {
+        WORKER_ENV: 'staging',
+        BIGQUERY_DATASET_ID: 'oursharedevents_backup_stg',
+      });
+
+      expect(status).toBe(200);
+      expect([...new Set(bqCalls.map((c) => c.dataset))]).toEqual([
+        `${BIGQUERY_DATASETS.general}_stg`,
+      ]);
+    });
+
+    test('the nightly run withholds tier 4 and tier 5 listed events too', async () => {
+      const { runBigQueryBackup } = await import('../src/handlers/bigquery');
+      await seedFull('ds02-evt-adm-cron-ok', { status: 'active' });
+      await seedFull('ds02-evt-adm-cron-t4', { status: 'active', tier: 4 });
+      await seedFull('ds02-evt-adm-cron-t5', { status: 'active', tier: 5 });
+
+      await runBigQueryBackup({ DB: tenvDb().DB, ...BQ_ENV_CONFIGURED } as never);
+
+      expect(exportedIds()).toContain('ds02-evt-adm-cron-ok');
+      expect(exportedIds()).not.toContain('ds02-evt-adm-cron-t4');
+      expect(exportedIds()).not.toContain('ds02-evt-adm-cron-t5');
+    });
+  });
 });
