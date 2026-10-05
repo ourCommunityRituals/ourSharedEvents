@@ -9,6 +9,7 @@
  */
 
 import { HARDENING_HEADERS } from '../lib/security-headers';
+import { CANONICAL_PATH, injectCanonical, type CanonicalEnv } from '../lib/canonical';
 
 const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -137,8 +138,10 @@ const PRIVACY_SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
-export function handlePrivacyPage(): Response {
-  return new Response(PRIVACY_POLICY_HTML, {
+export function handlePrivacyPage(request?: Request, env?: CanonicalEnv): Response {
+  // /privacy-policy serves this page too; both name /privacy as the canonical.
+  const body = injectCanonical(PRIVACY_POLICY_HTML, request, env, CANONICAL_PATH.privacy);
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',

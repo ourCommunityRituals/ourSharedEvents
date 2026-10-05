@@ -77,6 +77,12 @@ import {
   zoneDisplayName,
 } from '../lib/event-datetime.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
+import {
+  CANONICAL_PATH,
+  canonicalOrigin,
+  eventPagePath,
+  injectCanonical,
+} from '../lib/canonical.js';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
@@ -364,7 +370,8 @@ export async function handlePublicPage(
     )
   );
   // One address per list: ?q= / ?when= variants all point search engines here.
-  const origin = request ? new URL(request.url).origin : '';
+  // Production always names one host (the zone also routes www.).
+  const origin = canonicalOrigin(request, env) ?? '';
   const withCanonical = origin
     ? shell.replace('</head>', `  <link rel="canonical" href="${esc(origin)}/events" />\n</head>`)
     : shell;
@@ -2026,7 +2033,9 @@ export async function handlePublicEventPage(
   const nonce = generateNonce();
   const lang = preferredLang(request);
   const url = new URL(request.url);
-  const shareUrl = `${url.origin}/events/${row.id}`;
+  // Production names one host (the zone also routes www.), so the share link,
+  // og:url and the canonical (buildSearchMeta) always agree.
+  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
@@ -2540,7 +2549,8 @@ type LandingEnv = PagesEnv & DataProviderEnv;
 
 export async function handleLandingPage(
   env: PagesEnv,
-  ctx?: DataProviderCtx | null
+  ctx?: DataProviderCtx | null,
+  request?: Request
 ): Promise<Response> {
   let area;
   try {
@@ -2568,10 +2578,17 @@ export async function handleLandingPage(
   } catch {
     area = renderEmptyLandingArea();
   }
+  // /home, /welcome, /landing, /about and /info serve this page too; they all
+  // name `/` as the canonical.
   return html(
-    injectLandingArea(
-      injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
-      area
+    injectCanonical(
+      injectLandingArea(
+        injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
+        area
+      ),
+      request,
+      env,
+      CANONICAL_PATH.landing
     )
   );
 }

@@ -5,19 +5,17 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/schedule"
+  url: "{{baseUrl}}/schedule?when=week"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
-      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });
-
-        if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }"
+      code: "test('/schedule answers 301 (one address for the events page)', function() { expect(res.getStatus()).to.equal(301); }); test('/schedule redirects to /events and keeps the query', function() { expect(String(res.getHeader('location')).endsWith('/events?when=week')).to.equal(true); });"
 
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
+  followRedirects: false
+  maxRedirects: 0
   forwardAuthorizationHeader: false

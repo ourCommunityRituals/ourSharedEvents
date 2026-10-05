@@ -1,0 +1,21 @@
+info:
+  name: GET /lineup (alias)
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/lineup?when=week"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('/lineup answers 301 (one address for the events page)', function() { expect(res.getStatus()).to.equal(301); }); test('/lineup redirects to /events and keeps the query', function() { expect(String(res.getHeader('location')).endsWith('/events?when=week')).to.equal(true); });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

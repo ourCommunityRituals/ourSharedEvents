@@ -38,7 +38,9 @@ export const SITEMAP_STATIC_PATHS: readonly string[] = ['/', '/events', '/privac
 
 /**
  * Never crawled, by any agent. Prefix match per RFC 9309, so `/admin` also
- * covers `/admin/…`, and `/report` also covers `/reports`.
+ * covers `/admin/…`, and `/report` also covers `/reports`. A prefix that takes a
+ * public page by accident is a bug: tests/crawl-policy.spec.ts matches every real
+ * public path against these rules.
  */
 export const CRAWL_DISALLOW: readonly string[] = [
   '/q/', // scan ingestion — a fetch IS a write (Invariant #4)
@@ -51,7 +53,12 @@ export const CRAWL_DISALLOW: readonly string[] = [
   '/briefing',
   '/overview',
   '/summary',
-  '/sponsor', // token-gated sponsor home
+  // The token-gated sponsor home is `/sponsor?t=…`. A bare `/sponsor` prefix would
+  // also take `/sponsors/:id` (the public card) and `/sponsor-default-logo.svg`, and
+  // a crawler that may not fetch a page cannot read its `noindex`. So: the query
+  // form and the bare path, nothing broader. `$` anchors the end (RFC 9309).
+  '/sponsor?',
+  '/sponsor$',
   '/forms/',
   '/sharedReport',
   '/report',
