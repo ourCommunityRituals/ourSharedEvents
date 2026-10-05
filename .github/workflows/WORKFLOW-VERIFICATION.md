@@ -20,6 +20,39 @@ red-teamed with live secrets. They were separate workflow_run workflows until
 2026-10-03, but a workflow_run fired by another workflow_run reports
 `event == 'workflow_run'`, so T6 and the bookend skipped on every run.
 
+## A pull request whose pipeline never ran (OSE-1212)
+
+**Recognise it.** The PR shows a handful of green checks and none of `S0 Security`, `T0 Gate (<shard>)`,
+`Gate-execution reconciler` or `Invariant #22 cross-repo isolation gate`. PR #455 showed four green checks
+(Security Regression Gate, QR-0 Contract Verification and two CodeQL checks) while the pipeline had produced
+no run at all:
+
+```bash
+gh pr checks <number>
+gh run list --workflow "OurSharedEvents CI/CD" --branch <branch>   # no rows = the pipeline never started
+```
+
+The CodeQL checks with `event: dynamic` come from GitHub's default code-scanning setup. They are not
+`pull_request` workflow runs, so their presence says nothing about whether the pipeline started.
+
+**Cause: not established.** The first explanation (GitHub does not fire `pull_request` workflows for events
+made with an app token) was disproved on PR #456, which was opened through the same tool by the same actor and
+did start the pipeline. Do not rely on it. The one observed difference was that #455's branch had never hosted a
+PR before.
+
+**It cannot merge.** The checks above are required on `main`, with `enforce_admins` on
+(`tools/ci/main-branch-protection.json`). A required check that never reports stays at "Expected: waiting for
+status to be reported", so the merge button stays blocked, admins included. That block does not depend on
+knowing the cause. Do not lift protection to get past it.
+
+**Fix it.** Push any commit to the PR branch (`git commit --allow-empty -m "Run the pipeline"`); that fires
+`pull_request: synchronize`, which worked for #455 (4 checks became 19).
+
+**What keeps this true.** `tests/unit/ci/pr-pipeline-must-run.test.js` fails if the pipeline's
+`pull_request` trigger gains a path, branch or type filter, if the S0, T0 or reconciler jobs gain an `if:` that
+can skip them, if any of those names leaves the required list, or if `enforce_admins` goes off.
+`.github/workflows/branch-protection-drift.yml` checks nightly that GitHub holds the list the file says.
+
 ## Properly Archived/Disabled Files
 
 Files in `archive/` are ignored by GitHub Actions (only root `.github/workflows/*.yml` files execute):
