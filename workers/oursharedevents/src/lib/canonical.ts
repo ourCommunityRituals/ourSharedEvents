@@ -43,8 +43,13 @@ export function eventPagePath(eventId: string): string {
   return `/events/${eventId}`;
 }
 
+/** The one place the tag is spelled; `href` is a complete absolute URL. */
+export function canonicalLinkTagFor(href: string): string {
+  return `<link rel="canonical" href="${escapeHtml(href)}" />`;
+}
+
 export function canonicalLinkTag(origin: string, path: string): string {
-  return `<link rel="canonical" href="${escapeHtml(origin + path)}" />`;
+  return canonicalLinkTagFor(origin + path);
 }
 
 /**
