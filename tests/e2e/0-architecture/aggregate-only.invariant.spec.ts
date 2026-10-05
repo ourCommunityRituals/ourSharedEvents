@@ -33,10 +33,12 @@
  *   - A future refactor adds `SELECT anon_id_hash, ...` to a builder query
  *     → CI fails (anon_id_hash projection regex matches) → raw identity leak
  *     prevented before PR merges
- *   - Someone removes RETURN_RATE_MIN_SAMPLE or sets it to 0 or 1
- *     → CI fails (constant check fails) → de-anonymization via small-sample
+ *   - Someone weakens the return_rate gate below the platform floor K, or
+ *     brings back a private threshold constant
+ *     → CI fails (gate check fails) → de-anonymization via small-sample
  *     percentages would slip through (e.g., return_rate=50% with 2 attendees
  *     narrows a returner to one of two specific people)
+ *   - A suppression detail starts printing an observed count (OSE-1421)
  *   - A new field is added to SharedReport that includes raw identity data
  *     (e.g., an email, a raw hash) → the interface scan catches it
  *   - The corridor map suppression below-minimum-privacy-floor is removed
@@ -149,44 +151,59 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
     ).not.toMatch(/\banon_id\b(?!_hash)/);
   });
 
-  test('OSE-INV7 | privacy | suppression | RETURN_RATE_MIN_SAMPLE >= 3 (de-anonymization prevention)', () => {
+  test('OSE-INV7 | privacy | suppression | return_rate gates at the platform floor K >= 5, not a private constant', () => {
     const src = readFileSync(BUILDER_PATH, 'utf8');
-    // A return_rate percentage is only safe to publish when the sample size
-    // is large enough that the percentage cannot narrow down a single
-    // individual. With 2 attendees, return_rate=50% means one specific
-    // person is a returner — effectively de-anonymizing them.
-    // The minimum must be >= 3.
-    const minSampleMatch = src.match(/RETURN_RATE_MIN_SAMPLE\s*=\s*(\d+)/);
-    expect(
-      minSampleMatch,
-      'RETURN_RATE_MIN_SAMPLE constant must be defined in shared-report-builder.ts — ' +
-        'removing it disables de-anonymization protection on return_rate'
-    ).not.toBeNull();
-
-    const minSampleValue = parseInt(minSampleMatch![1], 10);
-    expect(
-      minSampleValue,
-      `RETURN_RATE_MIN_SAMPLE is ${minSampleValue} — must be >= 3 to prevent de-anonymization ` +
-        '(return_rate=50% with 2 attendees narrows a returner to one specific person)'
-    ).toBeGreaterThanOrEqual(3);
-  });
-
-  test('OSE-INV7 | privacy | suppression | return_rate is suppressed (nulled) when below min sample', () => {
-    const src = readFileSync(BUILDER_PATH, 'utf8');
-    // The guard must actually USE RETURN_RATE_MIN_SAMPLE as a threshold.
-    // If someone removes the `if (distinctAnonsHere >= RETURN_RATE_MIN_SAMPLE)` guard,
-    // small-sample percentages flow through to the response unchecked.
+    // A return_rate percentage is only safe to publish when the sample is large
+    // enough that it cannot narrow down a single individual (50% over 2 attendees
+    // names one specific returner). OSE-1421: the gate was a private
+    // RETURN_RATE_MIN_SAMPLE = 3, below the platform floor every other aggregate
+    // uses. It now reads CORRIDOR_MAP_MIN_COUNT (K), so there is ONE floor.
     expect(
       src,
-      'builder must gate return_rate computation on RETURN_RATE_MIN_SAMPLE — ' +
-        'missing guard means small-sample percentages expose de-anonymizing data'
-    ).toMatch(/RETURN_RATE_MIN_SAMPLE/);
+      'a private RETURN_RATE_MIN_SAMPLE constant must not come back: return_rate shares the platform floor'
+    ).not.toMatch(/RETURN_RATE_MIN_SAMPLE\s*=/);
+    expect(
+      src,
+      'builder must gate return_rate computation on `distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT` — ' +
+        'a missing or weaker guard lets small-sample percentages expose de-anonymizing data'
+    ).toMatch(/if\s*\(\s*distinctAnonsHere\s*>=\s*CORRIDOR_MAP_MIN_COUNT\s*\)/);
 
+    const floorSrc = readFileSync(
+      join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'lib', 'shared-report.ts'),
+      'utf8'
+    );
+    const floor = floorSrc.match(/export const CORRIDOR_MAP_MIN_COUNT\s*=\s*(\d+)/);
+    expect(floor, 'CORRIDOR_MAP_MIN_COUNT must be exported from shared-report.ts').not.toBeNull();
+    expect(
+      parseInt(floor![1], 10),
+      'the platform floor K must stay >= 5 (return_rate and every other aggregate share it)'
+    ).toBeGreaterThanOrEqual(5);
+  });
+
+  test('OSE-INV7 | privacy | suppression | return_rate is suppressed (nulled) when below the floor', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
     // The guard must result in suppression being recorded (push to suppression array)
     expect(
       src,
-      'builder must push a suppression reason when distinctAnonsHere < RETURN_RATE_MIN_SAMPLE'
-    ).toMatch(/below_min_sample_size/);
+      'builder must push a suppression reason when distinctAnonsHere < CORRIDOR_MAP_MIN_COUNT'
+    ).toMatch(/field:\s*'return_rate'[\s\S]{0,80}below_min_sample_size/);
+  });
+
+  test('OSE-INV7 | privacy | suppression | a suppression detail never interpolates an observed count', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // A suppression string that prints the count it hides is the count (OSE-1421).
+    // A detail may name a floor constant, never a per-event observation.
+    const details = [...src.matchAll(/detail:\s*`([^`]*)`/g)].map((m) => m[1]);
+    expect(details.length, 'builder carries suppression details').toBeGreaterThan(0);
+    for (const d of details) {
+      const interpolations = [...d.matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1].trim());
+      for (const expr of interpolations) {
+        expect(
+          /^(CORRIDOR_MAP_MIN_COUNT|CORRIDOR_BASELINE_MIN_SAMPLE)$/.test(expr),
+          `suppression detail \`${d}\` interpolates \`${expr}\` — only the published floors may appear, never an observed count`
+        ).toBe(true);
+      }
+    }
   });
 
   test('OSE-INV7 | privacy | suppression | corridor_map applies privacy floor (cell suppression)', () => {

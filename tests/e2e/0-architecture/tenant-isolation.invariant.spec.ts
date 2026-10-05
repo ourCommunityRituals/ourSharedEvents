@@ -251,11 +251,11 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
-  'lib/shared-report-builder.ts:342':
+  'lib/shared-report-builder.ts:340':
     'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',
-  'lib/shared-report-builder.ts:800':
+  'lib/shared-report-builder.ts:811':
     'Series instances keyed by `series_id = ?` — the held series id of the ' +
     'brand-scoped event being reported. Reads one organizer series, not cross-brand.',
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor

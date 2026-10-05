@@ -57,12 +57,16 @@ async function seedSponsor(id: string, name: string, displayName: string | null)
   )
     .bind(`pl-${id}`, id, EVENT)
     .run();
-  await tenv.DB.prepare(
-    `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
-     VALUES (?, ?, ?, 'public', 'p1', 'impression', datetime('now'))`
-  )
-    .bind(`si-${id}`, id, EVENT)
-    .run();
+  // A (sponsor x surface) row is published only at the K = 5 floor (OSE-1421),
+  // so seed exactly K impressions: the report must carry this sponsor's line.
+  for (let i = 0; i < 5; i++) {
+    await tenv.DB.prepare(
+      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+       VALUES (?, ?, ?, 'public', 'p1', 'impression', datetime('now'))`
+    )
+      .bind(`si-${id}-${i}`, id, EVENT)
+      .run();
+  }
 }
 
 async function homeFor(sponsorId: string): Promise<string> {
