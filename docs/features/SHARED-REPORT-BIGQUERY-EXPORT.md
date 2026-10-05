@@ -45,6 +45,7 @@ Session 4 ships the daily export of those aggregates into BigQuery so downstream
 ### `src/handlers/bigquery.ts` (existing scheduled export)
 
 - `runBigQueryBackup(env)` — daily backup of **listed** events (published, `status = 'active'`, past the publish grace window: `BACKUP_LISTED_EVENTS_SQL`) updated in last 24h. Writes to `events_backup` table. Drafts, ready, archived and unpublished events are never sent, because the row carries `title` and `slug`. An archived event is not re-exported, so the dataset keeps its last `active` row.
+- `handleAdminBackupEvent` (`POST /api/v2/admin/events/:id/backup`) — on-demand backup of one event, **same scope** as the nightly run (it reads `BACKUP_LISTED_EVENTS_SQL` for the row). An event that is not listed (draft, ready, archived, unpublished, or inside the grace window) is refused with `409 EVENT_NOT_LISTED` and nothing is sent; an unknown id is still `404 EVENT_NOT_FOUND`. A tier 4/5 listed event is withheld (200, `rowCount: 0`, `rowsWithheld: 1`). The router records a refusal in `export_manifest` as a failed export.
 - Called from `scheduled()` in `index.ts` alongside Session 3's `runSharedReportMaterialization`.
 
 ### `src/lib/pool-contract.ts` (regulatory pool routing)
