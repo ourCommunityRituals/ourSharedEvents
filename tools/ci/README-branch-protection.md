@@ -16,6 +16,7 @@ Required status checks = the CI jobs that **always run to completion on a `pull_
 | `S0 Security`                                                            | Static security analysis and supply-chain inventory                                                   |
 | `T0 Gate (lint)` / `(typecheck)` / `(tests)` / `(a11y)` / `(invariants)` | Quality + the **invariant constitution** shard                                                        |
 | `T0 Gate (component)`                                                    | Real Playwright viewport and layout specs against a local worker (OSE-1216: it was never required)    |
+| `Mobile workability — PR code (375×812, blocking)`                       | The phone audit of the PR's own code on a local worker. A phone is the first screen (PO 2026-10-06)   |
 | `Gate-execution reconciler`                                              | Fails when a gate expected for the trigger silently did not run (`scripts/assert-gate-execution.mjs`) |
 | `Invariant #22 cross-repo isolation gate`                                | The cross-repo import guard, in its own job (`.github/workflows/inv22-cross-repo-gate.yml`)           |
 

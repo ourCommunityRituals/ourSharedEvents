@@ -50,45 +50,11 @@ on:
     - cron: '30 9 * * *'
   pull_request:
     branches: [main]
-    # Widened for the blocking job (OSE-1236). The old list named two handlers
-    # and the spec. It could not see a change to a TEMPLATE, to the shared
-    # stylesheet, or to the design tokens — which is where mobile-workability
-    # regressions actually come from: the violations this gate found on its
-    # first PR-code run were in src/templates/admin.html and
-    # packages/ui/src/styles.ts, neither of which was listed here.
-    # ADR-008 Phase 0: @ocr/ui now lives in the hub, pinned by .ocr-hub-ref —
-    # a change to the shared stylesheet/tokens reaches OSE only as a bump of
-    # that file, so the pin file is the trigger (was 'packages/ui/src/**').
-    paths:
-      # ALL specs this job runs (playwright.mobile.config.ts testMatch:
-      # mobile-workability | admin-wizard-isolation | admin-csp-controls |
-      # admin-sponsor-form | sponsor-home-flow | landing-theme), plus the global setup + helpers. The
-      # list previously named only mobile-workability.spec.ts, so a change to
-      # either admin spec — two of the three specs the config actually executes
-      # — did not trigger the job that runs it, and the change merged green
-      # without ever being exercised (found on #555, the admin-csp de-flake).
-      - 'tests/playwright/mobile-workability.spec.ts'
-      - 'tests/playwright/a11y-profile.spec.ts'
-      - 'tests/playwright/display-tv-board.spec.ts'
-      - 'tests/playwright/admin-wizard-isolation.spec.ts'
-      - 'tests/playwright/admin-csp-controls.spec.ts'
-      - 'tests/playwright/admin-sponsor-form.spec.ts'
-      - 'tests/playwright/sponsor-home-flow.spec.ts'
-      - 'tests/playwright/landing-theme.spec.ts'
-      - 'tests/playwright/publish-loop-journey.spec.ts'
-      - 'tests/playwright/admin-create-preview.spec.ts'
-      - 'tests/playwright/mobile.global-setup.ts'
-      - 'tests/playwright/helpers/**'
-      - 'playwright.mobile.config.ts'
-      - 'playwright.config.ts'
-      - '.github/workflows/mobile-workability-audit.yml'
-      # The whole Worker source, not a hand-kept list: the browser specs above
-      # exercise logic in lib/ (sponsor discovery, the upcoming sort, the map
-      # gate, the public projection, …), and a hand-kept list missed those
-      # (CCR PR 700). Migrations too — the audit's worker applies them.
-      - 'workers/oursharedevents/src/**'
-      - 'workers/oursharedevents/migrations/**'
-      - '.ocr-hub-ref'
+    # No `paths` filter (PO 2026-10-06). The PR job is a required check, and a
+    # required check whose workflow does not start leaves the PR waiting on it
+    # for good. Whether a PR changes anything the audit measures is decided
+    # inside the job, by scripts/ci/phone-audit-scope.mjs (the list that used to
+    # live here, with its reasons, moved there).
   workflow_dispatch:
 
 concurrency:
@@ -108,7 +74,9 @@ jobs:
   # ── BLOCKING: this branch's code, on a local worker ────────────────────────
   pr-code:
     name: Mobile workability — PR code (375×812, blocking)
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # No `if`: this is a required check (tools/ci/main-branch-protection.json),
+    # and a skipped job is not success. The first step decides whether there is
+    # anything to audit; every later step follows it.
     runs-on: ubuntu-24.04
     # 25, not 15: the audit step alone measured 12.2 to 14.0 minutes over 14
     # runs (2026-10-05/06) and setup adds about 1.5, so 9 of those 14 runs were
@@ -119,12 +87,39 @@ jobs:
       - name: Checkout OSE
         uses: actions/checkout@v7
 
+      - name: Does this change touch what the audit measures?
+        # A pull request: ask the scope rule. A manual run: always audit. The
+        # nightly schedule: this job is not the nightly one (see nightly-staging).
+        # If the changed files cannot be read, the rule answers "run".
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          case "$EVENT" in
+            pull_request)
+              files="$(gh pr diff "$PR_NUMBER" --name-only || true)"
+              printf '%s\n' "$files" | node scripts/ci/phone-audit-scope.mjs | tee -a "$GITHUB_OUTPUT"
+              ;;
+            schedule) echo "run=false" | tee -a "$GITHUB_OUTPUT" ;;
+            *) echo "run=true" | tee -a "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Nothing to audit
+        if: steps.scope.outputs.run != 'true'
+        run: |
+          echo "Phone audit not run: this change touches no page, spec or dependency the audit measures (scripts/ci/phone-audit-scope.mjs)." | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Node
+        if: steps.scope.outputs.run == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        if: steps.scope.outputs.run == 'true'
         # ADR-008 Phase 0: this job installs/builds/tests/deploys the Worker,
         # which bundles @ocr/ui from the hub commit pinned in .ocr-hub-ref.
         # REQUIRED — never continue-on-error: without the pinned @ocr/ui the
@@ -137,6 +132,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
+        if: steps.scope.outputs.run == 'true'
         run: npm ci --prefer-offline || npm ci
 
       # The webServer boots `wrangler dev` with cwd workers/oursharedevents
@@ -150,10 +146,12 @@ jobs:
       # delete this step and the audit goes red with
       # `Could not resolve "@ocr/ui"`.
       - name: Install worker dependencies
+        if: steps.scope.outputs.run == 'true'
         working-directory: workers/oursharedevents
         run: npm ci --prefer-offline || npm ci
 
       - name: Install Playwright Chromium
+        if: steps.scope.outputs.run == 'true'
         # Chromium only. The spec forces 375×812 on every surface, so the
         # viewport — the thing invariant 14 is about — is identical across
         # projects; only the engine and UA differ. Engine-specific layout bugs
@@ -162,11 +160,13 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Install Playwright WebKit (publish loop journey only)
+        if: steps.scope.outputs.run == 'true'
         # OSE-1508: the organizer's publish loop runs on WebKit too, because
         # most phones are WebKit. One spec, so the cost stays small.
         run: npx playwright install --with-deps webkit
 
       - name: Audit this branch's code
+        if: steps.scope.outputs.run == 'true'
         # No continue-on-error. This is the whole point: the check's verdict is
         # now about the diff under review, so it is allowed to mean something.
         # playwright.mobile.config.ts starts `wrangler dev --local` itself — no
@@ -174,7 +174,7 @@ jobs:
         run: npx playwright test --config playwright.mobile.config.ts --reporter=html,list
 
       - name: Upload Playwright report
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mobile-workability-pr-report
