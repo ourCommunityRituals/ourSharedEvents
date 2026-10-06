@@ -11,10 +11,11 @@ concurrency:
   group: contract-${{ github.ref }}
   cancel-in-progress: true
 
+# Read only. contract-check runs this repo's scripts, which get its token
+# (OSE-1466 0.6). Only report-drift, which runs none of the PR's code, may
+# comment.
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 # bash is already the default on ubuntu-latest; kept explicit so a future
 # runner change cannot silently switch these steps to another shell.
@@ -121,8 +122,56 @@ jobs:
           name: conformance-report
           path: conformance-report.json
 
+  # Reporting is its own job so the token that can comment never sits in the job
+  # that runs this repo's scripts. It runs only when the check above failed on a
+  # pull request. It uses the brain's scripts and the base branch's copy of the
+  # one script it needs from this repo, never the pull request's code.
+  report-drift:
+    name: Report brain drift
+    needs: [contract-check]
+    if: ${{ always() && needs.contract-check.result == 'failure' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout OSE at the base commit (for the token check script only)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: ose-base
+          persist-credentials: false
+
+      - name: Checkout OCR-docs brain (read-only)
+        uses: actions/checkout@v7
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          path: ocr-docs
+          ref: main
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          # ADR-012 0.1: never leave the token where later steps can read it.
+          persist-credentials: false
+
+      - name: 'No token left behind by the brain checkout'
+        working-directory: ${{ github.workspace }}
+        run: bash ose-base/scripts/ci/assert-no-persisted-token.sh ocr-docs
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Download conformance report
+        # The check may have failed before it wrote a report; both steps below
+        # handle a missing file.
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: conformance-report
+
       - name: Open Linear ticket on drift
-        if: failure() && github.event_name == 'pull_request'
         shell: bash
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -142,7 +191,6 @@ jobs:
             --commit "$COMMIT_SHA"
 
       - name: Comment on PR with drift summary
-        if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:
           script: |
