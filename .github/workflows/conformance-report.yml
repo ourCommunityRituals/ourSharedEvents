@@ -81,6 +81,12 @@ jobs:
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
           persist-credentials: false
 
+      # OSE-1466 0.1, run time: the steps below run PR code, so prove the
+      # checkout above left no credential on disk.
+      - name: 'No token left behind by the brain checkout'
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/ci/assert-no-persisted-token.sh OCR-docs
+
       - name: Generate conformance report
         working-directory: workers/oursharedevents
         env:
