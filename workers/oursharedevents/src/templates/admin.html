@@ -3923,9 +3923,10 @@
               st.dirty = false;
               var eventId = st.eventId;
               var gen = st.gen;
-              // League goes last and stays on: it only appears on the TV once
-              // league links are added in the TV display card.
-              var body = { settings: { displayPanes: picked().concat(['league']), displayDwellSeconds: seconds() } };
+              // League and donate go last and stay on: each only appears on the
+              // TV once its link is saved in the TV display card. Leaving one out
+              // here would switch that screen off for an event that has the link.
+              var body = { settings: { displayPanes: picked().concat(['league', 'donate']), displayDwellSeconds: seconds() } };
               var text = 'Could not save. The TV keeps its last setting.';
               var kind = 'error';
               try {
