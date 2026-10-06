@@ -110,7 +110,10 @@ jobs:
     name: Mobile workability — PR code (375×812, blocking)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # 25, not 15: the audit step alone measured 12.2 to 14.0 minutes over 14
+    # runs (2026-10-05/06) and setup adds about 1.5, so 9 of those 14 runs were
+    # cut off at 15 with every completed test passing.
+    timeout-minutes: 25
 
     steps:
       - name: Checkout OSE
