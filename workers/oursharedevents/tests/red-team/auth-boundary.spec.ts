@@ -556,12 +556,12 @@ describe('Header injection: X-OCR-Internal and Authorization header manipulation
     }
   });
 
-  test('Cf-Access-Jwt-Assertion with leading/trailing whitespace is not accepted', () => {
+  test('Cf-Access-Jwt-Assertion with leading/trailing whitespace is not accepted', async () => {
     const now = Math.floor(Date.now() / 1000);
     const jwt = forgeCfAccessJwt({ iat: now, exp: now + 3600, email: 'test-admin@example.com' });
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': `  ${jwt}  ` });
     // With whitespace, the JWT parsing should fail (not a valid JWT structure)
-    const result = requireAdmin(
+    const result = await requireAdmin(
       req,
       adminEnvWith({
         ALLOW_ADMIN_KEY_FALLBACK: undefined,
