@@ -152,7 +152,9 @@ const config = defineConfig({
 
   use: {
     baseURL: BASE,
-    trace: 'on-first-retry',
+    // Never a trace (OSE-1470): it records every request's headers and cookies,
+    // and CI uploads test output. With retries at 0 it never recorded anyway.
+    trace: 'off',
     screenshot: 'only-on-failure',
     // Grant clipboard so the Copy URL control's real navigator.clipboard.writeText
     // resolves in headless CI (Chromium denies it without a permission grant, so
