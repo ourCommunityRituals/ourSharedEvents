@@ -8459,6 +8459,42 @@
         if (publishedEl) publishedEl.addEventListener('change', function () { publishedEl.dataset.chosen = '1'; });
       })();
 
+      // OSE-1644 — an event cannot leave draft without a start time and an event
+      // type, and neither can be added to a saved event from this page. So the
+      // form asks once, at Create: it names what is missing, marks the fields and
+      // focuses the first. Returns true when this press should stop. A second
+      // press with the same gap goes through: a draft still needs only a name.
+      window.oseCreateCoreCheck = function (doc) {
+        var el = function (id) { return doc.getElementById(id); };
+        var form = el('create-event-form');
+        var date = el('create-date');
+        var time = el('create-time');
+        var cat = el('create-category');
+        var type = el('create-event-type');
+        [date, time, cat, type].forEach(function (f) { f.removeAttribute('aria-invalid'); });
+        var noTime = !(date.value && time.value);
+        var noType = !type.value;
+        var gap = (noTime ? 'time' : '') + (noType ? '+type' : '');
+        if (!gap || form.dataset.coreAsked === gap) {
+          delete form.dataset.coreAsked;
+          return false;
+        }
+        form.dataset.coreAsked = gap;
+        var marked = [];
+        if (noTime && !date.value) marked.push(date);
+        if (noTime && !time.value) marked.push(time);
+        if (noType) marked.push(cat.value ? type : cat);
+        marked.forEach(function (f) { f.setAttribute('aria-invalid', 'true'); });
+        var names = [];
+        if (noTime) names.push('a start time');
+        if (noType) names.push('an event type');
+        var msg = el('create-msg');
+        msg.textContent = 'Add ' + names.join(' and ') + ' before this event can be published. Press Create Event again to save it as a draft without ' + (names.length > 1 ? 'them' : 'it') + '.';
+        msg.className = 'create-msg error';
+        marked[0].focus();
+        return true;
+      };
+
       document.getElementById('create-event-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('create-submit-btn');
@@ -8493,6 +8529,8 @@
           earlyTime.focus();
           return;
         }
+
+        if (window.oseCreateCoreCheck(document)) return;
 
         btn.disabled = true;
         btn.textContent = 'Creating\u2026';
