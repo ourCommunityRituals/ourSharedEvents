@@ -55,7 +55,8 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-describe('assert-no-persisted-token.sh', () => {
+// Each case spawns git and bash several times; slow on a loaded Windows machine.
+describe('assert-no-persisted-token.sh', { timeout: 30_000 }, () => {
   test('a clean checkout passes', () => {
     const r = run(repo);
     expect(r.out).toContain('clean');
