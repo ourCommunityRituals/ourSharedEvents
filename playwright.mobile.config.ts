@@ -180,6 +180,21 @@ const config = defineConfig({
       },
     },
     {
+      // Desktop is the second screen (PO 2026-10-06): the same workability
+      // contracts at a laptop size. No touch, so this is also the run that sees
+      // a page laid out for a pointer.
+      name: 'desktop-chromium',
+      testMatch: /mobile-workability\.spec\.ts/,
+      metadata: { auditViewport: { width: 1280, height: 800 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        launchOptions: process.env.PW_CHROMIUM_PATH
+          ? { executablePath: process.env.PW_CHROMIUM_PATH }
+          : {},
+      },
+    },
+    {
       // Tablet (PO 2026-10-03): the same workability contracts at an iPad Air
       // portrait size. 820px sits past the templates' 768px breakpoints, so
       // this is the width where a page falls back to its desktop layout.
