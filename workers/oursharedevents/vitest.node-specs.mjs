@@ -162,6 +162,7 @@ export const NODE_SPECS = [
   'tests/admin-wizard-step1.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',
+  'tests/admin-create-core-values.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
   'tests/admin-wizard-preview-review.spec.ts',
   'tests/admin-wizard-what-and-missing.spec.ts',

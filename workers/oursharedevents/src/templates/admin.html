@@ -3474,6 +3474,8 @@
             fire(typeEl, 'change');
           }
           function leaveEdit() {
+            var live = document.getElementById('wizard-go-live-msg');
+            if (live && /\berror\b/.test(live.className)) { live.textContent = ''; live.className = 'create-msg'; }
             wiz.editing = false;
             wiz.step = 5;
             replaceWizardStep(5);
@@ -3556,9 +3558,47 @@
             var gap = window.oseWizardReview ? window.oseWizardReview.message() : '';
             if (!gap) return false;
             if (msgEl) { msgEl.textContent = gap; msgEl.className = 'create-msg error'; }
-            window.oseWizardReview.focusFirstMissing();
+            // OSE-1644: go to the value itself, marked, with the reason beside
+            // it (the OSE-1515 pattern), not just to the row that names it.
+            var missing = window.oseWizardReview.missing();
+            markMissingCore(missing);
+            var hasDate = !!document.getElementById('wizard-event-date').value;
+            window.dispatchEvent(new CustomEvent('ose:wizard-edit', {
+              detail: missing[0] === 'time'
+                ? { step: 1, focus: hasDate ? 'wizard-event-time' : 'wizard-event-date' }
+                : { step: 2, focus: 'wizard-category' },
+            }));
+            setMsg(gap, 'error');
             return true;
           }
+
+          // The fields a core value lives in. A mark goes on the empty one and
+          // comes off as soon as it has a value.
+          var CORE_FIELDS = ['wizard-event-date', 'wizard-event-time', 'wizard-category', 'wizard-event-type'];
+          function markMissingCore(missing) {
+            var el = function (id) { return document.getElementById(id); };
+            CORE_FIELDS.forEach(function (id) { el(id).removeAttribute('aria-invalid'); });
+            if (missing.indexOf('time') >= 0) {
+              ['wizard-event-date', 'wizard-event-time'].forEach(function (id) {
+                if (!el(id).value) el(id).setAttribute('aria-invalid', 'true');
+              });
+            }
+            if (missing.indexOf('event_type') >= 0) {
+              el(el('wizard-category').value ? 'wizard-event-type' : 'wizard-category').setAttribute('aria-invalid', 'true');
+            }
+          }
+          CORE_FIELDS.forEach(function (id) {
+            var field = document.getElementById(id);
+            ['input', 'change'].forEach(function (ev) {
+              field.addEventListener(ev, function () {
+                if (!field.value || !field.hasAttribute('aria-invalid')) return;
+                field.removeAttribute('aria-invalid');
+                // A category alone is not a type yet: the mark moves on to it.
+                var type = document.getElementById('wizard-event-type');
+                if (id === 'wizard-category' && !type.value) type.setAttribute('aria-invalid', 'true');
+              });
+            });
+          });
 
           function goNext() {
             if (wiz.editing) {
@@ -4145,11 +4185,6 @@
           window.oseWizardReview = {
             missing: missingCore,
             message: function () { return sentence(missingCore()); },
-            focusFirstMissing: function () {
-              var m = missingCore();
-              var b = q('wizard-review-change-' + (m[0] === 'event_type' ? 'type' : 'when'));
-              if (b) b.focus();
-            },
           };
 
           // Any field, card or step change redraws; the wizard's own handlers run first.
@@ -8427,6 +8462,42 @@
         if (publishedEl) publishedEl.addEventListener('change', function () { publishedEl.dataset.chosen = '1'; });
       })();
 
+      // OSE-1644 — an event cannot leave draft without a start time and an event
+      // type, and neither can be added to a saved event from this page. So the
+      // form asks once, at Create: it names what is missing, marks the fields and
+      // focuses the first. Returns true when this press should stop. A second
+      // press with the same gap goes through: a draft still needs only a name.
+      window.oseCreateCoreCheck = function (doc) {
+        var el = function (id) { return doc.getElementById(id); };
+        var form = el('create-event-form');
+        var date = el('create-date');
+        var time = el('create-time');
+        var cat = el('create-category');
+        var type = el('create-event-type');
+        [date, time, cat, type].forEach(function (f) { f.removeAttribute('aria-invalid'); });
+        var noTime = !(date.value && time.value);
+        var noType = !type.value;
+        var gap = (noTime ? 'time' : '') + (noType ? '+type' : '');
+        if (!gap || form.dataset.coreAsked === gap) {
+          delete form.dataset.coreAsked;
+          return false;
+        }
+        form.dataset.coreAsked = gap;
+        var marked = [];
+        if (noTime && !date.value) marked.push(date);
+        if (noTime && !time.value) marked.push(time);
+        if (noType) marked.push(cat.value ? type : cat);
+        marked.forEach(function (f) { f.setAttribute('aria-invalid', 'true'); });
+        var names = [];
+        if (noTime) names.push('a start time');
+        if (noType) names.push('an event type');
+        var msg = el('create-msg');
+        msg.textContent = 'Add ' + names.join(' and ') + ' before this event can be published. Press Create Event again to save it as a draft without ' + (names.length > 1 ? 'them' : 'it') + '.';
+        msg.className = 'create-msg error';
+        marked[0].focus();
+        return true;
+      };
+
       document.getElementById('create-event-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('create-submit-btn');
@@ -8461,6 +8532,8 @@
           earlyTime.focus();
           return;
         }
+
+        if (window.oseCreateCoreCheck(document)) return;
 
         btn.disabled = true;
         btn.textContent = 'Creating\u2026';

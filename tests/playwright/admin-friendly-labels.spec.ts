@@ -128,6 +128,9 @@ test.describe('OSE-R-005 — friendly admin labels in browser', () => {
     const titleInput = page.locator('[data-testid="create-title"]');
     await titleInput.fill('Test Event for Friendly Toast');
     await page.locator('[data-testid="create-submit"]').click();
+    // OSE-1644: with no start time or event type the form asks once; the
+    // second press creates the draft.
+    await page.locator('[data-testid="create-submit"]').click();
 
     const msg = page.locator('[data-testid="create-msg"]');
     await expect(msg).toBeVisible();

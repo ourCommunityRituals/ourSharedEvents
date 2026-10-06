@@ -97,8 +97,24 @@ test('create from the full form: the event is a draft only the organizer can see
   await page.getByTestId('create-venue').fill('Eagles Hall');
   // OSE-1560: a new event is off the map unless the operator says otherwise; this journey puts it on.
   await page.getByTestId('create-published').check();
+  let posted = false;
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().endsWith('/api/v2/admin/events')) posted = true;
+  });
   await page.getByTestId('create-submit').click();
 
+  // OSE-1644: no event type yet, so the form asks once before it creates
+  // anything: it names the value, marks the field and puts focus there.
+  await expect(page.getByTestId('create-msg')).toHaveText(
+    'Add an event type before this event can be published. Press Create Event again to save it as a draft without it.'
+  );
+  await expect(page.getByTestId('create-category')).toBeFocused();
+  await expect(page.getByTestId('create-category')).toHaveAttribute('aria-invalid', 'true');
+  expect(posted, 'the first press sent nothing').toBe(false);
+
+  // Asked, never required: a second press saves the draft as it is. The next
+  // test relies on this draft having no event type.
+  await page.getByTestId('create-submit').click();
   expect((await created).status()).toBe(201);
   // The page moves on as soon as the event exists, so the id is read back
   // from the organizer's own list rather than from that response.
