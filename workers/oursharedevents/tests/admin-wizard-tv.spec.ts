@@ -8,6 +8,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { DEFAULT_DISPLAY_PANES } from '../src/lib/event-settings';
 import ADMIN_HTML from '../src/templates/admin.html';
 
 const EVT = 'evt_wizard_tv';
@@ -186,7 +187,7 @@ describe('wizard TV section: saving', () => {
     // The first answer does not claim "Saved." while a newer change waits.
     expect(sent).toHaveLength(2);
     expect(sent[1]).toEqual({
-      settings: { displayPanes: ['event', 'league'], displayDwellSeconds: 30 },
+      settings: { displayPanes: ['event', 'league', 'donate'], displayDwellSeconds: 30 },
     });
     expect($('wizard-tv-msg').textContent).toBe('Saving\u2026');
     answers.shift()!();
@@ -202,7 +203,7 @@ describe('wizard TV section: saving', () => {
     expect(calls).toEqual([]);
   });
 
-  test('a change saves the ticked screens in TV order, league kept last, and the speed', async () => {
+  test('a change saves the ticked screens in TV order, then league and donate, and the speed', async () => {
     const { box, speed, change, created, calls, $ } = mount();
     created();
     change(box('upcoming'), false);
@@ -215,9 +216,27 @@ describe('wizard TV section: saving', () => {
     ]);
     expect(calls[1]).toMatchObject({
       method: 'PUT',
-      body: { settings: { displayPanes: ['event', 'sponsors', 'league'], displayDwellSeconds: 8 } },
+      body: {
+        settings: {
+          displayPanes: ['event', 'sponsors', 'league', 'donate'],
+          displayDwellSeconds: 8,
+        },
+      },
     });
     expect($('wizard-tv-msg').textContent).toBe('Saved.');
+  });
+
+  test('with every screen ticked, a save sends the default TV order', async () => {
+    // The wizard must not switch off a screen it has no checkbox for: saving
+    // through it once dropped `donate`, so an event with a donation link lost
+    // that screen until the TV display card was saved again.
+    const { speed, change, created, calls } = mount();
+    created();
+    change(speed(30), true);
+    await flush();
+    expect(calls[0].body).toEqual({
+      settings: { displayPanes: [...DEFAULT_DISPLAY_PANES], displayDwellSeconds: 30 },
+    });
   });
 
   test('the last screen cannot be switched off', async () => {
@@ -379,7 +398,7 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     expect(puts).toEqual([
       {
         settings: {
-          displayPanes: ['event', 'upcoming', 'sponsors', 'league'],
+          displayPanes: ['event', 'upcoming', 'sponsors', 'league', 'donate'],
           displayDwellSeconds: 30,
         },
       },
