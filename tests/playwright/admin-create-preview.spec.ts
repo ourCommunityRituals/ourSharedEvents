@@ -145,7 +145,7 @@ test.describe('create flow: live preview and review', () => {
     expect(sent, `requests while typing:\n${sent.join('\n')}`).toEqual([]);
   });
 
-  test('a draft that is missing its time and type: review says so, Publish sends nothing, Change fixes it', async ({
+  test('a draft that is missing its time and type: review says so, Publish sends nothing and opens the field, Change fixes the rest', async ({
     page,
     request,
   }) => {
@@ -171,18 +171,21 @@ test.describe('create flow: live preview and review', () => {
     page.on('request', (r) => {
       if (r.method() !== 'GET') sent.push(`${r.method()} ${r.url()}`);
     });
+    // It also takes the organizer to the first missing field, marked and in
+    // focus, with the reason on that step (OSE-1644).
     await page.getByTestId('wizard-go-live-btn').click();
-    await expect(page.getByTestId('wizard-go-live-msg')).toHaveText(
+    await expect(page.getByTestId('wizard-msg')).toHaveText(
       'Add a start time and an event type before this event goes further'
     );
     expect(sent, 'Publish sent nothing').toEqual([]);
     expect((await request.get(`/events/${id}`)).status()).toBe(404);
-
-    // Change on the time goes back to the time field; the preview is there to see it.
-    await page.getByTestId('wizard-review-change-when').click();
     await expect(page.getByTestId('wizard-event-time')).toBeFocused();
+    await expect(page.getByTestId('wizard-event-time')).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByTestId('wizard-next-btn')).toBeHidden();
+
+    // Filling it clears the mark; the preview is there to see the change.
     await page.getByTestId('wizard-event-time').fill('18:30');
+    await expect(page.getByTestId('wizard-event-time')).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByTestId('wizard-preview-when')).toContainText('6:30');
     await page.getByTestId('wizard-save-edit-btn').click();
     await expect(page.getByTestId('wizard-step-5')).toBeVisible();
@@ -190,9 +193,11 @@ test.describe('create flow: live preview and review', () => {
       'Add an event type before this event goes further'
     );
 
-    // Change on the type goes to the type picker.
+    // Change on the type goes to the type picker, and marks nothing: only a
+    // refused Publish marks a field.
     await page.getByTestId('wizard-review-change-type').click();
     await expect(page.getByTestId('wizard-category')).toBeFocused();
+    await expect(page.getByTestId('wizard-category')).not.toHaveAttribute('aria-invalid', 'true');
     await page.getByTestId('wizard-category').selectOption({ index: 1 });
     await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
     await expect(page.getByTestId('wizard-preview-type')).toContainText('>');
