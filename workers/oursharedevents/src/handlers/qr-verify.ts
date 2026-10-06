@@ -11,7 +11,12 @@
  * State transition validity is guarded by isValidTransition from the domain model.
  */
 
-import { coreValuesMissing, coreValuesRefusal, isPublishStep } from '../lib/core-values';
+import {
+  coreValuesMissing,
+  coreValuesRefusal,
+  isPublishStep,
+  logCoreValuesRefused,
+} from '../lib/core-values';
 import { isValidTransition } from '../domain/event-state';
 import { listedFromForPublish } from '../lib/publish-grace';
 
@@ -62,7 +67,10 @@ export async function handleV2AdminVerifyQr(
   // OSE-1560 � same check as PUT status: a start time and an event type.
   if (isPublishStep(row.status, 'active')) {
     const missing = coreValuesMissing(row);
-    if (missing.length > 0) return Response.json(coreValuesRefusal(missing), { status: 409 });
+    if (missing.length > 0) {
+      logCoreValuesRefused('verify_qr', row.status, 'active', missing);
+      return Response.json(coreValuesRefusal(missing), { status: 409 });
+    }
   }
 
   // Publish grace window (lib/publish-grace.ts): live by link now, listed later.
