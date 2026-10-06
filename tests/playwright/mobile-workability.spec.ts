@@ -119,7 +119,35 @@ type Surface = {
    *  for THIS run (e.g., requires real seeded data we don't have in
    *  staging today). Used sparingly; documented in story description. */
   skipReason?: string;
+  /** True for a page the Worker serves only when Cloudflare Access is not in
+   *  front of it. On a deployed host Access answers first, so the run would
+   *  measure Cloudflare's page; see skipReasonFor(). */
+  localOnly?: boolean;
 };
+
+// OSE-1529: on staging and production Cloudflare Access answers /admin with a
+// 302 to its own login page before the Worker runs, so the Worker's sign-in
+// page is only reachable on a local worker. The nightly (playwright.config.ts,
+// deployed staging) measured Cloudflare's login page and failed on it
+// (run 37357145901: a 301x20 link, 4 contracts x 4 projects).
+const ACCESS_SKIP_REASON =
+  "Cloudflare Access answers this path on a deployed host, so the page measured would be Cloudflare's login page, not the Worker's. Audited on the local worker by the blocking PR job (playwright.mobile.config.ts).";
+
+function isLocalTarget(): boolean {
+  const base = test.info().project.use.baseURL ?? '';
+  try {
+    const host = new URL(base).hostname;
+    return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+function skipReasonFor(surface: Surface): string | undefined {
+  if (surface.skipReason) return surface.skipReason;
+  if (surface.localOnly && !isLocalTarget()) return ACCESS_SKIP_REASON;
+  return undefined;
+}
 
 /**
  * ADMIN_CTA_NOTE — why /admin's primaryCtaSelector starts with the path chooser
@@ -194,6 +222,7 @@ const SURFACES: Surface[] = [
     path: '/admin',
     name: 'organizer sign-in page',
     primaryCtaSelector: '[data-testid="signin-cta"]',
+    localOnly: true,
   },
   {
     path: '/admin',
@@ -426,7 +455,7 @@ for (const surface of SURFACES) {
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no horizontal scroll`, async ({
       page,
     }) => {
-      test.skip(!!surface.skipReason, surface.skipReason ?? '');
+      test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       await loadSurface(page, surface);
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
@@ -442,7 +471,7 @@ for (const surface of SURFACES) {
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all touch targets ≥ 44×44 px`, async ({
       page,
     }) => {
-      test.skip(!!surface.skipReason, surface.skipReason ?? '');
+      test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       await loadSurface(page, surface);
       const interactives = await getInteractiveLocators(page);
       const violations: string[] = [];
@@ -472,7 +501,7 @@ for (const surface of SURFACES) {
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | all input font-size ≥ 16 px`, async ({
       page,
     }) => {
-      test.skip(!!surface.skipReason, surface.skipReason ?? '');
+      test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       await loadSurface(page, surface);
       const inputs = await getInputLocators(page);
       const violations: string[] = [];
@@ -496,7 +525,7 @@ for (const surface of SURFACES) {
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | primary CTA above the fold`, async ({
       page,
     }) => {
-      test.skip(!!surface.skipReason, surface.skipReason ?? '');
+      test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       test.skip(
         !surface.primaryCtaSelector,
         `${surface.name}: no primaryCtaSelector declared — surface either has no clear CTA OR the contract isn't applicable`
@@ -561,7 +590,7 @@ for (const surface of SURFACES) {
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
       page,
     }) => {
-      test.skip(!!surface.skipReason, surface.skipReason ?? '');
+      test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       await loadSurface(page, surface);
       // Check viewport meta — pinch-zoom is disabled if the meta
       // includes `user-scalable=no` OR `maximum-scale=1`. EITHER of
