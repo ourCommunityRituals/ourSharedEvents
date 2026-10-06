@@ -443,6 +443,16 @@ jobs:
             package-lock.json
             workers/oursharedevents/package-lock.json
 
+      # OSE-1466 0.6, run time: this job runs the PR's code, so prove its token is
+      # refused on push, comment and issue creation. Nothing is created. One
+      # shard is enough: every shard of this job gets the same token.
+      - name: 'Job token cannot push, comment or open issues'
+        if: github.event_name == 'pull_request' && matrix.shard == 'lint'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_ISSUE: ${{ github.event.pull_request.number }}
+        run: bash scripts/ci/assert-token-read-only.sh
+
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
         # ADR-008 Phase 0: this job installs/builds/tests/deploys the Worker,
         # which bundles @ocr/ui from the hub commit pinned in .ocr-hub-ref.
