@@ -1,0 +1,41 @@
+info:
+  name: GET /events?when=week&utm_source=bruno (canonical is the bare list)
+  type: http
+  seq: 11
+
+# OSE-1622: a filtered or tagged address of the events list is the same page for
+# a search engine, so its canonical link names the bare /events with no query.
+# 403 is accepted because the edge may challenge a script client on an HTML
+# page; the canonical tests run only on a real 200.
+http:
+  method: GET
+  url: "{{baseUrl}}/events?when=week&utm_source=bruno"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        test('Returns 200 or 403 (edge challenge)', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 200) {
+          const body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+          const tags = body.match(/<link rel="canonical" href="[^"]*"/g) || [];
+          const href = tags.length ? tags[0].replace('<link rel="canonical" href="', '').replace('"', '') : '';
+          test('exactly one canonical link', function () {
+            expect(tags.length).to.eql(1);
+          });
+          test('the canonical is the bare /events, absolute, with no query', function () {
+            expect(href.indexOf('http')).to.eql(0);
+            expect(href.endsWith('/events')).to.eql(true);
+            expect(href.indexOf('?')).to.eql(-1);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
