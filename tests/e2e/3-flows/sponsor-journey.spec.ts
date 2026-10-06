@@ -687,8 +687,8 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
 
     const evRes = await publicFetch(page, '/api/v2/events');
     test.skip(!evRes.body.ok || !evRes.body.items?.length, 'No events');
-    const pickedEventId = pickSponsorJourneyEvent(evRes.body.items || []);
-    expect(pickedEventId).toBeTruthy();
+    const pickedEventId = await resolveJourneyEvent(page, evRes.body.items || []);
+    expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
 
     const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
