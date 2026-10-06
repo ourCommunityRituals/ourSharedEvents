@@ -78,8 +78,9 @@ local address skips it with the reason stated; a local run measures it as before
 
 - Before (CI, run 37357145901): 16 failed on this surface.
 - After (staging, this run): 20 skipped on this surface, 0 failed overall.
-- Still to confirm in this PR's own CI log: the blocking job lists the sign-in page as
-  passed, not skipped. If it shows as skipped there, the change is wrong.
+- Local worker (the blocking PR job, run 37422950524 on this change): the sign-in page
+  is measured, not skipped. 5 of 5 passed on `mobile-chromium` and 5 of 5 on
+  `tablet-chromium`; 413 passed overall.
 
 ## What this means for the drain stories
 
