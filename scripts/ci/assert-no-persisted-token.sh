@@ -13,7 +13,7 @@
 # whether it sits in .git/config or in a file pulled in by includeIf (where
 # newer actions/checkout versions keep it, under $RUNNER_TEMP):
 #   - any http.*.extraheader entry
-#   - any remote URL that carries userinfo (https://user:token@host/...)
+#   - any remote URL that carries userinfo (a user or token before the host)
 #
 # Prints the config key or remote name, never a value.
 # Exit 0 clean, 1 credential found, 2 bad usage or not a git checkout.
