@@ -79,6 +79,9 @@ const config = defineConfig({
   // worker serving the PR's own code. One resolution mechanism, here.
   use: {
     baseURL: process.env.STAGING_URL || 'https://stg.oursharedevents.com',
+    // Never a trace (OSE-1470): it records every request's headers and cookies,
+    // and CI uploads test output. Stated here so it is not left to the default.
+    trace: 'off',
   },
 
   expect: {
