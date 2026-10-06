@@ -315,4 +315,8 @@ describe('OSE-1216 — tools/ci/main-branch-protection.json vs the workflows', (
     expect(required).toContain('T0 Gate (component)');
     expect(required).not.toContain('S2 Post-Execution Security');
   });
+
+  test('the phone audit of the code under review is required (phone is the first screen, PO 2026-10-06)', () => {
+    expect(required).toContain('Mobile workability — PR code (375×812, blocking)');
+  });
 });
