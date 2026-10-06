@@ -85,6 +85,13 @@ jobs:
           # ADR-012 0.1: never leave the token where later steps can read it.
           persist-credentials: false
 
+      # OSE-1466 0.1, run time: the steps below run PR code, so prove the
+      # checkout above left no credential on disk.
+      - name: 'No token left behind by the brain checkout'
+        if: github.actor != 'dependabot[bot]'
+        working-directory: ${{ github.workspace }}
+        run: bash ose/scripts/ci/assert-no-persisted-token.sh ocr-docs
+
       - name: Set up Python
         if: github.actor != 'dependabot[bot]'
         uses: actions/setup-python@v7

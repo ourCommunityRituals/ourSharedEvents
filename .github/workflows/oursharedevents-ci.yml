@@ -971,6 +971,13 @@ jobs:
           # the token where it can be read.
           persist-credentials: false
 
+      # OSE-1466 0.1, run time: the steps below run PR code, so prove the
+      # checkout above left no credential on disk.
+      - name: 'No token left behind by the brain checkout'
+        if: matrix.section == 'worker-d1-schema' && github.actor != 'dependabot[bot]'
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/ci/assert-no-persisted-token.sh ocr-docs-brain-checkout
+
       - name: 'Run T0 test section'
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.command }}
