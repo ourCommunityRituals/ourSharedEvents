@@ -21,11 +21,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import {
-  requireAdmin,
-  extractAdminActor,
-  type AdminEnv,
-} from '../../src/auth/admin';
+import { requireAdmin, extractAdminActor, type AdminEnv } from '../../src/auth/admin';
 import {
   mintSignedLinkToken,
   verifySignedLinkToken,
@@ -49,8 +45,9 @@ const tenv = () => env as unknown as TestEnv;
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    try { await tenv().DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -58,8 +55,9 @@ beforeAll(async () => {
   }
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    try { await tenv().FORMS_DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -75,9 +73,13 @@ beforeAll(async () => {
  */
 function forgeCfAccessJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
   const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
   // Intentionally bogus signature — not signed with any CF Access key
   const fakeSig = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
   return `${header}.${body}.${fakeSig}`;
@@ -104,7 +106,6 @@ function makeRequest(headers: Record<string, string> = {}): Request {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
-
   test('forged JWT with future exp and allowlisted email passes requireAdmin — BUG CONFIRMED', () => {
     // Attacker constructs a valid-looking payload, signs with garbage.
     // If requireAdmin returns null (passes), the vulnerability is live.
@@ -122,8 +123,10 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
     // EXPECTATION: should be a 401/403 because we never verified the RSA signature.
     // If result is null the attacker is granted admin — this is the confirmed bug.
     // The test documents the current broken behaviour so it fails when the bug is fixed.
-    expect(result, 'SECURITY BUG AUTH-001: forged JWT accepted without signature verification')
-      .not.toBeNull();
+    expect(
+      result,
+      'SECURITY BUG AUTH-001: forged JWT accepted without signature verification'
+    ).not.toBeNull();
   });
 
   test('forged JWT with non-allowlisted email must not fall through to grant access', async () => {
@@ -134,10 +137,14 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
       email: 'attacker@evil.com',
     });
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': forgedJwt });
-    const result = await requireAdmin(req, adminEnvWith({
-      ALLOW_ADMIN_KEY_FALLBACK: undefined,
-      ALLOW_OCR_INTERNAL: undefined,
-    }), 'req-auth001b');
+    const result = await requireAdmin(
+      req,
+      adminEnvWith({
+        ALLOW_ADMIN_KEY_FALLBACK: undefined,
+        ALLOW_OCR_INTERNAL: undefined,
+      }),
+      'req-auth001b'
+    );
     // Must be denied regardless of JWT presence
     expect(result?.status).toBe(403);
   });
@@ -150,10 +157,14 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
       email: 'test-admin@example.com',
     });
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': expiredJwt });
-    const result = requireAdmin(req, adminEnvWith({
-      ALLOW_ADMIN_KEY_FALLBACK: undefined,
-      ALLOW_OCR_INTERNAL: undefined,
-    }), 'req-auth001c');
+    const result = requireAdmin(
+      req,
+      adminEnvWith({
+        ALLOW_ADMIN_KEY_FALLBACK: undefined,
+        ALLOW_OCR_INTERNAL: undefined,
+      }),
+      'req-auth001c'
+    );
     expect(result).not.toBeNull(); // expired JWT must be denied
   });
 
@@ -161,20 +172,28 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
     const now = Math.floor(Date.now() / 1000);
     const jwtNoExp = forgeCfAccessJwt({ iat: now, email: 'test-admin@example.com' });
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': jwtNoExp });
-    const result = requireAdmin(req, adminEnvWith({
-      ALLOW_ADMIN_KEY_FALLBACK: undefined,
-      ALLOW_OCR_INTERNAL: undefined,
-    }), 'req-auth001d');
+    const result = requireAdmin(
+      req,
+      adminEnvWith({
+        ALLOW_ADMIN_KEY_FALLBACK: undefined,
+        ALLOW_OCR_INTERNAL: undefined,
+      }),
+      'req-auth001d'
+    );
     expect(result).not.toBeNull(); // no exp = invalid
   });
 
   test('JWT with fewer than three dot-delimited parts is rejected', () => {
     const badJwt = 'header.payload'; // only two parts
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': badJwt });
-    const result = requireAdmin(req, adminEnvWith({
-      ALLOW_ADMIN_KEY_FALLBACK: undefined,
-      ALLOW_OCR_INTERNAL: undefined,
-    }), 'req-auth001e');
+    const result = requireAdmin(
+      req,
+      adminEnvWith({
+        ALLOW_ADMIN_KEY_FALLBACK: undefined,
+        ALLOW_OCR_INTERNAL: undefined,
+      }),
+      'req-auth001e'
+    );
     expect(result).not.toBeNull();
   });
 
@@ -191,10 +210,9 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
     });
     // With the bug live this returns 200; the test documents the current state.
     // After the fix (real signature verification) it must return 401.
-    expect(
-      [200, 401, 403],
-      'Response must be 200 (bug live) or 401/403 (bug fixed)'
-    ).toContain(res.status);
+    expect([200, 401, 403], 'Response must be 200 (bug live) or 401/403 (bug fixed)').toContain(
+      res.status
+    );
     // Concrete gate: once the fix ships, flip this to strict 401
     // expect(res.status).toBe(401);
   });
@@ -205,71 +223,84 @@ describe('AUTH-001: CF Access JWT signature not verified (CRITICAL)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-002: constantTimeEqual length-leak timing oracle (HIGH)', () => {
-
   /**
-   * Measure the wall-clock time requireAdmin spends rejecting a bearer token
-   * that is the wrong *length* vs one that is the right length but wrong content.
-   *
-   * constantTimeEqual() early-exits on length mismatch before doing any XOR.
-   * An attacker who can measure the microsecond-level timing difference can
-   * determine the correct key length through a binary search.
+   * Deterministic stand-in for wall-clock timing: count the per-byte reads
+   * (`String.prototype.charCodeAt` calls) the admin guard performs while
+   * rejecting a bearer token. constantTimeEqual() is the only code on this path
+   * that reads the token byte by byte, and each loop iteration reads one byte
+   * of each operand, so reads = 2 x bytes compared. Work done is exactly what a
+   * timing attacker observes, minus the runner-load noise that made the old
+   * performance.now() assertion fail intermittently (it compared two 500-iteration
+   * wall-clock totals with a 1.5x margin).
    */
-  async function measureRejectTime(
-    token: string,
-    correctKey: string,
-    iters = 500
-  ): Promise<number> {
+  async function perByteReads(token: string, correctKey: string): Promise<number> {
     const fakeEnv = adminEnvWith({
       ADMIN_KEY: correctKey,
       ALLOW_ADMIN_KEY_FALLBACK: 'true',
       ALLOW_OCR_INTERNAL: undefined,
     });
-    const start = performance.now();
-    for (let i = 0; i < iters; i++) {
-      const req = makeRequest({ Authorization: `Bearer ${token}` });
-      requireAdmin(req, fakeEnv, 'timing-test');
+    const original = String.prototype.charCodeAt;
+    let reads = 0;
+    String.prototype.charCodeAt = function (this: string, index: number): number {
+      reads++;
+      return original.call(this, index);
+    };
+    try {
+      const res = await requireAdmin(
+        makeRequest({ Authorization: `Bearer ${token}` }),
+        fakeEnv,
+        'work-count-test'
+      );
+      // Every token used here is wrong: the guard must reject it.
+      expect(res?.status).toBe(401);
+    } finally {
+      String.prototype.charCodeAt = original;
     }
-    return performance.now() - start;
+    return reads;
   }
 
-  test('documents: wrong-length token is rejected faster than same-length wrong token — length oracle exists', async () => {
-    const correctKey = 'test-admin-key-e2e-2026'; // 23 chars
-    const shortToken  = 'x'.repeat(10);            // different length — early exit
-    const sameLength  = 'x'.repeat(correctKey.length); // same length — full XOR
+  const correctKey = 'test-admin-key-e2e-2026'; // 23 chars
 
-    const shortTime = await measureRejectTime(shortToken, correctKey);
-    const sameTime  = await measureRejectTime(sameLength, correctKey);
+  test('guards: the compare loop has no early exit — a first-byte mismatch costs the same as a last-byte mismatch', async () => {
+    // This is the property constant-time comparison exists for. If a mismatch
+    // returned from inside the loop, the work done would reveal how many leading
+    // bytes of the guess are right, and the key could be recovered byte by byte.
+    const n = correctKey.length;
+    const firstByteWrong = 'X' + correctKey.slice(1);
+    const lastByteWrong = correctKey.slice(0, -1) + 'X';
+    const allWrong = 'x'.repeat(n);
 
-    // Document the timing gap. The difference should exist (short < same).
-    // This test intentionally records the vulnerability rather than failing—
-    // timing differences in a test runner are noisy. The important assertion
-    // is that the fix (padding both paths to equal length before comparing)
-    // would NOT produce a measurable gap.
-    console.log(`[AUTH-002] short-token reject time: ${shortTime.toFixed(2)}ms over 500 iters`);
-    console.log(`[AUTH-002] same-length reject time: ${sameTime.toFixed(2)}ms over 500 iters`);
+    const first = await perByteReads(firstByteWrong, correctKey);
+    const last = await perByteReads(lastByteWrong, correctKey);
+    const all = await perByteReads(allWrong, correctKey);
 
-    // Soft assertion: short path should not take longer than same-length path.
-    // A hardened fix makes these equal; the bug makes short strictly faster.
-    expect(shortTime).toBeLessThanOrEqual(sameTime * 1.5);
+    expect(first, 'first-byte mismatch must do the same work as last-byte mismatch').toBe(last);
+    expect(all, 'fully wrong token must do the same work as a nearly-right one').toBe(last);
+
+    // And the loop really ran over the whole key (a no-op compare would also be "equal").
+    const shortRejection = await perByteReads('x'.repeat(n + 1), correctKey);
+    expect(last - shortRejection).toBe(2 * n);
   });
 
-  test('timing oracle: 1-char token rejected much faster than correct-length wrong token', async () => {
-    const correctKey = 'test-admin-key-e2e-2026';
-    const tiny = 'a'; // 1 char — exits immediately on length check
+  test('documents: wrong-length token is rejected before any per-byte compare — length oracle exists', async () => {
+    // Known, accepted weakness (AUTH-002): constantTimeEqual() returns on a length
+    // mismatch before the XOR loop, so rejection time reveals whether a guess has the
+    // key's length. The key's length is not treated as secret; its content is.
+    // If this test goes red, the early return was removed or padded: the oracle is
+    // closed. Update AUTH-002 in this file's header and flip this test to assert
+    // equal work for every length.
+    const n = correctKey.length;
+    const sameLength = await perByteReads('x'.repeat(n), correctKey);
 
-    const tinyTime = await measureRejectTime(tiny, correctKey, 1000);
-    const sameTime = await measureRejectTime('b'.repeat(correctKey.length), correctKey, 1000);
-
-    // Tiny token (length mismatch) must reject substantially faster.
-    // This is the oracle: attacker can binary-search key length using time.
-    console.log(`[AUTH-002] 1-char oracle: ${tinyTime.toFixed(2)}ms`);
-    console.log(`[AUTH-002] same-length:   ${sameTime.toFixed(2)}ms`);
-
-    // Document: if this ratio is >2x, the oracle is reliably exploitable.
-    const ratio = sameTime / tinyTime;
-    console.log(`[AUTH-002] timing ratio (same/tiny): ${ratio.toFixed(2)}x`);
-    // We don't assert a hard pass/fail here because test-runner timing noise
-    // can swamp the signal. The numbers in CI logs are the evidence.
+    const baseline = await perByteReads('x'.repeat(n + 1), correctKey);
+    for (const len of [1, 10, n - 1, n + 1, n + 20]) {
+      const reads = await perByteReads('x'.repeat(len), correctKey);
+      expect(reads, `length ${len} must not enter the per-byte loop`).toBe(baseline);
+    }
+    expect(
+      sameLength - baseline,
+      'same-length token must pay for a full pass over the key (2 reads per byte)'
+    ).toBe(2 * n);
   });
 });
 
@@ -278,7 +309,6 @@ describe('AUTH-002: constantTimeEqual length-leak timing oracle (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-003: auth method downgrade via invalid JWT fallthrough (HIGH)', () => {
-
   test('structurally invalid JWT (only 2 parts) does not block Method 2 (X-OCR-Internal)', async () => {
     // RFC: a CF Access header that is present but malformed should short-circuit
     // the entire auth chain, not silently fall through to weaker methods.
@@ -295,7 +325,10 @@ describe('AUTH-003: auth method downgrade via invalid JWT fallthrough (HIGH)', (
     // Desired hardened behavior: CF Access header present but invalid → 401
     // (an entity that claims CF Access identity but provides a garbage token
     // should never fall back to weaker credentials).
-    console.log('[AUTH-003] Fallthrough result (null=passed, Response=blocked):', result === null ? 'PASSED (vulnerable)' : `BLOCKED ${result?.status}`);
+    console.log(
+      '[AUTH-003] Fallthrough result (null=passed, Response=blocked):',
+      result === null ? 'PASSED (vulnerable)' : `BLOCKED ${result?.status}`
+    );
 
     // Document the vulnerability. When fixed, this should be a non-null Response.
     // Until then, we assert what actually happens so CI catches regression in
@@ -313,7 +346,10 @@ describe('AUTH-003: auth method downgrade via invalid JWT fallthrough (HIGH)', (
     });
     const result = await requireAdmin(req, adminEnvWith(), 'req-auth003b');
     // Document current: garbled CF JWT → fallthrough → Method 3 succeeds
-    console.log('[AUTH-003] Garbled JWT + ADMIN_KEY result:', result === null ? 'PASSED (vulnerable)' : `BLOCKED ${result?.status}`);
+    console.log(
+      '[AUTH-003] Garbled JWT + ADMIN_KEY result:',
+      result === null ? 'PASSED (vulnerable)' : `BLOCKED ${result?.status}`
+    );
     expect([null, 401, 403]).toContain(result === null ? null : result.status);
   });
 
@@ -341,25 +377,28 @@ describe('AUTH-003: auth method downgrade via invalid JWT fallthrough (HIGH)', (
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-005: ALLOW_ADMIN_KEY_FALLBACK truthy-string misconfiguration (HIGH)', () => {
-
   const cases: Array<[string, boolean]> = [
-    ['true',  true],   // correct
-    ['True',  false],  // misconfigured — operator typo
-    ['TRUE',  false],  // misconfigured
-    ['1',     false],  // misconfigured
-    ['yes',   false],  // misconfigured
-    ['on',    false],  // misconfigured
-    ['false', false],  // correctly disabled
-    ['',      false],  // correctly disabled
+    ['true', true], // correct
+    ['True', false], // misconfigured — operator typo
+    ['TRUE', false], // misconfigured
+    ['1', false], // misconfigured
+    ['yes', false], // misconfigured
+    ['on', false], // misconfigured
+    ['false', false], // correctly disabled
+    ['', false], // correctly disabled
   ];
 
   for (const [val, shouldPass] of cases) {
     test(`ALLOW_ADMIN_KEY_FALLBACK="${val}" → Method 3 ${shouldPass ? 'enabled' : 'disabled'}`, async () => {
       const req = makeRequest({ Authorization: 'Bearer test-admin-key-e2e-2026' });
-      const result = await requireAdmin(req, adminEnvWith({
-        ALLOW_ADMIN_KEY_FALLBACK: val,
-        ALLOW_OCR_INTERNAL: undefined,
-      }), `req-auth005-${val}`);
+      const result = await requireAdmin(
+        req,
+        adminEnvWith({
+          ALLOW_ADMIN_KEY_FALLBACK: val,
+          ALLOW_OCR_INTERNAL: undefined,
+        }),
+        `req-auth005-${val}`
+      );
 
       if (shouldPass) {
         expect(result, `"${val}" should enable Method 3`).toBeNull();
@@ -374,10 +413,14 @@ describe('AUTH-005: ALLOW_ADMIN_KEY_FALLBACK truthy-string misconfiguration (HIG
   for (const [val, shouldPass] of cases) {
     test(`ALLOW_OCR_INTERNAL="${val}" → Method 2 ${shouldPass ? 'enabled' : 'disabled'}`, async () => {
       const req = makeRequest({ 'X-OCR-Internal': 'test-ocr-internal-secret-2026' });
-      const result = await requireAdmin(req, adminEnvWith({
-        ALLOW_ADMIN_KEY_FALLBACK: undefined,
-        ALLOW_OCR_INTERNAL: val,
-      }), `req-auth005-ocr-${val}`);
+      const result = await requireAdmin(
+        req,
+        adminEnvWith({
+          ALLOW_ADMIN_KEY_FALLBACK: undefined,
+          ALLOW_OCR_INTERNAL: val,
+        }),
+        `req-auth005-ocr-${val}`
+      );
 
       if (shouldPass) {
         expect(result, `"${val}" should enable Method 2`).toBeNull();
@@ -395,7 +438,9 @@ describe('AUTH-005: ALLOW_ADMIN_KEY_FALLBACK truthy-string misconfiguration (HIG
     const prodSection = src.slice(prodIdx);
     // ALLOW_ADMIN_KEY_FALLBACK must NOT appear set to "true" in production
     const hasFallbackTrue = /ALLOW_ADMIN_KEY_FALLBACK\s*=\s*["']?true["']?/.test(prodSection);
-    expect(hasFallbackTrue, 'ALLOW_ADMIN_KEY_FALLBACK must not be "true" in production env').toBe(false);
+    expect(hasFallbackTrue, 'ALLOW_ADMIN_KEY_FALLBACK must not be "true" in production env').toBe(
+      false
+    );
   });
 });
 
@@ -404,7 +449,6 @@ describe('AUTH-005: ALLOW_ADMIN_KEY_FALLBACK truthy-string misconfiguration (HIG
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-006: signed-link tokens have no jti — unconditionally reusable (HIGH)', () => {
-
   const reportEnv: SharedReportAuthEnv = {
     SHARED_REPORT_SIGNING_SECRET: 'test-shared-report-signing-secret-do-not-use',
   };
@@ -435,7 +479,9 @@ describe('AUTH-006: signed-link tokens have no jti — unconditionally reusable 
     expect(token).not.toBeNull();
     const [payloadB64] = token!.split('.');
     const pad = '='.repeat((4 - (payloadB64.length % 4)) % 4);
-    const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/') + pad)) as Record<string, unknown>;
+    const payload = JSON.parse(
+      atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/') + pad)
+    ) as Record<string, unknown>;
     // Document: no jti means the token cannot be server-side revoked
     expect(payload.jti, 'AUTH-006 confirmed: no jti in token payload').toBeUndefined();
     expect(payload.nonce, 'AUTH-006 confirmed: no nonce in token payload').toBeUndefined();
@@ -445,11 +491,15 @@ describe('AUTH-006: signed-link tokens have no jti — unconditionally reusable 
   test('SharedReport endpoint: GET /api/v2/events/:id/shared-report with same token succeeds twice', async () => {
     // Seed a minimal event row so the handler can find it
     try {
-      await tenv().DB.prepare(
-        `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
          VALUES ('evt_reuse_e2e', 'brand_test', 'Reuse Test Event', 'active', '2026-01-01', '2026-12-31')`
-      ).run();
-    } catch { /* already exists */ }
+        )
+        .run();
+    } catch {
+      /* already exists */
+    }
 
     const token = await mintSignedLinkToken(reportEnv, 'evt_reuse_e2e', 'bar_owner', 3600);
     expect(token).not.toBeNull();
@@ -472,7 +522,6 @@ describe('AUTH-006: signed-link tokens have no jti — unconditionally reusable 
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Header injection: X-OCR-Internal and Authorization header manipulation', () => {
-
   test('X-OCR-Internal with embedded newline does not bypass auth', async () => {
     // HTTP header injection attempt — newlines in header values.
     // The Fetch API itself rejects \r\n in header values (Invalid header value),
@@ -493,9 +542,13 @@ describe('Header injection: X-OCR-Internal and Authorization header manipulation
     // Same: Fetch API rejects null bytes in header values at construction time.
     try {
       const req = makeRequest({ Authorization: 'Bearer test-admin-key-e2e-2026\x00extra' });
-      const result = await requireAdmin(req, adminEnvWith({
-        ALLOW_OCR_INTERNAL: undefined,
-      }), 'req-inject-02');
+      const result = await requireAdmin(
+        req,
+        adminEnvWith({
+          ALLOW_OCR_INTERNAL: undefined,
+        }),
+        'req-inject-02'
+      );
       expect(result).not.toBeNull();
     } catch (e) {
       // Fetch API rejected the null byte — correct behavior
@@ -503,19 +556,26 @@ describe('Header injection: X-OCR-Internal and Authorization header manipulation
     }
   });
 
-  test('Cf-Access-Jwt-Assertion with leading/trailing whitespace is not accepted', () => {
+  test('Cf-Access-Jwt-Assertion with leading/trailing whitespace is not accepted', async () => {
     const now = Math.floor(Date.now() / 1000);
     const jwt = forgeCfAccessJwt({ iat: now, exp: now + 3600, email: 'test-admin@example.com' });
     const req = makeRequest({ 'Cf-Access-Jwt-Assertion': `  ${jwt}  ` });
     // With whitespace, the JWT parsing should fail (not a valid JWT structure)
-    const result = requireAdmin(req, adminEnvWith({
-      ALLOW_ADMIN_KEY_FALLBACK: undefined,
-      ALLOW_OCR_INTERNAL: undefined,
-    }), 'req-inject-03');
+    const result = await requireAdmin(
+      req,
+      adminEnvWith({
+        ALLOW_ADMIN_KEY_FALLBACK: undefined,
+        ALLOW_OCR_INTERNAL: undefined,
+      }),
+      'req-inject-03'
+    );
     // A valid-structured JWT with leading spaces fails the split('.') check
     // because the first character is not the header segment
     // Behaviour here depends on JS string handling — document it
-    console.log('[inject-03] Whitespace-padded JWT result:', result === null ? 'PASSED' : result.status);
+    console.log(
+      '[inject-03] Whitespace-padded JWT result:',
+      result === null ? 'PASSED' : result.status
+    );
   });
 
   test('extractAdminActor returns null for unauthenticated request', () => {
@@ -552,7 +612,6 @@ describe('Header injection: X-OCR-Internal and Authorization header manipulation
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Environment config: production hardening assertions', () => {
-
   test('wrangler.toml [env.production] does not set ADMIN_KEY in plaintext vars', () => {
     const src = (env as unknown as Record<string, string>).TEST_WRANGLER_TOML;
     const prodIdx = src.indexOf('[env.production]');
@@ -560,7 +619,10 @@ describe('Environment config: production hardening assertions', () => {
     const prodSection = src.slice(prodIdx);
     // ADMIN_KEY must be a secret, not a plaintext var
     const hasPlaintextKey = /^ADMIN_KEY\s*=/m.test(prodSection);
-    expect(hasPlaintextKey, 'ADMIN_KEY must not appear as plaintext var in production section').toBe(false);
+    expect(
+      hasPlaintextKey,
+      'ADMIN_KEY must not appear as plaintext var in production section'
+    ).toBe(false);
   });
 
   test('wrangler.toml [env.production] ALLOW_ADMIN_KEY_FALLBACK is not "true"', () => {
@@ -597,8 +659,13 @@ describe('Environment config: production hardening assertions', () => {
       if (path.replace(/\\/g, '/').includes('/auth/admin.ts')) {
         // AUTH-001 mitigated: admin.ts now fetches JWKS for CF Access JWT signature verification
         const hasFetch = /\bfetch\s*\(/.test(content);
-        expect(hasFetch, 'AUTH-001 mitigated: admin.ts must have a fetch call for JWKS verification').toBe(true);
-        console.log('[AUTH-001] Mitigated: admin.ts performs JWKS fetch for CF Access signature verification');
+        expect(
+          hasFetch,
+          'AUTH-001 mitigated: admin.ts must have a fetch call for JWKS verification'
+        ).toBe(true);
+        console.log(
+          '[AUTH-001] Mitigated: admin.ts performs JWKS fetch for CF Access signature verification'
+        );
         checked = true;
       }
     }
