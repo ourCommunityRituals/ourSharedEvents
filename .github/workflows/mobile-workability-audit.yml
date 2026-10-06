@@ -75,10 +75,32 @@ defaults:
 jobs:
   # ── BLOCKING: this branch's code, on a local worker ────────────────────────
   pr-code:
-    name: Mobile workability — PR code (375×812, blocking)
-    # No `if`: this is a required check (tools/ci/main-branch-protection.json),
-    # and a skipped job is not success. The first step decides whether there is
-    # anything to audit; every later step follows it.
+    # One leg per screen, in the order people use them (PO 2026-10-06): phone
+    # first, desktop second, tablet third. Only the phone leg is a required
+    # check: its name is the context in tools/ci/main-branch-protection.json,
+    # so it must stay exactly "Mobile workability — PR code (375×812, blocking)".
+    # The desktop and tablet legs report beside it and do not block a merge.
+    name: Mobile workability — PR code (${{ matrix.label }})
+    strategy:
+      # A red desktop or tablet leg must not cancel the phone leg.
+      fail-fast: false
+      matrix:
+        include:
+          - id: phone
+            label: 375×812, blocking
+            projects: --project mobile-chromium --project mobile-webkit
+            webkit: true
+          - id: desktop
+            label: desktop 1280×800
+            projects: --project desktop-chromium
+            webkit: false
+          - id: tablet
+            label: tablet 820×1180
+            projects: --project tablet-chromium
+            webkit: false
+    # No `if`: the phone leg is a required check, and a skipped job is not
+    # success. The first step decides whether there is anything to audit; every
+    # later step follows it.
     runs-on: ubuntu-24.04
     # 25, not 15: the audit step alone measured 12.2 to 14.0 minutes over 14
     # runs (2026-10-05/06) and setup adds about 1.5, so 9 of those 14 runs were
@@ -163,6 +185,10 @@ jobs:
 
       - name: Install Playwright Chromium
         if: steps.scope.outputs.run == 'true'
+        # 5 minutes: this takes about 30 seconds. On 2026-10-06 the WebKit
+        # install below hung for 15 minutes; without a limit a stalled download
+        # runs to the job's limit and shows as a failed check with no failing test.
+        timeout-minutes: 5
         # Chromium only. The spec forces 375×812 on every surface, so the
         # viewport — the thing invariant 14 is about — is identical across
         # projects; only the engine and UA differ. Engine-specific layout bugs
@@ -171,7 +197,8 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Install Playwright WebKit (publish loop journey only)
-        if: steps.scope.outputs.run == 'true'
+        if: steps.scope.outputs.run == 'true' && matrix.webkit
+        timeout-minutes: 5
         # OSE-1508: the organizer's publish loop runs on WebKit too, because
         # most phones are WebKit. One spec, so the cost stays small.
         run: npx playwright install --with-deps webkit
@@ -182,13 +209,17 @@ jobs:
         # now about the diff under review, so it is allowed to mean something.
         # playwright.mobile.config.ts starts `wrangler dev --local` itself — no
         # deploy, no secrets, no network.
-        run: npx playwright test --config playwright.mobile.config.ts --reporter=html,list
+        env:
+          PROJECTS: ${{ matrix.projects }}
+        # $PROJECTS is a fixed list of --project flags from the matrix above; it
+        # is left unquoted on purpose so each flag is its own argument.
+        run: npx playwright test --config playwright.mobile.config.ts $PROJECTS --reporter=html,list
 
       - name: Upload Playwright report
         if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-workability-pr-report
+          name: mobile-workability-pr-report-${{ matrix.id }}
           path: playwright-report/
           retention-days: 30
 
