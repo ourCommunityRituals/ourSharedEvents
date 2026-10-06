@@ -59,6 +59,7 @@ import { injectMarker } from './inject-marker.js';
 import {
   inWhenWindow,
   discoveryChipLabel,
+  discoveryEmptyCopy,
   orderUpcomingFirst,
   type WhenOption,
 } from './event-discovery.js';
@@ -230,6 +231,8 @@ export function renderLandingArea(
   const typeMap = new Map<string, string>(); // slug → label
   const modalities = new Set<string>();
   let windowCount = 0;
+  // Windows that hold at least one listed event. The rest get a message.
+  const filledWindows = new Set<string>();
 
   // The same card /events renders (OSE-1520): date, venue, state-aware button,
   // and the consented sponsor by the title (OSE-1522). The tags the CSS-only
@@ -238,6 +241,7 @@ export function renderLandingArea(
     .map((e) => {
       const windows = windowClasses(e, now);
       if (windows.includes(`when-${DEFAULT_WINDOW}`)) windowCount += 1;
+      for (const w of windows) filledWindows.add(w);
 
       const { slug: typeSlug, label: typeLabel } = typeOf(e);
       typeMap.set(typeSlug, typeLabel);
@@ -287,6 +291,7 @@ export function renderLandingArea(
     defaultView,
     mapHtml,
     mixedModality: modalities.size > 1,
+    emptyWindows: LANDING_WINDOWS.filter((w) => !filledWindows.has(`when-${w}`)),
   });
   return { html, types, windowCount, defaultView, leadsWithMap };
 }
@@ -331,8 +336,10 @@ function buildAreaMarkup(args: {
   mapHtml: string;
   /** Both online and in-person events are listed, so the Where choice can differ. */
   mixedModality: boolean;
+  /** Windows with no listed event: each gets a message instead of a blank list. */
+  emptyWindows: readonly LandingWindow[];
 }): string {
-  const { cards, types, defaultView, mapHtml, mixedModality } = args;
+  const { cards, types, defaultView, mapHtml, mixedModality, emptyWindows } = args;
   const listChecked = defaultView === 'list';
   // A refinement is offered only when it can change what is shown.
   const showTypes = types.length > 1;
@@ -359,6 +366,12 @@ function buildAreaMarkup(args: {
     rules.push(
       chipRules(`win-${w}`) + `#win-${w}:checked ~ .area .event-card:not(.when-${w}){display:none}`
     );
+  }
+  // An empty window's message is written by the server and shown by the same
+  // radio that hides the cards, so the choice still never leaves the device.
+  if (emptyWindows.length) rules.push('.area-window-empty{display:none}');
+  for (const w of emptyWindows) {
+    rules.push(`#win-${w}:checked ~ .area .win-empty-${w}{display:block}`);
   }
   if (mixedModality) {
     rules.push(chipRules('mod-all'));
@@ -407,11 +420,20 @@ function buildAreaMarkup(args: {
 
   // OSE-1354: the map view never hides the cards. The map (lib/attendee-map) sits
   // ABOVE the same list, so every listed event stays one tap from its page.
+  // The /events sentence and its link to a wider range (lib/event-discovery), one
+  // per empty window, so the two pages cannot word the same dead end differently.
+  const emptyMessages = emptyWindows
+    .map(
+      (w) =>
+        `<p class="empty-state area-window-empty win-empty-${w}" data-testid="area-window-empty-${w}" role="status">${discoveryEmptyCopy({ when: w, q: '' })}</p>`
+    )
+    .join('');
+
   const area = `<div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
             ${mapHtml}
           </div>
-          <div class="view-list" data-testid="area-list">${cards}
+          <div class="view-list" data-testid="area-list">${emptyMessages}${cards}
           </div>
         </div>`;
 

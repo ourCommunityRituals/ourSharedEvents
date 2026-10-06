@@ -229,3 +229,52 @@ describe('OSE-1312 | empty + injection', () => {
     expect(html).toContain('&lt;img');
   });
 });
+
+// A chosen window that holds no events used to leave a blank list: the filter is
+// CSS-only, so it hid every card and said nothing. The server now writes one
+// message per empty window (the /events copy, with its link to a wider range)
+// and the same CSS that hides the cards shows the matching message.
+describe('an empty time window says so and links to a wider range', () => {
+  const message = (html: string, w: string) =>
+    html.match(new RegExp(`<p[^>]*data-testid="area-window-empty-${w}"[^>]*>(.*?)</p>`, 's'))?.[0];
+
+  // NOW = Sat Sep 12 in the home zone. An event 20 days out is inside the next
+  // 90 days and outside both this weekend and the next 7 days.
+  const midOnly = () => render([ev({ id: 'm', startDateISO: inDays(20) })]).html;
+
+  it('writes the /events message for a window with no events', () => {
+    const p = message(midOnly(), 'weekend');
+    expect(p, 'weekend message').toBeDefined();
+    expect(p).toContain('Nothing this weekend yet.');
+    expect(p).toContain('href="/events?when=week"');
+    expect(p).toContain('Try the next 7 days');
+  });
+
+  it('writes none for a window that has events', () => {
+    const html = midOnly();
+    expect(message(html, 'next-90')).toBeUndefined();
+  });
+
+  it('the widest window, when empty, links to everything', () => {
+    // 120 days out: listed on the page, outside every landing window.
+    const p = message(render([ev({ id: 'far', startDateISO: inDays(120) })]).html, 'next-90');
+    expect(p, 'next-90 message').toBeDefined();
+    expect(p).toContain('Nothing in the next 90 days yet.');
+    expect(p).toContain('href="/events"');
+  });
+
+  it('a message is hidden until its own window is chosen', () => {
+    const html = midOnly();
+    const css = html.match(/<style data-testid="area-window-css">([\s\S]*?)<\/style>/)?.[1] ?? '';
+    expect(css).toContain('.area-window-empty{display:none}');
+    expect(css).toContain('#win-weekend:checked ~ .area .win-empty-weekend{display:block}');
+    // No rule can show the weekend message under another window.
+    expect(css).not.toMatch(/#win-(week|month|next-90):checked ~ \.area \.win-empty-weekend/);
+  });
+
+  it('the message sits in the list, so it shows in the list view and under the map', () => {
+    const html = midOnly();
+    const list = html.slice(html.indexOf('data-testid="area-list"'));
+    expect(list).toContain('data-testid="area-window-empty-weekend"');
+  });
+});
