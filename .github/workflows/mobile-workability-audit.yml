@@ -61,10 +61,12 @@ concurrency:
   group: mobile-workability-${{ github.ref }}
   cancel-in-progress: true
 
+# Read only: neither job comments or files issues. pr-code runs the PR's own
+# code, which gets this token (OSE-1466 0.6). pull-requests: read is for the
+# changed-files lookup.
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  pull-requests: read
 
 defaults:
   run:
@@ -86,6 +88,15 @@ jobs:
     steps:
       - name: Checkout OSE
         uses: actions/checkout@v7
+
+      # OSE-1466 0.6, run time: this job runs the PR's code, so prove its token is
+      # refused on push, comment and issue creation. Nothing is created.
+      - name: 'Job token cannot push, comment or open issues'
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBE_ISSUE: ${{ github.event.pull_request.number }}
+        run: bash scripts/ci/assert-token-read-only.sh
 
       - name: Does this change touch what the audit measures?
         # A pull request: ask the scope rule. A manual run: always audit. The

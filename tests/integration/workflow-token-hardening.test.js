@@ -40,6 +40,40 @@ function jobsWithoutPermissions(workflows) {
   return bad;
 }
 
+// ── 0.6, write surface ─────────────────────────────────────────────────────
+// On pull_request the workflow file itself comes from the PR, so every job in
+// such a workflow can be made to run PR code with its token. The set of those
+// jobs whose token can push, comment or open issues is therefore a reviewed
+// list, like the PR-reachable secrets list. Adding to it is a security decision.
+const WRITE_SCOPES = ['contents', 'pull-requests', 'issues'];
+const PR_WRITE_ALLOWED = {
+  'dependency-review.yml:dependency-review':
+    'Posts the dependency review summary on the pull request. Runs no repo code.',
+  'claude-review.yml:review': 'Posts the automated review on the pull request.',
+  'claude-review.yml:respond': 'Replies to review comments on the pull request.',
+  'brain-contract-check.yml:contract-check':
+    'Comments on drift, in the same job that runs repo scripts. To be split into a read-only check job and a reporting job (OSE-1466 0.6).',
+};
+
+/** Jobs in pull_request workflows whose token has a write scope: [{ id, scopes }]. */
+function prJobsWithWrite(workflows) {
+  const found = [];
+  for (const [file, wf] of Object.entries(workflows)) {
+    const on = wf && (wf.on || wf[true]);
+    const triggers = typeof on === 'string' ? [on] : Array.isArray(on) ? on : Object.keys(on || {});
+    if (!triggers.some((t) => t === 'pull_request' || t === 'pull_request_target')) continue;
+    for (const [job, def] of Object.entries((wf && wf.jobs) || {})) {
+      const perms = def && def.permissions !== undefined ? def.permissions : wf.permissions;
+      const scopes =
+        perms === 'write-all'
+          ? WRITE_SCOPES
+          : WRITE_SCOPES.filter((s) => perms && typeof perms === 'object' && perms[s] === 'write');
+      if (scopes.length) found.push({ id: `${file}:${job}`, scopes });
+    }
+  }
+  return found;
+}
+
 // ── 0.4 ────────────────────────────────────────────────────────────────────
 const FIRST_PARTY = /^(actions|github)\//;
 const SHA = /^[0-9a-f]{40}$/;
@@ -95,6 +129,29 @@ describe('detector controls', () => {
         'd.yml': { permissions: {}, jobs: { w: {} } },
       })
     ).toEqual([{ file: 'a.yml', job: 'x' }]);
+  });
+
+  test('0.6 finds write scopes on pull_request jobs, at either level, and ignores other triggers', () => {
+    expect(
+      prJobsWithWrite({
+        'a.yml': {
+          on: { pull_request: {} },
+          permissions: { contents: 'read', issues: 'write' },
+          jobs: {
+            inherits: {},
+            narrowed: { permissions: { contents: 'read' } },
+            widened: { permissions: { contents: 'write', checks: 'write' } },
+          },
+        },
+        'b.yml': { on: ['push', 'pull_request'], permissions: 'write-all', jobs: { all: {} } },
+        'c.yml': { on: 'schedule', permissions: { issues: 'write' }, jobs: { nightly: {} } },
+        'd.yml': { on: 'pull_request', permissions: { checks: 'write' }, jobs: { checksOnly: {} } },
+      })
+    ).toEqual([
+      { id: 'a.yml:inherits', scopes: ['issues'] },
+      { id: 'a.yml:widened', scopes: ['contents'] },
+      { id: 'b.yml:all', scopes: ['contents', 'pull-requests', 'issues'] },
+    ]);
   });
 
   test('0.4 flags a tag-pinned third-party action, passes a SHA and first-party', () => {
@@ -162,6 +219,29 @@ describe('.github/workflows', () => {
 
   test('0.6 every job has explicit token permissions', () => {
     expect(jobsWithoutPermissions(workflows)).toEqual([]);
+  });
+
+  test('0.6 only reviewed pull_request jobs hold a token that can push, comment or open issues', () => {
+    const ids = prJobsWithWrite(workflows).map((j) => j.id);
+    expect(ids.filter((id) => !(id in PR_WRITE_ALLOWED))).toEqual([]);
+    // An entry whose job no longer holds write must be removed, so the list only shrinks.
+    expect(Object.keys(PR_WRITE_ALLOWED).filter((id) => !ids.includes(id))).toEqual([]);
+  });
+
+  test('0.6 the run-time token probe is wired into the jobs that run PR code', () => {
+    const probed = [];
+    for (const [file, wf] of Object.entries(workflows)) {
+      for (const [job, def] of Object.entries((wf && wf.jobs) || {})) {
+        const hit = ((def && def.steps) || []).some(
+          (s) => typeof s.run === 'string' && s.run.includes('scripts/ci/assert-token-read-only.sh')
+        );
+        if (hit) probed.push(`${file}:${job}`);
+      }
+    }
+    expect(probed.sort()).toEqual([
+      'mobile-workability-audit.yml:pr-code',
+      'oursharedevents-ci.yml:gate',
+    ]);
   });
 
   test('0.4 every third-party action is pinned to a commit SHA', () => {
