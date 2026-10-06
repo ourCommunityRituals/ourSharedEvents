@@ -60,6 +60,34 @@ export function coreValuesMissing(
   return missing;
 }
 
+/** Which door refused: `PUT /admin/events/:id` with `status`, or verify-qr. */
+export type CoreValuesDoor = 'put_status' | 'verify_qr';
+
+/**
+ * One structured line per refused publish step (OSE-1644), so refusals can be
+ * counted by which value was missing. It names the door, the move and the
+ * missing values, and nothing about the event: no id, no title, no actor. The
+ * key set is sealed by tests/core-values-refused-log.spec.ts.
+ */
+export function logCoreValuesRefused(
+  door: CoreValuesDoor,
+  from: string,
+  to: string,
+  missing: CoreValue[]
+): void {
+  console.log(
+    JSON.stringify({
+      type: 'LIFECYCLE',
+      event: 'core_values_refused',
+      door,
+      from,
+      to,
+      missing_time: missing.includes('time'),
+      missing_event_type: missing.includes('event_type'),
+    })
+  );
+}
+
 /** The 409 body both doors return. */
 export function coreValuesRefusal(missing: CoreValue[], requestId?: string) {
   return {

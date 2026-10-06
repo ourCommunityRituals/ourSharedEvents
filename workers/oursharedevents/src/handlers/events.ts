@@ -12,7 +12,12 @@
  * Data source: D1 database (DB binding)
  */
 
-import { coreValuesMissing, coreValuesRefusal, isPublishStep } from '../lib/core-values';
+import {
+  coreValuesMissing,
+  coreValuesRefusal,
+  isPublishStep,
+  logCoreValuesRefused,
+} from '../lib/core-values';
 import { corsHeaders } from '../lib/cors';
 import {
   cursorAfter,
@@ -1271,6 +1276,7 @@ export async function handleUpdateEvent(
           ...('event_type_id' in body ? { event_type_id: body.event_type_id } : {}),
         });
         if (missing.length > 0) {
+          logCoreValuesRefused('put_status', from, to, missing);
           return Response.json(coreValuesRefusal(missing, rid), {
             status: 409,
             headers: { ...corsHeaders(request), 'X-Request-Id': rid },
