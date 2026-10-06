@@ -3474,6 +3474,7 @@
             fire(typeEl, 'change');
           }
           function leaveEdit() {
+            clearCoreMarks(false);
             wiz.editing = false;
             wiz.step = 5;
             replaceWizardStep(5);
@@ -3490,6 +3491,24 @@
             updateUI();
             var f = document.getElementById(d.focus || '');
             if (f) f.focus();
+            // A refused Publish names the fields it needs (OSE-1644). The
+            // Change button sends none, so it marks nothing.
+            (d.invalid || []).forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el) el.setAttribute('aria-invalid', 'true');
+            });
+            if (d.message) setMsg(d.message, 'error');
+          });
+          // A mark goes as soon as its field has a value, and never outlives the edit.
+          var CORE_FIELDS = ['wizard-event-date', 'wizard-event-time', 'wizard-category', 'wizard-event-type'];
+          function clearCoreMarks(onlyFilled) {
+            CORE_FIELDS.forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el && (!onlyFilled || String(el.value || '').trim())) el.removeAttribute('aria-invalid');
+            });
+          }
+          ['input', 'change'].forEach(function (evName) {
+            document.getElementById('launch-wizard').addEventListener(evName, function () { clearCoreMarks(true); });
           });
           async function saveEdit() {
             if (!wiz.createdId || wiz.saving) return;
@@ -3555,7 +3574,8 @@
           function refusedByReview(msgEl) {
             var gap = window.oseWizardReview ? window.oseWizardReview.message() : '';
             if (!gap) return false;
-            if (msgEl) { msgEl.textContent = gap; msgEl.className = 'create-msg error'; }
+            // The message moves with the organizer: it shows on the step that opens.
+            if (msgEl) { msgEl.textContent = ''; msgEl.className = 'create-msg'; }
             window.oseWizardReview.focusFirstMissing();
             return true;
           }
@@ -4145,10 +4165,22 @@
           window.oseWizardReview = {
             missing: missingCore,
             message: function () { return sentence(missingCore()); },
+            // Opens the step that holds the first missing value, marks the
+            // empty field and puts focus in it (OSE-1644).
             focusFirstMissing: function () {
               var m = missingCore();
-              var b = q('wizard-review-change-' + (m[0] === 'event_type' ? 'type' : 'when'));
-              if (b) b.focus();
+              if (!m.length) return;
+              var d;
+              if (m[0] === 'time') {
+                var empty = ['wizard-event-date', 'wizard-event-time'].filter(function (id) { return !val(id); });
+                d = { step: 1, focus: empty[0], invalid: empty };
+              } else {
+                var typ = byId('wizard-event-type');
+                var pickType = val('wizard-category') && typ && !typ.disabled;
+                d = { step: 2, focus: pickType ? 'wizard-event-type' : 'wizard-category', invalid: pickType ? ['wizard-event-type'] : ['wizard-category', 'wizard-event-type'] };
+              }
+              d.message = sentence(m);
+              window.dispatchEvent(new CustomEvent('ose:wizard-edit', { detail: d }));
             },
           };
 

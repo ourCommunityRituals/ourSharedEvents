@@ -361,15 +361,138 @@ describe('OSE-1528: the review before publish', () => {
     await m.flush();
     expect(m.goLive).toEqual([]);
     expect(m.calls.length).toBe(before);
-    expect(m.txt('wizard-go-live-msg')).toBe(
+    expect(m.txt('wizard-msg')).toBe(
       'Add a start time and an event type before this event goes further'
     );
-    expect(m.$('wizard-go-live-msg').className).toContain('error');
+    expect(m.$('wizard-msg').className).toContain('error');
   });
 
   test('Publish with everything present goes through', async () => {
     const m = mount();
     await toReview(m, { time: '18:30', withType: true });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.goLive).toEqual([['evt_new', 'draft']]);
+  });
+});
+
+/**
+ * OSE-1644: a refused Publish takes the organizer to the field, not to a button.
+ *
+ * @born-red OSE-1644 | method: ran against the pre-change template. Publish with
+ * a value missing stayed on step 5 with focus on the row's Change button, and no
+ * field was marked | date: 2026-10-06
+ */
+describe('OSE-1644: Publish with a core value missing goes to the field and marks it', () => {
+  const invalid = (m: M, id: string) => m.$(id).getAttribute('aria-invalid');
+
+  test('no start time: step 1 in edit mode, the time field marked and focused, the message says which', async () => {
+    const m = mount();
+    await toReview(m, { withType: true });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.goLive).toEqual([]);
+    expect(m.onStep(1)).toBe(true);
+    expect(m.$('wizard-save-edit-btn').hidden).toBe(false);
+    expect(m.doc.activeElement).toBe(m.$('wizard-event-time'));
+    expect(invalid(m, 'wizard-event-time')).toBe('true');
+    expect(invalid(m, 'wizard-event-date'), 'the date is filled, so it is not marked').toBeNull();
+    expect(m.txt('wizard-msg')).toBe('Add a start time before this event goes further');
+    expect(m.$('wizard-msg').className).toContain('error');
+  });
+
+  test('no date and no time: both marked, focus on the date', async () => {
+    const m = mount();
+    await toReview(m, { withType: true });
+    m.$('wizard-review-change-when').click();
+    m.type('wizard-event-date', '');
+    m.$('wizard-save-edit-btn').click();
+    await m.flush();
+    expect(m.onStep(5)).toBe(true);
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.onStep(1)).toBe(true);
+    expect(m.doc.activeElement).toBe(m.$('wizard-event-date'));
+    expect(invalid(m, 'wizard-event-date')).toBe('true');
+    expect(invalid(m, 'wizard-event-time')).toBe('true');
+  });
+
+  test('no event type: step 2, the category marked and focused', async () => {
+    const m = mount();
+    await toReview(m, { time: '18:30' });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.onStep(2)).toBe(true);
+    expect(m.doc.activeElement).toBe(m.$('wizard-category'));
+    expect(invalid(m, 'wizard-category')).toBe('true');
+    expect(m.txt('wizard-msg')).toBe('Add an event type before this event goes further');
+  });
+
+  test('both missing: the time comes first, and the message names both', async () => {
+    const m = mount();
+    await toReview(m);
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.onStep(1)).toBe(true);
+    expect(m.doc.activeElement).toBe(m.$('wizard-event-time'));
+    expect(m.txt('wizard-msg')).toBe(
+      'Add a start time and an event type before this event goes further'
+    );
+  });
+
+  test('filling the field clears its mark', async () => {
+    const m = mount();
+    await toReview(m, { withType: true });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    m.type('wizard-event-time', '19:15');
+    expect(invalid(m, 'wizard-event-time')).toBeNull();
+  });
+
+  test('choosing a category and a type clears their marks', async () => {
+    const m = mount();
+    await toReview(m, { time: '18:30' });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    await m.chooseType();
+    expect(invalid(m, 'wizard-category')).toBeNull();
+    expect(invalid(m, 'wizard-event-type')).toBeNull();
+  });
+
+  test('Back to review leaves no mark and no message behind', async () => {
+    const m = mount();
+    await toReview(m, { withType: true });
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    m.$('wizard-cancel-edit-btn').click();
+    expect(m.onStep(5)).toBe(true);
+    expect(invalid(m, 'wizard-event-time')).toBeNull();
+    expect(m.txt('wizard-msg')).toBe('');
+  });
+
+  test('the Change button alone marks nothing: only a refused Publish does', async () => {
+    const m = mount();
+    await toReview(m, { withType: true });
+    m.$('wizard-review-change-when').click();
+    expect(invalid(m, 'wizard-event-time')).toBeNull();
+    expect(m.txt('wizard-msg')).toBe('');
+  });
+
+  test('fix the time, save, Publish again: now the type is asked for, then Publish goes through', async () => {
+    const m = mount();
+    await toReview(m);
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    m.type('wizard-event-time', '19:15');
+    m.$('wizard-save-edit-btn').click();
+    await m.flush();
+    expect(m.onStep(5)).toBe(true);
+    m.$('wizard-go-live-btn').click();
+    await m.flush();
+    expect(m.onStep(2)).toBe(true);
+    await m.chooseType();
+    m.$('wizard-save-edit-btn').click();
+    await m.flush();
     m.$('wizard-go-live-btn').click();
     await m.flush();
     expect(m.goLive).toEqual([['evt_new', 'draft']]);
