@@ -213,7 +213,13 @@ const SURFACES: Surface[] = [
   {
     path: `/events/${AUDIT_EVENT.pre || 'unseeded-pre'}`,
     name: 'event page, before the event',
-    primaryCtaSelector: EVENT_PAGE_CTA,
+    // No primaryCtaSelector, on purpose. The page's order is the facts first and
+    // the ask after them (title, sponsor, What, Where, Who, How much, then the
+    // three choices; PO decision 2026-09-13). On the first CI run of this
+    // surface, with a one-line description, the first choice sat at 842px on an
+    // 812px screen: one short scroll down. Whether a phone should keep an
+    // action in view before the event is a PO decision, recorded on OSE-292;
+    // this contract would otherwise fail on the order the PO chose.
     skipReason: LIFECYCLE_SKIP_REASON,
   },
   {
