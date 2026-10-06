@@ -101,15 +101,39 @@ async function publicFetch(page: any, path: string) {
   }, path);
 }
 
-function pickSponsorJourneyEvent(items: Array<{ id?: string }>): string | undefined {
-  // OSE-1197: T4b seeds a dedicated sponsored fixture (`SMOKE_EVENT_SPONSORED`).
-  // Prefer it over "first live event" so concurrent shared-staging runs do not
-  // attach journey sponsors to whichever event happens to sort first.
+type JourneyEvent = { id?: string; phase?: string };
+
+// The TV board drops a finished event (display.html isShowable), so a sponsor
+// attached to one can never render there. The journey needs an event the board
+// will feature.
+function isOnTheBoard(item: JourneyEvent | undefined): item is JourneyEvent & { id: string } {
+  return !!item?.id && item.phase !== 'post_event';
+}
+
+/**
+ * The event this run attaches its sponsor to, and features on the TV.
+ *
+ * OSE-1197: T4b seeds a dedicated sponsored fixture (`SMOKE_EVENT_SPONSORED`).
+ * It is live but not in the public list, so it is read by id, the same way
+ * `/display?event=<id>` reads it. Otherwise the first listed event that has not
+ * finished. Never "whichever sorts first": on staging that is test-event-001,
+ * which ended in May.
+ */
+async function resolveJourneyEvent(page: any, listed: JourneyEvent[]): Promise<string | undefined> {
   if (SMOKE_EVENT_SPONSORED) {
-    const seeded = items.find((item) => item.id === SMOKE_EVENT_SPONSORED);
-    if (seeded?.id) return seeded.id;
+    const one = await publicFetch(
+      page,
+      `/api/v2/events/${encodeURIComponent(SMOKE_EVENT_SPONSORED)}`
+    );
+    if (one.status === 200 && one.body?.ok && isOnTheBoard(one.body.item)) return one.body.item.id;
   }
-  return items[0]?.id;
+  return listed.find(isOnTheBoard)?.id;
+}
+
+// The bare /display features the first listed event; the journey must look at
+// the event it attached its sponsor to.
+function displayUrl(eventId: string): string {
+  return `/display?event=${encodeURIComponent(eventId)}`;
 }
 
 // ─── Test Data ──────────────────────────────────────────────────────────────────
@@ -163,8 +187,8 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     const items = eventsRes.body.items || [];
     test.skip(items.length === 0, 'No events in staging — cannot attach sponsor');
 
-    const pickedEventId = pickSponsorJourneyEvent(items);
-    expect(pickedEventId).toBeTruthy();
+    const pickedEventId = await resolveJourneyEvent(page, items);
+    expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
   });
 
@@ -328,7 +352,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
-    await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    await page.goto(displayUrl(eventId), { waitUntil: 'networkidle', timeout: TIMEOUT });
     // Wait for sponsor loading to complete
     await page.waitForTimeout(3000);
 
@@ -517,7 +541,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   test('Step 12: Display no longer renders deleted sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
-    await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    await page.goto(displayUrl(eventId), { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
     // This run's exact sponsor must no longer render (a leftover "Journey Sponsor …"
@@ -545,8 +569,8 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
     const res = await publicFetch(page, '/api/v2/events');
     test.skip(!res.body.ok || !res.body.items?.length, 'No events');
-    const pickedEventId = pickSponsorJourneyEvent(res.body.items || []);
-    expect(pickedEventId).toBeTruthy();
+    const pickedEventId = await resolveJourneyEvent(page, res.body.items || []);
+    expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
   });
 
@@ -592,8 +616,8 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
   });
 
   test('Step 2: Verify bronze tier on Display', async ({ page, request }) => {
-    test.skip(!sponsorId, 'No sponsor');
-    await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    test.skip(!sponsorId || !eventId, 'No sponsor');
+    await page.goto(displayUrl(eventId), { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
     const item = await findDisplaySponsorByName(page, `Tier Upgrade ${timestamp}`);
@@ -620,8 +644,8 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     page,
     request,
   }) => {
-    test.skip(!sponsorId, 'No sponsor');
-    await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    test.skip(!sponsorId || !eventId, 'No sponsor');
+    await page.goto(displayUrl(eventId), { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
     const item = await findDisplaySponsorByName(page, `Tier Upgrade ${timestamp}`);
@@ -663,8 +687,8 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
 
     const evRes = await publicFetch(page, '/api/v2/events');
     test.skip(!evRes.body.ok || !evRes.body.items?.length, 'No events');
-    const pickedEventId = pickSponsorJourneyEvent(evRes.body.items || []);
-    expect(pickedEventId).toBeTruthy();
+    const pickedEventId = await resolveJourneyEvent(page, evRes.body.items || []);
+    expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
 
     const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
