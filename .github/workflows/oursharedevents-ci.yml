@@ -2014,10 +2014,10 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          # OSE-1197: prefer the dedicated sponsored event when it is publicly listed.
-          # Today it is NOT listed (its seeded window has passed; checked 2026-10-04), so the
-          # journey falls back to the first listed event, test-event-001. No forms-leg spec
-          # reads sponsors, so that fallback does not cross legs; keep it that way.
+          # OSE-1197: the journey attaches its sponsor to the dedicated sponsored event,
+          # read by id (it is live but not in the public list), and opens
+          # /display?event=<id>. If that event has finished it uses the first listed
+          # event that has not; never test-event-001, which the TV board drops.
           SMOKE_EVENT_SPONSORED: evt_smoke_sponsored
           # OSE-834 ARM: an unmet precondition (no admin key, a CF Access edge block)
           # is a FAILURE here, not a green skip — "a tier that cannot fail is not a
