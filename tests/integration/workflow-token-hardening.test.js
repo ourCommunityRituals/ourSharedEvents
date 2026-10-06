@@ -51,8 +51,8 @@ const PR_WRITE_ALLOWED = {
     'Posts the dependency review summary on the pull request. Runs no repo code.',
   'claude-review.yml:review': 'Posts the automated review on the pull request.',
   'claude-review.yml:respond': 'Replies to review comments on the pull request.',
-  'brain-contract-check.yml:contract-check':
-    'Comments on drift, in the same job that runs repo scripts. To be split into a read-only check job and a reporting job (OSE-1466 0.6).',
+  'brain-contract-check.yml:report-drift':
+    'Comments on drift and opens the Linear ticket after a failed check. Runs brain scripts and one base-branch script, never the pull request code.',
 };
 
 /** Jobs in pull_request workflows whose token has a write scope: [{ id, scopes }]. */
@@ -226,6 +226,26 @@ describe('.github/workflows', () => {
     expect(ids.filter((id) => !(id in PR_WRITE_ALLOWED))).toEqual([]);
     // An entry whose job no longer holds write must be removed, so the list only shrinks.
     expect(Object.keys(PR_WRITE_ALLOWED).filter((id) => !ids.includes(id))).toEqual([]);
+  });
+
+  test('0.6 the brain drift reporter, which can comment, never checks out the pull request code', () => {
+    const wf = workflows['brain-contract-check.yml'];
+    const report = wf.jobs['report-drift'];
+    const checkouts = report.steps.filter(
+      (st) => typeof st.uses === 'string' && st.uses.startsWith('actions/checkout')
+    );
+    expect(checkouts.length).toBeGreaterThan(0);
+    // A checkout with no `repository` and no `ref` is the pull request's head.
+    const prHead = checkouts.filter((st) => !st.with || (!st.with.repository && !st.with.ref));
+    expect(prHead).toEqual([]);
+    const ownRepo = checkouts.filter((st) => !st.with.repository).map((st) => st.with.ref);
+    expect(ownRepo).toEqual(['${{ github.event.pull_request.base.sha }}']);
+    // It only runs after the check job, and only when that job failed.
+    expect(report.needs).toEqual(['contract-check']);
+    expect(report.if).toContain("needs.contract-check.result == 'failure'");
+    // No step runs a script from a path other than the brain or the base checkout.
+    const runs = report.steps.map((st) => st.run).filter(Boolean);
+    for (const r of runs) expect(r).toMatch(/(^|[ "])(ocr-docs|ose-base)\//);
   });
 
   test('0.6 the run-time token probe is wired into the jobs that run PR code', () => {
