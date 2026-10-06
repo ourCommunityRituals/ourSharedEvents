@@ -21,6 +21,13 @@
  * reaches them by calling the handler directly). They are documented here, not
  * silently dropped; wiring browser auth for them is a follow-up.
  *
+ * SCREENS — each surface is scanned at the sizes people use it on, in that
+ * order (PO 2026-10-06): a phone first, then a desktop, then a tablet. The
+ * venue display is the one surface that is not a phone page; it is scanned at
+ * TV size only. Before this the scan ran at one desktop size, so a rule that
+ * only bites in the phone layout (a control that appears below a breakpoint,
+ * a menu that collapses) was never looked at by a real engine.
+ *
  * Axe contract: wcag2a + wcag2aa tags, fail on critical/serious, plus the
  * exactly-one-<h1> gate (axe's wcag tags don't include page-has-heading-one — it
  * lives in best-practice — so the headingless-page bug OSE-1312 shipped would pass
@@ -31,18 +38,29 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const SURFACES = [
-  { name: 'landing', path: '/' },
-  { name: 'public listing', path: '/events' },
-  { name: 'display', path: '/display' },
-  { name: 'poster', path: '/poster' },
-] as const;
+type Screen = { name: string; width: number; height: number };
+const PHONE: Screen = { name: 'phone', width: 375, height: 812 };
+const DESKTOP: Screen = { name: 'desktop', width: 1280, height: 800 };
+const TABLET: Screen = { name: 'tablet', width: 820, height: 1180 };
+const TV: Screen = { name: 'TV', width: 1920, height: 1080 };
+// The order people use the product in: phone, then desktop, then tablet.
+const PEOPLE_SCREENS = [PHONE, DESKTOP, TABLET];
+
+const SURFACES: { name: string; path: string; screens: Screen[] }[] = [
+  { name: 'landing', path: '/', screens: PEOPLE_SCREENS },
+  { name: 'public listing', path: '/events', screens: PEOPLE_SCREENS },
+  { name: 'poster', path: '/poster', screens: PEOPLE_SCREENS },
+  { name: 'display', path: '/display', screens: [TV] },
+];
 
 test.describe('AS-13: real-browser axe WCAG 2.0 AA — zero critical/serious', () => {
-  for (const surface of SURFACES) {
-    test(`${surface.name} (${surface.path}) has no critical/serious a11y violations`, async ({
+  for (const { surface, screen } of SURFACES.flatMap((s) =>
+    s.screens.map((screen) => ({ surface: s, screen }))
+  )) {
+    test(`${surface.name} (${surface.path}) on a ${screen.name} (${screen.width}×${screen.height}) has no critical/serious a11y violations`, async ({
       page,
     }) => {
+      await page.setViewportSize({ width: screen.width, height: screen.height });
       const res = await page.goto(surface.path);
       expect(res?.status(), `${surface.path} should render 200`).toBe(200);
 
