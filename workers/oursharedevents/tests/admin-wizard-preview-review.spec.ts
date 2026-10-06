@@ -367,51 +367,6 @@ describe('OSE-1528: the review before publish', () => {
     expect(m.$('wizard-go-live-msg').className).toContain('error');
   });
 
-  // OSE-1644: the refusal also takes the organizer to the value that is missing.
-  // Before this it named the value and left them on the review to find it.
-  test('a refused Publish opens the first missing field, marked, with the reason beside it', async () => {
-    const m = mount();
-    await toReview(m); // a date, no start time, no event type
-    m.$('wizard-go-live-btn').click();
-    await m.flush();
-    expect(m.onStep(1), 'the step that holds the start time').toBe(true);
-    expect(m.doc.activeElement).toBe(m.$('wizard-event-time'));
-    expect(m.$('wizard-event-time').getAttribute('aria-invalid')).toBe('true');
-    expect(m.$('wizard-category').getAttribute('aria-invalid')).toBe('true');
-    // The date is there, so it is not marked.
-    expect(m.$('wizard-event-date').getAttribute('aria-invalid')).toBeNull();
-    const msg = m.doc.getElementById('wizard-msg')!;
-    expect(msg.textContent).toBe(
-      'Add a start time and an event type before this event goes further'
-    );
-    expect(msg.className).toContain('error');
-  });
-
-  test('with only the event type missing it opens the type step and marks nothing else', async () => {
-    const m = mount();
-    await toReview(m, { time: '18:30' });
-    m.$('wizard-go-live-btn').click();
-    await m.flush();
-    expect(m.onStep(2), 'the step that holds the event type').toBe(true);
-    expect(m.doc.activeElement).toBe(m.$('wizard-category'));
-    expect(m.$('wizard-category').getAttribute('aria-invalid')).toBe('true');
-    expect(m.$('wizard-event-time').getAttribute('aria-invalid')).toBeNull();
-  });
-
-  test('a mark clears as soon as its value is given', async () => {
-    const m = mount();
-    await toReview(m);
-    m.$('wizard-go-live-btn').click();
-    await m.flush();
-    m.type('wizard-event-time', '18:30');
-    expect(m.$('wizard-event-time').getAttribute('aria-invalid')).toBeNull();
-    // The type is still missing, so its mark stays until a type is chosen.
-    expect(m.$('wizard-category').getAttribute('aria-invalid')).toBe('true');
-    await m.chooseType();
-    expect(m.$('wizard-category').getAttribute('aria-invalid')).toBeNull();
-    expect(m.$('wizard-event-type').getAttribute('aria-invalid')).toBeNull();
-  });
-
   test('Publish with everything present goes through', async () => {
     const m = mount();
     await toReview(m, { time: '18:30', withType: true });

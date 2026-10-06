@@ -178,16 +178,11 @@ test.describe('create flow: live preview and review', () => {
     expect(sent, 'Publish sent nothing').toEqual([]);
     expect((await request.get(`/events/${id}`)).status()).toBe(404);
 
-    // OSE-1644: the refusal lands on the first missing value, marked, with the
-    // reason beside it. No hunt for the right Change button.
+    // Change on the time goes back to the time field; the preview is there to see it.
+    await page.getByTestId('wizard-review-change-when').click();
     await expect(page.getByTestId('wizard-event-time')).toBeFocused();
-    await expect(page.getByTestId('wizard-event-time')).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.locator('#wizard-msg')).toHaveText(
-      'Add a start time and an event type before this event goes further'
-    );
     await expect(page.getByTestId('wizard-next-btn')).toBeHidden();
     await page.getByTestId('wizard-event-time').fill('18:30');
-    await expect(page.getByTestId('wizard-event-time')).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByTestId('wizard-preview-when')).toContainText('6:30');
     await page.getByTestId('wizard-save-edit-btn').click();
     await expect(page.getByTestId('wizard-step-5')).toBeVisible();

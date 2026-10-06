@@ -3474,8 +3474,6 @@
             fire(typeEl, 'change');
           }
           function leaveEdit() {
-            var live = document.getElementById('wizard-go-live-msg');
-            if (live && /\berror\b/.test(live.className)) { live.textContent = ''; live.className = 'create-msg'; }
             wiz.editing = false;
             wiz.step = 5;
             replaceWizardStep(5);
@@ -3558,47 +3556,9 @@
             var gap = window.oseWizardReview ? window.oseWizardReview.message() : '';
             if (!gap) return false;
             if (msgEl) { msgEl.textContent = gap; msgEl.className = 'create-msg error'; }
-            // OSE-1644: go to the value itself, marked, with the reason beside
-            // it (the OSE-1515 pattern), not just to the row that names it.
-            var missing = window.oseWizardReview.missing();
-            markMissingCore(missing);
-            var hasDate = !!document.getElementById('wizard-event-date').value;
-            window.dispatchEvent(new CustomEvent('ose:wizard-edit', {
-              detail: missing[0] === 'time'
-                ? { step: 1, focus: hasDate ? 'wizard-event-time' : 'wizard-event-date' }
-                : { step: 2, focus: 'wizard-category' },
-            }));
-            setMsg(gap, 'error');
+            window.oseWizardReview.focusFirstMissing();
             return true;
           }
-
-          // The fields a core value lives in. A mark goes on the empty one and
-          // comes off as soon as it has a value.
-          var CORE_FIELDS = ['wizard-event-date', 'wizard-event-time', 'wizard-category', 'wizard-event-type'];
-          function markMissingCore(missing) {
-            var el = function (id) { return document.getElementById(id); };
-            CORE_FIELDS.forEach(function (id) { el(id).removeAttribute('aria-invalid'); });
-            if (missing.indexOf('time') >= 0) {
-              ['wizard-event-date', 'wizard-event-time'].forEach(function (id) {
-                if (!el(id).value) el(id).setAttribute('aria-invalid', 'true');
-              });
-            }
-            if (missing.indexOf('event_type') >= 0) {
-              el(el('wizard-category').value ? 'wizard-event-type' : 'wizard-category').setAttribute('aria-invalid', 'true');
-            }
-          }
-          CORE_FIELDS.forEach(function (id) {
-            var field = document.getElementById(id);
-            ['input', 'change'].forEach(function (ev) {
-              field.addEventListener(ev, function () {
-                if (!field.value || !field.hasAttribute('aria-invalid')) return;
-                field.removeAttribute('aria-invalid');
-                // A category alone is not a type yet: the mark moves on to it.
-                var type = document.getElementById('wizard-event-type');
-                if (id === 'wizard-category' && !type.value) type.setAttribute('aria-invalid', 'true');
-              });
-            });
-          });
 
           function goNext() {
             if (wiz.editing) {
@@ -4185,6 +4145,11 @@
           window.oseWizardReview = {
             missing: missingCore,
             message: function () { return sentence(missingCore()); },
+            focusFirstMissing: function () {
+              var m = missingCore();
+              var b = q('wizard-review-change-' + (m[0] === 'event_type' ? 'type' : 'when'));
+              if (b) b.focus();
+            },
           };
 
           // Any field, card or step change redraws; the wizard's own handlers run first.
