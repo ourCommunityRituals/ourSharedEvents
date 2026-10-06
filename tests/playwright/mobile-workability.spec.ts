@@ -79,6 +79,23 @@ const SPONSOR_CARD_SKIP_REASON = SPONSOR_CARD_ID
   ? undefined
   : 'Set OSE_SPONSOR_CARD_ID to a seeded sponsor with an accepted placement — otherwise /sponsors/:id renders the 404 page, not the sponsor card.';
 
+// One event in each lifecycle phase, and a signed SharedReport link, seeded by
+// tests/playwright/mobile.global-setup.ts on the local worker. A phone is the
+// first screen for these pages through the whole lifecycle (PO 2026-10-06). On a
+// deployed host nothing seeds them, so they skip there with this reason; on the
+// local worker a failed seed stops the run before any test.
+const AUDIT_EVENT = {
+  pre: process.env.OSE_AUDIT_EVENT_PRE || '',
+  live: process.env.OSE_AUDIT_EVENT_LIVE || '',
+  post: process.env.OSE_AUDIT_EVENT_POST || '',
+};
+const AUDIT_REPORT_PATH = process.env.OSE_AUDIT_REPORT_PATH || '';
+const LIFECYCLE_SKIP_REASON = AUDIT_EVENT.pre
+  ? undefined
+  : 'Needs an event seeded in each phase (OSE_AUDIT_EVENT_PRE / _LIVE / _POST and OSE_AUDIT_REPORT_PATH). The blocking PR job seeds them on its local worker (mobile.global-setup.ts); a deployed host has none.';
+const EVENT_PAGE_CTA =
+  '[data-testid="event-rsvp"], [data-testid="event-checkin"], [data-testid="event-choices"] a, main a, main button';
+
 // Mobile floor: iPhone 13 Mini / iPhone X. Smallest modern phone in
 // significant active use. Designing to this floor passes for every
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
@@ -194,6 +211,30 @@ const SURFACES: Surface[] = [
       '[data-testid="event-rsvp"], [data-testid="event-checkin"], [data-testid="error-cta"], main a, main button',
   },
   {
+    path: `/events/${AUDIT_EVENT.pre || 'unseeded-pre'}`,
+    name: 'event page, before the event',
+    // No primaryCtaSelector, on purpose. The page's order is the facts first and
+    // the ask after them (title, sponsor, What, Where, Who, How much, then the
+    // three choices; PO decision 2026-09-13). On the first CI run of this
+    // surface, with a one-line description, the first choice sat at 842px on an
+    // 812px screen: one short scroll down. Whether a phone should keep an
+    // action in view before the event is a PO decision, recorded on OSE-292;
+    // this contract would otherwise fail on the order the PO chose.
+    skipReason: LIFECYCLE_SKIP_REASON,
+  },
+  {
+    path: `/events/${AUDIT_EVENT.live || 'unseeded-live'}`,
+    name: 'event page, during the event',
+    primaryCtaSelector: EVENT_PAGE_CTA,
+    skipReason: LIFECYCLE_SKIP_REASON,
+  },
+  {
+    path: `/events/${AUDIT_EVENT.post || 'unseeded-post'}`,
+    name: 'event page, after the event',
+    primaryCtaSelector: 'main a, main button',
+    skipReason: LIFECYCLE_SKIP_REASON,
+  },
+  {
     path: '/forms/evt_test_2026?type=register',
     name: 'register form',
     primaryCtaSelector:
@@ -283,6 +324,18 @@ const SURFACES: Surface[] = [
     primaryCtaSelector:
       '[data-testid="sponsor-card-phone"], [data-testid="sponsor-card-email"], [data-testid="sponsor-card-website"], [data-testid="sponsor-card-nav-events"]',
     skipReason: SPONSOR_CARD_SKIP_REASON,
+  },
+  {
+    // The signed link a sponsor or organizer opens on a phone: no admin header.
+    path: AUDIT_REPORT_PATH || '/sharedReport?eventId=unseeded&token=unseeded',
+    name: 'shared report (signed link)',
+    skipReason: LIFECYCLE_SKIP_REASON,
+  },
+  {
+    path: `/poster?event=${AUDIT_EVENT.pre || 'unseeded-pre'}`,
+    name: 'poster for an event',
+    primaryCtaSelector: '[data-testid="poster-print"], #admin-action-bar button',
+    skipReason: LIFECYCLE_SKIP_REASON,
   },
   {
     path: '/poster',
@@ -447,7 +500,9 @@ async function getInputLocators(page: Page): Promise<Locator[]> {
 // run-specific token, so titles are stable across runs and a token never lands
 // in a report. Only `t` / `token` — `?type=register` etc. must stay distinct.
 // Navigation still uses the full path.
-const titlePath = (p: string) => p.replace(/([?&](?:t|token)=)[^&]+/g, '$1…');
+// Seeded event ids are new on every run, so they are elided too (`evt_…`).
+const titlePath = (p: string) =>
+  p.replace(/([?&](?:t|token)=)[^&]+/g, '$1…').replace(/evt_[0-9a-f-]{36}/g, 'evt_…');
 
 for (const surface of SURFACES) {
   const shown = titlePath(surface.path);

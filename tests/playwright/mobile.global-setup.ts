@@ -14,11 +14,18 @@
  * skipped it. A second sponsor is seeded and accepts its placement through
  * the sponsor respond endpoint, and its id goes to OSE_SPONSOR_CARD_ID.
  *
+ * The event page, the poster and the SharedReport are phone-first through the
+ * whole lifecycle (PO 2026-10-06), so one event is seeded before, during and
+ * after, with a signed report link (helpers/lifecycle-seed.ts). Their ids go to
+ * OSE_AUDIT_EVENT_PRE / _LIVE / _POST and the link to OSE_AUDIT_REPORT_PATH.
+ * A seed that fails stops the run: these surfaces are never skipped locally.
+ *
  * Runs after the config's webServer is up. An explicit OSE_SPONSOR_HOME_TOKEN
  * or OSE_SPONSOR_CARD_ID from the environment wins, so a caller can still
  * point the audit at a specific sponsor.
  */
 import { request, type FullConfig } from '@playwright/test';
+import { seedLifecycle } from './helpers/lifecycle-seed';
 import { seedSponsorCard, seedSponsorHome } from './helpers/sponsor-home-seed';
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
@@ -35,6 +42,13 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     if (!process.env.OSE_SPONSOR_CARD_ID) {
       const card = await seedSponsorCard(ctx, bearer, 'Audit card');
       process.env.OSE_SPONSOR_CARD_ID = card.sponsorId;
+    }
+    if (!process.env.OSE_AUDIT_EVENT_PRE) {
+      const life = await seedLifecycle(ctx, bearer);
+      process.env.OSE_AUDIT_EVENT_PRE = life.pre;
+      process.env.OSE_AUDIT_EVENT_LIVE = life.live;
+      process.env.OSE_AUDIT_EVENT_POST = life.post;
+      process.env.OSE_AUDIT_REPORT_PATH = life.reportPath;
     }
   } finally {
     await ctx.dispose();
