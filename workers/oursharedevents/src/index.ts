@@ -23,6 +23,7 @@ import {
   emitOperationCost,
 } from './lib/cost-metric';
 import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
+import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
 export type { RouterEnv as Env };
 
@@ -47,11 +48,15 @@ export default {
     try {
       response = await route(request, costEnv, ctx);
     } catch (err) {
+      // The route pattern, the error class and what the error said, never the
+      // URL: a signed link is a credential (lib/unhandled-error-log.ts).
+      const failure = summarizeUnhandledError(err, request);
       console.error(
         JSON.stringify({
           type: 'UNHANDLED_ERROR',
-          error: err instanceof Error ? err.message : String(err),
-          path: new URL(request.url).pathname,
+          errorClass: failure.errorClass,
+          error: failure.error,
+          op: failure.op,
           timestamp: new Date().toISOString(),
         })
       );
