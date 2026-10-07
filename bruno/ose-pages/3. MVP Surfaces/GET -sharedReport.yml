@@ -37,6 +37,18 @@ runtime:
 
         \    });
 
+        \    test('Is not kept by the browser (Cache-Control no-store)', function() {
+
+        \        expect(String(res.getHeader('cache-control') || '')).to.eql('no-store');
+
+        \    });
+
+        \    test('Never sends its address on (Referrer-Policy no-referrer)', function() {
+
+        \        expect(String(res.getHeader('referrer-policy') || '')).to.eql('no-referrer');
+
+        \    });
+
         } else if (res.getStatus() === 403) {
 
         \    test('Has REPORT_DISABLED code', function() {

@@ -243,4 +243,7 @@ export const NODE_SPECS = [
   // Logs + Settings pages: each page's script run in jsdom with a stubbed fetch
   // (tabs, filters, honest empty/error states, text-only rendering).
   'tests/admin-logs-settings-ui.spec.ts',
+  // Signed links leave the address bar: the /sponsor and /sharedReport page
+  // scripts run in jsdom over the real templates with a stubbed fetch.
+  'tests/signed-link-url-scrub.spec.ts',
 ];

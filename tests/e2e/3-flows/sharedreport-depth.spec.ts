@@ -68,6 +68,8 @@ test.describe('SharedReport depth gate', () => {
     test.skip(!POST || !ADMIN_TOKEN, 'fixtures not seeded');
     const res = await fetchReport(request, POST!, ADMIN_TOKEN!);
     expect(res.status()).toBe(200);
+    // Read with a signed link, so the browser is told not to keep a copy.
+    expect(res.headers()['cache-control']).toBe('no-store');
     const body = await res.json();
     expect(body.ok).toBe(true);
     // Depth is expressed by section presence, not a top-level label — the wire

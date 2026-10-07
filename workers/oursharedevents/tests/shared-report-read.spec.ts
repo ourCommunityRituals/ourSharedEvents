@@ -406,8 +406,10 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(body.report.unique_gatherings).toBe(30);
   });
 
-  test('returns Cache-Control: private, max-age=3600 + Vary: Authorization for closed event', async () => {
-    // Q7: closed events (past end_date) cache at 3600s; in-flight at 300s.
+  test('returns Cache-Control: no-store (+ Vary: Authorization) for a closed event', async () => {
+    // The report is read with a signed link, so the browser must not keep a
+    // copy. Before 2026-10-07 this was `private, max-age=3600` (closed) and
+    // `private, max-age=300` (in flight), per S5-Q4 / Q7.
     await seedEvent({
       id: 'test-evt-read-cache',
       start_date: '2025-01-15T19:00:00Z',
@@ -419,7 +421,8 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
       `https://test.local/api/v2/events/test-evt-read-cache/shared-report`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    expect(res.headers.get('Cache-Control')).toBe('private, max-age=3600');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
     expect(res.headers.get('Vary')).toBe('Authorization');
   });
 });
@@ -1253,8 +1256,9 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(derived![0]!.sponsor_count).toBe(1); // not 2 — only sp-q6-a's row is in scope
   });
 
-  // Q7 — dynamic Cache-Control
-  test('Q7: in-flight event (no end_date) returns max-age=300', async () => {
+  // Q7 gave an in-flight event max-age=300 and a closed one max-age=3600. Both
+  // are no-store now: the event's phase no longer changes what is kept.
+  test('Q7 (retired): in-flight event (no end_date) returns no-store', async () => {
     await seedEvent({ id: 'test-evt-read-q7-inflight', end_date: null });
     await seedScanAggregate('test-evt-read-q7-inflight', 5);
     const token = await makeSignedLink('test-evt-read-q7-inflight');
@@ -1264,10 +1268,10 @@ describe('H3 corridor map + open-question resolutions', () => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     expect(res.status).toBe(200);
-    expect(res.headers.get('Cache-Control')).toBe('private, max-age=300');
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
 
-  test('Q7: closed event (past end_date) returns max-age=3600', async () => {
+  test('Q7 (retired): closed event (past end_date) returns no-store', async () => {
     await seedEvent({
       id: 'test-evt-read-q7-closed',
       start_date: '2025-01-15T19:00:00Z',
@@ -1281,7 +1285,7 @@ describe('H3 corridor map + open-question resolutions', () => {
       { headers: { Authorization: `Bearer ${token}` } }
     );
     expect(res.status).toBe(200);
-    expect(res.headers.get('Cache-Control')).toBe('private, max-age=3600');
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
 
   // Q2 — sponsor mint depth

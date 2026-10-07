@@ -68,12 +68,28 @@
     </main>
     <!--OCR_LEGAL_FOOTER-->
     <script>
-      // Accept / decline a placement, and ask to back an event. The token rides
-      // in the URL (?t=) and is re-sent in the body; the server re-verifies it
-      // and scopes every write to the token's sponsor + brand. No other JS on
-      // the page.
+      // Accept / decline a placement, and ask to back an event. The token
+      // arrives in the URL (?t=) and is re-sent in the body; the server
+      // re-verifies it and scopes every write to the token's sponsor + brand.
+      // No other JS on the page.
       (function () {
-        var token = new URLSearchParams(window.location.search).get('t') || '';
+        // The token is read once and kept in this variable only: never a
+        // cookie, never browser storage. It is then dropped from the address
+        // bar, so it is not in a screenshot, a copied or shared link, or the
+        // Back/Forward list. The browser's own history list can still hold the
+        // link as first opened (Chromium records it before any script runs).
+        // Only `t` goes; any other parameter and the #fragment stay. A refresh
+        // then asks for /sponsor with no token and gets the "open your link
+        // again" page (handlers/sponsor-home.ts).
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('t') || '';
+        if (params.has('t')) {
+          params.delete('t');
+          var rest = params.toString();
+          try {
+            history.replaceState(history.state, '', window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
+          } catch (e) { /* sandboxed frame: the address stays as opened */ }
+        }
         function setMsg(card, text, cls) {
           var m = card.querySelector('.sh-msg');
           if (!m) return;

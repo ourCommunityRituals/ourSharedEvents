@@ -2331,7 +2331,10 @@ export async function handleAdminPosterPreviewPage(
 }
 
 export function handleAdminPage(_env: PagesEnv): Response {
-  return html(injectLegalFooter(ADMIN_HTML, 'admin'));
+  const res = html(injectLegalFooter(ADMIN_HTML, 'admin'));
+  // Not kept in a browser or shared-device cache, so it is not shown again after sign-out.
+  res.headers.set('Cache-Control', 'no-store');
+  return res;
 }
 
 /**
@@ -2632,9 +2635,14 @@ export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
     SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
     'shared-report'
   );
-  return html(
+  const res = html(
     injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'sharedReport'))
   );
+  // Opened by a signed link (?token=). Not kept in a cache, and the address is
+  // never sent on in a Referer header, whatever is in it at that moment.
+  res.headers.set('Cache-Control', 'no-store');
+  res.headers.set('Referrer-Policy', 'no-referrer');
+  return res;
 }
 
 // ─── /ui-preview — component showcase for Claude Design ───────────────────────
