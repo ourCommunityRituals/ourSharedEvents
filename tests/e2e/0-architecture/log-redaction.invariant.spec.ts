@@ -520,7 +520,7 @@ function requestUrlScopes(src: string): UrlScope[] {
 }
 
 function readsWholeUrl(name: string, args: string): boolean {
-  const id = name.replace(/\$/g, '\\$');
+  const id = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Quoted text is prose; a template literal is kept (`${url}` interpolates).
   const text = args.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''");
   return new RegExp(
