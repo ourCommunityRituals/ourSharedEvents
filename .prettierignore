@@ -24,3 +24,9 @@ web/shared/testids.js
 # prettier reformat (single quotes) is permanent false drift. Same reason as the
 # testids registry above.
 packages/flags/src/generated/
+
+# Generated pool triage manifest. scripts/triage-vitest-pool.mjs is the canonical
+# formatter and its `--check` (T0 Gate lint shard) byte-compares against its own
+# output. Prettier leaves the file as it is today (checked 2026-10-07); this keeps
+# a later prettier from turning the check red on a file nobody edited.
+docs/testing/vitest-pool-triage.json
