@@ -761,6 +761,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The browser cache above holds the browser binaries. This one holds the
+      # Ubuntu packages `--with-deps` installs for them (WebKit: 181 packages,
+      # 126 MB). On 2026-10-07 the runner's mirror served those at 30-100 kB/s
+      # and the component shard hit the job ceiling before a test started.
+      # scripts/ci/install-playwright-browsers.sh copies this directory into
+      # apt's cache before the install and refreshes it after the download.
+      # One cache per browser set, so the chromium-only shard never saves its
+      # smaller set under the key the WebKit shard restores.
+      - name: Restore Playwright system package cache
+        if: matrix.shard == 'invariants' || matrix.shard == 'component'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pw-apt-archives
+          key: ${{ runner.os }}-pw-apt-${{ matrix.shard == 'component' && 'chromium-webkit' || 'chromium' }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pw-apt-${{ matrix.shard == 'component' && 'chromium-webkit' || 'chromium' }}-
+
       # ── Shard: invariants (OSE-350) ────────────────────────────────────────
       # The STRUCTURAL subset of the 0-architecture invariant suite — the
       # code-shape locks that read source files via node:fs and assert the
@@ -789,7 +806,9 @@ jobs:
           # ephemeral ubuntu VM (passwordless sudo on GitHub-hosted runners);
           # harmless on other platforms. Prevents a missing-shared-lib failure
           # now that this shard no longer runs on the pre-provisioned box.
-          npx playwright install --with-deps chromium
+          # Through the install script, so a slow package mirror cannot run
+          # the shard into its ceiling (see the system package cache above).
+          bash scripts/ci/install-playwright-browsers.sh chromium
           npx playwright test --config=playwright.e2e-smoke.config.ts \
             tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
             tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
@@ -850,7 +869,7 @@ jobs:
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
-          npx playwright install --with-deps chromium webkit
+          bash scripts/ci/install-playwright-browsers.sh chromium webkit
           PW_LABEL='T0: Component (viewport)' scripts/pw-guarded.sh \
             --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts \
