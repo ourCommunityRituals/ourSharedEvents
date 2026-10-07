@@ -1,10 +1,10 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 385,
-    "totalTests": 4998,
-    "workerd": 196,
-    "node": 189,
+    "total": 388,
+    "totalTests": 5045,
+    "workerd": 198,
+    "node": 190,
     "needsReview": 69
   },
   "files": [
@@ -216,7 +216,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
@@ -650,7 +650,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 11
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
@@ -805,6 +805,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-anon-key.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/event-card-filter.spec.ts",
@@ -1108,6 +1115,13 @@
       "testCount": 36
     },
     {
+      "file": "workers/oursharedevents/tests/forms-anon-unlinkable.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/forms-constraints.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -1267,6 +1281,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/live-off-map-by-link.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/log-never-who.spec.ts",
@@ -1686,7 +1707,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 8
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
@@ -1714,7 +1735,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/public-event-projection.spec.ts",
@@ -2673,7 +2694,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/visitor-country-cleared.spec.ts",
