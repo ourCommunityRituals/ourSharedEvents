@@ -38,7 +38,8 @@ export type ShortlinkResolveEnv = ShortlinksEnv;
 export async function handleShortlinkResolve(
   request: Request,
   env: ShortlinkResolveEnv,
-  code: string
+  code: string,
+  countable: boolean = true
 ): Promise<Response> {
   if (!env.DB) {
     return new Response(
@@ -67,7 +68,9 @@ export async function handleShortlinkResolve(
   // The redirect must succeed even if this increment fails: incrementClick
   // swallows D1 errors with a structured log. It IS awaited (one UPDATE …
   // RETURNING round trip), so the count is current when the 302 lands.
-  await incrementClick(env, code);
+  // Past the caller's limit (OSE-1496) the link still works and the click is
+  // not counted, so one client cannot run the count up. See publicCountLimited.
+  if (countable) await incrementClick(env, code);
 
   // 302 to the public event HTML page. OSE-243a wired /events/:id to
   // handlePublicEventPage which renders the 5W content + venue map +
