@@ -159,6 +159,37 @@ describe('the wrapper never refuses: it tells the handler whether to count', () 
     expect(seen[seen.length - 1]).toEqual(['203.0.113.99', true]);
   });
 
+  // A limit that stops counting can be turned around: drain someone else's
+  // allowance and their real scans stop being counted. So the bucket may only
+  // ever be the address Cloudflare itself reports, never one the client names.
+  test('a caller cannot drain another address by naming it in X-Forwarded-For', async () => {
+    const seen: boolean[] = [];
+    const wrapped = publicCountLimited('t', async (_r, _e, countable) => {
+      seen.push(countable);
+      return new Response(null, { status: 302 });
+    });
+    const e = { RATE_LIMIT_KV: kv() };
+    const victim = '203.0.113.50';
+    const forged = () =>
+      new Request('https://t.test/q/x', { headers: { 'X-Forwarded-For': victim } });
+    for (let i = 0; i <= PUBLIC_READ_MAX + 5; i++) await wrapped(forged(), e);
+    seen.length = 0;
+    await wrapped(req(victim), e);
+    expect(seen, 'the real visitor at that address is still counted').toEqual([true]);
+  });
+
+  test('requests with no Cloudflare address do not share an allowance', async () => {
+    const seen: boolean[] = [];
+    const wrapped = publicCountLimited('t', async (_r, _e, countable) => {
+      seen.push(countable);
+      return new Response(null, { status: 302 });
+    });
+    const e = { RATE_LIMIT_KV: kv() };
+    const bare = () => new Request('https://t.test/q/x');
+    for (let i = 0; i <= PUBLIC_READ_MAX + 5; i++) await wrapped(bare(), e);
+    expect(seen.every(Boolean), 'no shared bucket to drain: all counted').toBe(true);
+  });
+
   test('with no KV bound everything is counted (the limiter fails open)', async () => {
     const seen: boolean[] = [];
     const wrapped = publicCountLimited('t', async (_r, _e, countable) => {

@@ -180,14 +180,28 @@ export function publicReadLimited<E>(
  * scans or clicks without end: not to inflate a count, and not to push a
  * node's count across the floor to learn whether one real person scanned.
  *
- * Same limit, same fail-open rule and same address handling as
- * `publicReadLimited`: with the limiter's storage down, everything is counted.
+ * Same limit and same fail-open rule as `publicReadLimited`: with the limiter's
+ * storage down, everything is counted.
+ *
+ * ONE DIFFERENCE, and it matters. A limit that stops counting can be turned
+ * around: drain someone else's allowance and their real scans stop being
+ * counted. So the bucket here is only ever the address Cloudflare reports
+ * (`CF-Connecting-IP`). `publicReadLimited` falls back to `X-Forwarded-For`,
+ * then to one shared bucket, which is the cautious direction for a read and the
+ * wrong one for a count: a client could name the address to drain. With no
+ * Cloudflare address the request is counted and not limited.
+ *
+ * What remains by design: callers who really do share an address (one venue's
+ * Wi-Fi) share an allowance, so one of them flooding can stop the others being
+ * counted for that minute. Any per-address limit has this property.
  */
 export function publicCountLimited<E>(
   scope: string,
   handler: (request: Request, env: E, countable: boolean) => Promise<Response>,
   max: number = PUBLIC_READ_MAX
 ): (request: Request, env: E & PublicReadLimitEnv) => Promise<Response> {
-  return async (request: Request, env: E & PublicReadLimitEnv) =>
-    handler(request, env, !(await isPublicReadLimited(request, env, scope, max)));
+  return async (request: Request, env: E & PublicReadLimitEnv) => {
+    if (!edgeCallerIp(request)) return handler(request, env, true);
+    return handler(request, env, !(await isPublicReadLimited(request, env, scope, max)));
+  };
 }
