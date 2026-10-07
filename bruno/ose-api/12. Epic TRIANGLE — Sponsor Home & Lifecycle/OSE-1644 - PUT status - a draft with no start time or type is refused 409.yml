@@ -1,0 +1,51 @@
+info:
+  name: OSE-1644 | admin events | PUT status refuses a draft with no start time or type (409 CORE_VALUES_MISSING)
+  type: http
+  seq: 13
+
+# Contract: an event cannot leave draft without a start time and an event type.
+# The fixture bruno/fixtures/core-values-draft-seed.sql is a draft with neither,
+# reset before every run. The PUT is refused before any write, so this request
+# changes nothing and can run any number of times.
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/bruno-core-values-draft"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"status":"ready"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        test('409 CORE_VALUES_MISSING', function () {
+          expect(res.getStatus()).to.eql(409);
+          expect(res.getBody().ok).to.eql(false);
+          expect(res.getBody().code).to.eql('CORE_VALUES_MISSING');
+        });
+        test('names both missing values, time first', function () {
+          expect(res.getBody().missing).to.eql(['time', 'event_type']);
+        });
+        test('says what to add, in words', function () {
+          expect(res.getBody().error).to.eql(
+            'Add a start time and an event type before this event goes further'
+          );
+        });
+        test('carries nothing about the event', function () {
+          const keys = Object.keys(res.getBody()).sort();
+          expect(keys).to.not.include('item');
+          expect(keys).to.not.include('title');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

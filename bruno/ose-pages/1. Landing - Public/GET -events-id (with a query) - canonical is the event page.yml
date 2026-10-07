@@ -1,0 +1,42 @@
+info:
+  name: GET /events/:id?utm_source=bruno (canonical is the event page)
+  type: http
+  seq: 12
+
+# OSE-1622: an event page names /events/:id as its canonical address whatever
+# query it was asked with. testEventId is the shared seeded event; it has ended,
+# so this is the recap render. 403 is accepted because the edge may challenge a
+# script client on an HTML page; the canonical tests run only on a real 200.
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{testEventId}}?utm_source=bruno"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        test('Returns 200 or 403 (edge challenge)', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 200) {
+          const id = bru.getEnvVar('testEventId');
+          const body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+          const tags = body.match(/<link rel="canonical" href="[^"]*"/g) || [];
+          const href = tags.length ? tags[0].replace('<link rel="canonical" href="', '').replace('"', '') : '';
+          test('exactly one canonical link', function () {
+            expect(tags.length).to.eql(1);
+          });
+          test('the canonical is this event page, absolute, with no query', function () {
+            expect(href.indexOf('http')).to.eql(0);
+            expect(href.endsWith('/events/' + id)).to.eql(true);
+            expect(href.indexOf('?')).to.eql(-1);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

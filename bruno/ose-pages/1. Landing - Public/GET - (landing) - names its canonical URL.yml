@@ -1,0 +1,41 @@
+info:
+  name: GET /?utm_source=bruno (canonical is the landing page)
+  type: http
+  seq: 13
+
+# OSE-1622: the landing page names its own address as canonical, with no query.
+# 403 is accepted because the edge may challenge a script client on an HTML
+# page; the canonical tests run only on a real 200.
+http:
+  method: GET
+  url: "{{baseUrl}}/?utm_source=bruno"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        test('Returns 200 or 403 (edge challenge)', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 200) {
+          const body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+          const tags = body.match(/<link rel="canonical" href="[^"]*"/g) || [];
+          const href = tags.length ? tags[0].replace('<link rel="canonical" href="', '').replace('"', '') : '';
+          test('exactly one canonical link', function () {
+            expect(tags.length).to.eql(1);
+          });
+          test('the canonical is the site root, absolute, with no query', function () {
+            expect(href.indexOf('http')).to.eql(0);
+            expect(href.endsWith('/')).to.eql(true);
+            expect(href.split('/').length).to.eql(4);
+            expect(href.indexOf('?')).to.eql(-1);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
