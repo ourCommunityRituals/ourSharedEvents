@@ -1,9 +1,9 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 385,
-    "totalTests": 4998,
-    "workerd": 196,
+    "total": 388,
+    "totalTests": 5041,
+    "workerd": 199,
     "node": 189,
     "needsReview": 69
   },
@@ -216,7 +216,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
@@ -650,7 +650,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 11
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
@@ -693,6 +693,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/data-subject-erase-no-lookup-hash.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/data-subject.spec.ts",
@@ -1269,6 +1276,13 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/live-off-map-by-link.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
+      "testCount": 18
+    },
+    {
       "file": "workers/oursharedevents/tests/log-never-who.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -1686,7 +1700,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 8
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
@@ -1714,7 +1728,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/public-event-projection.spec.ts",
@@ -2662,6 +2676,13 @@
       "testCount": 12
     },
     {
+      "file": "workers/oursharedevents/tests/unhandled-error-log.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/upload.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2673,7 +2694,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/visitor-country-cleared.spec.ts",
