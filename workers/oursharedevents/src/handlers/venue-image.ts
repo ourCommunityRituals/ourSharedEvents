@@ -13,9 +13,11 @@
 //   3. The route is rate-limited where it is declared (router.ts,
 //      publicReadLimited), like every other public read.
 //
-// The gate is the public event page's own (handlePublicEventPage): published,
-// and not draft/ready. It is deliberately not narrowed to "listed", because the
-// page shows this image during the publish grace window and after the event.
+// The gate is the public event page's own (handlePublicEventPage): not
+// draft/ready, and either on the map or live. A live event's page opens by link
+// while it is off the map (PO 2026-10-07), and it shows this image. It is
+// deliberately not narrowed to "listed", because the page also shows it during
+// the publish grace window and after the event.
 
 import { fetchStaticMapImage, isGoogleMapsConfigured, type MapsEnv } from '../lib/maps';
 
@@ -54,7 +56,8 @@ export async function handleVenueImage(request: Request, env: VenueImageEnv): Pr
   try {
     row = await env.DB.prepare(
       `SELECT location, where_address FROM events
-        WHERE id = ? AND is_published = 1
+        WHERE id = ?
+          AND (is_published = 1 OR LOWER(COALESCE(status, '')) = 'active')
           AND LOWER(COALESCE(status, '')) NOT IN ('draft', 'ready')`
     )
       .bind(eventId)

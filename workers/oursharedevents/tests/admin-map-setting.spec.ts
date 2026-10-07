@@ -279,6 +279,28 @@ describe('changing the map setting from the panel', () => {
     expect(t.row.is_published).toBe(0);
   });
 
+  // PO 2026-10-07: a live event's page opens by link while it is off the map.
+  // The message used to say "Its public page is closed to guests until you
+  // turn it back on."
+  test('turning it off on a live event says its links still open its page', async () => {
+    const t = run({ ok: true, data: { ok: true } });
+    t.row.is_published = 1;
+    t.row.status = 'active';
+    await t.change('evt_1', false);
+    expect(t.msgEl.textContent).toBe(
+      'This event is off the map. Its links and printed codes still open its page.'
+    );
+    expect(t.msgEl.className).toContain('success');
+  });
+
+  test('turning it off on an event that is not live says only that it is off the map', async () => {
+    const t = run({ ok: true, data: { ok: true } });
+    t.row.is_published = 1;
+    t.row.status = 'draft';
+    await t.change('evt_1', false);
+    expect(t.msgEl.textContent).toBe('This event is off the map.');
+  });
+
   test('a failed save leaves the row as it was, and says so', async () => {
     const t = run({ ok: false, status: 503, data: { ok: false, error: 'Failed to update event' } });
     await t.change('evt_1', true);

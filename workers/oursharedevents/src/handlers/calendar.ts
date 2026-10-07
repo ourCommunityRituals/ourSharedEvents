@@ -133,7 +133,12 @@ export async function handleEventCalendar(
 
   if (!row) return notFound();
   const status = (row.status || '').toLowerCase();
-  if (row.is_published !== 1 || status === 'draft' || status === 'ready') return notFound();
+  // Same gate as the event page that links here (handlePublicEventPage): a live
+  // event's file downloads by link while it is off the map (PO 2026-10-07).
+  const offMap = row.is_published !== 1;
+  if (status === 'draft' || status === 'ready' || (offMap && status !== 'active')) {
+    return notFound();
+  }
 
   if (!row.start_date) {
     return Response.json(
