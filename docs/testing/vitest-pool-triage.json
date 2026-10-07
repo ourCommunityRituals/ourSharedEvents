@@ -359,6 +359,20 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/admin-write-guard.derived.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-write-guard.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 47
+    },
+    {
       "file": "workers/oursharedevents/tests/advanced-metrics.spec.ts",
       "bucket": "node",
       "needsReview": false,
