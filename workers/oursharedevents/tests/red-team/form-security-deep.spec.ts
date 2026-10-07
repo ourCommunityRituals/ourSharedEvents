@@ -41,8 +41,9 @@ const tenv = () => env as unknown as TestEnv;
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    try { await tenv().DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -50,8 +51,9 @@ beforeAll(async () => {
   }
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    try { await tenv().FORMS_DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -59,11 +61,15 @@ beforeAll(async () => {
   }
   // Seed active event for form endpoint tests
   try {
-    await tenv().DB.prepare(
-      `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
        VALUES ('evt_form_sec', 'brand_test', 'Form Security Test', 'active', '2026-01-01', '2026-12-31')`
-    ).run();
-  } catch { /* already exists */ }
+      )
+      .run();
+  } catch {
+    /* already exists */
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,7 +96,6 @@ async function postForm(
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('PII-01: Email dedup bypass via Unicode normalization (HIGH)', () => {
-
   test('hashEmail: canonical ASCII email produces consistent hash', async () => {
     const h1 = await hashEmail('user@example.com');
     const h2 = await hashEmail('user@example.com');
@@ -114,8 +119,8 @@ describe('PII-01: Email dedup bypass via Unicode normalization (HIGH)', () => {
 
   test('PII-01 CONFIRMED: Unicode fullwidth @ produces different hash — dedup bypass', async () => {
     // Unicode fullwidth variants that look identical but are different code points
-    const ascii = await hashEmail('user@example.com');               // ASCII @  (U+0040)
-    const fullwidthAt = await hashEmail('user＠example.com');        // Fullwidth @ (U+FF20)
+    const ascii = await hashEmail('user@example.com'); // ASCII @  (U+0040)
+    const fullwidthAt = await hashEmail('user＠example.com'); // Fullwidth @ (U+FF20)
 
     // These LOOK identical visually but produce different hashes
     // → an attacker can submit twice using the fullwidth variant
@@ -181,7 +186,6 @@ describe('PII-01: Email dedup bypass via Unicode normalization (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('PII-08: Encryption key rotation DoS — old records unreadable (HIGH)', () => {
-
   test('encryptEmail with key A, decryptEmail with key B fails with auth error', async () => {
     const keyA = 'original-encryption-key-32-chars-A';
     const keyB = 'rotated-encryption-key-32-chars-B!';
@@ -191,7 +195,9 @@ describe('PII-08: Encryption key rotation DoS — old records unreadable (HIGH)'
 
     // After key rotation, decrypting with key B throws (AES-GCM auth tag fails)
     await expect(decryptEmail(ciphertext, keyB)).rejects.toThrow();
-    console.log('[PII-08] Confirmed: AES-GCM decryption fails after key rotation — records permanently unreadable');
+    console.log(
+      '[PII-08] Confirmed: AES-GCM decryption fails after key rotation — records permanently unreadable'
+    );
   });
 
   test('encryptEmail roundtrip succeeds with same key', async () => {
@@ -216,8 +222,8 @@ describe('PII-08: Encryption key rotation DoS — old records unreadable (HIGH)'
       if (path.replace(/\\/g, '/').includes('lib/pii.ts')) {
         // Static salt is used — key rotation without re-encryption = data loss
         expect(content).toMatch(/oursharedevents-forms-/);
-        const hasPerRecordSalt = content.includes('crypto.getRandomValues') &&
-          content.match(/salt.*random/i);
+        const hasPerRecordSalt =
+          content.includes('crypto.getRandomValues') && content.match(/salt.*random/i);
         console.log('[PII-08] pii.ts uses static PBKDF2 salt:', !hasPerRecordSalt);
         console.log('[PII-08] Fix required: per-record salt OR re-encryption-on-read');
       }
@@ -242,12 +248,10 @@ describe('PII-08: Encryption key rotation DoS — old records unreadable (HIGH)'
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('CSP-001: unsafe-inline in form page script-src (HIGH)', () => {
-
   test('form page CSP header contains unsafe-inline in script-src', async () => {
-    const res = await SELF.fetch(
-      'http://localhost/forms/evt_form_sec?type=register',
-      { method: 'GET' }
-    );
+    const res = await SELF.fetch('http://localhost/forms/evt_form_sec?type=register', {
+      method: 'GET',
+    });
     const csp = res.headers.get('Content-Security-Policy') ?? '';
     console.log('[CSP-001] CSP header:', csp);
 
@@ -256,7 +260,9 @@ describe('CSP-001: unsafe-inline in form page script-src (HIGH)', () => {
       const hasUnsafeInline = scriptSrc.includes("'unsafe-inline'");
       // This is the vulnerability: unsafe-inline defeats any nonce
       if (hasUnsafeInline) {
-        console.log('[CSP-001] CONFIRMED: unsafe-inline present in script-src — nonce protection bypassed');
+        console.log(
+          '[CSP-001] CONFIRMED: unsafe-inline present in script-src — nonce protection bypassed'
+        );
       }
       // Document the current state
       expect(scriptSrc).toBeDefined();
@@ -295,7 +301,6 @@ describe('CSP-001: unsafe-inline in form page script-src (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Payload bomb: oversized form submissions', () => {
-
   test('16KB+ JSON payload in name field returns 400 or is safely truncated', async () => {
     const bomb = 'A'.repeat(16 * 1024); // 16KB string
     const res = await postForm('evt_form_sec', 'register', {
@@ -340,7 +345,6 @@ describe('Payload bomb: oversized form submissions', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('JSON injection in survey free-text fields', () => {
-
   const injections = [
     { label: 'null byte', value: 'comment\x00injected' },
     { label: 'newline injection', value: 'comment\n","evil":"true' },
@@ -383,7 +387,9 @@ describe('JSON injection in survey free-text fields', () => {
         for (const stmt of prepareStatements) {
           // Template literals with ${...} are string interpolation — dangerous
           const hasInterpolation = /\$\{/.test(stmt);
-          expect(hasInterpolation, `SQL injection risk in forms.ts: ${stmt.slice(0, 100)}`).toBe(false);
+          expect(hasInterpolation, `SQL injection risk in forms.ts: ${stmt.slice(0, 100)}`).toBe(
+            false
+          );
         }
 
         // Also check for string concat patterns
@@ -399,7 +405,6 @@ describe('JSON injection in survey free-text fields', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-003: Method confusion on form endpoints', () => {
-
   const httpMethods = ['GET', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
   const formEndpoints = [
     '/api/v2/events/evt_form_sec/forms/register',
@@ -417,9 +422,10 @@ describe('SEC-003: Method confusion on form endpoints', () => {
             'Content-Type': 'application/json',
             'CF-Connecting-IP': '1.2.3.4',
           },
-          body: method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
-            ? JSON.stringify({ email: 'test@example.com', event_id: 'evt_form_sec' })
-            : undefined,
+          body:
+            method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
+              ? JSON.stringify({ email: 'test@example.com', event_id: 'evt_form_sec' })
+              : undefined,
         });
 
         // Form SUBMISSION is POST-only — every other verb must be rejected, so a
@@ -430,14 +436,15 @@ describe('SEC-003: Method confusion on form endpoints', () => {
         // is verified safe (forms.ts handleSelfDeleteRegistration): it requires
         // a valid email whose hash is the ownership proof, deletes only the
         // caller's own row (event_id + attendee_email_hash), and always returns
-        // {ok:true, deleted} WITHOUT revealing whether a registration existed
-        // (no enumeration side-channel). So here it legitimately returns 200.
+        // {ok:true} and nothing else, so the answer does not say whether a
+        // registration existed (OSE-1497: it used to carry a `deleted` count,
+        // which did). So here it legitimately returns 200.
         const isSelfDelete = method === 'DELETE' && endpoint.endsWith('/forms/register');
         if (method !== 'OPTIONS') {
           console.log(`[SEC-003] ${method} ${endpoint} → ${res.status}`);
           if (isSelfDelete) {
             expect(res.status).toBe(200);
-            expect(await res.json()).toMatchObject({ ok: true });
+            expect(await res.json()).toEqual({ ok: true });
           } else {
             expect([404, 405, 400, 403, 410, 429]).toContain(res.status);
           }
@@ -452,7 +459,6 @@ describe('SEC-003: Method confusion on form endpoints', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Type coercion attacks in form submissions', () => {
-
   test('null email field is rejected without 500', async () => {
     const res = await postForm('evt_form_sec', 'email-signup', {
       email: null,
@@ -486,14 +492,11 @@ describe('Type coercion attacks in form submissions', () => {
   });
 
   test('non-JSON body for form endpoints returns 400 not 500', async () => {
-    const res = await SELF.fetch(
-      'http://localhost/api/v2/events/evt_form_sec/forms/register',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '1.2.3.4' },
-        body: 'not json at all {{{',
-      }
-    );
+    const res = await SELF.fetch('http://localhost/api/v2/events/evt_form_sec/forms/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '1.2.3.4' },
+      body: 'not json at all {{{',
+    });
     expect(res.status).not.toBe(500);
     console.log(`[TYPE-COERCE] Non-JSON body → ${res.status}`);
   });
@@ -504,7 +507,6 @@ describe('Type coercion attacks in form submissions', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-004: Path traversal in event ID', () => {
-
   const traversalPayloads = [
     '../../../admin',
     '..%2F..%2Fadmin',
@@ -528,7 +530,7 @@ describe('SEC-004: Path traversal in event ID', () => {
       expect(res.status).not.toBe(500);
       // If the payload routes to an admin endpoint, it must return 401
       if (res.status === 200) {
-        const body = await res.json() as { ok: boolean };
+        const body = (await res.json()) as { ok: boolean };
         // Should not get admin-scoped data
         expect(body.ok).toBeDefined();
       }
@@ -540,13 +542,15 @@ describe('SEC-004: Path traversal in event ID', () => {
     for (const [path, content] of Object.entries(sources)) {
       if (path.replace(/\\/g, '/').includes('/src/router.ts')) {
         // Look for the split('/')[5] pattern — this is the fragile index-based extraction
-        const splitMatches = content.match(/pathname\.split\s*\(\s*['"]\/['"]\s*\)\s*\[\s*\d+\s*\]/g) ?? [];
+        const splitMatches =
+          content.match(/pathname\.split\s*\(\s*['"]\/['"]\s*\)\s*\[\s*\d+\s*\]/g) ?? [];
         if (splitMatches.length > 0) {
           console.log('[SEC-004] Found index-based path splitting (fragile):', splitMatches);
           console.log('[SEC-004] SEC-004 confirmed: index-based ID extraction is fragile');
         }
         // The secure pattern uses regex capture groups like match[1]
-        const regexCaptureMatches = content.match(/Match\s*&&\s*method\s*===.*?\n.*?(\w+Match\[1\])/g) ?? [];
+        const regexCaptureMatches =
+          content.match(/Match\s*&&\s*method\s*===.*?\n.*?(\w+Match\[1\])/g) ?? [];
         console.log(`[SEC-004] Regex capture group patterns found: ${regexCaptureMatches.length}`);
       }
     }
