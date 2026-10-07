@@ -2,14 +2,14 @@
 
 > **Status:** manifest / measurement artifact. This is the **prerequisite** for the
 > OSE-946 reshape (split the worker vitest suite into a fast **node** project and a
-> small **workerd** project). It classifies where each spec *could* run; it does
+> small **workerd** project). It classifies where each spec _could_ run; it does
 > **not** move anything. Relocation is child 3 and is gated by the review rule below.
 
 ## Why this exists
 
 Every spec under `workers/oursharedevents/tests/**/*.spec.ts` runs in one
 `@cloudflare/vitest-pool-workers` (miniflare/workerd) pool. Loading the pyramid's
-*base* (pure-logic / static-source gates) into the *integration* runtime is what
+_base_ (pure-logic / static-source gates) into the _integration_ runtime is what
 drives the OSE-696 teardown flake and forces `maxWorkers:1` +
 `max-parallel:1`. The cure is to put each spec in the cheapest runtime that still
 proves what it proves. This manifest is the auditable map of which is which.
@@ -24,23 +24,25 @@ coverage-parity gate). The machine artifact is
 
 ## Buckets
 
-| Bucket | Rule | Meaning |
-| --- | --- | --- |
-| **workerd** | a hard runtime marker matched (`SELF.fetch`, `env.DB`/`env.FORMS_DB`, KV/R2, DO helpers, `createExecutionContext`, `applyD1Migrations`, `fetchMock`) | Proven runtime coupling — **stays** in the workers pool. Markers are matched comment-stripped; a stray match only over-classifies *toward* workerd (safe). |
-| **node** (clean) | no `cloudflare:test` import at all | Pure logic / pure Node — runs in the node project as-is. |
-| **node** (needs-review) | imports `cloudflare:test` for `env` only, no runtime marker | Almost always a static-source / config gate that is node-able once its source is fed via `fs` instead of the miniflare `env.*_JSON` binding — **auto-suggested `node`, flagged for human confirmation** (PO decision: auto-classify + flag review). |
+| Bucket                  | Rule                                                                                                                                                 | Meaning                                                                                                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **workerd**             | a hard runtime marker matched (`SELF.fetch`, `env.DB`/`env.FORMS_DB`, KV/R2, DO helpers, `createExecutionContext`, `applyD1Migrations`, `fetchMock`) | Proven runtime coupling — **stays** in the workers pool. Markers are matched comment-stripped; a stray match only over-classifies _toward_ workerd (safe).                                                                                          |
+| **node** (clean)        | no `cloudflare:test` import at all                                                                                                                   | Pure logic / pure Node — runs in the node project as-is.                                                                                                                                                                                            |
+| **node** (needs-review) | imports `cloudflare:test` for `env` only, no runtime marker                                                                                          | Almost always a static-source / config gate that is node-able once its source is fed via `fs` instead of the miniflare `env.*_JSON` binding — **auto-suggested `node`, flagged for human confirmation** (PO decision: auto-classify + flag review). |
 
 ## Current measurement
 
-<!-- keep in sync with vitest-pool-triage.json summary; `--check` enforces the JSON -->
+<!-- The JSON no longer stores totals (they made every pull request conflict on
+the same lines). `node scripts/triage-vitest-pool.mjs` prints the current ones.
+The table below is the 2026-09-14 measurement and is not kept current. -->
 
-| | count |
-| --- | --- |
-| total specs | 219 |
-| total test cases | 2,661 |
-| **workerd** (must stay) | 116 |
-| **node** (relocatable) | 103 |
-| — of which **needs-review** | 55 |
+|                             | count |
+| --------------------------- | ----- |
+| total specs                 | 219   |
+| total test cases            | 2,661 |
+| **workerd** (must stay)     | 116   |
+| **node** (relocatable)      | 103   |
+| — of which **needs-review** | 55    |
 
 Target realized by the reshape: ~103 specs leave the miniflare pool for a
 parallel node project (seconds, zero teardown flake); the workers pool shrinks to
@@ -58,6 +60,7 @@ itself**. (That spec is in the Playwright tier, out of this population — it is
 worked example, not an entry here.)
 
 **Therefore, child-3 relocation rules:**
+
 1. Move specs in **explicit CLI file lists**, one reviewed batch at a time — never
    flip the config to a broad `testMatch`/`include`.
 2. Each moved spec gets an assertion-level read first: does every assertion still

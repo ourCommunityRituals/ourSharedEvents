@@ -119,6 +119,96 @@ describe('pool triage: a spec classifies the same with LF and with CRLF line end
   });
 });
 
+// The written file holds one entry per spec and nothing that depends on any
+// other spec. It used to hold the totals too. A total changes with every spec
+// or test added, so any two pull requests that each added one changed the same
+// lines and could not both merge without one being regenerated. Seen on
+// 2026-10-07: three rounds of regenerating open pull requests after a merge.
+// The totals are still worked out and printed; they are just not stored.
+describe('pool triage: the written manifest merges cleanly', () => {
+  const NODE_SPEC = "it('one', () => {});\n";
+  const folder = (specs) => {
+    const root = mkdtempSync(join(tmpdir(), 'pool-triage-'));
+    mkdirSync(join(root, 'tests'), { recursive: true });
+    for (const [name, src] of Object.entries(specs)) writeFileSync(join(root, 'tests', name), src);
+    return root;
+  };
+  const built = (specs) => {
+    const root = folder(specs);
+    try {
+      return triage.buildManifest(join(root, 'tests'), root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  const written = (specs) => triage.serializeManifest(built(specs));
+  const BASE = { 'b.spec.ts': NODE_SPEC, 'm.spec.ts': NODE_SPEC };
+  const TWO_TESTS = `${NODE_SPEC}it('two', () => {});\n`;
+
+  test('it holds one entry per spec and no totals', () => {
+    const stored = JSON.parse(written(BASE));
+    expect(Object.keys(stored)).toEqual(['generatedBy', 'files']);
+    expect(stored.files.map((f) => f.file)).toEqual(['tests/b.spec.ts', 'tests/m.spec.ts']);
+  });
+
+  test('each entry still records its test count, so a dropped test shows in the diff', () => {
+    const stored = JSON.parse(written({ ...BASE, 'b.spec.ts': TWO_TESTS }));
+    expect(stored.files.map((f) => f.testCount)).toEqual([2, 1]);
+  });
+
+  test('adding a test to one spec changes one line of the file', () => {
+    const before = written(BASE).split('\n');
+    const after = written({ ...BASE, 'b.spec.ts': TWO_TESTS }).split('\n');
+    expect(after).toHaveLength(before.length);
+    expect(after.filter((line, i) => line !== before[i])).toEqual(['      "testCount": 2']);
+  });
+
+  test('the totals are still worked out, for the summary the script prints', () => {
+    expect(built(BASE).summary).toMatchObject({ total: 2, totalTests: 2, node: 2, workerd: 0 });
+  });
+
+  // The property itself, with git's own three-way merge. `ours` and `theirs`
+  // are two pull requests made from the same `base`; the merged file must be
+  // exactly what a fresh build of both changes gives.
+  const mergesCleanly = (ours, theirs, both) => {
+    const { spawnSync } = require('child_process');
+    const dir = mkdtempSync(join(tmpdir(), 'pool-triage-merge-'));
+    try {
+      const put = (name, text) => {
+        writeFileSync(join(dir, name), text);
+        return join(dir, name);
+      };
+      const merge = spawnSync(
+        'git',
+        [
+          'merge-file',
+          '-p',
+          put('ours.json', written(ours)),
+          put('base.json', written(BASE)),
+          put('theirs.json', written(theirs)),
+        ],
+        { encoding: 'utf8' }
+      );
+      expect(merge.status, `git merge-file reported conflicts:\n${merge.stdout}`).toBe(0);
+      expect(triage.isManifestStale(merge.stdout, written(both))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test('two branches that each add a spec merge with no conflict, and the result is up to date', () => {
+    const ours = { ...BASE, 'a.spec.ts': NODE_SPEC };
+    const theirs = { ...BASE, 'z.spec.ts': NODE_SPEC };
+    mergesCleanly(ours, theirs, { ...ours, ...theirs });
+  }, 30_000);
+
+  test('a branch that adds a test and a branch that adds a spec merge the same way', () => {
+    const ours = { ...BASE, 'b.spec.ts': TWO_TESTS };
+    const theirs = { ...BASE, 'z.spec.ts': NODE_SPEC };
+    mergesCleanly(ours, theirs, { ...BASE, 'b.spec.ts': TWO_TESTS, 'z.spec.ts': NODE_SPEC });
+  }, 30_000);
+});
+
 describe('pool triage: --check compares content, not line ends', () => {
   const manifest = {
     generatedBy: 'scripts/triage-vitest-pool.mjs',
@@ -132,7 +222,10 @@ describe('pool triage: --check compares content, not line ends', () => {
     const text = triage.serializeManifest(manifest);
     expect(text).not.toContain('\r');
     expect(text.endsWith('}\n')).toBe(true);
-    expect(JSON.parse(text)).toEqual(manifest);
+    expect(JSON.parse(text)).toEqual({
+      generatedBy: manifest.generatedBy,
+      files: manifest.files,
+    });
   });
 
   test('the same manifest, checked out with CRLF, is up to date', () => {

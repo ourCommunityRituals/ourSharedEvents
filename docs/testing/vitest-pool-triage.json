@@ -1,12 +1,5 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
-  "summary": {
-    "total": 390,
-    "totalTests": 5064,
-    "workerd": 200,
-    "node": 190,
-    "needsReview": 69
-  },
   "files": [
     {
       "file": "workers/oursharedevents/tests/a11y-axe.spec.ts",
