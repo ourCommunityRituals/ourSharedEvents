@@ -1,0 +1,43 @@
+info:
+  name: OSE-1500 | admin write | refused when the browser says it is cross-site
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsor-requests/spl_does_not_exist/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Sec-Fetch-Site
+      value: cross-site
+    - name: Origin
+      value: "https://another-site.example"
+  body:
+    type: json
+    data: '{"approve":true}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: an admin change that a browser marks as coming from another
+        // site never reaches a handler, whoever sent it. This collection's key
+        // header does not exempt it. Without the guard this request answers 404
+        // (no such request), so a 403 here is the guard and nothing else.
+        // Every other admin write in this collection sends no browser headers
+        // and must keep passing: that is the automation path.
+        test('403 CROSS_SITE_WRITE', function () {
+          expect(res.getStatus()).to.eql(403);
+          expect(res.getBody().code).to.eql('CROSS_SITE_WRITE');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

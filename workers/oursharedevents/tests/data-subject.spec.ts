@@ -155,7 +155,9 @@ describe('POST /api/v2/admin/data-subject/erase — validation', () => {
   test('non-JSON body → 400 INVALID_BODY', async () => {
     const res = await SELF.fetch(eraseUrl(), {
       method: 'POST',
-      headers: { Authorization: `Bearer ${ADMIN_KEY}` },
+      // Declared as JSON so the handler's own parse is what answers. A body sent
+      // as text/plain is refused earlier (tests/admin-write-guard.spec.ts).
+      headers: { Authorization: `Bearer ${ADMIN_KEY}`, 'Content-Type': 'application/json' },
       body: 'not json at all',
     });
     expect(res.status).toBe(400);
