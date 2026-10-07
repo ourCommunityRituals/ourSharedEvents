@@ -87,7 +87,8 @@ function isValidQrTokenShape(token: string): boolean {
 export async function handleQrScan(
   request: Request,
   env: QrScanEnv,
-  qrToken: string
+  qrToken: string,
+  countable: boolean = true
 ): Promise<Response> {
   if (!env.DB) {
     // Infrastructure not ready — redirect to homepage rather than stranding the attendee.
@@ -120,6 +121,22 @@ export async function handleQrScan(
   }
 
   const { id: deploymentId, event_id: eventId } = deployment;
+
+  // Past the caller's limit (OSE-1496): send the visitor on, count nothing. No
+  // row, no dedup marker and no new anonymous id, so a flood from one client
+  // adds no scans and no "people". The route decides; see publicCountLimited.
+  if (!countable) {
+    console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'rate_limited' }));
+    const here = new URL(request.url);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: qrScanTarget(here.origin, eventId, deploymentId, here.searchParams.get('type')),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
   const nowMs = Date.now();
   const nowDate = new Date(nowMs);
 

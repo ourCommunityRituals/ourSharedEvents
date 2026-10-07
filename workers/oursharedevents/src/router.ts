@@ -148,6 +148,7 @@ import { handleEventsMap } from './handlers/events-map.js';
 import {
   isPublicReadLimited,
   publicReadLimitResponse,
+  publicCountLimited,
   publicReadLimited,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
@@ -568,7 +569,11 @@ export async function route(
   // shortlink codes). Set-Cookie for anon_id if the visitor is new.
   if (pathname.startsWith('/q/') && method === 'GET') {
     const qrToken = pathname.slice('/q/'.length);
-    return handleQrScan(request, env, qrToken);
+    // Limited per caller (OSE-1496): past the limit the visitor is still sent
+    // on and the scan is not counted. Never a 429 on a poster link.
+    return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
+      handleQrScan(req, e, qrToken, countable)
+    )(request, env);
   }
 
   // ── Shortlink resolver (OSE-240) — `/s/<code>` ────────────────────────────
@@ -577,7 +582,11 @@ export async function route(
   // Matched FIRST so /s/ never collides with longer prefixes downstream.
   if (pathname.startsWith('/s/') && method === 'GET') {
     const code = pathname.slice('/s/'.length);
-    return handleShortlinkResolve(request, env, code);
+    // Limited per caller (OSE-1496): past the limit the link still redirects
+    // and the click is not counted.
+    return publicCountLimited('shortlink', (req, e: typeof env, countable) =>
+      handleShortlinkResolve(req, e, code, countable)
+    )(request, env);
   }
 
   // OSE default sponsor image (0083) — static, same-origin, locked down.
