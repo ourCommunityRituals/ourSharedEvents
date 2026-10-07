@@ -1992,11 +1992,16 @@ export async function handlePublicEventPage(
     );
   }
 
-  // Publication/state-machine gate: draft/ready/unpublished events are NOT
-  // renderable to public.
+  // State-machine gate: a draft or ready event is NOT renderable to public.
   // 404 (not 403) so an attacker can't probe to discover unpublished events.
   // The friendly copy MUST be byte-identical to the not-found case above so
   // a probe attacker can't differentiate a missing row from a draft row.
+  //
+  // PO decision 2026-10-07: "off the map" (`is_published = 0`) means not
+  // listed. It does not mean hidden. A LIVE event's page opens for anyone who
+  // holds its link, QR code or short link, the same as during the publish
+  // grace window; the list, map, sitemap and sponsor discovery still leave it
+  // out. So `is_published` closes the page only for an event that is not live.
   const status = (row.status || '').toLowerCase();
   // OSE-1519: an event that was live and is now archived is named, as ended. The
   // "was live" test is `listed_from`: an event archived straight from draft was
@@ -2005,7 +2010,8 @@ export async function handlePublicEventPage(
   if (status === 'archived' && row.is_published !== 1 && row.listed_from) {
     return renderEndedEventPage(env, row);
   }
-  if (row.is_published !== 1 || status === 'draft' || status === 'ready') {
+  const offMap = row.is_published !== 1;
+  if (status === 'draft' || status === 'ready' || (offMap && status !== 'active')) {
     return renderErrorPage(
       404,
       "We couldn't find that event",
@@ -2073,6 +2079,10 @@ export async function handlePublicEventPage(
   // 'demo' showcase banner, 'degraded' fallback indicator, or nothing when live.
   body = injectProvenanceBanner(body, await resolveAndSignalProvenance(env, 'public-event'));
 
+  // Off the map: open to whoever holds the link, never announced. Ask search
+  // engines not to index it (header and meta, as the admin previews do).
+  if (offMap) body = body.replace('</head>', '<meta name="robots" content="noindex" />\n</head>');
+
   // OSE-658 cache-coherence: private (never shared-edge — the body may carry a
   // sub-floor count, #7) and hard-expiring by the next phase pivot so no stale
   // pre/in/post state is ever served past the start/end boundary.
@@ -2081,6 +2091,7 @@ export async function handlePublicEventPage(
     headers: {
       ...securityHeaders(nonce),
       'Cache-Control': publicEventCacheControl({ status: row.status, ...phaseTimes }, phase),
+      ...(offMap ? { 'X-Robots-Tag': 'noindex' } : {}),
     },
   });
 }
@@ -2100,40 +2111,33 @@ const ADMIN_PREVIEW_CSS = `<style>
  * PUT /api/v2/admin/events/:id {status}, then ready -> active through POST
  * /verify-qr. It deliberately does NOT touch is_published — listing is the
  * host's publication act (migration 0070), and a preview must never flip it.
- * An unlisted event has no public page to land on, so it says so instead.
+ * A live event's page opens by link whether or not it is on the map (PO
+ * 2026-10-07), so Publish always has a public page to land on.
  */
 function injectAdminPreviewToolbar(
   body: string,
-  row: { id: string; status: string; is_published: number | null },
+  row: { id: string; status: string },
   nonce: string,
   // liveUrl: where Publish lands (the poster preview goes to the live poster).
-  // Without it, Publish opens the public event page, or says it is unlisted.
+  // Without it, Publish opens the public event page.
   opts: { liveUrl?: string; note?: string } = {}
 ): string {
   const safeId = esc(row.id);
   const liveAttr = opts.liveUrl ? ` data-live-url="${esc(opts.liveUrl)}"` : '';
-  // A live but unlisted event has no public page, so its preview stays here
-  // (published already: no Publish button, and the bar says what it is).
-  const liveUnlisted = row.status === 'active';
   const note =
     opts.note ??
-    (liveUnlisted
-      ? "It is live but kept off the map and list, so guests can't open this page. List it in admin to share it."
-      : 'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.');
+    'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.';
   const status = row.status === 'ready' ? 'ready' : 'draft';
-  const listed = row.is_published === 1 ? '1' : '0';
-  const publishBtn = liveUnlisted
-    ? ''
-    : `<button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}"${liveAttr}>Publish</button>`;
+  const publishBtn = `<button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}"${liveAttr}>Publish</button>`;
   const toolbar = `<aside class="admin-preview-toolbar" aria-label="Preview" data-testid="admin-draft-preview-toolbar">
-  <strong data-testid="admin-preview-banner">${liveUnlisted ? 'Preview — live, but unlisted' : 'Preview — not live'}</strong>
-  <span data-testid="admin-draft-preview-status">${liveUnlisted ? 'Live, unlisted' : status === 'ready' ? 'Ready' : 'Draft'}</span>
+  <strong data-testid="admin-preview-banner">Preview — not live</strong>
+  <span data-testid="admin-draft-preview-status">${status === 'ready' ? 'Ready' : 'Draft'}</span>
   <a class="btn btn-secondary" data-testid="admin-preview-back" href="/admin">Back to admin</a>
   ${publishBtn}
   <p data-testid="admin-preview-note">${esc(note)}</p>
   <p id="adminPreviewMsg" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
 </aside>
-<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.liveUrl){say('Published. Opening it…');window.location.href=b.dataset.liveUrl;}else if(b.dataset.listed==='1'){say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}else{say('Published, but unlisted: it has no public page. Change that in admin.');}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
+<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.liveUrl){say('Published. Opening it…');window.location.href=b.dataset.liveUrl;}else{say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
   return body
     .replace('</head>', `${ADMIN_PREVIEW_CSS}\n</head>`)
     .replace('<body>', `<body>\n${toolbar}`);
@@ -2214,15 +2218,15 @@ export async function handleAdminEventPreviewPage(
   }
 
   const status = (row.status || 'draft').toLowerCase();
-  // Live and listed: the public page IS the preview. Live but unlisted has
-  // no public page (it 404s by design), so it previews here instead.
-  if (status === 'active' && row.is_published === 1) {
+  // Live: the public page IS the preview, on the map or off it (a live event's
+  // page opens by link while it is off the map, PO 2026-10-07).
+  if (status === 'active') {
     return new Response(null, {
       status: 303,
       headers: { Location: `/events/${encodeURIComponent(row.id)}`, ...PREVIEW_HEADERS },
     });
   }
-  if (status !== 'draft' && status !== 'ready' && status !== 'active') {
+  if (status !== 'draft' && status !== 'ready') {
     return previewError(
       404,
       'Nothing to preview',
@@ -2237,7 +2241,7 @@ export async function handleAdminEventPreviewPage(
   const social = await fetchEventPageSocialData(env, row.id);
   const body = injectAdminPreviewToolbar(
     renderPreEventHtml(row, shareUrl, social, { nonce, lang, preview: true }),
-    { id: row.id, status, is_published: row.is_published ?? null },
+    { id: row.id, status },
     nonce
   );
 

@@ -408,7 +408,11 @@ describe('OSE-243a: state gate + 404 semantics', () => {
     expect(res.status).toBe(404);
   });
 
-  test('active but unpublished event → 404 (admin-only draft parking, MUST NOT leak)', async () => {
+  // PO decision 2026-10-07 (OSE-1643): "off the map" means not listed, not
+  // hidden. This test used to assert a 404 here ("admin-only draft parking");
+  // a live event's page now opens for whoever holds its link. The full rule,
+  // with the listing surfaces, is in tests/live-off-map-by-link.spec.ts.
+  test('active but off the map → 200, the real page (reached by link, not listed)', async () => {
     const eventId = 'evt_ose1354_unpublished';
     await seedEvent({
       id: eventId,
@@ -418,10 +422,23 @@ describe('OSE-243a: state gate + 404 semantics', () => {
       withFiveW: true,
     });
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toMatch(/data-testid="error-title"/);
-    expect(html).not.toContain('OSE-243a Smoke Event');
+    expect(html).toContain('data-testid="event-title"');
+    expect(html).toContain('OSE-243a Smoke Event');
+    expect(html).not.toMatch(/data-testid="error-title"/);
+  });
+
+  test('draft and ready stay 404 when they are off the map too (MUST NOT leak)', async () => {
+    for (const status of ['draft', 'ready']) {
+      const eventId = `evt_ose1643_${status}_offmap`;
+      await seedEvent({ id: eventId, status, isPublished: 0, startOffsetDays: 7, withFiveW: true });
+      const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+      expect(res.status, status).toBe(404);
+      const html = await res.text();
+      expect(html).toMatch(/data-testid="error-title"/);
+      expect(html).not.toContain('OSE-243a Smoke Event');
+    }
   });
 
   test('unknown event ID → 404', async () => {

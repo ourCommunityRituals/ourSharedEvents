@@ -14,6 +14,10 @@ docs:
     this run. One sponsor per case, fixed ids (sb_pcard_*), on their own
     active-but-unlisted event so the covenant order on test-event-001 is untouched.
 
+    The same fixture carries the two event-page requests (OSE-1643): that live,
+    off-the-map event (pcard-live-evt) opens by its link, and the draft beside it
+    (pcard-draft-evt) stays the generic 404.
+
     Not here on purpose: 429. Tripping the public-read limiter on shared staging
     would 429 other requests from the same runner. It is covered offline in the
     workers pool: tests/sponsor-public-card.spec.ts ("rate-limited").

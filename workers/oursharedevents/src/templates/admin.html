@@ -4311,7 +4311,7 @@
               </label>
               <p class="create-publish-hint" data-testid="create-published-hint">
                 Unchecked, it stays off every public listing and the venue above is not
-                shown. Your links and printed codes keep working either way.
+                shown there. Your links and printed codes keep working either way.
               </p>
             </div>
 
@@ -7963,7 +7963,7 @@
         if (m) {
           if (failure) { m.textContent = failure; m.className = 'create-msg error'; }
           else {
-            m.textContent = wantOn ? 'This event is now on the map.' : 'This event is off the map.' + (e.status === 'active' ? ' Its public page is closed to guests until you turn it back on.' : '');
+            m.textContent = wantOn ? 'This event is now on the map.' : 'This event is off the map.' + (e.status === 'active' ? ' Its links and printed codes still open its page.' : '');
             m.className = 'create-msg success';
           }
         }
@@ -8304,9 +8304,9 @@
        */
       window.graceNote = function (listedFrom, listed, byDefault) {
         // OSE-1560: off because nobody turned it on (the default), not because they chose.
-        if (listed === false && byDefault) return ' It is not on the map or list, and its public page stays closed to guests until you put it on the map.';
+        if (listed === false && byDefault) return ' It is not on the map or list. Your links and printed codes still open its page.';
         // Kept off the map by the organizer's choice: never promise a listing.
-        if (listed === false) return ' It stays off the map and list, as you chose, and its public page stays closed to guests. Turn on listing when you want people to find it.';
+        if (listed === false) return ' It stays off the map and list, as you chose. Your links and printed codes still open its page. Turn on listing when you want people to find it.';
         var t = listedFrom ? new Date(listedFrom) : null;
         if (!t || isNaN(t.getTime()) || t.getTime() <= Date.now()) return '';
         var at = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
