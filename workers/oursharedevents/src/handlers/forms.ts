@@ -38,6 +38,7 @@ import {
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor } from '../lib/count-floor';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import { eventAnonKey } from '../lib/event-anon-key';
 import {
   validateFormRequest,
   handleDbError,
@@ -54,6 +55,9 @@ export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
   // OSE-598: HMAC-SHA256 pepper for email hashing. Without this, bare SHA-256
   // is rainbow-table-precomputable. Production MUST set this via Wrangler secret.
+  // Also keys the per-event id every form row stores in place of the raw
+  // ose_anon cookie value (lib/event-anon-key.ts), so all four public forms
+  // need it: without it they answer 503 CONFIG_ERROR and write nothing.
   FORMS_HASH_PEPPER?: string;
 }
 
@@ -133,6 +137,11 @@ function formRateLimitedResponse(request: Request): Response {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Every public form needs FORMS_HASH_PEPPER: it keys the id the row stores. */
+function pepperNotConfigured(request: Request): Response {
+  return errorResponse('CONFIG_ERROR', 'FORMS_HASH_PEPPER not configured', 503, request);
+}
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320;
@@ -252,13 +261,15 @@ export async function handleFormRegistration(
   // (hashEmail(..., { requirePepper: true }) below). Guard it explicitly, like
   // the key above, so a missing FORMS_HASH_PEPPER surfaces as a clear
   // CONFIG_ERROR instead of a masked DB_ERROR from the caught throw.
-  if (email && !env.FORMS_HASH_PEPPER) {
-    return errorResponse('CONFIG_ERROR', 'FORMS_HASH_PEPPER not configured', 503, request);
-  }
+  // The same secret keys the per-event id the row stores, so the guard holds
+  // with or without an email: never store the raw ose_anon value instead.
+  if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
   let emailHash: string | undefined;
   let nameEncrypted: string | undefined;
+  let anonKey: string;
   try {
+    anonKey = await eventAnonKey(anonId, eventId, env.FORMS_HASH_PEPPER);
     // DE-06: WRITE paths must not silently degrade to bare (unpeppered) SHA-256.
     // requirePepper:true makes a missing FORMS_HASH_PEPPER throw; caught below
     // and surfaced as a clean 503 (never a raw 500 leak).
@@ -291,7 +302,7 @@ export async function handleFormRegistration(
         emailHash ?? null,
         bucket,
         expiresAt,
-        anonId,
+        anonKey, // per-event keyed id, never the cookie value
         new Date().toISOString()
       )
       .run();
@@ -393,18 +404,23 @@ export async function handleFormCheckin(
   const turnstileDeny = await guardTurnstile(request, env, 'checkin');
   if (turnstileDeny) return turnstileDeny;
 
+  // The row stores a per-event keyed id, never the cookie value; no secret, no write.
+  if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
+
   const { anonId, isNew } = getOrCreateAnonId(request);
   // OSE-1373: which door this check-in came through, from the request alone.
   const walkIn = (await readArrivalPath(request)) === 'walk_in' ? 1 : 0;
 
   try {
+    // Stable for one phone at one event, so a repeat tap can be recognised.
+    const anonKey = await eventAnonKey(anonId, eventId, env.FORMS_HASH_PEPPER);
     const id = generateId();
     await env.FORMS_DB.prepare(
       `INSERT INTO checkin_counts (id, event_id, total_count, walk_in_count, updated_at, last_anonymous_id)
        VALUES (?, ?, 1, ?, datetime('now'), ?)
        ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, walk_in_count = walk_in_count + excluded.walk_in_count, updated_at = datetime('now'), last_anonymous_id = ?`
     )
-      .bind(id, eventId, walkIn, anonId, anonId)
+      .bind(id, eventId, walkIn, anonKey, anonKey)
       .run();
 
     const result = await env.FORMS_DB.prepare(
@@ -450,16 +466,19 @@ export async function handleFormSurvey(
   if (!responses || typeof responses !== 'object') {
     return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400, request);
   }
+  // The row stores a per-event keyed id, never the cookie value; no secret, no write.
+  if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
   const id = generateId();
   const bucket = bucketTimestamp();
 
   try {
+    const anonKey = await eventAnonKey(anonId, eventId, env.FORMS_HASH_PEPPER);
     await env.FORMS_DB.prepare(
       `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed, anonymous_id, consent_given_at)
        VALUES (?, ?, ?, ?, 0, ?, ?)`
     )
-      .bind(id, eventId, JSON.stringify(responses), bucket, anonId, new Date().toISOString())
+      .bind(id, eventId, JSON.stringify(responses), bucket, anonKey, new Date().toISOString())
       .run();
   } catch (err) {
     return handleDbError('survey', eventId, err, request);
@@ -503,8 +522,7 @@ export async function handleFormEmailSignup(
   // DE-06 / OSE-1343: the pepper is required by hashEmail below; guard it
   // explicitly so a missing FORMS_HASH_PEPPER is a clear CONFIG_ERROR, not a
   // masked DB_ERROR from the caught throw.
-  if (!env.FORMS_HASH_PEPPER)
-    return errorResponse('CONFIG_ERROR', 'FORMS_HASH_PEPPER not configured', 503, request);
+  if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
   try {
     // DE-06: WRITE path — never silently degrade to bare SHA-256. A missing
@@ -527,6 +545,7 @@ export async function handleFormEmailSignup(
     }
 
     const encrypted = await encryptEmail(email, encryptionKey);
+    const anonKey = await eventAnonKey(anonId, eventId, env.FORMS_HASH_PEPPER);
     const id = generateId();
     const bucket = bucketTimestamp();
     const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
@@ -542,7 +561,7 @@ export async function handleFormEmailSignup(
         encrypted,
         bucket,
         retentionExpiresAt,
-        anonId,
+        anonKey, // per-event keyed id, never the cookie value
         new Date().toISOString()
       )
       .run();
