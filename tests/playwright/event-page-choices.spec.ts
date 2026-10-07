@@ -37,16 +37,45 @@ async function open(page: Page, width: number): Promise<void> {
   await expect(page.getByTestId('event-choices')).toBeVisible();
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+/**
+ * Every box in one reading of the page. Asking for them one call at a time
+ * lets the page move between two answers: on WebKit at 320px the Where card
+ * grew by about 120px after Register had been measured, so Register read as
+ * sitting above the bottom of a card it is drawn below (2026-10-07).
+ */
+async function boxes<K extends string>(page: Page, ids: readonly K[]): Promise<Record<K, Box>> {
+  for (const id of ids) await expect(page.getByTestId(id)).toBeVisible();
+  return page.evaluate(
+    (list) => {
+      const out: Record<string, { x: number; y: number; width: number; height: number }> = {};
+      for (const id of list) {
+        const r = document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        out[id] = { x: r.x, y: r.y, width: r.width, height: r.height };
+      }
+      return out;
+    },
+    ids as readonly string[]
+  ) as Promise<Record<K, Box>>;
+}
+
 for (const width of [375, 320]) {
   test(`at ${width}px: Register is first and full width, the three choices are tappable`, async ({
     page,
   }) => {
     await open(page, width);
-    const box = async (id: string) => (await page.getByTestId(id).boundingBox())!;
-    const column = (await page.getByTestId('event-choices').boundingBox())!;
-    const register = await box('event-rsvp');
-    const checkin = await box('event-choice-checkin');
-    const looking = await box('event-choice-looking');
+    const b = await boxes(page, [
+      'event-choices',
+      'event-rsvp',
+      'event-choice-checkin',
+      'event-choice-looking',
+      'event-where',
+    ] as const);
+    const column = b['event-choices'];
+    const register = b['event-rsvp'];
+    const checkin = b['event-choice-checkin'];
+    const looking = b['event-choice-looking'];
 
     // First, and as wide as the column they sit in.
     expect(register.y).toBeLessThan(checkin.y);
@@ -54,11 +83,11 @@ for (const width of [375, 320]) {
     expect(Math.abs(register.width - column.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(checkin.width - column.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(looking.width - column.width)).toBeLessThanOrEqual(1);
-    for (const b of [register, checkin, looking])
-      expect(b.height).toBeGreaterThanOrEqual(MIN_TOUCH);
+    for (const choice of [register, checkin, looking])
+      expect(choice.height).toBeGreaterThanOrEqual(MIN_TOUCH);
 
     // The facts come first: the choices are below the Where card.
-    const where = await box('event-where');
+    const where = b['event-where'];
     expect(register.y).toBeGreaterThan(where.y + where.height - 1);
   });
 
@@ -66,18 +95,23 @@ for (const width of [375, 320]) {
     page,
   }) => {
     await open(page, width);
-    const looking = (await page.getByTestId('event-choice-looking').boundingBox())!;
-    const share = (await page.getByTestId('share-btn').boundingBox())!;
-    const calendar = (await page.getByTestId('add-to-calendar-summary').boundingBox())!;
+    const b = await boxes(page, [
+      'event-choice-looking',
+      'share-btn',
+      'add-to-calendar-summary',
+    ] as const);
+    const looking = b['event-choice-looking'];
+    const share = b['share-btn'];
+    const calendar = b['add-to-calendar-summary'];
 
     expect(share.y, 'the pair is below the last choice').toBeGreaterThan(
       looking.y + looking.height - 1
     );
     expect(Math.abs(share.y - calendar.y), 'one row, side by side').toBeLessThanOrEqual(4);
     expect(share.x + share.width).toBeLessThanOrEqual(calendar.x + 1);
-    for (const b of [share, calendar]) {
-      expect(b.height).toBeGreaterThanOrEqual(MIN_TOUCH);
-      expect(b.width, 'each takes about half the row').toBeGreaterThan(width * 0.35);
+    for (const half of [share, calendar]) {
+      expect(half.height).toBeGreaterThanOrEqual(MIN_TOUCH);
+      expect(half.width, 'each takes about half the row').toBeGreaterThan(width * 0.35);
     }
 
     const overflow = await page.evaluate(
