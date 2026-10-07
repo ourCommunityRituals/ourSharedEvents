@@ -179,8 +179,13 @@ describe('canonical | event pages', () => {
   });
 
   test('live page: one canonical, /events/:id', async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    await seedEvent('canon-live', today, today);
+    // Yesterday to tomorrow, in UTC days: the event is under way at any hour in
+    // any event zone. Seeding "today" as the UTC day made this fail every evening
+    // from 00:00 to 05:00 UTC, when the event zone (Central) is still on the day
+    // before and the event had not started there yet.
+    const day = (offset: number) =>
+      new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    await seedEvent('canon-live', day(-1), day(1));
     const res = await get('stg.oursharedevents.com', '/events/canon-live?x=1');
     const text = await res.text();
     expect(text, 'the seeded event is in its live phase').toContain(
