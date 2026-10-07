@@ -1,0 +1,36 @@
+info:
+  name: OSE-1643 | event page | 200 for a live event off the map
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/pcard-live-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (handlers/pages.ts, PO decision 2026-10-07): off the map means not
+        // listed. It does not mean hidden. pcard-live-evt is status active with
+        // is_published = 0 (bruno/fixtures/sponsor-public-card-seed.sql), so its page opens
+        // for anyone who holds the link. Before this it answered the generic 404, and the
+        // QR codes and short link of a live event landed on the not-found page.
+        const body = String(res.getBody() || '');
+        test('200 for a live event that is off the map', function () { expect(res.getStatus()).to.eql(200); });
+        test('served as HTML', function () { expect(String(res.getHeader('content-type') || '')).to.include('text/html'); });
+        test('it is the event page, by name', function () { expect(body).to.include('Sponsor Card Fixture (live)'); });
+        test('it is not the not-found page', function () { expect(body).to.not.include('data-testid="error-title"'); });
+        test('search engines are asked not to index it (header)', function () { expect(String(res.getHeader('x-robots-tag') || '')).to.include('noindex'); });
+        test('search engines are asked not to index it (meta)', function () { expect(body).to.include('<meta name="robots" content="noindex" />'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

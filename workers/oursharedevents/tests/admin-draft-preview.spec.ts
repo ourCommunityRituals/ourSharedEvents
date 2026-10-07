@@ -152,25 +152,21 @@ describe('preview after publishing (the publish / unpublish loop)', () => {
     expect(res.headers.get('Location')).toBe('/events/evt_preview_live_listed');
   });
 
-  test('live but unlisted: no public page exists, so the preview renders here', async () => {
+  // PO decision 2026-10-07: a live event's page opens by link while it is off
+  // the map. This test used to assert the opposite (the public page 404s, so
+  // the preview renders in place with "List it in admin to share it.").
+  test('live but off the map: the public page opens by link, so the preview goes there too', async () => {
     const id = 'evt_preview_live_unlisted';
     await seedLive(id, 0);
-    // The public page 404s by design for an unlisted event...
-    expect((await SELF.fetch(`https://t.test/events/${id}`)).status).toBe(404);
-    // ...so a redirect there would strand the organizer on "couldn't find".
+    const page = await SELF.fetch(`https://t.test/events/${id}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('Draft Preview Smoke');
     const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${id}/preview`, {
       headers: adminHeaders(),
       redirect: 'manual',
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(303);
+    expect(res.headers.get('Location')).toBe(`/events/${id}`);
     expect(res.headers.get('Cache-Control')).toBe('no-store');
-    const html = await res.text();
-    expect(html).toContain('Draft Preview Smoke');
-    expect(html).toContain('Live, unlisted');
-    // The note says what to do, not "once it is live".
-    expect(html).toContain('List it in admin to share it.');
-    expect(html).not.toContain('once it is live');
-    // Already published: no Publish button to press again.
-    expect(html).not.toContain('data-testid="admin-preview-go-live"');
   });
 });
