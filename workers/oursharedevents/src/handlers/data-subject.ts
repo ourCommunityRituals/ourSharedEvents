@@ -7,7 +7,14 @@
  *   deletion counts.
  *
  *   Neither the raw email nor its hash is written to any log, audit row or
- *   response; only deletion counts leave the handler.
+ *   response; only deletion counts and a job id leave the handler.
+ *
+ *   Decision (2026-10-07): an erasure is identified by a random job id, not by
+ *   a second hash under an audit-only key. Any hash of the email, whatever its
+ *   key, would still let its holder test whether an address was a subject, and
+ *   would outlive the erasure. The job id is the `pii_audit_log` row id; the
+ *   response and the DATA_SUBJECT_ERASE log line carry the same value, so an
+ *   operator can show that an erasure ran without anything that names the person.
  *   Admin-only: caller must pass requireAdmin before this handler is invoked.
  *
  * OSE-1350 — anon-ID-linked scan/report rows.
@@ -115,6 +122,9 @@ export async function handleDataSubjectErase(
 
   const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER, { requirePepper: true });
   const now = new Date().toISOString();
+  // Random, so it says nothing about the person: two erasures of one email get
+  // two different ids.
+  const jobId = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
   let signupsDeleted = 0;
   let registrationsDeleted = 0;
   let subscribersDeleted = 0;
@@ -219,13 +229,12 @@ export async function handleDataSubjectErase(
 
   // Audit — write failure is non-fatal and must never abort the erasure response
   try {
-    const auditId = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
     await env.FORMS_DB.prepare(
       `INSERT INTO pii_audit_log (id, phase, triggered_by, records_affected, errors, details)
        VALUES (?, ?, ?, ?, ?, ?)`
     )
       .bind(
-        auditId,
+        jobId,
         'data_subject_erase',
         'admin_api',
         signupsDeleted +
@@ -251,6 +260,7 @@ export async function handleDataSubjectErase(
   console.log(
     JSON.stringify({
       type: 'DATA_SUBJECT_ERASE',
+      jobId,
       signupsDeleted,
       registrationsDeleted,
       subscribersDeleted,
@@ -263,6 +273,7 @@ export async function handleDataSubjectErase(
 
   return Response.json({
     ok: true,
+    jobId,
     signupsDeleted,
     registrationsDeleted,
     subscribersDeleted,

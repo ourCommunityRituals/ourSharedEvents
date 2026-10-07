@@ -1,9 +1,9 @@
 {
   "generatedBy": "scripts/triage-vitest-pool.mjs",
   "summary": {
-    "total": 386,
-    "totalTests": 5022,
-    "workerd": 197,
+    "total": 388,
+    "totalTests": 5041,
+    "workerd": 199,
     "node": 189,
     "needsReview": 69
   },
@@ -693,6 +693,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/data-subject-erase-no-lookup-hash.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/data-subject.spec.ts",
@@ -2667,6 +2674,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/unhandled-error-log.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/upload.spec.ts",
