@@ -2,9 +2,14 @@
  * Anonymous ID system — privacy-first visitor correlation.
  *
  * ADMIN-6: Generates and reads a random UUID stored in an HttpOnly cookie.
- * Contains no PII. Correlates a visitor across scans and form submissions
- * so we can answer "how many unique visitors registered AND checked in"
- * without knowing who they are.
+ * Contains no PII. Lets the platform count one browser once without knowing
+ * who it is.
+ *
+ * Where the value goes: the scan path stores it (main DB). The forms path does
+ * NOT — it stores a per-event keyed id derived from it (lib/event-anon-key.ts),
+ * so a form row cannot be joined to a scan row, or to the same browser at
+ * another event. "Registered AND checked in" is still answerable inside one
+ * event, where the keyed id is stable.
  *
  * Cookie: ose_anon={anon_UUID}; HttpOnly; Secure; SameSite=Lax; Max-Age=1yr
  */
