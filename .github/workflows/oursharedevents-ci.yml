@@ -685,6 +685,19 @@ jobs:
         if: matrix.shard == 'lint'
         run: node scripts/gen-testids.mjs --check
 
+      # Pool triage manifest drift (2026-10-07). docs/testing/vitest-pool-triage.json
+      # is DERIVED from the worker specs: which pool each one needs, and how many
+      # tests it holds. The check existed for three weeks with nothing running it,
+      # and the manifest fell 128 specs behind. Same class as the registry check
+      # above: a derived file compared with its source, statically, in a second.
+      # It goes red when a worker spec is added, removed or moved, or when its
+      # test count changes; the fix is `node scripts/triage-vitest-pool.mjs` and
+      # committing the result. Wiring held by
+      # tests/integration/vitest-pool-triage-wired.test.js.
+      - name: 'Lint: pool triage manifest matches the worker specs'
+        if: matrix.shard == 'lint'
+        run: node scripts/triage-vitest-pool.mjs --check
+
       # OSE-1328: one color pattern fleet-wide — colors go through var(--token),
       # never raw hex. Ratchet per surface (count can only drop; clean pages
       # locked at 0). This is what makes "theme-correct" a gate, not a pixel-check.

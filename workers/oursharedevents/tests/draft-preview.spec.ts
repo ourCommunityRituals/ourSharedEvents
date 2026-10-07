@@ -354,12 +354,36 @@ describe('OSE-1355 — Go live from the preview uses the existing state-machine 
     expect(after.headers.get('Location')).toBe(`/events/${id}`);
   });
 
-  test('an unlisted draft is told it stays unlisted instead of being sent to a 404', async () => {
-    await seed('evt_dp_unlisted', 'draft', { published: 0 });
-    const html = await (await preview('evt_dp_unlisted')).text();
-    expect(html).toMatch(/data-testid="admin-preview-go-live"[^>]*data-listed="0"/);
-    // OSE-1360 vocabulary: status active is "Published" (Live now = happening).
-    expect(html).toContain('Published, but unlisted');
+  // PO decision 2026-10-07: a live event's page opens by link while it is off
+  // the map. Publish from the preview used to stop with "Published, but
+  // unlisted: it has no public page", because that page was a 404.
+  test('an off-map draft: Publish from the preview opens its public page, which exists', async () => {
+    const id = 'evt_dp_unlisted';
+    await seed(id, 'draft', { published: 0 });
+    const html = await (await preview(id)).text();
+    expect(html).toContain('data-testid="admin-preview-go-live"');
+    // One landing for every event: no "listed" switch left in the button or the script.
+    expect(html).not.toContain('data-listed');
+    expect(html).not.toContain('no public page');
+    expect(html).not.toContain('Published, but unlisted');
+
+    // The two calls the button makes, then where it sends the organizer.
+    expect(
+      (await call('PUT', `/api/v2/admin/events/${id}`, asAdmin(), { status: 'ready' })).status
+    ).toBe(200);
+    expect((await call('POST', `/api/v2/admin/events/${id}/verify-qr`, asAdmin())).status).toBe(
+      200
+    );
+    const row = await env.DB.prepare('SELECT status, is_published FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string; is_published: number }>();
+    expect(row, 'publishing never puts it on the map').toEqual({
+      status: 'active',
+      is_published: 0,
+    });
+    const page = await call('GET', `/events/${id}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain(TITLE);
   });
 });
 

@@ -70,6 +70,14 @@ describe('both create paths ask the question', () => {
     const hint = ADMIN.slice(ADMIN.indexOf('data-testid="create-published-hint"'));
     expect(hint.slice(0, 400)).toMatch(/links|codes/i);
   });
+
+  test('the advanced form does not say the venue is hidden: the event page shows it to link holders', () => {
+    // PO 2026-10-07: a live event's page opens by link while it is off the map,
+    // and that page shows the venue. "The venue above is not shown." was true
+    // only while the page was closed; the venue is left off the listings.
+    const hint = ADMIN.slice(ADMIN.indexOf('data-testid="create-published-hint"')).slice(0, 400);
+    expect(hint.replace(/\s+/g, ' ')).toContain('the venue above is not shown there.');
+  });
 });
 
 describe('the answer is sent as the organizer made it, and omitted when they did not', () => {
