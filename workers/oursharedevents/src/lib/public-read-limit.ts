@@ -168,3 +168,26 @@ export function publicReadLimited<E>(
     return handler(request, env);
   };
 }
+
+/**
+ * Wrap a public route that COUNTS something on every request: a poster scan
+ * (`/q/`) or a short-link click (`/s/`). OSE-1496.
+ *
+ * It never refuses. These are the links people scan off a poster, and a crowd
+ * at a door shares one address, so a 429 would turn real people away. Instead
+ * the handler is told whether this request may be counted. Past the limit the
+ * visitor is still sent on and nothing is written, so one client cannot add
+ * scans or clicks without end: not to inflate a count, and not to push a
+ * node's count across the floor to learn whether one real person scanned.
+ *
+ * Same limit, same fail-open rule and same address handling as
+ * `publicReadLimited`: with the limiter's storage down, everything is counted.
+ */
+export function publicCountLimited<E>(
+  scope: string,
+  handler: (request: Request, env: E, countable: boolean) => Promise<Response>,
+  max: number = PUBLIC_READ_MAX
+): (request: Request, env: E & PublicReadLimitEnv) => Promise<Response> {
+  return async (request: Request, env: E & PublicReadLimitEnv) =>
+    handler(request, env, !(await isPublicReadLimited(request, env, scope, max)));
+}
