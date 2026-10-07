@@ -85,12 +85,14 @@ describe('OSE-1560 core values at publish; map defaults to off', () => {
   // "Turn off", paused on hover and focus). The component is OSE-1564 (hub
   // @ocr/ui); until it lands, the same words show as plain persistent text in
   // the admin status panel and the create message, which is not the toast.
-  redStory('OSE-1560', 'the map heads-up shows as a toast with a Turn off action', async () => {
+  // OSE-1560 is closed; the toast was carried to OSE-1644, so that is the story
+  // this red test now belongs to.
+  redStory('OSE-1644', 'the map heads-up shows as a toast with a Turn off action', async () => {
     const files = JSON.parse(E.TEST_SOURCE_FILES_JSON) as Record<string, string>;
     const key = Object.keys(files).find((k) => k.endsWith('templates/admin.html'));
     const admin = key ? files[key]! : '';
     expect(admin.length, 'admin.html is readable in the test pool').toBeGreaterThan(1000);
-    expect(admin, '[OSE-1560] the heads-up is a toast').toContain('data-testid="map-toast"');
+    expect(admin, '[OSE-1644] the heads-up is a toast').toContain('data-testid="map-toast"');
   });
 
   it('leaving draft without a time and an event type is refused by name', async () => {
