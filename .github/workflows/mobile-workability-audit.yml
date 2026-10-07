@@ -183,25 +183,41 @@ jobs:
         working-directory: workers/oursharedevents
         run: npm ci --prefer-offline || npm ci
 
-      - name: Install Playwright Chromium
+      # The Ubuntu packages the browsers need (WebKit: 181 packages, 126 MB) come
+      # from the runner's mirror. On 2026-10-06 and 2026-10-07 that download
+      # stalled and the install step timed out with no test run. The install
+      # script copies this directory into apt's cache before the install and
+      # refreshes it after the download. One cache per browser set; the keys
+      # match T0 Gate's, whose runs on main are what fill them for every PR.
+      - name: Restore Playwright system package cache
         if: steps.scope.outputs.run == 'true'
-        # 5 minutes: this takes about 30 seconds. On 2026-10-06 the WebKit
-        # install below hung for 15 minutes; without a limit a stalled download
-        # runs to the job's limit and shows as a failed check with no failing test.
-        timeout-minutes: 5
-        # Chromium only. The spec forces 375×812 on every surface, so the
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pw-apt-archives
+          key: ${{ runner.os }}-pw-apt-${{ matrix.webkit && 'chromium-webkit' || 'chromium' }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pw-apt-${{ matrix.webkit && 'chromium-webkit' || 'chromium' }}-
+
+      - name: Install Playwright browsers
+        if: steps.scope.outputs.run == 'true'
+        # 10 minutes: about a minute when the packages come from the cache. The
+        # script gives the package download two attempts of 150 seconds each
+        # (the second on another mirror) and fails with the reason if neither
+        # finishes, so this limit is only the backstop.
+        timeout-minutes: 10
+        # Chromium on every leg. The spec forces 375×812 on every surface, so the
         # viewport — the thing invariant 14 is about — is identical across
         # projects; only the engine and UA differ. Engine-specific layout bugs
         # are real, which is why the nightly keeps all four. Quadrupling the
         # cost of a gate that runs on every push does not pay for itself.
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright WebKit (publish loop journey only)
-        if: steps.scope.outputs.run == 'true' && matrix.webkit
-        timeout-minutes: 5
-        # OSE-1508: the organizer's publish loop runs on WebKit too, because
-        # most phones are WebKit. One spec, so the cost stays small.
-        run: npx playwright install --with-deps webkit
+        # WebKit on the phone leg only (OSE-1508): the organizer's publish loop
+        # runs on WebKit too, because most phones are WebKit. One spec, so the
+        # cost stays small.
+        env:
+          BROWSERS: ${{ matrix.webkit && 'chromium webkit' || 'chromium' }}
+        # $BROWSERS is one of the two fixed lists above; it is left unquoted on
+        # purpose so each browser is its own argument.
+        run: bash scripts/ci/install-playwright-browsers.sh $BROWSERS
 
       - name: Audit this branch's code
         if: steps.scope.outputs.run == 'true'
