@@ -150,10 +150,16 @@ describe('only a public event can ask for a map', () => {
     expect(google).not.toHaveBeenCalled();
   });
 
+  // PO decision 2026-10-07 (OSE-1643): a live event's page opens by link while
+  // it is off the map, and that page shows this image. The third row here used
+  // to be "a live but unpublished event" → 404; it is now served (next test).
+  // Off the map still closes the route for every event that is not live.
   test.each([
     ['a draft', 'draft', 1],
     ['a ready event', 'ready', 1],
-    ['a live but unpublished event', 'active', 0],
+    ['a draft that is off the map', 'draft', 0],
+    ['a ready event that is off the map', 'ready', 0],
+    ['an archived event that is off the map', 'archived', 0],
   ] as const)('%s gets the same 404, and nothing is fetched', async (_label, status, published) => {
     const google = stubGoogle();
     const id = await seed(status, { published });
@@ -161,6 +167,16 @@ describe('only a public event can ask for a map', () => {
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('NOT_FOUND');
     expect(google).not.toHaveBeenCalled();
+  });
+
+  test('a live event that is off the map gets its image: its page opens by link and shows it', async () => {
+    const google = stubGoogle();
+    const id = await seed('active', { published: 0 });
+    const res = await get(`?event=${id}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('image/png');
+    await res.body?.cancel();
+    expect(google).toHaveBeenCalledTimes(1);
   });
 
   test('a public event with no venue is a 404, not a Google request', async () => {

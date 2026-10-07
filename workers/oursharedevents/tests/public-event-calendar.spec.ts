@@ -144,11 +144,16 @@ describe('OSE-1358 public event calendar download', () => {
     expect(body).not.toContain('session');
   });
 
-  test('calendar download follows public gating for draft, ready, and unpublished events', async () => {
+  // PO decision 2026-10-07 (OSE-1643): a live event's page opens by link while
+  // it is off the map, and its calendar file follows the page. The third case
+  // here used to be { active, isPublished: 0 } → 404; it is the next test now.
+  test('calendar download follows public gating for draft, ready, and not-live off-map events', async () => {
     const cases = [
       { id: 'evt_ose1358_draft', status: 'draft', isPublished: 1 },
       { id: 'evt_ose1358_ready', status: 'ready', isPublished: 1 },
-      { id: 'evt_ose1358_unpublished', status: 'active', isPublished: 0 },
+      { id: 'evt_ose1643_draft_offmap', status: 'draft', isPublished: 0 },
+      { id: 'evt_ose1643_ready_offmap', status: 'ready', isPublished: 0 },
+      { id: 'evt_ose1643_archived_offmap', status: 'archived', isPublished: 0 },
     ];
 
     for (let i = 0; i < cases.length; i++) {
@@ -156,8 +161,18 @@ describe('OSE-1358 public event calendar download', () => {
       await seedEvent({ id: c.id, status: c.status, isPublished: c.isPublished });
       await seedShortlink(c.id, `Gate${i}A`);
       const res = await SELF.fetch(`https://t.test/events/${c.id}/calendar.ics`);
-      expect(res.status).toBe(404);
+      expect(res.status, `${c.status}, is_published ${c.isPublished}`).toBe(404);
     }
+  });
+
+  test('a live event that is off the map: the calendar file downloads, as its page opens by link', async () => {
+    const eventId = 'evt_ose1358_unpublished';
+    await seedEvent({ id: eventId, status: 'active', isPublished: 0 });
+    await seedShortlink(eventId, 'OffMp1');
+    const res = await SELF.fetch(`https://t.test/events/${eventId}/calendar.ics`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/calendar');
+    expect(await res.text()).toContain('URL:https://t.test/s/OffMp1');
   });
 
   test('calendar download requires an existing public shortlink and does not mutate click counts', async () => {

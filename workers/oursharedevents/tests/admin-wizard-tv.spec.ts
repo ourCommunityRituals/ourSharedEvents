@@ -476,9 +476,10 @@ describe('publish grace window: the organiser is told when it lists', () => {
     const note = w.graceNote(soon, false);
     expect(note).not.toContain('goes on the map');
     expect(note).toContain('stays off the map and list, as you chose');
-    // An unlisted event's public page is closed (pages.ts), so never say "share its link".
-    expect(note).toContain('public page stays closed');
-    expect(note).not.toMatch(/share its link/i);
+    // PO 2026-10-07: a live event's page opens by link while it is off the map
+    // (pages.ts). The note used to say "its public page stays closed to guests".
+    expect(note).toContain('Your links and printed codes still open its page.');
+    expect(note).not.toMatch(/closed/i);
     expect(w.graceNote(soon, true)).toContain('goes on the map and list at');
   });
 
@@ -489,7 +490,8 @@ describe('publish grace window: the organiser is told when it lists', () => {
     expect(note).not.toContain('as you chose');
     expect(note).not.toContain('goes on the map');
     expect(note).toContain('not on the map or list');
-    expect(note).toContain('public page stays closed');
+    expect(note).toContain('Your links and printed codes still open its page.');
+    expect(note).not.toMatch(/closed/i);
   });
 
   test('the wizard and the status panel both add the note to their Published message', () => {
