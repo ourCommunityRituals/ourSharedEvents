@@ -110,13 +110,52 @@ describe('OSE-1560 core values at publish; map defaults to off', () => {
     );
   });
 
-  it('verify-qr is the same door: a draft is refused', async () => {
-    const id = await createDraft('Verify door');
-    const res = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
+  // verify-qr answers 409 for two different reasons, and a bare status check
+  // cannot tell them apart. Each test below names the refusal it is about.
+  const verifyQr = (id: string) =>
+    SELF.fetch(`https://localhost/api/v2/admin/events/${id}/verify-qr`, {
       method: 'POST',
       headers: BEARER,
     });
+
+  // The earlier refusal: draft to active is not a move at all (VALID_TRANSITIONS),
+  // so a draft is turned away before the core values are looked at. This is not
+  // the core-values rule, and passes whether or not that rule exists.
+  it('verify-qr turns a draft away for the move itself, not for its values', async () => {
+    const id = await createDraft('Verify door, draft');
+    const res = await verifyQr(id);
     expect(res.status).toBe(409);
+    const body = (await res.json()) as { code?: string; from?: string; to?: string };
+    expect(body.code, 'a draft cannot go straight to live').toBe('INVALID_TRANSITION');
+    expect(body).toMatchObject({ from: 'draft', to: 'active' });
+  });
+
+  // The core-values rule at this door. Archived to active is an allowed move and
+  // a publish step, so it is the one state from which verify-qr reaches the rule.
+  // Seen red with the core-values block removed from handlers/qr-verify.ts (the
+  // event went live, 200). The log line for this refusal is covered by
+  // tests/core-values-refused-log.spec.ts and is not repeated here.
+  it('verify-qr is the same door: going live again from archived is refused by name', async () => {
+    const id = await createDraft('Verify door, archived');
+    const archived = await SELF.fetch(`https://localhost/api/v2/admin/events/${id}`, {
+      method: 'PUT',
+      headers: { ...BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'archived' }),
+    });
+    expect(archived.status, 'draft to archived is allowed without the values').toBe(200);
+
+    const res = await verifyQr(id);
+    expect(res.status, '[OSE-1560] verify-qr refuses with core values missing').toBe(409);
+    const body = (await res.json()) as { code?: string; missing?: string[] };
+    expect(body.code, '[OSE-1560] the refusal is CORE_VALUES_MISSING').toBe('CORE_VALUES_MISSING');
+    expect(body.missing, '[OSE-1560] it lists what is missing').toEqual(
+      expect.arrayContaining(['time', 'event_type'])
+    );
+
+    const row = await E.DB.prepare('SELECT status FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ status: string }>();
+    expect(row?.status, 'a refused event stays where it was').toBe('archived');
   });
 
   it('one PUT may supply the time and the type and move on', async () => {
