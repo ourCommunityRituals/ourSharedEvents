@@ -10,6 +10,14 @@
  * Seeds a real live event through the admin API, so the short code is the one
  * the Worker minted, and follows it the way a visitor does.
  *
+ * The code on the poster encodes the short link (`/s/<code>`), the same address
+ * printed under it (handlers/poster-bundle.ts). `/q/` is the separate scan
+ * tracker for placed posters and is not on this path.
+ *
+ * On arrival the page must give the facts in the agreed order (title, when,
+ * what, where, who, how much, then the choices) and name the place. Where the
+ * sponsor sits is measured by sponsor-surfaces-journey.spec.ts.
+ *
  * Runs in the blocking phone audit on Chromium and WebKit
  * (playwright.mobile.config.ts).
  */
@@ -47,6 +55,33 @@ test.describe('poster to event page', () => {
     expect(new URL(opened.url()).pathname).toBe(`/events/${eventId}`);
     await expect(opened.locator('h1')).toHaveCount(1);
     await expect(opened.locator('h1')).toContainText(title);
+
+    // The facts come in the agreed order, measured where they are drawn. A
+    // section the event has nothing for is left out, so only those present are
+    // compared; title, when and where always are.
+    await expect(opened.getByTestId('event-where')).toContainText('Eagles Hall');
+    const order = [
+      'event-title',
+      'event-when',
+      'event-what',
+      'event-where',
+      'event-who',
+      'event-how-much',
+      'event-choices',
+    ];
+    const drawn: { id: string; y: number }[] = [];
+    for (const id of order) {
+      const el = opened.getByTestId(id);
+      if ((await el.count()) === 0) continue;
+      const b = await el.first().boundingBox();
+      if (b) drawn.push({ id, y: b.y });
+    }
+    const ids = drawn.map((d) => d.id);
+    for (const must of ['event-title', 'event-when', 'event-where', 'event-choices']) {
+      expect(ids, `${must} is on the page`).toContain(must);
+    }
+    const byPosition = [...drawn].sort((a, b) => a.y - b.y).map((d) => d.id);
+    expect(byPosition, 'facts first, in order, then the choices').toEqual(ids);
   });
 
   test('printed poster: the short address under the code leads to the same page when typed', async ({
