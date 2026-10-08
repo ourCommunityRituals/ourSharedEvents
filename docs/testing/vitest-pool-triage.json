@@ -2021,8 +2021,8 @@
       "file": "workers/oursharedevents/tests/registration-self-delete.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
-      "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
-      "testCount": 4
+      "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB, createExecutionContext, waitOnExecutionContext",
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/regulatory-label-unavailable.spec.ts",
