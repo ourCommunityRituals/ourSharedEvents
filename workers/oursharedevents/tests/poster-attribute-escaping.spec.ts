@@ -33,6 +33,56 @@
  *
  * The second half of the file reads the page's scripts instead of running them
  * (tests/helpers/markup-attribute-check.ts, shared with the report page's spec).
+ *
+ * @born-red | method: the page tests were written first and run on the page as
+ *   it was on main (9e1f0185). An event name holding a double quote ended the
+ *   aria-label on the poster card and the alt on the artwork, in both poster
+ *   kinds: the card and the image each gained `style`, `id` and `srcset` from
+ *   the name. An artwork address did the same in `src`, and `javascript:` and
+ *   `data:` addresses were drawn as written. This finished file against main's
+ *   page: 55 of 90 red (34 page and address tests, the 3 escaper tests because
+ *   the function did not exist, 18 source tests). Green from the start, so
+ *   guards: the accepted artwork addresses, the live and preview link rules,
+ *   the picture rule, the map and calendar links | date: 2026-10-08
+ *
+ * Seen red afterwards (one fault put in, this file and the other jsdom poster
+ * specs run, the file restored; "page" = the two-page and attribute tests,
+ * "address" = the address tests, "helper" = the escaper tests, "source" = the
+ * parse of the scripts):
+ *   the escaper leaves both quote marks alone, or the double     21 red  page, helper
+ *   the escaper leaves the single quote alone                     2 red  helper only: the page has
+ *                                                                        no single-quoted attribute
+ *   the escaper leaves the ampersand alone                       19 red  page, helper
+ *   the escaper prints null and undefined                         1 red  helper
+ *   `esc` goes back to the textContent helper                    22 red  page, source
+ *   the event name raw in aria-label / in the artwork alt     16 / 14 red  page, source
+ *   a code label raw in the picture alt / the link aria-label   6 / 3 red  page, source
+ *   a sponsor title raw in aria-label                            13 red  page, source
+ *   raw in TEXT: event name, sponsor title, venue, option,
+ *     code word                                        11, 9, 4, 2, 3 red  page only: the source
+ *                                                                        check does not judge text
+ *   the artwork address used without its check                   14 red  address, source
+ *   the artwork check lets through javascript:, another host,
+ *     data:, plain http, white space                    3, 2, 2, 1, 1 red  address only: the source
+ *                                                                        check does not read a maker
+ *   the artwork address checked but not escaped at the write      5 red  source only: the check
+ *                                                                        already refuses quote marks
+ *   the preview link check dropped / a live poster takes a link
+ *     with no short code / the picture check dropped        3, 4, 2 red  address (and two older specs)
+ *   a code link not escaped in href                               6 red  address, source
+ *   the venue escaped, not encoded, in the map link               7 red  page, source
+ *   an id not encoded: calendar link / sponsor logo           5 / 8 red  page, source
+ *   raw where the page has already cut the value down: a kind
+ *     in a data-testid, the poster kind, the sponsor tier     3, 4, 3 red  source only
+ *   the UEC name raw in TEXT                                      0 red  SURVIVED: the page cuts it
+ *                                                                        to A-Z and "-" first, and
+ *                                                                        text is not judged by source
+ * And eleven faults put into the source check itself (it stops asking for esc;
+ * any function is a maker; any start is allowed; single quotes allowed again;
+ * a maker declared twice; a checked address after other text; a name checked in
+ * one place only; esc declared as anything; a checked address unescaped; a
+ * maker assigned; the escaper assigned twice): each turned 1 to 15 tests red
+ * here, and four of them also in the report page's spec.
  */
 
 import { describe, test, expect } from 'vitest';
