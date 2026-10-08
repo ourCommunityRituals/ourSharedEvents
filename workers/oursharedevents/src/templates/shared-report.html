@@ -1180,7 +1180,10 @@
           '<dl class="stat-dl"><dt>Return Rate (venue)</dt><dd>' +
           fmtPct(report.return_rate && report.return_rate.venue_pct) +
           '</dd></dl>' +
-          suppressionNote('return_rate') +
+          // The whole section can be withheld (too few people), or the rate
+          // alone (too few returned, or too few did not). Either way the card
+          // shows a dash and says why, never a bare dash.
+          (suppressionNote('return_rate') || suppressionNote('return_rate.venue_pct')) +
           '</div>' +
           '<div class="stat-card" data-testid="signed-link-corridor-density">' +
           '<dl class="stat-dl"><dt>Corridor Scans</dt><dd data-testid="corridor-density-count">' +

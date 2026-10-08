@@ -209,9 +209,17 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.report.event_id).toBe('test-evt-read-full');
     expect(r.report.unique_gatherings).toBe(42);
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
-    // was a private 3); venue_pct based on visit_count > 1
+    // was a private 3), so the sample size is published. One of the five came
+    // more than once: 20% of 5 is that one person, so the rate is withheld.
+    // (This test used to pin venue_pct = 20.)
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
-    expect(r.report.return_rate.venue_pct).toBeCloseTo((1 / 5) * 100, 1);
+    expect(r.report.return_rate.venue_pct).toBeNull();
+    expect(r.report._meta.suppression_reasons).toContainEqual(
+      expect.objectContaining({
+        field: 'return_rate.venue_pct',
+        reason: 'below_min_sample_size',
+      })
+    );
     // No baseline seeded → corridor_density_30d/90d nulled with reason
     const reasons = r.report._meta.suppression_reasons.map((s) => s.field);
     expect(reasons).toContain('corridor_density');

@@ -109,11 +109,30 @@ interface SharedReport {
   // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
   //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
+  //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
+  //    a rate beside `sample_size` is a head count (20% of 5 is one person), so it is
+  //    published only when the people it counts are at least K and the people it does
+  //    not count are none or at least K. Otherwise that rate is null, `sample_size`
+  //    stays, and `_meta.suppression_reasons` carries `return_rate.venue_pct` or
+  //    `return_rate.corridor_pct` with `below_min_sample_size`. So 0% is never
+  //    published, and 100% is. Most single-day events have fewer than K people who
+  //    came more than once, so `venue_pct` is usually null for them.
   return_rate: {
     venue_pct: number | null; // returners seen at THIS venue before
     corridor_pct: number | null; // returners seen at corridor before
     sample_size: number | null; // total distinct anons used as denominator
   };
+
+  // 2b. Click-outs — anonymous short-link (`/s/`) clicks per destination kind. Sent to
+  //    organizer, admin and internal readers only (not in `DEPTH_SECTIONS`, so never
+  //    to a sponsor link). Null when the event has no short links. Each kind passes
+  //    the K = 5 floor (null under it). `total` is the sum of the kinds that are
+  //    published, not of all kinds, and null when none is: a total over every kind
+  //    minus the published kinds would be the withheld kind (`floorTotalOfParts`).
+  click_outs: {
+    by_kind: Record<string, number | null>;
+    total: number | null;
+  } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
   corridor_density: {

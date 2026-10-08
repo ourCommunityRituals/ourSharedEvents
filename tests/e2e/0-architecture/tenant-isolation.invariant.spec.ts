@@ -249,7 +249,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
-  'lib/shared-report-builder.ts:341':
+  // 341→354 by the report-floor change (the return rate goes through
+  // flooredRatePct and records why it is withheld; the query is unchanged).
+  'lib/shared-report-builder.ts:354':
     'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',

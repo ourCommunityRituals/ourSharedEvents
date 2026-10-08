@@ -118,7 +118,7 @@ The window closes **ONE ring in ONE corridor.** Compression forces engineered ig
 | Constant                          | Value              | Gates                                                                                                              | In-window?               |
 | --------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------ |
 | `CORRIDOR_MAP_MIN_COUNT` (K-anon) | **5**              | a map cell is a poster's res9; it renders only from hours with ≥5 scans there (sub-K hours dropped before the sum) | YES (per event)          |
-| `return_rate` gate (= K)          | **5**              | return_rate publishes at ≥5 distinct anons (the platform floor `CORRIDOR_MAP_MIN_COUNT`; it was a private 3)       | YES (~2-3 events)        |
+| `return_rate` gate (= K)          | **5**              | sample publishes at ≥5 distinct anons (floor `CORRIDOR_MAP_MIN_COUNT`; was 3); a rate needs ≥5 returners too       | YES (~2-3 events)        |
 | `CORRIDOR_BASELINE_MIN_SAMPLE`    | **10**             | density **ratio** — 10 distinct return-anons in a **30-day rolling** bucket                                        | **NO — month-4+ upsell** |
 | fallback map                      | res7 cell + ring-1 | renders on the **first single event**                                                                              | Day 1                    |
 
