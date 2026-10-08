@@ -80,6 +80,45 @@ by policy.
    governance layer (pool list, dataset map, brain registry) — only as declined
    records.
 
+## Addendum, 2026-10-08: the named pole (proposed, pending owner ratification)
+
+> Status: **proposed**. Items 1 and 2 describe enforcement that exists in
+> code. Items 3 and 4 are rules for the owner to ratify. Nothing here changes
+> the three declined regimes above.
+
+The item-tracking argument above protects OSE, which never knows who anyone
+is. **It does not protect OW**, which stores a contributor's name. On the
+named plane the refusal has to hold by **field absence**: OW never holds a
+field one of the three regimes would govern.
+
+1. **Brain invariant #29 `declined_regulatory_regimes`** names this standard,
+   so the conformance check can see whether each product still refuses. It
+   is partial on creation and goes live when `declined-regimes.invariant.test.ts`
+   is green in both ourSharedEvents and ourWKRP.
+2. **OW gate (OW-159).** `tests/security/declined-regimes.invariant.test.ts`
+   fails the build if a migration, request schema or page holds any of these,
+   or if code names a pool or dataset for a declined regime:
+   - COPPA: an age, birth date or parental-consent field
+   - SOPPA: a student, school or grade field
+   - HIPAA: a patient, diagnosis or medical field
+3. **SOPPA engagement rule (proposed).** OW does not run a school-directed
+   deployment with student accounts. A school event served through OSE's
+   anonymous model is unaffected: OSE holds the item's scans, and the school
+   holds its roster.
+4. **COPPA on the named plane (proposed, owner decision).** OW is a
+   general-audience service. Under COPPA such a service is responsible once
+   it has actual knowledge that a user is under 13. The proposal is a
+   neutral 13+ age screen at sign-up ("Are you 13 or older?") that keeps no
+   birth date and turns away anyone younger without storing anything. The
+   legal reading is for OCR-60 (human-only).
+
+**Open legal question (OCR-60, human-only).** OSE's anonymous cookie
+(`ose_anon`) is a persistent identifier. Whether it is COPPA personal
+information on an event page directed at children is a question for counsel.
+OSE-680 (child-directed vertical taxonomy) was written when COPPA was a
+future tier, so its "on enablement" scope predates this standard and needs
+restating against it.
+
 ## Reconsideration
 
 Removing a regime from this list is a founder decision recorded here with a
