@@ -1903,7 +1903,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 13
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",

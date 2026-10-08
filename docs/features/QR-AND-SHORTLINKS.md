@@ -238,11 +238,22 @@ of the shown cells equals the sum of the hidden ones. Two rules cover this:
 > therefore means "no link has 5 taps yet", not "fewer than 5 taps", and the
 > card says so.
 >
-> **Open: two reads still floor the raw tap sum.** The operations dashboard's
-> `reach.link_taps` floors each event's raw sum, then adds the events; the
-> sponsor line "So far: N link taps" is `floorPreEventActivity`'s raw sum. An
-> organizer can difference either against the card's listed codes. Both are
-> pinned, with numbers, at the end of that spec.
+> **Closed (2026-10-08): the same leak on the operations dashboard.**
+> `reach.link_taps` (`GET /api/v2/admin/dashboards/operations`) floored each
+> event's raw tap sum, then added the events: 13 for the same 10, 2 and 1, and
+> 14 after one more tap on a withheld link. Its query now returns taps per event
+> and code, grouped by the expression the card groups by (`TAP_CODE_SQL`), and
+> the figure is `floorTotalOfParts` over each event's codes, then over the
+> events: 10 here, and withheld when no code of any event in scope has 5. The
+> same spec reads the route for one event and for a brand with three. No page
+> renders this figure yet.
+>
+> **Open: one read still floors the raw tap sum.** The sponsor line "So far: N
+> link taps" is `floorPreEventActivity`'s raw sum. A sponsor is shown no
+> per-code counts, but an organizer can open the sponsor's page and difference
+> it against the card's listed codes. It changes a number sponsors see, so it
+> waits on an owner decision. It is pinned, with numbers, at the end of that
+> spec.
 >
 > **Latent: same shape in `floorPreEventActivity`.** It floors the total and
 > each day independently. The sponsor view renders totals only

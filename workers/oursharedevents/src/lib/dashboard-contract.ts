@@ -16,7 +16,10 @@
 //                       cell). K=5 through lib/count-floor.ts, applied PER
 //                       CONTRIBUTING BUCKET before any sum (Invariant #7, the
 //                       OSE-669 rule), so a total never exposes a sub-K bucket
-//                       by differencing.
+//                       by differencing. For taps the bucket is a poster code,
+//                       not an event: the event's own card lists taps per
+//                       code, so a total built from anything coarser could be
+//                       subtracted against that list.
 //   • its path        — where the value sits in the response, so the class can
 //                       be checked against what is actually returned;
 //   • its source      — the table(s) it is read from, so a reviewer can check it.
@@ -102,8 +105,10 @@ export const DASHBOARD_METRICS = {
     dashboard: 'operations',
     privacy: 'floored',
     path: 'reach.link_taps',
-    source: 'shortlinks.clicks (per event, floored, survivors summed)',
-    description: 'Short-link taps, all time.',
+    source:
+      'shortlinks.clicks (per event and code, floored, survivors summed; then per event, floored, survivors summed)',
+    description:
+      'Short-link taps, all time, on the codes with 5 or more: the sum of the tap totals each event shows on its own.',
   },
   'reach.active_posters': {
     dashboard: 'operations',
