@@ -363,7 +363,7 @@
     "underscore": "^1.13.8",
     "jose": "^4.15.9",
     "qs": "^6.14.1",
-    "handlebars": "^4.7.9",
+    "handlebars": "^4.7.10",
     "@usebruno/cli": {
       "axios": "^1.20.0",
       "form-data": "^4.0.6",
