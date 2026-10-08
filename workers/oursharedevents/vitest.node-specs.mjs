@@ -262,4 +262,8 @@ export const NODE_SPECS = [
   // Typed text on the SharedReport page stays text: the page script run in jsdom
   // with plain and hostile values, plus a parse of its attribute writes.
   'tests/shared-report-attribute-escaping.spec.ts',
+  // The same for the poster page: the served page run in jsdom (print and
+  // digital, with and without artwork, picker and draft preview), plus the same
+  // parse of its attribute writes (tests/helpers/markup-attribute-check.ts).
+  'tests/poster-attribute-escaping.spec.ts',
 ];
