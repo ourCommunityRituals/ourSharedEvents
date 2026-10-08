@@ -1094,7 +1094,7 @@ jobs:
         working-directory: workers/oursharedevents
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: Vet this branch (T2 Bruno + T3 smoke on a local worker)
         run: bash scripts/ci/run-local-vetting.sh
       - name: Scan artifacts for credentials
@@ -1730,7 +1730,7 @@ jobs:
       - name: Install Playwright browsers
         # OSE-954: --with-deps pulls chromium system libs on the fresh ubuntu VM.
         if: matrix.installBrowser == true
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
 
       - name: Run T3 smoke section
         env:
@@ -1899,6 +1899,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The Ubuntu packages `--with-deps` installs for WebKit (181 packages,
+      # 126 MB). Same key the T0 component shard and the phone audit save under,
+      # so on a normal run apt downloads nothing. On 2026-10-08 this job spent
+      # its whole 30 minutes downloading them from a slow mirror and was
+      # cancelled before a test started.
+      - name: Restore Playwright system package cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pw-apt-archives
+          key: ${{ runner.os }}-pw-apt-chromium-webkit-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pw-apt-chromium-webkit-
+
       - name: Install Playwright browsers
         # --with-deps installs the system libraries the browsers need on a fresh
         # ubuntu-latest VM (OSE-954; matches the T0 gate + T3 smoke slices).
@@ -1907,7 +1920,7 @@ jobs:
         # the full device matrix lives on the E2E suite. The self-hosted box had
         # webkit globally cached, masking the need; ephemeral runners must fetch
         # it explicitly.
-        run: npx playwright install --with-deps chromium webkit
+        run: bash scripts/ci/install-playwright-browsers.sh chromium webkit
 
       # OSE-834 slice 2d (Fix 7): the tiers below assert against staging — prove
       # staging IS this merge before touching it. WORKER_BUILD_VERSION carries

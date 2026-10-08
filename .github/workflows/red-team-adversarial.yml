@@ -58,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: 'Adversarial: red-team suite against the deployed env'
         env:
           # OSE-1418: target is a repo variable, not hardcoded. It must be the env
@@ -98,7 +98,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: 'Closing: deployed surface carries no injected content'
         env:
           # OSE-1418: same target as T5 (repo variable RED_TEAM_BASE_URL).

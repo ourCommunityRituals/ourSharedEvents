@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: 'RL-*: burst past the limit, expect 429 within 3 s'
         env:
           BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}

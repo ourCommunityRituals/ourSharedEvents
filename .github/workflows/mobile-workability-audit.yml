@@ -281,7 +281,7 @@ jobs:
         # every night since 2026-09-01 with "Executable doesn't exist at
         # .../webkit-2336/pw_run.sh" — a red that said nothing about mobile
         # workability, on the one run that could block.
-        run: npx playwright install --with-deps chromium webkit
+        run: bash scripts/ci/install-playwright-browsers.sh chromium webkit
 
       - name: Audit deployed staging
         id: audit
