@@ -254,10 +254,20 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // flooredRatePct and records why it is withheld; the query is unchanged).
   // 354→399 by OSE-1652 (the venue rate reads the confirmed series through the
   // shared `confirmedSeriesOf` helper above; this query is unchanged).
-  'lib/shared-report-builder.ts:399':
-    'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
-    '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
-    'by design; never-who (COUNT DISTINCT anon_id_hash).',
+  // 399→436 by OSE-1649 (with :430, the same statement's correlated read of
+  // the other corridor events): the query now reads, for every event in the corridor,
+  // its distinct people and how many of them were seen at another corridor
+  // event, so a corridor's rates are published together or not at all. Still
+  // keyed by the geography only, cross-brand by design as before. What leaves
+  // the builder is this event's own rate and one yes/no ("another event here
+  // must withhold"); no other event's count, id or brand is published.
+  'lib/shared-report-builder.ts:436':
+    'Corridor-wide per-event COUNTs keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
+    '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
+    "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
+  'lib/shared-report-builder.ts:430':
+    "Same corridor statement, the correlated EXISTS over the corridor's other events " +
+    '(same geography key). Same rationale.',
   // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).

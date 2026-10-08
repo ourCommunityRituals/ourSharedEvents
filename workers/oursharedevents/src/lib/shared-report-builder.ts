@@ -423,22 +423,21 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     if (corridorKey) {
       const corridorRows = await db
         .prepare(
-          `WITH seen AS (
-             SELECT DISTINCT a.venue_id, a.anon_id_hash
-               FROM anon_id_returns a
-               JOIN events e ON e.id = a.venue_id
-              WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
-           )
-           SELECT s.venue_id AS event_id,
-                  COUNT(*) AS people,
-                  SUM(CASE WHEN EXISTS (
-                        SELECT 1 FROM seen o
-                         WHERE o.anon_id_hash = s.anon_id_hash AND o.venue_id != s.venue_id
-                      ) THEN 1 ELSE 0 END) AS elsewhere
-             FROM seen s
-            GROUP BY s.venue_id`
+          `SELECT a.venue_id AS event_id,
+                  COUNT(DISTINCT a.anon_id_hash) AS people,
+                  COUNT(DISTINCT CASE WHEN EXISTS (
+                    SELECT 1 FROM anon_id_returns o
+                      JOIN events oe ON oe.id = o.venue_id
+                     WHERE o.anon_id_hash = a.anon_id_hash
+                       AND o.venue_id != a.venue_id
+                       AND COALESCE(LOWER(oe.h3_res7), oe.corridor_id) = ?
+                  ) THEN a.anon_id_hash END) AS elsewhere
+             FROM anon_id_returns a
+             JOIN events e ON e.id = a.venue_id
+            WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
+            GROUP BY a.venue_id`
         )
-        .bind(corridorKey)
+        .bind(corridorKey, corridorKey)
         .all<{ event_id: string; people: number; elsewhere: number }>();
       const rows = corridorRows.results ?? [];
       const own = rows.find((r) => r.event_id === eventId);
