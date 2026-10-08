@@ -49,6 +49,7 @@ import {
   readPreEventActivity,
 } from '../lib/pre-event-activity';
 import { daysToGo } from './pre-event-activity';
+import { scanHourSql } from '../lib/scan-cells';
 import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { perEventCounts } from './portfolio-rollup';
 
@@ -207,7 +208,13 @@ interface BrandOps {
   byStatus: Map<string, number>;
   published: number;
   created30d: number;
-  scans: number;
+  /**
+   * The brand's poster-hour cells, raw (lib/scan-cells.ts). Only their floored
+   * sum is published (OSE-1656): every scan figure on every surface is a sum
+   * of the same cells, so this total cannot be subtracted against an event's
+   * or the corridor's.
+   */
+  scanCells: number[];
   /**
    * One figure per event that has short links: the taps on its codes that
    * clear the floor on their own, or null when none does. It is the total the
@@ -220,7 +227,12 @@ interface BrandOps {
   places: Set<string>;
   onShow: number;
   pendingRequests: number;
-  reportViews: number;
+  /**
+   * Report opens per event per day, raw. Opens are actions by link holders,
+   * so their total is floored like any other count (OSE-1656): the sum of the
+   * event-days with 5 or more, the cell the event dashboard sums too.
+   */
+  reportViewCells: number[];
   admin: Map<string, number>;
 }
 
@@ -244,12 +256,14 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    first<{ cnt: number }>(
+    // One row per poster-hour, the cell every scan figure is a sum of.
+    all<{ n: number }>(
       db
         .prepare(
-          `SELECT COUNT(*) AS cnt FROM scan_placement_events s
+          `SELECT COUNT(*) AS n FROM scan_placement_events s
              JOIN events e ON e.id = s.event_id
-            WHERE e.brand_id = ? AND ${DC}`
+            WHERE e.brand_id = ? AND ${DC}
+            GROUP BY s.poster_deployment_id, ${scanHourSql('s')}`
         )
         .bind(brand, dc)
     ),
@@ -295,12 +309,14 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    first<{ cnt: number }>(
+    // One row per event and day: the cell the views total is a sum of.
+    all<{ n: number }>(
       db
         .prepare(
-          `SELECT COALESCE(SUM(r.access_count), 0) AS cnt FROM report_access_log r
+          `SELECT COALESCE(SUM(r.access_count), 0) AS n FROM report_access_log r
              JOIN events e ON e.id = r.event_id
-            WHERE e.brand_id = ? AND ${DC} AND r.outcome = 'granted' AND r.date >= ?`
+            WHERE e.brand_id = ? AND ${DC} AND r.outcome = 'granted' AND r.date >= ?
+            GROUP BY r.event_id, r.date`
         )
         .bind(brand, dc, sinceDay)
     ),
@@ -338,13 +354,13 @@ async function readBrandOps(
     byStatus,
     published,
     created30d,
-    scans: num(scans?.cnt),
+    scanCells: scans.map((r) => num(r.n)),
     tapsPerEvent: [...codesByEvent.values()].map((codes) => floorTotalOfParts(codes).count),
     posters: num(posters?.cnt),
     places: new Set(places.map((p) => p.cell)),
     onShow: num(sponsors?.on_show),
     pendingRequests: num(sponsors?.pending),
-    reportViews: num(views?.cnt),
+    reportViewCells: views.map((r) => num(r.n)),
     admin: adminMap,
   };
 }
@@ -411,13 +427,13 @@ export async function handleOperationsDashboard(
     const admin = new Map<string, number>();
     const eventIds: string[] = [];
     const taps: (number | null)[] = [];
+    const scanCells: number[] = [];
+    const reportViewCells: number[] = [];
     let published = 0,
       created30d = 0,
-      scans = 0,
       posters = 0,
       onShow = 0,
-      pendingRequests = 0,
-      reportViews = 0;
+      pendingRequests = 0;
     for (const b of perBrand) {
       for (const [s, n] of b.byStatus) byStatus[s] = (byStatus[s] ?? 0) + n;
       for (const p of b.places) places.add(p);
@@ -426,12 +442,14 @@ export async function handleOperationsDashboard(
       taps.push(...b.tapsPerEvent);
       published += b.published;
       created30d += b.created30d;
-      scans += b.scans;
+      scanCells.push(...b.scanCells);
       posters += b.posters;
       onShow += b.onShow;
       pendingRequests += b.pendingRequests;
-      reportViews += b.reportViews;
+      reportViewCells.push(...b.reportViewCells);
     }
+    // Cells under the floor join no sum (OSE-1656, lib/scan-cells.ts).
+    const scans = floorTotalOfParts(scanCells);
     const explicit = await explicitChoices(env.FORMS_DB, eventIds);
 
     return json(request, reqId, {
@@ -467,7 +485,7 @@ export async function handleOperationsDashboard(
         explicit,
       },
       sponsors: { on_show: onShow, pending_requests: pendingRequests },
-      shared_report: { views_30d: reportViews },
+      shared_report: { views_30d: floorTotalOfParts(reportViewCells) },
     });
   });
 }
@@ -542,7 +560,7 @@ async function readBrandCorridor(
                JOIN events e ON e.id = s.event_id
                JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
               WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL
-              GROUP BY pd.h3_res7, e.h3_res7, e.data_class`
+              GROUP BY s.poster_deployment_id, ${scanHourSql('s')}, pd.h3_res7, e.h3_res7`
           )
           .bind(brand, dc)
       ),
@@ -625,11 +643,16 @@ export async function handleCorridorDashboard(
     const cats = new Map<string, number>();
     const evCells = new Map<string, { events: number; live: number }>();
     const posterCells = new Map<string, number>();
-    // Scans keep one raw count per part: brand, data class, source cell and
-    // destination (an event cell, or none). Each part is floored before any
-    // sum, so every view a caller can select (one brand or several, production
-    // or all) is a sum of parts that each cleared K, and subtracting one view
-    // from another never exposes a sub-K count (#7, the OSE-669 rule).
+    // Scans keep one raw count per part, and the part is one poster in one
+    // hour (OSE-1656, lib/scan-cells.ts): the cell every other scan figure is
+    // a sum of. A poster has one source cell, one event (so one destination
+    // and one data class) and one brand. Each part is floored before any sum,
+    // so every view a caller can select (one brand or several, production or
+    // all) is a sum of parts that each cleared K, and no view can be
+    // subtracted from another, or from the operations or an event's total, to
+    // expose a sub-K count (#7, the OSE-669 rule). Before OSE-1656 a part was
+    // a pair of cells, so a flow of 7 could be two posters of 4 and 3 that the
+    // event's exact total then gave back.
     const flowParts = new Map<string, { source: string; destination: string; parts: number[] }>();
     const noDestinationParts = new Map<string, number[]>();
     const dayPart = new Map<string, number>([
@@ -786,10 +809,12 @@ export async function handleEventDashboard(
             WHERE sp.event_id = ?`
         ).bind(eventId)
       ),
-      first<{ cnt: number }>(
+      // One row per day: the cell the operations view total sums too.
+      all<{ n: number }>(
         env.DB.prepare(
-          `SELECT COALESCE(SUM(access_count), 0) AS cnt FROM report_access_log
-            WHERE event_id = ? AND outcome = 'granted' AND date >= ?`
+          `SELECT COALESCE(SUM(access_count), 0) AS n FROM report_access_log
+            WHERE event_id = ? AND outcome = 'granted' AND date >= ?
+            GROUP BY date`
         ).bind(eventId, sinceDay)
       ),
       explicitChoices(env.FORMS_DB, [eventId]),
@@ -817,7 +842,7 @@ export async function handleEventDashboard(
         pending_requests: num(sponsors?.pending),
         declined: num(sponsors?.declined),
       },
-      shared_report: { views_30d: num(views?.cnt) },
+      shared_report: { views_30d: floorTotalOfParts(views.map((r) => num(r.n))) },
     });
   });
 }

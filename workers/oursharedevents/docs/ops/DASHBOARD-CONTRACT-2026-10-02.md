@@ -2,7 +2,7 @@
 
 Part of OSE-1468. The code is the source of truth:
 
-- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `1.1.0`)
+- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `2.0.0`)
 - Queries: `src/handlers/dashboards.ts`
 - Seeded fixture: `tests/helpers/seed-dashboard-fixture.ts`
 - Tests: `tests/dashboards.spec.ts` (26, workers pool); link taps also in `tests/reach-card-neighbour-floor.spec.ts`; corridor scans also in `tests/corridor-scans-neighbour-floor.spec.ts`
@@ -33,7 +33,7 @@ An admin with no brand membership gets 403 `BRAND_SCOPE_DENIED`. A key actor in 
 ```json
 {
   "contract": {
-    "version": "1.1.0",
+    "version": "2.0.0",
     "dashboard": "operations",
     "metrics": ["events.total", "..."],
     "floor": 5
@@ -65,11 +65,12 @@ A caller can pick overlapping views: several brands or one, and `production` or 
 
 ## Privacy classes
 
-| Class             | Meaning                                                                                                      | Rule                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `entity`          | Counts of things, not people: events, posters, places, sponsor placements, admin actions, SharedReport opens | Exact                                                                           |
-| `anonymous_exact` | Poster scans (`scan_placement_events`: event, poster, hour; no session, device or person)                    | Exact. Same rule as `/stats` and the pre-event card, so a first scan shows as 1 |
-| `floored`         | Registrations, check-ins, email signups, short-link taps, scans per cell, flows                              | K = 5 via `lib/count-floor.ts`                                                  |
+| Class     | Meaning                                                                                                                                                    | Rule                                                                   |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `entity`  | Counts of things, not people: events, posters, places, sponsor placements, admin actions                                                                   | Exact                                                                  |
+| `floored` | Every count of people or of their actions: registrations, check-ins, email signups, short-link taps, poster scans (every grain), flows, SharedReport opens | K = 5 via `lib/count-floor.ts`, per contributing bucket before any sum |
+
+Until `2.0.0` there was an `anonymous_exact` class for poster scans, exact for the organizer, and SharedReport opens were `entity`. OSE-1656 removed the class and retyped both (owner ruling 2026-10-08: no exceptions).
 
 Each registry entry holds one value of one class and names its `path` in the response (`flows[].scans` maps over an array). A test resolves every path against a live response and checks the value has its class's shape: a `FlooredCount` for `floored`, and no `FlooredCount` anywhere inside for the exact classes. A second test fails on any response key no metric covers.
 
@@ -130,9 +131,16 @@ The version follows the response shape. The two link-tap changes (the event figu
 
 `1.1.0` (2026-10-08): the corridor's source cells gained `scans_no_destination`, a new metric, so a minor bump. The same change made `source_cells[].scans` the sum of the cell's listed parts; that alone changes which scans the figure counts, not its shape, and can only lower it or withhold it.
 
-## Open after the 2026-10-08 ruling
+`2.0.0` (2026-10-08, OSE-1656): a major bump. Every scan metric (`reach.poster_scans`, `participation.anonymous.scans` on both dashboards, `reach.scans`, `reach.scansByDay[].count`) and both `shared_report.views_30d` metrics are retyped to `floored`; each is now a `FlooredCount`, not a number. `event.reach.scans_by_day.day` is new (the label beside each floored day).
 
-The ruling reaches further than the corridor. The `anonymous_exact` class (poster scans on the operations and event dashboards) and the exact scan counts on the pre-event card are served to the same admin, and an exact total beside floored parts gives a withheld part back: the operations dashboard's `reach.poster_scans` minus the corridor's cells is the scans the corridor withholds, and the event dashboard's `reach.scans` is one destination's scans, exact. None of those reads is changed yet. They are mapped on OSE-1655 for the owner, because flooring them changes what the event card and the Live page show. `tests/corridor-scans-neighbour-floor.spec.ts` pins one case with its numbers, and that test fails the day it is closed.
+## Scans: one grain everywhere (OSE-1656, 2026-10-08)
+
+The 2026-10-08 ruling reached past the corridor: the operations total minus the corridor's cells was the scans the corridor withheld, and the event dashboard's exact `reach.scans` said it outright. Closed by giving every scan figure one grain, **one poster in one hour** (`lib/scan-cells.ts`). That is the cell the SharedReport's poster attribution already floors (OSE-1459): the scan path keeps one scan per person per poster per hour, so only a poster-hour of 5 or more is 5 or more people.
+
+- Every scan figure, on every surface, is the sum of the poster-hours that clear the floor (`floorTotalOfParts`): a poster on its card, a day on the chart, the event on the card, `/stats` and its dashboard, the brand on the operations dashboard, a corridor part, and the sponsor's line. So any two of them differ by a sum of cells that each clear the floor, and none can be subtracted from another, or from the report, to get a group under 5 back. `tests/corridor-scans-neighbour-floor.spec.ts` now asserts that one more scan on a left-out flow moves neither the operations total nor the event's.
+- Report opens are floored per event per day, the same way.
+- The First-Scan gauge and the timeline's "People scanning" step read withheld until one poster has 5 scans in one hour: a gauge that showed 1 would tell "nobody" from "1 to 4".
+- Not changed: the organizer's registration and survey lists. They are the organizer's own consented rows, which the organizer reads one by one (`lib/count-floor.ts`, scope note). A count floor on a list whose every row the reader holds protects no one.
 
 ## Next slices (not in this change)
 

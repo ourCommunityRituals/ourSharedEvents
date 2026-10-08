@@ -160,13 +160,16 @@ async function openLive(dashboard: unknown): Promise<Document> {
   return doc;
 }
 
-/** The governed event dashboard as the route sends it today: scans exact, taps and check-ins floored. */
+/**
+ * The governed event dashboard as the route sends it: since OSE-1656 every
+ * scan figure is floored too, and each day's count is a floored count.
+ */
 function dashboard(overrides: { scans?: unknown; scansByDay?: unknown[] } = {}) {
   return {
     ok: true,
     reach: {
-      scans: overrides.scans ?? 3,
-      scansByDay: overrides.scansByDay ?? [{ day: '2026-10-07', count: 3 }],
+      scans: overrides.scans ?? shown(7),
+      scansByDay: overrides.scansByDay ?? [{ day: '2026-10-07', count: shown(7) }],
       clicks: WITHHELD,
       posters: 2,
       places: 1,
@@ -182,23 +185,25 @@ const text = (doc: Document, id: string) =>
 describe('OSE-1657 item 3 | the Live view says only what is true of its numbers', () => {
   test('the note names the tiles that came floored, and no other', async () => {
     const doc = await openLive(dashboard());
-    expect(text(doc, 'live-scans')).toBe('3');
+    expect(text(doc, 'live-scans')).toBe('7');
     expect(text(doc, 'live-taps')).toBe('Held');
     expect(text(doc, 'live-checkins')).toBe('Held');
     const note = text(doc, 'live-note');
-    // Before: "A total under 5 reads "held"." — untrue while scans read 3.
+    // Before: "A total under 5 reads "held"." — untrue while scans read 7.
     expect(note).not.toMatch(/A total under 5 reads/i);
     expect(note).toMatch(/Link taps and check-ins under 5 read .Held./);
     expect(note).not.toMatch(/scans[^.]*under 5/i);
   });
 
-  test('when scans come floored too (OSE-1656), the note says so, and a floored day reads Held', async () => {
+  // The route's own day shape (OSE-1656): `count` is a floored count. Before
+  // the day list read the flag on the day itself, so a withheld day read "0".
+  test('when scans come floored, the note says so, and a floored day reads Held, never 0', async () => {
     const doc = await openLive(
       dashboard({
         scans: WITHHELD,
         scansByDay: [
-          { day: '2026-10-06', count: null, suppressed: true, floor: 5 },
-          { day: '2026-10-07', count: 6 },
+          { day: '2026-10-06', count: WITHHELD },
+          { day: '2026-10-07', count: shown(6) },
         ],
       })
     );
@@ -215,7 +220,7 @@ describe('OSE-1657 item 3 | the Live view says only what is true of its numbers'
   test('guard: nothing floored, the note makes no claim about "Held"', async () => {
     const doc = await openLive({
       ...dashboard(),
-      reach: { scans: 9, scansByDay: [], clicks: shown(12), posters: 2, places: 1 },
+      reach: { scans: shown(9), scansByDay: [], clicks: shown(12), posters: 2, places: 1 },
       participation: { explicit: { checkins: shown(7) } },
     });
     expect(text(doc, 'live-note')).not.toMatch(/Held/i);

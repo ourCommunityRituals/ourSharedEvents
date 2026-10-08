@@ -152,7 +152,7 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(handler).toContain('listShortlinksForEvent');
     expect(handler).toContain('posterSlotLabel');
     expect(handler).toContain('/s/${slot.code}');
-    expect(handler).toContain('slots }');
+    expect(handler).toMatch(/\bslots,?\s*\}/);
     expect(handler).not.toContain('ensureSlotShortlinks');
   });
 

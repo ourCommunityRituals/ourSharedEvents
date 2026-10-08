@@ -6,10 +6,11 @@
  * NEVER WHO, ONLY HOW MANY:
  *   - every number is a count of anonymous events (scan_placement_events, the
  *     shortlinks.clicks counter, organizer-declared poster cells);
- *   - the organizer sees exact counts (same rule as /stats: anonymous scans have
- *     no one to re-identify, and a first real scan shows as 1);
- *   - the SPONSOR (an outside party) only ever sees floored counts (K=5), per
- *     day and in total — a raw sub-5 number never reaches their page;
+ *   - every scan and tap count is floored (K=5), for the organizer and the
+ *     sponsor alike (OSE-1656, owner ruling 2026-10-08: no exceptions). Scans
+ *     are sums of poster-hours that each clear the floor (lib/scan-cells.ts),
+ *     per day and in total, so one more scan in a quiet poster-hour moves
+ *     nothing either of them reads;
  *   - the module never reads the WHO side (scan_node_returns), IPs, request.cf,
  *     or FORMS_DB.
  *
@@ -20,7 +21,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import {
-  bucketScansByDay,
   floorPreEventActivity,
   organizerPreEventActivity,
   readPreEventActivity,
@@ -28,6 +28,12 @@ import {
   PRE_EVENT_DAYS,
 } from '../src/lib/pre-event-activity';
 import { daysToGo } from '../src/handlers/pre-event-activity';
+import { scansByLocalDay } from '../src/lib/scan-cells';
+import { applyCountFloor } from '../src/lib/count-floor';
+
+/** A floored count, as readPreEventActivity hands it on. */
+const fl = (n: number) => applyCountFloor(n);
+const HELD = { count: null, suppressed: true, floor: 5 };
 import { renderPreEventReach } from '../src/lib/sponsor-home-render';
 import { mintSponsorHomeToken } from '../src/lib/sponsor-home-auth';
 import ADMIN_HTML from '../src/templates/admin.html';
@@ -135,34 +141,54 @@ beforeAll(async () => {
   await seedEvent('pe-draft', 'draft');
 });
 
-describe('bucketScansByDay — the event’s own days, zero-filled', () => {
+describe('scansByLocalDay — the event’s own days, every day present, each floored', () => {
   const now = new Date('2026-09-29T15:00:00Z'); // 10:00 in Chicago
 
   test('a late-night UTC hour lands on the previous Chicago day', () => {
-    // 2026-09-29T03:00Z is 22:00 on Sep 28 in Chicago.
-    const days = bucketScansByDay([{ bucket: '2026-09-29T03:00', cnt: 4 }], 'America/Chicago', now);
-    expect(days.find((d) => d.day === '2026-09-28')?.count).toBe(4);
-    expect(days.find((d) => d.day === '2026-09-29')?.count).toBe(0);
+    // 2026-09-29T03 is 22:00 on Sep 28 in Chicago.
+    const days = scansByLocalDay(
+      [{ poster: 'p', hour: '2026-09-29T03', n: 6 }],
+      'America/Chicago',
+      now,
+      PRE_EVENT_DAYS
+    );
+    expect(days.find((d) => d.day === '2026-09-28')?.count).toEqual(fl(6));
+    expect(days.find((d) => d.day === '2026-09-29')?.count).toEqual(HELD);
   });
 
   test('always PRE_EVENT_DAYS days, oldest first, ending today', () => {
-    const days = bucketScansByDay([], 'America/Chicago', now);
+    const days = scansByLocalDay([], 'America/Chicago', now, PRE_EVENT_DAYS);
     expect(days).toHaveLength(PRE_EVENT_DAYS);
     expect(days[days.length - 1].day).toBe('2026-09-29');
     expect(days[0].day).toBe('2026-09-16');
-    expect(days.every((d) => d.count === 0)).toBe(true);
+    expect(days.every((d) => d.count.suppressed)).toBe(true);
   });
 
-  test('hours outside the window and junk buckets are dropped', () => {
-    const days = bucketScansByDay(
+  test('a day is its poster-hours with 5 or more: 6 + 4 + 4 in one day reads 6, never 14', () => {
+    const days = scansByLocalDay(
       [
-        { bucket: '2026-08-01T12:00', cnt: 50 },
-        { bucket: 'not-a-bucket', cnt: 9 },
+        { poster: 'a', hour: '2026-09-29T14', n: 6 },
+        { poster: 'b', hour: '2026-09-29T14', n: 4 },
+        { poster: 'a', hour: '2026-09-29T13', n: 4 },
       ],
       'America/Chicago',
-      now
+      now,
+      PRE_EVENT_DAYS
     );
-    expect(days.reduce((t, d) => t + d.count, 0)).toBe(0);
+    expect(days[days.length - 1].count).toEqual(fl(6));
+  });
+
+  test('hours outside the window and junk hours are dropped', () => {
+    const days = scansByLocalDay(
+      [
+        { poster: 'a', hour: '2026-08-01T12', n: 50 },
+        { poster: 'a', hour: 'not-a-bucket', n: 9 },
+      ],
+      'America/Chicago',
+      now,
+      PRE_EVENT_DAYS
+    );
+    expect(days.every((d) => d.count.suppressed)).toBe(true);
   });
 
   test('an unknown zone falls back to the home corridor, never throws', () => {
@@ -170,22 +196,21 @@ describe('bucketScansByDay — the event’s own days, zero-filled', () => {
   });
 });
 
-describe('floorPreEventActivity — the sponsor never sees a sub-5 number', () => {
-  test('totals and every day under 5 are suppressed; posters/places stay exact', () => {
+describe('floorPreEventActivity — nobody sees a sub-5 number', () => {
+  test('scans arrive floored and pass through; taps are floored here; posters/places stay exact', () => {
     const f = floorPreEventActivity({
       posters: 1,
       places: 1,
-      scans: 3,
-      clicks: 12,
+      scans: HELD,
       clicksByCode: [12],
       scansByDay: [
-        { day: '2026-09-28', count: 2 },
-        { day: '2026-09-29', count: 6 },
+        { day: '2026-09-28', count: HELD },
+        { day: '2026-09-29', count: fl(6) },
       ],
     });
     expect(f.posters).toBe(1);
     expect(f.places).toBe(1);
-    expect(f.scans).toEqual({ count: null, suppressed: true, floor: 5 });
+    expect(f.scans).toEqual(HELD);
     expect(f.clicks).toEqual({ count: 12, suppressed: false, floor: 5 });
     expect(f.scansByDay[0].count.suppressed).toBe(true);
     expect(f.scansByDay[0].count.count).toBeNull();
@@ -199,10 +224,9 @@ describe('organizerPreEventActivity — the tap total is the sum of the codes th
   const activity = (clicksByCode: number[]) => ({
     posters: 2,
     places: 1,
-    scans: 3,
-    clicks: clicksByCode.reduce((t, n) => t + n, 0),
+    scans: HELD,
     clicksByCode,
-    scansByDay: [{ day: '2026-09-29', count: 3 }],
+    scansByDay: [{ day: '2026-09-29', count: HELD }],
   });
 
   test('a code under the floor never joins the total: 10 + 2 + 1 reads 10, and so does 10 + 2 + 2', () => {
@@ -221,31 +245,34 @@ describe('organizerPreEventActivity — the tap total is the sum of the codes th
     expect(organizerPreEventActivity(activity([5, 6, 20])).clicks.count).toBe(31);
   });
 
-  test('scans stay exact, and the per-code parts are not sent', () => {
+  // OSE-1656: the organizer reads the same numbers as the sponsor.
+  test('scans arrive floored for the organizer too, and the per-code parts are not sent', () => {
     const o = organizerPreEventActivity(activity([10, 2, 1]));
-    expect(o.scans).toBe(3);
-    expect(o.scansByDay).toEqual([{ day: '2026-09-29', count: 3 }]);
+    expect(o.scans).toEqual(HELD);
+    expect(o).toEqual(floorPreEventActivity(activity([10, 2, 1])));
     expect(Object.keys(o).sort()).toEqual(['clicks', 'places', 'posters', 'scans', 'scansByDay']);
     expect(JSON.stringify(o)).not.toContain('clicksByCode');
   });
 });
 
 describe('readPreEventActivity — counts from D1', () => {
-  test('posters/places count ACTIVE posters; scans + taps are totals; chart covers 14 days', async () => {
+  // pe-busy: poster 1 has 7 scans in one hour, poster 2 has 2 (30 hours ago),
+  // poster 3 has 3 (20 days ago). Only poster 1's hour clears the floor, so
+  // every scan figure is 7 (it read 12, which gave the 2 and the 3 back).
+  test('posters/places count ACTIVE posters; scans are the poster-hours with 5 or more; chart covers 14 days', async () => {
     const a = await readPreEventActivity(tenv.DB, 'pe-busy', 'America/Chicago');
     expect(a.posters).toBe(3);
     expect(a.places).toBe(2);
-    expect(a.scans).toBe(12);
-    expect(a.clicks).toBe(11);
-    // The same 11 taps, per code (event link 9, donation link 2).
+    expect(a.scans).toEqual(fl(7));
+    // The taps per code (event link 9, donation link 2), read side only.
     expect([...a.clicksByCode].sort((x, y) => x - y)).toEqual([2, 9]);
-    // The 20-day-old scans are in the total but not in the 14-day chart.
-    expect(a.scansByDay.reduce((t, d) => t + d.count, 0)).toBe(9);
+    expect(a.scansByDay.reduce((t, d) => t + (d.count.count ?? 0), 0)).toBe(7);
+    expect(a.scansByDay.filter((d) => !d.count.suppressed)).toHaveLength(1);
   });
 
-  test('an event with nothing yet reads as zeros, not an error', async () => {
+  test('an event with nothing yet reads as withheld counts, not an error', async () => {
     const a = await readPreEventActivity(tenv.DB, 'pe-draft', 'America/Chicago');
-    expect(a).toMatchObject({ posters: 0, places: 0, scans: 0, clicks: 0, clicksByCode: [] });
+    expect(a).toMatchObject({ posters: 0, places: 0, scans: HELD, clicksByCode: [] });
   });
 
   /** The real DB, except any statement reading the short links fails. */
@@ -266,7 +293,7 @@ describe('readPreEventActivity — counts from D1', () => {
   test('a failed tap read: the card still gets its scans (taps read as none), a strict caller gets the error', async () => {
     const broken = tapReadFails(tenv.DB);
     const a = await readPreEventActivity(broken, 'pe-busy', 'America/Chicago');
-    expect(a).toMatchObject({ posters: 3, places: 2, scans: 12, clicks: 0, clicksByCode: [] });
+    expect(a).toMatchObject({ posters: 3, places: 2, scans: fl(7), clicksByCode: [] });
     // Strict (the event dashboard): never a total that was not read.
     await expect(
       readPreEventActivity(broken, 'pe-busy', 'America/Chicago', new Date(), true)
@@ -280,7 +307,7 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
     expect(res.status).toBe(401);
   });
 
-  test('exact counts, the public short link first, its QR as a picture', async () => {
+  test('floored counts, the public short link first, its QR as a picture', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/events/pe-busy/pre-event-activity', {
       headers: ADMIN,
     });
@@ -288,14 +315,15 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
     const body = (await res.json()) as {
       ok: boolean;
       event: { status: string; days_to_go: number | null };
-      activity: { posters: number; places: number; scans: number; clicks: unknown };
+      activity: { posters: number; places: number; scans: unknown; clicks: unknown };
       link: { url: string; code: string; qr: string } | null;
       poster_url: string;
     };
     expect(body.ok).toBe(true);
-    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: 12 });
+    // OSE-1656: scans arrive floored for the organizer too: poster 1's hour of 7.
+    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: fl(7) });
     // Poster tiers (PO 2026-09-30): digital taps are K=5-floored for the
-    // organizer too — the tap total arrives as a FlooredCount, scans stay exact.
+    // organizer too — the tap total arrives as a FlooredCount.
     // The total counts the codes that clear the floor on their own: the event
     // link's 9. The donation link's 2 is withheld and never joins it (as 11,
     // the total moved to 12 when the donation link gained a tap).
@@ -374,8 +402,7 @@ describe('/sponsor — pre-event reach, floored', () => {
       floorPreEventActivity({
         posters: 1,
         places: 1,
-        scans: 3,
-        clicks: 2,
+        scans: fl(3),
         clicksByCode: [2],
         scansByDay: [],
       })
@@ -393,8 +420,7 @@ describe('/sponsor — pre-event reach, floored', () => {
       floorPreEventActivity({
         posters: 1,
         places: 1,
-        scans: 9,
-        clicks: 13,
+        scans: fl(9),
         clicksByCode: [10, 2, 1],
         scansByDay: [],
       })
@@ -410,8 +436,7 @@ describe('/sponsor — pre-event reach, floored', () => {
       floorPreEventActivity({
         posters: 1,
         places: 1,
-        scans: 9,
-        clicks: 15,
+        scans: fl(9),
         clicksByCode: [4, 4, 3, 4],
         scansByDay: [],
       })
@@ -426,8 +451,7 @@ describe('/sponsor — pre-event reach, floored', () => {
       floorPreEventActivity({
         posters: 0,
         places: 0,
-        scans: 0,
-        clicks: 30,
+        scans: fl(0),
         clicksByCode: [30],
         scansByDay: [],
       })
@@ -441,8 +465,7 @@ describe('/sponsor — pre-event reach, floored', () => {
       floorPreEventActivity({
         posters: 2,
         places: 1,
-        scans: 9,
-        clicks: 40,
+        scans: fl(9),
         clicksByCode: [40],
         scansByDay: [],
       })
@@ -475,7 +498,9 @@ describe('/sponsor — pre-event reach, floored', () => {
     // also saw the organizer's card).
     expect(busy).toContain('data-testid="placement-reach"');
     expect(busy).toContain('Your name is on 3 posters in 2 places');
-    expect(busy).toContain('12 poster scans');
+    // OSE-1656: poster 1's hour of 7 is the only poster-hour with 5 or more.
+    expect(busy).toContain('7 poster scans');
+    expect(busy).not.toContain('12 poster scans');
     expect(busy).toContain('So far: 9 link taps');
     expect(busy).not.toContain('11 link taps');
     // Not yet accepted: their name isn't on the poster, so no reach claim.

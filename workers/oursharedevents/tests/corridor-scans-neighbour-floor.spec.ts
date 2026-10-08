@@ -17,10 +17,12 @@
  *   floor in both. Read the dashboard through the real route, as every reader
  *   who can pick a different view of it. Nothing published may differ.
  *
- * A "part" is the smallest bucket the dashboard counts scans in: one brand,
- * one data class, one source cell, and one destination (the event's cell, or
- * none when the event has no place on the map). The views are one brand or
- * both, and production data or all of it: six reads.
+ * A "part" is the smallest bucket the dashboard counts scans in: one poster in
+ * one hour (OSE-1656, lib/scan-cells.ts), and a poster has one brand, one
+ * data class, one source cell and one destination (the event's cell, or none
+ * when the event has no place on the map). Here every part is one poster with
+ * all its scans in one hour. The views are one brand or both, and production
+ * data or all of it: six reads.
  *
  * Every leaf of every response is compared, not a list of fields someone
  * remembered; the order of the two lists is compared too. Two things keep it
@@ -791,23 +793,19 @@ describe('a cell is the sum of what is listed for it', () => {
   });
 });
 
-// ─── Still open ─────────────────────────────────────────────────────────────
+// ─── Closed by OSE-1656: the totals elsewhere are sums of the same parts ────
 //
-// The owner's ruling also reaches the exact scan counts the same admin is
-// served elsewhere. They are not corridor reads and are not changed here; this
-// pins one of them, with its numbers, so the gap is written down where a test
-// fails the day it is closed. Delete it then.
-//
-//   operations  GET /api/v2/admin/dashboards/operations  reach.poster_scans is
-//               every scan of the brand, exact. Corridor cells are sums of
-//               listed parts, so the difference is the scans the corridor
-//               withholds.
-//   event       GET /api/v2/admin/events/:id/dashboard  reach.scans is exact
-//               for one event, and an event is one destination.
+// Until OSE-1656 the operations dashboard's `reach.poster_scans` and an
+// event's `reach.scans` were exact, so the operations total minus the
+// corridor cells was the flow the corridor left out (3, then 4), and the
+// event's own total said it outright. Both are now sums of the poster-hours
+// that clear the floor, the parts the corridor sums, so nothing moves.
+// Seen red on main at 43d593f: operations read 15 then 16, and the event 3
+// then 4, for one scan on a flow the corridor withholds.
 
-describe('still open: exact scan counts elsewhere give back what the corridor withholds', () => {
-  test('operations total minus the corridor cells is the left-out flow: 3, then 4', async () => {
-    const at = async (n: number): Promise<{ left: number; event: number }> => {
+describe('the totals the same admin reads elsewhere are sums of the same parts', () => {
+  test('one more scan on the left-out flow moves neither the operations total nor the event’s', async () => {
+    const at = async (n: number) => {
       const w: World = {
         'a|production|s1|d1': 7,
         'a|production|s1|d2': n,
@@ -819,15 +817,19 @@ describe('still open: exact scan counts elsewhere give back what the corridor wi
       const ops = (await fetchJson(
         `/api/v2/admin/dashboards/operations?brand_id=${BRANDS.a}`,
         KEY_ACTOR
-      )) as { reach: { poster_scans: number } };
+      )) as { reach: { poster_scans: unknown } };
       const one = (await fetchJson(
         `/api/v2/admin/events/${eventId('a', 'production', 'd2')}/dashboard`,
         KEY_ACTOR
-      )) as { reach: { scans: number } };
-      return { left: ops.reach.poster_scans - 7 - 5, event: one.reach.scans };
+      )) as { reach: { scans: unknown } };
+      return { ops: ops.reach.poster_scans, event: one.reach.scans };
     };
-    expect(await at(3)).toEqual({ left: 3, event: 3 });
-    expect(await at(4)).toEqual({ left: 4, event: 4 });
+    const three = await at(3);
+    const four = await at(4);
+    expect(three).toEqual(four);
+    // The operations total is the corridor's listed parts and nothing else.
+    expect(three.ops).toEqual(shown(12));
+    expect(three.event).toEqual({ count: null, suppressed: true, floor: K });
   });
 });
 
