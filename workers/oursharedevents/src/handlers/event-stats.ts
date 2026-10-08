@@ -65,7 +65,7 @@ export async function handleAdminEventStats(
   // One physical scan = one placement event (WHERE side of the split scan
   // path; migration 0062 / OSE-798), so the gauge never touches a
   // session-derived column. A failed read reads as withheld, never as 0.
-  let scans: FlooredCount = applyCountFloor(0);
+  let scans: FlooredCount;
   try {
     scans = scansOf(await readEventScanCells(env.DB, eventId));
   } catch {
