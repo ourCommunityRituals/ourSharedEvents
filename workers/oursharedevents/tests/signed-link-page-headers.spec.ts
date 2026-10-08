@@ -72,7 +72,8 @@ function expectScrubScriptIsNonced(res: Response, html: string): void {
     res.headers.get('content-security-policy') ?? ''
   )?.[1];
   expect(nonce, 'CSP nonce').toBeTruthy();
-  const scripts = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
+  // Any case, and an end tag written with spaces or attributes, as a browser reads it.
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
   const scrub = scripts.filter((m) => m[2].includes('history.replaceState'));
   expect(scrub.length, 'a script that calls history.replaceState').toBeGreaterThan(0);
   for (const m of scrub) expect(m[1]).toContain(`nonce="${nonce}"`);
