@@ -14,7 +14,7 @@
  *
  * Public (no auth):
  *   POST /api/v2/events/:id/forms/register      → submit registration
- *   POST /api/v2/events/:id/forms/checkin        → increment check-in count
+ *   POST /api/v2/events/:id/forms/checkin        → increment check-in count (answer floored, K=5)
  *   POST /api/v2/events/:id/forms/survey         → submit survey response
  *   POST /api/v2/events/:id/forms/email-signup   → submit email signup
  *
@@ -450,7 +450,14 @@ export async function handleFormCheckin(
       isNew,
       latencyMs: Date.now() - start,
     });
-    const res = jsonResponse({ ok: true, count }, request);
+    // OSE-1657: this route takes no login, so its answer is floored like the
+    // admin check-in count (K=5). The exact total goes to the log above only.
+    // Under 5 the caller learns the check-in worked, never how many came before.
+    const floored = applyCountFloor(count);
+    const res = jsonResponse(
+      { ok: true, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      request
+    );
     return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
     return handleDbError('checkin', eventId, err, request);

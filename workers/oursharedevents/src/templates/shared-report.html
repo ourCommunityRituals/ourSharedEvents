@@ -1612,8 +1612,18 @@
         const esc = window.escapeReportHtml;
         const rows = await Promise.all(
           events.slice(0, 10).map(async (ev) => {
-            let reg = 0,
-              checkin = 0;
+            // OSE-1657: each count is a number, 'held' (the route floors it under
+            // 5) or 'failed'. Never 0 for either: 0 would read as "none".
+            let reg = 'failed',
+              checkin = 'failed';
+            const countOf = (res) =>
+              !res || !res.ok
+                ? 'failed'
+                : res.suppressed === true
+                  ? 'held'
+                  : typeof res.count === 'number' && isFinite(res.count)
+                    ? res.count
+                    : 'failed';
             try {
               const [rRes, cRes] = await Promise.all([
                 fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations')
@@ -1623,15 +1633,18 @@
                   .then((r) => r.json())
                   .catch(() => null),
               ]);
-              reg = rRes && rRes.ok ? Number(rRes.count) || 0 : 0;
-              checkin = cRes && cRes.ok ? Number(cRes.count) || 0 : 0;
+              reg = countOf(rRes);
+              checkin = countOf(cRes);
             } catch {
-              /* zero */
+              /* stays 'failed' */
             }
             return { name: ev.name || 'Untitled', reg, checkin };
           })
         );
-        const maxReg = Math.max(...rows.map((r) => r.reg), 1);
+        const num = (v) => (typeof v === 'number' ? v : null);
+        const word = (v) =>
+          typeof v === 'number' ? String(v) : v === 'held' ? 'Fewer than 5' : 'Not available';
+        const maxReg = Math.max(...rows.map((r) => num(r.reg) || 0), 1);
         content.innerHTML =
           '<h3>Registration → Check-in Funnel</h3>' +
           '<table class="funnel-table" data-testid="funnel-table" aria-label="Conversion funnel per event">' +
@@ -1644,25 +1657,31 @@
           '</tr></thead><tbody>' +
           rows
             .map((r) => {
-              const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
-              const barW = Math.round((r.reg / maxReg) * 100);
+              // A rate is drawn only over two published counts; otherwise it is held.
+              const both = num(r.reg) !== null && num(r.checkin) !== null && r.reg > 0;
+              const rate = both
+                ? Math.round((r.checkin / r.reg) * 100) + '%'
+                : r.reg === 'failed' || r.checkin === 'failed'
+                  ? 'Not available'
+                  : 'Held';
+              const barW = Math.round(((num(r.reg) || 0) / maxReg) * 100);
               return (
                 '<tr data-testid="funnel-row">' +
                 '<td data-label="Event" data-testid="funnel-event-name">' +
                 esc(r.name) +
                 '</td>' +
                 '<td data-label="Registrations" data-testid="funnel-reg-count">' +
-                r.reg +
+                word(r.reg) +
                 '</td>' +
                 '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' +
                 barW +
                 '%" aria-hidden="true"></div></div></td>' +
                 '<td data-label="Check-ins" data-testid="funnel-checkin-count">' +
-                r.checkin +
+                word(r.checkin) +
                 '</td>' +
                 '<td data-label="Showed up" class="rate-val" data-testid="funnel-rate">' +
-                pct +
-                '%</td>' +
+                rate +
+                '</td>' +
                 '</tr>'
               );
             })

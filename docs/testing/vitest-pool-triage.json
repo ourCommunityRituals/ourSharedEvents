@@ -1777,7 +1777,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/public-list-api-parity.contract.spec.ts",
@@ -1924,7 +1924,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 12
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/red-story-helper.spec.ts",
@@ -2814,6 +2814,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/withheld-checkin-answer.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/withheld-counts-in-words.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
     }
   ]
 }

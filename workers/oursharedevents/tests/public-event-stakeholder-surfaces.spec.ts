@@ -19,8 +19,8 @@
  *     10. Live sponsor strip (live-sponsor-strip) renders when sponsors exist
  *
  *   Post-event phase:
- *     11. Stats card (event-stats-card) renders when any count > 0
- *     12. Stats card absent when all counts are 0
+ *     11. Stats card (event-stats-card) renders when any count is 5 or more
+ *     12. Stats card absent when all counts are under 5, 0 included (OSE-1657)
  *     13. Attendance rate renders only when both registrations and checkins > 0
  *     14. Sponsor thank-you (post-sponsor-thanks) renders when sponsors exist
  *     15. Sponsor thank-you absent when no sponsors
@@ -458,16 +458,20 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     await seedRegistration(id, { id: 'reg_subk_b', expiresAt: null });
     await seedCheckinCount(id, 1);
     await seedSurvey(id, 'surv_subk_a');
-    await seedEmailSignup(id, 'email_subk_a');
+    for (let i = 0; i < 5; i++) await seedEmailSignup(id, `email_subk_${i}`);
 
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    // The card + its lines still render (there WAS activity) — but floored.
+    // One count clears the floor (5 email signups), so the card shows; every
+    // other line is floored. OSE-1657: with every count under 5 there is no
+    // card at all (next test), so "there was some activity" is not shown either.
     expect(html).toContain('data-testid="event-stats-card"');
+    expect(html).toContain('<strong>5</strong> Email signups');
     expect(html).toContain('data-testid="stat-checkins"');
     expect(html).toContain('data-testid="stat-registrations"');
     expect(html).toContain('Fewer than 5 Registered');
     expect(html).toContain('Fewer than 5 Checked in');
+    expect(html).toContain('Fewer than 5 Surveys submitted');
     // The exact sub-K values must NOT appear as the rendered stat.
     expect(html).not.toContain('<strong>2</strong> Registered');
     expect(html).not.toContain('<strong>1</strong> Checked in');
@@ -494,7 +498,10 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     expect(html).toContain('<strong>5</strong> Email signups');
     // OSE-1201: the ratio never wears the banned word.
     expect(html).not.toMatch(/attendance/i);
-    expect(html).not.toContain('Fewer than 5');
+    // Every count clears the floor. The walk-in line is the one that reads
+    // "Fewer than 5": none were recorded, and 0 reads like 1 to 4 (OSE-1657).
+    expect(html.match(/Fewer than 5/g) ?? []).toEqual(['Fewer than 5']);
+    expect(html).toContain('Fewer than 5 Walked in');
   });
 
   test('showed-up share shown only when both registrations and checkins > 0', async () => {
@@ -507,6 +514,19 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="stat-checkins"');
     expect(html).not.toContain('data-testid="stat-showed-up-share"');
+  });
+
+  test('event-stats-card absent when every count is under 5 — the same as all zero (OSE-1657)', async () => {
+    const id = 'evt_ssp1_post_stats_allsubk';
+    await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
+    await seedRegistration(id, { id: 'reg_allsubk_a', expiresAt: null });
+    await seedCheckinCount(id, 4);
+    await seedSurvey(id, 'surv_allsubk_a');
+    await seedEmailSignup(id, 'email_allsubk_a');
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    expect(html).toContain('data-testid="event-main-post"');
+    expect(html).not.toContain('data-testid="event-stats-card"');
   });
 
   test('event-stats-card absent when all counts are zero', async () => {
