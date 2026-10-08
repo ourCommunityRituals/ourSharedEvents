@@ -73,6 +73,8 @@ Each registry entry holds one value of one class and names its `path` in the res
 
 Floored totals follow the OSE-669 rule: each event is floored first and only the events at or above K are summed. A total can't be subtracted from another view to recover a small event. A flow (source cell to event cell) under K is left out entirely. Listing the pair, even as suppressed, would tell a reader that someone scanned from that cell to that one.
 
+Link taps on the **event** dashboard (`reach.clicks`) go one grain finer, because the same organizer is shown taps per poster code on the pre-event card: each code is floored first and only the codes at or above K are summed (`floorTotalOfParts`). The total is withheld when no code has 5, however many small codes there are, so it cannot be subtracted against the card's listed codes. The **operations** dashboard's `reach.link_taps` still floors each event's raw tap sum; that is open (see `tests/reach-card-neighbour-floor.spec.ts`, "still open").
+
 Places are H3 res-7 cells only. No response carries lat/lon or res-9 (Invariant #1). There is a test for this.
 
 ## How "anonymous versus explicit" maps to OSE data

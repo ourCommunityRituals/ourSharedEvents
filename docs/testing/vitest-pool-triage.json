@@ -1679,21 +1679,21 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 18
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/poster-tiers.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 24
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/pre-event-activity.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 19
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/pre-event-funnel-media.spec.ts",
@@ -1897,6 +1897,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/reach-card-neighbour-floor.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",

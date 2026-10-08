@@ -26,7 +26,15 @@
 //     outside party never sees a sub-5 count. Poster and place counts are the
 //     organizer's own placements (not people) and stay exact.
 
-import { applyCountFloor, type FlooredCount } from './count-floor';
+import { applyCountFloor, floorTotalOfParts, type FlooredCount } from './count-floor';
+
+/**
+ * One code on the poster = every short link of one kind (a link with no kind
+ * is the event link). The organizer's per-code list (lib/poster-reach.ts) and
+ * the organizer's tap total below group by this one expression, so the total
+ * is a sum of the same parts the list shows.
+ */
+export const TAP_CODE_SQL = `COALESCE(NULLIF(kind, ''), 'public')`;
 
 /** Days of history the window shows (ending today, in the event's zone). */
 export const PRE_EVENT_DAYS = 14;
@@ -41,6 +49,12 @@ export interface PreEventActivity {
   scans: number;
   /** Short-link taps, all time (running counter; no per-day history exists). */
   clicks: number;
+  /**
+   * The same taps, per code (TAP_CODE_SQL): the parts `clicks` adds up. Read
+   * side only. Neither audience is sent these; the organizer's total is built
+   * from them (organizerPreEventActivity).
+   */
+  clicksByCode: number[];
   /** Scans per day for the last PRE_EVENT_DAYS days, oldest first, zero-filled. */
   scansByDay: { day: string; count: number }[];
 }
@@ -144,12 +158,24 @@ export async function readPreEventActivity(
       .bind(eventId),
     strict
   );
-  const clickRow = await one<{ cnt: number }>(
-    db
-      .prepare('SELECT COALESCE(SUM(clicks), 0) AS cnt FROM shortlinks WHERE event_id = ?')
-      .bind(eventId),
-    strict
-  );
+  // Taps per code, in one read: `clicks` is their sum, and the organizer's
+  // total is built from the parts (organizerPreEventActivity).
+  let clicksByCode: number[] = [];
+  try {
+    const res = await db
+      .prepare(
+        `SELECT COALESCE(SUM(clicks), 0) AS taps
+           FROM shortlinks
+          WHERE event_id = ?
+          GROUP BY ${TAP_CODE_SQL}`
+      )
+      .bind(eventId)
+      .all<{ taps: number }>();
+    clicksByCode = (res.results ?? []).map((r) => Number(r.taps) || 0);
+  } catch (e) {
+    if (strict) throw e;
+    clicksByCode = [];
+  }
 
   // Hour buckets for the window plus a day of slack either side (zone shift);
   // bucketScansByDay trims to the event's local days.
@@ -177,7 +203,8 @@ export async function readPreEventActivity(
     posters: Number(posterRow?.posters) || 0,
     places: Number(posterRow?.places) || 0,
     scans: Number(scanRow?.cnt) || 0,
-    clicks: Number(clickRow?.cnt) || 0,
+    clicks: clicksByCode.reduce((t, n) => t + n, 0),
+    clicksByCode,
     scansByDay: bucketScansByDay(hours, timezone, now),
   };
 }
@@ -185,14 +212,18 @@ export async function readPreEventActivity(
 /**
  * The organizer-facing shape (poster tiers, PO 2026-09-30): physical poster
  * scans stay exact (the organizer's own placements — same rule as /stats),
- * but digital link TAPS are floored at K=5 like every other digital count, so
- * the card's tap total can never show a small number nor un-floor the per-code
- * breakdown by subtraction (lib/poster-reach.ts floorTaps).
+ * but digital link TAPS are floored at K=5 like every other digital count.
+ * The organizer also sees taps per code (lib/poster-reach.ts floorTaps), so
+ * this total is the sum of the codes that clear the floor on their own
+ * (floorTotalOfParts), withheld when none does. A code under the floor never
+ * joins it, so the total cannot be subtracted against the listed codes to get
+ * a withheld one back. The per-code parts themselves are not sent.
  */
 export function organizerPreEventActivity(
   a: PreEventActivity
-): Omit<PreEventActivity, 'clicks'> & { clicks: FlooredCount } {
-  return { ...a, clicks: applyCountFloor(a.clicks) };
+): Omit<PreEventActivity, 'clicks' | 'clicksByCode'> & { clicks: FlooredCount } {
+  const { clicksByCode, ...rest } = a;
+  return { ...rest, clicks: floorTotalOfParts(clicksByCode) };
 }
 
 /** The sponsor-facing shape: every scan/click count floored (K=5), per day too. */

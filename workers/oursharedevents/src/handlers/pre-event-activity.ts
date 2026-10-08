@@ -7,7 +7,10 @@
 // Poster tiers (OSE-1357): + `reach` — scans per placement (venue areas vs
 // community places, most-scanned first) and taps per code (lib/poster-reach).
 // Organizer-only: physical scans exact, digital taps floored (K=5) at every
-// grain shown, the tap total included; the sponsor surface never reads it.
+// grain shown; the sponsor surface never reads it. The tap totals
+// (`activity.clicks`, `reach.taps.total`, `reach.totals.taps`) are one number:
+// the taps on the codes that clear the floor on their own (floorTotalOfParts),
+// so none of them can be subtracted against the listed codes.
 //
 // READ-ONLY. It lists existing short links and never mints one; when none
 // exists yet the card points at the poster page, which mints on open.
