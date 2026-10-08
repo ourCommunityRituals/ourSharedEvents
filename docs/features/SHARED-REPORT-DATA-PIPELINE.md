@@ -111,7 +111,7 @@ CREATE TABLE anon_id_returns (
 **Materialization:**
 
 - Cron worker reads scan telemetry events (OSE-218) by venue, hashes anon_id with pepper, upserts the row.
-- Return rate at SharedReport time = `COUNT(anon_id_hash) WHERE venue_id = ? AND visit_count > 1 / COUNT(anon_id_hash) WHERE venue_id = ?`.
+- Return rate at SharedReport time (OSE-1652): of the distinct `anon_id_hash` rows for this event, how many also have a row for another event of the same confirmed series (`venue_pct`) or of the same corridor (`corridor_pct`), each through `flooredRatePct`. `visit_count` is not read: the job adds one to it on every run over the same scans, so it counts runs, not visits. (Before 2026-10-08 the venue rate was `visit_count > 1`, which read six one-time visitors as 100% after a second run.)
 
 ### 2. `corridor_density_baseline` — 2-mile corridor rolling aggregate
 
