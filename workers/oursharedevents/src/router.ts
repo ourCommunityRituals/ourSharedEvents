@@ -198,6 +198,7 @@ import {
   requireKeyActor,
   type AdminObjectScopeEnv,
 } from './lib/admin-object-scope';
+import { adminWriteRefusal, adminWriteRefusalResponse } from './lib/admin-write-guard';
 import {
   handleAdminMintSponsorHomeLink,
   handleSponsorHomePage,
@@ -703,6 +704,34 @@ export async function route(
     if (await checkRateLimit(env, adminKey, RATE_LIMIT_ADMIN_MAX)) {
       return rateLimitResponse();
     }
+  }
+
+  // ── Admin write guard: cross-site requests and non-JSON bodies ─────────────
+  //
+  // A signed-in admin's browser attaches the Access cookie to any request to
+  // this host, whichever site asked for it. So every admin request that is not
+  // GET/HEAD/OPTIONS must say it came from this origin (Sec-Fetch-Site, or
+  // Origin for an older browser), or come from automation holding a key
+  // header; and a body must be declared as JSON. One guard, here, ahead of
+  // every admin route below, so a route added later is covered without its
+  // author doing anything. The rule and its exemptions: lib/admin-write-guard.ts.
+  // Proof that every requireAdmin route is behind it:
+  // tests/admin-write-guard.derived.spec.ts.
+  const adminWriteRefused = adminWriteRefusal(request, env, url);
+  if (adminWriteRefused) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    console.warn(
+      JSON.stringify({
+        event: 'ADMIN_WRITE_REFUSED',
+        kind: adminWriteRefused.kind,
+        reason: adminWriteRefused.reason,
+        method,
+        path: pathname,
+        request_id: reqId,
+      })
+    );
+    _audit(reqId, 'ADMIN_WRITE_REFUSED', 'denied', adminWriteRefused.kind, pathname);
+    return adminWriteRefusalResponse(adminWriteRefused, reqId);
   }
 
   // ── Admin OBJECT-level brand scope (OSE-1080, #9 tenant_isolation) ─────────

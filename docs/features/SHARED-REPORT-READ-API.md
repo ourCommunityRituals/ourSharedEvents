@@ -54,7 +54,9 @@ Two endpoints land:
 - `409 Conflict` — event is too recent (materialization hasn't run yet); response body suggests retry after the next cron tick
 - `429 Too Many Requests` — more than 60 requests in a minute (`RATE_LIMIT_MAX`, owner ruling 2026-10-01). The bucket is the signed-link token; a request with no bearer token falls back to the caller's address. The refusal carries `Retry-After`, `Cache-Control: no-store`, and no report data. The limit exists because `poster_attribution` is a live join: an unbounded poll would let a link holder watch one poster's floored count tick (OSE-1421). It is applied at the route in `router.ts` through `publicReadLimited` (`lib/public-read-limit.ts`)
 
-**Cache headers:** `Cache-Control: private, max-age=3600` (S5-Q4)
+**Cache headers:** `Cache-Control: no-store` and `Vary: Authorization`, on every 200, whatever the event's phase.
+
+S5-Q4 ratified a private browser cache here (`private, max-age=3600`, later `max-age=300` while the event was still running and `3600` once it had ended). That was withdrawn on 2026-10-07 (OSE-1502): the report is read with a signed link, and a copy left in the browser cache of a shared device outlives the visit. What the cache bought was one skipped rebuild when the same link was opened again inside the window; every view is now a fresh read, bounded by the 60-per-minute limit above. The error answers (401, 403, 404, 409) carry no `Cache-Control` header, as before.
 
 ### 2. `POST /api/v2/events/shared-reports/batch`
 
@@ -291,7 +293,9 @@ The signed-link verification reuses OSE's existing signed-link mechanism (HMAC +
 
 ### Cache (S5-Q4)
 
-Cloudflare's `cf.cacheTtl` or response `Cache-Control` header. Single-event endpoint sets `private, max-age=3600`. Batch endpoint sets `no-store`. Cache key isolation via `Vary: Authorization`.
+Both endpoints set `Cache-Control: no-store`. Nothing is cached at the edge (`cf.cacheTtl` is not used) or in the browser. The single-event endpoint also sends `Vary: Authorization`.
+
+As ratified, the single-event endpoint set `private, max-age=3600`; that was withdrawn on 2026-10-07 (see "Cache headers" under endpoint 1). Asserted by `workers/oursharedevents/tests/shared-report-read.spec.ts`.
 
 ---
 

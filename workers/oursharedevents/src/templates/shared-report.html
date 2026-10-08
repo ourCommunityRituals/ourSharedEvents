@@ -978,6 +978,29 @@
           if (pathMatch) eventId = pathMatch[1];
         }
         const token = params.get('token') || '';
+        // The token is read once and kept in this variable only: never a
+        // cookie, never browser storage. It is then dropped from the address
+        // bar, so it is not in a screenshot, a copied or shared link, or the
+        // Back/Forward list. The browser's own history list can still hold the
+        // link as first opened (Chromium records it before any script runs).
+        // Only `token` goes: the event id, any other parameter and the
+        // #fragment stay, and the scripts below still read the event id from
+        // the address. A refresh then finds no token and shows this page's
+        // no-token view, not the report.
+        if (params.has('token')) {
+          const kept = new URLSearchParams(location.search);
+          kept.delete('token');
+          const rest = kept.toString();
+          try {
+            history.replaceState(
+              history.state,
+              '',
+              location.pathname + (rest ? '?' + rest : '') + location.hash
+            );
+          } catch (_e) {
+            /* sandboxed frame: the address stays as opened */
+          }
+        }
         // Only enter signed-link mode when BOTH eventId and token are present.
         // A user landing on bare /sharedReport (admin dashboard) is unchanged.
         if (!eventId || !token) return;

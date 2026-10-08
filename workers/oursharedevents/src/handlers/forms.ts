@@ -322,6 +322,11 @@ export async function handleFormRegistration(
 // email they registered with (its peppered hash must match) — NOT by any new
 // credential or identity surface (#1: no new login, no cross-linking). Writes
 // ONLY to FORMS_DB; never touches the scan DB, never joins registration↔scan.
+//
+// Knowing an email is not control of it: anyone who knows the address can still
+// remove that registration here. Whether removal should need a one-time link
+// sent to the address, or move behind operator erasure, is an open owner
+// decision on OSE-1497. What the answer gives away is settled: nothing.
 export async function handleSelfDeleteRegistration(
   request: Request,
   env: FormsEnv,
@@ -351,17 +356,27 @@ export async function handleSelfDeleteRegistration(
     );
   }
 
+  // The stored hash is keyed with FORMS_HASH_PEPPER. Without the secret the
+  // lookup would fall back to a bare SHA-256, which matches no row written with
+  // the secret and still says "ok": a removal that never happened, reported as
+  // done. Answer CONFIG_ERROR and delete nothing instead (OSE-1497).
+  if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
+
   try {
-    const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER);
+    const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER, { requirePepper: true });
     const result = await env.FORMS_DB.prepare(
       'DELETE FROM form_registrations WHERE event_id = ? AND attendee_email_hash = ?'
     )
       .bind(eventId, emailHash)
       .run();
-    const deleted = result.meta?.changes ?? 0;
-    logFormEvent('register', eventId, 'lifecycle', { op: 'self_delete', deleted });
-    // Do not reveal whether a registration existed — always ok, report count.
-    return jsonResponse({ ok: true, deleted }, request);
+    // The count goes to the log only (no email, no hash). The route takes no
+    // login, so a count in the answer told any caller whether that email had
+    // registered for this event. The answer is the same either way (OSE-1497).
+    logFormEvent('register', eventId, 'lifecycle', {
+      op: 'self_delete',
+      deleted: result.meta?.changes ?? 0,
+    });
+    return jsonResponse({ ok: true }, request);
   } catch (err) {
     return handleDbError('register', eventId, err, request);
   }

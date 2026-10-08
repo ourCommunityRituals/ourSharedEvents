@@ -11,8 +11,9 @@
  *
  * Both delegate to a shared report builder — single source of truth.
  *
- * Cache headers (S5-Q4 ratified):
- *   - Single endpoint: `Cache-Control: private, max-age=3600` + `Vary: Authorization`
+ * Cache headers:
+ *   - Single endpoint: `Cache-Control: no-store` + `Vary: Authorization` (S5-Q4's
+ *     private browser cache was withdrawn 2026-10-07: the read is by signed link)
  *   - Batch endpoint:  `Cache-Control: no-store` (consumers manage their own cache)
  *
  * Gate 6 (tests/shared-report-pipeline-invariants.spec.ts) enforces that
@@ -200,15 +201,14 @@ export async function handleGetSharedReport(
     report = filtered.upgrade ? { ...filtered.report, upgrade: filtered.upgrade } : filtered.report;
   }
 
-  // Q7: in-flight events cache at 5 min so impression counts update visibly between
-  // sponsor visits mid-event. Closed events cache at 1 hour (numbers are stable).
-  const endDate = result.report.event_end_date;
-  const isInFlight = !endDate || new Date(endDate) > new Date();
-  const cacheControl = isInFlight ? 'private, max-age=300' : 'private, max-age=3600';
-
+  // The report is read with a signed link, so the browser is told not to keep a
+  // copy: a report left in a shared device's cache outlives the visit. This was
+  // `private, max-age=300` while the event ran and `max-age=3600` after it
+  // (S5-Q4 / Q7), which saved a rebuild on a repeat view inside that window.
+  // Every view is a fresh read now, bounded by the route's rate limit (router.ts).
   ctx.waitUntil(logReportAccess(env, eventId, claim.role, 'granted'));
   return jsonResponse({ ok: true, report }, 200, {
-    'Cache-Control': cacheControl,
+    'Cache-Control': 'no-store',
     Vary: 'Authorization',
   });
 }

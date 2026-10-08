@@ -67,6 +67,13 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
   user/slug/QR-token/id identity. Do not add identifying fields. Gate:
   `tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts` (COST-301).
 - **PII:** encrypt/scrub in `lib/forms-db.ts`; retention lifecycle in `index.ts`.
+- **Admin writes come from the admin site, as JSON:** one guard in `router.ts`
+  (`lib/admin-write-guard.ts`) runs ahead of every admin route. A request that is
+  not GET/HEAD/OPTIONS on an admin path must be same-origin (`Sec-Fetch-Site`, or
+  `Origin` for an older browser) or carry an automation key header, and a body
+  must be `application/json`. A new admin route needs no code for this. In a test,
+  an email actor that writes needs `'Sec-Fetch-Site': 'same-origin'`. Gate:
+  `tests/admin-write-guard.derived.spec.ts` reads the routes out of the router.
 
 ## Tests & "done"
 
