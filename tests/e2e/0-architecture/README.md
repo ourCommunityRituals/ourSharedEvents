@@ -134,7 +134,7 @@ about a _class_ of things or about _one specific artifact_.
 | Shape                                  | Gates                                                                                                                                                                                                                                                                            | Verdict |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | Derives its subjects                   | csp-connect-src, log-redaction, sponsor-signal-never-who (client + click-out, since OSE-1166), migration-monotonicity, slug-permanence, rendered-surface-lexicon, runtime-llm-free, monetization-inert, scan-path-split, sponsor-identity-split, tenant-isolation, pii-retention | correct |
-| Names one specific artifact, correctly | cost-metric-never-who, deprecation-lock, worker-claude-md, and others whose invariant IS about one module's shape                                                                                                                                                                | correct |
+| Names one specific artifact, correctly | cost-metric-never-who, deprecation-lock, declined-regimes (meta-gate; its column scan derives from both migration dirs), worker-claude-md, and others whose invariant IS about one module's shape                                                                                | correct |
 | Runtime checks, not source-shape gates | anonymous-id, geo-resolution, ncr-accumulation, uec-codes                                                                                                                                                                                                                        | n/a     |
 
 ### Two findings, both fixed
@@ -193,6 +193,7 @@ and is wired — and let the mechanism do the scanning.
 | `cors-allowlist.invariant.spec.ts` | #15 cors_allowlist_immutability |
 | `cost-metric-never-who.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `csp-connect-src.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `declined-regimes.invariant.test.ts` | #29 declined_regulatory_regimes |
 | `deprecation-lock.invariant.spec.ts` | #10 deprecation_lock |
 | `edge-token-verification.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `export-grain.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
