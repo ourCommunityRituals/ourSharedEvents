@@ -73,6 +73,7 @@ export const NODE_SPECS = [
   // they never touched the runtime, they just couldn't transform the template in
   // node. Green-filtered in the node project like batch 2.
   'tests/advanced-metrics.spec.ts',
+  'tests/withheld-counts-in-words.spec.ts',
   'tests/as-display-public-admin.spec.ts',
   'tests/briefing.spec.ts',
   'tests/color-contrast.spec.ts',

@@ -610,7 +610,11 @@ describe('the source: every value written into an attribute goes through the esc
     ],
     [
       'the bar width taken from the payload instead of computed',
-      (p) => p.replace('const barW = Math.round((r.reg / maxReg) * 100);', 'const barW = r.width;'),
+      (p) =>
+        p.replace(
+          'const barW = Math.round(((num(r.reg) || 0) / maxReg) * 100);',
+          'const barW = r.width;'
+        ),
       /`barW` is written into <div style="…">/,
     ],
     [

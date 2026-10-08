@@ -97,8 +97,9 @@ test.describe('Check-in Form - Interaction', () => {
     await page.waitForTimeout(2000);
 
     const countAfter = await countEl.textContent();
-    // Count text should contain a number and "checked in"
-    expect(countAfter).toMatch(/\d+.*checked in/i);
+    // OSE-1657: the page confirms the check-in; it adds the total only when the
+    // answer publishes one (5 or more), so a number is not required.
+    expect(countAfter).toMatch(/^You're checked in/);
   });
 
   test('tap button provides visual feedback (animation)', async ({ page }) => {
@@ -135,6 +136,11 @@ test.describe('Check-in Form - Interaction', () => {
     const body = await response.json();
     expect(body).toHaveProperty('ok', true);
     expect(body).toHaveProperty('count');
-    expect(typeof body.count).toBe('number');
+    // OSE-1657: floored like the admin count — a number from 5 on, else null.
+    expect(body.count === null || typeof body.count === 'number').toBe(true);
+    expect(typeof body.suppressed).toBe('boolean');
+    expect(body.floor).toBe(5);
+    if (body.suppressed) expect(body.count).toBeNull();
+    else expect(body.count).toBeGreaterThanOrEqual(5);
   });
 });

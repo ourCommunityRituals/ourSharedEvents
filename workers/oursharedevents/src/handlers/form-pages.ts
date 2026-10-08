@@ -492,7 +492,10 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
           } : {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
           });
-          document.getElementById('count').textContent = body.count + ' checked in';
+          // OSE-1657: the answer carries a total only when it is 5 or more.
+          document.getElementById('count').textContent = typeof body.count === 'number'
+            ? "You're checked in (" + body.count + ' checked in).'
+            : "You're checked in.";
         } finally {
           tapping = false;
           btn.style.transform = 'scale(1)';

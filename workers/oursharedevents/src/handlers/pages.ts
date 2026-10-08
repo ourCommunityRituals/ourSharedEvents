@@ -68,7 +68,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
-import { applyCountFloor } from '../lib/count-floor.js';
+import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
   formatDateOnly,
@@ -1723,7 +1723,25 @@ ${SPONSOR_LIST_CSS}
         // check-ins over registrations — never by a word that implies bodies.
         const { checkinCount, regCount, surveyCount, emailCount } = social;
         const walkInCount = social.walkInCount ?? 0;
-        const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
+        // OSE-1657: nothing a reader sees may tell 0 from 1 to 4. So the card
+        // shows only when some count clears the floor (an event with 3
+        // check-ins and one with none both show no card), and when it shows,
+        // every line is drawn: a small count reads "Fewer than 5", whether it
+        // is 0 or 4.
+        const hasStats = [regCount, checkinCount, surveyCount, emailCount].some(clearsFloor);
+        // Walk-ins are a subset of check-ins. Floored one by one, 8 check-ins
+        // and 6 walk-ins would both print and give back the 2 who came through
+        // registration. Floored as a nested pair, a walk-in count prints only
+        // when what is left is 0 or at least 5.
+        const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
+        const walkInLine = !clearsFloor(checkinCount)
+          ? ''
+          : walkInShown !== null
+            ? statLine(walkInShown, 'Walked in', 'stat-walk-ins')
+            : clearsFloor(walkInCount)
+              ? '<p data-testid="stat-walk-ins">Walked in: held, so a group under 5 cannot be worked out</p>'
+              : statLine(walkInCount, 'Walked in', 'stat-walk-ins');
+        const walkInPct = flooredRatePct(walkInCount, checkinCount);
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
@@ -1731,14 +1749,14 @@ ${SPONSOR_LIST_CSS}
                 // OSE-1373: the promise first (how many said they'd come), then
                 // the turnout, then how many walked in, then the ratio — the
                 // order a reader asks in.
-                regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''
+                statLine(regCount, 'Registered', 'stat-registrations')
               }
-              ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
-              ${walkInCount > 0 ? statLine(walkInCount, 'Walked in', 'stat-walk-ins') : ''}
+              ${statLine(checkinCount, 'Checked in', 'stat-checkins')}
+              ${walkInLine}
               ${
-                // The walk-in share needs BOTH operands over the floor, like the ratio.
-                clearsFloor(walkInCount) && clearsFloor(checkinCount)
-                  ? `<p data-testid="stat-walk-in-share">${Math.round((walkInCount / checkinCount) * 100)}% of check-ins were walk-ins</p>`
+                // The walk-in share uses the same nested rule as the walk-in line.
+                walkInPct !== null
+                  ? `<p data-testid="stat-walk-in-share">${Math.round(walkInPct)}% of check-ins were walk-ins</p>`
                   : ''
               }
               ${
@@ -1748,8 +1766,8 @@ ${SPONSOR_LIST_CSS}
                   ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
                   : ''
               }
-              ${surveyCount > 0 ? statLine(surveyCount, 'Surveys submitted', 'stat-surveys') : ''}
-              ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
+              ${statLine(surveyCount, 'Surveys submitted', 'stat-surveys')}
+              ${statLine(emailCount, 'Email signups', 'stat-email-signups')}
             </section>`
           : '';
         return statsCard;

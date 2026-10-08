@@ -197,8 +197,13 @@ describe('OSE-1373 | recap numbers, sponsor list, and no calendar after the fact
 
   test('the floor still holds for every line (<5 never prints exact)', () => {
     const html = renderPostEventHtml(row(), SHARE, [], social({ regCount: 3, checkinCount: 2 }));
-    expect(html).toContain('Fewer than');
+    // OSE-1657: every count under 5, so no card at all (0 and 1 to 4 look the same).
+    expect(html).not.toContain('data-testid="event-stats-card"');
     expect(html).not.toContain('data-testid="stat-showed-up-share"');
+    const one = renderPostEventHtml(row(), SHARE, [], social({ regCount: 12, checkinCount: 2 }));
+    expect(one).toContain('Fewer than 5 Checked in');
+    expect(one).not.toContain('<strong>2</strong>');
+    expect(one).not.toContain('data-testid="stat-showed-up-share"');
   });
 
   for (const [phase, render] of PAGES) {

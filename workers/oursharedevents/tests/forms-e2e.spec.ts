@@ -195,11 +195,14 @@ describe('Scenario 2: Check-in lifecycle', () => {
     const EVENT = 'evt-checkin-e2e';
 
     // ── 5 check-in taps ───────────────────────────────────────────────────
+    // OSE-1657: the public answer is floored like the admin count (K=5):
+    // taps 1 to 4 answer null, the fifth answers 5.
     for (let i = 1; i <= 5; i++) {
       const res = await handleFormCheckin(postReq({}), formsEnv(), EVENT);
       const body = await json(res);
       expect(body.ok).toBe(true);
-      expect(body.count).toBe(i);
+      expect(body.count).toBe(i < 5 ? null : 5);
+      expect(body.suppressed).toBe(i < 5);
     }
 
     // ── Admin reads count ─────────────────────────────────────────────────

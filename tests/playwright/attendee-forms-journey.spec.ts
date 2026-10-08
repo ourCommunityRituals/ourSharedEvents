@@ -124,7 +124,7 @@ test('a server hiccup says so, keeps the name, and a second tap works', async ({
   await expect(page.getByTestId('form-success')).toContainText("You're registered");
 });
 
-test('check in: one tap, the count shows, and a walk-in adds one more', async ({
+test('check in: one tap is confirmed, a walk-in too, and neither shows a count under 5', async ({
   page,
   request,
 }) => {
@@ -132,11 +132,13 @@ test('check in: one tap, the count shows, and a walk-in adds one more', async ({
   const tap = page.getByTestId('checkin-submit');
   expect((await tap.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_TOUCH);
   await tap.click();
-  await expect(page.getByTestId('checkin-count')).toHaveText('1 checked in');
+  // OSE-1657: the public answer is floored like the admin count, so the first
+  // people in are told it worked, never how many came before them.
+  await expect(page.getByTestId('checkin-count')).toHaveText("You're checked in.");
 
   await page.goto(formUrl('checkin'));
   await page.getByTestId('checkin-walk-in-submit').click();
-  await expect(page.getByTestId('checkin-count')).toHaveText('2 checked in');
+  await expect(page.getByTestId('checkin-count')).toHaveText("You're checked in.");
 
   // Two people is under the count floor of 5: the organizer is told the count
   // is withheld, not shown a small number.
@@ -151,15 +153,16 @@ test('check in: one tap, the count shows, and a walk-in adds one more', async ({
 
 test('a second tap on the same phone does not check the same person in twice', async ({ page }) => {
   test.fail(true, 'Defect: the button stays live after a check-in, so every extra tap adds one.');
+  // Counted by the check-ins sent, not by the text: under 5 the page reads
+  // "You're checked in." after either tap (OSE-1657), so the text cannot show it.
   await page.goto(formUrl('checkin'));
+  const posts = countPosts(page, '/forms/checkin');
   const tap = page.getByTestId('checkin-submit');
   await tap.click();
-  const count = page.getByTestId('checkin-count');
-  await expect(count).toContainText('checked in');
-  const first = await count.innerText();
+  await expect(page.getByTestId('checkin-count')).toContainText('checked in');
   await tap.click({ timeout: 3000 });
   await page.waitForTimeout(1000);
-  await expect(count).toHaveText(first);
+  expect(posts()).toBe(1);
 });
 
 test('a form link for an event that does not exist does not take a registration', async ({
