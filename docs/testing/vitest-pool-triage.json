@@ -1514,6 +1514,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/poster-attribute-escaping.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 25
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-attribution-h3.spec.ts",
       "bucket": "node",
       "needsReview": true,
