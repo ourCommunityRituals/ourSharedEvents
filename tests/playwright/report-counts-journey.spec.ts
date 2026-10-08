@@ -90,9 +90,10 @@ test.beforeAll(async ({ request }) => {
   reportUrl = `/sharedReport?eventId=${encodeURIComponent(seeded.eventId)}&token=${encodeURIComponent(token)}`;
 });
 
-// Known defect, stated as the behaviour we want. Goes red the day it is fixed.
+// Until 2026-10-08 this was a known defect: Generate Link answered "esc is not
+// defined" and showed no link. The same flow runs in jsdom, in seconds, in
+// workers/oursharedevents/tests/admin-mint-report-link.spec.ts.
 test('the organizer makes a report link in /admin', async ({ page }) => {
-  test.fail(true, 'Defect: Generate Link answers "esc is not defined" and shows no link.');
   await page.setViewportSize(PHONE);
   await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
   await page.goto('/admin', { waitUntil: 'domcontentloaded' });
@@ -107,6 +108,19 @@ test('the organizer makes a report link in /admin', async ({ page }) => {
     new RegExp(`eventId=${seeded.eventId}`),
     { timeout: 5000 }
   );
+  await expect(page.getByTestId('mint-token')).not.toBeEmpty();
+  await expect(page.getByTestId('mint-copy-btn')).toBeVisible();
+  await expect(page.getByTestId('mint-result')).toContainText(
+    "Copy this now; it isn't stored and can't be shown again."
+  );
+
+  // The link the page made is a working one: it opens this event's report.
+  // The admin key header set above would replace the report page's own
+  // Authorization header (the signed link), so it is dropped first.
+  const made = await page.getByTestId('mint-report-url').getAttribute('href');
+  await page.setExtraHTTPHeaders({});
+  await page.goto(made!);
+  await expect(page.getByTestId('signed-link-event-title')).toHaveText(seeded.eventTitle);
 });
 
 test('the report link opens the report for this event', async ({ page }) => {

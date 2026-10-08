@@ -633,19 +633,22 @@ describe('ADMIN-15 JS: copyUrl function', () => {
   });
 });
 
+// These two read the served page as text. They cannot tell whether the code
+// runs: they passed for weeks while Generate Link threw "esc is not defined".
+// What the panel draws is checked in admin-mint-report-link.spec.ts.
 describe('OSE-1342: Shared Report mint link', () => {
   test('builds a browser-openable signed report URL from the minted token', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain("location.origin + '/sharedReport?eventId=' +");
     expect(html).toContain('encodeURIComponent(data.token)');
     expect(html).toContain('data-testid="mint-report-url"');
-    expect(html).toContain('href="\' + escAttr(reportUrl) + \'"');
+    expect(html).toContain('href="\' + esc(reportUrl) + \'"');
   });
 
   test('copies the generated report URL instead of only the bearer token', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain("var value = argOf(el, 'url') || argOf(el, 'token') || ''");
-    expect(html).toContain('data-action="mint-copy" data-url="\' + escAttr(reportUrl) + \'"');
+    expect(html).toContain('data-action="mint-copy" data-url="\' + esc(reportUrl) + \'"');
     expect(html).toContain('aria-label="Copy report link"');
   });
 });

@@ -212,6 +212,13 @@
       "testCount": 22
     },
     {
+      "file": "workers/oursharedevents/tests/admin-mint-report-link.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1693,7 +1700,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 24
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/pre-event-funnel-media.spec.ts",
@@ -1903,7 +1910,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 19
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",
@@ -2184,6 +2191,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-attribute-escaping.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-auth.spec.ts",
@@ -2646,6 +2660,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/template-script-names.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/tenant-isolation.spec.ts",
