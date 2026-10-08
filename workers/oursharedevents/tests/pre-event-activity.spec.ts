@@ -382,8 +382,43 @@ describe('/sponsor — pre-event reach, floored', () => {
     );
     expect(html).toContain('Your name is on 1 poster in 1 place');
     expect(html).toContain('fewer than 5 poster scans');
-    expect(html).toContain('fewer than 5 link taps');
+    expect(html).toContain('fewer than 5 taps on any one link');
     expect(html).not.toMatch(/\b3 poster scans|\b2 link taps/);
+  });
+
+  // A link under the floor never joins the figure (OSE-1651): the organizer's
+  // card lists taps per link, so a raw total here would give a withheld one back.
+  test('the tap figure is the links with 5 or more: 10, 2 and 1 read "10 link taps"', () => {
+    const html = renderPreEventReach(
+      floorPreEventActivity({
+        posters: 1,
+        places: 1,
+        scans: 9,
+        clicks: 13,
+        clicksByCode: [10, 2, 1],
+        scansByDay: [],
+      })
+    );
+    expect(html).toContain('So far: 10 link taps');
+    expect(html).not.toContain('13 link taps');
+  });
+
+  // Withheld no longer means "fewer than 5 taps": four links with 4, 4, 3 and 4
+  // are 15 taps in all, and the line must not say there are fewer than 5.
+  test('no link at 5: the line says so in words, and never "fewer than 5 link taps"', () => {
+    const html = renderPreEventReach(
+      floorPreEventActivity({
+        posters: 1,
+        places: 1,
+        scans: 9,
+        clicks: 15,
+        clicksByCode: [4, 4, 3, 4],
+        scansByDay: [],
+      })
+    );
+    expect(html).toContain('So far: fewer than 5 taps on any one link · 9 poster scans.');
+    expect(html).not.toContain('15 link taps');
+    expect(html).not.toContain('fewer than 5 link taps');
   });
 
   test('no poster yet → link taps still count as reach; says no posters honestly', () => {
@@ -434,13 +469,46 @@ describe('/sponsor — pre-event reach, floored', () => {
     const cards = html.split('data-testid="placement-card"');
     const busy = cards.find((c) => c.includes('data-event-id="pe-busy"')) ?? '';
     const quiet = cards.find((c) => c.includes('data-event-id="pe-quiet"')) ?? '';
-    // Accepted: reach with floored words (12 and 11 clear the floor).
+    // Accepted: reach with floored words. The event's two links have 9 and 2
+    // taps: the link with 9 clears the floor, the link with 2 never joins the
+    // figure (it read 11 before OSE-1651, which gave the 2 away to anyone who
+    // also saw the organizer's card).
     expect(busy).toContain('data-testid="placement-reach"');
     expect(busy).toContain('Your name is on 3 posters in 2 places');
     expect(busy).toContain('12 poster scans');
-    expect(busy).toContain('11 link taps');
+    expect(busy).toContain('So far: 9 link taps');
+    expect(busy).not.toContain('11 link taps');
     // Not yet accepted: their name isn't on the poster, so no reach claim.
     expect(quiet).not.toContain('data-testid="placement-reach"');
+  });
+
+  // The same question the organizer's harness asks, through the served page:
+  // one more tap on a link under the floor must change nothing the sponsor reads.
+  test('the served page: one more tap on a link under the floor moves nothing', async () => {
+    const minted = await mintSponsorHomeToken(tenv, 'pes-cafe', BRAND);
+    const reachLine = async (): Promise<string> => {
+      const res = await SELF.fetch(`https://t.test/sponsor?t=${encodeURIComponent(minted!.token)}`);
+      expect(res.status).toBe(200);
+      const cards = (await res.text()).split('data-testid="placement-card"');
+      const busy = cards.find((c) => c.includes('data-event-id="pe-busy"')) ?? '';
+      const at = busy.indexOf('data-testid="placement-reach"');
+      expect(at, 'the reach line is on the card').toBeGreaterThan(-1);
+      return busy.slice(at, busy.indexOf('</p>', at));
+    };
+    const setTaps = (code: string, n: number) =>
+      tenv.DB.prepare('UPDATE shortlinks SET clicks = ? WHERE code = ?').bind(n, code).run();
+
+    const before = await reachLine();
+    await setTaps('peBUS2', 3); // the link with 2 gains a tap; still under 5
+    const hidden = await reachLine();
+    await setTaps('peBUS1', 10); // (control) the link with 9 gains a tap
+    const shown = await reachLine();
+    await setTaps('peBUS2', 2);
+    await setTaps('peBUS1', 9);
+
+    expect(hidden).toBe(before);
+    expect(before).toContain('So far: 9 link taps');
+    expect(shown).toContain('So far: 10 link taps');
   });
 });
 

@@ -1693,7 +1693,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 24
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/pre-event-funnel-media.spec.ts",
@@ -1903,7 +1903,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 19
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",

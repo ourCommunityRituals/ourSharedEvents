@@ -226,13 +226,21 @@ export function organizerPreEventActivity(
   return { ...rest, clicks: floorTotalOfParts(clicksByCode) };
 }
 
-/** The sponsor-facing shape: every scan/click count floored (K=5), per day too. */
+/**
+ * The sponsor-facing shape: every scan/click count floored (K=5), per day too.
+ * The tap figure follows the same rule as the organizer's (owner, 2026-10-08:
+ * the floor has no exceptions for any reader): it is the sum of the codes that
+ * clear the floor on their own, withheld when none does. A sponsor is shown
+ * no per-code counts, but an organizer can open a sponsor's page and the
+ * organizer's card lists the codes, so a raw total here gave a withheld code
+ * back.
+ */
 export function floorPreEventActivity(a: PreEventActivity): FlooredPreEventActivity {
   return {
     posters: a.posters,
     places: a.places,
     scans: applyCountFloor(a.scans),
-    clicks: applyCountFloor(a.clicks),
+    clicks: floorTotalOfParts(a.clicksByCode),
     scansByDay: a.scansByDay.map((d) => ({ day: d.day, count: applyCountFloor(d.count) })),
   };
 }
