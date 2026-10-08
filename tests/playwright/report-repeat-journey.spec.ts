@@ -9,7 +9,9 @@
  * the new draft selected in the admin.
  *
  * And the other side of the wall: the same report opened through a signed link
- * (a sponsor, a bar owner: no admin session) shows no action row.
+ * (a sponsor, a bar owner: no admin session) shows no action row. That link's
+ * token leaves the address bar once the page has read it, and a refresh then
+ * shows the page's no-token view, not the report.
  *
  * Runs against the local worker of playwright.mobile.config.ts.
  */
@@ -130,5 +132,41 @@ test('a signed-link viewer gets the report and no action row', async ({ browser 
   await expect(page.getByTestId('signed-link-event-title')).toHaveText(eventTitle);
   await expect(page.getByTestId('report-actions')).toBeHidden();
   expect(adminRequests, 'a signed-link visit never calls an admin route').toEqual([]);
+  await context.close();
+});
+
+test('a signed link leaves the address bar once read, and a refresh does not bring the report back', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  const res = await page.goto(signedLink);
+  expect(res?.headers()['cache-control']).toBe('no-store');
+  expect(res?.headers()['referrer-policy']).toBe('no-referrer');
+  await expect(page.getByTestId('signed-link-event-title')).toHaveText(eventTitle);
+
+  // Only the token is dropped: the address still names the event.
+  const left = new URL(page.url()).searchParams;
+  expect([...left.keys()]).toEqual(['eventId']);
+  expect(left.get('eventId')).toBe(eventId);
+
+  // The token is kept in the page only: no cookie, nothing in browser storage.
+  expect(await context.cookies()).toEqual([]);
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+
+  // A refresh asks for the address left behind. No token, so no report.
+  const reportReads: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().endsWith('/shared-report')) reportReads.push(r.url());
+  });
+  await page.reload();
+  await expect(page.locator('#events-list')).toBeAttached();
+  await expect(page.getByTestId('signed-link-section')).toBeHidden();
+  await expect(page.getByTestId('signed-link-event-title')).toHaveCount(0);
+  expect(reportReads, 'a refresh has no token to read the report with').toEqual([]);
+
+  // The same link, opened again, is the report.
+  await page.goto(signedLink);
+  await expect(page.getByTestId('signed-link-event-title')).toHaveText(eventTitle);
   await context.close();
 });

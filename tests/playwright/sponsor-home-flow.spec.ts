@@ -11,7 +11,12 @@
  * cannot prove, and this does:
  *   - the page's one inline script actually runs under the nonce CSP and the
  *     Accept / Decline taps reach the server (no CSP violation, no console error)
- *   - the answer survives a reload (the server, not the DOM, holds it)
+ *   - the answer is still there when the link is opened again (the server, not
+ *     the DOM, holds it)
+ *   - the link's token leaves the address bar once the page has read it, the
+ *     page keeps working without it there, and a refresh then shows "open your
+ *     link again" (the token is not in the address any more, and is stored
+ *     nowhere), after which the same link still opens the page
  *   - the public event page follows the answer — accepted shows the sponsor,
  *     declined removes it (ADR-019 consent; the respond handler busts the cache)
  *   - the controls are ≥ 44 px at 375×812
@@ -108,8 +113,13 @@ test('the minted link opens the sponsor page with one placement waiting for an a
   const res = await page.goto(sponsorPath());
   expect(res?.status()).toBe(200);
   expect(res?.headers()['cache-control']).toContain('no-store');
+  expect(res?.headers()['referrer-policy']).toBe('no-referrer');
 
   await expect(page.getByTestId('sponsor-home-name')).toHaveText(seeded.sponsorName);
+  // The link is the credential: once read, it is gone from the address bar.
+  expect(new URL(page.url()).pathname).toBe('/sponsor');
+  expect(new URL(page.url()).search).toBe('');
+  expect(page.url()).not.toContain(seeded.token);
   await expect(page.getByTestId('sponsor-home-count-pending')).toHaveText('1');
 
   const card = page.locator(
@@ -149,7 +159,7 @@ test('organizer inbox: the checklist says the sponsor has not answered yet', asy
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
-test('Accept: the card updates, the answer survives a reload, and the event page shows the sponsor', async ({
+test('Accept: the card updates, the answer is there when the link is opened again, and the event page shows the sponsor', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -173,7 +183,9 @@ test('Accept: the card updates, the answer survives a reload, and the event page
   await expect(card.getByTestId('placement-decline')).toBeVisible();
   await expect(page.getByTestId('sponsor-home-count-pending')).toHaveText('0');
 
-  await page.reload();
+  // Opening the link again, not a refresh: the token has left the address bar,
+  // so a refresh asks for /sponsor with no token (its own test below).
+  await page.goto(sponsorPath());
   await expect(card.getByTestId('placement-state')).toHaveText('Accepted');
   await expect(page.getByTestId('sponsor-home-count-pending')).toHaveText('0');
 
@@ -198,7 +210,7 @@ test('Decline (changing their mind): the card updates and the event page drops t
   await expect(card.getByTestId('placement-accept')).toBeVisible();
   await expect(card.getByTestId('placement-decline')).toBeHidden();
 
-  await page.reload();
+  await page.goto(sponsorPath());
   await expect(card.getByTestId('placement-state')).toHaveText('Declined');
 
   expect(await publicPageShowsSponsor(page)).toBe(false);
@@ -214,6 +226,37 @@ test('organizer inbox: after the decline the checklist says so, and nothing is w
   await expect(declined).toContainText('1 sponsor declined');
   await expect(declined).toContainText(seeded.sponsorName);
   await expect(card.getByTestId('inbox-sponsors-waiting')).toHaveCount(0);
+});
+
+test('a refresh after the token has left the address bar says to open the link again, and the link still works', async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const problems = watchForBreakage(page);
+  await page.goto(sponsorPath());
+  await expect(page.getByTestId('sponsor-home-name')).toHaveText(seeded.sponsorName);
+  expect(page.url()).not.toContain(seeded.token);
+
+  // The token is kept in the page only: no cookie, nothing in browser storage.
+  expect(await context.cookies()).toEqual([]);
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+  expect(problems, problems.join('\n')).toEqual([]);
+
+  const res = await page.reload();
+  expect(res?.status()).toBe(401);
+  expect(res?.headers()['referrer-policy']).toBe('no-referrer');
+  await expect(page.getByTestId('error-title')).toHaveText('Open your sponsor link again');
+  await expect(page.getByTestId('error-body')).toContainText('It still works');
+  const body = await page.content();
+  expect(body).not.toContain(seeded.sponsorName);
+  expect(body).not.toContain(seeded.eventTitle);
+  await expect(page.getByTestId('placement-card')).toHaveCount(0);
+
+  // The same link, opened again, is the sponsor's page.
+  const again = await page.goto(sponsorPath());
+  expect(again?.status()).toBe(200);
+  await expect(page.getByTestId('sponsor-home-name')).toHaveText(seeded.sponsorName);
 });
 
 test('a tampered link shows the invalid-link page and no sponsor data', async ({ page }) => {
@@ -260,7 +303,7 @@ test.describe('sponsor discovery: ask to join → organizer approves', () => {
     await expect(card).toHaveAttribute('data-requested', '1');
     await expect(askBtn).toBeHidden();
 
-    await page.reload();
+    await page.goto(sponsorPath());
     await expect(
       page.locator(`[data-testid="request-card"][data-event-id="${otherEventId}"]`)
     ).toContainText('Waiting for the organizer');

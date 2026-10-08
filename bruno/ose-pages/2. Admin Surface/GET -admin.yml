@@ -27,6 +27,16 @@ runtime:
 
         \    });
 
+        \    if ((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).includes('admin-footer')) {
+
+        \        test('The admin page is not kept by the browser (Cache-Control no-store)', function() {
+
+        \            expect(String(res.getHeader('cache-control') || '')).to.eql('no-store');
+
+        \        });
+
+        \    }
+
         } else {
 
         \    test('Returns 401 without valid token', function() {
