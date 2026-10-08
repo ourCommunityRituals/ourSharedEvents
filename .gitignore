@@ -76,6 +76,10 @@ test-dashboard/
 # Cloudflare Wrangler local state (D1 SQLite, miniflare)
 .wrangler/
 
+# Files the operator saves for scripts/prod-preflight.mjs (secret NAMES, migration
+# lists, CI run summaries). Read locally, never committed.
+.preflight/
+
 # Build outputs
 dist/
 build/

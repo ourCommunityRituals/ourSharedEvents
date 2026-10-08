@@ -2710,6 +2710,20 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium
 
+      # Before any smoke spec reads production, prove it is running the commit
+      # this run deployed and that /health stays good. The script reads /health
+      # every 10 s and ends HEALTHY, WRONG BUILD, ROLL BACK or CANNOT SEE; only
+      # HEALTHY passes. It rolls nothing back: ROLL BACK is an instruction to
+      # the operator (docs/runbooks/ROLLBACK.md). It sends no credential. NOT
+      # continue-on-error and no `if:` — held by
+      # tests/integration/post-deploy-health-wired.test.js.
+      - name: 'Gate: production runs this build and stays healthy'
+        env:
+          HEALTH_URL: '${{ env.PROD_BASE_URL }}/health'
+          EXPECTED_ENV: production
+          EXPECTED_PREFIX: prod
+        run: EXPECTED_SHA="$(git rev-parse --short HEAD)" node scripts/ci/post-deploy-health.mjs
+
       - name: 'Security smoke: XSS + auth'
         id: security-smoke
         env:
