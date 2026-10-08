@@ -253,4 +253,7 @@ export const NODE_SPECS = [
   // Signed links leave the address bar: the /sponsor and /sharedReport page
   // scripts run in jsdom over the real templates with a stubbed fetch.
   'tests/signed-link-url-scrub.spec.ts',
+  // Typed text on the SharedReport page stays text: the page script run in jsdom
+  // with plain and hostile values, plus a parse of its attribute writes.
+  'tests/shared-report-attribute-escaping.spec.ts',
 ];
