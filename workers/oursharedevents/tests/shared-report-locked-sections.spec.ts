@@ -410,10 +410,9 @@ describe('a link with nothing locked shows no locked card', () => {
 });
 
 describe('what the wire carries is written as text', () => {
-  // Angle brackets and ampersands only. The page's `esc` does not escape quote
-  // marks, so a name holding one would end the attribute it is written into.
-  // Section names and depths are the server's own constants today, so nothing
-  // reaches that; it is reported, not pinned here.
+  // Angle brackets and ampersands here. Quote marks in a name or a depth (and in
+  // every other value the page writes into an attribute) are covered by
+  // shared-report-attribute-escaping.spec.ts.
   test('a section name or depth that looks like markup adds no element and is shown as typed', async () => {
     const body = await read('sponsor', { depth: 'local', sponsor_id: SPONSOR_ID });
     const hostile = '<img src=x onerror=alert(1)>&amp;';
