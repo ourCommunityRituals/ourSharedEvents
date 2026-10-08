@@ -382,8 +382,9 @@ never touches the WHO side, the request, or FORMS_DB" in
 `tests/pre-event-activity.spec.ts` enforces that.
 
 - The **organizer** sees it on the admin pre-event card, with the public short
-  link and its QR ("link first"): scans exact, taps floored. The tap total is
-  the sum of the codes that have 5 or more taps each (§4).
+  link and its QR ("link first"): scans and taps floored. The tap total is
+  the sum of the codes that have 5 or more taps each (§4); every scan figure is
+  the sum of the poster-hours with 5 or more (OSE-1656, `lib/scan-cells.ts`).
 - The **sponsor** sees one floored sentence on each accepted pre-event placement:
   "So far: N link taps · M poster scans. Your name is on P posters in Q places."
   (`renderPreEventReach`). N is the same figure the organizer's card shows: the
@@ -493,10 +494,10 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
    into**, recorded on a deployment OCR created. Deriving it from the visitor's
    request would reverse §9.2 and fail gate 8b. That would need a new ADR, not a
    code change.
-4. **Organizer exact vs. uniform floor** (§5). Ratify the per-data-class policy:
-   anonymous scans and taps exact for the organizer, identity-derived counts
-   floored. The alternative is to amend the OSE-665 wording in
-   `count-floor.ts`.
+4. ~~**Organizer exact vs. uniform floor** (§5).~~ Decided 2026-10-08 (owner
+   ruling: no exceptions, at any tier): scans and taps are floored for the
+   organizer too (OSE-1656 for scans, #871 for taps). The organizer's own
+   registration and survey lists stay row-level (`count-floor.ts` scope note).
 5. ~~Fix `click_outs` to drop-before-sum, and flip its test (§4).~~ Done
    2026-10-07.
 6. **Retention of `scan_node_returns`.** The sweep exists but is off by default.

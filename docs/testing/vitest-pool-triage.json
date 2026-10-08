@@ -944,7 +944,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/event-type-catalog.spec.ts",
@@ -1700,7 +1700,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 21
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/poster-tiers.spec.ts",
@@ -1714,7 +1714,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 27
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/pre-event-funnel-media.spec.ts",
@@ -2121,6 +2121,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/scan-counts-neighbour-floor.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/scan-path-consistency.spec.ts",

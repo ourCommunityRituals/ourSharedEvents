@@ -3,7 +3,9 @@
  *
  * GET /api/v2/admin/events/:id/stats → { ok, status, stats } feeding the ported
  * EventDashboard card (OSE-886). Asserts the per-data-class privacy model:
- *   • scans        — anonymous, EXACT (the First-Scan gauge: 1 real scan → 1).
+ *   • scans        — floored like every count of people (OSE-1656, owner ruling
+ *                    2026-10-08: no exceptions): the sum of the event's
+ *                    poster-hours with 5 or more, so 1 to 4 read like none.
  *   • appearances  — active sponsors present, EXACT (not impressions, #25).
  *   • registrations / checkins — identity-derived, uniform K=5 floor
  *     (lib/count-floor.ts / OSE-665): sub-K suppressed server-side, never leaked.
@@ -51,6 +53,22 @@ async function createEvent(title: string): Promise<string> {
 
 async function stats(eventId: string, headers: Record<string, string> = ADMIN) {
   return SELF.fetch(`https://t.test/api/v2/admin/events/${eventId}/stats`, { headers });
+}
+
+/** `n` scans at one poster in one hour (the cell every scan figure sums). */
+async function seedScansAt(eventId: string, poster: string, hour: string, n: number) {
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO poster_deployments (id, event_id, qr_token) VALUES (?, ?, ?)'
+  )
+    .bind(poster, eventId, `qrt-${poster}`)
+    .run();
+  for (let i = 0; i < n; i++) {
+    await env.DB.prepare(
+      'INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket) VALUES (?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), eventId, poster, `${hour}:00`)
+      .run();
+  }
 }
 
 async function seedScan(eventId: string): Promise<void> {
@@ -101,14 +119,14 @@ describe('OSE-896 — admin event stats endpoint', () => {
     expect([401, 403]).toContain(res.status);
   });
 
-  test('empty event → scans/appearances exact 0, PII tiles suppressed under K', async () => {
+  test('empty event → appearances exact 0; scans and PII tiles suppressed under K', async () => {
     const eventId = await createEvent('Empty Event');
     const res = await stats(eventId);
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.status).toBe(200);
-    expect(body.stats.scans).toBe(0); // exact, anonymous
+    expect(body.stats.scans).toEqual({ count: null, suppressed: true, floor: 5 });
     expect(body.stats.appearances).toBe(0); // exact, public
     // 0 < K → suppressed, raw value withheld (count null)
     expect(body.stats.registrations).toMatchObject({ count: null, suppressed: true });
@@ -116,13 +134,25 @@ describe('OSE-896 — admin event stats endpoint', () => {
     expect(body.stats.registrations.floor).toBeGreaterThanOrEqual(5);
   });
 
-  test('one real scan renders scans:1 exact — the First-Scan gauge (never floored)', async () => {
+  // OSE-1656. The First-Scan gauge used to show a single scan as 1, which
+  // told "nobody" from "1 to 4". It now reads withheld until one poster has
+  // 5 scans in one hour (decision 5 on the ticket: withheld until 5).
+  test('one scan reads withheld, like none: the First-Scan gauge is floored', async () => {
     const eventId = await createEvent('First Scan');
     await seedScan(eventId);
-    const res = await stats(eventId);
-    const body = (await res.json()) as any;
-    // The whole point of First Scan: a single anonymous scan shows as 1.
-    expect(body.stats.scans).toBe(1);
+    const body = (await (await stats(eventId)).json()) as any;
+    expect(body.stats.scans).toEqual({ count: null, suppressed: true, floor: 5 });
+  });
+
+  test('scans are the poster-hours with 5 or more: 4 + 4 is withheld, a fifth in one hour shows 5', async () => {
+    const eventId = await createEvent('Poster Hours');
+    await seedScansAt(eventId, `${eventId}-p`, '2026-10-01T18', 4);
+    await seedScansAt(eventId, `${eventId}-p`, '2026-10-01T19', 4);
+    let body = (await (await stats(eventId)).json()) as any;
+    expect(body.stats.scans).toEqual({ count: null, suppressed: true, floor: 5 });
+    await seedScansAt(eventId, `${eventId}-p`, '2026-10-01T19', 1);
+    body = (await (await stats(eventId)).json()) as any;
+    expect(body.stats.scans).toEqual({ count: 5, suppressed: false, floor: 5 });
   });
 
   test('active sponsors are counted exact; inactive are excluded', async () => {

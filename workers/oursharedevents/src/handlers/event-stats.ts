@@ -4,9 +4,13 @@
 // seam: turns the `—` stat tiles into real numbers for the selected event.
 //
 // Privacy model (per-data-class):
-//   • scans        — anonymous scan events (DB.scans). No individual to
-//                    re-identify → EXACT. This is the First-Scan gauge: a single
-//                    real scan must show as `1`, never suppressed.
+//   • scans        — anonymous poster scans. Floored (OSE-1656, owner ruling
+//                    2026-10-08: no exceptions): the sum of the event's
+//                    poster-hours with 5 or more (lib/scan-cells.ts), the same
+//                    figure every other surface reads. The First-Scan gauge
+//                    therefore reads "fewer than 5" until five people scanned
+//                    one poster in one hour: a gauge that showed 1 would tell
+//                    "nobody" from "1 to 4".
 //   • appearances  — count of ACTIVE SPONSORS present on the event
 //                    (DB.sponsors, is_active=1). Public businesses, not privacy
 //                    contributors → EXACT. This is presence, NOT an impression/
@@ -27,6 +31,7 @@
 // FORMS_DB. No cross-DB join. No runtime LLM. No banned lexicon on the wire.
 
 import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { readEventScanCells, scansOf } from '../lib/scan-cells';
 
 export interface EventStatsEnv {
   DB: D1Database;
@@ -46,7 +51,7 @@ async function countExact(db: D1Database, sql: string, id: string): Promise<numb
  * GET /api/v2/admin/events/:id/stats  (admin-guarded in the router)
  *
  * → { ok, status:200, stats: {
- *       scans: number,               // exact
+ *       scans: FlooredCount,         // poster-hours with 5 or more, summed
  *       appearances: number,         // exact (active sponsors present)
  *       registrations: FlooredCount, // K=5 uniform floor, communicated
  *       checkins: FlooredCount,      // K=5 uniform floor, communicated
@@ -57,15 +62,15 @@ export async function handleAdminEventStats(
   env: EventStatsEnv,
   eventId: string
 ): Promise<Response> {
-  // Anonymous, exact — the First-Scan gauge. One physical scan = one placement
-  // event (WHERE side of the split scan path; migration 0062 / OSE-798). Counting
-  // scan_placement_events (not scan_node_returns) keeps the gauge = scans, and
-  // never touches a session-derived column.
-  const scans = await countExact(
-    env.DB,
-    'SELECT COUNT(*) AS cnt FROM scan_placement_events WHERE event_id = ?',
-    eventId
-  );
+  // One physical scan = one placement event (WHERE side of the split scan
+  // path; migration 0062 / OSE-798), so the gauge never touches a
+  // session-derived column. A failed read reads as withheld, never as 0.
+  let scans: FlooredCount = applyCountFloor(0);
+  try {
+    scans = scansOf(await readEventScanCells(env.DB, eventId));
+  } catch {
+    scans = applyCountFloor(0);
+  }
 
   // Active sponsors present — public businesses, exact (not impressions).
   // OSE-799 A2: a sponsor's presence at an event is its active sponsor_placement.

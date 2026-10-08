@@ -284,7 +284,7 @@ const ITEM = (extra: Record<string, unknown>) => ({
   location_desc: null,
   address: EVENT_ADDRESS,
   placement_type: 'venue',
-  scans: 23,
+  scans: fc(23),
   h3_res9: '89266454447ffff',
   is_active: 1,
   scan_url: 'https://ose.test/q/qrt_abc',
@@ -384,8 +384,9 @@ describe('Tier 2 | add placement: At the event venue / Out in the community', ()
   });
 });
 
-describe('Tier 2 | each placement row: where it hangs + its exact scans', () => {
-  test('venue and community rows say where, and how many scans (singular/plural)', async () => {
+// OSE-1656: a row's scans arrive floored (the poster's hours with 5 or more).
+describe('Tier 2 | each placement row: where it hangs + its floored scans', () => {
+  test('venue and community rows say where, and how many scans; under the floor in words', async () => {
     const { w, doc } = mountAdmin(
       () =>
         listReply([
@@ -395,7 +396,7 @@ describe('Tier 2 | each placement row: where it hangs + its exact scans', () => 
             qr_token: 'qrt_2',
             placement_label: 'Harbor Library',
             placement_type: 'community',
-            scans: 1,
+            scans: fc(1),
           }),
         ]),
       PD_SCRIPT
@@ -406,7 +407,7 @@ describe('Tier 2 | each placement row: where it hangs + its exact scans', () => 
     expect(at(rows[0], 'pd-placement-kind')).toBe('At the venue');
     expect(at(rows[0], 'pd-scans')).toBe('23 scans');
     expect(at(rows[1], 'pd-placement-kind')).toBe('In the community');
-    expect(at(rows[1], 'pd-scans')).toBe('1 scan');
+    expect(at(rows[1], 'pd-scans')).toBe('Fewer than 5 scans in any hour');
   });
 
   test('hostile label / description / scans stay text', async () => {
@@ -422,7 +423,9 @@ describe('Tier 2 | each placement row: where it hangs + its exact scans', () => 
     expect(panel.querySelector('img[onerror]')).toBeNull();
     expect(panel.querySelector('[data-testid="pd-label"]')!.textContent).toBe(HOSTILE);
     expect(panel.querySelector('[data-testid="pd-location"]')!.textContent).toBe(HOSTILE);
-    expect(panel.querySelector('[data-testid="pd-scans"]')!.textContent).toBe('0 scans');
+    expect(panel.querySelector('[data-testid="pd-scans"]')!.textContent).toBe(
+      'Fewer than 5 scans in any hour'
+    );
   });
 });
 
@@ -457,21 +460,22 @@ function mountReach() {
 const fc = (n: number) =>
   n >= 5 ? { count: n, suppressed: false, floor: 5 } : { count: null, suppressed: true, floor: 5 };
 
+// Scans arrive floored too (OSE-1656): the café's 4 never joins its group.
 const REACH = {
   venue: {
-    scans: 34,
+    scans: fc(34),
     places: 1,
     placements: [
-      { id: 'a', label: 'Front door', scans: 23 },
-      { id: 'b', label: 'Bar', scans: 11 },
+      { id: 'a', label: 'Front door', scans: fc(23) },
+      { id: 'b', label: 'Bar', scans: fc(11) },
     ],
   },
   community: {
-    scans: 13,
+    scans: fc(9),
     places: 2,
     placements: [
-      { id: 'c', label: 'Harbor Library', scans: 9 },
-      { id: 'd', label: 'Café', scans: 4 },
+      { id: 'c', label: 'Harbor Library', scans: fc(9) },
+      { id: 'd', label: 'Café', scans: fc(4) },
     ],
   },
   // Taps arrive FLOORED from the server (lib/poster-reach.ts floorTaps).
@@ -483,7 +487,7 @@ const REACH = {
     ],
     other: { codes: 2, taps: fc(7) },
   },
-  totals: { scans: 47, taps: fc(53) },
+  totals: { scans: fc(43), taps: fc(53) },
 };
 
 describe('Tier 3 | the "Before the event" card: a compact Reach section', () => {
@@ -512,12 +516,17 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     ]);
     expect(line('pre-event-reach-taps')).toBe('Link taps: EVENT 40 · DONATE 6 · other links 7');
     expect(line('pre-event-reach-venue')).toBe('At the venue: Front door 23 · Bar 11');
-    expect(line('pre-event-reach-community')).toBe('In the community: Harbor Library 9 · Café 4');
+    expect(line('pre-event-reach-community')).toBe(
+      'In the community: Harbor Library 9 · Café fewer than 5'
+    );
   });
 
   test('empty groups say so; a long list is capped with "N more"; no reach → hidden', () => {
     const { doc, render, line } = mountReach();
-    const many = Array.from({ length: 8 }, (_, i) => ({ label: `Spot ${i + 1}`, scans: 8 - i }));
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      label: `Spot ${i + 1}`,
+      scans: fc(8 - i),
+    }));
     render({
       venue: { placements: [] },
       community: { placements: many },
@@ -532,12 +541,14 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     );
     const box = doc.getElementById('pre-event-reach')!;
     expect(box.querySelector('.error, .card-error, [role="alert"]')).toBeNull();
-    expect(line('pre-event-reach-community')).toMatch(/Spot 1 8 · .* · Spot 6 3 · 2 more$/);
+    expect(line('pre-event-reach-community')).toMatch(
+      /Spot 1 8 · .* · Spot 4 5 · Spot 5 fewer than 5 · Spot 6 fewer than 5 · 2 more$/
+    );
     render(null);
     expect((doc.getElementById('pre-event-reach') as HTMLElement).hidden).toBe(true);
   });
 
-  test('hostile labels and words stay text; non-numbers read as 0', () => {
+  test('hostile labels and words stay text; anything but a floored count reads "fewer than 5", never a number', () => {
     const { w, doc, render, line } = mountReach();
     render({
       venue: { placements: [{ label: HOSTILE, scans: '<b>9</b>' }] },
@@ -547,8 +558,8 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     expect(w.__pwned).toBeUndefined();
     const box = doc.getElementById('pre-event-reach')!;
     expect(box.querySelector('script, img')).toBeNull();
-    expect(line('pre-event-reach-venue')).toBe(`At the venue: ${HOSTILE} 0`);
-    expect(line('pre-event-reach-community')).toBe('In the community: Café 0');
+    expect(line('pre-event-reach-venue')).toBe(`At the venue: ${HOSTILE} fewer than 5`);
+    expect(line('pre-event-reach-community')).toBe('In the community: Café fewer than 5');
     expect(line('pre-event-reach-taps')).toBe(`Link taps: ${HOSTILE} 9`);
   });
 
@@ -630,6 +641,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     const end = rest.search(/\r?\n {6}\};\r?\n/);
     return rest.slice(0, end) + '\n};';
   }
+  /** `scans` is the event's raw scans, all in one poster-hour: sent floored. */
   async function mountCard(clicks: unknown, scans: number, reach: unknown = REACH) {
     const dom = new JSDOM(`<!doctype html><body>${preEventCardMarkup()}</body>`, {
       runScripts: 'outside-only',
@@ -642,7 +654,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
       body: {
         ok: true,
         event: { id: EVT, status: 'active', days_to_go: 12 },
-        activity: { posters: 1, places: 1, scans, clicks, scansByDay: [] },
+        activity: { posters: 1, places: 1, scans: fc(scans), clicks, scansByDay: [] },
         reach,
         link: { url: 'https://ose.test/s/Pub001', code: 'Pub001', qr: QR },
       },
@@ -656,10 +668,10 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
   }
 
   test('withheld: the tile reads Held and the lede says "fewer than 5 taps on any one link" — never the number', async () => {
-    const { text } = await mountCard(fc(3), 2);
+    const { text } = await mountCard(fc(3), 7);
     expect(text('pre-event-clicks')).toBe('Held');
     expect(text('pre-event-lede')).toBe(
-      'People are finding it: fewer than 5 taps on any one link and 2 poster scans so far.'
+      'People are finding it: fewer than 5 taps on any one link and 7 poster scans so far.'
     );
   });
 
@@ -674,18 +686,18 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     // listed and the total is withheld. The card must not say there are fewer
     // than 5 taps (there are 15), and must not print 0, NaN or a blank.
     const none = { count: null, suppressed: true, floor: 5 };
-    const { text } = await mountCard(none, 2, {
+    const { text } = await mountCard(none, 7, {
       venue: { scans: 0, places: 0, placements: [] },
       community: { scans: 0, places: 0, placements: [] },
       taps: { codes: [], other: { codes: 4, taps: none }, total: none },
-      totals: { scans: 2, taps: none },
+      totals: { scans: fc(7), taps: none },
     });
     const tile = text('pre-event-clicks')!;
     const lede = text('pre-event-lede')!;
     const line = text('pre-event-reach-taps')!;
     expect(tile).toBe('Held');
     expect(lede).toBe(
-      'People are finding it: fewer than 5 taps on any one link and 2 poster scans so far.'
+      'People are finding it: fewer than 5 taps on any one link and 7 poster scans so far.'
     );
     expect(line).toBe(
       'Link taps: fewer than 5 on any one link so far (a link shows here at 5 or more)'
@@ -698,10 +710,21 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
   });
 
   test('at or over the floor: the exact number', async () => {
-    const { text } = await mountCard(fc(11), 3);
+    const { text } = await mountCard(fc(11), 8);
     expect(text('pre-event-clicks')).toBe('11');
+    expect(text('pre-event-scans')).toBe('8');
     expect(text('pre-event-lede')).toBe(
-      'People are finding it: 11 link taps and 3 poster scans so far.'
+      'People are finding it: 11 link taps and 8 poster scans so far.'
     );
+  });
+
+  // OSE-1656: poster scans arrive floored; withheld reads in words, never 0.
+  test('scans withheld, taps shown: the tile reads Held and the lede says so in words', async () => {
+    const { text } = await mountCard(fc(11), 3);
+    expect(text('pre-event-scans')).toBe('Held');
+    expect(text('pre-event-lede')).toBe(
+      'People are finding it: 11 link taps and fewer than 5 poster scans in any one hour so far.'
+    );
+    expect(text('pre-event-lede')).not.toMatch(/\b3\b|\b0 poster/);
   });
 });

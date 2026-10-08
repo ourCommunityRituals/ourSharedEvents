@@ -8,11 +8,11 @@
  *            aren't confused.
  *   Tier 2 — where posters go: a placement is AT THE VENUE (an area of the
  *            event's own location — address + map spot default to the event's)
- *            or IN THE COMMUNITY (its own address); each row carries its exact
- *            scan count.
+ *            or IN THE COMMUNITY (its own address); each row carries its scan
+ *            count, floored (OSE-1656: the poster's hours with 5 or more).
  *   Tier 3 — the reach picture: pre-event-activity gains `reach` — placements
- *            ranked by scans, split venue vs community (exact: the organizer's
- *            own posters), plus taps per code from shortlinks.clicks FLOORED at
+ *            ranked by scans, split venue vs community (floored the same way,
+ *            OSE-1656), plus taps per code from shortlinks.clicks FLOORED at
  *            K=5 at every grain shown — never a small number, never derivable by
  *            subtraction (PO 2026-09-30). Never who: taps carry no location,
  *            scans resolve only to their poster, nothing person-shaped.
@@ -310,16 +310,18 @@ describe('Tier 2 | placements: venue areas and community places', () => {
     ).rejects.toThrow(/CHECK/i);
   });
 
-  test('the list carries each placement’s type and its exact scan count', async () => {
+  // Both posters' scans are in one hour: the venue's 5 clear the floor, the
+  // community poster's 3 do not (OSE-1656: withheld, like none).
+  test('the list carries each placement’s type and its floored scan count', async () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events/${EVT}/poster-deployments`, {
       headers: ADMIN,
     });
     const body = (await res.json()) as {
-      items: Array<{ id: string; placement_type: string; scans: number }>;
+      items: Array<{ id: string; placement_type: string; scans: unknown }>;
     };
     const byId = Object.fromEntries(body.items.map((i) => [i.id, i]));
-    expect(byId[venueId]).toMatchObject({ placement_type: 'venue', scans: 5 });
-    expect(byId[communityId]).toMatchObject({ placement_type: 'community', scans: 3 });
+    expect(byId[venueId]).toMatchObject({ placement_type: 'venue', scans: shown(5) });
+    expect(byId[communityId]).toMatchObject({ placement_type: 'community', scans: HELD });
   });
 
   test('a real /q/ scan lands on its own placement’s count, and nowhere else', async () => {
@@ -332,10 +334,23 @@ describe('Tier 2 | placements: venue areas and community places', () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events/${EVT}/poster-deployments`, {
       headers: ADMIN,
     });
-    const body = (await res.json()) as { items: Array<{ id: string; scans: number }> };
+    const body = (await res.json()) as { items: Array<{ id: string; scans: unknown }> };
     const byId = Object.fromEntries(body.items.map((i) => [i.id, i.scans]));
-    expect(byId[communityId]).toBe(4);
-    expect(byId[venueId]).toBe(5);
+    // The scan landed on the community poster and nowhere else...
+    const rows = async (pd: string) =>
+      (
+        await tenv()
+          .DB.prepare(
+            'SELECT COUNT(*) AS n FROM scan_placement_events WHERE poster_deployment_id = ?'
+          )
+          .bind(pd)
+          .first<{ n: number }>()
+      )?.n;
+    expect(await rows(communityId)).toBe(4);
+    expect(await rows(venueId)).toBe(5);
+    // ...and 3 to 4 at a poster under the floor moves nothing anyone reads.
+    expect(byId[communityId]).toEqual(HELD);
+    expect(byId[venueId]).toEqual(shown(5));
   });
 
   test('a PUT can move a placement between venue and community', async () => {
@@ -368,19 +383,19 @@ interface Floored {
 }
 interface Reach {
   venue: {
-    scans: number;
+    scans: Floored;
     places: number;
-    placements: Array<{ id: string; label: string; scans: number; active: boolean }>;
+    placements: Array<{ id: string; label: string; scans: Floored; active: boolean }>;
   };
   community: {
-    scans: number;
+    scans: Floored;
     places: number;
     placements: Array<{
       id: string;
       label: string;
       description: string | null;
       address: string | null;
-      scans: number;
+      scans: Floored;
     }>;
   };
   taps: {
@@ -388,8 +403,11 @@ interface Reach {
     codes: Array<Record<string, unknown> & { taps: Floored }>;
     other: { codes: number; taps: Floored } | null;
   };
-  totals: { scans: number; taps: Floored };
+  totals: { scans: Floored; taps: Floored };
 }
+
+const shown = (n: number): Floored => ({ count: n, suppressed: false, floor: 5 });
+const HELD: Floored = { count: null, suppressed: true, floor: 5 };
 
 describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps per code', () => {
   let reach: Reach;
@@ -458,23 +476,26 @@ describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps p
     reach = (JSON.parse(raw) as { reach: Reach }).reach;
   });
 
-  test('venue areas, most-scanned first (a zero-scan active area still shows)', () => {
+  // Each poster's scans are in one hour, so a poster's figure is its own
+  // count when it is 5 or more, and withheld otherwise (OSE-1656).
+  test('venue areas, most-scanned first (an active area with none to show still shows)', () => {
     expect(reach.venue.placements.map((p) => [p.label, p.scans])).toEqual([
-      ['Front door', 23],
-      ['Bar', 11],
-      ['Stage left', 0],
+      ['Front door', shown(23)],
+      ['Bar', shown(11)],
+      ['Stage left', HELD],
     ]);
-    expect(reach.venue.scans).toBe(34);
+    expect(reach.venue.scans).toEqual(shown(34));
     expect(reach.venue.places).toBe(1); // every area shares the venue's res-7 cell
   });
 
   test('community places, most-scanned first, with their description/address; retired + unscanned drop out', () => {
     expect(reach.community.placements.map((p) => [p.label, p.scans])).toEqual([
-      ['Harbor Library', 9],
-      ['Café', 4],
+      ['Harbor Library', shown(9)],
+      ['Café', HELD],
     ]);
     expect(reach.community.placements[0].address).toBe('100 Library Ln, Sawyer, MI');
-    expect(reach.community.scans).toBe(13);
+    // The café's 4 never joins the sum (it read 13, which gave the 4 back).
+    expect(reach.community.scans).toEqual(shown(9));
     expect(reach.community.places).toBeGreaterThanOrEqual(1);
   });
 
@@ -497,11 +518,12 @@ describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps p
     expect(reach.taps.total.count! - shown).toBe(reach.taps.other!.taps.count);
   });
 
-  test('totals: physical scans exact, digital taps floored — and the card’s own totals agree', () => {
-    expect(reach.totals).toEqual({ scans: 47, taps: { count: 18, suppressed: false, floor: 5 } });
+  test('totals: scans and taps each floored on their own grain — and the card’s own totals agree', () => {
+    expect(reach.totals).toEqual({ scans: shown(43), taps: shown(18) });
     expect(reach.totals).not.toHaveProperty('reach'); // scans + taps would un-floor taps
-    const activity = (JSON.parse(raw) as { activity: { scans: number; clicks: Floored } }).activity;
-    expect(activity.scans).toBe(reach.totals.scans);
+    const activity = (JSON.parse(raw) as { activity: { scans: Floored; clicks: Floored } })
+      .activity;
+    expect(activity.scans).toEqual(reach.totals.scans);
     expect(activity.clicks).toEqual(reach.totals.taps);
   });
 
@@ -649,8 +671,15 @@ describe('never who — structural', () => {
     ]) {
       expect(code, banned).not.toContain(banned);
     }
-    expect(code).toContain('FROM scan_placement_events');
+    // Scans are read through the one cell reader (OSE-1656), which reads
+    // scan_placement_events and nothing person-shaped either.
+    expect(code).toContain('readEventScanCells');
     expect(code).toContain('SUM(clicks)');
+    const cells = src('/src/lib/scan-cells.ts');
+    expect(cells).toContain('FROM scan_placement_events');
+    for (const banned of ['scan_node_returns', 'anonymous_id', 'request', 'FORMS_DB']) {
+      expect(cells, banned).not.toContain(banned);
+    }
   });
 
   test('the sponsor surface does not read the organizer’s reach picture (stays floored)', () => {

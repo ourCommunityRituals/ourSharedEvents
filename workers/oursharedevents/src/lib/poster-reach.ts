@@ -19,9 +19,12 @@
 //     per-click rows to break down, and nothing here reads the request;
 //   - no session/person data: scan_node_returns and FORMS_DB are never read.
 //
-// Audience: the ORGANIZER only (admin). Physical placement scans are exact —
-// the same rule as /stats (a scan resolves to the organizer's own poster).
-// Digital TAPS are floored at K=5 at the finest grain shown (PO, 2026-09-30):
+// Audience: the ORGANIZER only (admin). Physical placement scans are floored
+// too (OSE-1656, owner ruling 2026-10-08: no exceptions): a placement's scans
+// are the sum of its poster-hours that clear the floor, and each group's and
+// the event's total is the sum of the same cells (lib/scan-cells.ts), so no
+// figure here can be subtracted from another, or from the SharedReport's
+// poster attribution, to get a group under 5 back. Digital TAPS are floored at K=5 at the finest grain shown (PO, 2026-09-30):
 // every per-code count goes through applyCountFloor (lib/count-floor.ts) — no
 // local threshold here — and a code under the floor never joins a sum. The
 // total, and the figure for the codes not listed, are each the sum of the
@@ -33,6 +36,13 @@
 import { applyCountFloor, floorTotalOfParts, type FlooredCount } from './count-floor';
 import { posterCodeKind } from './poster-codes';
 import { TAP_CODE_SQL } from './pre-event-activity';
+import {
+  posterScans,
+  readEventScanCells,
+  scansByPoster,
+  scansOf,
+  type ScanCell,
+} from './scan-cells';
 
 export const PLACEMENT_TYPES = ['venue', 'community'] as const;
 export type PlacementType = (typeof PLACEMENT_TYPES)[number];
@@ -54,12 +64,13 @@ export interface ReachPlacement {
   description: string | null;
   address: string | null;
   active: boolean;
-  scans: number;
+  /** The placement's poster-hours that clear the floor, summed; withheld when none does. */
+  scans: FlooredCount;
 }
 
 export interface ReachGroup {
-  /** Scans across every placement in the group. */
-  scans: number;
+  /** The group's poster-hours that clear the floor, summed. */
+  scans: FlooredCount;
   /** Distinct organizer-declared res-7 cells the group's placements cover. */
   places: number;
   /** Placements, most-scanned first (ties: label). */
@@ -91,8 +102,8 @@ export interface PosterReach {
   community: ReachGroup;
   /** Short-link taps per code (a bare counter — no location, no time series), floored. */
   taps: FlooredTaps;
-  /** Physical scans exact; digital taps as `taps.total`. No combined sum (it would un-floor taps). */
-  totals: { scans: number; taps: FlooredCount };
+  /** Scans and taps, each floored on its own grain. No combined sum. */
+  totals: { scans: FlooredCount; taps: FlooredCount };
 }
 
 /**
@@ -131,10 +142,12 @@ interface PlacementRow {
   placement_type: string | null;
   h3_res7: string | null;
   is_active: number;
-  scans: number;
 }
 
-function group(rows: PlacementRow[]): ReachGroup {
+function group(rows: PlacementRow[], cells: readonly ScanCell[]): ReachGroup {
+  const ids = new Set(rows.map((r) => String(r.id)));
+  const own = cells.filter((c) => ids.has(c.poster));
+  const byPoster = scansByPoster(own);
   const placements = rows
     .map((r) => ({
       id: String(r.id),
@@ -142,17 +155,18 @@ function group(rows: PlacementRow[]): ReachGroup {
       description: r.location_desc ? String(r.location_desc) : null,
       address: r.address ? String(r.address) : null,
       active: Number(r.is_active) === 1,
-      scans: Number(r.scans) || 0,
+      scans: posterScans(byPoster, String(r.id)),
     }))
-    // A retired poster with no scans is noise; with scans it is history.
-    .filter((p) => p.active || p.scans > 0)
-    .sort((a, b) => b.scans - a.scans || a.label.localeCompare(b.label));
-  const cells = new Set(
+    // A retired poster with no published scans is noise; with scans it is
+    // history. "No published scans" covers 0 and 1 to 4 alike.
+    .filter((p) => p.active || p.scans.count !== null)
+    .sort((a, b) => (b.scans.count ?? 0) - (a.scans.count ?? 0) || a.label.localeCompare(b.label));
+  const places = new Set(
     rows.filter((r) => Number(r.is_active) === 1 && r.h3_res7).map((r) => String(r.h3_res7))
   );
   return {
-    scans: placements.reduce((t, p) => t + p.scans, 0),
-    places: cells.size,
+    scans: scansOf(own),
+    places: places.size,
     placements,
   };
 }
@@ -168,20 +182,22 @@ export async function readPosterReach(db: D1Database, eventId: string): Promise<
     const res = await db
       .prepare(
         `SELECT pd.id, pd.placement_label, pd.location_desc, pd.address, pd.placement_type,
-                pd.h3_res7, pd.is_active, COALESCE(s.scans, 0) AS scans
+                pd.h3_res7, pd.is_active
            FROM poster_deployments pd
-           LEFT JOIN (SELECT poster_deployment_id, COUNT(*) AS scans
-                        FROM scan_placement_events
-                       WHERE event_id = ?
-                       GROUP BY poster_deployment_id) s
-             ON s.poster_deployment_id = pd.id
           WHERE pd.event_id = ?`
       )
-      .bind(eventId, eventId)
+      .bind(eventId)
       .all<PlacementRow>();
     rows = res.results ?? [];
   } catch {
     rows = [];
+  }
+
+  let cells: ScanCell[] = [];
+  try {
+    cells = await readEventScanCells(db, eventId);
+  } catch {
+    cells = [];
   }
 
   let tapRows: { kind: string; taps: number }[] = [];
@@ -200,14 +216,20 @@ export async function readPosterReach(db: D1Database, eventId: string): Promise<
     tapRows = [];
   }
 
-  const venue = group(rows.filter((r) => r.placement_type === 'venue'));
-  const community = group(rows.filter((r) => r.placement_type !== 'venue'));
+  const venue = group(
+    rows.filter((r) => r.placement_type === 'venue'),
+    cells
+  );
+  const community = group(
+    rows.filter((r) => r.placement_type !== 'venue'),
+    cells
+  );
   const taps = floorTaps(tapRows);
 
   return {
     venue,
     community,
     taps,
-    totals: { scans: venue.scans + community.scans, taps: taps.total },
+    totals: { scans: scansOf(cells), taps: taps.total },
   };
 }

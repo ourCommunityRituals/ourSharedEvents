@@ -6333,12 +6333,13 @@
           at('pd-address').textContent = text(pd.address) || 'No address';
           if (pd.location_desc) at('pd-location').textContent = text(pd.location_desc);
           else at('pd-location').remove();
-          // Where it hangs, and how many times THIS poster was scanned (exact,
-          // organizer-only — a scan resolves to its poster, never a person).
+          // Where it hangs, and how many times THIS poster was scanned. The
+          // count arrives floored (OSE-1656): the poster's hours with 5 or more
+          // scans, summed. Withheld reads in words, never as 0.
           at('pd-placement-kind').textContent =
             pd.placement_type === 'venue' ? 'At the venue' : 'In the community';
-          const scans = Number(pd.scans) || 0;
-          at('pd-scans').textContent = scans + (scans === 1 ? ' scan' : ' scans');
+          const scans = pd.scans && typeof pd.scans.count === 'number' ? pd.scans.count : null;
+          at('pd-scans').textContent = scans === null ? 'Fewer than 5 scans in any hour' : scans + ' scans';
 
           // 1. The short link + Copy lead the card.
           at('pd-short-link').textContent = scanUrl;
@@ -7832,8 +7833,8 @@
           if (f.suppressed) return 'fewer than ' + (f.floor || 5);
           return f.count != null ? String(f.count) : null;
         };
-        // Only exact scans prove people are scanning; a floored "fewer than 5"
-        // registration count may be zero, so it never ticks this step.
+        // Only a published scan count (5 or more, OSE-1656) proves people are
+        // scanning; "fewer than 5" may be zero, so it never ticks this step.
         var scanN = stats && stats.scans != null ? (typeof stats.scans === 'number' ? stats.scans : stats.scans.count) : null;
         var anyScans = typeof scanN === 'number' && scanN > 0;
         var counts = stats ? [['Scans', fmt(stats.scans)], ['registered', fmt(stats.registrations)], ['checked in', fmt(stats.checkins)]]
@@ -8032,10 +8033,13 @@
         // (three links with 4 taps each read null), so the words say "on any
         // one link". Early weeks are quiet, not broken: a normal state.
         var tapsN = a.clicks && typeof a.clicks.count === 'number' ? a.clicks.count : null;
+        // Poster scans arrive floored too (OSE-1656): the poster-hours with 5
+        // or more, summed, or null while none has.
+        var scansN = a.scans && typeof a.scans.count === 'number' ? a.scans.count : null;
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
-        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
+        else if (tapsN === null && scansN === null) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
+        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + (scansN === null ? 'fewer than 5 poster scans in any one hour' : scansN + ' poster scans') + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -8090,7 +8094,7 @@
           linkCard.hidden = false;
         } else linkCard.hidden = true;
 
-        set('pre-event-scans', String(a.scans || 0));
+        set('pre-event-scans', scansN === null ? 'Held' : String(scansN));
         set('pre-event-clicks', tapsN === null ? 'Held' : String(tapsN));
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
@@ -8098,7 +8102,12 @@
         // Scans per day, last 14 days — bars drawn as SVG (no chart library).
         var spark = document.getElementById('pre-event-spark');
         spark.textContent = '';
-        var days = Array.isArray(a.scansByDay) ? a.scansByDay : [];
+        // Each day arrives floored (the day's poster-hours with 5 or more,
+        // summed): a held day is drawn like an empty one and titled "held".
+        var days = (Array.isArray(a.scansByDay) ? a.scansByDay : []).map(function (x) {
+          var n = x && x.count && typeof x.count.count === 'number' ? x.count.count : null;
+          return { day: String((x && x.day) || ''), count: n || 0, held: n === null };
+        });
         if (days.length) {
           var NS = 'http://www.w3.org/2000/svg';
           var max = Math.max.apply(null, days.map(function (x) { return x.count || 0; }).concat([1]));
@@ -8109,7 +8118,8 @@
           svg.setAttribute('preserveAspectRatio', 'none');
           svg.setAttribute('role', 'img');
           var total = days.reduce(function (t, x) { return t + (x.count || 0); }, 0);
-          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' in total, ' + (days[days.length - 1].count || 0) + ' today.');
+          var last = days[days.length - 1];
+          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' on the days shown, ' + (last.held ? 'held' : last.count) + ' today. A day with fewer than 5 scans in every hour at every poster is held.');
           days.forEach(function (x, i) {
             var h = x.count > 0 ? Math.max(3, Math.round((x.count / max) * 38)) : 1;
             var r = document.createElementNS(NS, 'rect');
@@ -8121,7 +8131,7 @@
             r.setAttribute('fill', 'currentColor');
             r.setAttribute('opacity', x.count > 0 ? '1' : '0.3');
             var t = document.createElementNS(NS, 'title');
-            t.textContent = x.day + ': ' + (x.count || 0) + ' scan' + (x.count === 1 ? '' : 's');
+            t.textContent = x.day + ': ' + (x.held ? 'held' : x.count + ' scans');
             r.appendChild(t);
             svg.appendChild(r);
           });
@@ -8156,7 +8166,11 @@
         var num = function (v) { var n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
         var places = function (g) {
           var list = g && Array.isArray(g.placements) ? g.placements : [];
-          return list.map(function (x) { return { name: String((x && x.label) || 'Poster'), n: num(x && x.scans) }; });
+          // Each placement's scans arrive floored (OSE-1656): words, never 0.
+          return list.map(function (x) {
+            var n = x && x.scans && typeof x.scans.count === 'number' ? num(x.scans.count) : null;
+            return { name: String((x && x.label) || 'Poster'), n: n === null ? 'fewer than 5' : n };
+          });
         };
         // A floored count: its number when it cleared the floor, else null.
         var fl = function (f) { return f && typeof f.count === 'number' ? num(f.count) : null; };

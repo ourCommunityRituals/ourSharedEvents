@@ -164,7 +164,9 @@ describe('contract', () => {
   test('every registry metric names a dashboard, privacy class and source', () => {
     for (const [id, m] of Object.entries(DASHBOARD_METRICS)) {
       expect(['operations', 'event', 'corridor'], id).toContain(m.dashboard);
-      expect(['entity', 'anonymous_exact', 'floored'], id).toContain(m.privacy);
+      // OSE-1656: there is no exact class for counts of people or their
+      // actions any more; `anonymous_exact` is gone.
+      expect(['entity', 'floored'], id).toContain(m.privacy);
       expect(m.source.length, id).toBeGreaterThan(0);
     }
     for (const n of NOT_MEASURED) expect(n.reason.length, n.id).toBeGreaterThan(10);
@@ -256,12 +258,15 @@ describe('founder / operations cockpit', () => {
     // the workshop is a draft and unpublished. Only bocce is on the public list.
     expect(body.events.published).toBe(1);
     expect(body.events.created_30d).toBe(3);
-    // 7 + 3 + 2 bocce + 3 workshop; the demo's 40 and dash-b's 50 are not here.
-    expect(body.reach.poster_scans).toBe(15);
+    // OSE-1656: scans are the poster-hours with 5 or more. Every poster's scans
+    // are in one hour: bocce's 7 count; its 3 and 2, and the workshop's 3, do
+    // not (15 used to give them back). The demo's 40 and dash-b's 50 are not here.
+    expect(body.reach.poster_scans).toEqual({ count: 7, suppressed: false, floor: 5 });
     expect(body.reach.active_posters).toBe(4);
     expect(body.reach.poster_places).toBe(2);
     expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1 });
-    expect(body.shared_report.views_30d).toBe(4);
+    // Report opens are floored too (one event-day of 4 opens: withheld).
+    expect(body.shared_report.views_30d).toEqual({ count: null, suppressed: true, floor: 5 });
   });
 
   test('#7: taps are floored per code and explicit choices per event, then summed', async () => {
@@ -283,13 +288,14 @@ describe('founder / operations cockpit', () => {
       suppressed: true,
       floor: 5,
     });
-    expect(body.participation.anonymous.scans).toBe(15);
+    expect(body.participation.anonymous.scans).toEqual(body.reach.poster_scans);
   });
 
   test('data_class=all brings the demo event in; a bad value is 400', async () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=all`));
     expect(body.events.total).toBe(4);
-    expect(body.reach.poster_scans).toBe(58);
+    // + the demo poster's 40 in one hour; the other demo poster's 3 never joins.
+    expect(body.reach.poster_scans.count).toBe(47);
     // The demo event's link (40 taps) joins bocce's 9; by default it does not.
     expect(body.reach.link_taps.count).toBe(49);
     expect(body.scope.data_class).toBe('all');
@@ -303,7 +309,7 @@ describe('#9 tenant isolation', () => {
   test('a dash-a operator never sees dash-b numbers', async () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, OPS));
     // dash-b holds 50 scans, 99 taps, 20 registrations, 30 check-ins.
-    expect(body.reach.poster_scans).toBeLessThan(50);
+    expect(body.reach.poster_scans.count).toBeLessThan(50);
     expect(body.reach.link_taps.count).not.toBe(108);
     expect(body.participation.explicit.registrations.count).toBe(7);
     expect(body.participation.explicit.checkins.count).toBe(6);
@@ -326,10 +332,10 @@ describe('#9 tenant isolation', () => {
   test('a member of two brands can narrow to one', async () => {
     const both = await call(handleOperationsDashboard, reqAs(AB, OPS));
     expect(both.body.scope.brands).toEqual([DASH.brandA, DASH.brandB]);
-    expect(both.body.reach.poster_scans).toBe(65);
+    expect(both.body.reach.poster_scans.count).toBe(57);
     const one = await call(handleOperationsDashboard, reqAs(AB, `${OPS}?brand_id=${DASH.brandB}`));
     expect(one.body.scope.brands).toEqual([DASH.brandB]);
-    expect(one.body.reach.poster_scans).toBe(50);
+    expect(one.body.reach.poster_scans.count).toBe(50);
     // Taps across brands: dash-a's 9 (its 3 and its 2 never join) + dash-b's 99.
     // Every scope a caller can pick is a sum of codes that each cleared K, so
     // both minus one is 9, a number dash-a's own dashboard already shows.
@@ -367,7 +373,9 @@ describe('corridor / community intelligence', () => {
     // cell 1: bocce's 7 to the event cell. The workshop's 3 (cell 1 → cell 1)
     // is a flow under K: it is not listed, so it is not in the cell either.
     // 10 here beside a single flow of 7 would hand the 3 back.
-    // cell 2: 3 + 2 = 5 scans, one flow.
+    // cell 2: two posters with 3 and 2, each in one hour. Neither poster-hour
+    // clears the floor, so the cell is withheld (OSE-1656). It used to read 5,
+    // a figure the bocce event's exact 12 then took apart again (12 - 7).
     const none = { count: null, suppressed: true, floor: 5 };
     expect(src[CELL_SRC_1]).toEqual({
       cell: CELL_SRC_1,
@@ -376,39 +384,38 @@ describe('corridor / community intelligence', () => {
       // Every event in the fixture has a cell, so nothing lacks a destination.
       scans_no_destination: none,
     });
-    expect(src[CELL_SRC_2].scans).toEqual({ count: 5, suppressed: false, floor: 5 });
+    expect(src[CELL_SRC_2].scans).toEqual(none);
+    expect(src[CELL_SRC_2].posters).toBe(2); // listed for its posters, with nothing to show
     expect(src[CELL_SRC_2].scans_no_destination).toEqual(none);
   });
 
   test('#7: a flow under K is left out, not shown', async () => {
     const { body } = await call(handleCorridorDashboard, reqAs(A, COR));
-    // cell1 → event cell: 7; cell2 → event cell: 5; cell1 → cell1 (workshop): 3 → omitted.
+    // cell1 → event cell: 7. cell2 → event cell: 3 + 2 from two posters, each
+    // under K on its own → omitted (OSE-1656). cell1 → cell1 (workshop): 3 → omitted.
     expect(body.flows).toEqual([
       {
         source: CELL_SRC_1,
         destination: CELL_EVENT,
         scans: { count: 7, suppressed: false, floor: 5 },
       },
-      {
-        source: CELL_SRC_2,
-        destination: CELL_EVENT,
-        scans: { count: 5, suppressed: false, floor: 5 },
-      },
     ]);
   });
 
   test('#7: a sub-K bucket is not recoverable by subtracting two scopes', async () => {
-    // Cell 2 holds 5 production scans and 3 demo scans for dash-a. Summing raw
-    // counts before the floor would show 8 under data_class=all, and 8 - 5
-    // would reveal the suppressed 3.
+    // Cell 2 holds 3 + 2 production scans and 3 demo scans for dash-a, three
+    // posters each under K in its hour. Summing raw counts before the floor
+    // would show 8 under data_class=all, and 8 - 5 would reveal the 3; summing
+    // per pair of cells would show 5, and the event's own total would take it
+    // apart. Per poster-hour, nothing in cell 2 is published in either scope.
     const prod = await call(handleCorridorDashboard, reqAs(A, COR));
     const all = await call(handleCorridorDashboard, reqAs(A, `${COR}?data_class=all`));
     const cell2 = (b: Body) => b.source_cells.find((c: Body) => c.cell === CELL_SRC_2).scans;
-    expect(cell2(prod.body).count).toBe(5);
-    expect(cell2(all.body).count).toBe(5);
+    expect(cell2(prod.body).count).toBeNull();
+    expect(cell2(all.body).count).toBeNull();
     const flow2 = (b: Body) =>
-      b.flows.find((f: Body) => f.source === CELL_SRC_2 && f.destination === CELL_EVENT).scans;
-    expect(flow2(all.body).count).toBe(5);
+      b.flows.find((f: Body) => f.source === CELL_SRC_2 && f.destination === CELL_EVENT);
+    expect(flow2(all.body)).toBeUndefined();
     // Across brands too: a member of both sees each brand's bucket floored alone.
     const both = await call(handleCorridorDashboard, reqAs(AB, COR));
     const onlyB = await call(handleCorridorDashboard, reqAs(AB, `${COR}?brand_id=${DASH.brandB}`));
@@ -456,16 +463,17 @@ describe('organizer / partner report — one event', () => {
     expect(body.event).toMatchObject({ id: DASH.bocce, status: 'active', is_published: true });
     expect(body.reach.posters).toBe(3);
     expect(body.reach.places).toBe(2);
-    expect(body.reach.scans).toBe(12);
+    // OSE-1656: the poster-hours with 5 or more (bocce's 7; its 3 and 2 never join).
+    expect(body.reach.scans).toEqual({ count: 7, suppressed: false, floor: 5 });
     // 9 on the event link; the donation link's 3 is under K and never joins.
     expect(body.reach.clicks).toEqual({ count: 9, suppressed: false, floor: 5 });
-    expect(body.participation.anonymous.scans).toBe(12);
+    expect(body.participation.anonymous.scans).toEqual(body.reach.scans);
     expect(body.participation.explicit.registrations.count).toBe(7);
     expect(body.participation.explicit.email_signups.suppressed).toBe(true);
     // on show, waiting and declined never overlap: the declined placement is
     // still is_active = 1 and must not count as on show.
     expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1, declined: 1 });
-    expect(body.shared_report.views_30d).toBe(4);
+    expect(body.shared_report.views_30d).toEqual({ count: null, suppressed: true, floor: 5 });
   });
 
   test('the workshop: every identity-derived count under K is suppressed', async () => {
@@ -481,8 +489,8 @@ describe('organizer / partner report — one event', () => {
       floor: 5,
     });
     expect(body.reach.clicks.suppressed).toBe(true);
-    // Anonymous scans stay exact: a first scan must show.
-    expect(body.participation.anonymous.scans).toBe(3);
+    // Anonymous scans are floored too (OSE-1656): 3 in one hour reads withheld.
+    expect(body.participation.anonymous.scans).toEqual({ count: null, suppressed: true, floor: 5 });
   });
 
   test('an unknown event is 404', async () => {
