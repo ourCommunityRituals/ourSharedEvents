@@ -177,3 +177,116 @@ test('a link for one event does not open another event', async ({ page }) => {
   await expect(page.getByTestId('signed-link-error')).toBeVisible();
   await expect(page.getByTestId('report-main')).not.toContainText(seeded.eventTitle);
 });
+
+// A sponsor's own link is sent fewer sections than the organizer's, and the
+// report names the ones it withheld as locked cards. On a phone those cards are
+// part of the page's one scroll: in the flow, inside the screen's width, with
+// nothing opened over the page. The names come from the API's answer for the
+// same link, so the page is checked against the server and not against a list
+// kept here.
+for (const depth of ['local', 'mid'] as const) {
+  test(`a sponsor link at ${depth} depth: its locked sections sit in the page's one scroll on a 375px screen`, async ({
+    page,
+    request,
+  }) => {
+    const minted = await request.post(
+      `/api/v2/admin/events/${encodeURIComponent(seeded.eventId)}/shared-report/mint-link`,
+      {
+        headers: { Authorization: `Bearer ${ADMIN_BEARER}` },
+        data: { role: 'sponsor', depth, sponsor_id: seeded.sponsorId, ttl_days: 1 },
+      }
+    );
+    expect(minted.status()).toBe(200);
+    const { token } = (await minted.json()) as { token: string };
+
+    const api = await request.get(
+      `/api/v2/events/${encodeURIComponent(seeded.eventId)}/shared-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(api.status()).toBe(200);
+    const { report } = (await api.json()) as {
+      report: { upgrade?: { locked_sections: string[]; next_depth: string } };
+    };
+    const locked = report.upgrade?.locked_sections ?? [];
+    expect(locked.length, `the ${depth} link has sections withheld`).toBeGreaterThan(0);
+
+    await page.setViewportSize(PHONE);
+    await page.goto(
+      `/sharedReport?eventId=${encodeURIComponent(seeded.eventId)}&token=${encodeURIComponent(token)}`
+    );
+    await expect(page.getByTestId('signed-link-event-title')).toHaveText(seeded.eventTitle);
+
+    const cards = page.getByTestId('signed-link-locked-section');
+    await expect(cards).toHaveCount(locked.length);
+    expect(
+      await cards.evaluateAll((els) => els.map((el) => el.getAttribute('data-section-name')))
+    ).toEqual(locked);
+
+    // Measured before anything is scrolled. Each line below is its own finding,
+    // so they are soft: one run names every rule the page breaks.
+    const layout = await page.evaluate(() => {
+      const doc = document.documentElement;
+      const group = document.querySelector('[data-testid="signed-link-locked-sections"]')!;
+      const cardEls = [...group.querySelectorAll('[data-testid="signed-link-locked-section"]')];
+      const chain: Element[] = [...cardEls];
+      for (let el: Element | null = group; el && el !== doc; el = el.parentElement) chain.push(el);
+      const outOfFlow: string[] = [];
+      const innerScrollers: string[] = [];
+      for (const el of chain) {
+        const cs = getComputedStyle(el);
+        const name = `${el.tagName.toLowerCase()}.${el.className}`;
+        if (cs.position !== 'static' && cs.position !== 'relative') {
+          outOfFlow.push(`${name} is ${cs.position}`);
+        }
+        const scrollsDown =
+          /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+        const scrollsAcross =
+          /(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1;
+        if (el !== document.body && (scrollsDown || scrollsAcross)) innerScrollers.push(name);
+      }
+      const offScreen = cardEls
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.left < 0 || r.right > window.innerWidth + 0.5 || r.width < 1)
+        .map((r) => `${Math.round(r.left)}..${Math.round(r.right)}`);
+      const blurred = chain
+        .map((el) => getComputedStyle(el).filter)
+        .filter((f) => f && f !== 'none');
+      return {
+        sideways: doc.scrollWidth - doc.clientWidth,
+        outOfFlow,
+        innerScrollers,
+        offScreen,
+        openDialogs: document.querySelectorAll(
+          'dialog[open], [role="dialog"]:not([hidden]), [role="alertdialog"]:not([hidden]), [aria-modal="true"]:not([hidden])'
+        ).length,
+        blurred,
+      };
+    });
+    expect.soft(layout.sideways, 'no sideways scroll at 375px').toBeLessThanOrEqual(0);
+    expect.soft(layout.outOfFlow, "in the page's flow").toEqual([]);
+    expect.soft(layout.innerScrollers, 'one scroll: no scrolling box around the cards').toEqual([]);
+    expect.soft(layout.offScreen, "inside the screen's width").toEqual([]);
+    expect.soft(layout.openDialogs, 'no dialog').toBe(0);
+    // Present behaviour, not the story's wording: the cards are plain
+    // placeholders, with no blur filter on them or on anything around them.
+    expect.soft(layout.blurred, 'no blur (present behaviour)').toEqual([]);
+
+    // Each card is reached by scrolling the page, and once there it is what is
+    // drawn at its own middle: nothing is laid over it. 95% and not 100%: a card
+    // brought to the screen's edge can sit a fraction of a pixel past it (seen
+    // at 99.97%); a card too wide for the screen, or held in a short scrolling
+    // box, shows about 79%.
+    for (let i = 0; i < locked.length; i++) {
+      await cards.nth(i).scrollIntoViewIfNeeded();
+      await expect.soft(cards.nth(i), `card ${i + 1} fits on the screen`).toBeInViewport({
+        ratio: 0.95,
+      });
+      const covered = await cards.nth(i).evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return top !== null && el.contains(top) ? '' : `covered by ${top?.tagName ?? 'nothing'}`;
+      });
+      expect.soft(covered, `nothing drawn over card ${i + 1}`).toBe('');
+    }
+  });
+}

@@ -43,7 +43,7 @@ Before deploying Story 5.2 changes:
    - `SHEETS_SPREADSHEET_ID`
    - `ADMIN_TOKEN`
 4. **SHORTLINKS sheet exists** - Required for Worker-native shortlink resolution
-5. **Rollback plan ready** - Review [ROLLBACK.md](./ROLLBACK.md)
+5. **Rollback plan ready** - Review [ROLLBACK.md](../runbooks/ROLLBACK.md)
 
 ## Cutover Process
 
@@ -160,9 +160,7 @@ If issues occur after cutover:
 
 ### Quick Rollback (Worker Version)
 
-```bash
-npm run rollback:prod
-```
+See [ROLLBACK.md](../runbooks/ROLLBACK.md). `npm run rollback:prod` does not work (`scripts/rollback-worker.mjs` runs from a folder that no longer exists).
 
 ### Backend Mode Rollback
 
@@ -226,7 +224,7 @@ Shortlinks (`/r/...`) still require GAS:
 
 ## Related Documentation
 
-- [ROLLBACK.md](./ROLLBACK.md) - Rollback procedures
+- [ROLLBACK.md](../runbooks/ROLLBACK.md) - Rollback procedures
 - [worker-routing.md](./worker-routing.md) - Worker routing architecture
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment procedures
 - [cloudflare-proxy/src/config/backendConfig.js](../cloudflare-proxy/src/config/backendConfig.js) - Backend routing logic

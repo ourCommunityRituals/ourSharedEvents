@@ -22,6 +22,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import {
   bucketScansByDay,
   floorPreEventActivity,
+  organizerPreEventActivity,
   readPreEventActivity,
   localDay,
   PRE_EVENT_DAYS,
@@ -176,6 +177,7 @@ describe('floorPreEventActivity — the sponsor never sees a sub-5 number', () =
       places: 1,
       scans: 3,
       clicks: 12,
+      clicksByCode: [12],
       scansByDay: [
         { day: '2026-09-28', count: 2 },
         { day: '2026-09-29', count: 6 },
@@ -188,6 +190,43 @@ describe('floorPreEventActivity — the sponsor never sees a sub-5 number', () =
     expect(f.scansByDay[0].count.suppressed).toBe(true);
     expect(f.scansByDay[0].count.count).toBeNull();
     expect(f.scansByDay[1].count.count).toBe(6);
+    // The per-code parts are read-side only: the sponsor is never sent them.
+    expect(Object.keys(f).sort()).toEqual(['clicks', 'places', 'posters', 'scans', 'scansByDay']);
+  });
+});
+
+describe('organizerPreEventActivity — the tap total is the sum of the codes that clear the floor', () => {
+  const activity = (clicksByCode: number[]) => ({
+    posters: 2,
+    places: 1,
+    scans: 3,
+    clicks: clicksByCode.reduce((t, n) => t + n, 0),
+    clicksByCode,
+    scansByDay: [{ day: '2026-09-29', count: 3 }],
+  });
+
+  test('a code under the floor never joins the total: 10 + 2 + 1 reads 10, and so does 10 + 2 + 2', () => {
+    const ten = { count: 10, suppressed: false, floor: 5 };
+    expect(organizerPreEventActivity(activity([10, 2, 1])).clicks).toEqual(ten);
+    expect(organizerPreEventActivity(activity([10, 2, 2])).clicks).toEqual(ten);
+  });
+
+  test('small codes never add up to a total: 4 + 4 + 3 + 4 is withheld; no codes is withheld', () => {
+    const none = { count: null, suppressed: true, floor: 5 };
+    expect(organizerPreEventActivity(activity([4, 4, 3, 4])).clicks).toEqual(none);
+    expect(organizerPreEventActivity(activity([])).clicks).toEqual(none);
+  });
+
+  test('every code at or above the floor: the total is all of them', () => {
+    expect(organizerPreEventActivity(activity([5, 6, 20])).clicks.count).toBe(31);
+  });
+
+  test('scans stay exact, and the per-code parts are not sent', () => {
+    const o = organizerPreEventActivity(activity([10, 2, 1]));
+    expect(o.scans).toBe(3);
+    expect(o.scansByDay).toEqual([{ day: '2026-09-29', count: 3 }]);
+    expect(Object.keys(o).sort()).toEqual(['clicks', 'places', 'posters', 'scans', 'scansByDay']);
+    expect(JSON.stringify(o)).not.toContain('clicksByCode');
   });
 });
 
@@ -198,13 +237,40 @@ describe('readPreEventActivity — counts from D1', () => {
     expect(a.places).toBe(2);
     expect(a.scans).toBe(12);
     expect(a.clicks).toBe(11);
+    // The same 11 taps, per code (event link 9, donation link 2).
+    expect([...a.clicksByCode].sort((x, y) => x - y)).toEqual([2, 9]);
     // The 20-day-old scans are in the total but not in the 14-day chart.
     expect(a.scansByDay.reduce((t, d) => t + d.count, 0)).toBe(9);
   });
 
   test('an event with nothing yet reads as zeros, not an error', async () => {
     const a = await readPreEventActivity(tenv.DB, 'pe-draft', 'America/Chicago');
-    expect(a).toMatchObject({ posters: 0, places: 0, scans: 0, clicks: 0 });
+    expect(a).toMatchObject({ posters: 0, places: 0, scans: 0, clicks: 0, clicksByCode: [] });
+  });
+
+  /** The real DB, except any statement reading the short links fails. */
+  function tapReadFails(db: D1Database): D1Database {
+    return new Proxy(db, {
+      get(target, prop) {
+        if (prop !== 'prepare') return Reflect.get(target, prop);
+        return (sql: string) => {
+          if (!sql.includes('FROM shortlinks')) return target.prepare(sql);
+          const boom = () => Promise.reject(new Error('no such table: shortlinks'));
+          const stmt = { bind: () => stmt, all: boom, first: boom, run: boom, raw: boom };
+          return stmt;
+        };
+      },
+    });
+  }
+
+  test('a failed tap read: the card still gets its scans (taps read as none), a strict caller gets the error', async () => {
+    const broken = tapReadFails(tenv.DB);
+    const a = await readPreEventActivity(broken, 'pe-busy', 'America/Chicago');
+    expect(a).toMatchObject({ posters: 3, places: 2, scans: 12, clicks: 0, clicksByCode: [] });
+    // Strict (the event dashboard): never a total that was not read.
+    await expect(
+      readPreEventActivity(broken, 'pe-busy', 'America/Chicago', new Date(), true)
+    ).rejects.toThrow('shortlinks');
   });
 });
 
@@ -230,7 +296,11 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
     expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: 12 });
     // Poster tiers (PO 2026-09-30): digital taps are K=5-floored for the
     // organizer too — the tap total arrives as a FlooredCount, scans stay exact.
-    expect(body.activity.clicks).toEqual({ count: 11, suppressed: false, floor: 5 });
+    // The total counts the codes that clear the floor on their own: the event
+    // link's 9. The donation link's 2 is withheld and never joins it (as 11,
+    // the total moved to 12 when the donation link gained a tap).
+    expect(body.activity.clicks).toEqual({ count: 9, suppressed: false, floor: 5 });
+    expect(body.activity).not.toHaveProperty('clicksByCode');
     expect(body.link?.url).toBe('https://t.test/s/peBUS1'); // public before donation
     expect(body.link?.qr.startsWith('data:image/')).toBe(true);
     expect(body.poster_url).toBe('/poster?event=pe-busy');
@@ -301,7 +371,14 @@ describe('daysToGo — counted in the event’s zone', () => {
 describe('/sponsor — pre-event reach, floored', () => {
   test('the reach line renders floored counts as words, never a raw sub-5 number', () => {
     const html = renderPreEventReach(
-      floorPreEventActivity({ posters: 1, places: 1, scans: 3, clicks: 2, scansByDay: [] })
+      floorPreEventActivity({
+        posters: 1,
+        places: 1,
+        scans: 3,
+        clicks: 2,
+        clicksByCode: [2],
+        scansByDay: [],
+      })
     );
     expect(html).toContain('Your name is on 1 poster in 1 place');
     expect(html).toContain('fewer than 5 poster scans');
@@ -311,7 +388,14 @@ describe('/sponsor — pre-event reach, floored', () => {
 
   test('no poster yet → link taps still count as reach; says no posters honestly', () => {
     const html = renderPreEventReach(
-      floorPreEventActivity({ posters: 0, places: 0, scans: 0, clicks: 30, scansByDay: [] })
+      floorPreEventActivity({
+        posters: 0,
+        places: 0,
+        scans: 0,
+        clicks: 30,
+        clicksByCode: [30],
+        scansByDay: [],
+      })
     );
     expect(html).toContain('30 link taps');
     expect(html).toContain('No posters up yet.');
@@ -319,7 +403,14 @@ describe('/sponsor — pre-event reach, floored', () => {
 
   test('link taps lead, poster scans follow (the shared link is the big driver)', () => {
     const html = renderPreEventReach(
-      floorPreEventActivity({ posters: 2, places: 1, scans: 9, clicks: 40, scansByDay: [] })
+      floorPreEventActivity({
+        posters: 2,
+        places: 1,
+        scans: 9,
+        clicks: 40,
+        clicksByCode: [40],
+        scansByDay: [],
+      })
     );
     expect(html.indexOf('40 link taps')).toBeLessThan(html.indexOf('9 poster scans'));
   });

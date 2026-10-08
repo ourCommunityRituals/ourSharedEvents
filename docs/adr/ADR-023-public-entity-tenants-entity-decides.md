@@ -105,9 +105,10 @@ are the repo facts checked afterwards. Each is a read of source, not a runtime c
 - **No regime flag, steward, retention hold or decision log exists** (searched `src/` and
   `docs/`). The build-side items below are all new work, not gaps in something present.
 - **No tenant data-export feature exists.** Only `report.export-json` / `export-pdf`
-  flags for SharedReport (`docs/features/TIERS.md`) and a manual D1 export in
-  `docs/runbooks/DISASTER-RECOVERY.md`.
-- **Forms PII is already scrubbed on a schedule** (`DISASTER-RECOVERY.md`: older than
+  flags for SharedReport (`docs/features/TIERS.md`). (A manual D1 export stood in
+  `docs/runbooks/DISASTER-RECOVERY.md` when this was written. It was removed on
+  2026-10-07: it wrote rows to a folder git did not ignore.)
+- **Forms PII is already scrubbed on a schedule** (`DISASTER-RECOVERY.md` §7: older than
   retention is gone by design). That is a deletion path a public-entity retention hold
   would have to override, so the hold is not a small add-on.
 - **IP handling, which the compliance check flagged as its top risk:** `CF-Connecting-IP`
