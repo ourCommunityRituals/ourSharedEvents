@@ -287,6 +287,74 @@ describe('OSE-1459 — poster scan times come from the scan hour, not the write 
     expect(row!.first_scan_at).toBe('2026-05-07T19:00:00Z');
     expect(row!.last_scan_at).toBe('2026-05-07T19:00:00Z');
   });
+
+  // The hour is cut twice: /q/ stores an hour, and the report cuts whatever it
+  // reads to the hour again (`bucketToHour`). Nothing held the second cut: every
+  // seed in the suite already sat on the hour, so taking it out left all of it
+  // green. `scan_bucket` is free text with no check on it, so the report's own
+  // cut is what stands between a finer stored value and the reader.
+  //
+  // Seen red: with `d.setUTCMinutes(0, 0, 0)` removed from `bucketToHour`.
+  test('scans stored finer than the hour are reported on the hour, and no time in the report is finer', async () => {
+    const evt = 'test-evt-711-finer';
+    await seedEvent(evt);
+    await seedDeployment('pd-711-finer', evt, 'Bakery door');
+    const stored = [
+      '2026-05-07T19:07:31',
+      '2026-05-07T19:12:05',
+      '2026-05-07T19:30:00',
+      '2026-05-07T19:44:59',
+      '2026-05-07T19:58:44',
+    ];
+    expect(stored).toHaveLength(CORRIDOR_MAP_MIN_COUNT);
+    for (const [i, bucket] of stored.entries()) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+           VALUES (?, ?, 'pd-711-finer', ?, '2026-05-07 19:59:59')`
+        )
+        .bind(`spe-711-finer-${i}`, evt, bucket)
+        .run();
+    }
+
+    const r = await buildSharedReport(tenv().DB, evt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const row = r.report.poster_attribution.find((p) => p.poster_deployment_id === 'pd-711-finer');
+    expect(row, 'five scans in one hour: the poster is published').toBeDefined();
+    expect(row!.scan_count).toBe(CORRIDOR_MAP_MIN_COUNT);
+    expect(row!.first_scan_at).toBe('2026-05-07T19:00:00Z');
+    expect(row!.last_scan_at).toBe('2026-05-07T19:00:00Z');
+    // The labels are the same hour in words: no minutes in them either.
+    expect(row!.first_scan_label).not.toMatch(/\d:\d\d/);
+    expect(row!.last_scan_label).not.toMatch(/\d:\d\d/);
+
+    // Every time in the report, wherever it sits. Three are not observations and
+    // are left out by name: the organizer's own start and end, and the clock of
+    // the hourly job that built the aggregates.
+    const NOT_OBSERVED = /^\$\.(event_start_date|event_end_date|_meta\.materialized_at)$/;
+    const finer: string[] = [];
+    let times = 0;
+    const walk = (value: unknown, path: string): void => {
+      if (Array.isArray(value)) value.forEach((v, i) => walk(v, `${path}[${i}]`));
+      else if (value && typeof value === 'object') {
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          walk(v, `${path}.${k}`);
+        }
+      } else if (typeof value === 'string' && !NOT_OBSERVED.test(path)) {
+        const m = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:(\d{2})(?::(\d{2})(\.\d+)?)?/.exec(value);
+        if (!m) return;
+        times++;
+        if (m[1] !== '00' || (m[2] ?? '00') !== '00' || m[3]) finer.push(`${path} = ${value}`);
+      }
+    };
+    walk(r.report, '$');
+    expect(times, 'the walk saw the poster times').toBeGreaterThanOrEqual(2);
+    expect(finer).toEqual([]);
+    // None of the stored minutes or seconds is anywhere in the payload.
+    const json = JSON.stringify(r.report);
+    for (const bucket of stored) expect(json).not.toContain(bucket.slice(11));
+  });
 });
 
 describe('OSE-711 — aggregate-only invariant (static guard)', () => {

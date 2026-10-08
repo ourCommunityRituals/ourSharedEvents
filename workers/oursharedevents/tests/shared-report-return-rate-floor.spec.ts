@@ -371,6 +371,50 @@ describe('no below_min_sample_size detail prints an observed count', () => {
     }
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
+
+  // The test above reaches the map's line through poster cells. An event with
+  // no poster scans yet takes the other path: the neighbourhood preview, drawn
+  // by the map renderer, which writes its own hidden-area line. That line had no
+  // test: printing the number of hidden areas in it left every spec here green.
+  //
+  // Seen red: with `${suppressedCells.length} areas not shown ...` in the
+  // builder (as a template literal, and as string concatenation, which the
+  // source gate in aggregate-only.invariant does not read), and with the
+  // pre-fix loop ("area 1 of 6 suppressed ...", one line per area).
+  test('the launch-day map (no poster scans yet): one hidden-area line, naming only the floor, the same whether the head count is published or withheld', async () => {
+    const seen: Array<{ hidden: number; detail: string | undefined }> = [];
+    for (const [id, people] of [
+      ['test-evt-rrf-map-shown', 20],
+      ['test-evt-rrf-map-held', 3],
+    ] as const) {
+      await seedEvent(id, CELL);
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_aggregates
+             (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
+           VALUES (?, ?, '2026-05-07', 19, ?, ?, datetime('now'))`
+        )
+        .bind(`sa-${id}`, id, people * 2, people)
+        .run();
+
+      const r = await buildSharedReport(tenv().DB, id);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      expect(r.report.corridor_map?.source).toBe('fallback');
+      expect(r.report.unique_gatherings).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
+      const lines = r.report._meta.suppression_reasons.filter((s) => s.field === 'corridor_map');
+      expect(lines, 'one line, not one per hidden area').toHaveLength(1);
+      expect(lines[0]!.reason).toBe('below_min_sample_size');
+      expect(numbersIn(lines[0]!.detail)).toEqual([String(CORRIDOR_MAP_MIN_COUNT)]);
+      seen.push({ hidden: r.report.corridor_map!.suppressed.length, detail: lines[0]!.detail });
+      expect(bannedKeysIn(r.report)).toEqual([]);
+    }
+    // The two maps hide a different number of areas (the event's own cell is
+    // one of them only when its head count is withheld), and say the same thing.
+    expect(seen[0]!.hidden).not.toBe(seen[1]!.hidden);
+    expect(seen[0]!.detail).toBe(seen[1]!.detail);
+  });
 });
 
 describe('sponsor_impressions[].count passes the same floor as its rollups', () => {
