@@ -117,11 +117,18 @@ interface SharedReport {
   //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
   //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
   //    a rate beside `sample_size` is a head count (20% of 5 is one person), so it is
-  //    published only when the people it counts are at least K and the people it does
-  //    not count are none or at least K. Otherwise that rate is null, `sample_size`
-  //    stays, and `_meta.suppression_reasons` carries `return_rate.venue_pct` or
-  //    `return_rate.corridor_pct` with `below_min_sample_size`. So 0% is never
-  //    published, and 100% is.
+  //    published only when the people it counts and the people it does not count are
+  //    each at least K (OSE-1649). Otherwise that rate is null, `sample_size` stays, and
+  //    `_meta.suppression_reasons` carries `return_rate.venue_pct` or
+  //    `return_rate.corridor_pct` with `below_min_sample_size`. So neither 0% nor 100%
+  //    is published: 100% would turn into a dash the day one more person came, and say
+  //    that person did not return. (The returns export keeps the shared nested rule,
+  //    which allows "all": its weekly snapshots are rounded down to multiples of 5.)
+  //    A corridor's rates are published together or not at all: if any event in the
+  //    corridor with a published sample size must withhold its corridor rate, every
+  //    event's is withheld, because with two events "seen at both" is one number and
+  //    the other report's rate gives it back. The `return_rate`, head-count and map
+  //    notes are given at 0 as at 1 to 4, so a note never tells "none" from "a few".
   return_rate: {
     venue_pct: number | null; // also seen at another event of this event's confirmed series
     corridor_pct: number | null; // returners seen at corridor before
