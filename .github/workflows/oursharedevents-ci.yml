@@ -866,10 +866,17 @@ jobs:
       # executed==0 while discovered>0, and publishes the executed/skipped split so
       # partial skips are visible instead of silent (the old "35 passed / 22 skipped,
       # nothing flagged" false green).
+      #
+      # WebKit opens one blank page before the tests (2026-10-08, run
+      # 37795716364): the first page a just-installed WebKit was asked for did
+      # not open inside the 30 s test limit on either worker, and every later
+      # one did. The warm-up loads no page of the app; retries stay at 0 and
+      # the test limit at 30 s, so a page that hangs still fails.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
           bash scripts/ci/install-playwright-browsers.sh chromium webkit
+          node scripts/ci/warm-playwright-browser.mjs webkit
           PW_LABEL='T0: Component (viewport)' scripts/pw-guarded.sh \
             --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts \
