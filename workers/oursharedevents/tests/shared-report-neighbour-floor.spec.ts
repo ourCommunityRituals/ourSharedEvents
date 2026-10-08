@@ -75,11 +75,11 @@ const STAMP = '2026-05-08 03:00:00';
 interface World {
   /** People in the event's second hour bucket (scan_aggregates). */
   hourPeople: number;
-  /** People in a second hour bucket of the sibling event in the same series. */
+  /** People in a second hour bucket of the earlier event in the same series. */
   siblingHourPeople: number;
   /** People seen at this event (anon_id_returns rows). */
   attendees: number;
-  /** Of those, how many came more than once (visit_count > 1). */
+  /** Of those, how many were also at the earlier event of the series (OSE-1652). */
   cameTwice: number;
   /** Of those, how many were also seen at the sibling event in the corridor. */
   seenElsewhere: number;
@@ -174,13 +174,17 @@ const hash = (prefix: string, i: number): string => `${prefix}${String(i).padSta
 /** Seed one whole dataset for `eventId`. Deterministic: same world, same rows. */
 async function seedWorld(eventId: string, w: World): Promise<void> {
   const db = tenv().DB;
+  // Two other events, one per question, so each lever moves one thing. `sib`
+  // shares the corridor cell and no series (corridor_pct); `ser` is the earlier
+  // event of the series and has no cell (venue_pct and headcount_trend).
   const sib = `${eventId}-sib`;
+  const ser = `${eventId}-ser`;
   const series = `${eventId}-series`;
   const camp = `${eventId}-camp`;
   const sp = (x: string) => `${eventId}-sp${x}`;
 
   const stmts: D1PreparedStatement[] = [];
-  const event = (id: string, start: string, end: string) =>
+  const event = (id: string, start: string, end: string, cell: string | null = CELL7) =>
     db
       .prepare(
         `INSERT INTO events
@@ -189,9 +193,10 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
          VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, 'America/Chicago',
                  ?, ?, ?, ?)`
       )
-      .bind(id, `Neighbour ${id}`, id, CELL7, start, end, STAMP, STAMP);
+      .bind(id, `Neighbour ${id}`, id, cell, start, end, STAMP, STAMP);
   stmts.push(event(eventId, '2026-05-07T19:00:00Z', '2026-05-07T23:00:00Z'));
   stmts.push(event(sib, '2026-04-30T19:00:00Z', '2026-04-30T23:00:00Z'));
+  stmts.push(event(ser, '2026-04-23T19:00:00Z', '2026-04-23T23:00:00Z', null));
   stmts.push(
     db
       .prepare(
@@ -200,7 +205,7 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       )
       .bind(series, eventId, STAMP, STAMP),
     // The series points at its anchor event, so the events join it afterwards.
-    db.prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`).bind(series, eventId, sib)
+    db.prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`).bind(series, eventId, ser)
   );
 
   // People per hour bucket. A constant sub-K bucket rides along (3), so a rule
@@ -216,11 +221,13 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
   stmts.push(bucket(eventId, 19, 20), bucket(eventId, 21, 3));
   if (w.hourPeople > 0) stmts.push(bucket(eventId, 20, w.hourPeople));
   stmts.push(bucket(sib, 19, 12), bucket(sib, 21, 3));
-  if (w.siblingHourPeople > 0) stmts.push(bucket(sib, 20, w.siblingHourPeople));
+  stmts.push(bucket(ser, 19, 12), bucket(ser, 21, 3));
+  if (w.siblingHourPeople > 0) stmts.push(bucket(ser, 20, w.siblingHourPeople));
 
-  // People seen at the event. The first `cameTwice` came more than once; the
-  // LAST `seenElsewhere` were also at the sibling. The sibling's own row count
-  // is held constant, so the only thing that moves is the overlap.
+  // People seen at the event. The first `cameTwice` were also at the earlier
+  // event of the series; the LAST `seenElsewhere` were also at the corridor
+  // sibling. `visit_count` stays 1: it counts job runs, and nothing reads it.
+  // The sibling's own row count is held constant, so only the overlap moves.
   const anon = (h: string, venue: string, visits: number) =>
     db
       .prepare(
@@ -230,7 +237,8 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       )
       .bind(h, venue, STAMP, STAMP, visits, STAMP);
   for (let i = 0; i < w.attendees; i++) {
-    stmts.push(anon(hash('aaaa', i), eventId, i < w.cameTwice ? 2 : 1));
+    stmts.push(anon(hash('aaaa', i), eventId, 1));
+    if (i < w.cameTwice) stmts.push(anon(hash('aaaa', i), ser, 1));
   }
   for (let i = 0; i < w.seenElsewhere; i++) {
     stmts.push(anon(hash('aaaa', w.attendees - 1 - i), sib, 1));

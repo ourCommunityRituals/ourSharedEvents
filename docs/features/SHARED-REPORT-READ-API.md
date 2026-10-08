@@ -108,7 +108,11 @@ interface SharedReport {
   // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
   unique_gatherings: number | null;
 
-  // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor.
+  // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
+  //    of its confirmed series (`venue_pct`, OSE-1652) or in its corridor (`corridor_pct`).
+  //    Both count distinct events, never `visit_count` (that column counts runs of the
+  //    nightly job). An event in no confirmed series gets `venue_pct: null` with
+  //    `no_series`.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
   //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
   //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
@@ -117,10 +121,9 @@ interface SharedReport {
   //    not count are none or at least K. Otherwise that rate is null, `sample_size`
   //    stays, and `_meta.suppression_reasons` carries `return_rate.venue_pct` or
   //    `return_rate.corridor_pct` with `below_min_sample_size`. So 0% is never
-  //    published, and 100% is. Most single-day events have fewer than K people who
-  //    came more than once, so `venue_pct` is usually null for them.
+  //    published, and 100% is.
   return_rate: {
-    venue_pct: number | null; // returners seen at THIS venue before
+    venue_pct: number | null; // also seen at another event of this event's confirmed series
     corridor_pct: number | null; // returners seen at corridor before
     sample_size: number | null; // total distinct anons used as denominator
   };

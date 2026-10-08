@@ -7,8 +7,8 @@
  *
  * Six fields per Session 1 ratified contract:
  *   1. unique_gatherings        — from scan_aggregates.distinct_agent_hashes (summed)
- *   2. return_rate              — % of distinct anons seen at prior events
- *      (per-venue + per-corridor variants)
+ *   2. return_rate              — % of distinct anons also seen at another event
+ *      (of the confirmed series, and of the corridor)
  *   3. corridor_density         — this event's anon count vs rolling baseline
  *   4. sponsor_impressions[]    — per sponsor × surface
  *   5. poster_attribution[]     — per poster deployment
@@ -66,6 +66,34 @@ function corridorKeyOf(event: {
 // OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
 // before surfacing in poster_attribution. Sub-second precision exposes timing
 // patterns that can correlate individual scan events across anonymised reports.
+/**
+ * The event's series, when it is confirmed and belongs to the event's brand.
+ *
+ * Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
+ * across brands. `event_series` has no brand column, so the series' brand is
+ * its anchor event's brand; a series anchored at another brand's event is
+ * withheld whole (its name is another tenant's label). Callers brand-fence the
+ * series' instances as well, so legacy cross-brand rows cannot leak.
+ */
+async function confirmedSeriesOf(
+  db: D1Database,
+  event: { series_id: string | null; brand_id: string }
+): Promise<{ id: string; series_name: string } | null> {
+  if (!event.series_id) return null;
+  const series = await db
+    .prepare(
+      `SELECT es.id, es.series_name, es.state
+         FROM event_series es
+         JOIN events anchor ON anchor.id = es.venue_id
+        WHERE es.id = ? AND anchor.brand_id = ?`
+    )
+    .bind(event.series_id, event.brand_id)
+    .first<{ id: string; series_name: string; state: string }>();
+  return series && series.state === 'confirmed'
+    ? { id: series.id, series_name: series.series_name }
+    : null;
+}
+
 function bucketToHour(iso: string): string {
   // OSE-1376: created_at is SQLite `datetime('now')` ("YYYY-MM-DD HH:MM:SS", UTC,
   // no offset) — parse it as UTC explicitly, never as the runtime's local time.
@@ -316,29 +344,46 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // narrows a returner to one of two specific people). Suppressed per S5-Q5.
   if (distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT) {
     sampleSize = distinctAnonsHere;
-    // venue_pct — same-venue means same event_id in v1 (no separate venues
-    // table). So venue_pct asks: of the anons at THIS event, what fraction
-    // were also at the SAME event before? With (anon, venue) PK and an
-    // event having a single venue_id, this would be 100% by construction
-    // — so we instead interpret "venue" as "this event_id" and the answer
-    // is "how many returners have visit_count > 1" (came multiple times
-    // to the same event window — relevant only for multi-day events).
-    const repeatRow = await db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM anon_id_returns
-         WHERE venue_id = ? AND visit_count > 1`
-      )
-      .bind(eventId)
-      .first<{ c: number }>();
-    // A rate beside its sample size IS its numerator (20% of 5 is one person),
-    // and the rest of the group is its complement. `flooredRatePct` publishes
-    // the rate only when neither is a group under the floor; otherwise null.
-    venuePct = flooredRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
-    if (venuePct === null) {
+    // venue_pct — of the people at THIS event, how many came to another event
+    // of its confirmed series: the same place, again (OSE-1652). A venue is
+    // not a row of its own; a confirmed series is how the schema says "this
+    // gathering recurs here" (0033/0034), and it is the grouping the headcount
+    // trend reads. Counted as distinct events, like corridor_pct and the
+    // returns export. Never `visit_count`: the nightly job adds one to it on
+    // every run over the same scans, so it counts runs, not returns, and read
+    // as a return it made six one-time visitors a 100% rate.
+    const series = await confirmedSeriesOf(db, event);
+    if (series) {
+      const repeatRow = await db
+        .prepare(
+          `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
+           FROM anon_id_returns a
+           JOIN events e ON e.id = a.venue_id
+           WHERE e.series_id = ?
+             AND e.brand_id = ?
+             AND a.venue_id != ?
+             AND a.anon_id_hash IN (
+               SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
+             )`
+        )
+        .bind(series.id, event.brand_id, eventId, eventId)
+        .first<{ c: number }>();
+      // A rate beside its sample size IS its numerator (20% of 5 is one person),
+      // and the rest of the group is its complement. `flooredRatePct` publishes
+      // the rate only when neither is a group under the floor; otherwise null.
+      venuePct = flooredRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
+      if (venuePct === null) {
+        suppression.push({
+          field: 'return_rate.venue_pct',
+          reason: 'below_min_sample_size',
+          detail: RATE_WITHHELD_DETAIL,
+        });
+      }
+    } else {
       suppression.push({
         field: 'return_rate.venue_pct',
-        reason: 'below_min_sample_size',
-        detail: RATE_WITHHELD_DETAIL,
+        reason: 'no_series',
+        detail: 'event is not part of a confirmed series',
       });
     }
 
@@ -809,21 +854,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     unique_gatherings: number | null;
   }> = [];
   if (event.series_id) {
-    // Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
-    // across brands. `event_series` has no brand column, so the series' brand is
-    // its anchor event's brand; a series anchored at another brand's event is
-    // withheld whole (its name is another tenant's label), and the instances
-    // below are brand-fenced as well, so legacy cross-brand rows cannot leak.
-    const series = await db
-      .prepare(
-        `SELECT es.id, es.series_name, es.state
-           FROM event_series es
-           JOIN events anchor ON anchor.id = es.venue_id
-          WHERE es.id = ? AND anchor.brand_id = ?`
-      )
-      .bind(event.series_id, event.brand_id)
-      .first<{ id: string; series_name: string; state: string }>();
-    if (series && series.state === 'confirmed') {
+    const series = await confirmedSeriesOf(db, event);
+    if (series) {
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
       // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend

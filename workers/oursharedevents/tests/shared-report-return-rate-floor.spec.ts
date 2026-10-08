@@ -87,33 +87,62 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM scan_cell_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
+  await db.prepare(`UPDATE events SET series_id = NULL WHERE id LIKE 'test-evt-rrf-%'`).run();
+  await db.prepare(`DELETE FROM event_series WHERE id LIKE 'ser-rrf-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-rrf-%'`).run();
 }
 
+/**
+ * The event, and the earlier event of its confirmed series (OSE-1652): the
+ * venue return rate counts people seen at another event of the same series.
+ * The earlier event has no cell, so it never counts toward corridor_pct.
+ */
 async function seedEvent(id: string, h3Res7: string | null = null): Promise<void> {
-  await tenv()
-    .DB.prepare(
-      `INSERT INTO events
-         (id, brand_id, title, slug, status, location, h3_res7, start_date, created_at, updated_at)
-       VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, '2026-05-07T19:00:00Z',
-               datetime('now'), datetime('now'))`
+  const db = tenv().DB;
+  const insert = (eventId: string, cell: string | null) =>
+    db
+      .prepare(
+        `INSERT INTO events
+           (id, brand_id, title, slug, status, location, h3_res7, start_date, created_at, updated_at)
+         VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, '2026-05-07T19:00:00Z',
+                 datetime('now'), datetime('now'))`
+      )
+      .bind(eventId, `Test ${eventId}`, eventId, cell)
+      .run();
+  await insert(id, h3Res7);
+  await insert(`${id}-prev`, null);
+  await db
+    .prepare(
+      `INSERT INTO event_series (id, venue_id, series_name, state) VALUES (?, ?, 'Test series', 'confirmed')`
     )
-    .bind(id, `Test ${id}`, id, h3Res7)
+    .bind(`ser-rrf-${id}`, `${id}-prev`)
+    .run();
+  await db
+    .prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`)
+    .bind(`ser-rrf-${id}`, id, `${id}-prev`)
     .run();
 }
 
-/** `n` people at the event; the first `cameTwice` of them more than once. */
+/**
+ * `n` people at the event; the first `cameTwice` of them were also at the
+ * earlier event of its series. `visit_count` is left at 1: it counts runs of
+ * the nightly job, not visits, and the report no longer reads it.
+ */
 async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<void> {
   const now = new Date().toISOString();
-  for (let i = 0; i < n; i++) {
-    await tenv()
+  const row = (hash: string, venue: string) =>
+    tenv()
       .DB.prepare(
         `INSERT INTO anon_id_returns
            (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, 1, ?)`
       )
-      .bind(`${i}`.padStart(32, 'f'), eventId, now, now, i < cameTwice ? 2 : 1, now)
+      .bind(hash, venue, now, now, now)
       .run();
+  for (let i = 0; i < n; i++) {
+    const hash = `${i}`.padStart(32, 'f');
+    await row(hash, eventId);
+    if (i < cameTwice) await row(hash, `${eventId}-prev`);
   }
 }
 

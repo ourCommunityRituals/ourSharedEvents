@@ -197,7 +197,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
       start_date: '2026-05-07T19:00:00Z',
     });
     await seedScanAggregate('test-evt-read-full', 42);
-    await seedAnonReturn({ hash: 'a'.repeat(32), venueId: 'test-evt-read-full', visit_count: 2 });
+    await seedAnonReturn({ hash: 'a'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'b'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'c'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'd'.repeat(32), venueId: 'test-evt-read-full' });
@@ -209,15 +209,16 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.report.event_id).toBe('test-evt-read-full');
     expect(r.report.unique_gatherings).toBe(42);
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
-    // was a private 3), so the sample size is published. One of the five came
-    // more than once: 20% of 5 is that one person, so the rate is withheld.
-    // (This test used to pin venue_pct = 20.)
+    // was a private 3), so the sample size is published. The venue rate counts
+    // people seen at another event of a confirmed series (OSE-1652); this event
+    // is in none, so there is nothing to compare with. (This test used to pin
+    // venue_pct = 20 from a visit_count of 2, which counts job runs.)
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
     expect(r.report.return_rate.venue_pct).toBeNull();
     expect(r.report._meta.suppression_reasons).toContainEqual(
       expect.objectContaining({
         field: 'return_rate.venue_pct',
-        reason: 'below_min_sample_size',
+        reason: 'no_series',
       })
     );
     // No baseline seeded → corridor_density_30d/90d nulled with reason
