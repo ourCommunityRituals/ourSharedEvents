@@ -68,7 +68,8 @@ function jwtFor(email: string): string {
   const now = Math.floor(Date.now() / 1000);
   return `${b64url({ alg: 'none', typ: 'JWT' })}.${b64url({ email, iat: now - 10, exp: now + 3600 })}.sig`;
 }
-const admin = { 'Cf-Access-Jwt-Assertion': jwtFor(ADMIN_EMAIL) };
+// A signed-in person is a browser on the admin site (admin write guard).
+const admin = { 'Cf-Access-Jwt-Assertion': jwtFor(ADMIN_EMAIL), 'Sec-Fetch-Site': 'same-origin' };
 const page = (id: string) => `https://t.test/api/v2/admin/events/${id}/poster-preview`;
 const bundle = (id: string) => `https://t.test/api/v2/admin/events/${id}/poster-bundle`;
 

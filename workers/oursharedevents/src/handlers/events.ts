@@ -19,6 +19,7 @@ import {
   logCoreValuesRefused,
 } from '../lib/core-values';
 import { corsHeaders } from '../lib/cors';
+import { isJsonContentType } from '../lib/content-type';
 import {
   cursorAfter,
   decodeUpcomingCursor,
@@ -478,8 +479,7 @@ function isValidIsoDate(date: string): boolean {
 }
 
 function isValidContentType(request: Request): boolean {
-  const ct = request.headers.get('content-type') || '';
-  return ct.includes('application/json');
+  return isJsonContentType(request.headers.get('content-type'));
 }
 
 function slugify(text: string): string {

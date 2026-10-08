@@ -228,6 +228,23 @@ done
 
 **Before that deploy:** `deploy-production` refuses to run while `ADMIN_KEY`, `X_OCR_INTERNAL` or `ADMIN_TOKEN` is set as a production Worker secret (ADR-012 gate R2). Check with `npx wrangler secret list --env production`. Delete any of the three with `npx wrangler secret delete <NAME> --env production`.
 
+### Access cookie SameSite setting, per environment (OSE-1500)
+
+**Why it is recorded:** Access signs a person in with the `CF_Authorization` cookie. The cookie's SameSite setting decides whether the browser attaches it to a request that another site makes to this host. With `None`, or in some browsers with no setting at all, another site can make a signed-in admin's browser send an admin write.
+
+**What the Worker does whatever the setting is:** every admin request that is not GET, HEAD or OPTIONS must come from this origin (`Sec-Fetch-Site: same-origin`, or a matching `Origin` in an older browser) or from automation holding a key header, and a body must be `application/json`. The rule is in `workers/oursharedevents/src/lib/admin-write-guard.ts`. `tests/admin-write-guard.derived.spec.ts` proves every `requireAdmin` route is behind it. The cookie setting is a second layer, not the only one.
+
+**The values.** These are read from the Cloudflare dashboard, which this repo cannot see. Nobody has read them yet, so they are not filled in. Do not copy a default from documentation into this table: write down what the dashboard shows.
+
+| Environment | Access application                                      | SameSite value   | Read on | Read by |
+| ----------- | ------------------------------------------------------- | ---------------- | ------- | ------- |
+| Staging     | the app on `stg.oursharedevents.com`                    | **not yet read** |         |         |
+| Production  | the app on `oursharedevents.com` (OSE-1353, to be made) | **not yet read** |         |         |
+
+**How to read it:** Zero Trust → Access → Applications → the app → its cookie settings → **Same Site Attribute**. To check what the browser actually received, sign in, open the browser's developer tools on the admin page, find the `CF_Authorization` cookie for the host and read its SameSite column. Record both if they differ.
+
+**What to set (recommended, owner decides):** `Lax`. `Strict` also closes the gap, but a person who arrives from a link on another site may be asked to sign in again. If the dashboard shows `None` or nothing selected, change it, then sign in again and confirm `/admin` still loads and saves. Fill in the table in a pull request each time the value is read or changed.
+
 ---
 
 ## First Production Launch — One-Time Data Steps

@@ -60,6 +60,7 @@ const PRE_EVENT_REACH_MAX = 20;
 import { renderSponsorHomePage, type PlacementRow } from '../lib/sponsor-home-render';
 import { sponsorTitle } from '../lib/sponsor-card';
 import { corsHeaders } from '../lib/cors';
+import { isJsonContentType } from '../lib/content-type';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -321,7 +322,7 @@ export async function handleSponsorPlacementRespond(
   // the route table alongside the other public writes, not buried here.
   const id = rid();
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;
@@ -393,7 +394,7 @@ export async function handleSponsorRequestCreate(
   // Rate limit lives at the router (publicReadLimited('sponsor-request', …)).
   const id = rid();
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;
@@ -477,7 +478,7 @@ export async function handleAdminAnswerSponsorRequest(
   // cannot set this Content-Type without a CORS preflight — without the check,
   // a sponsor could lure an organizer into approving the sponsor's own request
   // (CCR PR #700, L1 #1). Body capped like the sponsor-side writes.
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;
