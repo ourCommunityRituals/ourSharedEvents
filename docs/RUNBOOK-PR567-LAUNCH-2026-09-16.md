@@ -101,7 +101,7 @@ gh workflow run "OurSharedEvents CI/CD" --ref main -f deploy_production=PRODUCTI
 
 ## Rollback
 
-- Worker: `npx wrangler rollback --env {staging|production}` (or `npm run deploy:rollback`).
+- Worker: see [runbooks/ROLLBACK.md](./runbooks/ROLLBACK.md) (revert through CI; switching the production Worker back by hand is break-glass, §6). `npm run deploy:rollback`, named here before 2026-10-07, prints steps for the old Apps Script system.
 - Migrations are additive (0075 adds a column + indexes; 0076 adds tables/column) — no destructive down-migration; a Worker rollback to the prior version + the pre-existing schema is safe because the old code doesn't read the new columns.
 
 ## Not-yet-a-gate (follow-up, not launch-blocking)

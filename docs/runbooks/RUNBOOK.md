@@ -134,7 +134,7 @@ curl -s https://stg.oursharedevents.com/health | jq
   wrangler d1 migrations apply DB --env staging --remote
   wrangler d1 migrations apply FORMS_DB --env staging --remote
   ```
-- If data corrupted: See DISASTER-RECOVERY.md for D1 restore procedures
+- If data is wrong or missing: see [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md). Start at its table in §1. Do not delete a database.
 
 ---
 
@@ -199,16 +199,9 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 **Resolution:**
 
-- Rollback Worker to previous version:
-  ```bash
-  wrangler rollback --env staging
-  ```
-- Or revert the commit and push:
-  ```bash
-  git revert HEAD
-  git push origin main
-  ```
-- See ROLLBACK.md for full rollback procedures
+- Revert the change through a pull request: [ROLLBACK.md](./ROLLBACK.md) §3. A push straight to `main` is refused by branch protection.
+- For production, then run ROLLBACK.md §4.
+- Switching a Worker back by hand, outside CI, is break-glass on production: ROLLBACK.md §6.
 
 ---
 
@@ -277,12 +270,12 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 **What is expected (OSE-1508):** the database change is immediate, but copies already handed out live until they expire.
 
-| Where | How long it can lag | Source |
-| ----- | ------------------- | ------ |
+| Where                                                              | How long it can lag                                         | Source                                                                                                |
+| ------------------------------------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Guest's browser, `GET /api/v2/events` and `GET /api/v2/events/:id` | up to 60 s fresh + 300 s stale-while-revalidate = **6 min** | `private, max-age=60, stale-while-revalidate=300` in `workers/oursharedevents/src/handlers/events.ts` |
-| Attendee map, `GET /api/v2/events/map` | up to **6 min** (also cacheable at the edge: `public`) | `workers/oursharedevents/src/handlers/events-map.ts` |
-| TV `/display` event list | until its next refresh, **5 min** | `setInterval(loadEvents, 5 * 60 * 1000)` in `src/templates/display.html` |
-| TV screen settings (`display-config`) | **1 min** | `setInterval(loadDisplayConfig, 60 * 1000)` in `src/templates/display.html` |
+| Attendee map, `GET /api/v2/events/map`                             | up to **6 min** (also cacheable at the edge: `public`)      | `workers/oursharedevents/src/handlers/events-map.ts`                                                  |
+| TV `/display` event list                                           | until its next refresh, **5 min**                           | `setInterval(loadEvents, 5 * 60 * 1000)` in `src/templates/display.html`                              |
+| TV screen settings (`display-config`)                              | **1 min**                                                   | `setInterval(loadDisplayConfig, 60 * 1000)` in `src/templates/display.html`                           |
 
 **Inside the publish grace window** (`PUBLISH_GRACE_MINUTES`, 10 on deployed envs) the event was never listed, on the map, sitemap or the TV's "coming up", so an Undo there leaves no public trace. Only someone who already had the direct link could have seen it.
 

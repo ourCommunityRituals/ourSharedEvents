@@ -12,8 +12,8 @@
 | Deploy to staging     | Push to `main` branch (automatic via CI) |
 | Deploy to production  | Tag with `vX.Y.Z` (automatic via CI)     |
 | Manual staging worker | `wrangler deploy --env staging`          |
-| Rollback staging      | `npm run rollback:staging`               |
-| Rollback production   | `npm run rollback:prod`                  |
+| Rollback staging      | [ROLLBACK.md](./ROLLBACK.md) §3          |
+| Rollback production   | [ROLLBACK.md](./ROLLBACK.md) §3 and §4   |
 
 ---
 
@@ -451,35 +451,13 @@ curl -s https://www.oursharedevents.com/ping
 
 ## Rollback Procedures
 
-### Staging Rollback
+The steps are in [ROLLBACK.md](./ROLLBACK.md). They are not repeated here, so there is one copy to keep right.
 
-```bash
-# Single-command rollback
-npm run rollback:staging
+- **Undo a bad deploy:** ROLLBACK.md §3 (revert through CI), then §4 for production.
+- **Check afterwards:** ROLLBACK.md §7.
+- **Data is wrong or missing:** [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md).
 
-# Or via wrangler
-wrangler rollback --env staging
-```
-
-### Production Rollback
-
-```bash
-# Single-command rollback
-npm run rollback:prod
-
-# Or via wrangler
-wrangler rollback --env production
-```
-
-### Verify Rollback
-
-```bash
-# Check staging
-curl -s https://stg.oursharedevents.com/api/health/backend | jq
-
-# Check production
-curl -s https://www.oursharedevents.com/api/health/backend | jq
-```
+The `npm run rollback:*` scripts that used to be listed here do not work: `scripts/rollback-worker.mjs` runs from a folder that no longer exists. Switching the production Worker back by hand is break-glass (ROLLBACK.md §6).
 
 ---
 
