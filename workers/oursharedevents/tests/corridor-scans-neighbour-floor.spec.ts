@@ -59,12 +59,13 @@ const BYSTANDER_SCANS = 60;
 
 /**
  * Where posters hang. `off` holds one poster only, and it has been retired.
+ * Its id sorts ahead of the other two, though its row is the last to be built.
  * `nowhere` is a poster that was never given a cell: it is in no cell's row.
  */
 const SOURCE = {
   s1: '872664d00ffffff',
   s2: '872664d01ffffff',
-  off: '872664d02ffffff',
+  off: '872664c02ffffff',
   nowhere: null,
 } as const;
 /** Where events are held. `none`: the event has no place on the map. */
@@ -713,12 +714,15 @@ describe('which rows are listed', () => {
       scans: shown(6),
       scans_no_destination: shown(6),
     });
-    expect(cell(await bodyOf(at(5), 'a'), 'off')).toEqual({
+    const listed = await bodyOf(at(5), 'a');
+    expect(cell(listed, 'off')).toEqual({
       cell: SOURCE.off,
       posters: 0,
       scans: shown(5),
       scans_no_destination: withheld,
     });
+    // Rows are in cell order, wherever a row came from.
+    expect(listed.source_cells.map((c) => cellName(c.cell))).toEqual(['off', 's1', 's2']);
   });
 
   test('scans on a poster with no cell are in no cell and no flow, however many there are', async () => {
