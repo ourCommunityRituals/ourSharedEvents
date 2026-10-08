@@ -931,7 +931,11 @@ describe('invariant enforcement continuity — structural specs gate T0 (OSE-350
   const { readdirSync } = require('fs');
 
   const ARCH_REL = 'tests/e2e/0-architecture';
-  const specs = readdirSync(join(ROOT, ARCH_REL)).filter((f) => f.endsWith('.invariant.spec.ts'));
+  // `.invariant.test.ts` too: a brain invariant that lives in two repos names one
+  // test_file for both, and ourWKRP's convention is `.test.ts` (#29).
+  const specs = readdirSync(join(ROOT, ARCH_REL)).filter((f) =>
+    /\.invariant\.(spec|test)\.ts$/.test(f)
+  );
 
   // Classify each spec by content. Runtime = needs a deployed worker
   // (page fixture / request fixture / baseURL). Structural = reads source
