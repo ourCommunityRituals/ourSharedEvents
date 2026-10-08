@@ -235,3 +235,101 @@ describe('jobs that install WebKit go through the script and the package cache',
     expect(readFileSync(SCRIPT, 'utf-8')).not.toContain('\r');
   });
 });
+
+// ─── Every job, not only the three that failed first ─────────────────────────
+// On 2026-10-08 the staging T4 job spent its whole 30 minutes in
+// `npx playwright install --with-deps chromium webkit` on the same slow mirror
+// and was cancelled before a test started: the first change had moved three
+// jobs to the script and left the rest calling apt directly. The subjects here
+// are derived from every workflow file, so a new job is covered the day it is
+// written.
+describe('no job asks apt for browser packages outside the script', () => {
+  const DIR = join(ROOT, '.github', 'workflows');
+  const DIRECT = /playwright\s+install\b[^\n]*--with-deps/;
+  // A job that never installs node_modules has no local playwright for the
+  // script to call, so it cannot use it as written. Named, with the reason; the
+  // list may only shrink.
+  const EXEMPT = new Map([
+    [
+      'security-monitoring.yml › health-check › Install Playwright deps',
+      'no npm ci in this job: npx fetches playwright itself; chromium only',
+    ],
+  ]);
+
+  const runs = [];
+  for (const f of readdirSync(DIR).filter((n) => /\.ya?ml$/.test(n))) {
+    const doc = yaml.load(readFileSync(join(DIR, f), 'utf-8'));
+    for (const [job, def] of Object.entries((doc && doc.jobs) || {})) {
+      for (const s of (def && def.steps) || []) {
+        if (s && typeof s.run === 'string') {
+          runs.push({ where: `${f} › ${job} › ${s.name || '(unnamed)'}`, run: s.run });
+        }
+      }
+    }
+  }
+
+  test('negative control: the walk reads run steps, and the pattern sees a direct install', () => {
+    expect(runs.length).toBeGreaterThan(100);
+    expect(runs.filter((r) => r.run.includes(SCRIPT_REL)).length).toBeGreaterThanOrEqual(3);
+    expect(DIRECT.test('npx playwright install --with-deps chromium webkit')).toBe(true);
+    expect(DIRECT.test('npx playwright install chromium')).toBe(false);
+    expect(DIRECT.test(`bash ${SCRIPT_REL} chromium webkit`)).toBe(false);
+  });
+
+  test('every install that pulls system packages goes through the script', () => {
+    const direct = runs
+      .filter((r) => DIRECT.test(r.run) && !EXEMPT.has(r.where))
+      .map((r) => r.where);
+    expect(direct).toEqual([]);
+  });
+
+  test('every exemption still names a real step that still installs directly', () => {
+    for (const where of EXEMPT.keys()) {
+      const step = runs.find((r) => r.where === where);
+      expect(step, `${where} no longer exists: remove it from EXEMPT`).toBeDefined();
+      expect(
+        DIRECT.test(step.run),
+        `${where} no longer installs directly: remove it from EXEMPT`
+      ).toBe(true);
+    }
+  });
+
+  test('the staging jobs in the Done bar (T3 smoke, T4 functional) call the script', () => {
+    const jobs = yaml.load(readFileSync(join(DIR, 'oursharedevents-ci.yml'), 'utf-8')).jobs;
+    const installs = Object.entries(jobs)
+      .flatMap(([job, def]) => (def.steps || []).map((s) => ({ job, s })))
+      .filter(
+        ({ s }) => s && s.name === 'Install Playwright browsers' && typeof s.run === 'string'
+      );
+    const viaScript = installs.filter(({ s }) => s.run.includes(`bash ${SCRIPT_REL} `));
+    expect(viaScript.map(({ s }) => s.run.trim()).sort()).toEqual(
+      expect.arrayContaining([`bash ${SCRIPT_REL} chromium`, `bash ${SCRIPT_REL} chromium webkit`])
+    );
+  });
+
+  test('the staging T4 job restores the WebKit package cache before it installs', () => {
+    const jobs = yaml.load(readFileSync(join(DIR, 'oursharedevents-ci.yml'), 'utf-8')).jobs;
+    const withWebkit = Object.entries(jobs).filter(([, def]) =>
+      (def.steps || []).some(
+        (s) =>
+          s &&
+          s.name === 'Install Playwright browsers' &&
+          /chromium webkit$/.test((s.run || '').trim())
+      )
+    );
+    expect(withWebkit.map(([job]) => job)).toEqual(['functional-staging-sub']);
+    const steps = withWebkit[0][1].steps;
+    const at = (name) => steps.findIndex((s) => s && s.name === name);
+    const cache = steps[at('Restore Playwright system package cache')];
+    expect(cache, 'the package cache step must exist').toBeDefined();
+    expect(cache.uses).toBe('actions/cache@v6');
+    expect(cache.with.path).toBe('~/.cache/pw-apt-archives');
+    // The key the T0 component shard and the phone audit save under.
+    expect(cache.with.key).toBe(
+      "${{ runner.os }}-pw-apt-chromium-webkit-${{ hashFiles('package-lock.json') }}"
+    );
+    expect(at('Restore Playwright system package cache')).toBeLessThan(
+      at('Install Playwright browsers')
+    );
+  });
+});
