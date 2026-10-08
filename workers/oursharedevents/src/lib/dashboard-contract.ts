@@ -209,8 +209,8 @@ export const DASHBOARD_METRICS = {
     dashboard: 'event',
     privacy: 'floored',
     path: 'reach.clicks',
-    source: 'shortlinks.clicks',
-    description: 'Short-link taps, all time.',
+    source: 'shortlinks.clicks (per code, floored, survivors summed)',
+    description: 'Short-link taps, all time, on the codes with 5 or more.',
   },
   'event.participation.anonymous_scans': {
     dashboard: 'event',

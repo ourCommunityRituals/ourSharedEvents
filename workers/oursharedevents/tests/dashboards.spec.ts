@@ -522,5 +522,9 @@ describe('query failures are 503, never zeroes', () => {
     const reach = { ...denv, DB: failingOn(tenv.DB, 'scan_placement_events') } as DashboardsEnv;
     const b = await handleEventDashboard(reqAs(A, '/x'), reach, DASH.bocce);
     expect(b.status).toBe(503);
+    // The tap read too: a failed read must not come back as a withheld total.
+    const taps = { ...denv, DB: failingOn(tenv.DB, 'FROM shortlinks') } as DashboardsEnv;
+    const c = await handleEventDashboard(reqAs(A, '/x'), taps, DASH.bocce);
+    expect(c.status).toBe(503);
   });
 });

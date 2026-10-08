@@ -8018,13 +8018,15 @@
         // the event page (the 5Ws) — that's where the pre-event marketing
         // happens. Physical posters widen the reach after that.
         var hasLink = !!(d.link && d.link.url);
-        // Link taps arrive floored (K=5): a number, or null while under 5 —
-        // early weeks are quiet, not broken, so that reads as a normal state.
+        // Link taps arrive floored (K=5): the taps on the links that have 5 or
+        // more each, or null while no link has. Null is NOT "under 5 in all"
+        // (three links with 4 taps each read null), so the words say "on any
+        // one link". Early weeks are quiet, not broken: a normal state.
         var tapsN = a.clicks && typeof a.clicks.count === 'number' ? a.clicks.count : null;
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
-        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once there are 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 link taps' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
+        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
+        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -8080,7 +8082,7 @@
         } else linkCard.hidden = true;
 
         set('pre-event-scans', String(a.scans || 0));
-        set('pre-event-clicks', tapsN === null ? '<5' : String(tapsN));
+        set('pre-event-clicks', tapsN === null ? 'Held' : String(tapsN));
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
 
@@ -8125,6 +8127,8 @@
       // value goes in through textContent, nothing is used as a key or href.
       // Taps arrive floored by the server (K=5, never a small number, never
       // derivable by subtraction); under the floor is an ordinary early state.
+      // A withheld figure means each link in it has fewer than 5, not that
+      // they have fewer than 5 between them, so it reads "fewer than 5 each".
       window.renderPreEventReach = function (r) {
         var box = document.getElementById('pre-event-reach');
         if (!box) return;
@@ -8153,10 +8157,10 @@
           .map(function (c) { return { name: String(c.word || 'LINK'), n: fl(c.taps) }; });
         var on = t.other && typeof t.other === 'object' ? fl(t.other.taps) : undefined;
         if (on !== undefined && (taps.length || on !== null)) {
-          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5' : on });
+          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5 each' : on });
         }
         line('pre-event-reach-taps', 'Link taps', taps,
-          'fewer than 5 so far (they show here at 5 or more)');
+          'fewer than 5 on any one link so far (a link shows here at 5 or more)');
         line('pre-event-reach-venue', 'At the venue', places(ok && r.venue), 'no posters placed yet');
         line('pre-event-reach-community', 'In the community', places(ok && r.community), 'no posters placed yet');
         box.hidden = !ok;
