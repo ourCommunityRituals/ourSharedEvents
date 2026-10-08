@@ -144,7 +144,7 @@ const PENDING = (names) =>
 
 const RUN = (over = {}) =>
   JSON.stringify({
-    headSha: 'abc1234def5678abc1234def5678abc1234def56',
+    headSha: 'abc1234' + '0'.repeat(33),
     headBranch: 'main',
     event: 'push',
     conclusion: 'success',
@@ -693,7 +693,7 @@ describe('the written migration plan covers what will be applied', () => {
 });
 
 describe('the staging chain is green for the commit', () => {
-  const sha = 'abc1234def5678abc1234def5678abc1234def56';
+  const sha = 'abc1234' + '0'.repeat(33);
 
   test('no file yet: not checked', () => {
     const r = pf.checkStagingChain({ text: undefined, sha });

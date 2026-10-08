@@ -21,7 +21,7 @@ const SCRIPT = join(ROOT, 'scripts', 'prod-preflight.mjs');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const ci = yaml.load(read('.github/workflows/oursharedevents-ci.yml'));
 
-const SHA = 'abc1234def5678abc1234def5678abc1234def56';
+const SHA = 'abc1234' + '0'.repeat(33);
 // Production's level when the plan was written: main 77, forms 14.
 const PROD_DB_LEVEL = 77;
 const PROD_FORMS_LEVEL = 14;

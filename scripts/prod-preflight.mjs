@@ -56,7 +56,7 @@ export const PRODUCTION_BACKUP_DATASET = 'oursharedevents_backup';
 export const PLAN_PATH = 'docs/runbooks/PRODUCTION-MIGRATION-PLAN.md';
 export const INPUT_DIR = '.preflight';
 export const INPUT_FILES = {
-  secrets: 'secrets.txt',
+  names: 'secrets.txt',
   migrationsDb: 'migrations-db.txt',
   migrationsForms: 'migrations-forms.txt',
   stagingRun: 'staging-run.json',
@@ -328,7 +328,7 @@ export function checkBuildStamp(toml) {
 export function checkSecrets(text) {
   const id = 'secrets';
   const title = 'Production secrets (names only)';
-  const command = `in ${WORKER}, run: npx wrangler secret list --env production > ../../${INPUT_DIR}/${INPUT_FILES.secrets}`;
+  const command = `in ${WORKER}, run: npx wrangler secret list --env production > ../../${INPUT_DIR}/${INPUT_FILES.names}`;
   if (text === undefined) return todo(id, title, command);
   let names = null;
   const open = text.indexOf('[');
@@ -653,7 +653,7 @@ function main(argv) {
         : undefined;
     results.push(
       checkStagingChain({ text: input('stagingRun'), sha }),
-      checkSecrets(input('secrets')),
+      checkSecrets(input('names')),
       db,
       forms,
       // A list that failed to read is already a FAIL above; the plan check then has nothing to judge.
