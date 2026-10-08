@@ -11,7 +11,7 @@ The brain registry (OCR-docs/ocr-docs-brain/architectural-invariants.yaml) names
   2. The baseline is a ratchet: an entry whose file now resolves must be
      removed (the count may fall, never rise, and a fall must be recorded).
   3. `tests/e2e/0-architecture/README.md` carries a GENERATED gate index between
-     BEGIN/END markers: every `*.invariant.spec.ts` in that folder, joined to the
+     BEGIN/END markers: every `*.invariant.spec.ts` / `*.invariant.test.ts` in that folder, joined to the
      brain invariant(s) that name it (id + name only, so a status change in the
      brain cannot stale it). Hand edits inside the markers fail the check.
      Regenerate with `--write`.
@@ -82,7 +82,9 @@ def render_index(invs, repo):
     for inv in invs:
         by_file.setdefault(clean_path(inv.get("test_file", "")), []).append(inv)
     rows = []
-    for spec in sorted(p.name for p in (repo / GATE_DIR).glob("*.invariant.spec.ts")):
+    # .test.ts too: an invariant living in two repos names one test_file for both (#29).
+    gates = [*(repo / GATE_DIR).glob("*.invariant.spec.ts"), *(repo / GATE_DIR).glob("*.invariant.test.ts")]
+    for spec in sorted(p.name for p in gates):
         owners = by_file.get(spec, []) + by_file.get(str(GATE_DIR / spec).replace("\\", "/"), [])
         if owners:
             cell = ", ".join(f"#{o['id']} {o['name']}" for o in owners)
