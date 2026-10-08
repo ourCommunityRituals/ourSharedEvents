@@ -39,6 +39,10 @@
  *   - The page never renders attendee data. Counts live in the SharedReport,
  *     behind its own token and k-anonymity floor.
  *   - `noindex` + `Cache-Control: no-store` + the same nonce CSP as every page.
+ *   - `Referrer-Policy: no-referrer` on every answer, and the page drops the
+ *     token from the address bar once it has read it (kept in a script variable
+ *     only: no cookie, no browser storage). A request with no token is told to
+ *     open the link again; that is what a refresh asks for afterwards.
  */
 
 import { html, renderErrorPage } from './pages';
@@ -56,6 +60,7 @@ const PRE_EVENT_REACH_MAX = 20;
 import { renderSponsorHomePage, type PlacementRow } from '../lib/sponsor-home-render';
 import { sponsorTitle } from '../lib/sponsor-card';
 import { corsHeaders } from '../lib/cors';
+import { isJsonContentType } from '../lib/content-type';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -157,13 +162,43 @@ export async function handleAdminMintSponsorHomeLink(
 // PlacementRow + humanDate + the page markup now live in lib/sponsor-home-render
 // (CCR-PR567 re-run items 6/8 — a pure, a11y- + XSS-testable render).
 
+/**
+ * `/sponsor` is opened by a signed link, so its address is never sent on in a
+ * Referer header. On every answer, the refusals included: a 429 is served while
+ * a working token is still in the address.
+ */
+function noReferrer(res: Response): Response {
+  res.headers.set('Referrer-Policy', 'no-referrer');
+  return res;
+}
+
 function invalidLinkPage(): Response {
-  return renderErrorPage(
-    401,
-    'This sponsor link isn’t valid',
-    'It may have expired, or it was copied incompletely. Ask the event organizer for a fresh link.',
-    '/events',
-    'See what’s happening'
+  return noReferrer(
+    renderErrorPage(
+      401,
+      'This sponsor link isn’t valid',
+      'It may have expired, or it was copied incompletely. Ask the event organizer for a fresh link.',
+      '/events',
+      'See what’s happening'
+    )
+  );
+}
+
+/**
+ * No token in the address at all. The page drops the token from the address
+ * bar once it has read it (templates/sponsor-home.html), so this is what a
+ * refresh or the Back button asks for. The link itself still works, so the
+ * page says to open it again rather than to ask for a new one.
+ */
+function reopenLinkPage(): Response {
+  return noReferrer(
+    renderErrorPage(
+      401,
+      'Open your sponsor link again',
+      'This page opens from the link the organizer sent you. To keep that link private it is not kept in the address bar, so a refresh or the Back button cannot reopen the page. Open the link again from your message or email. It still works.',
+      '/events',
+      'See what’s happening'
+    )
   );
 }
 
@@ -172,10 +207,12 @@ export async function handleSponsorHomePage(
   env: SponsorHomeEnv
 ): Promise<Response> {
   if (await isPublicReadLimited(request, env, 'sponsor-home')) {
-    return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    return noReferrer(renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.'));
   }
   const url = new URL(request.url);
-  const claim = await verifySponsorHomeToken(env, url.searchParams.get('t'));
+  const token = url.searchParams.get('t');
+  if (!token) return reopenLinkPage();
+  const claim = await verifySponsorHomeToken(env, token);
   if (!claim || !env.DB) return invalidLinkPage();
 
   const sponsor = await env.DB.prepare(
@@ -270,7 +307,7 @@ export async function handleSponsorHomePage(
 
   const res = html(page);
   res.headers.set('Cache-Control', 'no-store');
-  return res;
+  return noReferrer(res);
 }
 
 // ─── Public: accept / decline a placement ────────────────────────────────────
@@ -285,7 +322,7 @@ export async function handleSponsorPlacementRespond(
   // the route table alongside the other public writes, not buried here.
   const id = rid();
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;
@@ -357,7 +394,7 @@ export async function handleSponsorRequestCreate(
   // Rate limit lives at the router (publicReadLimited('sponsor-request', …)).
   const id = rid();
   if (!env.DB) return jsonError('DB_NOT_CONFIGURED', 'Database not available', 503, id);
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;
@@ -441,7 +478,7 @@ export async function handleAdminAnswerSponsorRequest(
   // cannot set this Content-Type without a CORS preflight — without the check,
   // a sponsor could lure an organizer into approving the sponsor's own request
   // (CCR PR #700, L1 #1). Body capped like the sponsor-side writes.
-  if (!(request.headers.get('content-type') || '').includes('application/json')) {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
     return jsonError('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, id);
   }
   let body: Record<string, unknown>;

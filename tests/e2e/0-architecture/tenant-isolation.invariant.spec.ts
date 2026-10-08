@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:399':
+  'handlers/events.ts:400':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -119,7 +119,8 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '373→383 by OSE-1560, whose map-default / event-settings imports land above it, ' +
     'then →394 by OSE-1522, whose sponsor-titles import and the `sponsor_titles` block in the ' +
     'public list handler land above it; 394→399 by OSE-1644, whose ' +
-    'logCoreValuesRefused import widens the core-values import above it. Scope ' +
+    'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
+    'by OSE-1500, whose one-line content-type import lands above it. Scope ' +
     'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':
@@ -249,7 +250,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
-  'lib/shared-report-builder.ts:341':
+  // 341→354 by the report-floor change (the return rate goes through
+  // flooredRatePct and records why it is withheld; the query is unchanged).
+  'lib/shared-report-builder.ts:354':
     'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
     'by design; never-who (COUNT DISTINCT anon_id_hash).',

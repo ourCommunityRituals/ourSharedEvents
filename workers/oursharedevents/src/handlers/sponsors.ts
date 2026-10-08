@@ -25,6 +25,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
+import { isJsonContentType } from '../lib/content-type';
 import {
   filterSponsorsForSurface,
   buildSponsorBundle,
@@ -179,8 +180,7 @@ async function resolvePoolBrand(
 }
 
 function isValidContentType(request: Request): boolean {
-  const ct = request.headers.get('content-type') || '';
-  return ct.includes('application/json');
+  return isJsonContentType(request.headers.get('content-type'));
 }
 
 async function parseBody(

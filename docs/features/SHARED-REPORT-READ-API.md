@@ -54,7 +54,9 @@ Two endpoints land:
 - `409 Conflict` — event is too recent (materialization hasn't run yet); response body suggests retry after the next cron tick
 - `429 Too Many Requests` — more than 60 requests in a minute (`RATE_LIMIT_MAX`, owner ruling 2026-10-01). The bucket is the signed-link token; a request with no bearer token falls back to the caller's address. The refusal carries `Retry-After`, `Cache-Control: no-store`, and no report data. The limit exists because `poster_attribution` is a live join: an unbounded poll would let a link holder watch one poster's floored count tick (OSE-1421). It is applied at the route in `router.ts` through `publicReadLimited` (`lib/public-read-limit.ts`)
 
-**Cache headers:** `Cache-Control: private, max-age=3600` (S5-Q4)
+**Cache headers:** `Cache-Control: no-store` and `Vary: Authorization`, on every 200, whatever the event's phase.
+
+S5-Q4 ratified a private browser cache here (`private, max-age=3600`, later `max-age=300` while the event was still running and `3600` once it had ended). That was withdrawn on 2026-10-07 (OSE-1502): the report is read with a signed link, and a copy left in the browser cache of a shared device outlives the visit. What the cache bought was one skipped rebuild when the same link was opened again inside the window; every view is now a fresh read, bounded by the 60-per-minute limit above. The error answers (401, 403, 404, 409) carry no `Cache-Control` header, as before.
 
 ### 2. `POST /api/v2/events/shared-reports/batch`
 
@@ -109,11 +111,30 @@ interface SharedReport {
   // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
   //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
+  //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
+  //    a rate beside `sample_size` is a head count (20% of 5 is one person), so it is
+  //    published only when the people it counts are at least K and the people it does
+  //    not count are none or at least K. Otherwise that rate is null, `sample_size`
+  //    stays, and `_meta.suppression_reasons` carries `return_rate.venue_pct` or
+  //    `return_rate.corridor_pct` with `below_min_sample_size`. So 0% is never
+  //    published, and 100% is. Most single-day events have fewer than K people who
+  //    came more than once, so `venue_pct` is usually null for them.
   return_rate: {
     venue_pct: number | null; // returners seen at THIS venue before
     corridor_pct: number | null; // returners seen at corridor before
     sample_size: number | null; // total distinct anons used as denominator
   };
+
+  // 2b. Click-outs — anonymous short-link (`/s/`) clicks per destination kind. Sent to
+  //    organizer, admin and internal readers only (not in `DEPTH_SECTIONS`, so never
+  //    to a sponsor link). Null when the event has no short links. Each kind passes
+  //    the K = 5 floor (null under it). `total` is the sum of the kinds that are
+  //    published, not of all kinds, and null when none is: a total over every kind
+  //    minus the published kinds would be the withheld kind (`floorTotalOfParts`).
+  click_outs: {
+    by_kind: Record<string, number | null>;
+    total: number | null;
+  } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
   corridor_density: {
@@ -272,7 +293,9 @@ The signed-link verification reuses OSE's existing signed-link mechanism (HMAC +
 
 ### Cache (S5-Q4)
 
-Cloudflare's `cf.cacheTtl` or response `Cache-Control` header. Single-event endpoint sets `private, max-age=3600`. Batch endpoint sets `no-store`. Cache key isolation via `Vary: Authorization`.
+Both endpoints set `Cache-Control: no-store`. Nothing is cached at the edge (`cf.cacheTtl` is not used) or in the browser. The single-event endpoint also sends `Vary: Authorization`.
+
+As ratified, the single-event endpoint set `private, max-age=3600`; that was withdrawn on 2026-10-07 (see "Cache headers" under endpoint 1). Asserted by `workers/oursharedevents/tests/shared-report-read.spec.ts`.
 
 ---
 

@@ -224,8 +224,10 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
   });
 
   // Rc — click_outs (the /s/ digital signal, finally counted on the SharedReport).
-  // Same per-kind K-anon floor as unique_gatherings; floored per kind AND on the total.
-  test('click_outs: public 6 shows, donate 3 suppressed, total (9) clears the floor', async () => {
+  // Same per-kind K-anon floor as unique_gatherings, and the same drop-before-sum:
+  // the total is the sum of the kinds that are published. (This test used to pin
+  // total = 9, which hands back the withheld kind: 9 − 6 = 3.)
+  test('click_outs: public 6 shows, donate 3 suppressed, total is the published 6 (not 9)', async () => {
     await seedEvent('test-evt-kanon-cko');
     const db = tenv().DB;
     await db
@@ -251,7 +253,33 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     expect(co).not.toBeNull();
     expect(co!.by_kind.public).toBe(6); // clears K → exact
     expect(co!.by_kind.donate).toBeNull(); // sub-K → suppressed
-    expect(co!.total).toBe(9); // 6 + 3 clears K as its own aggregate
+    expect(co!.total).toBe(6); // the sub-K kind never joins the sum
+    // Nothing a reader can subtract: total minus the published kinds is zero.
+    const publishedKinds = Object.values(co!.by_kind).reduce<number>((a, b) => a + (b ?? 0), 0);
+    expect(co!.total! - publishedKinds).toBe(0);
+  });
+
+  test('click_outs: kinds that are each sub-K never add up to a published total (3 + 4 is not 7)', async () => {
+    await seedEvent('test-evt-kanon-cko-sum');
+    const db = tenv().DB;
+    for (const [code, kind, clicks] of [
+      ['ckoSP1', 'public', 3],
+      ['ckoSD1', 'donate', 4],
+    ] as const) {
+      await db
+        .prepare(
+          `INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`
+        )
+        .bind(code, 'test-evt-kanon-cko-sum', kind, clicks)
+        .run();
+    }
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-cko-sum');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.click_outs!.by_kind).toEqual({ public: null, donate: null });
+    expect(r.report.click_outs!.total).toBeNull(); // raw 7 would clear K; no kind does
   });
 
   test('click_outs: an all-sub-K event suppresses each kind AND the total', async () => {

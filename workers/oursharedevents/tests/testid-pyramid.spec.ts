@@ -41,6 +41,7 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { eventAnonKey } from '../src/lib/event-anon-key';
 
 // ── Test env ────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
   TEST_MIGRATION_STATEMENTS: string;
   TEST_FORMS_MIGRATION_STATEMENTS: string;
+  FORMS_HASH_PEPPER: string;
 }
 
 const ADMIN_KEY = 'test-admin-key-e2e-2026';
@@ -481,7 +483,10 @@ describe('L3 Integration: Flag toggle → DB → Resolution', () => {
 });
 
 describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
-  test('form submission stores anonymous_id in FORMS_DB', async () => {
+  // FORMS_DB never holds the ose_anon cookie value: it holds a per-event keyed
+  // id derived from it (lib/event-anon-key.ts), so no forms row can be joined to
+  // a scan row or to the same browser at another event.
+  test('form submission stores a per-event keyed id in FORMS_DB, not the cookie value', async () => {
     const eventId = 'evt-integ-anon';
 
     const res = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/register`, {
@@ -498,17 +503,21 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
     expect(setCookie).toContain('Secure');
     expect(setCookie).toContain('SameSite=Lax'); // invariant #1 — cookie contract completeness
 
-    // Check DB has anonymous_id
+    // The DB holds the keyed id, and it is not the value the cookie was set to.
+    const cookieValue = /ose_anon=(anon_[a-zA-Z0-9_-]+)/.exec(setCookie)![1];
     const tenv = env as unknown as TestEnv;
     const row = await tenv.FORMS_DB.prepare(
       'SELECT anonymous_id FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC LIMIT 1'
     )
       .bind(eventId)
       .first<{ anonymous_id: string }>();
-    expect(row!.anonymous_id).toMatch(/^anon_/);
+    expect(row!.anonymous_id).toMatch(/^evk1_[0-9a-f]{64}$/);
+    expect(row!.anonymous_id).toBe(
+      await eventAnonKey(cookieValue, eventId, tenv.FORMS_HASH_PEPPER)
+    );
   });
 
-  test('returning visitor with cookie reuses same anonymous_id', async () => {
+  test('returning visitor with cookie gets the same keyed id on every form of one event', async () => {
     const eventId = 'evt-integ-anon-reuse';
     const anonId = 'anon_test-fixed-id-12345';
 
@@ -530,21 +539,23 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
     });
     expect(res2.status).toBe(200);
 
-    // Both should have the same anonymous_id in DB
+    // Both rows hold the same per-event keyed id, never the cookie value.
     const tenv = env as unknown as TestEnv;
+    const keyed = await eventAnonKey(anonId, eventId, tenv.FORMS_HASH_PEPPER);
+    expect(keyed).not.toBe(anonId);
     const reg = await tenv.FORMS_DB.prepare(
       'SELECT anonymous_id FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC LIMIT 1'
     )
       .bind(eventId)
       .first<{ anonymous_id: string }>();
-    expect(reg!.anonymous_id).toBe(anonId);
+    expect(reg!.anonymous_id).toBe(keyed);
 
     const checkin = await tenv.FORMS_DB.prepare(
       'SELECT last_anonymous_id FROM checkin_counts WHERE event_id = ?'
     )
       .bind(eventId)
       .first<{ last_anonymous_id: string }>();
-    expect(checkin!.last_anonymous_id).toBe(anonId);
+    expect(checkin!.last_anonymous_id).toBe(keyed);
   });
 });
 

@@ -97,8 +97,8 @@ test.describe('Check-in Form - Interaction', () => {
     await page.waitForTimeout(2000);
 
     const countAfter = await countEl.textContent();
-    // Count text should contain a number and "checked in"
-    expect(countAfter).toMatch(/\d+.*checked in/i);
+    // OSE-1657: the page confirms the check-in and shows no tally.
+    expect(countAfter).toBe("You're checked in.");
   });
 
   test('tap button provides visual feedback (animation)', async ({ page }) => {
@@ -122,7 +122,7 @@ test.describe('Check-in Form - Interaction', () => {
     expect(hasAnimation).toBe(true);
   });
 
-  test('API response includes ok and count', async ({ page }) => {
+  test('API response says ok and carries no count', async ({ page }) => {
     const responsePromise = page.waitForResponse(
       (res) =>
         res.url().includes(`/api/v2/events/${TEST_EVENT_ID}/forms/checkin`) && res.status() === 200
@@ -134,7 +134,7 @@ test.describe('Check-in Form - Interaction', () => {
     const response = await responsePromise;
     const body = await response.json();
     expect(body).toHaveProperty('ok', true);
-    expect(body).toHaveProperty('count');
-    expect(typeof body.count).toBe('number');
+    // OSE-1657: counts are post-event only, so the answer carries none.
+    expect(body).not.toHaveProperty('count');
   });
 });

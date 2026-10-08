@@ -25,6 +25,17 @@
  * (skipping strings, template literals and comments while counting) and fails
  * on any forbidden key.
  *
+ * The request URL is refused in three forms, because a signed link is a
+ * credential wherever its query string goes:
+ *   - `request.url` in the call (only `new URL(request.url).pathname` is allowed);
+ *   - the query half of a parsed URL on any receiver: `.search`,
+ *     `.searchParams`, `.href`;
+ *   - a parsed request URL written whole. The names are derived too: every
+ *     `const NAME = new URL(request.url)`, with the block it lives in, makes
+ *     `{ NAME }`, `${NAME}` and `String(NAME)` a violation in that block.
+ * The runtime side of this is workers/oursharedevents/tests/unhandled-error-log.spec.ts,
+ * which reads the lines a real failing request writes.
+ *
  * Exemptions: none. If a true false positive appears, add an entry to
  * EXEMPTIONS below with `file`, the exact `pattern` label, and a `reason`.
  *
@@ -65,6 +76,15 @@ const FORBIDDEN: Array<{
     re: /\brequest\.url\b/,
     safe: /new\s+URL\(\s*request\.url\s*\)\.pathname\b/g,
     why: 'full URL — query strings carry live credentials (?t=, &token=); log new URL(request.url).pathname',
+  },
+  {
+    // The same leak one step removed: `const url = new URL(request.url)` and
+    // then `url.search`, `url.searchParams.get('t')` or `url.href` in the log.
+    // Matched on any receiver, because a parsed URL goes by many names (`url`,
+    // `here`, `requestUrl`); `.pathname` and `.origin` carry no query string.
+    label: 'URL query',
+    re: /\.(?:search|searchParams|href)\b/,
+    why: 'the query-string half of a parsed URL (.search, .searchParams, .href); log the route pattern or .pathname',
   },
   {
     label: 'token:',
@@ -216,6 +236,7 @@ function stripComments(text: string): string {
 interface Sink {
   file: string; // relative to SRC_DIR, forward slashes
   line: number;
+  index: number; // offset of the call in the text it was found in
   callee: string;
   args: string; // argument text, parens included, comments stripped
 }
@@ -239,6 +260,7 @@ function findCalls(src: string, file: string, calleeRe: RegExp): Sink[] {
     sinks.push({
       file,
       line: lineOf(src, m.index),
+      index: m.index,
       callee: m[0].slice(0, -1).trim(),
       args: stripComments(src.slice(open, close)),
     });
@@ -425,7 +447,103 @@ function hits(f: (typeof FORBIDDEN)[number], text: string): boolean {
   return f.re.test(f.safe ? text.replace(f.safe, '') : text);
 }
 
-function violationsIn(sinks: Sink[]): string[] {
+/**
+ * A parsed request URL, logged whole. Derived, not listed: every name bound to
+ * `new URL(request.url)` (`const url = …`, `const here = …`), with the block it
+ * lives in. In a log sink inside that block the name may only be read through a
+ * part that has no query string; `{ url }`, `${url}`, `String(url)` and
+ * `url.toString()` all write the full URL. An object KEY that shares the name
+ * (`{ url: issue.url }`) is not a read, and another function's own `url` (a
+ * validated logo address, say) is outside the block.
+ */
+const WHOLE_URL_LABEL = 'whole request URL';
+const QUERYLESS_URL_PARTS = ['pathname', 'origin', 'host', 'hostname', 'protocol', 'port'];
+
+interface UrlScope {
+  name: string;
+  start: number; // the declaration
+  end: number; // end of the block that encloses it
+}
+
+/**
+ * Every `{…}` block as [open, close), strings, templates and comments skipped.
+ * `balanced` is false when the braces do not pair up (the scanner was thrown by
+ * something it cannot read, a regex literal with a brace in it for one).
+ */
+function braceBlocks(src: string): { blocks: Array<[number, number]>; balanced: boolean } {
+  const blocks: Array<[number, number]> = [];
+  const stack: number[] = [];
+  let balanced = true;
+  let j = 0;
+  while (j < src.length) {
+    const c = src[j];
+    const n = src[j + 1];
+    if (c === '/' && n === '/') {
+      const nl = src.indexOf('\n', j);
+      j = nl === -1 ? src.length : nl;
+    } else if (c === '/' && n === '*') {
+      const end = src.indexOf('*/', j + 2);
+      j = end === -1 ? src.length : end + 2;
+    } else if (c === '"' || c === "'") {
+      j = skipQuoted(src, j);
+    } else if (c === '`') {
+      j = skipTemplate(src, j);
+    } else {
+      if (c === '{') stack.push(j);
+      else if (c === '}') {
+        const open = stack.pop();
+        if (open === undefined) balanced = false;
+        else blocks.push([open, j + 1]);
+      }
+      j++;
+    }
+  }
+  return { blocks, balanced: balanced && stack.length === 0 };
+}
+
+function requestUrlScopes(src: string): UrlScope[] {
+  const re =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*URL\s*)?=\s*new\s+URL\(\s*request\.url\s*\)(?!\s*\.)/g;
+  const { blocks, balanced } = braceBlocks(src);
+  const scopes: UrlScope[] = [];
+  for (const m of src.matchAll(re)) {
+    const at = m.index ?? 0;
+    // Innermost block around the declaration. When the braces do not pair up,
+    // or the declaration is at the top level, the whole file is the scope: the
+    // rule then flags more, never less.
+    const around = balanced
+      ? blocks.filter(([open, close]) => open < at && at < close).sort((a, b) => b[0] - a[0])[0]
+      : undefined;
+    scopes.push({ name: m[1], start: around ? at : 0, end: around ? around[1] : src.length });
+  }
+  return scopes;
+}
+
+function readsWholeUrl(name: string, args: string): boolean {
+  const id = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Quoted text is prose; a template literal is kept (`${url}` interpolates).
+  const text = args.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''");
+  return new RegExp(
+    `(?<![\\w$.])${id}(?![\\w$])(?!\\s*:)(?!\\s*\\.\\s*(?:${QUERYLESS_URL_PARTS.join('|')})\\b)`
+  ).test(text);
+}
+
+function deriveUrlScopes(sources: Array<{ file: string; src: string }>): Map<string, UrlScope[]> {
+  return new Map(sources.map(({ file, src }) => [file, requestUrlScopes(src)]));
+}
+
+/** The names bound to the request URL whose block contains the sink `s`. */
+function urlNamesAt(s: Sink, scopes: Map<string, UrlScope[]>): string[] {
+  return [
+    ...new Set(
+      (scopes.get(s.file) ?? [])
+        .filter((sc) => sc.start <= s.index && s.index < sc.end)
+        .map((sc) => sc.name)
+    ),
+  ];
+}
+
+function violationsIn(sinks: Sink[], urlScopes: Map<string, UrlScope[]> = new Map()): string[] {
   const out: string[] = [];
   for (const s of sinks) {
     for (const f of FORBIDDEN) {
@@ -434,9 +552,19 @@ function violationsIn(sinks: Sink[]): string[] {
       if (EXEMPTIONS.some((e) => e.file === s.file && e.pattern === f.label)) continue;
       out.push(`src/${s.file}:${s.line} ${s.callee}(…) contains "${f.label}" — ${f.why}`);
     }
+    for (const name of urlNamesAt(s, urlScopes)) {
+      if (!readsWholeUrl(name, s.args)) continue;
+      if (EXEMPTIONS.some((e) => e.file === s.file && e.pattern === WHOLE_URL_LABEL)) continue;
+      out.push(
+        `src/${s.file}:${s.line} ${s.callee}(…) contains "${WHOLE_URL_LABEL}" — ` +
+          `\`${name}\` is new URL(request.url); log ${name}.pathname or the route pattern`
+      );
+    }
   }
   return out;
 }
+
+const URL_SCOPES = deriveUrlScopes(SOURCES);
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -577,6 +705,7 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
       emailHash: '(JSON.stringify({ type: "X", emailHash }))',
       email_hash: '({ email_hash: h })',
       'request.url': '(JSON.stringify({ q: new URL(request.url).search }))',
+      'URL query': '(JSON.stringify({ type: "X", q: url.search }))',
       'token:': '({ token: t, ok: true })',
       'credential name': '(JSON.stringify({ type: "X", draftToken }))',
       'form record id': "('register', eventId, 'submit', { id, isNew })",
@@ -618,12 +747,125 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     }
   });
 
+  test('log-redaction | negative control | the query half of a parsed URL is refused', () => {
+    // Not `request.url` in the call itself: the URL was parsed a line earlier.
+    const q = FORBIDDEN.find((f) => f.label === 'URL query')!;
+    for (const leak of [
+      '(JSON.stringify({ type: "X", q: url.search }))',
+      "({ t: url.searchParams.get('t') })",
+      '(`failed ${here.href}`)',
+      '({ link: requestUrl.href })',
+    ]) {
+      expect(hits(q, leak), `URL query matcher must fire on ${leak}`).toBe(true);
+    }
+    for (const ok of [
+      '({ path: url.pathname, origin: url.origin })',
+      '({ researched: true, searchCount: 3, hrefs })',
+    ]) {
+      expect(hits(q, ok), `URL query matcher must not fire on ${ok}`).toBe(false);
+    }
+    const src = [
+      'export async function handle(request: Request) {',
+      '  const url = new URL(request.url);',
+      '  console.error(JSON.stringify({ type: "X", q: url.search }));',
+      '}',
+    ].join('\n');
+    const sources = [{ file: 'handlers/x.ts', src }];
+    const found = violationsIn(deriveSinks(sources).sinks, deriveUrlScopes(sources));
+    expect(found.some((v) => v.includes('"URL query"'))).toBe(true);
+  });
+
+  test('log-redaction | negative control | a parsed request URL logged whole is refused', () => {
+    const wrap = (call: string, decl = 'const url = new URL(request.url);') => [
+      {
+        file: 'handlers/x.ts',
+        src: `async function h(request: Request) {\n  ${decl}\n  ${call}\n}`,
+      },
+    ];
+    const whole = (sources: Array<{ file: string; src: string }>) =>
+      violationsIn(deriveSinks(sources).sinks, deriveUrlScopes(sources)).filter((v) =>
+        v.includes(`"${WHOLE_URL_LABEL}"`)
+      );
+    for (const leak of [
+      'console.error(JSON.stringify({ type: "X", url }));',
+      'console.error(JSON.stringify({ type: "X", at: url }));',
+      'console.warn(`failed on ${url}`);',
+      'console.log(String(url));',
+      'console.log(url.toString());',
+      'console.log({ a: 1, url, b: 2 });',
+    ]) {
+      expect(whole(wrap(leak)).length, `must fire on ${leak}`).toBe(1);
+    }
+    // Any name the URL was bound to is derived, typed or not.
+    expect(
+      whole(wrap('console.log({ here });', 'const here: URL = new URL(request.url);')).length
+    ).toBe(1);
+    for (const ok of [
+      'console.log({ path: url.pathname, origin: url.origin, host: url.hostname });',
+      'console.log({ url: issue.url });',
+      "console.log('url', { count });",
+      'console.log({ curl, urls, my_url });',
+    ]) {
+      expect(whole(wrap(ok)), `must not fire on ${ok}`).toEqual([]);
+    }
+    // A name bound to something else is not a request URL …
+    expect(whole(wrap('console.log({ url });', 'const url = sponsor.website_url;'))).toEqual([]);
+    // … and neither is `new URL(request.url).pathname`, which is a string.
+    expect(
+      whole(wrap('console.log({ url });', 'const url = new URL(request.url).pathname;'))
+    ).toEqual([]);
+    // The scope is the block the URL was parsed in, from that line on: a sink in
+    // a callback inside it counts, another function's own `url` does not, and
+    // neither does a sink above the declaration.
+    const two = (first: string, second: string) => [
+      {
+        file: 'handlers/x.ts',
+        src: [
+          'async function a(request: Request) {',
+          '  console.info({ early: url });',
+          '  const url = new URL(request.url);',
+          `  ${first}`,
+          '}',
+          'function b(sponsor: { website_url: string }) {',
+          '  const url = sponsor.website_url;',
+          `  ${second}`,
+          '}',
+        ].join('\n'),
+      },
+    ];
+    expect(whole(two('items.forEach((i) => { console.log({ i, url }); });', '')).length).toBe(1);
+    expect(whole(two('', 'console.log({ url });'))).toEqual([]);
+    // Braces the scanner cannot pair: the whole file becomes the scope.
+    const unbalanced = two('', 'console.log({ url });');
+    unbalanced[0].src += '\n}';
+    expect(whole(unbalanced).length).toBe(2);
+    // The names are derived in the worker source too, so the rule is not vacuous,
+    // and the scanner pairs the braces of nearly every file it reads.
+    expect(
+      [...URL_SCOPES.values()].flat().length,
+      'the walk must find names bound to new URL(request.url)'
+    ).toBeGreaterThan(10);
+    const unpaired = SOURCES.filter(({ src }) => !braceBlocks(src).balanced).map((s) => s.file);
+    expect(
+      unpaired.length,
+      `files whose braces the scanner cannot pair (whole-file scope there): ${unpaired.join(', ')}`
+    ).toBeLessThan(SOURCES.length / 10);
+  });
+
   test('log-redaction | every exemption is still needed and has a reason', () => {
     for (const e of EXEMPTIONS) {
       expect(
         e.reason.trim().length,
         `exemption ${e.file}/${e.pattern} needs a reason`
       ).toBeGreaterThan(10);
+      if (e.pattern === WHOLE_URL_LABEL) {
+        const hit = SINKS.some(
+          (s) =>
+            s.file === e.file && urlNamesAt(s, URL_SCOPES).some((n) => readsWholeUrl(n, s.args))
+        );
+        expect(hit, `exemption ${e.file}/${e.pattern} is stale — remove it`).toBe(true);
+        continue;
+      }
       const f = FORBIDDEN.find((x) => x.label === e.pattern);
       expect(f, `exemption ${e.file}/${e.pattern} names an unknown pattern`).toBeTruthy();
       const hit = SINKS.some((s) => s.file === e.file && hits(f!, s.args));
@@ -632,11 +874,12 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
   });
 
   test('log-redaction | no log sink carries an identifier or credential', () => {
-    const violations = violationsIn(SINKS);
+    const violations = violationsIn(SINKS, URL_SCOPES);
     expect(
       violations,
       'Log lines must not carry identifiers or credentials (Workers Logs are on). ' +
-        'Log the pathname, not request.url; drop anonId / emailHash; never log tokens or cookies.\n' +
+        'Log the pathname or the route pattern, not request.url, url.search or the parsed URL; ' +
+        'drop anonId / emailHash; never log tokens or cookies.\n' +
         violations.join('\n')
     ).toEqual([]);
   });

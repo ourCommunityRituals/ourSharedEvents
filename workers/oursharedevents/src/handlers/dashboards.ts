@@ -17,8 +17,12 @@
  * all-tenants view. That belongs to OER, which reads exports, not D1.
  *
  * Aggregate only (#7). Nothing here returns a row about a person. Identity-
- * derived counts (FORMS_DB) and digital taps are floored per event before they
- * are summed. Scans per place are floored per cell, and flows per cell pair.
+ * derived counts (FORMS_DB) are floored per event before they are summed.
+ * Digital taps are floored per poster code, the grain an event's own card
+ * lists, then per event, then summed (floorTotalOfParts, lib/count-floor.ts).
+ * Corridor scans are floored per part (brand, data class, source cell and
+ * destination), and a source cell's figure is the sum of the parts listed for
+ * it, so no figure counts a scan the same reader is not shown.
  * Places are H3 res-7 cells only, never lat/lon or res-9 (Invariant #1).
  *
  * Demo and synthetic events are left out by default (`?data_class=production`).
@@ -30,7 +34,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
-import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { applyCountFloor, floorTotalOfParts, type FlooredCount } from '../lib/count-floor';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import {
@@ -39,7 +43,11 @@ import {
   notMeasuredFor,
   type DashboardId,
 } from '../lib/dashboard-contract';
-import { organizerPreEventActivity, readPreEventActivity } from '../lib/pre-event-activity';
+import {
+  TAP_CODE_SQL,
+  organizerPreEventActivity,
+  readPreEventActivity,
+} from '../lib/pre-event-activity';
 import { daysToGo } from './pre-event-activity';
 import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { perEventCounts } from './portfolio-rollup';
@@ -200,7 +208,14 @@ interface BrandOps {
   published: number;
   created30d: number;
   scans: number;
-  tapsPerEvent: number[];
+  /**
+   * One figure per event that has short links: the taps on its codes that
+   * clear the floor on their own, or null when none does. It is the total the
+   * event's own card and dashboard show (organizerPreEventActivity), built by
+   * the same rule from the same parts, so a code under the floor never joins
+   * it and it cannot be subtracted against the card's listed codes.
+   */
+  tapsPerEvent: (number | null)[];
   posters: number;
   places: Set<string>;
   onShow: number;
@@ -238,13 +253,16 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    all<{ cnt: number }>(
+    // One row per event and poster code: TAP_CODE_SQL is the expression the
+    // event's own card groups by, so these parts are the parts it lists.
+    all<{ event_id: string; taps: number }>(
       db
         .prepare(
-          `SELECT SUM(sl.clicks) AS cnt FROM shortlinks sl
+          `SELECT sl.event_id AS event_id, COALESCE(SUM(sl.clicks), 0) AS taps
+             FROM shortlinks sl
              JOIN events e ON e.id = sl.event_id
             WHERE e.brand_id = ? AND ${DC}
-            GROUP BY sl.event_id`
+            GROUP BY sl.event_id, ${TAP_CODE_SQL}`
         )
         .bind(brand, dc)
     ),
@@ -312,6 +330,8 @@ async function readBrandOps(
     const key = a.outcome === 'denied' ? 'denied' : a.action;
     adminMap.set(key, (adminMap.get(key) ?? 0) + num(a.cnt));
   }
+  const codesByEvent = new Map<string, number[]>();
+  for (const t of taps) pushTo(codesByEvent, t.event_id, t.taps);
 
   return {
     eventIds: events.map((e) => e.id),
@@ -319,7 +339,7 @@ async function readBrandOps(
     published,
     created30d,
     scans: num(scans?.cnt),
-    tapsPerEvent: taps.map((t) => num(t.cnt)),
+    tapsPerEvent: [...codesByEvent.values()].map((codes) => floorTotalOfParts(codes).count),
     posters: num(posters?.cnt),
     places: new Set(places.map((p) => p.cell)),
     onShow: num(sponsors?.on_show),
@@ -390,7 +410,7 @@ export async function handleOperationsDashboard(
     const places = new Set<string>();
     const admin = new Map<string, number>();
     const eventIds: string[] = [];
-    const taps: number[] = [];
+    const taps: (number | null)[] = [];
     let published = 0,
       created30d = 0,
       scans = 0,
@@ -435,7 +455,10 @@ export async function handleOperationsDashboard(
       },
       reach: {
         poster_scans: scans,
-        link_taps: floorBucketsThenSum(taps),
+        // Each event's figure is floored before the events are added, and is
+        // itself a sum of codes that cleared the floor: withheld when no code
+        // of any event in scope has 5 taps, however many taps there are.
+        link_taps: floorTotalOfParts(taps),
         active_posters: posters,
         poster_places: places.size,
       },
@@ -457,8 +480,13 @@ interface BrandCorridor {
   categories: Array<{ code: string; cnt: number }>;
   eventCells: Array<{ cell: string; events: number; live: number }>;
   posterCells: Array<{ cell: string; posters: number }>;
-  scanCells: Array<{ cell: string; scans: number }>;
-  flows: Array<{ source: string; destination: string; scans: number }>;
+  /**
+   * Scans, one row per part: source cell, destination cell and data class
+   * (the brand is the query's). `destination` is null when the event has no
+   * place on the map. This is the only scan read the corridor has: the cell
+   * figures and the flows are both built from these rows.
+   */
+  scanParts: Array<{ source: string; destination: string | null; scans: number }>;
   dayParts: Array<{ part: string; cnt: number }>;
   series: Array<{ sid: string; cnt: number }>;
   partners: Array<{ business: string }>;
@@ -470,7 +498,7 @@ async function readBrandCorridor(
   brand: string,
   dc: DataClassFilter
 ): Promise<BrandCorridor> {
-  const [categories, eventCells, posterCells, scanCells, flows, dayParts, series, partners] =
+  const [categories, eventCells, posterCells, scanParts, dayParts, series, partners] =
     await Promise.all([
       all<{ code: string; cnt: number }>(
         db
@@ -503,26 +531,17 @@ async function readBrandCorridor(
           )
           .bind(brand, dc)
       ),
-      all<{ cell: string; scans: number }>(
-        db
-          .prepare(
-            `SELECT pd.h3_res7 AS cell, COUNT(*) AS scans FROM scan_placement_events s
-               JOIN events e ON e.id = s.event_id
-               JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
-              WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL
-              GROUP BY pd.h3_res7, e.data_class`
-          )
-          .bind(brand, dc)
-      ),
-      all<{ source: string; destination: string; scans: number }>(
+      // One read for cells and flows alike. An event with no cell is kept, as
+      // a destination of its own (NULL groups with NULL): its scans are a part
+      // of the source cell like any other, not a remainder nobody floors.
+      all<{ source: string; destination: string | null; scans: number }>(
         db
           .prepare(
             `SELECT pd.h3_res7 AS source, e.h3_res7 AS destination, COUNT(*) AS scans
                FROM scan_placement_events s
                JOIN events e ON e.id = s.event_id
                JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
-              WHERE e.brand_id = ? AND ${DC}
-                AND pd.h3_res7 IS NOT NULL AND e.h3_res7 IS NOT NULL
+              WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL
               GROUP BY pd.h3_res7, e.h3_res7, e.data_class`
           )
           .bind(brand, dc)
@@ -565,8 +584,7 @@ async function readBrandCorridor(
     categories,
     eventCells,
     posterCells,
-    scanCells,
-    flows,
+    scanParts,
     dayParts,
     series,
     partners,
@@ -607,13 +625,13 @@ export async function handleCorridorDashboard(
     const cats = new Map<string, number>();
     const evCells = new Map<string, { events: number; live: number }>();
     const posterCells = new Map<string, number>();
-    // Floored metrics keep one raw bucket per (brand, data class, cell) and are
-    // floored per bucket before the sum. Every view a caller can select (one
-    // brand or several, production or all) is then a sum of buckets that each
-    // cleared K, so subtracting one view from another never exposes a sub-K
-    // count (#7, the OSE-669 rule applied to cells and flows).
-    const scanCells = new Map<string, number[]>();
-    const flows = new Map<string, number[]>();
+    // Scans keep one raw count per part: brand, data class, source cell and
+    // destination (an event cell, or none). Each part is floored before any
+    // sum, so every view a caller can select (one brand or several, production
+    // or all) is a sum of parts that each cleared K, and subtracting one view
+    // from another never exposes a sub-K count (#7, the OSE-669 rule).
+    const flowParts = new Map<string, { source: string; destination: string; parts: number[] }>();
+    const noDestinationParts = new Map<string, number[]>();
     const dayPart = new Map<string, number>([
       ['weekday', 0],
       ['weekend', 0],
@@ -630,30 +648,70 @@ export async function handleCorridorDashboard(
         evCells.set(c.cell, { events: cur.events + num(c.events), live: cur.live + num(c.live) });
       }
       for (const c of b.posterCells) addTo(posterCells, c.cell, c.posters);
-      for (const c of b.scanCells) pushTo(scanCells, c.cell, c.scans);
-      for (const f of b.flows) pushTo(flows, `${f.source}>${f.destination}`, f.scans);
+      for (const p of b.scanParts) {
+        if (p.destination === null) {
+          pushTo(noDestinationParts, p.source, p.scans);
+          continue;
+        }
+        const key = `${p.source}>${p.destination}`;
+        const flow = flowParts.get(key) ?? {
+          source: p.source,
+          destination: p.destination,
+          parts: [],
+        };
+        flow.parts.push(num(p.scans));
+        flowParts.set(key, flow);
+      }
       for (const d of b.dayParts) addTo(dayPart, d.part, d.cnt);
       for (const s of b.series) series.push(num(s.cnt));
       for (const p of b.partners) businesses.add(p.business);
       placements += b.placements;
     }
 
-    const sourceCellIds = new Set([...posterCells.keys(), ...scanCells.keys()]);
-    const sourceCells = [...sourceCellIds].sort().map((cell) => ({
-      cell,
-      posters: posterCells.get(cell) ?? 0,
-      scans: floorBucketsThenSum(scanCells.get(cell) ?? []),
-    }));
-
     // A flow under K is left out entirely, not shown as suppressed: listing the
     // pair would tell a reader that someone scanned from that cell to that one.
-    const flowRows = [...flows.entries()]
-      .map(([k, n]) => {
-        const [source, destination] = k.split('>');
-        return { source, destination, scans: floorBucketsThenSum(n) };
-      })
+    // Ties are broken by the cells, never by the order rows arrived in, which
+    // follows parts that are not listed.
+    const flowRows = [...flowParts.values()]
+      .map((f) => ({
+        source: f.source,
+        destination: f.destination,
+        scans: floorTotalOfParts(f.parts),
+      }))
       .filter((f) => !f.scans.suppressed)
-      .sort((a, b) => (b.scans.count ?? 0) - (a.scans.count ?? 0));
+      .sort(
+        (a, b) =>
+          (b.scans.count ?? 0) - (a.scans.count ?? 0) ||
+          a.source.localeCompare(b.source) ||
+          a.destination.localeCompare(b.destination)
+      );
+
+    // A source cell's scans are the sum of what this response lists for it:
+    // its flows, and its scans for events with no place (floored the same
+    // way, and shown beside it). Counting the cell's scans on their own would
+    // add in the flows left out above, and cell minus listed flows would hand
+    // them back (10 in the cell, one flow of 7: the other flow has 3).
+    const listedFlows = new Map<string, number[]>();
+    for (const f of flowRows) pushTo(listedFlows, f.source, f.scans.count);
+    const sourceCellIds = new Set([
+      ...posterCells.keys(),
+      ...listedFlows.keys(),
+      ...noDestinationParts.keys(),
+    ]);
+    const sourceCells = [...sourceCellIds]
+      .sort()
+      .map((cell) => {
+        const noDestination = floorTotalOfParts(noDestinationParts.get(cell) ?? []);
+        return {
+          cell,
+          posters: posterCells.get(cell) ?? 0,
+          scans: floorTotalOfParts([...(listedFlows.get(cell) ?? []), noDestination.count]),
+          scans_no_destination: noDestination,
+        };
+      })
+      // A cell with no poster out is listed for its number, or not at all: a
+      // row with nothing to show would say that someone once scanned there.
+      .filter((c) => c.posters > 0 || !c.scans.suppressed);
 
     return json(request, reqId, {
       ...envelope('corridor', brands, dataClass),

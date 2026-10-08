@@ -478,25 +478,27 @@ describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps p
     expect(reach.community.places).toBeGreaterThanOrEqual(1);
   });
 
-  test('link taps per code, floored: a lone small code is never left derivable by subtraction', () => {
-    // Raw: EVENT 12, DONATE 6, REGISTER 2. REGISTER (2) is under the floor; if
-    // EVENT and DONATE were both listed, 20 − 12 − 6 would recover the 2. So
-    // DONATE, the smallest listed code, joins REGISTER in "other links".
+  test('link taps per code, floored: a small code never joins a sum, so no figure gives it back', () => {
+    // Raw: EVENT 12, DONATE 6, REGISTER 2. REGISTER (2) is under the floor and
+    // joins no sum. DONATE, the smallest listed code, sits with it in "other
+    // links" (so that group is never one code); the group's figure and the
+    // total count only the codes that clear the floor: 6, and 12 + 6 = 18.
+    // As raw sums they were 8 and 20, and each moved when REGISTER gained a tap.
     expect(reach.taps.codes.map((c) => [c.kind, c.word, c.taps.count])).toEqual([
       ['public', 'EVENT', 12],
     ]);
     expect(reach.taps.other).toEqual({
       codes: 2,
-      taps: { count: 8, suppressed: false, floor: 5 },
+      taps: { count: 6, suppressed: false, floor: 5 },
     });
-    expect(reach.taps.total).toEqual({ count: 20, suppressed: false, floor: 5 });
+    expect(reach.taps.total).toEqual({ count: 18, suppressed: false, floor: 5 });
     expect(raw).not.toMatch(/"taps":\s*\{\s*"count":\s*2\b/);
     const shown = reach.taps.codes.reduce((t, c) => t + (c.taps.count ?? 0), 0);
-    expect(reach.taps.total.count! - shown).not.toBe(2);
+    expect(reach.taps.total.count! - shown).toBe(reach.taps.other!.taps.count);
   });
 
   test('totals: physical scans exact, digital taps floored — and the card’s own totals agree', () => {
-    expect(reach.totals).toEqual({ scans: 47, taps: { count: 20, suppressed: false, floor: 5 } });
+    expect(reach.totals).toEqual({ scans: 47, taps: { count: 18, suppressed: false, floor: 5 } });
     expect(reach.totals).not.toHaveProperty('reach'); // scans + taps would un-floor taps
     const activity = (JSON.parse(raw) as { activity: { scans: number; clicks: Floored } }).activity;
     expect(activity.scans).toBe(reach.totals.scans);
@@ -551,21 +553,47 @@ describe('Tier 3 | floorTaps — K=5 at the finest grain, closed to subtraction'
     expect(f.total).toEqual({ count: null, suppressed: true, floor: 5 });
   });
 
-  test('the subtraction case: total − shown codes never equals a single hidden code', () => {
-    // EVENT 40, DONATE 3: listing EVENT with an exact total 43 would give 43 − 40 = 3.
+  test('the subtraction case: a small code joins neither sum', () => {
+    // EVENT 40, DONATE 3. A total of 43 moves to 44 when DONATE gains a tap,
+    // and 43 beside a listed 40 is the 3. The 3 joins no sum: 40 it is.
     const f = floorTaps([
       { kind: 'public', taps: 40 },
       { kind: 'donation', taps: 3 },
     ]);
     expect(f.codes).toEqual([]);
-    expect(f.other?.codes).toBe(2);
-    expect(f.total.count).toBe(43);
+    expect(f.other).toEqual({ codes: 2, taps: { count: 40, suppressed: false, floor: 5 } });
+    expect(f.total).toEqual({ count: 40, suppressed: false, floor: 5 });
   });
 
-  test('property: over many random mixes, no exposed number is small and no lone small code is derivable', () => {
+  test('the reported case: 10, 2, 1 lists 10 with a total of 10, and one more withheld tap changes nothing', () => {
+    const at = (checkin: number) =>
+      floorTaps([
+        { kind: 'public', taps: 10 },
+        { kind: 'register', taps: 2 },
+        { kind: 'checkin', taps: checkin },
+      ]);
+    expect(at(1).codes.map((c) => c.taps.count)).toEqual([10]);
+    expect(at(1).other).toEqual({ codes: 2, taps: { count: null, suppressed: true, floor: 5 } });
+    expect(at(1).total).toEqual({ count: 10, suppressed: false, floor: 5 });
+    expect(at(2)).toEqual(at(1));
+  });
+
+  test('small codes never add up: 4 + 4 + 3 + 4 publishes no group figure and no total', () => {
+    const f = floorTaps(
+      [4, 4, 3, 4].map((taps, i) => ({
+        kind: ['public', 'checkin', 'register', 'donation'][i]!,
+        taps,
+      }))
+    );
+    const none = { count: null, suppressed: true, floor: 5 };
+    expect(f).toEqual({ codes: [], other: { codes: 4, taps: none }, total: none });
+  });
+
+  test('property: over many random mixes, every figure is a sum of counts at or above the floor, and none moves with a withheld code', () => {
     let seed = 7;
     const rnd = (n: number) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
     const kinds = ['public', 'checkin', 'register', 'donation', 'sponsor', 'signup'];
+    let neighbours = 0;
     for (let run = 0; run < 400; run++) {
       const raw = kinds
         .slice(0, 1 + rnd(kinds.length))
@@ -575,17 +603,27 @@ describe('Tier 3 | floorTaps — K=5 at the finest grain, closed to subtraction'
         expect(x.count === null || x.count >= K, JSON.stringify(raw)).toBe(true);
         expect(x.suppressed).toBe(x.count === null);
       }
-      if (f.total.count !== null) {
-        const hidden = raw.filter((r) => !f.codes.some((c) => c.kind === r.kind));
-        // What subtraction recovers is the sum of the hidden group …
-        const recovered = f.total.count - f.codes.reduce((t, c) => t + c.taps.count!, 0);
-        expect(recovered).toBe(hidden.reduce((t, h) => t + h.taps, 0));
-        // … and that group is never one lone small code.
-        const smallHidden = hidden.filter((h) => h.taps < K);
-        if (smallHidden.length)
-          expect(hidden.length, JSON.stringify(raw)).toBeGreaterThanOrEqual(2);
-      }
+      // The codes not listed are never one lone code beside listed ones.
+      const hidden = raw.filter((r) => !f.codes.some((c) => c.kind === r.kind));
+      expect(f.other?.codes ?? 0, JSON.stringify(raw)).toBe(hidden.length);
+      if (f.codes.length) expect(hidden.length, JSON.stringify(raw)).not.toBe(1);
+      // Each sum is exactly the counts that clear the floor on their own.
+      const clear = (rows: { taps: number }[]) =>
+        rows.filter((r) => r.taps >= K).reduce((t, r) => t + r.taps, 0);
+      expect(f.total.count ?? 0, JSON.stringify(raw)).toBe(clear(raw));
+      expect(f.other?.taps.count ?? 0, JSON.stringify(raw)).toBe(clear(hidden));
+      // So what subtraction gives is a figure that is published anyway.
+      const listed = f.codes.reduce((t, c) => t + c.taps.count!, 0);
+      expect((f.total.count ?? 0) - listed).toBe(f.other?.taps.count ?? 0);
+      // One more tap on any code that stays under the floor: nothing changes.
+      raw.forEach((r, i) => {
+        if (r.taps + 1 >= K) return;
+        const more = raw.map((x, j) => (j === i ? { ...x, taps: x.taps + 1 } : x));
+        expect(floorTaps(more), JSON.stringify(raw)).toEqual(f);
+        neighbours++;
+      });
     }
+    expect(neighbours).toBeGreaterThan(100);
   });
 });
 

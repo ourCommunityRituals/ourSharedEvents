@@ -16,8 +16,16 @@
 //                       cell). K=5 through lib/count-floor.ts, applied PER
 //                       CONTRIBUTING BUCKET before any sum (Invariant #7, the
 //                       OSE-669 rule), so a total never exposes a sub-K bucket
-//                       by differencing.
-//   • its path        — where the value sits in the response, so the class can
+//                       by differencing. For taps the bucket is a poster code,
+//                       not an event: the event's own card lists taps per
+//                       code, so a total built from anything coarser could be
+//                       subtracted against that list. For corridor scans the
+//                       bucket is brand × data class × source cell ×
+//                       destination, and a cell's figure is the sum of the
+//                       buckets listed beside it, never a count of its own.
+//                       Owner ruling, 2026-10-08: the floor has no exceptions.
+//                       It holds against a brand's own admin, at every tier.
+//   • its path       — where the value sits in the response, so the class can
 //                       be checked against what is actually returned;
 //   • its source      — the table(s) it is read from, so a reviewer can check it.
 //
@@ -31,7 +39,8 @@
 import { applyCountFloor, type FlooredCount } from './count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
-export const DASHBOARD_CONTRACT_VERSION = '1.0.0';
+// 1.1.0 (2026-10-08): new metric corridor.source_cells.scans_no_destination.
+export const DASHBOARD_CONTRACT_VERSION = '1.1.0';
 
 export type DashboardId = 'operations' | 'event' | 'corridor';
 export type PrivacyClass = 'entity' | 'anonymous_exact' | 'floored';
@@ -102,8 +111,10 @@ export const DASHBOARD_METRICS = {
     dashboard: 'operations',
     privacy: 'floored',
     path: 'reach.link_taps',
-    source: 'shortlinks.clicks (per event, floored, survivors summed)',
-    description: 'Short-link taps, all time.',
+    source:
+      'shortlinks.clicks (per event and code, floored, survivors summed; then per event, floored, survivors summed)',
+    description:
+      'Short-link taps, all time, on the codes with 5 or more: the sum of the tap totals each event shows on its own.',
   },
   'reach.active_posters': {
     dashboard: 'operations',
@@ -209,8 +220,8 @@ export const DASHBOARD_METRICS = {
     dashboard: 'event',
     privacy: 'floored',
     path: 'reach.clicks',
-    source: 'shortlinks.clicks',
-    description: 'Short-link taps, all time.',
+    source: 'shortlinks.clicks (per code, floored, survivors summed)',
+    description: 'Short-link taps, all time, on the codes with 5 or more.',
   },
   'event.participation.anonymous_scans': {
     dashboard: 'event',
@@ -303,8 +314,18 @@ export const DASHBOARD_METRICS = {
     privacy: 'floored',
     path: 'source_cells[].scans',
     source:
-      'scan_placement_events → poster_deployments.h3_res7 (floored per brand × data class × cell, survivors summed)',
-    description: 'Source layer: scans per res-7 poster cell.',
+      'scan_placement_events → poster cell → event cell or none (floored per brand × data class × source cell × destination, survivors summed)',
+    description:
+      'Source layer: scans per res-7 poster cell, on the parts with 5 or more: the sum of the flows listed from the cell and its scans_no_destination, and nothing else.',
+  },
+  'corridor.source_cells.scans_no_destination': {
+    dashboard: 'corridor',
+    privacy: 'floored',
+    path: 'source_cells[].scans_no_destination',
+    source:
+      'scan_placement_events → poster cell, where events.h3_res7 IS NULL (floored per brand × data class × source cell, survivors summed)',
+    description:
+      'Scans on posters in this cell for events that have no place on the map, so they are in no flow. One part of the cell figure, floored like a flow.',
   },
   'corridor.flows.source': {
     dashboard: 'corridor',
@@ -326,7 +347,8 @@ export const DASHBOARD_METRICS = {
     path: 'flows[].scans',
     source:
       'scan_placement_events → poster cell → event cell (floored per brand × data class × pair, survivors summed)',
-    description: 'Scans from a source cell to an event cell; pairs under K are left out.',
+    description:
+      'Scans from a source cell to an event cell; pairs under K are left out, of the list and of the source cell figure alike.',
   },
   'corridor.day_part': {
     dashboard: 'corridor',

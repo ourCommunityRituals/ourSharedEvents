@@ -476,18 +476,7 @@ wrangler deployments list --env production
 
 ### Rollback
 
-```bash
-# Quick rollback (Story 5.3)
-npm run rollback:staging        # Staging
-npm run rollback:prod           # Production
-npm run rollback:all            # Both
-
-# List deployments
-npm run rollback:list
-
-# Manual rollback
-wrangler rollback --env production
-```
+See [ROLLBACK.md](../runbooks/ROLLBACK.md). A bad deploy is undone by a revert pull request, then a production run. The `npm run rollback:*` scripts once listed here do not work (`scripts/rollback-worker.mjs` runs from a folder that no longer exists), and switching the production Worker back by hand is break-glass (ROLLBACK.md §6).
 
 ### Health Checks
 
@@ -530,7 +519,7 @@ Detailed runbooks for operational tasks are available:
 | **Running Local Tests**             | [RUNBOOK-LOCAL-TESTING.md](./RUNBOOK-LOCAL-TESTING.md) | Local CI execution guide              |
 | **Investigating CI Failures**       | [RUNBOOK-CI-DEBUG.md](./RUNBOOK-CI-DEBUG.md)           | Debugging failing CI runs             |
 | **Incident Response**               | [RUNBOOK.md](../RUNBOOK.md)                            | SEV definitions, rollback, escalation |
-| **Rollback Procedures**             | [ROLLBACK.md](./ROLLBACK.md)                           | Worker and GAS rollback               |
+| **Rollback Procedures**             | [ROLLBACK.md](../runbooks/ROLLBACK.md)                 | Undo a bad Worker deploy              |
 
 ---
 
@@ -550,7 +539,7 @@ Detailed runbooks for operational tasks are available:
 | Document                                             | Purpose                            |
 | ---------------------------------------------------- | ---------------------------------- |
 | [RUNBOOK.md](../RUNBOOK.md)                          | Releases, incidents, SEV response  |
-| [ROLLBACK.md](./ROLLBACK.md)                         | Rollback procedures                |
+| [ROLLBACK.md](../runbooks/ROLLBACK.md)               | Rollback procedures                |
 | [CLOUDFLARE_SECRETS.md](./CLOUDFLARE_SECRETS.md)     | Secrets and environment variables  |
 | [UPTIME_MONITORING.md](./UPTIME_MONITORING.md)       | External monitoring setup          |
 | [SYNTHETIC_MONITORING.md](./SYNTHETIC_MONITORING.md) | Cloudflare/Datadog synthetic tests |

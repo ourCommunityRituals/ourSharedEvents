@@ -27,8 +27,8 @@
 /** Highest migration in migrations/ — currently 0094_shortlink_click_daily.sql */
 export const REQUIRED_DB_MIGRATION = 94;
 
-/** Highest migration in migrations-forms/ — currently 0015_checkin_walk_in_count.sql */
-export const REQUIRED_FORMS_MIGRATION = 15;
+/** Highest migration in migrations-forms/ — currently 0016_scrub_raw_anonymous_id.sql */
+export const REQUIRED_FORMS_MIGRATION = 16;
 
 export interface SchemaGuardEnv {
   DB?: D1Database;

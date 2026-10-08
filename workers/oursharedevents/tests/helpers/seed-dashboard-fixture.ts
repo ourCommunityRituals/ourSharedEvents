@@ -3,7 +3,8 @@
  *
  * Brand `dash-a` runs two events in one corridor:
  *   • a bocce tournament (REC, live, listed, weekend, in a series of two),
- *     with three posters in two source cells, 12 scans, 9 link taps,
+ *     with three posters in two source cells, 12 scans, 9 taps on its event
+ *     link and 3 on a donation link (a code under K),
  *     7 registrations, 6 check-ins, 2 email signups, two sponsors on show,
  *     one sponsor asking to join and one that declined;
  *   • a teacher/parent workshop (no event type → OTHER, draft, weekday),
@@ -195,6 +196,16 @@ export async function seedDashboardFixture(db: D1Database, forms: D1Database): P
          ('dashB1', ?, 9), ('dashW1', ?, 2), ('dashX1', ?, 99)`
     )
     .bind(DASH.bocce, DASH.workshop, DASH.other)
+    .run();
+  // A second code on the bocce poster with 3 taps: under K on its own, so the
+  // card withholds it and no total may include it (12 would give it back).
+  // The demo event's link has 40: only data_class=all may count it.
+  await db
+    .prepare(
+      `INSERT INTO shortlinks (code, event_id, clicks, kind) VALUES
+         ('dashB2', ?, 3, 'donation'), ('dashD1', ?, 40, 'public')`
+    )
+    .bind(DASH.bocce, DASH.demo)
     .run();
 
   await seedSplitSponsor(db, { id: 'sb-dash-1', eventId: DASH.bocce, brandId: DASH.brandA });

@@ -525,8 +525,10 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     });
     expect(line('pre-event-reach-venue')).toBe('At the venue: no posters placed yet');
     // Under the floor is week one of a healthy campaign, not an error (§10.1).
+    // "On any one link": the withheld state is per link, not a claim about
+    // how many taps there are in all.
     expect(line('pre-event-reach-taps')).toBe(
-      'Link taps: fewer than 5 so far (they show here at 5 or more)'
+      'Link taps: fewer than 5 on any one link so far (a link shows here at 5 or more)'
     );
     const box = doc.getElementById('pre-event-reach')!;
     expect(box.querySelector('.error, .card-error, [role="alert"]')).toBeNull();
@@ -550,7 +552,7 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     expect(line('pre-event-reach-taps')).toBe(`Link taps: ${HOSTILE} 9`);
   });
 
-  test('a small tap count never shows as a number: suppressed codes are skipped, a small group reads "fewer than 5"', () => {
+  test('a small tap count never shows as a number: suppressed codes are skipped, a withheld group reads "fewer than 5 each"', () => {
     const { render, line } = mountReach();
     render({
       venue: { placements: [] },
@@ -562,12 +564,46 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
           { word: 'DONATE', taps: { count: null, suppressed: true, floor: 5, raw: 3 } },
         ],
         other: { codes: 2, taps: fc(4) },
-        total: fc(16),
+        total: fc(12),
       },
     });
     const t = line('pre-event-reach-taps')!;
-    expect(t).toBe('Link taps: EVENT 12 · other links fewer than 5');
+    expect(t).toBe('Link taps: EVENT 12 · other links fewer than 5 each');
     expect(t).not.toMatch(/\b[1-4]\b/);
+  });
+
+  test('a withheld figure is never shown as 0, NaN or a blank, whatever shape it arrives in', () => {
+    const { render, line } = mountReach();
+    const none = { count: null, suppressed: true, floor: 5 };
+    for (const taps of [
+      // The server's shapes: nothing listed; one listed beside a withheld group.
+      { codes: [], other: { codes: 4, taps: none }, total: none },
+      { codes: [{ word: 'EVENT', taps: fc(10) }], other: { codes: 2, taps: none }, total: fc(10) },
+      // Shapes it should never send, which must still not print a number.
+      { codes: [], other: null, total: none },
+      { codes: [], other: { codes: 2, taps: { count: 'NaN' } }, total: none },
+      { codes: [{ word: 'EVENT', taps: none }], other: { codes: 1, taps: {} } },
+      {},
+    ]) {
+      render({ venue: { placements: [] }, community: { placements: [] }, taps });
+      const t = line('pre-event-reach-taps')!;
+      expect(t, JSON.stringify(taps)).toMatch(/^Link taps: \S/);
+      expect(t, JSON.stringify(taps)).not.toMatch(/NaN|null|undefined|\b0\b/);
+      // The only digits in a line with nothing listed are the floor itself.
+      if (!/EVENT/.test(t)) expect(t.replace(/\b5\b/g, ''), JSON.stringify(taps)).not.toMatch(/\d/);
+    }
+    render({
+      venue: { placements: [] },
+      community: { placements: [] },
+      taps: {
+        codes: [{ word: 'EVENT', taps: fc(10) }],
+        other: { codes: 2, taps: none },
+        total: fc(10),
+      },
+    });
+    expect(line('pre-event-reach-taps')).toBe(
+      'Link taps: EVENT 10 · other links fewer than 5 each'
+    );
   });
 
   test('textContent / createElement only: no innerHTML, no href, no response value as a key', () => {
@@ -594,7 +630,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     const end = rest.search(/\r?\n {6}\};\r?\n/);
     return rest.slice(0, end) + '\n};';
   }
-  async function mountCard(clicks: unknown, scans: number) {
+  async function mountCard(clicks: unknown, scans: number, reach: unknown = REACH) {
     const dom = new JSDOM(`<!doctype html><body>${preEventCardMarkup()}</body>`, {
       runScripts: 'outside-only',
       url: 'https://ose.test/admin',
@@ -607,7 +643,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
         ok: true,
         event: { id: EVT, status: 'active', days_to_go: 12 },
         activity: { posters: 1, places: 1, scans, clicks, scansByDay: [] },
-        reach: REACH,
+        reach,
         link: { url: 'https://ose.test/s/Pub001', code: 'Pub001', qr: QR },
       },
     }));
@@ -619,18 +655,46 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     return { text };
   }
 
-  test('under the floor: the tile reads <5 and the lede says "fewer than 5" — never the number', async () => {
+  test('withheld: the tile reads Held and the lede says "fewer than 5 taps on any one link" — never the number', async () => {
     const { text } = await mountCard(fc(3), 2);
-    expect(text('pre-event-clicks')).toBe('<5');
+    expect(text('pre-event-clicks')).toBe('Held');
     expect(text('pre-event-lede')).toBe(
-      'People are finding it: fewer than 5 link taps and 2 poster scans so far.'
+      'People are finding it: fewer than 5 taps on any one link and 2 poster scans so far.'
     );
   });
 
-  test('nothing yet (or under the floor with no scans) reads as the normal early state', async () => {
+  test('nothing yet (or withheld with no scans) reads as the normal early state', async () => {
     const { text } = await mountCard(fc(0), 0);
-    expect(text('pre-event-clicks')).toBe('<5');
-    expect(text('pre-event-lede')).toMatch(/taps show here once there are 5 or more/);
+    expect(text('pre-event-clicks')).toBe('Held');
+    expect(text('pre-event-lede')).toMatch(/taps show here once a link has 5 or more/);
+  });
+
+  test('a withheld total is not "fewer than 5 taps": four links with 4, 4, 3 and 4 taps (15 in all)', async () => {
+    // What the server sends for that event: no link has 5, so no code is
+    // listed and the total is withheld. The card must not say there are fewer
+    // than 5 taps (there are 15), and must not print 0, NaN or a blank.
+    const none = { count: null, suppressed: true, floor: 5 };
+    const { text } = await mountCard(none, 2, {
+      venue: { scans: 0, places: 0, placements: [] },
+      community: { scans: 0, places: 0, placements: [] },
+      taps: { codes: [], other: { codes: 4, taps: none }, total: none },
+      totals: { scans: 2, taps: none },
+    });
+    const tile = text('pre-event-clicks')!;
+    const lede = text('pre-event-lede')!;
+    const line = text('pre-event-reach-taps')!;
+    expect(tile).toBe('Held');
+    expect(lede).toBe(
+      'People are finding it: fewer than 5 taps on any one link and 2 poster scans so far.'
+    );
+    expect(line).toBe(
+      'Link taps: fewer than 5 on any one link so far (a link shows here at 5 or more)'
+    );
+    for (const shown of [tile, lede, line]) {
+      expect(shown).not.toMatch(/NaN|null|undefined|<5|\b0\b/);
+      expect(shown).not.toMatch(/fewer than 5 (link )?taps(?! on any one link)/);
+      expect(shown).not.toMatch(/fewer than 5 so far/);
+    }
   });
 
   test('at or over the floor: the exact number', async () => {

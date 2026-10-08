@@ -73,6 +73,7 @@ export const NODE_SPECS = [
   // they never touched the runtime, they just couldn't transform the template in
   // node. Green-filtered in the node project like batch 2.
   'tests/advanced-metrics.spec.ts',
+  'tests/withheld-counts-in-words.spec.ts',
   'tests/as-display-public-admin.spec.ts',
   'tests/briefing.spec.ts',
   'tests/color-contrast.spec.ts',
@@ -218,6 +219,13 @@ export const NODE_SPECS = [
   // OSE-1531 — the report's action row + Repeat this event, run in jsdom over the
   // real template with a stubbed fetch. No cloudflare:test.
   'tests/shared-report-actions.spec.ts',
+  // The Return Rate card when the API withholds the rate on its own: the same
+  // jsdom-over-the-real-template shape as the spec above. No cloudflare:test.
+  'tests/shared-report-return-rate-card.spec.ts',
+  // Locked sections on a sponsor link: the real read handler (builder and audit
+  // log replaced, as in shared-report-read-depth-wiring) feeds the real template
+  // in jsdom. No cloudflare:test.
+  'tests/shared-report-locked-sections.spec.ts',
 
   // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
   // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.
@@ -243,4 +251,20 @@ export const NODE_SPECS = [
   // Logs + Settings pages: each page's script run in jsdom with a stubbed fetch
   // (tabs, filters, honest empty/error states, text-only rendering).
   'tests/admin-logs-settings-ui.spec.ts',
+  // Signed links leave the address bar: the /sponsor and /sharedReport page
+  // scripts run in jsdom over the real templates with a stubbed fetch.
+  'tests/signed-link-url-scrub.spec.ts',
+  // The admin Shared Report Links panel: the page's own scripts run in jsdom as
+  // classic scripts, with a stubbed fetch that answers the way the mint route does.
+  'tests/admin-mint-report-link.spec.ts',
+  // Every name a template's inline script uses is declared where that script
+  // can see it: the TypeScript checker over each template's scripts (node:fs).
+  'tests/template-script-names.spec.ts',
+  // Typed text on the SharedReport page stays text: the page script run in jsdom
+  // with plain and hostile values, plus a parse of its attribute writes.
+  'tests/shared-report-attribute-escaping.spec.ts',
+  // The same for the poster page: the served page run in jsdom (print and
+  // digital, with and without artwork, picker and draft preview), plus the same
+  // parse of its attribute writes (tests/helpers/markup-attribute-check.ts).
+  'tests/poster-attribute-escaping.spec.ts',
 ];

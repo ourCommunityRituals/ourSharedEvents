@@ -39,7 +39,7 @@ You can scan any QR code at any event knowing no personal data is captured. If y
 - Survey comments → PII-scrubbed by daily job
 - Email signup → encrypted, auto-deleted after 30 days
 
-The scan system and the forms system are **separate databases with no SQL or foreign-key join between them**. Both store the same pseudonymous `ose_anon` value; the only code that uses it across the two is erasure, which reads it from `FORMS_DB` to delete the matching scan rows.
+The scan system and the forms system are **separate databases with no SQL or foreign-key join between them**, and since 2026-10-07 they share no value either. The scan side stores the pseudonymous `ose_anon` cookie value. The forms side stores a **per-event keyed id**: a keyed hash of that value and the event id (`src/lib/event-anon-key.ts`). It equals nothing on the scan side, differs from event to event, and stays the same inside one event, which is what lets check-in recognise the same phone.
 
 ### For Sponsors
 
@@ -53,13 +53,13 @@ By removing PII from the data layer by design, the platform can scale across tho
 
 ## Two-Database Architecture
 
-The most critical design decision: **two separate D1 databases, with no SQL join, foreign key or analytics join between them**. They do share one pseudonymous key, `anonymous_id` (the `ose_anon` cookie value), which erasure uses to find a person's scan rows.
+The most critical design decision: **two separate D1 databases, with no SQL join, foreign key or analytics join between them**. Both have a column called `anonymous_id`, but the two no longer hold the same thing: the scan side holds the `ose_anon` cookie value, the forms side a per-event keyed id derived from it with a secret (`FORMS_HASH_PEPPER`). A reader of both databases cannot match one to the other.
 
 ```
 FORMS_DB (opt-in personal data)          DB (anonymous presence signal)
 ───────────────────────────────          ──────────────────────────────
 form_registrations                       scan_placement_events (WHERE)
-  anonymous_id  (ose_anon, shared key)     poster_deployment_id (FK)
+  anonymous_id  (per-event keyed id)       poster_deployment_id (FK)
   name          (plain text)               scan_bucket      (hourly window)
   email_hash    (SHA-256)
   expires_at    (90-day TTL)             scan_node_returns (WHO came back)
@@ -81,7 +81,9 @@ checkin_counts                             qr_token        (unique)
                                              retention window set by default)
 ```
 
-**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases rule out that join in SQL. The shared `anonymous_id` is still a pseudonymous key across the two, and application code uses it for one purpose only: erasure.
+**Why two databases?** If they were one database, a JOIN could correlate form submissions with scan data, creating a de-anonymization path. Separate databases rule out that join in SQL, and the per-event keyed id rules it out by value: nothing stored in `FORMS_DB` equals anything stored in `DB`.
+
+**What that costs.** Erasure by email used the shared value to find a person's scan rows. It can no longer do that: an erasure request deletes everything keyed by the email (registrations, email signups, subscribers), and does not reach `scan_node_returns` or `anon_id_returns`. Those rows carry no name or email, and are bounded by the retention window once one is set.
 
 ---
 
@@ -89,7 +91,7 @@ checkin_counts                             qr_token        (unique)
 
 ### Scan tables (`scan_placement_events` + `scan_node_returns`, migration 0062)
 
-Migration 0062 (OSE-798) dropped the old combined `scans` table and split each scan into two rows with no shared key, so no stored row holds both *where* (the placement) and *who* (the cookie id):
+Migration 0062 (OSE-798) dropped the old combined `scans` table and split each scan into two rows with no shared key, so no stored row holds both _where_ (the placement) and _who_ (the cookie id):
 
 ```sql
 -- WHERE: which poster placement was scanned. No person-derived value.
@@ -250,16 +252,16 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 
 ## Threat Model
 
-| Threat                              | Mitigation                                                              |
-| ----------------------------------- | ----------------------------------------------------------------------- |
-| **Database breach of scan system**  | No PII to leak — schema has no PII columns                              |
-| **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted                  |
-| **Cross-database correlation**      | Separate D1 databases, no foreign keys between them                     |
+| Threat                              | Mitigation                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Database breach of scan system**  | No PII to leak — schema has no PII columns                                                       |
+| **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted                                           |
+| **Cross-database correlation**      | Separate D1 databases, no foreign keys, no value in common                                       |
 | **Timing correlation**              | Reports and exports use hour buckets only; the second-level `created_at` stays inside the Worker |
-| **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual            |
-| **IP logging**                      | IP never stored; no location is derived from the request either (country removed by OSE-1460) |
-| **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                      |
-| **Admin data access**               | Admin APIs return hashes, counts, and scrubbed data — never raw PII     |
+| **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual                                     |
+| **IP logging**                      | IP never stored; no location is derived from the request either (country removed by OSE-1460)    |
+| **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                                               |
+| **Admin data access**               | Admin APIs return hashes, counts, and scrubbed data — never raw PII                              |
 
 ---
 

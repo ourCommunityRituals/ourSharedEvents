@@ -12,8 +12,8 @@
 | Deploy to staging     | Push to `main` branch (automatic via CI) |
 | Deploy to production  | Tag with `vX.Y.Z` (automatic via CI)     |
 | Manual staging worker | `wrangler deploy --env staging`          |
-| Rollback staging      | `npm run rollback:staging`               |
-| Rollback production   | `npm run rollback:prod`                  |
+| Rollback staging      | [ROLLBACK.md](./ROLLBACK.md) §3          |
+| Rollback production   | [ROLLBACK.md](./ROLLBACK.md) §3 and §4   |
 
 ---
 
@@ -199,6 +199,59 @@ npm run test:prod:smoke
 
 ---
 
+## Production preflight (run before every production deploy)
+
+**What it is:** `scripts/prod-preflight.mjs` prints one line per check (`PASS`, `FAIL` or `TODO`) with what to do, and ends with `READY` or `NOT READY`. It exits non-zero unless every check passed. It is read-only: it makes no network request, runs no wrangler command and reads no credential.
+
+**Run it** from the repo root, on `main`, at the commit you are about to deploy:
+
+```bash
+node scripts/prod-preflight.mjs
+```
+
+Five checks read this checkout. Six need something only you can read, so the first run shows them as `TODO` with the exact command for each. You run those commands yourself and save what they print into `.preflight/` (git ignores it). They list secret **names** only, the migrations production still has to apply, and two CI runs. Then run the preflight again.
+
+```bash
+mkdir .preflight
+# in workers/oursharedevents:
+npx wrangler secret list --env production > ../../.preflight/secrets.txt
+npx wrangler d1 migrations list DB --env production --remote > ../../.preflight/migrations-db.txt
+npx wrangler d1 migrations list FORMS_DB --env production --remote > ../../.preflight/migrations-forms.txt
+# back in the repo root:
+gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push --limit 5
+gh run view <id> --json headSha,headBranch,event,conclusion,jobs > .preflight/staging-run.json
+gh run list --workflow "CF Access Canary" --limit 1
+gh run view <id> --json conclusion,jobs > .preflight/access-canary.json
+```
+
+**What each check proves:**
+
+| Check                                  | Proves                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema constants                       | `REQUIRED_DB_MIGRATION` and `REQUIRED_FORMS_MIGRATION` equal the highest migration file, and the file numbers have no hole or repeat.                         |
+| Production bindings                    | Production has every binding staging has, with real ids, and shares none with staging or local dev.                                                           |
+| Production settings                    | `[env.production.vars]` has what staging has, minus the staging-only switches (`ADMIN_SCOPE_ALL` and the two key fallbacks), and nothing points at staging.   |
+| Name, routes, nightly job              | The Worker is `oursharedevents-prod`, answers only on the production hosts, and has its nightly job.                                                          |
+| Build stamp                            | The deploy step can rewrite the version line, so `/health` will name the commit.                                                                              |
+| Staging chain                          | T1 to T4 passed on `main` for the commit in your checkout.                                                                                                    |
+| Production secrets                     | The four required names are set; `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` are not. The deploy job refuses on the same two lists.                       |
+| Migrations to apply (main, then forms) | The level each production database is at, and that what is left is simply the last few migrations in a row.                                                   |
+| Migration plan                         | Every migration to apply has a line in `PRODUCTION-MIGRATION-PLAN.md`. It names the ones that write or remove rows.                                           |
+| Access app                             | The latest canary run found production admin behind the production Access app. Without it the deploy job goes red at its last step, after the Worker is live. |
+
+**What it cannot prove** is printed at the end of every run: that a secret's value is usable, that GitHub deploys the same commit as your checkout, and the by-hand steps before and after.
+
+**The migrations:** read [`PRODUCTION-MIGRATION-PLAN.md`](./PRODUCTION-MIGRATION-PLAN.md) before the first production deploy. It lists the 17 main and 2 forms migrations production still needs, which ones write or remove rows, how to check afterwards, and what cannot be undone.
+
+**After the deploy:** `T2 Smoke → Production` starts with "Gate: production runs this build and stays healthy". It reads `/health` every 10 seconds and ends with one of four verdicts. Only the first passes.
+
+- `HEALTHY`: the right build is live and five readings in a row were good.
+- `WRONG BUILD`: production is healthy but is not running the commit this run deployed. Do not roll back; look at the Deploy step.
+- `ROLL BACK`: three bad readings in a row, or it did not settle in two minutes. Nothing rolls back by itself. This is an instruction to you: follow [`ROLLBACK.md`](./ROLLBACK.md).
+- `CANNOT SEE`: a sign-in or challenge page answered instead of the Worker, so there is no verdict on the build. Open `/health` in a browser. If it is good there, a Cloudflare rule is stopping the check.
+
+---
+
 ## First Production Launch — Cloudflare Access App (OSE-1353)
 
 **Why:** production admin is Cloudflare Access only. `ALLOW_OCR_INTERNAL` and `ALLOW_ADMIN_KEY_FALLBACK` are absent from `[env.production.vars]` (ADR-012 gate R2, `tests/prod-admin-scope-config.spec.ts`). The Worker requires an Access identity on every path it guards with `requireAdmin`. A guarded path that the Access app does not cover reaches the Worker with no `Cf-Access-Jwt-Assertion` and returns 401, so the admin UI breaks on it. Protecting `/admin` alone is not enough: the dashboard loads, then every `/api/v2/admin/*` call fails.
@@ -227,6 +280,23 @@ done
 **Pin the audience (OSE-1377), after the app exists:** set `CF_ACCESS_AUD = "<AUD tag>"` in `[env.production.vars]` in a PR. The tag is not a secret. Until it is pinned, a token from any Access app on the `mzdano` team verifies on production. The pin takes effect on the next production deploy.
 
 **Before that deploy:** `deploy-production` refuses to run while `ADMIN_KEY`, `X_OCR_INTERNAL` or `ADMIN_TOKEN` is set as a production Worker secret (ADR-012 gate R2). Check with `npx wrangler secret list --env production`. Delete any of the three with `npx wrangler secret delete <NAME> --env production`.
+
+### Access cookie SameSite setting, per environment (OSE-1500)
+
+**Why it is recorded:** Access signs a person in with the `CF_Authorization` cookie. The cookie's SameSite setting decides whether the browser attaches it to a request that another site makes to this host. With `None`, or in some browsers with no setting at all, another site can make a signed-in admin's browser send an admin write.
+
+**What the Worker does whatever the setting is:** every admin request that is not GET, HEAD or OPTIONS must come from this origin (`Sec-Fetch-Site: same-origin`, or a matching `Origin` in an older browser) or from automation holding a key header, and a body must be `application/json`. The rule is in `workers/oursharedevents/src/lib/admin-write-guard.ts`. `tests/admin-write-guard.derived.spec.ts` proves every `requireAdmin` route is behind it. The cookie setting is a second layer, not the only one.
+
+**The values.** These are read from the Cloudflare dashboard, which this repo cannot see. Nobody has read them yet, so they are not filled in. Do not copy a default from documentation into this table: write down what the dashboard shows.
+
+| Environment | Access application                                      | SameSite value   | Read on | Read by |
+| ----------- | ------------------------------------------------------- | ---------------- | ------- | ------- |
+| Staging     | the app on `stg.oursharedevents.com`                    | **not yet read** |         |         |
+| Production  | the app on `oursharedevents.com` (OSE-1353, to be made) | **not yet read** |         |         |
+
+**How to read it:** Zero Trust → Access → Applications → the app → its cookie settings → **Same Site Attribute**. To check what the browser actually received, sign in, open the browser's developer tools on the admin page, find the `CF_Authorization` cookie for the host and read its SameSite column. Record both if they differ.
+
+**What to set (recommended, owner decides):** `Lax`. `Strict` also closes the gap, but a person who arrives from a link on another site may be asked to sign in again. If the dashboard shows `None` or nothing selected, change it, then sign in again and confirm `/admin` still loads and saves. Fill in the table in a pull request each time the value is read or changed.
 
 ---
 
@@ -434,35 +504,13 @@ curl -s https://www.oursharedevents.com/ping
 
 ## Rollback Procedures
 
-### Staging Rollback
+The steps are in [ROLLBACK.md](./ROLLBACK.md). They are not repeated here, so there is one copy to keep right.
 
-```bash
-# Single-command rollback
-npm run rollback:staging
+- **Undo a bad deploy:** ROLLBACK.md §3 (revert through CI), then §4 for production.
+- **Check afterwards:** ROLLBACK.md §7.
+- **Data is wrong or missing:** [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md).
 
-# Or via wrangler
-wrangler rollback --env staging
-```
-
-### Production Rollback
-
-```bash
-# Single-command rollback
-npm run rollback:prod
-
-# Or via wrangler
-wrangler rollback --env production
-```
-
-### Verify Rollback
-
-```bash
-# Check staging
-curl -s https://stg.oursharedevents.com/api/health/backend | jq
-
-# Check production
-curl -s https://www.oursharedevents.com/api/health/backend | jq
-```
+The `npm run rollback:*` scripts that used to be listed here do not work: `scripts/rollback-worker.mjs` runs from a folder that no longer exists. Switching the production Worker back by hand is break-glass (ROLLBACK.md §6).
 
 ---
 

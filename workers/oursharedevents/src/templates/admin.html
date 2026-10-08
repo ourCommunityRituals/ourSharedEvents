@@ -4311,7 +4311,7 @@
               </label>
               <p class="create-publish-hint" data-testid="create-published-hint">
                 Unchecked, it stays off every public listing and the venue above is not
-                shown. Your links and printed codes keep working either way.
+                shown there. Your links and printed codes keep working either way.
               </p>
             </div>
 
@@ -5420,8 +5420,16 @@
       // carrying its own lock state) and ONE upsell line for the whole section
       // in organizer language (plan names via tierLabel, never tier codes).
       // Pure: admin-forms-single-row.spec.ts extracts and runs it.
+      //
+      // esc is this script's one escaper, for text and for attribute values
+      // alike (it escapes & < > " '). It is declared at the script's top level,
+      // not inside oseFormsSection, because mintReportLink below draws with it
+      // too. Inside either function, the other one throws "esc is not defined"
+      // the moment it draws: that is what Generate Link did. Kept inside the
+      // section markers so the extracted block still carries it.
+      // Gates: admin-mint-report-link.spec.ts, template-script-names.spec.ts.
+      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
       function oseFormsSection(o) {
-        var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
         var renderCount = function (c) {
           if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
             + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
@@ -5521,9 +5529,10 @@
             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + escAttr(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
             '</div>' +
-            '<a data-testid="mint-report-url" href="' + escAttr(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
+            '<a data-testid="mint-report-url" href="' + esc(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
+            '<div class="sub-line">Copy this now; it isn&#39;t stored and can&#39;t be shown again.</div>' +
             '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
           result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--success);border-radius:6px';
         } catch (err) {
@@ -7963,7 +7972,7 @@
         if (m) {
           if (failure) { m.textContent = failure; m.className = 'create-msg error'; }
           else {
-            m.textContent = wantOn ? 'This event is now on the map.' : 'This event is off the map.' + (e.status === 'active' ? ' Its public page is closed to guests until you turn it back on.' : '');
+            m.textContent = wantOn ? 'This event is now on the map.' : 'This event is off the map.' + (e.status === 'active' ? ' Its links and printed codes still open its page.' : '');
             m.className = 'create-msg success';
           }
         }
@@ -8018,13 +8027,15 @@
         // the event page (the 5Ws) — that's where the pre-event marketing
         // happens. Physical posters widen the reach after that.
         var hasLink = !!(d.link && d.link.url);
-        // Link taps arrive floored (K=5): a number, or null while under 5 —
-        // early weeks are quiet, not broken, so that reads as a normal state.
+        // Link taps arrive floored (K=5): the taps on the links that have 5 or
+        // more each, or null while no link has. Null is NOT "under 5 in all"
+        // (three links with 4 taps each read null), so the words say "on any
+        // one link". Early weeks are quiet, not broken: a normal state.
         var tapsN = a.clicks && typeof a.clicks.count === 'number' ? a.clicks.count : null;
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
-        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once there are 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 link taps' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
+        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
+        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -8080,7 +8091,7 @@
         } else linkCard.hidden = true;
 
         set('pre-event-scans', String(a.scans || 0));
-        set('pre-event-clicks', tapsN === null ? '<5' : String(tapsN));
+        set('pre-event-clicks', tapsN === null ? 'Held' : String(tapsN));
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
 
@@ -8125,6 +8136,8 @@
       // value goes in through textContent, nothing is used as a key or href.
       // Taps arrive floored by the server (K=5, never a small number, never
       // derivable by subtraction); under the floor is an ordinary early state.
+      // A withheld figure means each link in it has fewer than 5, not that
+      // they have fewer than 5 between them, so it reads "fewer than 5 each".
       window.renderPreEventReach = function (r) {
         var box = document.getElementById('pre-event-reach');
         if (!box) return;
@@ -8153,10 +8166,10 @@
           .map(function (c) { return { name: String(c.word || 'LINK'), n: fl(c.taps) }; });
         var on = t.other && typeof t.other === 'object' ? fl(t.other.taps) : undefined;
         if (on !== undefined && (taps.length || on !== null)) {
-          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5' : on });
+          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5 each' : on });
         }
         line('pre-event-reach-taps', 'Link taps', taps,
-          'fewer than 5 so far (they show here at 5 or more)');
+          'fewer than 5 on any one link so far (a link shows here at 5 or more)');
         line('pre-event-reach-venue', 'At the venue', places(ok && r.venue), 'no posters placed yet');
         line('pre-event-reach-community', 'In the community', places(ok && r.community), 'no posters placed yet');
         box.hidden = !ok;
@@ -8304,9 +8317,9 @@
        */
       window.graceNote = function (listedFrom, listed, byDefault) {
         // OSE-1560: off because nobody turned it on (the default), not because they chose.
-        if (listed === false && byDefault) return ' It is not on the map or list, and its public page stays closed to guests until you put it on the map.';
+        if (listed === false && byDefault) return ' It is not on the map or list. Your links and printed codes still open its page.';
         // Kept off the map by the organizer's choice: never promise a listing.
-        if (listed === false) return ' It stays off the map and list, as you chose, and its public page stays closed to guests. Turn on listing when you want people to find it.';
+        if (listed === false) return ' It stays off the map and list, as you chose. Your links and printed codes still open its page. Turn on listing when you want people to find it.';
         var t = listedFrom ? new Date(listedFrom) : null;
         if (!t || isNaN(t.getTime()) || t.getTime() <= Date.now()) return '';
         var at = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });

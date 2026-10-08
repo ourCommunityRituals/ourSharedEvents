@@ -56,6 +56,8 @@ function asEmail(email: string): Record<string, string> {
       iat: now - 10,
       exp: now + 3600,
     })}.sig`,
+    // A signed-in person is a browser on the admin site (admin write guard).
+    'Sec-Fetch-Site': 'same-origin',
   };
 }
 

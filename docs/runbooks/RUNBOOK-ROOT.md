@@ -587,6 +587,8 @@ curl -s "https://www.oursharedevents.com/api?action=getPublicBundle&slug=test-ev
 
 ## 5. Rollback Procedures
 
+> **Out of date.** This section describes the retired Apps Script system and a `cloudflare-proxy/` folder that no longer exists. For the Cloudflare Worker and D1 system that runs today, use [ROLLBACK.md](./ROLLBACK.md) (bad deploy) and [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md) (bad data).
+
 ### 5.1 Roll Back Apps Script Deployment
 
 **When to use:** GAS code is broken, need to restore previous version.

@@ -20,17 +20,31 @@
  * two DBs' file-level correlation surface disjoint everywhere except this one
  * function, which exists solely to serve an erasure request already validated
  * and authenticated by the caller.
+ *
+ * WHAT THIS CAN STILL FIND (2026-10-07). The form handlers no longer store the
+ * raw anonymous id. They store a per-event keyed id (lib/event-anon-key.ts),
+ * which equals nothing in the main DB and cannot be turned back into the
+ * cookie value, and forms migration 0016 cleared the raw values stored before
+ * that. So for every row written since, this lookup returns nothing, and
+ * erasure by email cannot reach the main-DB scan and returns tables: that
+ * link is exactly what was removed. Keyed ids are skipped here rather
+ * than handed to the caller, so the audit record never counts a "linked"
+ * anonymous id that could not match a scan row. Only a raw value still on a
+ * row (a database the scrub has not reached) is returned.
  */
+
+import { isEventAnonKey } from './event-anon-key';
 
 export interface ErasureAnonLookupEnv {
   FORMS_DB: D1Database;
 }
 
 /**
- * Returns the distinct set of anon_ids ever linked to `emailHash` via a form
- * submission (email_signups or form_registrations). Best-effort: query
- * failures propagate to the caller, which treats this as non-fatal to the
- * core email-keyed erasure.
+ * Returns the distinct set of raw anon_ids still linked to `emailHash` via a
+ * form submission (email_signups or form_registrations) — see "WHAT THIS CAN
+ * STILL FIND" above: empty for every row written with a per-event keyed id.
+ * Best-effort: query failures propagate to the caller, which treats this as
+ * non-fatal to the core email-keyed erasure.
  */
 export async function findAnonIdsLinkedToEmailHash(
   env: ErasureAnonLookupEnv,
@@ -47,7 +61,8 @@ export async function findAnonIdsLinkedToEmailHash(
     .bind(emailHash, emailHash)
     .all<{ anonymous_id: string }>();
   for (const row of rows.results ?? []) {
-    if (row.anonymous_id) anonIds.add(row.anonymous_id);
+    // A per-event keyed id is not an anonymous id: it matches no main-DB row.
+    if (row.anonymous_id && !isEventAnonKey(row.anonymous_id)) anonIds.add(row.anonymous_id);
   }
   return anonIds;
 }

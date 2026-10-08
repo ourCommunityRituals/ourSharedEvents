@@ -486,13 +486,15 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
         btn.style.transform = 'scale(0.93)';
         btn.style.opacity = '0.7';
         try {
-          const body = await submitForm('${eventId}', 'checkin', walkIn ? {
+          await submitForm('${eventId}', 'checkin', walkIn ? {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
             arrival_path: 'walk_in',
           } : {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
           });
-          document.getElementById('count').textContent = body.count + ' checked in';
+          // OSE-1657: counts are post-event only, so the page confirms the
+          // check-in and shows no tally.
+          document.getElementById('count').textContent = "You're checked in.";
         } finally {
           tapping = false;
           btn.style.transform = 'scale(1)';

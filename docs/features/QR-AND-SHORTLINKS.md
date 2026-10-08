@@ -212,17 +212,53 @@ of the shown cells equals the sum of the hidden ones. Two rules cover this:
   resolutions of one series at once. This is a **design memo, not ratified**, and
   no gate enforces it.
 
-> **Finding: subtraction leak in `click_outs`.** The SharedReport's
-> `click_outs` (`src/lib/shared-report-builder.ts`, section 8) floors each kind
-> on its own, then floors the **raw** total, including the suppressed kinds. With
-> `public = 6` and `donate = 3`, it emits `by_kind.public = 6`,
-> `by_kind.donate = null`, `total = 9`, so `9 − 6 = 3`. The test
-> `tests/shared-report-kanon-floor.spec.ts` ("public 6 shows, donate 3
-> suppressed, total (9) clears the floor") **encodes** this behavior. The impact
-> is limited today: `click_outs` is not in `DEPTH_SECTIONS`, so sponsor tokens
-> never receive it; no template renders it; and its readers (organizer, admin,
-> internal) already see exact tap totals elsewhere. It still breaks the rule
-> above and should drop-before-sum. See §8.
+> **Closed (2026-10-07): subtraction leak in `click_outs`.** The SharedReport's
+> `click_outs` (`src/lib/shared-report-builder.ts`, section 8) floored each kind
+> on its own, then floored the **raw** total, including the suppressed kinds. With
+> `public = 6` and `donate = 3`, it emitted `by_kind.public = 6`,
+> `by_kind.donate = null`, `total = 9`, so `9 − 6 = 3`. The total is now the sum
+> of the kinds that are published (`floorTotalOfParts`, `src/lib/count-floor.ts`):
+> `total = 6` here, and null when no kind clears the floor, however many small
+> kinds there are. `tests/shared-report-neighbour-floor.spec.ts` reads the report
+> for two datasets one click apart and requires that nothing published moves;
+> `tests/shared-report-kanon-floor.spec.ts`, which used to pin `total = 9`, now
+> pins 6. `click_outs` is still not in `DEPTH_SECTIONS` (sponsor tokens never
+> receive it) and no template renders it.
+>
+> **Closed (2026-10-07): the same leak on the organizer's pre-event card.** The
+> card lists taps per code and withholds a code under 5 (`floorTaps`,
+> `src/lib/poster-reach.ts`), but its totals were the raw sum: with taps 10, 2
+> and 1 it listed 10, withheld the other two, and showed 13 in three fields of
+> one response (`activity.clicks`, `reach.taps.total`, `reach.totals.taps`) and
+> on the Live page (`reach.clicks` of the event dashboard). "Other links" was a
+> raw sum too. All of them are now `floorTotalOfParts` over the per-code counts
+> (10 here; null when no code has 5, however many small codes there are).
+> `tests/reach-card-neighbour-floor.spec.ts` reads both routes for two datasets
+> one tap apart and requires that nothing published moves. A withheld total
+> therefore means "no link has 5 taps yet", not "fewer than 5 taps", and the
+> card says so.
+>
+> **Closed (2026-10-08): the same leak on the operations dashboard.**
+> `reach.link_taps` (`GET /api/v2/admin/dashboards/operations`) floored each
+> event's raw tap sum, then added the events: 13 for the same 10, 2 and 1, and
+> 14 after one more tap on a withheld link. Its query now returns taps per event
+> and code, grouped by the expression the card groups by (`TAP_CODE_SQL`), and
+> the figure is `floorTotalOfParts` over each event's codes, then over the
+> events: 10 here, and withheld when no code of any event in scope has 5. The
+> same spec reads the route for one event and for a brand with three. No page
+> renders this figure yet.
+>
+> **Closed (2026-10-08): the same leak on the sponsor's line.** "So far: N link
+> taps" was `floorPreEventActivity`'s raw sum, floored afterwards: 13 for 10, 2
+> and 1, and 14 after one more tap on a withheld link. A sponsor is shown no
+> per-code counts, but an organizer can open the sponsor's page and difference
+> it against the card's listed codes. Owner decision, 2026-10-08: close it; the
+> under-5 rule has no exceptions for any reader or tier. The figure is now
+> `floorTotalOfParts` over the same per-code counts the organizer's total uses,
+> so both audiences read the same number: 10 here. When no link has 5 the line
+> says "fewer than 5 taps on any one link", because "fewer than 5 link taps"
+> would be untrue for four links holding 15 between them. Nothing is pinned as
+> open in that spec now.
 >
 > **Latent: same shape in `floorPreEventActivity`.** It floors the total and
 > each day independently. The sponsor view renders totals only
@@ -236,8 +272,9 @@ In a multi-week pre-event window, "the report legitimately shows _nothing_ early
 then crosses the floor and begins to resolve"
 ([reconciliation §10.1](../discovery/OSE_REFERENCE_posterPrimitiveReconciliation_2026-09-04.md#101-the-suppression-is-part-of-the-story)).
 **The below-floor state is not an error state and must not be styled as one.**
-The code follows this. The sponsor line reads "fewer than 5" in words, never a
-warning (`floored()` in `src/lib/sponsor-home-render.ts`). Public recap lines
+The code follows this. The sponsor line reads "fewer than 5 poster scans" or
+"fewer than 5 taps on any one link" in words, never a warning
+(`renderPreEventReach` in `src/lib/sponsor-home-render.ts`). Public recap lines
 read "Fewer than 5 …" (`statLine` in `src/handlers/pages.ts`).
 
 ---
@@ -252,8 +289,8 @@ Everything below was read from the handlers named. "Exact" means the raw count.
 | QR scans, event total                        | **Exact**: `/stats` (`src/handlers/event-stats.ts`) and pre-event card (`src/handlers/pre-event-activity.ts`)                    | **Floored**. Shown only on an **accepted** placement (`sponsor_accepted = 1`) of a publicly renderable (active) event in the **pre-event** phase (`src/lib/sponsor-home-render.ts`, `canRender(state, 'public')`) | Not a section. `unique_gatherings` (distinct hashes, drop-before-sum, floored) at every depth                | **None**                                                        |
 | QR scans per day (14 days)                   | **Exact** (admin card chart, `admin.html` reads `scansByDay`)                                                                    | Not shown. Computed floored, never rendered                                                                                                                                                                       | not sent                                                                                                     | None                                                            |
 | QR scans per poster, with its res9 cell      | Via the SharedReport only: organizer/admin get the full report, `poster_attribution` floored, **sub-5 posters dropped entirely** | Not shown                                                                                                                                                                                                         | `poster_attribution` at **mid+** depth, same floor and drop (`tests/poster-attribution-kanon-floor.spec.ts`) | None                                                            |
-| Short-link taps, event total                 | **Exact** (`SUM(shortlinks.clicks)`, pre-event card)                                                                             | **Floored**, same gating as scans                                                                                                                                                                                 | Not sent (`click_outs` is not in `DEPTH_SECTIONS`)                                                           | None                                                            |
-| Short-link taps per destination kind         | SharedReport `click_outs`: floored per kind + total. **Differencable**, see §4                                                   | Not shown                                                                                                                                                                                                         | not sent                                                                                                     | None                                                            |
+| Short-link taps, event total                 | **Floored**: the taps on the codes with 5 or more each (`floorTotalOfParts`); pre-event card and Live page (§4)                  | **Floored**, same gating as scans                                                                                                                                                                                 | Not sent (`click_outs` is not in `DEPTH_SECTIONS`)                                                           | None                                                            |
+| Short-link taps per destination kind         | SharedReport `click_outs`: floored per kind; the total is the sum of the published kinds (§4)                                    | Not shown                                                                                                                                                                                                         | not sent                                                                                                     | None                                                            |
 | Posters out / places covered (distinct res7) | **Exact**                                                                                                                        | **Exact.** These are the organizer's own placements, not people (`floorPreEventActivity` leaves them exact)                                                                                                       | not a section                                                                                                | None                                                            |
 | Corridor map                                 | Full report                                                                                                                      | —                                                                                                                                                                                                                 | **mid+** (`DEPTH_SECTIONS` in `src/lib/report-depth.ts`, ADR-017); cells are the event venue's               | None                                                            |
 | Registrations / check-ins (forms, not QR)    | **Floored** (`event-stats.ts`)                                                                                                   | —                                                                                                                                                                                                                 | —                                                                                                            | Post-event recap: floored (`statLine`, `src/handlers/pages.ts`) |
@@ -344,11 +381,13 @@ in admin (`src/handlers/poster-deployments.ts`).
 never touches the WHO side, the request, or FORMS_DB" in
 `tests/pre-event-activity.spec.ts` enforces that.
 
-- The **organizer** sees it exact on the admin pre-event card, with the public
-  short link and its QR ("link first").
+- The **organizer** sees it on the admin pre-event card, with the public short
+  link and its QR ("link first"): scans exact, taps floored. The tap total is
+  the sum of the codes that have 5 or more taps each (§4).
 - The **sponsor** sees one floored sentence on each accepted pre-event placement:
   "So far: N link taps · M poster scans. Your name is on P posters in Q places."
-  (`renderPreEventReach`)
+  (`renderPreEventReach`). N is the same figure the organizer's card shows: the
+  taps on the links that have 5 or more each.
 
 ---
 
@@ -370,7 +409,7 @@ BUILT = in code with a test. PARTIAL = some of it. NOT BUILT = cites the story i
 | Several codes per poster, kinds, plan limits, order                                                       | **BUILT**     | `src/lib/poster-codes.ts`, 0080; `tests/poster-codes-parse.spec.ts`, `tests/poster-multi-code.spec.ts`, `tests/poster-multi-code-ui.spec.ts`                                                    |
 | Pre-event activity (organizer exact) and sponsor reach (floored)                                          | **BUILT**     | `src/lib/pre-event-activity.ts`, `src/lib/sponsor-home-render.ts`; `tests/pre-event-activity.spec.ts`                                                                                           |
 | SharedReport `poster_attribution`, K-floored with sub-5 dropped                                           | **BUILT**     | `src/lib/shared-report-builder.ts` (OSE-711); `tests/poster-attribution-kanon-floor.spec.ts`                                                                                                    |
-| SharedReport `click_outs` (the digital signal)                                                            | **PARTIAL**   | Built and tested, but has the subtraction leak (§4), and is neither rendered nor in `DEPTH_SECTIONS`                                                                                            |
+| SharedReport `click_outs` (the digital signal)                                                            | **PARTIAL**   | Built and tested, total is drop-before-sum (§4); neither rendered nor in `DEPTH_SECTIONS`                                                                                                       |
 | Weekly per-poster scan series, K=5 (§8 story 2)                                                           | **PARTIAL**   | Per-poster **totals** (SharedReport) and per-day **event** totals (organizer card) exist. No per-poster time series                                                                             |
 | `scan_node_returns` retention sweep (OSE-1351) and erasure by anon id (OSE-1350)                          | **BUILT**     | `src/lib/scan-returns-retention.ts` (**off unless `SCAN_RETURNS_RETENTION_DAYS` is set**), `src/handlers/data-subject.ts`; `tests/scan-returns-retention.spec.ts`, `tests/data-subject.spec.ts` |
 | Static gate: `qr_token` never updated, PST-02 (§8 story 1)                                                | **NOT BUILT** | True in code (update allowlist omits it), ungated                                                                                                                                               |
@@ -412,8 +451,11 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
 1. `surface = 'digital'` ⇒ `h3_res9 IS NULL`. There is no `surface` column yet
    (§8 story 7).
 2. `qr_token` is never updated (PST-02, §8 story 1).
-3. **Drop-before-sum for any displayed total over floored cells.** The
-   `click_outs` test currently asserts the opposite (§4).
+3. **Drop-before-sum for any displayed total over floored cells.** Gated for
+   the SharedReport by `tests/shared-report-neighbour-floor.spec.ts`: two
+   datasets one person apart, nothing published may move; and a registry
+   of every number the report publishes with its floor rule. Not gated for
+   other surfaces (`floorPreEventActivity`, §4).
 4. Finalized-only / single-rung exposure (memo R1, R2, R4): not ratified, not
    gated.
 5. **Placement id and identity in one row, in FORMS_DB.**
@@ -455,7 +497,8 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
    anonymous scans and taps exact for the organizer, identity-derived counts
    floored. The alternative is to amend the OSE-665 wording in
    `count-floor.ts`.
-5. **Fix `click_outs`** to drop-before-sum, and flip its test (§4).
+5. ~~Fix `click_outs` to drop-before-sum, and flip its test (§4).~~ Done
+   2026-10-07.
 6. **Retention of `scan_node_returns`.** The sweep exists but is off by default.
    The policy question from reconciliation §7/§10.3 (with Tom) is still open.
 7. **`created_at` precision at rest** (memo §4, decision 3).

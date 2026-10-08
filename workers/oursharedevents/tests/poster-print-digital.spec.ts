@@ -91,15 +91,17 @@ describe('Print | Digital — the URL is the state', () => {
   });
 
   test('Digital: the date adds to a calendar, the venue opens a map (escaped, new tab)', () => {
+    // Both addresses are a fixed start with one encoded value written straight
+    // after it (what the links come out as, for a venue or an id holding quote
+    // marks, is run in poster-attribute-escaping.spec.ts).
     expect(html).toContain(
-      '\'<a href="/events/\' + id + \'/calendar.ics" download data-testid="poster-add-to-calendar">\''
+      '\'<a href="/events/\' + encodeURIComponent(event.id) + \'/calendar.ics" download data-testid="poster-add-to-calendar">\''
     );
     expect(html).toContain(
-      "'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(venue)"
+      '\'<a href="https://www.google.com/maps/search/?api=1&amp;query=\' + encodeURIComponent(venue) + \'" target="_blank" rel="noopener noreferrer"'
     );
-    expect(html).toMatch(/esc\(mapHref\) \+ '" target="_blank" rel="noopener noreferrer"/);
     // Print stays plain text — nothing to tap on paper.
-    expect(html).toContain('const whenHtml = digital && id');
+    expect(html).toContain('const whenHtml = digital && event.id');
   });
 });
 

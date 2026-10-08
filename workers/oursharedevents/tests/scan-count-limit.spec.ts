@@ -289,13 +289,32 @@ describe('through the real routes', () => {
     });
 
   /**
-   * Use up `ip`'s allowance for `scope` the way the route does, without sending
-   * hundreds of real requests. The scope name is the one the router passes, so
-   * a route wired to a different scope (or to none) is still counted and fails.
+   * Use up `ip`'s per-minute allowance for `scope`, without sending hundreds of
+   * real requests. The scope name is the one the router passes, so a route wired
+   * to a different scope (or to none) is still counted and fails.
+   *
+   * It asks with a limit one above the default. That is how a caller skips the
+   * 10-second edge layer (public-read-limit.ts), so every call here lands on the
+   * per-minute count. Asked with the default limit, the edge layer answers
+   * "limited" after 60 calls and returns before the per-minute count is touched:
+   * the count stopped at 61 of 360, and the route was held back by the edge layer
+   * alone. A run that crossed that layer's 10-second boundary between the drain
+   * and the clicks counted them again (CI, 2026-10-07: "expected 3 to be 1").
+   *
+   * The last line checks the drain did what it says, with the edge layer out of
+   * the question, so this cannot go back to depending on the clock unnoticed.
    */
   const useUp = async (scope: string, ip: string) => {
     const r = new Request('https://localhost/x', { headers: { 'CF-Connecting-IP': ip } });
-    for (let i = 0; i < PUBLIC_READ_MAX; i++) await isPublicReadLimited(r, tenv(), scope);
+    for (let i = 0; i <= PUBLIC_READ_MAX; i++) {
+      await isPublicReadLimited(r, tenv(), scope, PUBLIC_READ_MAX + 1);
+    }
+    // Asked on its own terms, not the loop's: the edge layer is skipped here
+    // whatever the loop above does, so only the per-minute count can say yes.
+    expect(
+      await isPublicReadLimited(r, tenv(), scope, PUBLIC_READ_MAX + 1),
+      'the per-minute allowance is used up, whatever the edge layer says'
+    ).toBe(true);
   };
 
   test('scans: counted up to the limit, then sent on uncounted; another caller is unaffected', async () => {

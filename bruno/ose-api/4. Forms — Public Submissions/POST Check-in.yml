@@ -31,11 +31,11 @@ runtime:
 
         
 
-        \    test('Has count (number)', function() {
+        \    test('Carries no count (counts are post-event only)', function() {
 
-        \        expect(json.count).to.be.a('number');
+        \        expect(json).to.not.have.property('count');
 
-        \        expect(json.count).to.be.at.least(1);
+        \        expect(json).to.not.have.property('suppressed');
 
         \    });
 

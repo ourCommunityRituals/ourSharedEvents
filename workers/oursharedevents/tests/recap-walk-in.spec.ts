@@ -11,6 +11,9 @@
  * decide the path. Structural assertions below pin that on the source.
  * K-anonymity: every line under 5 reads "Fewer than 5"; the walk-in share and
  * the showed-up ratio are suppressed when either of their inputs is under 5.
+ * OSE-1657: the card shows only when some count is 5 or more, so an event whose
+ * counts are all under 5 looks like one with none; once it shows, 0 and 1 to 4
+ * read the same; and walk-ins are floored as a subset of check-ins.
  *
  * @born-red OSE-1373 | method: spec written before the change and run against
  *   origin/main (no walk-in path at check-in, no walk_in_count column, no
@@ -153,13 +156,20 @@ describe('OSE-1373 | acceptance: N registrations, M registered-path + W walk-in 
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  test('<5 anywhere: every line floors, the share and the ratio are suppressed', async () => {
+  test('<5 everywhere: no card at all, the same as an event where nobody came (OSE-1657)', async () => {
     const id = 'evt_walkin_subk';
     await seed(id, 3, 1, 2);
+    const html = await recap(id);
+    expect(html).not.toContain('data-testid="event-stats-card"');
+    expect(html).not.toMatch(/<strong>[1-4]<\/strong>/);
+  });
+
+  test('<5 on one line while another prints: that line floors, the share and the ratio are suppressed', async () => {
+    const id = 'evt_walkin_subk_one';
+    await seed(id, 12, 1, 2);
     const card = statsCard(await recap(id));
-    expect(card).toContain('Fewer than 5 Registered');
+    expect(card).toContain('<strong>12</strong> Registered');
     expect(card).toContain('Fewer than 5 Checked in');
-    expect(card).toContain('Fewer than 5 Walked in');
     expect(card).not.toMatch(/<strong>[1-4]<\/strong>/);
     expect(card).not.toContain('data-testid="stat-walk-in-share"');
     expect(card).not.toContain('data-testid="stat-showed-up-share"');
@@ -176,11 +186,11 @@ describe('OSE-1373 | acceptance: N registrations, M registered-path + W walk-in 
     expect(card).toContain('75% of those registered showed up');
   });
 
-  test('no walk-ins recorded → no Walk-in line at all', async () => {
+  test('no walk-ins recorded reads like 1 to 4: "Fewer than 5 Walked in" (OSE-1657)', async () => {
     const id = 'evt_walkin_none';
     await seed(id, 10, 6, 0);
     const card = statsCard(await recap(id));
-    expect(card).not.toContain('data-testid="stat-walk-ins"');
+    expect(card).toContain('Fewer than 5 Walked in');
     expect(card).not.toContain('data-testid="stat-walk-in-share"');
   });
 });

@@ -68,7 +68,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
-import { applyCountFloor } from '../lib/count-floor.js';
+import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
   formatDateOnly,
@@ -1723,7 +1723,25 @@ ${SPONSOR_LIST_CSS}
         // check-ins over registrations — never by a word that implies bodies.
         const { checkinCount, regCount, surveyCount, emailCount } = social;
         const walkInCount = social.walkInCount ?? 0;
-        const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
+        // OSE-1657: nothing a reader sees may tell 0 from 1 to 4. So the card
+        // shows only when some count clears the floor (an event with 3
+        // check-ins and one with none both show no card), and when it shows,
+        // every line is drawn: a small count reads "Fewer than 5", whether it
+        // is 0 or 4.
+        const hasStats = [regCount, checkinCount, surveyCount, emailCount].some(clearsFloor);
+        // Walk-ins are a subset of check-ins. Floored one by one, 8 check-ins
+        // and 6 walk-ins would both print and give back the 2 who came through
+        // registration. Floored as a nested pair, a walk-in count prints only
+        // when what is left is 0 or at least 5.
+        const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
+        const walkInLine = !clearsFloor(checkinCount)
+          ? ''
+          : walkInShown !== null
+            ? statLine(walkInShown, 'Walked in', 'stat-walk-ins')
+            : clearsFloor(walkInCount)
+              ? '<p data-testid="stat-walk-ins">Walked in: held, so a group under 5 cannot be worked out</p>'
+              : statLine(walkInCount, 'Walked in', 'stat-walk-ins');
+        const walkInPct = flooredRatePct(walkInCount, checkinCount);
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
@@ -1731,14 +1749,14 @@ ${SPONSOR_LIST_CSS}
                 // OSE-1373: the promise first (how many said they'd come), then
                 // the turnout, then how many walked in, then the ratio — the
                 // order a reader asks in.
-                regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''
+                statLine(regCount, 'Registered', 'stat-registrations')
               }
-              ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
-              ${walkInCount > 0 ? statLine(walkInCount, 'Walked in', 'stat-walk-ins') : ''}
+              ${statLine(checkinCount, 'Checked in', 'stat-checkins')}
+              ${walkInLine}
               ${
-                // The walk-in share needs BOTH operands over the floor, like the ratio.
-                clearsFloor(walkInCount) && clearsFloor(checkinCount)
-                  ? `<p data-testid="stat-walk-in-share">${Math.round((walkInCount / checkinCount) * 100)}% of check-ins were walk-ins</p>`
+                // The walk-in share uses the same nested rule as the walk-in line.
+                walkInPct !== null
+                  ? `<p data-testid="stat-walk-in-share">${Math.round(walkInPct)}% of check-ins were walk-ins</p>`
                   : ''
               }
               ${
@@ -1748,8 +1766,8 @@ ${SPONSOR_LIST_CSS}
                   ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
                   : ''
               }
-              ${surveyCount > 0 ? statLine(surveyCount, 'Surveys submitted', 'stat-surveys') : ''}
-              ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
+              ${statLine(surveyCount, 'Surveys submitted', 'stat-surveys')}
+              ${statLine(emailCount, 'Email signups', 'stat-email-signups')}
             </section>`
           : '';
         return statsCard;
@@ -1992,11 +2010,16 @@ export async function handlePublicEventPage(
     );
   }
 
-  // Publication/state-machine gate: draft/ready/unpublished events are NOT
-  // renderable to public.
+  // State-machine gate: a draft or ready event is NOT renderable to public.
   // 404 (not 403) so an attacker can't probe to discover unpublished events.
   // The friendly copy MUST be byte-identical to the not-found case above so
   // a probe attacker can't differentiate a missing row from a draft row.
+  //
+  // PO decision 2026-10-07: "off the map" (`is_published = 0`) means not
+  // listed. It does not mean hidden. A LIVE event's page opens for anyone who
+  // holds its link, QR code or short link, the same as during the publish
+  // grace window; the list, map, sitemap and sponsor discovery still leave it
+  // out. So `is_published` closes the page only for an event that is not live.
   const status = (row.status || '').toLowerCase();
   // OSE-1519: an event that was live and is now archived is named, as ended. The
   // "was live" test is `listed_from`: an event archived straight from draft was
@@ -2005,7 +2028,8 @@ export async function handlePublicEventPage(
   if (status === 'archived' && row.is_published !== 1 && row.listed_from) {
     return renderEndedEventPage(env, row);
   }
-  if (row.is_published !== 1 || status === 'draft' || status === 'ready') {
+  const offMap = row.is_published !== 1;
+  if (status === 'draft' || status === 'ready' || (offMap && status !== 'active')) {
     return renderErrorPage(
       404,
       "We couldn't find that event",
@@ -2073,6 +2097,10 @@ export async function handlePublicEventPage(
   // 'demo' showcase banner, 'degraded' fallback indicator, or nothing when live.
   body = injectProvenanceBanner(body, await resolveAndSignalProvenance(env, 'public-event'));
 
+  // Off the map: open to whoever holds the link, never announced. Ask search
+  // engines not to index it (header and meta, as the admin previews do).
+  if (offMap) body = body.replace('</head>', '<meta name="robots" content="noindex" />\n</head>');
+
   // OSE-658 cache-coherence: private (never shared-edge — the body may carry a
   // sub-floor count, #7) and hard-expiring by the next phase pivot so no stale
   // pre/in/post state is ever served past the start/end boundary.
@@ -2081,6 +2109,7 @@ export async function handlePublicEventPage(
     headers: {
       ...securityHeaders(nonce),
       'Cache-Control': publicEventCacheControl({ status: row.status, ...phaseTimes }, phase),
+      ...(offMap ? { 'X-Robots-Tag': 'noindex' } : {}),
     },
   });
 }
@@ -2100,40 +2129,33 @@ const ADMIN_PREVIEW_CSS = `<style>
  * PUT /api/v2/admin/events/:id {status}, then ready -> active through POST
  * /verify-qr. It deliberately does NOT touch is_published — listing is the
  * host's publication act (migration 0070), and a preview must never flip it.
- * An unlisted event has no public page to land on, so it says so instead.
+ * A live event's page opens by link whether or not it is on the map (PO
+ * 2026-10-07), so Publish always has a public page to land on.
  */
 function injectAdminPreviewToolbar(
   body: string,
-  row: { id: string; status: string; is_published: number | null },
+  row: { id: string; status: string },
   nonce: string,
   // liveUrl: where Publish lands (the poster preview goes to the live poster).
-  // Without it, Publish opens the public event page, or says it is unlisted.
+  // Without it, Publish opens the public event page.
   opts: { liveUrl?: string; note?: string } = {}
 ): string {
   const safeId = esc(row.id);
   const liveAttr = opts.liveUrl ? ` data-live-url="${esc(opts.liveUrl)}"` : '';
-  // A live but unlisted event has no public page, so its preview stays here
-  // (published already: no Publish button, and the bar says what it is).
-  const liveUnlisted = row.status === 'active';
   const note =
     opts.note ??
-    (liveUnlisted
-      ? "It is live but kept off the map and list, so guests can't open this page. List it in admin to share it."
-      : 'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.');
+    'This is what people will see once it is live. Buttons below are switched off here, and nothing is counted.';
   const status = row.status === 'ready' ? 'ready' : 'draft';
-  const listed = row.is_published === 1 ? '1' : '0';
-  const publishBtn = liveUnlisted
-    ? ''
-    : `<button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}" data-listed="${listed}"${liveAttr}>Publish</button>`;
+  const publishBtn = `<button id="adminPreviewGoLive" class="btn btn-primary" data-testid="admin-preview-go-live" type="button" data-event-id="${safeId}" data-status="${status}"${liveAttr}>Publish</button>`;
   const toolbar = `<aside class="admin-preview-toolbar" aria-label="Preview" data-testid="admin-draft-preview-toolbar">
-  <strong data-testid="admin-preview-banner">${liveUnlisted ? 'Preview — live, but unlisted' : 'Preview — not live'}</strong>
-  <span data-testid="admin-draft-preview-status">${liveUnlisted ? 'Live, unlisted' : status === 'ready' ? 'Ready' : 'Draft'}</span>
+  <strong data-testid="admin-preview-banner">Preview — not live</strong>
+  <span data-testid="admin-draft-preview-status">${status === 'ready' ? 'Ready' : 'Draft'}</span>
   <a class="btn btn-secondary" data-testid="admin-preview-back" href="/admin">Back to admin</a>
   ${publishBtn}
   <p data-testid="admin-preview-note">${esc(note)}</p>
   <p id="adminPreviewMsg" data-testid="admin-preview-msg" role="status" aria-live="polite"></p>
 </aside>
-<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.liveUrl){say('Published. Opening it…');window.location.href=b.dataset.liveUrl;}else if(b.dataset.listed==='1'){say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}else{say('Published, but unlisted: it has no public page. Change that in admin.');}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
+<script nonce="${nonce}">(function(){var b=document.getElementById('adminPreviewGoLive'),m=document.getElementById('adminPreviewMsg');if(!b)return;function say(t){if(m)m.textContent=t;}function call(u,meth,body){return fetch(u,{method:meth,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok||d.ok===false)throw new Error((d&&(d.error||d.code))||('HTTP '+r.status));return d;});});}b.addEventListener('click',function(){var id=b.dataset.eventId,base='/api/v2/admin/events/'+encodeURIComponent(id);b.disabled=true;say('Publishing…');(b.dataset.status==='draft'?call(base,'PUT',{status:'ready'}):Promise.resolve()).then(function(){b.dataset.status='ready';return call(base+'/verify-qr','POST');}).then(function(){if(b.dataset.liveUrl){say('Published. Opening it…');window.location.href=b.dataset.liveUrl;}else{say('Published. Opening the public page…');window.location.href='/events/'+encodeURIComponent(id);}}).catch(function(e){b.disabled=false;say('Could not publish: '+(e&&e.message?e.message:'try again'));});});})();</script>`;
   return body
     .replace('</head>', `${ADMIN_PREVIEW_CSS}\n</head>`)
     .replace('<body>', `<body>\n${toolbar}`);
@@ -2214,15 +2236,15 @@ export async function handleAdminEventPreviewPage(
   }
 
   const status = (row.status || 'draft').toLowerCase();
-  // Live and listed: the public page IS the preview. Live but unlisted has
-  // no public page (it 404s by design), so it previews here instead.
-  if (status === 'active' && row.is_published === 1) {
+  // Live: the public page IS the preview, on the map or off it (a live event's
+  // page opens by link while it is off the map, PO 2026-10-07).
+  if (status === 'active') {
     return new Response(null, {
       status: 303,
       headers: { Location: `/events/${encodeURIComponent(row.id)}`, ...PREVIEW_HEADERS },
     });
   }
-  if (status !== 'draft' && status !== 'ready' && status !== 'active') {
+  if (status !== 'draft' && status !== 'ready') {
     return previewError(
       404,
       'Nothing to preview',
@@ -2237,7 +2259,7 @@ export async function handleAdminEventPreviewPage(
   const social = await fetchEventPageSocialData(env, row.id);
   const body = injectAdminPreviewToolbar(
     renderPreEventHtml(row, shareUrl, social, { nonce, lang, preview: true }),
-    { id: row.id, status, is_published: row.is_published ?? null },
+    { id: row.id, status },
     nonce
   );
 
@@ -2327,7 +2349,10 @@ export async function handleAdminPosterPreviewPage(
 }
 
 export function handleAdminPage(_env: PagesEnv): Response {
-  return html(injectLegalFooter(ADMIN_HTML, 'admin'));
+  const res = html(injectLegalFooter(ADMIN_HTML, 'admin'));
+  // Not kept in a browser or shared-device cache, so it is not shown again after sign-out.
+  res.headers.set('Cache-Control', 'no-store');
+  return res;
 }
 
 /**
@@ -2628,9 +2653,14 @@ export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
     SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
     'shared-report'
   );
-  return html(
+  const res = html(
     injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'sharedReport'))
   );
+  // Opened by a signed link (?token=). Not kept in a cache, and the address is
+  // never sent on in a Referer header, whatever is in it at that moment.
+  res.headers.set('Cache-Control', 'no-store');
+  res.headers.set('Referrer-Policy', 'no-referrer');
+  return res;
 }
 
 // ─── /ui-preview — component showcase for Claude Design ───────────────────────

@@ -102,16 +102,17 @@ async function seedEvent(id: string, h3Res7: string | null = null): Promise<void
     .run();
 }
 
-async function seedAnons(eventId: string, n: number): Promise<void> {
+/** `n` people at the event; the first `cameTwice` of them more than once. */
+async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<void> {
   const now = new Date().toISOString();
   for (let i = 0; i < n; i++) {
     await tenv()
       .DB.prepare(
         `INSERT INTO anon_id_returns
            (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .bind(`${i}`.padStart(32, 'f'), eventId, now, now, now)
+      .bind(`${i}`.padStart(32, 'f'), eventId, now, now, i < cameTwice ? 2 : 1, now)
       .run();
   }
 }
@@ -171,7 +172,7 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     });
   }
 
-  test('exactly K distinct attendees: the percentages are published over a sample of K', async () => {
+  test('exactly K distinct attendees: the sample size is published; a rate over nobody is not', async () => {
     const id = 'test-evt-rrf-atk';
     await seedEvent(id, CELL);
     await seedAnons(id, CORRIDOR_MAP_MIN_COUNT);
@@ -180,10 +181,123 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
-    expect(r.report.return_rate.venue_pct).not.toBeNull();
-    expect(r.report.return_rate.corridor_pct).not.toBeNull();
-    expect(r.report._meta.suppression_reasons.map((s) => s.field)).not.toContain('return_rate');
+    // Nobody came twice and nobody was seen elsewhere: 0 is under the floor like
+    // 1 to 4, so neither rate is published. (This test used to expect both.)
+    expect(r.report.return_rate.venue_pct).toBeNull();
+    expect(r.report.return_rate.corridor_pct).toBeNull();
+    const fields = r.report._meta.suppression_reasons.map((s) => s.field);
+    expect(fields).not.toContain('return_rate'); // the section itself is published
+    expect(fields).toContain('return_rate.venue_pct');
+    expect(fields).toContain('return_rate.corridor_pct');
     expect(bannedKeysIn(r.report)).toEqual([]);
+  });
+
+  test('exactly K distinct attendees who all came twice: 100% over a sample of K', async () => {
+    const id = 'test-evt-rrf-all5';
+    await seedEvent(id, CELL);
+    await seedAnons(id, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT);
+
+    const r = await buildSharedReport(tenv().DB, id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
+    expect(r.report.return_rate.venue_pct).toBe(100);
+    expect(r.report._meta.suppression_reasons.map((s) => s.field)).not.toContain(
+      'return_rate.venue_pct'
+    );
+  });
+});
+
+/**
+ * A rate published beside its sample size is a head count: rate x sample / 100.
+ * So the rate itself passes the floor (`flooredRatePct`): the people it counts
+ * must be at least K, and the people it does not count none or at least K.
+ * Every (sample, returners) pair below is read through the real builder.
+ */
+describe('a published return rate never multiplies back to a group under the floor', () => {
+  beforeEach(async () => {
+    await applyMigrations();
+    await clearTables();
+  });
+
+  const K = CORRIDOR_MAP_MIN_COUNT;
+  /** The two groups a rate splits its sample into, recovered as a reader would. */
+  function groups(pct: number, sample: number): { counted: number; rest: number } {
+    const counted = Math.round((pct * sample) / 100);
+    return { counted, rest: sample - counted };
+  }
+
+  for (const sample of [K, 9, 10, 12]) {
+    test(`venue_pct over ${sample} people, for every number who came twice`, async () => {
+      const id = `test-evt-rrf-sweep-${sample}`;
+      await seedEvent(id, CELL);
+      let publishedSomewhere = false;
+      for (let twice = 0; twice <= sample; twice++) {
+        await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
+        await seedAnons(id, sample, twice);
+        const r = await buildSharedReport(tenv().DB, id);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const { venue_pct, sample_size } = r.report.return_rate;
+        expect(sample_size).toBe(sample);
+        const safe = twice >= K && (sample - twice === 0 || sample - twice >= K);
+        if (safe) {
+          expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo((twice / sample) * 100, 6);
+          publishedSomewhere = true;
+        } else {
+          expect(venue_pct, `${twice} of ${sample} must be withheld`).toBeNull();
+        }
+        if (venue_pct !== null) {
+          const g = groups(venue_pct, sample);
+          expect(g.counted).toBeGreaterThanOrEqual(K);
+          expect(g.rest === 0 || g.rest >= K, `rest of ${g.rest}`).toBe(true);
+        }
+        // Withheld with a reason that names the floor only; published without one.
+        const reason = r.report._meta.suppression_reasons.find(
+          (s) => s.field === 'return_rate.venue_pct'
+        );
+        expect(reason !== undefined).toBe(venue_pct === null);
+        if (reason) {
+          expect(reason.reason).toBe('below_min_sample_size');
+          expect(numbersIn(reason.detail)).toEqual([String(K)]);
+        }
+      }
+      expect(publishedSomewhere, 'the sweep never published a rate: it proves nothing').toBe(true);
+    });
+  }
+
+  test('corridor_pct over 12 people, for every number also seen at another event in the corridor', async () => {
+    const id = 'test-evt-rrf-corr';
+    const other = 'test-evt-rrf-corr-other';
+    const sample = 12;
+    await seedEvent(id, CELL);
+    await seedEvent(other, CELL);
+    let published = 0;
+    for (let elsewhere = 0; elsewhere <= sample; elsewhere++) {
+      await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
+      await seedAnons(id, sample);
+      await seedAnons(other, elsewhere); // the same first `elsewhere` people
+      const r = await buildSharedReport(tenv().DB, id);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const { corridor_pct } = r.report.return_rate;
+      const safe = elsewhere >= K && (sample - elsewhere === 0 || sample - elsewhere >= K);
+      if (safe) {
+        expect(corridor_pct, `${elsewhere} of ${sample}`).toBeCloseTo(
+          (elsewhere / sample) * 100,
+          6
+        );
+        published++;
+      } else {
+        expect(corridor_pct, `${elsewhere} of ${sample} must be withheld`).toBeNull();
+      }
+      const reason = r.report._meta.suppression_reasons.find(
+        (s) => s.field === 'return_rate.corridor_pct'
+      );
+      expect(reason !== undefined).toBe(corridor_pct === null);
+    }
+    // 5, 6, 7 of 12 (both sides at least K) and 12 of 12.
+    expect(published).toBe(4);
   });
 });
 
@@ -256,6 +370,50 @@ describe('no below_min_sample_size detail prints an observed count', () => {
       expect(stray, `${s.field}: "${s.detail}" prints a non-floor number`).toEqual([]);
     }
     expect(bannedKeysIn(r.report)).toEqual([]);
+  });
+
+  // The test above reaches the map's line through poster cells. An event with
+  // no poster scans yet takes the other path: the neighbourhood preview, drawn
+  // by the map renderer, which writes its own hidden-area line. That line had no
+  // test: printing the number of hidden areas in it left every spec here green.
+  //
+  // Seen red: with `${suppressedCells.length} areas not shown ...` in the
+  // builder (as a template literal, and as string concatenation, which the
+  // source gate in aggregate-only.invariant does not read), and with the
+  // pre-fix loop ("area 1 of 6 suppressed ...", one line per area).
+  test('the launch-day map (no poster scans yet): one hidden-area line, naming only the floor, the same whether the head count is published or withheld', async () => {
+    const seen: Array<{ hidden: number; detail: string | undefined }> = [];
+    for (const [id, people] of [
+      ['test-evt-rrf-map-shown', 20],
+      ['test-evt-rrf-map-held', 3],
+    ] as const) {
+      await seedEvent(id, CELL);
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO scan_aggregates
+             (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
+           VALUES (?, ?, '2026-05-07', 19, ?, ?, datetime('now'))`
+        )
+        .bind(`sa-${id}`, id, people * 2, people)
+        .run();
+
+      const r = await buildSharedReport(tenv().DB, id);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      expect(r.report.corridor_map?.source).toBe('fallback');
+      expect(r.report.unique_gatherings).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
+      const lines = r.report._meta.suppression_reasons.filter((s) => s.field === 'corridor_map');
+      expect(lines, 'one line, not one per hidden area').toHaveLength(1);
+      expect(lines[0]!.reason).toBe('below_min_sample_size');
+      expect(numbersIn(lines[0]!.detail)).toEqual([String(CORRIDOR_MAP_MIN_COUNT)]);
+      seen.push({ hidden: r.report.corridor_map!.suppressed.length, detail: lines[0]!.detail });
+      expect(bannedKeysIn(r.report)).toEqual([]);
+    }
+    // The two maps hide a different number of areas (the event's own cell is
+    // one of them only when its head count is withheld), and say the same thing.
+    expect(seen[0]!.hidden).not.toBe(seen[1]!.hidden);
+    expect(seen[0]!.detail).toBe(seen[1]!.detail);
   });
 });
 

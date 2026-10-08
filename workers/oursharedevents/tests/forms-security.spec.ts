@@ -451,7 +451,8 @@ describe('S12: Check-in stores zero PII', () => {
     expect(cols).toContain('total_count');
     expect(cols).toContain('updated_at');
     expect(cols).toContain('last_anonymous_id');
-    // last_anonymous_id is NOT PII — it's a random UUID with no personal data
+    // last_anonymous_id is NOT PII — a per-event keyed id (lib/event-anon-key.ts),
+    // never the ose_anon cookie value; see tests/forms-anon-unlinkable.spec.ts.
     // OSE-1373 (forms migration 0015): a second running count, per arrival path.
     expect(cols).toContain('walk_in_count');
   });

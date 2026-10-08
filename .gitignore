@@ -76,6 +76,16 @@ test-dashboard/
 # Cloudflare Wrangler local state (D1 SQLite, miniflare)
 .wrangler/
 
+# Files the operator saves for scripts/prod-preflight.mjs (secret NAMES, migration
+# lists, CI run summaries). Read locally, never committed.
+.preflight/
+
+# The recovery runbook used to export table rows to backup/*.json. No runbook does
+# now (tests/integration/runbook-dangerous-commands.test.js), but if a file is
+# saved there by habit, at the root or inside the Worker folder, git must not
+# offer to commit it.
+backup/
+
 # Build outputs
 dist/
 build/

@@ -685,6 +685,19 @@ jobs:
         if: matrix.shard == 'lint'
         run: node scripts/gen-testids.mjs --check
 
+      # Pool triage manifest drift (2026-10-07). docs/testing/vitest-pool-triage.json
+      # is DERIVED from the worker specs: which pool each one needs, and how many
+      # tests it holds. The check existed for three weeks with nothing running it,
+      # and the manifest fell 128 specs behind. Same class as the registry check
+      # above: a derived file compared with its source, statically, in a second.
+      # It goes red when a worker spec is added, removed or moved, or when its
+      # test count changes; the fix is `node scripts/triage-vitest-pool.mjs` and
+      # committing the result. Wiring held by
+      # tests/integration/vitest-pool-triage-wired.test.js.
+      - name: 'Lint: pool triage manifest matches the worker specs'
+        if: matrix.shard == 'lint'
+        run: node scripts/triage-vitest-pool.mjs --check
+
       # OSE-1328: one color pattern fleet-wide — colors go through var(--token),
       # never raw hex. Ratchet per surface (count can only drop; clean pages
       # locked at 0). This is what makes "theme-correct" a gate, not a pixel-check.
@@ -748,6 +761,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The browser cache above holds the browser binaries. This one holds the
+      # Ubuntu packages `--with-deps` installs for them (WebKit: 181 packages,
+      # 126 MB). On 2026-10-07 the runner's mirror served those at 30-100 kB/s
+      # and the component shard hit the job ceiling before a test started.
+      # scripts/ci/install-playwright-browsers.sh copies this directory into
+      # apt's cache before the install and refreshes it after the download.
+      # One cache per browser set, so the chromium-only shard never saves its
+      # smaller set under the key the WebKit shard restores.
+      - name: Restore Playwright system package cache
+        if: matrix.shard == 'invariants' || matrix.shard == 'component'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pw-apt-archives
+          key: ${{ runner.os }}-pw-apt-${{ matrix.shard == 'component' && 'chromium-webkit' || 'chromium' }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pw-apt-${{ matrix.shard == 'component' && 'chromium-webkit' || 'chromium' }}-
+
       # ── Shard: invariants (OSE-350) ────────────────────────────────────────
       # The STRUCTURAL subset of the 0-architecture invariant suite — the
       # code-shape locks that read source files via node:fs and assert the
@@ -776,7 +806,9 @@ jobs:
           # ephemeral ubuntu VM (passwordless sudo on GitHub-hosted runners);
           # harmless on other platforms. Prevents a missing-shared-lib failure
           # now that this shard no longer runs on the pre-provisioned box.
-          npx playwright install --with-deps chromium
+          # Through the install script, so a slow package mirror cannot run
+          # the shard into its ceiling (see the system package cache above).
+          bash scripts/ci/install-playwright-browsers.sh chromium
           npx playwright test --config=playwright.e2e-smoke.config.ts \
             tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
             tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
@@ -834,10 +866,17 @@ jobs:
       # executed==0 while discovered>0, and publishes the executed/skipped split so
       # partial skips are visible instead of silent (the old "35 passed / 22 skipped,
       # nothing flagged" false green).
+      #
+      # WebKit opens one blank page before the tests (2026-10-08, run
+      # 37795716364): the first page a just-installed WebKit was asked for did
+      # not open inside the 30 s test limit on either worker, and every later
+      # one did. The warm-up loads no page of the app; retries stay at 0 and
+      # the test limit at 30 s, so a page that hangs still fails.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
-          npx playwright install --with-deps chromium webkit
+          bash scripts/ci/install-playwright-browsers.sh chromium webkit
+          node scripts/ci/warm-playwright-browser.mjs webkit
           PW_LABEL='T0: Component (viewport)' scripts/pw-guarded.sh \
             --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts \
@@ -1062,7 +1101,7 @@ jobs:
         working-directory: workers/oursharedevents
         run: npm ci --prefer-offline || npm ci
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: Vet this branch (T2 Bruno + T3 smoke on a local worker)
         run: bash scripts/ci/run-local-vetting.sh
       - name: Scan artifacts for credentials
@@ -1698,7 +1737,7 @@ jobs:
       - name: Install Playwright browsers
         # OSE-954: --with-deps pulls chromium system libs on the fresh ubuntu VM.
         if: matrix.installBrowser == true
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
 
       - name: Run T3 smoke section
         env:
@@ -1867,6 +1906,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The Ubuntu packages `--with-deps` installs for WebKit (181 packages,
+      # 126 MB). Same key the T0 component shard and the phone audit save under,
+      # so on a normal run apt downloads nothing. On 2026-10-08 this job spent
+      # its whole 30 minutes downloading them from a slow mirror and was
+      # cancelled before a test started.
+      - name: Restore Playwright system package cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pw-apt-archives
+          key: ${{ runner.os }}-pw-apt-chromium-webkit-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pw-apt-chromium-webkit-
+
       - name: Install Playwright browsers
         # --with-deps installs the system libraries the browsers need on a fresh
         # ubuntu-latest VM (OSE-954; matches the T0 gate + T3 smoke slices).
@@ -1875,7 +1927,7 @@ jobs:
         # the full device matrix lives on the E2E suite. The self-hosted box had
         # webkit globally cached, masking the need; ephemeral runners must fetch
         # it explicitly.
-        run: npx playwright install --with-deps chromium webkit
+        run: bash scripts/ci/install-playwright-browsers.sh chromium webkit
 
       # OSE-834 slice 2d (Fix 7): the tiers below assert against staging — prove
       # staging IS this merge before touching it. WORKER_BUILD_VERSION carries
@@ -2677,6 +2729,20 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
+
+      # Before any smoke spec reads production, prove it is running the commit
+      # this run deployed and that /health stays good. The script reads /health
+      # every 10 s and ends HEALTHY, WRONG BUILD, ROLL BACK or CANNOT SEE; only
+      # HEALTHY passes. It rolls nothing back: ROLL BACK is an instruction to
+      # the operator (docs/runbooks/ROLLBACK.md). It sends no credential. NOT
+      # continue-on-error and no `if:` — held by
+      # tests/integration/post-deploy-health-wired.test.js.
+      - name: 'Gate: production runs this build and stays healthy'
+        env:
+          HEALTH_URL: '${{ env.PROD_BASE_URL }}/health'
+          EXPECTED_ENV: production
+          EXPECTED_PREFIX: prod
+        run: EXPECTED_SHA="$(git rev-parse --short HEAD)" node scripts/ci/post-deploy-health.mjs
 
       - name: 'Security smoke: XSS + auth'
         id: security-smoke
