@@ -130,10 +130,10 @@ today, and what would be different if production held data.
   placement. It only touches rows where `tier` is empty, and the column is new, so no
   recorded value is overwritten. With no events there are no placements, so `tier`
   stays empty.
-- **`INSERT INTO sponsor_asset_new`, `DROP TABLE sponsor_asset`, rename**: SQLite cannot
-  change a column rule in place, so the table is copied into a new one with the wider
-  rule, the old one is dropped, and the new one takes its name. Every column of every
-  row is copied. Its one index is created again.
+- **`sponsor_asset` is rebuilt through `sponsor_asset_new`**: SQLite cannot change a
+  column rule in place. So every row is copied into a new table with the wider rule,
+  the old table is removed, and the new one takes its name. Every column of every row
+  is copied. Its one index is created again.
 - **Safe because** the copy keeps all rows, and nothing else refers to `sponsor_asset`
   by foreign key.
 - **Check:** `sponsor_asset` has the same number of rows after as before.
@@ -247,8 +247,10 @@ The deploy job does the first three itself and goes red if any fails.
   none to clear.
 - **The row deleted by `0086`**, if it existed. It was test data.
 - **Rows the nightly job deletes after `0091`.** On production today there are none.
-- **The whole database can be rewound** to the restore point you noted, with
-  `npx wrangler d1 time-travel restore <database> --env production --bookmark=<bookmark>`.
+- **The whole database can be rewound** to the restore point you noted. The command,
+  its conditions and its stop line are in
+  [DISASTER-RECOVERY.md §6](./DISASTER-RECOVERY.md#6-break-glass-restore-a-database-to-an-earlier-time),
+  and nowhere else, on purpose.
   That throws away **everything** written after the bookmark, not only the migration.
   With no events on production that costs nothing before launch. After launch it would
   cost real data. It is a last resort and an owner decision.
