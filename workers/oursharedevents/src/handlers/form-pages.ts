@@ -486,16 +486,15 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
         btn.style.transform = 'scale(0.93)';
         btn.style.opacity = '0.7';
         try {
-          const body = await submitForm('${eventId}', 'checkin', walkIn ? {
+          await submitForm('${eventId}', 'checkin', walkIn ? {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
             arrival_path: 'walk_in',
           } : {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
           });
-          // OSE-1657: the answer carries a total only when it is 5 or more.
-          document.getElementById('count').textContent = typeof body.count === 'number'
-            ? "You're checked in (" + body.count + ' checked in).'
-            : "You're checked in.";
+          // OSE-1657: counts are post-event only, so the page confirms the
+          // check-in and shows no tally.
+          document.getElementById('count').textContent = "You're checked in.";
         } finally {
           tapping = false;
           btn.style.transform = 'scale(1)';

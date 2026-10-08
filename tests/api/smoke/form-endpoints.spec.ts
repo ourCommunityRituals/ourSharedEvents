@@ -70,12 +70,8 @@ test.describe('Form Endpoints — Public Submissions', () => {
     const json = await response.json();
     expectSuccessOrDisabled(response.status(), json);
     if (response.status() === 200) {
-      // OSE-1657: floored like the admin check-in count (K=5): a number from 5
-      // on, null with suppressed: true below it.
-      expect(typeof json.suppressed).toBe('boolean');
-      expect(json.floor).toBe(5);
-      if (json.suppressed) expect(json.count).toBeNull();
-      else expect(json.count).toBeGreaterThanOrEqual(5);
+      // OSE-1657: counts are post-event only, so the public answer carries none.
+      expect(json).toEqual({ ok: true });
     }
   });
 

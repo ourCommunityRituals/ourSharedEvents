@@ -31,21 +31,11 @@ runtime:
 
         
 
-        \    test('Has count floored like the admin count (number from 5, else null + suppressed)', function() {
+        \    test('Carries no count (counts are post-event only)', function() {
 
-        \        expect(json.floor).to.eql(5);
+        \        expect(json).to.not.have.property('count');
 
-        \        if (json.suppressed) {
-
-        \            expect(json.count).to.eql(null);
-
-        \        } else {
-
-        \            expect(json.suppressed).to.eql(false);
-
-        \            expect(json.count).to.be.at.least(5);
-
-        \        }
+        \        expect(json).to.not.have.property('suppressed');
 
         \    });
 

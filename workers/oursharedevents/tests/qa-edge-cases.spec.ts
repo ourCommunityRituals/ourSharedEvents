@@ -125,16 +125,18 @@ describe('QA-1 Edge-1: Double-submit registration — no server-side dedup', () 
   test('checkin increments counter on every tap — no dedup', async () => {
     const EVENT = 'qa1-double-checkin';
 
-    // OSE-1657: the public answer is floored (K=5), so taps 1 to 4 read null.
-    // Five taps on one phone are counted five times: the fifth answer is 5.
-    for (let i = 1; i <= 4; i++) {
+    // OSE-1657: the public answer carries no count (counts are post-event
+    // only), so the stored counter shows that five taps count five times.
+    for (let i = 1; i <= 5; i++) {
       const r = await postJson(`/api/v2/events/${EVENT}/forms/checkin`, {});
       expect(r.status).toBe(200);
-      expect(await j(r)).toMatchObject({ ok: true, count: null, suppressed: true });
+      expect(await j(r)).toEqual({ ok: true });
     }
-    const r5 = await postJson(`/api/v2/events/${EVENT}/forms/checkin`, {});
-    expect(r5.status).toBe(200);
-    expect((await j(r5)).count).toBe(5);
+    const row = await formsDb()
+      .prepare('SELECT total_count FROM checkin_counts WHERE event_id = ?')
+      .bind(EVENT)
+      .first<{ total_count: number }>();
+    expect(row?.total_count).toBe(5);
   });
 });
 
