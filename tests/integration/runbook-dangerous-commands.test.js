@@ -350,7 +350,7 @@ describe('a planted line in a copy of the runbooks is caught', () => {
     [
       'query output sent to a folder git does not ignore',
       outside(
-        'wrangler d1 execute DB --env production --command "SELECT * FROM events" --json > backup/events-$(date +%Y%m%d).json'
+        'wrangler d1 execute DB --env production --command "SELECT * FROM events" --json > dumps/events-$(date +%Y%m%d).json'
       ),
       'export: target is not ignored by git',
     ],
@@ -360,7 +360,7 @@ describe('a planted line in a copy of the runbooks is caught', () => {
         [
           'for table in events subscribers; do',
           '  wrangler d1 execute DB --env production \\',
-          '    --command "SELECT * FROM $table" --json > backup/${table}-$(date +%Y%m%d).json',
+          '    --command "SELECT * FROM $table" --json > dumps/${table}-$(date +%Y%m%d).json',
           'done',
         ].join('\n')
       ),
@@ -369,7 +369,7 @@ describe('a planted line in a copy of the runbooks is caught', () => {
     [
       'the same, in a break-glass section',
       breakGlass(
-        'wrangler d1 execute FORMS_DB --env production --remote --command "SELECT 1" > backup/x.json'
+        'wrangler d1 execute FORMS_DB --env production --remote --command "SELECT 1" > dumps/x.json'
       ),
       'export: target is not ignored by git',
     ],
@@ -460,5 +460,21 @@ describe('a planted line in a copy of the runbooks is caught', () => {
   it('a "# break-glass" comment inside a code block does not open a break-glass section', () => {
     const planted = `\n\n## Planted section\n\n${fence('# break-glass\nDROP TABLE events;')}\n`;
     expect(scanCopyWith(planted).some((v) => v.includes('[drop-table: outside'))).toBe(true);
+  });
+});
+
+// The recovery runbook used to export `SELECT *` to `backup/*.json`. No page says
+// that any more (the scan above), but a habit outlives a page. If a file is saved
+// there anyway, git must not offer to commit it.
+describe('the folder the old recovery runbook exported to', () => {
+  it.each([
+    ['at the repository root', 'backup/events-20261008.json'],
+    ['inside the Worker folder', 'workers/oursharedevents/backup/subscribers-20261008.json'],
+  ])('is ignored by git %s', (_where, path) => {
+    expect(gitIgnores(path)).toBe(true);
+  });
+
+  it('(guard) a folder nobody has listed is still not ignored', () => {
+    expect(gitIgnores('dumps/events-20261008.json')).toBe(false);
   });
 });
