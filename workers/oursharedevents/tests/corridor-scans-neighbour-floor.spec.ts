@@ -89,17 +89,25 @@ function split(key: PartKey): { brand: Brand; dc: DataClass; source: Source; des
 }
 
 /**
- * The retired poster and the poster with no cell each belong to one event;
- * every other part has a poster of its own.
+ * The two retired posters (one for an event with a place, one for an event
+ * with none) and the poster with no cell each belong to one event; every
+ * other part has a poster of its own.
  */
 const OFF_PART: PartKey = 'a|production|off|d1';
+const OFF_NO_PLACE_PART: PartKey = 'a|production|off|none';
 const NOWHERE_PART: PartKey = 'a|production|nowhere|d1';
+const ONE_OFF_POSTERS: Partial<Record<PartKey, string>> = {
+  [OFF_PART]: 'cnp-off',
+  [OFF_NO_PLACE_PART]: 'cnp-off-none',
+  [NOWHERE_PART]: 'cnp-nowhere',
+};
 function posterOf(key: PartKey): { event: string; poster: string } {
   const p = split(key);
   const event = eventId(p.brand, p.dc, p.dest);
   if (p.source === 'off' || p.source === 'nowhere') {
-    if (key !== OFF_PART && key !== NOWHERE_PART) throw new Error(`no such poster: ${key}`);
-    return { event, poster: `cnp-${p.source}` };
+    const poster = ONE_OFF_POSTERS[key];
+    if (!poster) throw new Error(`no such poster: ${key}`);
+    return { event, poster };
   }
   return { event, poster: `cnp-${event}-${p.source}` };
 }
@@ -368,6 +376,16 @@ beforeAll(async () => {
   stmts.push(
     poster.bind('cnp-off', eventId('a', 'production', 'd1'), 'tok-cnp-off', 0, SOURCE.off)
   );
+  // A second retired poster in that cell, for the event that has no place.
+  stmts.push(
+    poster.bind(
+      'cnp-off-none',
+      eventId('a', 'production', 'none'),
+      'tok-cnp-off-none',
+      0,
+      SOURCE.off
+    )
+  );
   // A poster that is out, and was never given a cell.
   stmts.push(
     poster.bind('cnp-nowhere', eventId('a', 'production', 'd1'), 'tok-cnp-nowhere', 1, null)
@@ -569,6 +587,16 @@ const LADDERS: { label: string; base: World; hidden: PartKey }[] = [
     hidden: OFF_PART,
   },
   {
+    label: 'a retired poster, the only one in its cell, for an event with no place',
+    base: { 'a|production|s1|d1': 7 },
+    hidden: OFF_NO_PLACE_PART,
+  },
+  {
+    label: 'scans with no destination in two brands: 3 in the other brand',
+    base: { 'a|production|s1|d1': 7, 'b|production|s1|none': 3 },
+    hidden: 'a|production|s1|none',
+  },
+  {
     label: 'a poster that has no cell',
     base: { 'a|production|s1|d1': 7 },
     hidden: NOWHERE_PART,
@@ -638,6 +666,18 @@ describe('small parts never add up to a published number', () => {
     expect(all.flows).toEqual([]);
   });
 
+  test('scans with no destination, 4 in each of two brands: withheld for the member of both, and not in the cell', async () => {
+    const w: World = {
+      'a|production|s1|d1': 7,
+      'a|production|s1|none': 4,
+      'b|production|s1|none': 4,
+    };
+    const both = await bodyOf(w, 'both');
+    expect(cell(both, 's1')?.scans_no_destination).toEqual(withheld);
+    // 7, the one listed flow: not 15, and not 11.
+    expect(cell(both, 's1')?.scans).toEqual(shown(7));
+  });
+
   test('a withheld part beside listed ones is dropped, not rounded: 6 + 4 + 9 reads 15', async () => {
     const w: World = {
       'a|production|s1|d1': 6,
@@ -662,6 +702,17 @@ describe('which rows are listed', () => {
       expect(cell(a, 'off'), `${n} scans`).toBeUndefined();
       expect(a.source_cells.map((c) => cellName(c.cell))).toEqual(['s1', 's2']);
     }
+    // The same for scans that have no destination: no row for 4 of them.
+    const noPlace = await bodyOf({ 'a|production|s1|d1': 7, [OFF_NO_PLACE_PART]: 4 }, 'a');
+    expect(cell(noPlace, 'off')).toBeUndefined();
+    expect(
+      cell(await bodyOf({ 'a|production|s1|d1': 7, [OFF_NO_PLACE_PART]: 6 }, 'a'), 'off')
+    ).toEqual({
+      cell: SOURCE.off,
+      posters: 0,
+      scans: shown(6),
+      scans_no_destination: shown(6),
+    });
     expect(cell(await bodyOf(at(5), 'a'), 'off')).toEqual({
       cell: SOURCE.off,
       posters: 0,
@@ -775,3 +826,42 @@ describe('still open: exact scan counts elsewhere give back what the corridor wi
     expect(await at(4)).toEqual({ left: 4, event: 4 });
   });
 });
+
+// ─── Seen red ───────────────────────────────────────────────────────────────
+//
+// Run against the handler at 0c6ff64b (a cell counted on its own, floored per
+// brand, data class and cell): 21 of the 37 tests fail.
+//
+// Eleven of them (the reported case and ten of the ladders) fail on something
+// published that moved for one scan on a withheld part. For instance:
+//   the reported case, a cell with flows of 7 and 3, then 7 and 4
+//     a | source_cells.s1.scans.count: 10 -> 11        (now 7, 7)
+//   a cell with no flow listed, parts of 3 and 1, then 3 and 2
+//     a | source_cells.s1.scans.count: null -> 5       (now withheld, withheld)
+//   scans for an event with no place beside a listed flow of 7
+//     a | source_cells.s1.scans.count: 7 -> 8          (now 7, 7)
+//   a demo flow left out beside listed flows, demo data included
+//     a+demo | source_cells.s1.scans.count: 13 -> 14   (now 13, 13)
+//   two brands, the member of both
+//     both | source_cells.s1.scans.count: 15 -> 16     (now 15, 15)
+//   two flows of the other brand tie at 7, first scan of this brand on one
+//     both | flows_order: "s1>d1 s2>d1" -> "s2>d1 s1>d1"
+//   a cell whose only poster is retired, its first scan
+//     a | source_cells.off.posters: (absent) -> 0      (a row appears)
+//
+// Six fail on what a dataset reads: 12 published for three parts of 4, 10 for
+// parts of 6 and 4, a row for a cell with no poster and 1 scan, flows that tie
+// in arrival order, the cell of the fifth-scan control (11, not 7), and the
+// pin above (which reads the cell as 7).
+//
+// Four fail first on `scans_no_destination`, which did not exist: the dataset
+// above the floor, the control on a part with no destination, the identity
+// check, and 4 + 4 scans with no destination across two brands.
+//
+// The other 16 are green there too, so they are guards and were not seen red
+// until faults were planted in the handler: the floor is 5, the member's
+// scope, the third brand, the same dataset read twice, the five controls on
+// parts that have a destination, four ladders (the same pair in two data
+// classes, the other brand listing a cell this brand has nothing in, two of
+// this brand's flows tying, a poster with no cell), 3 + 3 across two brands,
+// 3 + 3 across two data classes, and a poster with no cell holding 9 scans.
