@@ -97,9 +97,8 @@ test.describe('Check-in Form - Interaction', () => {
     await page.waitForTimeout(2000);
 
     const countAfter = await countEl.textContent();
-    // OSE-1657: the page confirms the check-in; it adds the total only when the
-    // answer publishes one (5 or more), so a number is not required.
-    expect(countAfter).toMatch(/^You're checked in/);
+    // OSE-1657: the page confirms the check-in and shows no tally.
+    expect(countAfter).toBe("You're checked in.");
   });
 
   test('tap button provides visual feedback (animation)', async ({ page }) => {
@@ -123,7 +122,7 @@ test.describe('Check-in Form - Interaction', () => {
     expect(hasAnimation).toBe(true);
   });
 
-  test('API response includes ok and count', async ({ page }) => {
+  test('API response says ok and carries no count', async ({ page }) => {
     const responsePromise = page.waitForResponse(
       (res) =>
         res.url().includes(`/api/v2/events/${TEST_EVENT_ID}/forms/checkin`) && res.status() === 200
@@ -135,12 +134,7 @@ test.describe('Check-in Form - Interaction', () => {
     const response = await responsePromise;
     const body = await response.json();
     expect(body).toHaveProperty('ok', true);
-    expect(body).toHaveProperty('count');
-    // OSE-1657: floored like the admin count — a number from 5 on, else null.
-    expect(body.count === null || typeof body.count === 'number').toBe(true);
-    expect(typeof body.suppressed).toBe('boolean');
-    expect(body.floor).toBe(5);
-    if (body.suppressed) expect(body.count).toBeNull();
-    else expect(body.count).toBeGreaterThanOrEqual(5);
+    // OSE-1657: counts are post-event only, so the answer carries none.
+    expect(body).not.toHaveProperty('count');
   });
 });

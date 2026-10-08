@@ -124,7 +124,7 @@ test('a server hiccup says so, keeps the name, and a second tap works', async ({
   await expect(page.getByTestId('form-success')).toContainText("You're registered");
 });
 
-test('check in: one tap is confirmed, a walk-in too, and neither shows a count under 5', async ({
+test('check in: one tap is confirmed, a walk-in too, and neither shows a count', async ({
   page,
   request,
 }) => {
@@ -132,8 +132,8 @@ test('check in: one tap is confirmed, a walk-in too, and neither shows a count u
   const tap = page.getByTestId('checkin-submit');
   expect((await tap.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_TOUCH);
   await tap.click();
-  // OSE-1657: the public answer is floored like the admin count, so the first
-  // people in are told it worked, never how many came before them.
+  // OSE-1657: counts are post-event only, so a check-in is told it worked and
+  // never how many came before or since.
   await expect(page.getByTestId('checkin-count')).toHaveText("You're checked in.");
 
   await page.goto(formUrl('checkin'));
