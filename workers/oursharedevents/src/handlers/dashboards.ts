@@ -17,8 +17,10 @@
  * all-tenants view. That belongs to OER, which reads exports, not D1.
  *
  * Aggregate only (#7). Nothing here returns a row about a person. Identity-
- * derived counts (FORMS_DB) and digital taps are floored per event before they
- * are summed. Scans per place are floored per cell, and flows per cell pair.
+ * derived counts (FORMS_DB) are floored per event before they are summed.
+ * Digital taps are floored per poster code, the grain an event's own card
+ * lists, then per event, then summed (floorTotalOfParts, lib/count-floor.ts).
+ * Scans per place are floored per cell, and flows per cell pair.
  * Places are H3 res-7 cells only, never lat/lon or res-9 (Invariant #1).
  *
  * Demo and synthetic events are left out by default (`?data_class=production`).
@@ -30,7 +32,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
-import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { applyCountFloor, floorTotalOfParts, type FlooredCount } from '../lib/count-floor';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import {
@@ -39,7 +41,11 @@ import {
   notMeasuredFor,
   type DashboardId,
 } from '../lib/dashboard-contract';
-import { organizerPreEventActivity, readPreEventActivity } from '../lib/pre-event-activity';
+import {
+  TAP_CODE_SQL,
+  organizerPreEventActivity,
+  readPreEventActivity,
+} from '../lib/pre-event-activity';
 import { daysToGo } from './pre-event-activity';
 import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { perEventCounts } from './portfolio-rollup';
@@ -200,7 +206,14 @@ interface BrandOps {
   published: number;
   created30d: number;
   scans: number;
-  tapsPerEvent: number[];
+  /**
+   * One figure per event that has short links: the taps on its codes that
+   * clear the floor on their own, or null when none does. It is the total the
+   * event's own card and dashboard show (organizerPreEventActivity), built by
+   * the same rule from the same parts, so a code under the floor never joins
+   * it and it cannot be subtracted against the card's listed codes.
+   */
+  tapsPerEvent: (number | null)[];
   posters: number;
   places: Set<string>;
   onShow: number;
@@ -238,13 +251,16 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    all<{ cnt: number }>(
+    // One row per event and poster code: TAP_CODE_SQL is the expression the
+    // event's own card groups by, so these parts are the parts it lists.
+    all<{ event_id: string; taps: number }>(
       db
         .prepare(
-          `SELECT SUM(sl.clicks) AS cnt FROM shortlinks sl
+          `SELECT sl.event_id AS event_id, COALESCE(SUM(sl.clicks), 0) AS taps
+             FROM shortlinks sl
              JOIN events e ON e.id = sl.event_id
             WHERE e.brand_id = ? AND ${DC}
-            GROUP BY sl.event_id`
+            GROUP BY sl.event_id, ${TAP_CODE_SQL}`
         )
         .bind(brand, dc)
     ),
@@ -312,6 +328,8 @@ async function readBrandOps(
     const key = a.outcome === 'denied' ? 'denied' : a.action;
     adminMap.set(key, (adminMap.get(key) ?? 0) + num(a.cnt));
   }
+  const codesByEvent = new Map<string, number[]>();
+  for (const t of taps) pushTo(codesByEvent, t.event_id, t.taps);
 
   return {
     eventIds: events.map((e) => e.id),
@@ -319,7 +337,7 @@ async function readBrandOps(
     published,
     created30d,
     scans: num(scans?.cnt),
-    tapsPerEvent: taps.map((t) => num(t.cnt)),
+    tapsPerEvent: [...codesByEvent.values()].map((codes) => floorTotalOfParts(codes).count),
     posters: num(posters?.cnt),
     places: new Set(places.map((p) => p.cell)),
     onShow: num(sponsors?.on_show),
@@ -390,7 +408,7 @@ export async function handleOperationsDashboard(
     const places = new Set<string>();
     const admin = new Map<string, number>();
     const eventIds: string[] = [];
-    const taps: number[] = [];
+    const taps: (number | null)[] = [];
     let published = 0,
       created30d = 0,
       scans = 0,
@@ -435,7 +453,10 @@ export async function handleOperationsDashboard(
       },
       reach: {
         poster_scans: scans,
-        link_taps: floorBucketsThenSum(taps),
+        // Each event's figure is floored before the events are added, and is
+        // itself a sum of codes that cleared the floor: withheld when no code
+        // of any event in scope has 5 taps, however many taps there are.
+        link_taps: floorTotalOfParts(taps),
         active_posters: posters,
         poster_places: places.size,
       },

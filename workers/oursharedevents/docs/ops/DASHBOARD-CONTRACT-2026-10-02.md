@@ -5,7 +5,7 @@ Part of OSE-1468. The code is the source of truth:
 - Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `1.0.0`)
 - Queries: `src/handlers/dashboards.ts`
 - Seeded fixture: `tests/helpers/seed-dashboard-fixture.ts`
-- Tests: `tests/dashboards.spec.ts` (26, workers pool)
+- Tests: `tests/dashboards.spec.ts` (26, workers pool); link taps also in `tests/reach-card-neighbour-floor.spec.ts`
 
 This page explains the decisions. If it disagrees with the code, the code wins and this page is wrong.
 
@@ -50,7 +50,7 @@ A failed D1 or FORMS_DB read, or a missing FORMS_DB binding when the scope has e
 
 ## Floors across scopes
 
-A caller can pick overlapping views: several brands or one, and `production` or `all`. Scans per cell and flows therefore keep one raw count per brand, data class and cell (or cell pair), and each count is floored before the sum. Every view is a sum of counts that each cleared K, so subtracting one view from another cannot reveal a count under K. Per-event floors already work this way, because each event belongs to exactly one brand and one data class.
+A caller can pick overlapping views: several brands or one, and `production` or `all`. Scans per cell and flows therefore keep one raw count per brand, data class and cell (or cell pair), and each count is floored before the sum. Every view is a sum of counts that each cleared K, so subtracting one view from another cannot reveal a count under K. Per-event floors already work this way, because each event belongs to exactly one brand and one data class. So do the per-code floors on link taps: a code belongs to one event.
 
 ## Listed and admin activity
 
@@ -73,7 +73,11 @@ Each registry entry holds one value of one class and names its `path` in the res
 
 Floored totals follow the OSE-669 rule: each event is floored first and only the events at or above K are summed. A total can't be subtracted from another view to recover a small event. A flow (source cell to event cell) under K is left out entirely. Listing the pair, even as suppressed, would tell a reader that someone scanned from that cell to that one.
 
-Link taps on the **event** dashboard (`reach.clicks`) go one grain finer, because the same organizer is shown taps per poster code on the pre-event card: each code is floored first and only the codes at or above K are summed (`floorTotalOfParts`). The total is withheld when no code has 5, however many small codes there are, so it cannot be subtracted against the card's listed codes. The **operations** dashboard's `reach.link_taps` still floors each event's raw tap sum; that is open (see `tests/reach-card-neighbour-floor.spec.ts`, "still open").
+Link taps go one grain finer, because the same organizer is shown taps per poster code on the pre-event card: each code is floored first and only the codes at or above K are summed (`floorTotalOfParts` in `lib/count-floor.ts`). On the **event** dashboard (`reach.clicks`) the total is withheld when no code has 5, however many small codes there are, so it cannot be subtracted against the card's listed codes.
+
+The **operations** dashboard's `reach.link_taps` is the sum of those event totals (since 2026-10-08). Its query returns one count per event and code, grouped by `TAP_CODE_SQL`, the same expression the card groups by. Each event's codes at or above K are summed into that event's figure, the event figures are floored and summed, and the result is withheld when no code of any event in scope has 5 taps. A withheld value means "no link has 5 taps yet", not "fewer than 5 taps". Before this it floored each event's raw tap sum: with one event and links holding 10, 2 and 1 taps it read 13, and 14 after one more tap on a withheld link, while the card listed 10. It now reads 10 in both cases. `tests/reach-card-neighbour-floor.spec.ts` reads the route for datasets one tap apart, for one event and for a brand with three, and requires that nothing published moves.
+
+No page renders `reach.link_taps` yet (the admin card is a next slice, below). When one does, it must show a withheld value in words, never as 0, as the Live page does for `reach.clicks` ("Held").
 
 Places are H3 res-7 cells only. No response carries lat/lon or res-9 (Invariant #1). There is a test for this.
 
@@ -108,6 +112,8 @@ Each item below is in `NOT_MEASURED` and is returned in every response. The dash
 ## Versioning
 
 Adding a metric is a minor bump. Removing or retyping one is a major bump. A test checks that every metric id a response lists exists in the registry.
+
+The version follows the response shape. The two link-tap changes (the event figure in #871, then the operations figure on 2026-10-08) changed which taps a figure counts, not its shape, path or class, so the version stayed `1.0.0`. Both can only lower a figure or withhold it.
 
 ## Next slices (not in this change)
 

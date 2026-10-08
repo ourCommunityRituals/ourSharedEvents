@@ -259,4 +259,7 @@ export const NODE_SPECS = [
   // Every name a template's inline script uses is declared where that script
   // can see it: the TypeScript checker over each template's scripts (node:fs).
   'tests/template-script-names.spec.ts',
+  // Typed text on the SharedReport page stays text: the page script run in jsdom
+  // with plain and hostile values, plus a parse of its attribute writes.
+  'tests/shared-report-attribute-escaping.spec.ts',
 ];

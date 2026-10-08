@@ -907,6 +907,20 @@
             })
           : '—';
       };
+      // ONE escaper for every value this page writes into markup, safe as
+      // element text AND as the value of a quoted attribute: it escapes all five
+      // of & < > " '. The browser mirror of lib/html-escape.ts escapeHtml, which
+      // client code can't import. Defined once so the four scripts below cannot
+      // drift: each used to carry its own copy, built on textContent/innerHTML,
+      // which leaves quote marks alone and so let a typed value end the
+      // attribute it was written into. Not for an unquoted attribute, a URL
+      // (use encodeURIComponent) or a style.
+      window.escapeReportHtml = function (s) {
+        return String(s == null ? '' : s).replace(
+          /[&<>"']/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+        );
+      };
     </script>
     <script>
       // ─── OSE-R-003 signed-link mode ─────────────────────────────────────────
@@ -950,11 +964,8 @@
       };
 
       (async () => {
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = String(s == null ? '' : s);
-          return d.innerHTML;
-        };
+        // The one shared escaper (defined in the prelude script).
+        const esc = window.escapeReportHtml;
         // OSE-1363: the one shared UTC formatter (defined in the prelude script).
         const fmtDate = window.formatReportDate;
         const fmtPct = (n) => (n == null ? '—' : (Math.round(n * 10) / 10).toFixed(1) + '%');
@@ -1236,7 +1247,7 @@
                   cm.source === 'fallback' ? 'Neighborhood Preview' : 'Corridor Scan Map';
                 const chip =
                   '<span class="cell-count-chip" data-testid="corridor-map-cell-count" aria-label="' +
-                  fmtInt(cm.cell_count) +
+                  esc(fmtInt(cm.cell_count)) +
                   ' cells mapped">' +
                   fmtInt(cm.cell_count) +
                   ' cells</span>';
@@ -1299,9 +1310,9 @@
                   '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
                   '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
                   '</tbody></table>' +
-                  '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + localPct + '% vs Paid ' + paidPct + '%">' +
-                  '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + localPct + '%"></div>' +
-                  '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + paidPct + '%"></div>' +
+                  '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
+                  '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
+                  '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + esc(paidPct) + '%"></div>' +
                   '</div>' +
                   '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + fmtInt(localImpr) + '</strong> displays · Paid: <strong data-testid="paid-displays-total">' + fmtInt(paidImpr) + '</strong> displays</p>' +
                   '</section>'
@@ -1429,11 +1440,8 @@
     <script>
       (async () => {
         if (window.__signedLinkMode) return;
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = s;
-          return d.innerHTML;
-        };
+        // The one shared escaper (defined in the prelude script).
+        const esc = window.escapeReportHtml;
         // OSE-1363: the one shared UTC formatter (defined in the prelude script).
         const fmt = window.formatReportDate;
         const listEl = document.getElementById('events-list');
@@ -1522,11 +1530,7 @@
             sectionEl.style.display = 'none';
             return;
           }
-          const esc = (s) => {
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-          };
+          const esc = window.escapeReportHtml;
           const allSponsors = [];
           for (const ev of items.slice(0, 10)) {
             try {
@@ -1605,11 +1609,7 @@
           content.innerHTML = '<p class="empty">No event data to analyze.</p>';
           return;
         }
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = s;
-          return d.innerHTML;
-        };
+        const esc = window.escapeReportHtml;
         const rows = await Promise.all(
           events.slice(0, 10).map(async (ev) => {
             let reg = 0,
