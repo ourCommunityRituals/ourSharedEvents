@@ -218,6 +218,9 @@ export const NODE_SPECS = [
   // OSE-1531 — the report's action row + Repeat this event, run in jsdom over the
   // real template with a stubbed fetch. No cloudflare:test.
   'tests/shared-report-actions.spec.ts',
+  // The Return Rate card when the API withholds the rate on its own: the same
+  // jsdom-over-the-real-template shape as the spec above. No cloudflare:test.
+  'tests/shared-report-return-rate-card.spec.ts',
 
   // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
   // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.

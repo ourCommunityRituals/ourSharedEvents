@@ -31,7 +31,7 @@ import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-r
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
-import { applyCountFloor } from './count-floor';
+import { applyCountFloor, flooredRatePct, floorTotalOfParts } from './count-floor';
 import { sponsorTitle } from './sponsor-card';
 import {
   formatHourBucketLabel,
@@ -57,19 +57,11 @@ function corridorKeyOf(event: {
 // per-bucket K-anon floor (K = CORRIDOR_MAP_MIN_COUNT = 5) is applied PER
 // CONTRIBUTING BUCKET BEFORE summation, never to the final sum alone. A
 // contributing bucket whose count is below K is DROPPED (it never joins the
-// sum); only survivors (count >= K) are summed. This mirrors the portfolio
-// -rollup #7 pattern (sumContributingBuckets → applyCountFloor) so a sub-K
-// cohort can't be laundered into a large aggregate — nor recovered by
-// differencing the aggregate against per-bucket views the same reader can see.
-function sumContributingBuckets(rows: Array<{ count: number | null }>): number {
-  let sum = 0;
-  for (const r of rows) {
-    const raw = r.count ?? 0;
-    const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
-    if (n >= CORRIDOR_MAP_MIN_COUNT) sum += n;
-  }
-  return sum;
-}
+// sum); only survivors (count >= K) are summed, so a sub-K cohort can't be
+// laundered into a large aggregate — nor recovered by differencing the
+// aggregate against per-bucket views the same reader can see. The rule lives in
+// ONE place, `floorTotalOfParts` (lib/count-floor.ts); every total below that
+// is published beside its parts goes through it.
 
 // OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
 // before surfacing in poster_attribution. Sub-second precision exposes timing
@@ -82,6 +74,10 @@ function bucketToHour(iso: string): string {
   d.setUTCMinutes(0, 0, 0);
   return d.toISOString().replace('.000Z', 'Z');
 }
+
+// Why a return rate is withheld over a sample that is itself published. Names
+// the floor, never an observed count (OSE-1421).
+const RATE_WITHHELD_DETAIL = `one side of this rate is a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people`;
 
 export type SuppressionReasonCode =
   'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
@@ -103,16 +99,23 @@ export interface SharedReport {
   /**
    * Rc — anonymous digital click-out counts from the /s/ routing layer, per
    * destination kind (public/donate/signup/…). Group-level counter only (no IP,
-   * no per-visitor id, no cookie, no referrer); each kind AND the total pass the
-   * same K=5 floor as unique_gatherings, so a sub-K count never ships. This is the
-   * digital half of the flywheel — surfaced on the SharedReport / post-event
-   * recap only (never pre/event/poster, OSE-509).
+   * no per-visitor id, no cookie, no referrer); each kind passes the same K=5
+   * floor as unique_gatherings, and `total` is the sum of the kinds that are
+   * published (null when none is), so a sub-K count never ships and cannot be
+   * had by subtraction. This is the digital half of the flywheel — surfaced on
+   * the SharedReport / post-event recap only (never pre/event/poster, OSE-509).
    */
   click_outs: {
     by_kind: Record<string, number | null>;
     total: number | null;
   } | null;
 
+  /**
+   * `sample_size` is the people seen at the event, published from K = 5. A
+   * rate is null unless the people it counts are at least K and the people it
+   * does not count are none or at least K (`flooredRatePct`): beside its sample
+   * size, a rate is otherwise a head count under the floor.
+   */
   return_rate: {
     venue_pct: number | null;
     corridor_pct: number | null;
@@ -294,7 +297,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // Sum survivors (>= K) per the ratified per-bucket rule, then pass the sum
   // through the shared OSE-665 renderer. floored.count is exact when the
   // survivor sum clears K, else null (suppressed).
-  const flooredGatherings = applyCountFloor(sumContributingBuckets(saBuckets.results ?? []));
+  const flooredGatherings = floorTotalOfParts((saBuckets.results ?? []).map((r) => r.count));
   const uniqueGatherings = hasAnyBucket ? flooredGatherings.count : null;
 
   // 3. return_rate — for distinct anon_id_hashes at this event, how many
@@ -327,7 +330,17 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       )
       .bind(eventId)
       .first<{ c: number }>();
-    venuePct = ((repeatRow?.c ?? 0) / distinctAnonsHere) * 100;
+    // A rate beside its sample size IS its numerator (20% of 5 is one person),
+    // and the rest of the group is its complement. `flooredRatePct` publishes
+    // the rate only when neither is a group under the floor; otherwise null.
+    venuePct = flooredRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
+    if (venuePct === null) {
+      suppression.push({
+        field: 'return_rate.venue_pct',
+        reason: 'below_min_sample_size',
+        detail: RATE_WITHHELD_DETAIL,
+      });
+    }
 
     // corridor_pct — fraction of anons at THIS event who appeared at any
     // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
@@ -347,7 +360,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         )
         .bind(corridorKey, eventId, eventId)
         .first<{ c: number }>();
-      corridorPct = ((corridorRow?.c ?? 0) / distinctAnonsHere) * 100;
+      corridorPct = flooredRatePct(corridorRow?.c ?? 0, distinctAnonsHere);
+      if (corridorPct === null) {
+        suppression.push({
+          field: 'return_rate.corridor_pct',
+          reason: 'below_min_sample_size',
+          detail: RATE_WITHHELD_DETAIL,
+        });
+      }
     } else {
       suppression.push({
         field: 'return_rate.corridor_pct',
@@ -837,7 +857,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
           .all<{ count: number | null }>();
         const instRows = instBuckets.results ?? [];
         const instHasBucket = instRows.length > 0;
-        const instFloored = applyCountFloor(sumContributingBuckets(instRows));
+        const instFloored = floorTotalOfParts(instRows.map((r) => r.count));
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
@@ -871,9 +891,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // 8. click_outs (Rc) — anonymous /s/ routing-layer clicks per destination kind.
   //    Read shortlinks.clicks grouped by kind (NULL/'' → 'public'); floor each
   //    kind independently at K=5 (never merged into the scan total — different
-  //    metric, and a merge would double-count / enable differencing), and floor
-  //    the total as its own aggregate. Closes the gap where the digital half of
-  //    the flywheel was absent from the proof layer.
+  //    metric, and a merge would double-count / enable differencing). The total
+  //    is the sum of the kinds that are published, never of all of them: a raw
+  //    total minus the published kinds is the withheld kind (9 − 6 = 3).
   const clickRows = await db
     .prepare(
       `SELECT COALESCE(NULLIF(TRIM(kind), ''), 'public') AS kind, SUM(clicks) AS clicks
@@ -886,13 +906,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const clickData = clickRows.results ?? [];
   if (clickData.length > 0) {
     const byKind: Record<string, number | null> = {};
-    let rawTotal = 0;
     for (const r of clickData) {
       const raw = Number.isFinite(Number(r.clicks)) ? Number(r.clicks) : 0;
       byKind[r.kind] = applyCountFloor(raw).count;
-      rawTotal += raw;
     }
-    clickOuts = { by_kind: byKind, total: applyCountFloor(rawTotal).count };
+    clickOuts = { by_kind: byKind, total: floorTotalOfParts(Object.values(byKind)).count };
   }
 
   return {

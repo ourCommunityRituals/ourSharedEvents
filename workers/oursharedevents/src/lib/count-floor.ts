@@ -41,6 +41,46 @@ export function applyCountFloor(raw: number, floor: number = CORRIDOR_MAP_MIN_CO
 }
 
 /**
+ * Floor a total published beside its parts (drop before sum, OSE-683).
+ *
+ * A part under the floor never joins the sum. Flooring the raw sum is not
+ * enough: with parts 6 and 3, publishing 6, "withheld" and a total of 9 hands
+ * back the 3. The total is the sum of the parts that are themselves published,
+ * so it can only be differenced against them down to zero. With no surviving
+ * part it is withheld, however large the small parts are together (3 + 3 is
+ * not 6).
+ */
+export function floorTotalOfParts(
+  parts: readonly (number | null | undefined)[],
+  floor: number = CORRIDOR_MAP_MIN_COUNT
+): FlooredCount {
+  let sum = 0;
+  for (const part of parts) sum += applyCountFloor(part ?? 0, floor).count ?? 0;
+  return applyCountFloor(sum, floor);
+}
+
+/**
+ * A rate, in percent: `part` of `whole` (people who returned, of people seen).
+ *
+ * A rate published beside its denominator IS its numerator (20% of 5 is one
+ * person), and its complement is the rest of the group (95% of 20 leaves one
+ * person who did not). So the two counts go through the nested-count rule
+ * below, the one the returns export uses for the same pair: the whole and the
+ * part must each clear the floor, and the people left over must be none or at
+ * least the floor. Otherwise the rate is null.
+ */
+export function flooredRatePct(
+  part: number,
+  whole: number,
+  floor: number = CORRIDOR_MAP_MIN_COUNT
+): number | null {
+  const [w, p] = floorNestedCounts([whole, part], floor, floor);
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — skipping this check changes nothing, because the part is null whenever the whole is (a part no larger than a sub-floor whole is itself under the floor, and a part larger than its whole fails closed). Kept for type narrowing and defence in depth.
+  if (typeof w !== 'number') return null;
+  return typeof p === 'number' ? (p / w) * 100 : null;
+}
+
+/**
  * Floor a chain of nested counts, largest first (each one counts a subset of
  * the one before: people ⊇ returned twice ⊇ returned three times …).
  *
