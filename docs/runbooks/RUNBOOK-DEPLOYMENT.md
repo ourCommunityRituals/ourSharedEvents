@@ -199,6 +199,59 @@ npm run test:prod:smoke
 
 ---
 
+## Production preflight (run before every production deploy)
+
+**What it is:** `scripts/prod-preflight.mjs` prints one line per check (`PASS`, `FAIL` or `TODO`) with what to do, and ends with `READY` or `NOT READY`. It exits non-zero unless every check passed. It is read-only: it makes no network request, runs no wrangler command and reads no credential.
+
+**Run it** from the repo root, on `main`, at the commit you are about to deploy:
+
+```bash
+node scripts/prod-preflight.mjs
+```
+
+Five checks read this checkout. Six need something only you can read, so the first run shows them as `TODO` with the exact command for each. You run those commands yourself and save what they print into `.preflight/` (git ignores it). They list secret **names** only, the migrations production still has to apply, and two CI runs. Then run the preflight again.
+
+```bash
+mkdir .preflight
+# in workers/oursharedevents:
+npx wrangler secret list --env production > ../../.preflight/secrets.txt
+npx wrangler d1 migrations list DB --env production --remote > ../../.preflight/migrations-db.txt
+npx wrangler d1 migrations list FORMS_DB --env production --remote > ../../.preflight/migrations-forms.txt
+# back in the repo root:
+gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push --limit 5
+gh run view <id> --json headSha,headBranch,event,conclusion,jobs > .preflight/staging-run.json
+gh run list --workflow "CF Access Canary" --limit 1
+gh run view <id> --json conclusion,jobs > .preflight/access-canary.json
+```
+
+**What each check proves:**
+
+| Check                                  | Proves                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema constants                       | `REQUIRED_DB_MIGRATION` and `REQUIRED_FORMS_MIGRATION` equal the highest migration file, and the file numbers have no hole or repeat.                         |
+| Production bindings                    | Production has every binding staging has, with real ids, and shares none with staging or local dev.                                                           |
+| Production settings                    | `[env.production.vars]` has what staging has, minus the staging-only switches (`ADMIN_SCOPE_ALL` and the two key fallbacks), and nothing points at staging.   |
+| Name, routes, nightly job              | The Worker is `oursharedevents-prod`, answers only on the production hosts, and has its nightly job.                                                          |
+| Build stamp                            | The deploy step can rewrite the version line, so `/health` will name the commit.                                                                              |
+| Staging chain                          | T1 to T4 passed on `main` for the commit in your checkout.                                                                                                    |
+| Production secrets                     | The four required names are set; `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` are not. The deploy job refuses on the same two lists.                       |
+| Migrations to apply (main, then forms) | The level each production database is at, and that what is left is simply the last few migrations in a row.                                                   |
+| Migration plan                         | Every migration to apply has a line in `PRODUCTION-MIGRATION-PLAN.md`. It names the ones that write or remove rows.                                           |
+| Access app                             | The latest canary run found production admin behind the production Access app. Without it the deploy job goes red at its last step, after the Worker is live. |
+
+**What it cannot prove** is printed at the end of every run: that a secret's value is usable, that GitHub deploys the same commit as your checkout, and the by-hand steps before and after.
+
+**The migrations:** read [`PRODUCTION-MIGRATION-PLAN.md`](./PRODUCTION-MIGRATION-PLAN.md) before the first production deploy. It lists the 17 main and 2 forms migrations production still needs, which ones write or remove rows, how to check afterwards, and what cannot be undone.
+
+**After the deploy:** `T2 Smoke → Production` starts with "Gate: production runs this build and stays healthy". It reads `/health` every 10 seconds and ends with one of four verdicts. Only the first passes.
+
+- `HEALTHY`: the right build is live and five readings in a row were good.
+- `WRONG BUILD`: production is healthy but is not running the commit this run deployed. Do not roll back; look at the Deploy step.
+- `ROLL BACK`: three bad readings in a row, or it did not settle in two minutes. Nothing rolls back by itself. This is an instruction to you: follow [`ROLLBACK.md`](./ROLLBACK.md).
+- `CANNOT SEE`: a sign-in or challenge page answered instead of the Worker, so there is no verdict on the build. Open `/health` in a browser. If it is good there, a Cloudflare rule is stopping the check.
+
+---
+
 ## First Production Launch — Cloudflare Access App (OSE-1353)
 
 **Why:** production admin is Cloudflare Access only. `ALLOW_OCR_INTERNAL` and `ALLOW_ADMIN_KEY_FALLBACK` are absent from `[env.production.vars]` (ADR-012 gate R2, `tests/prod-admin-scope-config.spec.ts`). The Worker requires an Access identity on every path it guards with `requireAdmin`. A guarded path that the Access app does not cover reaches the Worker with no `Cf-Access-Jwt-Assertion` and returns 401, so the admin UI breaks on it. Protecting `/admin` alone is not enough: the dashboard loads, then every `/api/v2/admin/*` call fails.
