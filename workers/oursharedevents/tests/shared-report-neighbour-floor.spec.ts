@@ -802,9 +802,12 @@ const REGISTRY: Record<string, How> = {
 const patternOf = (key: string): RegExp =>
   new RegExp(
     `^${key
-      .replace(/[.\[\]]/g, '\\$&')
+      // Every regex character is escaped first, backslash included. The two
+      // wildcards (`[]` any index, `*` any one name) are then read back out of
+      // their escaped form.
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/\\\[\\\]/g, '\\[\\d+\\]')
-      .replace(/\*/g, '[^.\\[]+')}$`
+      .replace(/\\\*/g, '[^.\\[]+')}$`
   );
 const PATTERNS = Object.keys(REGISTRY).map((key) => ({ key, re: patternOf(key) }));
 
