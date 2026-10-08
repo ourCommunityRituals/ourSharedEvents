@@ -2,10 +2,12 @@
 
 Part of OSE-1468. The code is the source of truth:
 
-- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `1.0.0`)
+- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `1.1.0`)
 - Queries: `src/handlers/dashboards.ts`
 - Seeded fixture: `tests/helpers/seed-dashboard-fixture.ts`
-- Tests: `tests/dashboards.spec.ts` (26, workers pool); link taps also in `tests/reach-card-neighbour-floor.spec.ts`
+- Tests: `tests/dashboards.spec.ts` (26, workers pool); link taps also in `tests/reach-card-neighbour-floor.spec.ts`; corridor scans also in `tests/corridor-scans-neighbour-floor.spec.ts`
+
+**Owner ruling, 2026-10-08:** "there should be no exceptions to the rule. Even at enterprise. the <5 rule still applies so there is consistency." The floor holds against a brand's own admin, at every tier (OSE-1655).
 
 This page explains the decisions. If it disagrees with the code, the code wins and this page is wrong.
 
@@ -31,7 +33,7 @@ An admin with no brand membership gets 403 `BRAND_SCOPE_DENIED`. A key actor in 
 ```json
 {
   "contract": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "dashboard": "operations",
     "metrics": ["events.total", "..."],
     "floor": 5
@@ -50,7 +52,7 @@ A failed D1 or FORMS_DB read, or a missing FORMS_DB binding when the scope has e
 
 ## Floors across scopes
 
-A caller can pick overlapping views: several brands or one, and `production` or `all`. Scans per cell and flows therefore keep one raw count per brand, data class and cell (or cell pair), and each count is floored before the sum. Every view is a sum of counts that each cleared K, so subtracting one view from another cannot reveal a count under K. Per-event floors already work this way, because each event belongs to exactly one brand and one data class. So do the per-code floors on link taps: a code belongs to one event.
+A caller can pick overlapping views: several brands or one, and `production` or `all`. Corridor scans therefore keep one raw count per part (brand, data class, source cell and destination), and each part is floored before any sum. Every view is a sum of parts that each cleared K, so subtracting one view from another cannot reveal a count under K. Per-event floors already work this way, because each event belongs to exactly one brand and one data class. So do the per-code floors on link taps: a code belongs to one event.
 
 ## Listed and admin activity
 
@@ -73,6 +75,17 @@ Each registry entry holds one value of one class and names its `path` in the res
 
 Floored totals follow the OSE-669 rule: each event is floored first and only the events at or above K are summed. A total can't be subtracted from another view to recover a small event. A flow (source cell to event cell) under K is left out entirely. Listing the pair, even as suppressed, would tell a reader that someone scanned from that cell to that one.
 
+A source cell's scans are the sum of what the same response lists for it (since 2026-10-08): the flows from that cell, plus `scans_no_destination`, the cell's scans for events that have no place on the map and so are in no flow. The cell figure is built from those published numbers with `floorTotalOfParts`; it is not a count of its own. Before this the cell counted every scan on its posters, so a cell reading 10 beside one flow of 7 gave back the flow that was left out (3), and read 11 after one more scan on it. It now reads 7 in both cases. So:
+
+- `source_cells[].scans` = the cell's listed flows + its `scans_no_destination`, always. It is a lower bound on the scans in the cell, and withheld means "no flow from this cell has 5 scans yet", not "fewer than 5 scans".
+- `scans_no_destination` is one part, floored like a flow: withheld under 5. It is on every row, so its presence says nothing.
+- A cell with no poster out is listed once it has a number to show, and not before. A row with no poster and a withheld count would say that someone once scanned there.
+- Flows that tie are ordered by source cell, then destination. The order rows arrive in follows parts that are not listed.
+
+`tests/corridor-scans-neighbour-floor.spec.ts` reads the route for datasets one scan apart on a withheld part, as one brand, as a member of two, with and without demo data, and requires that nothing published moves. The other repair considered was to list withheld flows as rows and total them with the same helper. It gives the same cell number, but a withheld row that appears with the first scan publishes "between 1 and 4", and listing a row for every poster and event pair instead is a larger change to the response.
+
+No page renders the corridor dashboard yet. When one does, a withheld cell must be shown in words, never as 0.
+
 Link taps go one grain finer, because the same organizer is shown taps per poster code on the pre-event card: each code is floored first and only the codes at or above K are summed (`floorTotalOfParts` in `lib/count-floor.ts`). On the **event** dashboard (`reach.clicks`) the total is withheld when no code has 5, however many small codes there are, so it cannot be subtracted against the card's listed codes.
 
 The **operations** dashboard's `reach.link_taps` is the sum of those event totals (since 2026-10-08). Its query returns one count per event and code, grouped by `TAP_CODE_SQL`, the same expression the card groups by. Each event's codes at or above K are summed into that event's figure, the event figures are floored and summed, and the result is withheld when no code of any event in scope has 5 taps. A withheld value means "no link has 5 taps yet", not "fewer than 5 taps". Before this it floored each event's raw tap sum: with one event and links holding 10, 2 and 1 taps it read 13, and 14 after one more tap on a withheld link, while the card listed 10. It now reads 10 in both cases. `tests/reach-card-neighbour-floor.spec.ts` reads the route for datasets one tap apart, for one event and for a brand with three, and requires that nothing published moves.
@@ -90,8 +103,8 @@ Places are H3 res-7 cells only. No response carries lat/lon or res-9 (Invariant 
 ## Source and destination layers (corridor)
 
 - **Destination layer** (`event_cells`): the cell where each event is held (`events.h3_res7`), with its event count and live count.
-- **Source layer** (`source_cells`): the cell where each poster hangs (`poster_deployments.h3_res7`), with its poster count (exact) and its scan count (floored). This is where the organizer put the poster, never where a scanner stood.
-- **Flows**: scans from a source cell to an event cell, floored.
+- **Source layer** (`source_cells`): the cell where each poster hangs (`poster_deployments.h3_res7`), with its poster count (exact), its scan count (floored: the sum of its listed flows and its `scans_no_destination`) and its scans for events with no place on the map (`scans_no_destination`, floored). This is where the organizer put the poster, never where a scanner stood. A poster with no cell is in no row.
+- **Flows**: scans from a source cell to an event cell, floored. A flow under K is not listed, and is not in its source cell's count either.
 
 ## Not measured yet
 
@@ -114,6 +127,12 @@ Each item below is in `NOT_MEASURED` and is returned in every response. The dash
 Adding a metric is a minor bump. Removing or retyping one is a major bump. A test checks that every metric id a response lists exists in the registry.
 
 The version follows the response shape. The two link-tap changes (the event figure in #871, then the operations figure on 2026-10-08) changed which taps a figure counts, not its shape, path or class, so the version stayed `1.0.0`. Both can only lower a figure or withhold it.
+
+`1.1.0` (2026-10-08): the corridor's source cells gained `scans_no_destination`, a new metric, so a minor bump. The same change made `source_cells[].scans` the sum of the cell's listed parts; that alone changes which scans the figure counts, not its shape, and can only lower it or withhold it.
+
+## Open after the 2026-10-08 ruling
+
+The ruling reaches further than the corridor. The `anonymous_exact` class (poster scans on the operations and event dashboards) and the exact scan counts on the pre-event card are served to the same admin, and an exact total beside floored parts gives a withheld part back: the operations dashboard's `reach.poster_scans` minus the corridor's cells is the scans the corridor withholds, and the event dashboard's `reach.scans` is one destination's scans, exact. None of those reads is changed yet. They are mapped on OSE-1655 for the owner, because flooring them changes what the event card and the Live page show. `tests/corridor-scans-neighbour-floor.spec.ts` pins one case with its numbers, and that test fails the day it is closed.
 
 ## Next slices (not in this change)
 

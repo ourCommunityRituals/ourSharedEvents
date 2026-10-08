@@ -8,8 +8,10 @@
  *   contract  every response carries the registry version, its metric list and
  *             its not-measured list; floored metrics have the FlooredCount shape.
  *   #7        identity-derived counts are floored per event before the sum, and
- *             taps per poster code (then per event); scans per cell are
- *             floored; flows under K are left out.
+ *             taps per poster code (then per event); corridor scans are floored
+ *             per source cell and destination, flows under K are left out, and
+ *             a cell's scans are the sum of what is listed for it (the
+ *             neighbour pairs are in corridor-scans-neighbour-floor.spec.ts).
  *   #9        a dash-a operator never sees dash-b numbers; a forged brand_id is
  *             403; a key actor must name a brand.
  *   #1        no response carries lat/lon or res-9 cells.
@@ -355,20 +357,27 @@ describe('corridor / community intelligence', () => {
     expect(body.partner_network).toEqual({ sponsors: 2, placements: 2 });
   });
 
-  test('event layer vs source layer, scans floored per cell', async () => {
+  test('event layer vs source layer, a cell is the sum of its listed flows', async () => {
     const { body } = await call(handleCorridorDashboard, reqAs(A, COR));
     expect(body.event_cells).toEqual([
       { cell: CELL_EVENT, events: 2, live: 1 },
       { cell: CELL_SRC_1, events: 1, live: 0 },
     ]);
     const src = Object.fromEntries(body.source_cells.map((c: Body) => [c.cell, c]));
-    // cell 1: bocce 7 + workshop 3 = 10 scans; cell 2: 3 + 2 = 5 scans.
+    // cell 1: bocce's 7 to the event cell. The workshop's 3 (cell 1 → cell 1)
+    // is a flow under K: it is not listed, so it is not in the cell either.
+    // 10 here beside a single flow of 7 would hand the 3 back.
+    // cell 2: 3 + 2 = 5 scans, one flow.
+    const none = { count: null, suppressed: true, floor: 5 };
     expect(src[CELL_SRC_1]).toEqual({
       cell: CELL_SRC_1,
       posters: 2,
-      scans: { count: 10, suppressed: false, floor: 5 },
+      scans: { count: 7, suppressed: false, floor: 5 },
+      // Every event in the fixture has a cell, so nothing lacks a destination.
+      scans_no_destination: none,
     });
     expect(src[CELL_SRC_2].scans).toEqual({ count: 5, suppressed: false, floor: 5 });
+    expect(src[CELL_SRC_2].scans_no_destination).toEqual(none);
   });
 
   test('#7: a flow under K is left out, not shown', async () => {
@@ -404,7 +413,10 @@ describe('corridor / community intelligence', () => {
     const both = await call(handleCorridorDashboard, reqAs(AB, COR));
     const onlyB = await call(handleCorridorDashboard, reqAs(AB, `${COR}?brand_id=${DASH.brandB}`));
     const cell1 = (b: Body) => b.source_cells.find((c: Body) => c.cell === CELL_SRC_1)?.scans;
-    expect(cell1(both.body).count - (cell1(onlyB.body)?.count ?? 0)).toBe(10);
+    // 57 (dash-a's listed 7 + dash-b's 50) minus 50: the 7 dash-a's own view
+    // shows, not 10 (which would carry the workshop's withheld 3).
+    expect(cell1(both.body).count).toBe(57);
+    expect(cell1(both.body).count - (cell1(onlyB.body)?.count ?? 0)).toBe(7);
   });
 
   test('#1: no coordinates or res-9 cells in the response', async () => {
