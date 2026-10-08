@@ -221,6 +221,10 @@ export const NODE_SPECS = [
   // The Return Rate card when the API withholds the rate on its own: the same
   // jsdom-over-the-real-template shape as the spec above. No cloudflare:test.
   'tests/shared-report-return-rate-card.spec.ts',
+  // Locked sections on a sponsor link: the real read handler (builder and audit
+  // log replaced, as in shared-report-read-depth-wiring) feeds the real template
+  // in jsdom. No cloudflare:test.
+  'tests/shared-report-locked-sections.spec.ts',
 
   // OSE-1390 mint-link sub-day TTL. Pure resolveMintTtlSeconds over lib/mint-ttl.ts;
   // no cloudflare:test / DOM. Born-red per floor/ceiling/both-provided clauses.
