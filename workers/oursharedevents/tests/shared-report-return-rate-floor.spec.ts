@@ -221,7 +221,9 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 
-  test('exactly K distinct attendees who all came twice: 100% over a sample of K', async () => {
+  // OSE-1649 item 3: 100% is withheld too. Published, it turns into a dash the
+  // day one more person comes, which says that person did not return.
+  test('exactly K distinct attendees who all came twice: 100% is withheld like "all but one"', async () => {
     const id = 'test-evt-rrf-all5';
     await seedEvent(id, CELL);
     await seedAnons(id, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT);
@@ -230,8 +232,8 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
-    expect(r.report.return_rate.venue_pct).toBe(100);
-    expect(r.report._meta.suppression_reasons.map((s) => s.field)).not.toContain(
+    expect(r.report.return_rate.venue_pct).toBeNull();
+    expect(r.report._meta.suppression_reasons.map((s) => s.field)).toContain(
       'return_rate.venue_pct'
     );
   });
@@ -239,8 +241,8 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
 
 /**
  * A rate published beside its sample size is a head count: rate x sample / 100.
- * So the rate itself passes the floor (`flooredRatePct`): the people it counts
- * must be at least K, and the people it does not count none or at least K.
+ * So the rate itself passes the floor: the people it counts and the people it
+ * does not count must each be at least K (OSE-1649: never 100% either).
  * Every (sample, returners) pair below is read through the real builder.
  */
 describe('a published return rate never multiplies back to a group under the floor', () => {
@@ -269,7 +271,9 @@ describe('a published return rate never multiplies back to a group under the flo
         if (!r.ok) return;
         const { venue_pct, sample_size } = r.report.return_rate;
         expect(sample_size).toBe(sample);
-        const safe = twice >= K && (sample - twice === 0 || sample - twice >= K);
+        // Both sides at least K; "everyone came twice" (the rest is 0) is
+        // withheld like 1 to 4 (OSE-1649 item 3).
+        const safe = twice >= K && sample - twice >= K;
         if (safe) {
           expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo((twice / sample) * 100, 6);
           publishedSomewhere = true;
@@ -279,7 +283,7 @@ describe('a published return rate never multiplies back to a group under the flo
         if (venue_pct !== null) {
           const g = groups(venue_pct, sample);
           expect(g.counted).toBeGreaterThanOrEqual(K);
-          expect(g.rest === 0 || g.rest >= K, `rest of ${g.rest}`).toBe(true);
+          expect(g.rest >= K, `rest of ${g.rest}`).toBe(true);
         }
         // Withheld with a reason that names the floor only; published without one.
         const reason = r.report._meta.suppression_reasons.find(
@@ -291,7 +295,10 @@ describe('a published return rate never multiplies back to a group under the flo
           expect(numbersIn(reason.detail)).toEqual([String(K)]);
         }
       }
-      expect(publishedSomewhere, 'the sweep never published a rate: it proves nothing').toBe(true);
+      // Both sides at least K means a rate needs 2K people: under that, every
+      // split is withheld; from there, the sweep must publish one, or it proves
+      // nothing.
+      expect(publishedSomewhere, `published over ${sample} people`).toBe(sample >= 2 * K);
     });
   }
 
@@ -306,11 +313,23 @@ describe('a published return rate never multiplies back to a group under the flo
       await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
       await seedAnons(id, sample);
       await seedAnons(other, elsewhere); // the same first `elsewhere` people
+      // Ten people of the other event's own, so its rate can pass: a corridor's
+      // rates are published together or not at all (OSE-1649 item 1).
+      for (let i = 0; i < 10; i++) {
+        await tenv()
+          .DB.prepare(
+            `INSERT INTO anon_id_returns
+               (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             VALUES (?, ?, datetime('now'), datetime('now'), 1, datetime('now'))`
+          )
+          .bind(`o${i}`.padStart(32, 'e'), other)
+          .run();
+      }
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       const { corridor_pct } = r.report.return_rate;
-      const safe = elsewhere >= K && (sample - elsewhere === 0 || sample - elsewhere >= K);
+      const safe = elsewhere >= K && sample - elsewhere >= K;
       if (safe) {
         expect(corridor_pct, `${elsewhere} of ${sample}`).toBeCloseTo(
           (elsewhere / sample) * 100,
@@ -325,8 +344,8 @@ describe('a published return rate never multiplies back to a group under the flo
       );
       expect(reason !== undefined).toBe(corridor_pct === null);
     }
-    // 5, 6, 7 of 12 (both sides at least K) and 12 of 12.
-    expect(published).toBe(4);
+    // 5, 6, 7 of 12: both sides at least K. 12 of 12 is withheld (item 3).
+    expect(published).toBe(3);
   });
 });
 

@@ -648,56 +648,25 @@ describe('the harness can see: a full report, and each lever above the floor', (
 });
 
 /**
- * OPEN findings: pairs where a published field still moves. They are NOT
- * accepted behaviour. Each is pinned to the exact fields that move, so a new
- * one fails, and one that gets closed fails until its entry is removed: the
- * list can only shrink. Keys are the pair's own title, `lever: n -> n+1`.
+ * The list is empty (OSE-1649). The three kinds it held are closed in
+ * `shared-report-builder.ts`, and each pair below now asserts that nothing
+ * published moves:
+ *
+ * - ACROSS TWO REPORTS: with two events in a corridor, "seen at both" is one
+ *   number each report divides by its own sample size, so the sibling's rate
+ *   gave back this event's withheld group. A corridor's rates are now
+ *   published together or not at all.
+ * - NONE AGAINST SOME, by a note: the return-rate, head-count and map notes
+ *   appeared only when something was under the floor. They are now given at
+ *   0 as at 1 to 4.
+ * - NONE AGAINST SOME, by rule: 100% was published and "all but one" was not.
+ *   The report's rates never publish 100% now (the returns export keeps the
+ *   shared nested rule: weekly snapshots rounded down to multiples of 5).
+ *
+ * A new leak goes here with the exact fields that move, and fails when it
+ * stops reproducing, so the list can only shrink.
  */
-const NOTE = (i: number): string[] =>
-  ['detail', 'field', 'reason'].map((k) => `report._meta.suppression_reasons[${i}].${k}`);
-/** `n` notes appearing in `_meta.suppression_reasons`. */
-const NOTES = (n: number): string[] => [
-  ...Array.from({ length: n }, (_, i) => NOTE(i)).flat(),
-  'report._meta.suppression_reasons.length',
-];
-/** The same fields as a signed link and as the batch read spell them. */
-const everywhere = (paths: string[]): string[] =>
-  [...paths, ...paths.map((p) => p.replace(/^report\./, `report.${EVENT}.`))].sort();
-
-/**
- * ACROSS TWO REPORTS. With two events in a corridor, "seen at both" is one
- * number, and each event's report divides it by its own head count. This event
- * withholds its rate, because the people seen nowhere else are 1 to 4. The
- * sibling event still publishes ITS rate (both of its sides clear the floor),
- * and that rate times the sibling's sample size is the same overlap. A reader
- * holding both reports subtracts it from this event's sample size. Flooring one
- * report at a time cannot see this; it needs a rule across reports.
- */
-const SIBLING_RATE = `report.${EVENT}-sib.return_rate.corridor_pct`;
-
-const OPEN: Record<string, string[]> = {
-  'people seen nowhere else in the corridor: 1 -> 2': [SIBLING_RATE],
-  'people seen nowhere else in the corridor: 2 -> 3': [SIBLING_RATE],
-  'people seen nowhere else in the corridor: 3 -> 4': [SIBLING_RATE],
-
-  // NONE AGAINST SOME, by a note. The report explains a withheld figure
-  // ("hidden, not enough data yet") only when something IS under the floor, so
-  // the note tells none from 1 to 4. `applyCountFloor` reads 0 to 4 alike;
-  // these notes do not. They reach every depth, including a local sponsor link
-  // that is not sent the section the note is about.
-  'people seen at the event: 0 -> 1': everywhere(NOTES(2)),
-  "a map cell's only scans: 0 -> 1": everywhere(NOTES(1)),
-
-  // NONE AGAINST SOME, by rule. The nested-count rule (`floorNestedCounts`,
-  // shared with the returns export) publishes a part equal to its whole, so
-  // "everyone returned" (100%) is published and "all but one" is withheld.
-  // Closing it means never publishing 100%, in the report and the export alike.
-  'people who came only once: 0 -> 1': everywhere([...NOTES(1), 'report.return_rate.venue_pct']),
-  'people seen nowhere else in the corridor: 0 -> 1': [
-    ...everywhere([...NOTES(1), 'report.return_rate.corridor_pct']),
-    SIBLING_RATE,
-  ].sort(),
-};
+const OPEN: Record<string, string[]> = {};
 
 const titleOf = (lever: Lever, n: number): string => `${lever.name}: ${n} -> ${n + 1}`;
 

@@ -105,7 +105,23 @@ function bucketToHour(iso: string): string {
 
 // Why a return rate is withheld over a sample that is itself published. Names
 // the floor, never an observed count (OSE-1421).
+const CORRIDOR_RATE_WITHHELD_DETAIL = `a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people could be worked out from this rate or from another event's in this corridor`;
 const RATE_WITHHELD_DETAIL = `one side of this rate is a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people`;
+
+/**
+ * A return rate as the report publishes it: `flooredRatePct`, and never 100%.
+ *
+ * `flooredRatePct` lets the people a rate does not count be none (the nested
+ * rule shared with the returns export). The report is read live, so 100%
+ * turning into a dash when one more person comes says that person did not
+ * return: "none" and "1 to 4" must look the same (OSE-1649 item 3, owner
+ * ruling 2026-10-08, no exceptions). The returns export keeps the shared rule:
+ * it publishes weekly snapshots rounded down to multiples of 5, the owner's
+ * measure against differencing (2026-10-01).
+ */
+function reportRatePct(part: number, whole: number): number | null {
+  return part >= whole ? null : flooredRatePct(part, whole);
+}
 
 export type SuppressionReasonCode =
   'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
@@ -140,9 +156,11 @@ export interface SharedReport {
 
   /**
    * `sample_size` is the people seen at the event, published from K = 5. A
-   * rate is null unless the people it counts are at least K and the people it
-   * does not count are none or at least K (`flooredRatePct`): beside its sample
-   * size, a rate is otherwise a head count under the floor.
+   * rate is null unless the people it counts and the people it does not count
+   * are each at least K (`reportRatePct`): beside its sample size, a rate is
+   * otherwise a head count under the floor, and 100% turning into a dash would
+   * single one person out (OSE-1649). The corridor rate is also withheld
+   * whenever another event in the corridor must withhold its own.
    */
   return_rate: {
     venue_pct: number | null;
@@ -371,7 +389,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       // A rate beside its sample size IS its numerator (20% of 5 is one person),
       // and the rest of the group is its complement. `flooredRatePct` publishes
       // the rate only when neither is a group under the floor; otherwise null.
-      venuePct = flooredRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
+      venuePct = reportRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
       if (venuePct === null) {
         suppression.push({
           field: 'return_rate.venue_pct',
@@ -390,27 +408,54 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // corridor_pct — fraction of anons at THIS event who appeared at any
     // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
     // to corridor_id for legacy events geocoded before BE-24b landed.
+    //
+    // A corridor's rates are published together or not at all (OSE-1649 item
+    // 1). With two events in a corridor, "seen at both" is one number that each
+    // report divides by its own sample size. If this event withholds its rate
+    // because 1 to 4 of its people went nowhere else, the other event's rate
+    // times its published sample size is that same overlap, and this event's
+    // sample size minus it is the withheld group. So every event in the
+    // corridor whose sample size is published (K or more people) is read here,
+    // and if any of them must withhold its corridor rate, all of them do. An
+    // event under K publishes no sample size, so nothing can be subtracted
+    // from it, and it does not hold the others back.
     const corridorKey = corridorKeyOf(event);
     if (corridorKey) {
-      const corridorRow = await db
+      const corridorRows = await db
         .prepare(
-          `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
-           FROM anon_id_returns a
-           JOIN events e ON e.id = a.venue_id
-           WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
-             AND a.venue_id != ?
-             AND a.anon_id_hash IN (
-               SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
-             )`
+          `SELECT a.venue_id AS event_id,
+                  COUNT(DISTINCT a.anon_id_hash) AS people,
+                  COUNT(DISTINCT CASE WHEN EXISTS (
+                    SELECT 1 FROM anon_id_returns o
+                      JOIN events oe ON oe.id = o.venue_id
+                     WHERE o.anon_id_hash = a.anon_id_hash
+                       AND o.venue_id != a.venue_id
+                       AND COALESCE(LOWER(oe.h3_res7), oe.corridor_id) = ?
+                  ) THEN a.anon_id_hash END) AS elsewhere
+             FROM anon_id_returns a
+             JOIN events e ON e.id = a.venue_id
+            WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
+            GROUP BY a.venue_id`
         )
-        .bind(corridorKey, eventId, eventId)
-        .first<{ c: number }>();
-      corridorPct = flooredRatePct(corridorRow?.c ?? 0, distinctAnonsHere);
+        .bind(corridorKey, corridorKey)
+        .all<{ event_id: string; people: number; elsewhere: number }>();
+      const rows = corridorRows.results ?? [];
+      const own = rows.find((r) => r.event_id === eventId);
+      const ownRate = reportRatePct(own?.elsewhere ?? 0, distinctAnonsHere);
+      const anotherWithholds = rows.some(
+        (r) =>
+          r.event_id !== eventId &&
+          r.people >= CORRIDOR_MAP_MIN_COUNT &&
+          reportRatePct(r.elsewhere, r.people) === null
+      );
+      corridorPct = anotherWithholds ? null : ownRate;
       if (corridorPct === null) {
+        // One reason for both cases: a different string for "another event
+        // withholds" would say that this event's own rate passed.
         suppression.push({
           field: 'return_rate.corridor_pct',
           reason: 'below_min_sample_size',
-          detail: RATE_WITHHELD_DETAIL,
+          detail: CORRIDOR_RATE_WITHHELD_DETAIL,
         });
       }
     } else {
@@ -420,7 +465,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         detail: 'event has no h3_res7 or corridor_id',
       });
     }
-  } else if (distinctAnonsHere > 0) {
+  } else {
+    // Said at 0 people as at 1 to 4 (OSE-1649 item 2): a note that appeared
+    // only when someone was there would tell "nobody" from "1 to 4".
     suppression.push({
       field: 'return_rate',
       reason: 'below_min_sample_size',
@@ -465,7 +512,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // ratios are NOT computed, so they cannot leak the raw numerator by division.
     const flooredThisEvent = applyCountFloor(distinctAnonsHere);
     thisEventCount = flooredThisEvent.count;
-    if (flooredThisEvent.suppressed && distinctAnonsHere > 0) {
+    // Said at 0 as at 1 to 4 (OSE-1649 item 2).
+    if (flooredThisEvent.suppressed) {
       suppression.push({
         field: 'corridor_density.this_event_count',
         reason: 'below_min_sample_size',
@@ -808,12 +856,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // poster_attribution drops (OSE-711). Only cells at or above the floor exist
   // on the map.
   const shownCells = cellData.filter((r) => r.count >= CORRIDOR_MAP_MIN_COUNT);
-  const hiddenCells = cellData.length - shownCells.length;
-  if (hiddenCells > 0) {
+  // The note is given whenever the map is drawn from poster cells, not only
+  // when one was dropped (OSE-1649 item 2): a note that appeared only then
+  // would tell a poster with no scans from one with 1 to 4.
+  if (cellData.length > 0) {
     suppression.push({
       field: 'corridor_map',
       reason: 'below_min_sample_size',
-      detail: `some areas not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
+      detail: `areas with fewer than ${CORRIDOR_MAP_MIN_COUNT} scans are not shown`,
     });
   }
 
