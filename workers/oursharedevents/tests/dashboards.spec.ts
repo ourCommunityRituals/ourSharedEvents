@@ -7,8 +7,9 @@
  *
  *   contract  every response carries the registry version, its metric list and
  *             its not-measured list; floored metrics have the FlooredCount shape.
- *   #7        identity-derived counts and taps are floored per event before the
- *             sum; scans per cell are floored; flows under K are left out.
+ *   #7        identity-derived counts are floored per event before the sum, and
+ *             taps per poster code (then per event); scans per cell are
+ *             floored; flows under K are left out.
  *   #9        a dash-a operator never sees dash-b numbers; a forged brand_id is
  *             403; a key actor must name a brand.
  *   #1        no response carries lat/lon or res-9 cells.
@@ -261,9 +262,11 @@ describe('founder / operations cockpit', () => {
     expect(body.shared_report.views_30d).toBe(4);
   });
 
-  test('#7: taps and explicit choices are floored per event, then summed', async () => {
+  test('#7: taps are floored per code and explicit choices per event, then summed', async () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, OPS));
-    // bocce 9 taps survive; workshop 2 is dropped, not added (9, not 11).
+    // Taps are floored per poster code, the grain the event's own card lists.
+    // Bocce's event link has 9 and survives; its donation link has 3 and is
+    // dropped; so is the workshop's only link, with 2 (9, not 12 or 14).
     expect(body.reach.link_taps).toEqual({ count: 9, suppressed: false, floor: 5 });
     // registrations: bocce 7 survives, workshop 3 dropped → 7, not 10.
     expect(body.participation.explicit.registrations).toEqual({
@@ -285,6 +288,8 @@ describe('founder / operations cockpit', () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=all`));
     expect(body.events.total).toBe(4);
     expect(body.reach.poster_scans).toBe(58);
+    // The demo event's link (40 taps) joins bocce's 9; by default it does not.
+    expect(body.reach.link_taps.count).toBe(49);
     expect(body.scope.data_class).toBe('all');
     const bad = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=nope`));
     expect(bad.status).toBe(400);
@@ -323,6 +328,11 @@ describe('#9 tenant isolation', () => {
     const one = await call(handleOperationsDashboard, reqAs(AB, `${OPS}?brand_id=${DASH.brandB}`));
     expect(one.body.scope.brands).toEqual([DASH.brandB]);
     expect(one.body.reach.poster_scans).toBe(50);
+    // Taps across brands: dash-a's 9 (its 3 and its 2 never join) + dash-b's 99.
+    // Every scope a caller can pick is a sum of codes that each cleared K, so
+    // both minus one is 9, a number dash-a's own dashboard already shows.
+    expect(both.body.reach.link_taps).toEqual({ count: 108, suppressed: false, floor: 5 });
+    expect(one.body.reach.link_taps).toEqual({ count: 99, suppressed: false, floor: 5 });
   });
 
   test('the routes are behind requireAdmin', async () => {
@@ -435,6 +445,7 @@ describe('organizer / partner report — one event', () => {
     expect(body.reach.posters).toBe(3);
     expect(body.reach.places).toBe(2);
     expect(body.reach.scans).toBe(12);
+    // 9 on the event link; the donation link's 3 is under K and never joins.
     expect(body.reach.clicks).toEqual({ count: 9, suppressed: false, floor: 5 });
     expect(body.participation.anonymous.scans).toBe(12);
     expect(body.participation.explicit.registrations.count).toBe(7);
