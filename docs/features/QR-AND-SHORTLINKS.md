@@ -248,12 +248,17 @@ of the shown cells equals the sum of the hidden ones. Two rules cover this:
 > same spec reads the route for one event and for a brand with three. No page
 > renders this figure yet.
 >
-> **Open: one read still floors the raw tap sum.** The sponsor line "So far: N
-> link taps" is `floorPreEventActivity`'s raw sum. A sponsor is shown no
+> **Closed (2026-10-08): the same leak on the sponsor's line.** "So far: N link
+> taps" was `floorPreEventActivity`'s raw sum, floored afterwards: 13 for 10, 2
+> and 1, and 14 after one more tap on a withheld link. A sponsor is shown no
 > per-code counts, but an organizer can open the sponsor's page and difference
-> it against the card's listed codes. It changes a number sponsors see, so it
-> waits on an owner decision. It is pinned, with numbers, at the end of that
-> spec.
+> it against the card's listed codes. Owner decision, 2026-10-08: close it; the
+> under-5 rule has no exceptions for any reader or tier. The figure is now
+> `floorTotalOfParts` over the same per-code counts the organizer's total uses,
+> so both audiences read the same number: 10 here. When no link has 5 the line
+> says "fewer than 5 taps on any one link", because "fewer than 5 link taps"
+> would be untrue for four links holding 15 between them. Nothing is pinned as
+> open in that spec now.
 >
 > **Latent: same shape in `floorPreEventActivity`.** It floors the total and
 > each day independently. The sponsor view renders totals only
@@ -267,8 +272,9 @@ In a multi-week pre-event window, "the report legitimately shows _nothing_ early
 then crosses the floor and begins to resolve"
 ([reconciliation §10.1](../discovery/OSE_REFERENCE_posterPrimitiveReconciliation_2026-09-04.md#101-the-suppression-is-part-of-the-story)).
 **The below-floor state is not an error state and must not be styled as one.**
-The code follows this. The sponsor line reads "fewer than 5" in words, never a
-warning (`floored()` in `src/lib/sponsor-home-render.ts`). Public recap lines
+The code follows this. The sponsor line reads "fewer than 5 poster scans" or
+"fewer than 5 taps on any one link" in words, never a warning
+(`renderPreEventReach` in `src/lib/sponsor-home-render.ts`). Public recap lines
 read "Fewer than 5 …" (`statLine` in `src/handlers/pages.ts`).
 
 ---
@@ -380,7 +386,8 @@ never touches the WHO side, the request, or FORMS_DB" in
   the sum of the codes that have 5 or more taps each (§4).
 - The **sponsor** sees one floored sentence on each accepted pre-event placement:
   "So far: N link taps · M poster scans. Your name is on P posters in Q places."
-  (`renderPreEventReach`)
+  (`renderPreEventReach`). N is the same figure the organizer's card shows: the
+  taps on the links that have 5 or more each.
 
 ---
 

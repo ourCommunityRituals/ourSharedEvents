@@ -46,9 +46,9 @@
  * per-code parts are not sent, and the two reads pinned as still open at the
  * end of the file.
  *
- * One of those two, the operations dashboard, has since been closed and is
- * the third read above. Its own red run is described at its block, near the
- * end of the file.
+ * Both have since been closed. The operations dashboard is the third read
+ * above; the sponsor's line has a block of its own at the end of the file.
+ * Each block says what its own red run showed. Nothing is pinned as open now.
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -649,31 +649,66 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
   });
 });
 
-// ─── Still open ─────────────────────────────────────────────────────────────
+// ─── The sponsor's line ─────────────────────────────────────────────────────
 //
-// One other read publishes the same taps as a raw sum that is floored
-// afterwards. It is not the organizer's card and is not changed with it. It is
-// pinned here, with its numbers, so the list can only shrink: when it is
-// closed its test fails. Delete it then.
+// The sponsor's home page says "So far: N link taps" for each event they back
+// (floorPreEventActivity, drawn by lib/sponsor-home-render.ts). A sponsor is
+// shown no per-code counts, but an organizer can mint a sponsor link and open
+// it, and the organizer's card lists the codes. So the same rule holds here as
+// on the card: a code under the floor never joins the figure.
 //
-//   sponsor     the sponsor's home page line "So far: N link taps"
-//               (floorPreEventActivity). A sponsor is shown no per-code counts,
-//               but an organizer can open the sponsor's page. It changes a
-//               number sponsors see, so it waits on the owner.
-//
-// The operations dashboard's `reach.link_taps` was the other one (13, then 14).
-// It is closed: the read is in READS above, and has a block of its own.
+// This was the last read pinned as open (owner decision 2026-10-08: close it;
+// the floor has no exceptions for any reader). Seen red on the code before
+// floorPreEventActivity used floorTotalOfParts: the reported pair read 13, then
+// 14; 1 / 2 / 1 read withheld, then 5 after one tap; and every base dataset
+// with a code under the floor moved. The served page is held in
+// tests/pre-event-activity.spec.ts.
 
-describe('still open: one other read floors the raw tap sum', () => {
-  const before = world(10, null, 2, 1);
-  const after = world(10, null, 2, 2);
+describe("the sponsor's line: only links that clear the floor on their own", () => {
+  const sponsorTaps = async (w: World): Promise<Floored> => {
+    await seedWorld(w);
+    const a = await readPreEventActivity(tenv().DB, EVENT, 'America/Chicago');
+    return floorPreEventActivity(a).clicks;
+  };
 
-  test('sponsor shape, clicks: 13, then 14 after one tap on a withheld code', async () => {
-    const at = async (w: World): Promise<number | null> => {
-      await seedWorld(w);
-      const a = await readPreEventActivity(tenv().DB, EVENT, 'America/Chicago');
-      return floorPreEventActivity(a).clicks.count;
-    };
-    expect([await at(before), await at(after)]).toEqual([13, 14]);
+  test('the reported pair: 10 / 2 / 1, then one more tap on a withheld code, reads 10 both times', async () => {
+    const before = await sponsorTaps(world(10, null, 2, 1));
+    const after = await sponsorTaps(world(10, null, 2, 2));
+    expect([before.count, after.count]).toEqual([10, 10]);
+  });
+
+  test('no code at the floor: 1 / 2 / 1, then 1 / 2 / 2 (5 taps in all), is withheld both times', async () => {
+    const before = await sponsorTaps(world(1, null, 2, 1));
+    const after = await sponsorTaps(world(1, null, 2, 2));
+    expect([before.count, after.count]).toEqual([null, null]);
+    expect([before.suppressed, after.suppressed]).toEqual([true, true]);
+  });
+
+  for (const { label, w } of BASES) {
+    const hidden = KINDS.filter((k) => w[k] !== null && codeTaps(w, k) < K - 1);
+    for (const k of hidden) {
+      test(`${label}: one more tap on ${k} (${codeTaps(w, k)}, under the floor) moves nothing`, async () => {
+        const before = await sponsorTaps(w);
+        const after = await sponsorTaps({ ...w, [k]: (w[k] as number) + 1 });
+        expect(after).toEqual(before);
+      });
+    }
+  }
+
+  test('a tap on a code above the floor shows: 10 / 2 / 1 reads 10, 11 / 2 / 1 reads 11', async () => {
+    const before = await sponsorTaps(world(10, null, 2, 1));
+    const after = await sponsorTaps(world(11, null, 2, 1));
+    expect([before.count, after.count]).toEqual([10, 11]);
+  });
+
+  test('the figure is the one the organizer is shown for the same event', async () => {
+    for (const { w } of BASES) {
+      const s = await sponsorTaps(w);
+      const organizer = (await card(w)).activity.clicks;
+      expect({ count: s.count, suppressed: s.suppressed }).toEqual({
+        count: organizer.count,
+        suppressed: organizer.suppressed,
+      });
+    }
   });
 });

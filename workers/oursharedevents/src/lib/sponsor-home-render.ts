@@ -126,7 +126,13 @@ export function renderPreEventReach(r: FlooredPreEventActivity): string {
   // Link taps lead: the shared event link (friends and family → the event
   // page, where this sponsor's name shows) is the big driver; posters come
   // second and widen the reach into places.
-  const taps = `So far: ${floored(r.clicks)} link taps · ${floored(r.scans)} poster scans.`;
+  // A withheld tap figure means no link has 5 taps yet, not fewer than 5 taps in
+  // all (four links with 4, 4, 3 and 4 are 15), so it has its own words.
+  const linkTaps =
+    r.clicks.suppressed || r.clicks.count == null
+      ? `fewer than ${r.clicks.floor} taps on any one link`
+      : `${r.clicks.count} link taps`;
+  const taps = `So far: ${linkTaps} · ${floored(r.scans)} poster scans.`;
   if (r.posters === 0) {
     return `<p class="sh-why" data-testid="placement-reach">${taps} No posters up yet.</p>`;
   }
