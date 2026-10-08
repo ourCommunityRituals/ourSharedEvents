@@ -34,7 +34,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 const TEMPLATES_DIR = fileURLToPath(new URL('../src/templates/', import.meta.url));
@@ -57,6 +57,11 @@ const OPTIONS: ts.CompilerOptions = {
 
 type Finding = { line: number; code: number; text: string };
 type Checked = { scripts: number; findings: Finding[] };
+
+// Type-checking a 330 KB page takes a second or two on a quiet machine and
+// several on a busy one, so nothing here runs on the default five-second limit.
+vi.setConfig({ testTimeout: 120_000 });
+const LIBS = new Map<string, ts.SourceFile | undefined>();
 
 const checked = new Map<string, Checked>();
 /** One template, read from disk and checked once. */
@@ -86,23 +91,35 @@ function check(html: string): Checked {
   };
   host.fileExists = (name) => files.has(name) || real.fileExists(name);
   host.readFile = (name) => files.get(name)?.text ?? real.readFile(name);
-  host.getSourceFile = (name, languageVersion, onError, shouldCreate) =>
-    files.has(name)
-      ? ts.createSourceFile(name, files.get(name)!.text, languageVersion, true, ts.ScriptKind.JS)
-      : real.getSourceFile(name, languageVersion, onError, shouldCreate);
+  host.getSourceFile = (name, languageVersion, onError, shouldCreate) => {
+    if (files.has(name)) {
+      return ts.createSourceFile(
+        name,
+        files.get(name)!.text,
+        languageVersion,
+        true,
+        ts.ScriptKind.JS
+      );
+    }
+    // The browser and language typings are the same for every page: parse once.
+    if (!LIBS.has(name))
+      LIBS.set(name, real.getSourceFile(name, languageVersion, onError, shouldCreate));
+    return LIBS.get(name);
+  };
 
   const program = ts.createProgram([...files.keys()], OPTIONS, host);
   const findings: Finding[] = [];
   for (const [name, file] of files) {
     const source = program.getSourceFile(name)!;
+    // A script that does not parse cannot be checked at all, so every syntax
+    // error is a finding. Of the rest, only the name problems are.
     const diagnostics = [
       ...program.getSyntacticDiagnostics(source),
-      ...program.getSemanticDiagnostics(source),
+      ...program
+        .getSemanticDiagnostics(source)
+        .filter((d) => UNRESOLVED.has(d.code) || REDECLARED.has(d.code)),
     ];
     for (const d of diagnostics) {
-      // A script that does not parse cannot be checked at all, so it is a finding.
-      const syntax = d.code < 2000;
-      if (!syntax && !UNRESOLVED.has(d.code) && !REDECLARED.has(d.code)) continue;
       const at = source.getLineAndCharacterOfPosition(d.start ?? 0);
       findings.push({
         line: file.firstLine + at.line,

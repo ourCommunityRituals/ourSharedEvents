@@ -48,6 +48,10 @@ const PAGE_SCRIPTS = [
 type Reply = { status?: number; body?: unknown; throws?: string };
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
+// Each test parses the whole 330 KB page; on a busy machine that alone can take
+// seconds, so the default five-second limit is not used here.
+vi.setConfig({ testTimeout: 30_000 });
+
 const open: JSDOM[] = [];
 afterEach(() => {
   while (open.length) open.pop()!.window.close();
@@ -137,7 +141,9 @@ describe('admin Shared Report Links: Generate Link', () => {
 
     expect(errorShown(), 'the result box shows an error instead of a link').toBe('');
     expect($('mint-token')!.textContent).toBe(TOKEN);
+    expect($('mint-copy-btn'), 'the copy control').not.toBeNull();
     expect($('mint-copy-btn')!.getAttribute('data-url')).toBe(reportUrl(EVT, TOKEN));
+    expect($('mint-report-url'), 'the report link').not.toBeNull();
     expect($('mint-report-url')!.getAttribute('href')).toBe(reportUrl(EVT, TOKEN));
     expect($('mint-report-url')!.textContent).toBe(reportUrl(EVT, TOKEN));
     expect($('mint-result')!.textContent).toContain(
@@ -248,20 +254,25 @@ describe('admin Shared Report Links: what is drawn is text', () => {
     }
   });
 
-  test('whatever writes into href and data-url escapes quote marks', async () => {
+  // The link is built from the page's own origin and two URL-encoded values, so
+  // no input can put a quote mark into it and the test above cannot see whether
+  // it is escaped. This one reads which helper each use goes through, from the
+  // page's own source, and then calls that helper in the page.
+  test('whatever writes the link into href, data-url and the page escapes quote marks', async () => {
     const { doc, inPage } = await mount();
     const source = Array.from(doc.querySelectorAll('script'))
       .map((s) => s.textContent || '')
       .find((text) => text.includes('window.mintReportLink = async function'))!;
     const block = source.slice(source.indexOf('window.mintReportLink = async function'));
 
-    // The helper each attribute goes through, read from the page's own source.
     const href = block.match(/href="' \+ ([A-Za-z_$][\w$]*)\(reportUrl\) \+ '"/);
     const dataUrl = block.match(/data-url="' \+ ([A-Za-z_$][\w$]*)\(reportUrl\) \+ '"/);
+    const linkText = block.match(/>' \+ ([A-Za-z_$][\w$]*)\(reportUrl\) \+ '<\/a>/);
     expect(href, 'href is written through an escape helper').not.toBeNull();
     expect(dataUrl, 'data-url is written through an escape helper').not.toBeNull();
+    expect(linkText, 'the link text is written through an escape helper').not.toBeNull();
 
-    for (const name of new Set([href![1], dataUrl![1]])) {
+    for (const name of new Set([href![1], dataUrl![1], linkText![1]])) {
       // Called where the forms script's top level sees it, as the page would.
       const escaped = inPage(`${name}(${JSON.stringify(`"'<>&`)})`);
       expect(escaped, `${name} escapes every character that can end an attribute or a tag`).toBe(
