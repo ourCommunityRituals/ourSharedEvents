@@ -55,54 +55,57 @@ or are idempotent ALTERs handled by the migration test helpers (see the
 
 ---
 
-## Staging — self-service rollback
+## Staging — put a database back
 
-Staging can be dropped and recreated at any time without approval.
+A staging database is never deleted and made again. D1 Time Travel restores a
+database in place, and nothing in Cloudflare's documentation brings a deleted
+database back. A new database also gets a new id.
 
-```bash
-# 1. Delete both staging databases
-wrangler d1 delete ocr-db-staging
-wrangler d1 delete ocr-forms-db-staging
-
-# 2. Recreate
-wrangler d1 create ocr-db-staging
-wrangler d1 create ocr-forms-db-staging
-
-# 3. Update database_id in wrangler.toml [env.staging.d1_databases]
-
-# 4. Re-apply all migrations
-wrangler d1 migrations apply DB        --env staging --remote
-wrangler d1 migrations apply FORMS_DB  --env staging --remote
-
-# 5. Verify (see "Post-migration smoke test" below)
-```
+To put a staging database back to an earlier time, use the staging blocks in
+[`docs/runbooks/DISASTER-RECOVERY.md`](../../../docs/runbooks/DISASTER-RECOVERY.md)
+§6. It is also the drill for production.
 
 ---
 
-## Production — requires DevOps approval
+## Production — what to do when a migration went wrong
 
-Production rollback is destructive. **Do not execute without DevOps lead sign-off.**
+In this order:
 
-### Option A — drop and recreate (pre-launch only)
+1. **Roll forward.** Write a new migration that repairs it
+   (`docs/runbooks/DISASTER-RECOVERY.md` §5). This is the normal path.
+2. **Restore the database to before the migration** with D1 Time Travel
+   (`docs/runbooks/DISASTER-RECOVERY.md` §6, break-glass). It loses everything
+   written since, and it brings back erased personal data, which that runbook
+   then removes again.
+3. **Reverse SQL** (Option B below, break-glass). Only when 1 and 2 cannot do it.
 
-Only safe before real user data exists. After Pulse 1 launch, prefer Option B.
+Option A, "drop and recreate the production databases", was removed on
+2026-10-07 (OSE-1503). No production database is deleted, at any stage.
 
-```bash
-# Run via CI workflow_dispatch only — never from a developer laptop
-wrangler d1 delete ocr-db-production
-wrangler d1 delete ocr-forms-db-production
-wrangler d1 create ocr-db-production
-wrangler d1 create ocr-forms-db-production
-# Update database_id in wrangler.toml [env.production.d1_databases]
-# Trigger deploy-prod CI workflow to re-apply migrations
-```
+### Option B — break-glass: surgical reverse-order SQL
 
-### Option B — surgical reverse-order rollback (post-launch)
+The SQL below drops objects in reverse migration order. For a partial reverse
+(only the last N migrations), take the relevant sections from the bottom up.
+No CI job runs this SQL: it would be run by hand.
 
-Drop objects in reverse migration order. Run against production D1 **via
-CI or DevOps gatekeeper only**. The SQL below is the canonical full
-rollback; for partial rollback (drop only the last N migrations), execute
-the relevant sections from the bottom up.
+**Who may do it:** the founder. Nobody else.
+
+**All of these must be true:**
+
+1. A new migration (roll forward) cannot repair it.
+2. A Time Travel restore has been considered and is the worse choice.
+3. The current Time Travel bookmark for the database is written down
+   (`docs/runbooks/DISASTER-RECOVERY.md` §4). It is the way back.
+4. The statements have been run on staging first, and staging still passes
+   its checks.
+
+**What is lost:** every row in a dropped table and every value in a dropped
+column. The Worker that is live may stop working if it reads what was dropped,
+so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
+
+> **STOP.** Say this aloud before running any statement below: "I am dropping
+> `<object>` from `<database-name>` in `<environment>`. Its rows will be gone.
+> I have the bookmark, and I ran this on staging first."
 
 #### B.1 — `DB` (main database)
 
