@@ -21,8 +21,34 @@
  *
  * What this file cannot see: what a browser would then DO with an injected
  * attribute. jsdom applies no Content-Security-Policy and loads no image. The
- * reach under the page's policy is reasoned about in the pull request, not
- * measured here.
+ * reach under the page's policy is described in the pull request, not measured
+ * here.
+ *
+ * @born-red | method: the two-page tests were written first and run on the page
+ *   as it was on main: 8 of 9 failed (the venue label carried `x1`, `y1` and six
+ *   more attributes besides class and title; so did the map image, the status
+ *   badge and the locked-section group). The ninth, numbers and dates, passed
+ *   from the start and is a guard | date: 2026-10-08
+ *
+ * Seen red afterwards (one fault put into the page, this file run, page
+ * restored; "page" = the two-page tests, "helper" = the escaper tests,
+ * "source" = the parse of the scripts):
+ *   main's page under the finished file                        15 red  page, helper, source
+ *   the escaper leaves both quote marks alone                  10 red  page, helper
+ *   the escaper leaves the single quote alone                   2 red  helper only: the page has
+ *                                                                      no single-quoted attribute
+ *   the escaper prints null and undefined                       1 red  helper
+ *   the events table script keeps its own old helper            7 red  page, source
+ *   the sponsor cards script keeps its own old helper           2 red  source only: it writes text
+ *   the venue raw in title                                      6 red  page, source
+ *   the venue through the old helper, inline, in alt            6 red  page, source
+ *   the status raw in the badge class                           6 red  page, source
+ *   the depth raw in the conditional data-next-depth            4 red  page, source (and 1 in
+ *                                                                      shared-report-locked-sections)
+ *   the event title raw in TEXT position                        2 red  page only: the source check
+ *                                                                      does not judge text
+ *   a payload value in a style and a bare number in a title     2 red  source only: no payload in
+ *                                                                      the tests carries that field
  */
 
 import { describe, test, expect } from 'vitest';
