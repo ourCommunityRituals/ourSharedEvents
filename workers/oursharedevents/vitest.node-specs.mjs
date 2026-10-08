@@ -253,4 +253,10 @@ export const NODE_SPECS = [
   // Signed links leave the address bar: the /sponsor and /sharedReport page
   // scripts run in jsdom over the real templates with a stubbed fetch.
   'tests/signed-link-url-scrub.spec.ts',
+  // The admin Shared Report Links panel: the page's own scripts run in jsdom as
+  // classic scripts, with a stubbed fetch that answers the way the mint route does.
+  'tests/admin-mint-report-link.spec.ts',
+  // Every name a template's inline script uses is declared where that script
+  // can see it: the TypeScript checker over each template's scripts (node:fs).
+  'tests/template-script-names.spec.ts',
 ];

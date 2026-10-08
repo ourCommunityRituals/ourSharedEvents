@@ -5420,8 +5420,16 @@
       // carrying its own lock state) and ONE upsell line for the whole section
       // in organizer language (plan names via tierLabel, never tier codes).
       // Pure: admin-forms-single-row.spec.ts extracts and runs it.
+      //
+      // esc is this script's one escaper, for text and for attribute values
+      // alike (it escapes & < > " '). It is declared at the script's top level,
+      // not inside oseFormsSection, because mintReportLink below draws with it
+      // too. Inside either function, the other one throws "esc is not defined"
+      // the moment it draws: that is what Generate Link did. Kept inside the
+      // section markers so the extracted block still carries it.
+      // Gates: admin-mint-report-link.spec.ts, template-script-names.spec.ts.
+      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
       function oseFormsSection(o) {
-        var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
         var renderCount = function (c) {
           if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
             + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
@@ -5521,9 +5529,10 @@
             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + escAttr(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
             '</div>' +
-            '<a data-testid="mint-report-url" href="' + escAttr(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
+            '<a data-testid="mint-report-url" href="' + esc(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
+            '<div class="sub-line">Copy this now; it isn&#39;t stored and can&#39;t be shown again.</div>' +
             '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
           result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--success);border-radius:6px';
         } catch (err) {
