@@ -1626,6 +1626,13 @@
       "testCount": 1
     },
     {
+      "file": "workers/oursharedevents/tests/poster-picker-stale-response.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-preview-mode.spec.ts",
       "bucket": "node",
       "needsReview": false,
