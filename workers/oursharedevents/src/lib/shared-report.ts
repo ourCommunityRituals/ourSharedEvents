@@ -106,7 +106,6 @@ const MATERIALIZATION_CEILING_HOURS = 26;
  *
  * For each candidate event:
  *   1. Read distinct `anonymous_id` from `scan_node_returns` for the event
- *      (a keyed scan id, the same for one browser at every event; OSE-1659)
  *   2. Hash each with ANON_ID_HASH_PEPPER (skip if pepper missing → null hash)
  *   3. Upsert `anon_id_returns(anon_id_hash, venue_id=event_id, ...)`:
  *      - INSERT a new row on first sight
