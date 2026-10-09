@@ -11,7 +11,6 @@
 import { listedSql } from '../lib/publish-grace';
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { HARDENING_HEADERS } from '../lib/security-headers';
-import { computeEventPhase } from '../domain/event-phase';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
@@ -67,7 +66,7 @@ import {
   type DataProviderEnv,
   type DataProviderCtx,
 } from '../lib/data-provider.js';
-import { enrichWithPhase } from '../lib/event-enrich.js';
+import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
@@ -2042,8 +2041,9 @@ export async function handlePublicEventPage(
   // Phase-aware dispatch via the OSE-242 canonical resolver.
   // OSE-1313 — a timed event's phase pivots at its canonical start instant
   // (starts_at) and its date-only end closes at the end of that local day.
+  // OSE-475: the same call the TV's display-config makes (eventPhaseOf).
   const phaseTimes = phaseTimesFor(row);
-  const phase = computeEventPhase({ status: row.status, ...phaseTimes });
+  const phase = eventPhaseOf(row);
 
   // CSP nonce — generated for the response headers regardless of whether
   // the body uses it. `securityHeaders(nonce)` writes the nonce into the

@@ -395,6 +395,7 @@
           '<p class="label">' + escAttr(prompt) + '</p>' +
           '<p class="link" data-testid="display-' + kind + '-link">' + escAttr(shortUrl(link.url, 64)) + '</p></div>';
       }
+      var PHASES = ['pre_event', 'event', 'post_event'];
       // A wrapped (finished) event has no place on a board about what is coming up.
       function isShowable(e) {
         return !!e && e.phase !== 'post_event';
@@ -579,7 +580,9 @@
       async function loadEvents() {
         const main = document.getElementById('main-content');
         try {
-          const res = await fetch('/api/v2/events');
+          // no-cache: the list's own Cache-Control (max-age=60, swr=300) would
+          // otherwise let a 5-minute refresh show the previous refresh's phases.
+          const res = await fetch('/api/v2/events', { cache: 'no-cache' });
           // fetch() resolves on a 429/5xx; that is a failed refresh (the
           // catch keeps the last good board), not an empty list of events.
           if (!res.ok) throw new Error('events ' + res.status);
@@ -591,7 +594,7 @@
           const wanted = new URLSearchParams(location.search).get('event');
           if (wanted && requestedEventIndex(items) === -1) {
             try {
-              const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted));
+              const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted), { cache: 'no-cache' });
               const oneData = one.ok ? await one.json() : null;
               if (oneData && oneData.ok && oneData.item && oneData.item.id === wanted) items = [oneData.item].concat(items);
             } catch { /* fall back to the list */ }
@@ -668,6 +671,15 @@
           board.config = data;
           board.configEtag = etag;
           board.configFor = id;
+          // OSE-475: the config carries the featured event's phase from the
+          // resolver the public page uses, and a start or end changes its ETag,
+          // so a crossing shows on this minute check, not the 5-minute refresh.
+          // A wrapped event leaves the board: re-read the list to feature the next.
+          const f = (board.items || []).find(e => e.id === id);
+          if (f && PHASES.indexOf(data.phase) !== -1 && f.phase !== data.phase) {
+            f.phase = data.phase;
+            if (!isShowable(f)) { loadEvents(); return; }
+          }
           renderBoard();
         } catch { /* keep the last config */ }
       }

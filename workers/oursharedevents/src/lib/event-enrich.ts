@@ -23,6 +23,39 @@
 import { computeEventPhase, type EventPhase } from '../domain/event-phase';
 import { phaseTimesFor } from './event-datetime';
 
+/**
+ * The one phase rule for a stored event row: the canonical resolver over the
+ * row's status and its phase times (OSE-1313: a timed event pivots at
+ * starts_at; a date-only day runs local midnight to local midnight in the
+ * event's zone). The public event page, the JSON API (via enrichWithPhase) and
+ * the TV's display-config all call this, so no surface can drift (OSE-475).
+ * Tolerates loosely typed rows: a non-string field reads as absent.
+ */
+export function eventPhaseOf(
+  row: {
+    status?: unknown;
+    start_date?: unknown;
+    end_date?: unknown;
+    starts_at?: unknown;
+    timezone?: unknown;
+  },
+  now?: Date
+): EventPhase {
+  const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  return computeEventPhase(
+    {
+      status: str(row.status) ?? '',
+      ...phaseTimesFor({
+        start_date: str(row.start_date),
+        end_date: str(row.end_date),
+        starts_at: str(row.starts_at),
+        timezone: str(row.timezone),
+      }),
+    },
+    now
+  );
+}
+
 export function enrichWithPhase(
   row: Record<string, unknown>
 ): Record<string, unknown> & { phase: EventPhase } {
@@ -41,14 +74,6 @@ export function enrichWithPhase(
     startDateISO: typeof row.start_date === 'string' ? row.start_date : (row.startDateISO ?? null),
     venue: typeof row.location === 'string' ? row.location : (row.venue ?? null),
     // OSE-1313 — timed events pivot at starts_at (see phaseTimesFor).
-    phase: computeEventPhase({
-      status: typeof row.status === 'string' ? row.status : '',
-      ...phaseTimesFor({
-        start_date: typeof row.start_date === 'string' ? row.start_date : null,
-        end_date: typeof row.end_date === 'string' ? row.end_date : null,
-        starts_at: typeof row.starts_at === 'string' ? row.starts_at : null,
-        timezone: typeof row.timezone === 'string' ? row.timezone : null,
-      }),
-    }),
+    phase: eventPhaseOf(row),
   };
 }
