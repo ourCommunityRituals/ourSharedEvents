@@ -89,11 +89,13 @@ test.describe('landing: an empty time window says so', () => {
   });
 
   test('the link in the message leads to a wider list', async ({ page }) => {
-    test.skip(
-      expectedEmptyWindows().length === 0,
-      'Friday to Sunday the setup event fills every window, so no message is drawn; the test above checks none shows'
-    );
     await page.goto('/');
+    if (expectedEmptyWindows().length === 0) {
+      // Friday to Sunday the setup event fills every window, so the server
+      // writes no message and there is no link to follow: none may be in the page.
+      await expect(page.locator('[data-testid^="area-window-empty-"]')).toHaveCount(0);
+      return;
+    }
     for (const w of WINDOWS) {
       await page.locator(`label[for="win-${w}"]`).click();
       if ((await visibleCards(page)) > 0) continue;
