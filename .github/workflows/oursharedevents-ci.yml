@@ -2524,6 +2524,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           clean: true
+          # Full history, so the next step can see whether this commit is on main.
+          fetch-depth: 0
+
+      # OSE-1662: a `v*.*.*` tag or a dispatch can name any commit, from any
+      # branch. Only a commit that is on main ships. First step after checkout,
+      # so nothing else in this job runs for a commit off main. NOT
+      # continue-on-error and no `if:` — held by
+      # tests/integration/assert-on-main-wired.test.js.
+      - name: 'Gate: the commit is on main (OSE-1662)'
+        run: bash scripts/ci/assert-on-main.sh
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
