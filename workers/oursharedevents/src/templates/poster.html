@@ -960,13 +960,13 @@ body {
           if (a.getAttribute('data-kind') === KIND) a.setAttribute('aria-current', 'page');
           else a.removeAttribute('aria-current');
         });
-        // The event's other screens, one tap away (the same links as the event
-        // page's nav, lib/event-nav.ts). A draft preview has no public page or
-        // TV yet, so it keeps only "All events".
+        // The event's page, one tap away (the same public links as the event
+        // page's nav, lib/event-nav.ts; the TV is an organizer link, OSE-1684).
+        // A draft preview has no public page yet, so it keeps only "All events".
         const eventNav = document.querySelector('[data-testid="poster-event-nav"]');
         if (eventNav && event && event.id && !PREVIEW_EVENT) {
           const eid = encodeURIComponent(event.id);
-          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/events/' + eid + '/tv', 'TV display']].forEach(function (l) {
+          [['poster-nav-event', '/events/' + eid, 'Event page']].forEach(function (l) {
             let a = eventNav.querySelector('[data-testid="' + l[0] + '"]');
             if (!a) { a = document.createElement('a'); a.setAttribute('data-testid', l[0]); a.textContent = l[2]; eventNav.appendChild(a); }
             a.setAttribute('href', l[1]);

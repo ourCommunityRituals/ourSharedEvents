@@ -4,8 +4,10 @@
  * The design critique found the event page, the list and the poster each had a
  * different header and no way between them, and no live screen for organizers.
  *
- *   - lib/event-nav.ts: one nav — All events · Event page · Poster · TV display —
- *     on the event page; the poster and the list link back the same way.
+ *   - lib/event-nav.ts: one nav — All events · Event page · Poster — on the
+ *     event page; the poster and the list link back the same way. The TV
+ *     display is an organizer link (OSE-1684): only admin and the live view
+ *     link it.
  *   - GET /api/v2/admin/events/:id/live: admin-only page whose numbers come from
  *     the governed event dashboard, never from a second query.
  *
@@ -85,7 +87,7 @@ beforeAll(async () => {
 });
 
 describe('lib/event-nav | one nav for every screen of an event', () => {
-  test('a live event links its page, poster and TV display; the current screen is not a link', () => {
+  test('a live event links its page and poster; the current screen is not a link', () => {
     const nav = renderEventNav('evt_abc', 'event', { live: true });
     expect(nav).toContain('<a href="/events" data-testid="event-nav-events"');
     expect(nav).toContain('aria-current="page" data-testid="event-nav-event"');
@@ -93,9 +95,11 @@ describe('lib/event-nav | one nav for every screen of an event', () => {
     expect(nav).toContain(
       'href="/events/evt_abc/poster?kind=digital" data-testid="event-nav-poster"'
     );
-    expect(nav).toContain('href="/events/evt_abc/tv" data-testid="event-nav-display"');
+    // The TV display is an organizer link (OSE-1684): never on a public page.
+    expect(nav).not.toContain('event-nav-display');
+    expect(nav).not.toContain('/tv"');
     // 44px targets on every link (mobile-workability).
-    expect(nav.match(/min-height:44px/g)?.length).toBe(4);
+    expect(nav.match(/min-height:44px/g)?.length).toBe(3);
   });
 
   test('a draft or wrapped event keeps only "All events": the poster and TV refuse it', () => {
@@ -122,12 +126,14 @@ describe('lib/event-nav | one nav for every screen of an event', () => {
 });
 
 describe('served pages | the same way between screens', () => {
-  test('/poster carries an event nav that script fills with the event page and TV display', async () => {
+  test('/poster carries an event nav that script fills with the event page, never the TV', async () => {
     const html = await (await SELF.fetch(`${ORIGIN}/poster`)).text();
     expect(html).toContain('data-testid="poster-event-nav"');
     expect(html).toContain('<a href="/events" data-testid="poster-nav-events">');
     expect(html).toContain("['poster-nav-event', '/events/' + eid, 'Event page']");
-    expect(html).toContain("['poster-nav-display', '/events/' + eid + '/tv', 'TV display']");
+    expect(html).toContain("[['poster-nav-event', '/events/' + eid, 'Event page']].forEach");
+    // The TV display is an organizer link (OSE-1684).
+    expect(html).not.toContain('poster-nav-display');
     // A draft preview has no public page or TV to link to.
     expect(html).toMatch(/if \(eventNav && event && event\.id && !PREVIEW_EVENT\)/);
   });
