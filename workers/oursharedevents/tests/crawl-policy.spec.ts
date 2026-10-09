@@ -153,7 +153,11 @@ const MUST_BE_CRAWLABLE = [
 const MUST_BE_BLOCKED = [
   '/q/abc',
   '/s/abc',
-  '/tv/K7Q2PX', // TV code lookup (OSE-1684)
+  '/e/K7Q2PX', // event code lookups (OSE-1684)
+  '/p/K7Q2PX',
+  '/tv/K7Q2PX',
+  '/r/K7Q2PX',
+  '/c/K7Q2PX',
   '/api/v2/events',
   '/admin',
   '/admin/events',

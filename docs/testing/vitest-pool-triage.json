@@ -856,6 +856,13 @@
       "testCount": 31
     },
     {
+      "file": "workers/oursharedevents/tests/event-code.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/event-countdown-page.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1497,7 +1504,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 15
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/page-aliases.spec.ts",
@@ -2821,13 +2828,6 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
-    },
-    {
-      "file": "workers/oursharedevents/tests/tv-code.spec.ts",
-      "bucket": "workerd",
-      "needsReview": false,
-      "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/uec-drift-check.spec.ts",

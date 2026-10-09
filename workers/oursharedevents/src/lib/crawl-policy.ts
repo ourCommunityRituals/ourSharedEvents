@@ -46,7 +46,12 @@ export const SITEMAP_STATIC_PATHS: readonly string[] = ['/', '/events', '/privac
 export const CRAWL_DISALLOW: readonly string[] = [
   '/q/', // scan ingestion — a fetch IS a write (Invariant #4)
   '/s/', // shortlink resolver — a fetch bumps the click counter
-  '/tv/', // TV code resolver (OSE-1684) — a code lookup, never a page to index
+  // Event codes (OSE-1684): lookups, never pages to index; /e/ also counts a share.
+  '/e/',
+  '/p/',
+  '/tv/',
+  '/r/',
+  '/c/',
   '/api/',
   '/admin',
   '/manage',

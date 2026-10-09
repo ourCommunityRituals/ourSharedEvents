@@ -39,7 +39,9 @@ const SAVED = {
   donate: { label: 'Donate', url: 'https://donate.example/give' },
 };
 
-const TV_CODE: Reply = { body: { ok: true, code: 'K7Q2PX', path: '/tv/K7Q2PX' } };
+const TV_CODE: Reply = {
+  body: { ok: true, code: 'K7Q2PX', links: { share: '/e/K7Q2PX', tv: '/tv/K7Q2PX' } },
+};
 
 function mount(
   load: Reply = { body: SAVED },
@@ -58,7 +60,7 @@ function mount(
   w.fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const method = (init?.method ?? 'GET').toUpperCase();
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    const r = url.endsWith('/tv-code') ? tvCode : method === 'PUT' ? save : load;
+    const r = url.endsWith('/short-links') ? tvCode : method === 'PUT' ? save : load;
     const status = r.status ?? 200;
     return { ok: status < 400, status, json: async () => r.body };
   }) as unknown as typeof fetch;
@@ -88,7 +90,7 @@ describe('admin TV display card', () => {
     await flush();
     expect(calls.map((c) => [c.method, c.url])).toEqual([
       ['GET', `/api/v2/admin/events/${EVT}/display-config`],
-      ['POST', `/api/v2/admin/events/${EVT}/tv-code`],
+      ['POST', `/api/v2/admin/events/${EVT}/short-links`],
     ]);
     expect($('tv-code').hidden).toBe(false);
     expect($('tv-code-address').textContent).toBe('admin.test/tv/K7Q2PX');

@@ -44,6 +44,7 @@ import {
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
+import { ensureEventCode } from '../lib/event-code';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
@@ -877,6 +878,28 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     });
   }
 
+  // OSE-1684: the event's one short code (/e/ share link, /p/, /tv/, /r/, /c/),
+  // minted now so the event page's Share button hands out /e/<code> from the
+  // start. A failure is a warning, not a failed create: admin mints it on
+  // first ask.
+  let eventCode: string | null = null;
+  try {
+    eventCode = await ensureEventCode(env.DB, id);
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        type: 'EVENT_CODE_CREATE_FAILED',
+        eventId: id,
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    warnings.push({
+      code: 'EVENT_CODE_CREATE_FAILED',
+      message: 'The short code was not made; the event page shares its full address until it is.',
+    });
+  }
+
   return Response.json(
     {
       ok: true,
@@ -884,6 +907,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       id,
       slug,
       shortcode,
+      event_code: eventCode,
       starts_at: startsAt,
       timezone,
       warnings,
@@ -1519,7 +1543,8 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
-      delChild('DELETE FROM event_tv_codes        WHERE event_id = ?'),
+      delChild('DELETE FROM event_codes           WHERE event_id = ?'),
+      delChild('DELETE FROM share_opens_daily     WHERE event_id = ?'),
       env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
     ]);
   } catch (err) {

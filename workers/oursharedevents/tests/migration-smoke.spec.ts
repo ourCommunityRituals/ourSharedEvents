@@ -52,9 +52,9 @@ const DB_TABLES = [
   'corridor_readiness_latch', // 0082 (VISION §6.2b corridor readiness latch)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
+  'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
-  'event_tv_codes', // 0096 (OSE-1684 — one short code per event, typed on a TV)
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker lookup)
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column
@@ -68,6 +68,7 @@ const DB_TABLES = [
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side; no session-derived column)
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
+  'share_opens_daily', // 0096 (OSE-1684 — share opens per event × screen × phase × day, aggregate only)
   'shortlink_click_daily', // 0094 (OSE-1613 — clicks per link per UTC day, aggregate only)
   'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020 (0067: FK repointed to sponsor_business)

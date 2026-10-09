@@ -411,6 +411,8 @@ interface PublicEventEnv extends PagesEnv {
 }
 
 export interface PublicEventRow {
+  /** OSE-1684: the event's short code; the Share button hands out /e/<code>. */
+  share_code?: string | null;
   id: string;
   brand_id: string;
   title: string;
@@ -737,8 +739,15 @@ function renderEventActions(
     </div>
   </details>`
       : '';
+  // OSE-1684: Share hands out the short /e/<code> link, so each open counts as
+  // a share of the event (owner 2026-10-09). The canonical address, og:url and
+  // the calendar entry keep the readable /events/<id>/<name>. No code yet
+  // (an older event admin has not opened): the readable address is shared.
+  const shareLink = row.share_code
+    ? `${new URL(shareUrl).origin}/e/${encodeURIComponent(row.share_code)}`
+    : shareUrl;
   return `<div class="ose-event-actions" data-testid="event-actions">
-  ${renderShareBlock(shareUrl, row.title, nonce, lang, opts.inert === true)}
+  ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
   ${menu}
 </div>`;
 }
@@ -1949,9 +1958,11 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
-              e.event_type_id, etr.name AS event_type_name, e.listed_from
+              e.event_type_id, etr.name AS event_type_name, e.listed_from,
+              ec.code AS share_code
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+       LEFT JOIN event_codes ec ON ec.event_id = e.id
        WHERE e.id = ?`
     )
       .bind(eventId)
