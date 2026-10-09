@@ -331,7 +331,7 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
     expect(body.activity).not.toHaveProperty('clicksByCode');
     expect(body.link?.url).toBe('https://t.test/s/peBUS1'); // public before donation
     expect(body.link?.qr.startsWith('data:image/')).toBe(true);
-    expect(body.poster_url).toBe('/poster?event=pe-busy');
+    expect(body.poster_url).toBe('/events/pe-busy/poster');
     expect(body.event.days_to_go).toBeGreaterThan(0);
   });
 
@@ -574,7 +574,7 @@ describe('never who — structural', () => {
     // No response-supplied URL reaches an href (CodeQL js/xss-more-sources):
     // the poster link is built from the id; the QR is only a data:image src.
     expect(fn).not.toContain('d.poster_url');
-    expect(fn).toContain("btn.href = '/poster?event=' + encodeURIComponent(String(id));");
+    expect(fn).toContain("btn.href = '/events/' + encodeURIComponent(String(id)) + '/poster';");
     // Draft → one Go live button, no hunting for the status panel.
     expect(fn).toContain("btn.setAttribute('data-to', 'active')");
     // Link first: live → "Copy link" is the primary action, the poster second;

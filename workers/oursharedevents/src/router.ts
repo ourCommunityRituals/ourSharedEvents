@@ -1986,6 +1986,15 @@ export async function route(
     return handleEventCalendar(request, env, eventCalendarMatch[1]);
   }
 
+  // ── One event's screens under its own address (OSE-1684) ─────────────────
+  // /events/<id>/tv and /events/<id>/poster are the addresses the platform
+  // writes for an event's TV and poster; the pages read the id from the path.
+  // /display?event= and /poster?event= keep working (printed and saved links).
+  const eventScreenMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/(tv|poster)$/);
+  if (eventScreenMatch && (method === 'GET' || method === 'HEAD')) {
+    return eventScreenMatch[2] === 'tv' ? handleDisplayPage(env) : handlePosterPage(env, request);
+  }
+
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
   // /events/:id renders the 5W content + venue map + anonymity affordance.
   // Recipients land here from /s/:code shortlinks (OSE-240). Phase-aware

@@ -935,6 +935,13 @@ body {
         }));
       }
 
+      // The event this poster is for: /events/<id>/poster (the address the
+      // platform writes, OSE-1684) or the older /poster?event=<id>, which still works.
+      const ROUTE_EVENT = (function () {
+        const m = location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/poster$/);
+        return m ? m[1] : '';
+      })();
+
       // Print (default) or Digital, from ?kind= — the URL is the state.
       const KIND = new URLSearchParams(location.search).get('kind') === 'digital' ? 'digital' : 'print';
 
@@ -942,7 +949,8 @@ body {
       // controls in step with the event on show.
       function syncChrome(event) {
         const params = new URLSearchParams(location.search);
-        if (event && event.id) params.set('event', event.id);
+        // On /events/<id>/poster the path already names the event.
+        if (event && event.id && !ROUTE_EVENT) params.set('event', event.id);
         params.set('kind', KIND);
         try { history.replaceState(null, '', '?' + params.toString()); } catch (e) { /* sandboxed */ }
         document.querySelectorAll('[data-kind]').forEach(function (a) {
@@ -958,7 +966,7 @@ body {
         const eventNav = document.querySelector('[data-testid="poster-event-nav"]');
         if (eventNav && event && event.id && !PREVIEW_EVENT) {
           const eid = encodeURIComponent(event.id);
-          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/display?event=' + eid, 'TV display']].forEach(function (l) {
+          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/events/' + eid + '/tv', 'TV display']].forEach(function (l) {
             let a = eventNav.querySelector('[data-testid="' + l[0] + '"]');
             if (!a) { a = document.createElement('a'); a.setAttribute('data-testid', l[0]); a.textContent = l[2]; eventNav.appendChild(a); }
             a.setAttribute('href', l[1]);
@@ -1197,8 +1205,8 @@ body {
         '</div>';
       }
 
-      // OSE-1081: `event` is the CANONICAL surface deep-link param —
-      // admin.html's scopedSurfaceUrl() emits /poster?event=<id>.
+      // OSE-1081 / OSE-1684: admin.html's scopedSurfaceUrl() emits
+      // /events/<id>/poster; /poster?event=<id> still works.
       // OSE-867: a scoped poster is ONE network call. poster-bundle carries the
       // event (title / start / venue under the public projection's names), the
       // sponsor strip and the QR slots, so nothing else is fetched: no events
@@ -1211,7 +1219,7 @@ body {
         const picker = document.getElementById('event-picker');
         const area = document.getElementById('poster-area');
         // Admin preview (a draft): the server names the event on <body>.
-        const wanted = PREVIEW_EVENT || new URLSearchParams(location.search).get('event');
+        const wanted = PREVIEW_EVENT || ROUTE_EVENT || new URLSearchParams(location.search).get('event');
         if (wanted) {
           document.getElementById('poster-event-select').hidden = true;
           const shown = await loadPosterBundle(wanted, true);

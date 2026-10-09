@@ -3106,8 +3106,8 @@
             setCardUrl('wizard-link-public', origin + '/events/' + id);
             // Scoped to this event: a bare /poster or /display shows whichever
             // event is featured, not necessarily the one just made.
-            setCardUrl('wizard-link-poster', origin + '/poster?event=' + id);
-            setCardUrl('wizard-link-display', origin + '/display?event=' + id);
+            setCardUrl('wizard-link-poster', origin + '/events/' + id + '/poster');
+            setCardUrl('wizard-link-display', origin + '/events/' + id + '/tv');
             // The TV section (its own script below) needs the new event's id.
             window.dispatchEvent(
               new CustomEvent('ose:wizard-created', {
@@ -5696,7 +5696,7 @@
          (AdminDisplay.html); this is that card, back. It saves into the event's
          settings (displayPanes / displayDwellSeconds / leagueLinks,
          lib/event-settings.ts) through PUT /api/v2/admin/events/:id, and a TV on
-         /display?event=<id> picks a change up within a minute (it re-checks
+         /events/<id>/tv picks a change up within a minute (it re-checks
          GET /api/v2/events/:id/display-config with that response's ETag).
          League links point at wherever the league already keeps them — a Google
          Sheet, an Excel link, any https page; the TV shows each as a QR. -->
@@ -5833,7 +5833,7 @@
           fill({ panes: DEFAULT_ON, dwell_seconds: 15, league: [], donate: null });
           setDisabled(true);
           var open = $('tv-open');
-          if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
+          if (open) open.setAttribute('href', '/events/' + encodeURIComponent(eventId) + '/tv');
           try {
             var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/display-config');
             var data = await res.json();
@@ -7025,9 +7025,9 @@
         const id = encodeURIComponent(eventId);
         switch (surface) {
           case 'poster':
-            return '/poster?event=' + id;
+            return '/events/' + id + '/poster';
           case 'display':
-            return '/display?event=' + id;
+            return '/events/' + id + '/tv';
           case 'public':
             return '/events/' + id; // existing public-event route
           case 'report':
@@ -8072,7 +8072,7 @@
           // Built here from the id we already hold, never taken from the
           // response: a server-supplied href is an XSS sink (javascript:) the
           // client has no business trusting (CodeQL js/xss-more-sources).
-          btn.href = '/poster?event=' + encodeURIComponent(String(id));
+          btn.href = '/events/' + encodeURIComponent(String(id)) + '/poster';
           btn.target = '_blank';
           btn.rel = 'noopener';
           btn.setAttribute('data-testid', 'pre-event-poster');

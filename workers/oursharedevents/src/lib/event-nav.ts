@@ -31,8 +31,8 @@ export function eventScreenPaths(eventId: string): Record<EventScreen, string> {
   const id = encodeURIComponent(eventId);
   return {
     event: `/events/${id}`,
-    poster: `/poster?event=${id}&kind=digital`,
-    display: `/display?event=${id}`,
+    poster: `/events/${id}/poster?kind=digital`,
+    display: `/events/${id}/tv`,
   };
 }
 

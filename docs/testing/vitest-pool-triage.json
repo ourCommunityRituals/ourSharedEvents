@@ -947,6 +947,20 @@
       "testCount": 23
     },
     {
+      "file": "workers/oursharedevents/tests/event-screen-addresses.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-screen-route-read.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

@@ -2241,7 +2241,7 @@ export async function handleAdminEventPreviewPage(
  * router, guardAdminObjectScope for the brand, no-store + noindex. draft/ready
  * render poster.html in preview mode (data-preview-event on <body>, so its one
  * data call goes to the admin poster-bundle instead of the public one); active
- * redirects to the real /poster?event=; archived or missing is a 404. The
+ * redirects to the real /events/<id>/poster; archived or missing is a 404. The
  * toolbar is hidden when printing, so a test print looks like the real one.
  */
 export async function handleAdminPosterPreviewPage(
@@ -2278,7 +2278,7 @@ export async function handleAdminPosterPreviewPage(
     );
   }
   const status = (row.status || 'draft').toLowerCase();
-  const posterUrl = `/poster?event=${encodeURIComponent(row.id)}`;
+  const posterUrl = `/events/${encodeURIComponent(row.id)}/poster`;
   if (status === 'active') {
     return new Response(null, {
       status: 303,

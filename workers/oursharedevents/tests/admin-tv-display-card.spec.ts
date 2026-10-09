@@ -94,7 +94,7 @@ describe('admin TV display card', () => {
     expect($<HTMLInputElement>('tv-donate').value).toBe('https://donate.example/give');
     expect($<HTMLInputElement>('tv-league-standings').value).toBe('https://docs.google.com/x');
     expect($<HTMLInputElement>('tv-league-schedule').value).toBe('');
-    expect($('tv-open').getAttribute('href')).toBe(`/display?event=${EVT}`);
+    expect($('tv-open').getAttribute('href')).toBe(`/events/${EVT}/tv`);
     expect($<HTMLButtonElement>('tv-save').disabled).toBe(false);
   });
 

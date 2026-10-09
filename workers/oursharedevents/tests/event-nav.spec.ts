@@ -91,9 +91,9 @@ describe('lib/event-nav | one nav for every screen of an event', () => {
     expect(nav).toContain('aria-current="page" data-testid="event-nav-event"');
     expect(nav).not.toContain('href="/events/evt_abc"');
     expect(nav).toContain(
-      'href="/poster?event=evt_abc&amp;kind=digital" data-testid="event-nav-poster"'
+      'href="/events/evt_abc/poster?kind=digital" data-testid="event-nav-poster"'
     );
-    expect(nav).toContain('href="/display?event=evt_abc" data-testid="event-nav-display"');
+    expect(nav).toContain('href="/events/evt_abc/tv" data-testid="event-nav-display"');
     // 44px targets on every link (mobile-workability).
     expect(nav.match(/min-height:44px/g)?.length).toBe(4);
   });
@@ -127,7 +127,7 @@ describe('served pages | the same way between screens', () => {
     expect(html).toContain('data-testid="poster-event-nav"');
     expect(html).toContain('<a href="/events" data-testid="poster-nav-events">');
     expect(html).toContain("['poster-nav-event', '/events/' + eid, 'Event page']");
-    expect(html).toContain("['poster-nav-display', '/display?event=' + eid, 'TV display']");
+    expect(html).toContain("['poster-nav-display', '/events/' + eid + '/tv', 'TV display']");
     // A draft preview has no public page or TV to link to.
     expect(html).toMatch(/if \(eventNav && event && event\.id && !PREVIEW_EVENT\)/);
   });
@@ -164,7 +164,7 @@ describe('GET /api/v2/admin/events/:id/live | the organizer live view', () => {
     const on = await (await SELF.fetch(live('evt_lv_live2'), { headers: auth })).text();
     expect(on).toContain('href="/events/evt_lv_live2" data-testid="live-nav-event"');
     expect(on).toContain('data-testid="live-nav-poster"');
-    expect(on).toContain('href="/display?event=evt_lv_live2" data-testid="live-nav-display"');
+    expect(on).toContain('href="/events/evt_lv_live2/tv" data-testid="live-nav-display"');
   });
 
   test('the event title is escaped in the heading and the tab title', async () => {
