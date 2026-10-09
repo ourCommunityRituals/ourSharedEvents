@@ -1483,7 +1483,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/pagination-shape-invariant.spec.ts",

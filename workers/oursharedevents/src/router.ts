@@ -2029,6 +2029,17 @@ export async function route(
     target.pathname = '/events';
     return Response.redirect(target.toString(), 301);
   }
+  // /event and /event/<rest> are the singular people type; they forward to the
+  // plural, rest of the path and query string kept (/event/:id → /events/:id,
+  // /event/:id/calendar.ics → its .ics). `/event/` alone is an unknown path.
+  if (
+    (pathname === '/event' || (pathname.startsWith('/event/') && pathname.length > 7)) &&
+    (method === 'GET' || method === 'HEAD')
+  ) {
+    const target = new URL(request.url);
+    target.pathname = '/events' + pathname.slice('/event'.length);
+    return Response.redirect(target.toString(), 301);
+  }
   if (pathname === '/events') {
     return handlePublicPage(env, ctx, request);
   }
