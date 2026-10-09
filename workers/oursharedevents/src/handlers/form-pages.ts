@@ -637,6 +637,7 @@ interface FormEventRow {
   id: string;
   brand_id: string | null;
   title: string | null;
+  slug: string | null;
   status: string | null;
   description: string | null;
   location: string | null;
@@ -667,7 +668,7 @@ function registerNextStep(row: FormEventRow, shareUrl: string): string {
       }`
     : '';
   return nextStepTemplate(`<div class="next-step" data-testid="register-next-step">
-      ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id))}">Back to the event page</a>
+      ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id, row.slug))}">Back to the event page</a>
       <p data-testid="register-next-checkin">On the day, check in with one tap from the event page or the code at the door. You are counted, never named.</p>
     </div>`);
 }
@@ -815,7 +816,7 @@ export async function handleFormPage(
   if (env.DB) {
     try {
       row = await env.DB.prepare(
-        `SELECT id, brand_id, title, status, description, location, where_address,
+        `SELECT id, brand_id, title, slug, status, description, location, where_address,
                 start_date, end_date, starts_at, timezone
            FROM events WHERE id = ?`
       )
@@ -855,7 +856,7 @@ export async function handleFormPage(
       nextStep = emailNextStep(row, await fetchNextEventsAtVenue(env.DB, row));
     } else if (formType !== 'checkin' && formType !== 'survey') {
       // Any other ?type= renders the registration form (formPage's default).
-      const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
+      const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
       nextStep = registerNextStep(row, shareUrl);
     }
   }

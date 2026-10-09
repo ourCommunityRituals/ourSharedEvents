@@ -2001,6 +2001,12 @@ export async function route(
   // dispatch: pre_event = full render, event/post_event = minimal stub.
   // MUST appear before the generic /events match below or the more-specific
   // path is shadowed.
+  // /events/<id>/<readable-name> (OSE-1684): the same page; the handler
+  // forwards a name that is not the event's own to the right one.
+  const eventNamedMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/);
+  if (eventNamedMatch && method === 'GET') {
+    return handlePublicEventPage(request, env, eventNamedMatch[1], eventNamedMatch[2]);
+  }
   if (pathname.startsWith('/events/') && method === 'GET') {
     const eventId = pathname.slice('/events/'.length);
     // Reject sub-paths like /events/:id/whatever — those don't exist yet.

@@ -173,6 +173,9 @@ describe('OSE-539 L2: pre-event phase', () => {
     const id = await createEventWithGeo('URL Attribute Test');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain(`data-share-url="https://t.test/events/${id}"`);
+    // The readable address (OSE-1684): /events/<id>/<name from the title>.
+    expect(html).toMatch(
+      new RegExp(`data-share-url="https://t\\.test/events/${id}/url-attribute-test(-[0-9a-f]{6})?"`)
+    );
   });
 });

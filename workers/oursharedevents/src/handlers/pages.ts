@@ -1914,7 +1914,9 @@ async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): P
 export async function handlePublicEventPage(
   request: Request,
   env: PublicEventEnv,
-  eventId: string
+  eventId: string,
+  /** The name after the id in /events/<id>/<name> (OSE-1684); absent on /events/<id>. */
+  requestedSlug?: string
 ): Promise<Response> {
   if (!env.DB) {
     return renderErrorPage(
@@ -2003,6 +2005,18 @@ export async function handlePublicEventPage(
     );
   }
 
+  // /events/<id>/<name>: the id has decided the event; a name that is not this
+  // event's own forwards to the right one. Checked only after the gate above,
+  // so a draft answers the same 404 whatever name is asked and never reveals
+  // its real one.
+  if (requestedSlug !== undefined) {
+    const own = eventPagePath(encodeURIComponent(row.id), row.slug);
+    const asked = new URL(request.url);
+    if (asked.pathname !== own) {
+      return new Response(null, { status: 301, headers: { Location: own + asked.search } });
+    }
+  }
+
   // Phase-aware dispatch via the OSE-242 canonical resolver.
   // OSE-1313 — a timed event's phase pivots at its canonical start instant
   // (starts_at) and its date-only end closes at the end of that local day.
@@ -2021,7 +2035,7 @@ export async function handlePublicEventPage(
   const url = new URL(request.url);
   // Production names one host (the zone also routes www.), so the share link,
   // og:url and the canonical (buildSearchMeta) always agree.
-  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
+  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 

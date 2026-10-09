@@ -76,16 +76,24 @@ describe('search engines skip the TV and the poster (OSE-1684)', () => {
 });
 
 describe('what is not an event screen', () => {
-  test('a malformed id, a trailing slash or an unknown screen is a 404', async () => {
+  test('a malformed id or a trailing slash is a 404', async () => {
     for (const path of [
       '/events/evt.1/tv',
       `/events/${'a'.repeat(129)}/tv`,
       '/events/evt-1/tv/',
-      '/events/evt-1/tvx',
-      '/events/evt-1/screen',
       '/events//tv',
     ]) {
       expect((await get(path)).status, path).toBe(404);
+    }
+  });
+
+  test('any other name after the id is the event page, never the TV or poster', async () => {
+    // /events/<id>/<readable-name> is the event page (OSE-1684), so "tvx" and
+    // "screen" go to the event page handler like any readable name.
+    for (const path of ['/events/evt-1/tvx', '/events/evt-1/screen', '/events/evt-1/posters']) {
+      const body = await (await get(path)).text();
+      expect(body, path).not.toContain('function routeEventId()');
+      expect(body, path).not.toContain('const ROUTE_EVENT = (function ()');
     }
   });
 

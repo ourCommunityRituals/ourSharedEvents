@@ -47,8 +47,14 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-/** A live, listed event whose phase is picked by its dates. */
-async function seedEvent(id: string, start: string, end: string | null, status = 'active') {
+/** A live, listed event whose phase is picked by its dates. Its slug is `<id>-night`. */
+async function seedEvent(
+  id: string,
+  start: string,
+  end: string | null,
+  status = 'active',
+  slug = `${id}-night`
+) {
   const db = (env as unknown as TestEnv).DB;
   await db.prepare(`DELETE FROM events WHERE id = ?`).bind(id).run();
   await db
@@ -57,7 +63,7 @@ async function seedEvent(id: string, start: string, end: string | null, status =
                            start_date, end_date, qr_verified, created_at, updated_at)
          VALUES (?, 'root', ?, ?, ?, 1, 'Eagles Hall', ?, ?, 1, datetime('now'), datetime('now'))`
     )
-    .bind(id, `Canon ${id}`, id, status, start, end)
+    .bind(id, `Canon ${id}`, slug, status, start, end)
     .run();
 }
 
@@ -169,16 +175,18 @@ describe('canonical | event pages', () => {
     await seedEvent('canon-post', '2020-06-01', '2020-06-01');
   });
 
-  test('pre-event page: one canonical, /events/:id, whatever the query', async () => {
+  test('pre-event page: one canonical, /events/:id/:name, whatever the query', async () => {
     for (const q of ['', '?utm_source=x', '?lang=es&ref=share']) {
       const text = await (await get('stg.oursharedevents.com', `/events/canon-pre${q}`)).text();
       const tags = canonicals(text);
       expect(tags, q).toHaveLength(1);
-      expect(hrefOf(tags[0]), q).toBe('https://stg.oursharedevents.com/events/canon-pre');
+      expect(hrefOf(tags[0]), q).toBe(
+        'https://stg.oursharedevents.com/events/canon-pre/canon-pre-night'
+      );
     }
   });
 
-  test('live page: one canonical, /events/:id', async () => {
+  test('live page: one canonical, /events/:id/:name', async () => {
     // Yesterday to tomorrow, in UTC days: the event is under way at any hour in
     // any event zone. Seeding "today" as the UTC day made this fail every evening
     // from 00:00 to 05:00 UTC, when the event zone (Central) is still on the day
@@ -193,14 +201,18 @@ describe('canonical | event pages', () => {
     );
     const tags = canonicals(text);
     expect(tags).toHaveLength(1);
-    expect(hrefOf(tags[0])).toBe('https://stg.oursharedevents.com/events/canon-live');
+    expect(hrefOf(tags[0])).toBe(
+      'https://stg.oursharedevents.com/events/canon-live/canon-live-night'
+    );
   });
 
-  test('recap page: one canonical, /events/:id', async () => {
+  test('recap page: one canonical, /events/:id/:name', async () => {
     const text = await (await get('stg.oursharedevents.com', '/events/canon-post?x=1')).text();
     const tags = canonicals(text);
     expect(tags).toHaveLength(1);
-    expect(hrefOf(tags[0])).toBe('https://stg.oursharedevents.com/events/canon-post');
+    expect(hrefOf(tags[0])).toBe(
+      'https://stg.oursharedevents.com/events/canon-post/canon-post-night'
+    );
   });
 
   test('og:url and the canonical are the same address', async () => {
@@ -218,7 +230,7 @@ describe('canonical | event pages', () => {
     const text = await res.text();
     const tags = canonicals(text);
     expect(tags).toHaveLength(1);
-    expect(hrefOf(tags[0])).toBe(`${PRODUCTION_ORIGIN}/events/canon-pre`);
+    expect(hrefOf(tags[0])).toBe(`${PRODUCTION_ORIGIN}/events/canon-pre/canon-pre-night`);
     // The share link and og:url come from the same origin, so none says www.
     expect(/property="og:url" content="([^"]*)"/.exec(text)?.[1]).toBe(hrefOf(tags[0]));
     expect(text).not.toContain('www.oursharedevents.com');
@@ -231,5 +243,65 @@ describe('canonical | event pages', () => {
       expect(res.status, id).toBe(404);
       expect(canonicals(await res.text()), id).toHaveLength(0);
     }
+  });
+});
+
+describe('canonical | the readable address /events/:id/:name (OSE-1684)', () => {
+  beforeAll(async () => {
+    await applyMigrations();
+    await seedEvent('canon-named', '2099-06-01', '2099-06-01');
+    await seedEvent('canon-tv', '2099-06-01', '2099-06-01', 'active', 'tv');
+    await seedEvent('canon-odd', '2099-06-01', '2099-06-01', 'active', 'Not_A Slug');
+    await seedEvent('canon-hidden', '2099-06-01', '2099-06-01', 'draft');
+  });
+
+  const manual = (path: string) =>
+    SELF.fetch(`https://stg.oursharedevents.com${path}`, { redirect: 'manual' });
+
+  test('the right name is the page itself, with the same canonical', async () => {
+    const res = await manual('/events/canon-named/canon-named-night');
+    expect(res.status).toBe(200);
+    const tags = canonicals(await res.text());
+    expect(hrefOf(tags[0])).toBe(
+      'https://stg.oursharedevents.com/events/canon-named/canon-named-night'
+    );
+  });
+
+  test('a wrong or old name forwards to the right one, query kept', async () => {
+    for (const name of ['trivia-night', 'canon-named', 'x']) {
+      const res = await manual(`/events/canon-named/${name}?ref=share`);
+      expect(res.status, name).toBe(301);
+      expect(res.headers.get('location'), name).toBe(
+        '/events/canon-named/canon-named-night?ref=share'
+      );
+    }
+  });
+
+  test('the plain /events/:id still opens the page', async () => {
+    expect((await manual('/events/canon-named')).status).toBe(200);
+  });
+
+  test('a slug that names a screen, or is not address-shaped, keeps the plain address', async () => {
+    for (const id of ['canon-tv', 'canon-odd']) {
+      const text = await (await manual(`/events/${id}`)).text();
+      expect(hrefOf(canonicals(text)[0]), id).toBe(`https://stg.oursharedevents.com/events/${id}`);
+      const named = await manual(`/events/${id}/anything`);
+      expect(named.status, id).toBe(301);
+      expect(named.headers.get('location'), id).toBe(`/events/${id}`);
+    }
+  });
+
+  test('a draft answers the same 404 whatever name is asked, and never names its own', async () => {
+    const plain = await manual('/events/canon-hidden');
+    const right = await manual('/events/canon-hidden/canon-hidden-night');
+    const wrong = await manual('/events/canon-hidden/guess');
+    for (const res of [plain, right, wrong]) {
+      expect(res.status).toBe(404);
+      expect(res.headers.get('location')).toBeNull();
+    }
+    const bodies = await Promise.all([plain.text(), right.text(), wrong.text()]);
+    expect(bodies[1]).toBe(bodies[0]);
+    expect(bodies[2]).toBe(bodies[0]);
+    expect(bodies[0]).not.toContain('canon-hidden-night');
   });
 });
