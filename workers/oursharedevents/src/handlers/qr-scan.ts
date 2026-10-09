@@ -8,13 +8,15 @@
  * Privacy invariants:
  *   - Only scan_bucket (hour-granularity UTC) is stored — no exact timestamp.
  *   - user_agent_hash is SHA-256 truncated to 16 hex chars — not reversible.
- *   - anonymous_id from HttpOnly cookie — no PII, no IP.
+ *   - anonymous_id is a keyed scan id derived from the HttpOnly cookie
+ *     (lib/scan-node-key.ts, OSE-1659) — never the cookie value, no PII, no IP.
  *   - No visitor location: the Cloudflare country header is never read, so country_code stays
  *     NULL (OSE-1460). Place comes only from the poster's corridor.
  *   - No referrer logged.
  *
  * Dedup:
- *   - KV key `scan:dedup:{anonId}:{deploymentId}:{hour_bucket}`, 1-hour TTL.
+ *   - KV key `scan:dedup:{scanKey}:{deploymentId}:{hour_bucket}`, 1-hour TTL
+ *     (the cookie value only when ANON_ID_HASH_PEPPER is unset).
  *   - Same anon + same deployment + same hour bucket → no second scan row.
  *     One person counts once per poster per hour, so an hourly poster count is
  *     a count of people (OSE-1459): the K-floor on poster cells and on
@@ -31,9 +33,27 @@
 
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
+import { scanNodeKey } from '../lib/scan-node-key';
+
+// One warning per isolate, not one per scan: the missing secret is a config
+// fact, and the line names no visitor.
+let scanPepperWarned = false;
+function warnScanPepperMissing(): void {
+  if (scanPepperWarned) return;
+  scanPepperWarned = true;
+  console.warn(
+    JSON.stringify({
+      type: 'ANON_ID_HASH_PEPPER_MISSING',
+      note: 'OSE-1659: scans are stored with no id, so returning visitors are not counted and distinct counts are coarser. Set the ANON_ID_HASH_PEPPER secret.',
+    })
+  );
+}
 
 export interface QrScanEnv {
   DB: D1Database;
+  // OSE-1659: keys the scan id stored in scan_node_returns (lib/scan-node-key.ts).
+  // Unset → the scan is stored with no id; the cookie value is never stored.
+  ANON_ID_HASH_PEPPER?: string;
   RATE_LIMIT_KV?: KVNamespace;
   // Optional scan write-buffer. Bound → the hot path enqueues and returns;
   // unbound → the direct D1 batch (dark-launch parity). See lib/scan-buffer.ts.
@@ -142,13 +162,17 @@ export async function handleQrScan(
 
   // Anonymous ID: read from cookie or generate new one.
   const { anonId, isNew } = getOrCreateAnonId(request);
+  // OSE-1659: what is stored and queued is the keyed scan id, never the cookie
+  // value. Null without the pepper: the scan still counts, with no id.
+  const scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
+  if (!scanKey) warnScanPepperMissing();
 
   // Hour dedup (OSE-1459): same anon + same deployment in the same hour bucket
   // the scan is stored under → skip write. One person, one poster, one hour.
   let isDuplicate = false;
   let dedupKey: string | null = null;
   if (env.RATE_LIMIT_KV) {
-    dedupKey = scanDedupKey(anonId, deploymentId, scanBucket(nowDate));
+    dedupKey = scanDedupKey(scanKey ?? anonId, deploymentId, scanBucket(nowDate));
     const existing = await env.RATE_LIMIT_KV.get(dedupKey);
     if (existing !== null) {
       isDuplicate = true;
@@ -176,7 +200,7 @@ export async function handleQrScan(
         return_row_id: `snr_${crypto.randomUUID()}`,
         event_id: eventId,
         deployment_id: deploymentId,
-        anon_id: anonId,
+        anon_id: scanKey,
         ua_hash: uaHash,
         country: null, // rollback-safe wire field; never a real country (OSE-1460)
         scan_bucket: bucket,

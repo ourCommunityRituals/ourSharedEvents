@@ -29,6 +29,7 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { isScanNodeKey } from '../src/lib/scan-node-key';
 
 interface TestEnv {
   DB: D1Database;
@@ -165,7 +166,8 @@ describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
       .first<{ anonymous_id: string; scan_bucket: string }>();
 
     expect(row).not.toBeNull();
-    expect(row!.anonymous_id).toMatch(/^anon_/);
+    // OSE-1659: a keyed scan id, never the raw ose_anon cookie value.
+    expect(isScanNodeKey(row!.anonymous_id)).toBe(true);
     // Privacy invariant survives the routed path: hour-granularity bucket only.
     expect(row!.scan_bucket).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/);
   });

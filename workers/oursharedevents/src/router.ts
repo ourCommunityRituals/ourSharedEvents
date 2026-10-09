@@ -397,13 +397,12 @@ export type RouterEnv = PagesEnv &
     FORMS_KEY_ROTATED_AT?: string;
     /**
      * OSE-1351 — scan_node_returns / anon_id_returns TTL retention window in
-     * days. Optional; unset → uncapped (no windowing at the table level,
-     * per the Q3-ratified decision in migrations/0031_create_anon_id_returns.sql).
-     * Read by the scheduled `runScanReturnsRetention` job in
-     * `lib/scan-returns-retention.ts`. Setting this is the documented way to
-     * layer a bounded retention window on top of Q3 once that ruling is made
-     * — it is independent of the OSE-1350 data-subject erasure path, which
-     * purges by email on demand regardless of this window.
+     * days, read by the scheduled `runScanReturnsRetention` job in
+     * `lib/scan-returns-retention.ts`. Unset → uncapped. Since OSE-1659
+     * wrangler.toml sets "365" in every env (the ose_anon cookie lifetime, the
+     * Q3 bound in migrations/0031_create_anon_id_returns.sql); a test keeps it
+     * set and at least 180. It is independent of the OSE-1350 data-subject
+     * erasure path.
      */
     SCAN_RETURNS_RETENTION_DAYS?: string;
   };

@@ -29,11 +29,13 @@ import {
 } from '../src/handlers/forms';
 import { findAnonIdsLinkedToEmailHash } from '../src/lib/erasure-anon-lookup';
 import { hashEmail } from '../src/lib/forms-db';
+import { scanNodeKey } from '../src/lib/scan-node-key';
 
 interface TestEnv {
   DB: D1Database;
   FORMS_DB: D1Database;
   FORMS_HASH_PEPPER: string;
+  ANON_ID_HASH_PEPPER: string;
   TEST_MIGRATION_STATEMENTS: string;
   TEST_FORMS_MIGRATION_STATEMENTS: string;
 }
@@ -221,7 +223,8 @@ describe('cross-database: a scan and the four forms from one cookie share no val
       .bind(eventId)
       .first<{ c: number }>();
     expect(scanRow!.c).toBe(1);
-    expect(scanIds).toContain(cookieValue);
+    // OSE-1659: the scan side holds the keyed id of this cookie, not the cookie.
+    expect(scanIds).toContain(await scanNodeKey(cookieValue, tenv().ANON_ID_HASH_PEPPER));
 
     // Every form really wrote a row, and each row carries an id (the decision
     // was to replace the id, not drop it), so the join has a right side.
@@ -446,7 +449,7 @@ describe('erasure by email: the forms rows go, the scan rows are out of reach', 
     expect(body.anonIdReturnsDeleted).toBe(0);
     const scanRow = await mainDb()
       .prepare('SELECT COUNT(*) AS c FROM scan_node_returns WHERE anonymous_id = ?')
-      .bind(cookieValue)
+      .bind(await scanNodeKey(cookieValue, tenv().ANON_ID_HASH_PEPPER))
       .first<{ c: number }>();
     expect(scanRow!.c).toBe(1);
   });

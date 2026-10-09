@@ -2130,11 +2130,25 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/scan-node-key.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 15
+    },
+    {
       "file": "workers/oursharedevents/tests/scan-path-consistency.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/scan-returns-retention-config.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/scan-returns-retention.spec.ts",

@@ -1216,6 +1216,13 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
+          # hashes anon_id_returns. Without it scans are stored with no id and
+          # returns are not counted, but nothing breaks and nothing leaks, so a
+          # missing value is a warning until it has been provisioned once.
+          if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
+            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
+          fi
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -2581,6 +2588,13 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
+          # hashes anon_id_returns. Without it scans are stored with no id and
+          # returns are not counted, but nothing breaks and nothing leaks, so a
+          # missing value is a warning until it has been provisioned once.
+          if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
+            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the production worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh production"
+          fi
           # ADR-012 gate R2 (OSE-1467): static admin credentials must be ABSENT on
           # production. Their presence is a standing admin path that bypasses Access.
           for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do

@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 94, forms 14 to 16
+# Production migration plan: main 77 to 95, forms 14 to 16
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0094, forms 0015–0016.
+Covers: main 0078–0095, forms 0015–0016.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 94               | 17       |
+| Main (`ocr-db-production`)        | 77               | 95               | 18       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 16               | 2        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0094
+## Main database, 0078 to 0095
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -111,6 +111,7 @@ a line in this document.
 | `0092_anon_id_returns_pepper_epoch_index.sql`    | Adds an index on `anon_id_returns.pepper_epoch`.                                                       | No   |
 | `0093_events_listed_from.sql`                    | Adds `events.listed_from`, the time a published event joins the list and map.                          | No   |
 | `0094_shortlink_click_daily.sql`                 | Creates `shortlink_click_daily`, one click count per link per day.                                     | No   |
+| `0095_scan_node_returns_clear_raw_anon_id.sql`   | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                     | Yes  |
 
 ## Forms database, 0015 to 0016
 
@@ -121,7 +122,7 @@ a line in this document.
 
 ## The migrations that write or remove rows
 
-Six files. Each is listed with what it changes, why it is safe on production as it is
+Seven files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -170,6 +171,20 @@ today, and what would be different if production held data.
 - **Safe because** production has no events, so it has no scans. Nothing to clear.
 - **If it did clear:** the cleared values are gone. That is the intent.
 
+### `0095_scan_node_returns_clear_raw_anon_id.sql`
+
+- **`UPDATE scan_node_returns`**: sets `anonymous_id` to empty unless it is already
+  the new keyed scan id (`snk1_…`). The scan path stored the raw `ose_anon` cookie
+  value there until OSE-1659 (2026-10-09). Rows and every other column stay, so scan
+  totals do not change.
+- **Safe because** production has no events, so it has no scans (0 rows, read
+  2026-10-09). Nothing to clear.
+- **If it did clear:** those rows lose their id. Distinct-browser counts for them fall
+  back to the user-agent hash, and those browsers cannot be matched as returning
+  visitors. That is the stated cost.
+- **After the deploy:** the scan write stores only a keyed id, whichever Worker queued
+  the scan, so no raw value can come back.
+
 ### `0016_scrub_raw_anonymous_id.sql` (forms)
 
 - **Four `UPDATE` statements**, one each on `form_registrations`, `checkin_counts`,
@@ -203,7 +218,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0094_shortlink_click_daily.sql` and `94`; then
+2. **The level.** Expected: `0095_scan_node_returns_clear_raw_anon_id.sql` and `95`; then
    `0016_scrub_raw_anonymous_id.sql` and `16`.
 
    ```bash
