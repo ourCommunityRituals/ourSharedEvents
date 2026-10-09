@@ -160,12 +160,13 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     publicEventId = await createEvent(request, 'active', true, 'public');
 
     await page.goto(`${BASE_URL}/events`, { waitUntil: 'domcontentloaded' });
-    const cardLink = page.locator(
-      `[data-testid="public-event-card-link"][href="/events/${publicEventId}"]`
-    );
+    // OSE-1684: the card links to the readable address /events/<id>/<slug>.
+    // createEvent's slug is lowercase words and dashes, so it is used as is.
+    const readablePath = `/events/${publicEventId}/launch-smoke-public-${RUN_ID}`;
+    const cardLink = page.locator(`[data-testid="public-event-card-link"][href="${readablePath}"]`);
     await expect(cardLink, 'public event card links to its public event page').toHaveCount(1);
 
-    const eventPage = await page.goto(`${BASE_URL}/events/${publicEventId}`, {
+    const eventPage = await page.goto(`${BASE_URL}${readablePath}`, {
       waitUntil: 'domcontentloaded',
     });
     const eventPageStatus = eventPage?.status();
