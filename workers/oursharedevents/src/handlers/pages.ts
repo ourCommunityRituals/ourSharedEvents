@@ -75,6 +75,7 @@ import {
   zonedDatePart,
   zoneDisplayName,
 } from '../lib/event-datetime.js';
+import { renderEventCountdown } from '../lib/event-countdown.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 import {
   CANONICAL_PATH,
@@ -1131,6 +1132,8 @@ export function renderPreEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const startHuman = formatEventWhen(row);
+  // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
+  const countdown = renderEventCountdown(row, nonce);
   const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
   const geoLink = renderGeoLink(
     row.lat,
@@ -1188,7 +1191,7 @@ ${SPONSOR_LIST_CSS}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
-      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
+      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
       ${renderTrustLine(row, 'event-trust')}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}

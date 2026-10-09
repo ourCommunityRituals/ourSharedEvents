@@ -210,6 +210,9 @@ export const NODE_SPECS = [
   // OSE-1313 event date+time+timezone → UTC. Pure Intl/Date math over
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',
+  // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
+  // browser tick run in jsdom with fake timers. No cloudflare:test.
+  'tests/event-countdown.spec.ts',
   // OSE-1363 date-only off-by-one on the public listing. renderEventList over
   // lib/event-list.ts (imports only html-escape + inject-marker); node-clean.
   'tests/event-list.spec.ts',
