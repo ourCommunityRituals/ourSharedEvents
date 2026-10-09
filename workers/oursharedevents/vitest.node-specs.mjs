@@ -210,6 +210,9 @@ export const NODE_SPECS = [
   // OSE-1313 event date+time+timezone → UTC. Pure Intl/Date math over
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',
+  // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
+  // browser tick run in jsdom with fake timers. No cloudflare:test.
+  'tests/event-countdown.spec.ts',
   // OSE-1363 date-only off-by-one on the public listing. renderEventList over
   // lib/event-list.ts (imports only html-escape + inject-marker); node-clean.
   'tests/event-list.spec.ts',
@@ -267,4 +270,10 @@ export const NODE_SPECS = [
   // digital, with and without artwork, picker and draft preview), plus the same
   // parse of its attribute writes (tests/helpers/markup-attribute-check.ts).
   'tests/poster-attribute-escaping.spec.ts',
+  // OSE-1441 - the /poster picker drops a late bundle answer for the event it
+  // left: the page script in jsdom with one answer held back.
+  'tests/poster-picker-stale-response.spec.ts',
+  // F5.3 — the form page's confirmation: handleFormPage called directly with a
+  // stub DB, its scripts run in jsdom with a stubbed fetch; no cloudflare:test.
+  'tests/form-next-step-dom.spec.ts',
 ];

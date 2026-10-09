@@ -245,6 +245,8 @@ interface DisplayConfig {
   league: Array<{ kind: string; label: string; url: string; qr: string | null }>;
   event_page?: { url: string; qr: string | null };
   donate?: { label: string; url: string; qr: string | null } | null;
+  /** OSE-475: the featured event's phase, from the server's canonical resolver. */
+  phase?: string;
 }
 const DEFAULT_CONFIG: DisplayConfig = { ok: true, panes: ALL, dwell_seconds: 15, league: [] };
 const QR = 'data:image/png;base64,iVBORw0KGgo=';
@@ -301,9 +303,12 @@ async function bootPage(
     /** When set, GET /api/v2/events answers with this HTTP status and a JSON error. */
     eventsStatus: 0,
     impressions: [] as string[],
+    /** Every GET /api/v2/events and /api/v2/events/:id, with its fetch options. */
+    eventReads: [] as Array<{ url: string; init?: RequestInit }>,
   };
-  w.fetch = (async (url: string) => {
+  w.fetch = (async (url: string, init?: RequestInit) => {
     const u = String(url);
+    if (/\/api\/v2\/events(\/[^/?]+)?$/.test(u)) server.eventReads.push({ url: u, init });
     if (u.includes('/display-config')) {
       const id = /\/events\/([^/]+)\/display-config/.exec(u)![1];
       server.configFetches++;
@@ -1221,5 +1226,91 @@ describe('OSE-1522 | the TV shows the consented sponsor by an event title', () =
     expect(lineOf(doc, 'display-featured-sponsor')).toEqual([
       'Supported by Hall Bakery, Corner "Hardware"',
     ]);
+  });
+});
+
+describe('display page: a phase crossing shows on the minute check (OSE-475)', () => {
+  // The server's display-config carries the featured event's phase from the
+  // resolver the public event page uses, and its ETag changes at a crossing
+  // (tests/display-phase-parity.spec.ts). Here: the page acts on it.
+  const PRE = [
+    { ...EVENTS[0], phase: 'pre_event' },
+    { ...EVENTS[1], phase: 'pre_event' },
+  ];
+  const label = (doc: Document) =>
+    doc.querySelector('[data-testid="display-featured-label"]')?.textContent;
+
+  test('pre → live: the label turns to "Happening now" without waiting for the list', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: PRE,
+      config: { ...DEFAULT_CONFIG, phase: 'pre_event' },
+    });
+    expect(label(doc)).toBe('Coming up');
+    const reads = server.eventReads.length;
+    server.config = { ...DEFAULT_CONFIG, phase: 'event' };
+    server.etag = '"c-live"';
+    await recheckConfig();
+    expect(label(doc)).toBe('Happening now');
+    // The minute check alone did it: the list was not re-read.
+    expect(server.eventReads.length).toBe(reads);
+  });
+
+  test('live → post: the wrapped event leaves the board and the next one is featured', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: [{ ...EVENTS[0], phase: 'event' }, PRE[1]],
+      config: { ...DEFAULT_CONFIG, phase: 'event' },
+    });
+    expect(label(doc)).toBe('Happening now');
+    // What the server says one minute after the end: the list has it wrapped,
+    // and the featured event's config (a new ETag) says post_event.
+    server.events = [
+      { ...EVENTS[0], phase: 'post_event' },
+      { ...EVENTS[1], phase: 'pre_event' },
+    ];
+    server.configs['evt-1'] = { ...DEFAULT_CONFIG, phase: 'post_event' };
+    server.configs['evt-2'] = { ...DEFAULT_CONFIG, phase: 'pre_event' };
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Trivia <b>Tuesday</b>'
+    );
+    expect(label(doc)).toBe('Coming up');
+    expect(doc.body.textContent).not.toContain('Bocce Night');
+  });
+
+  test('the same phase with the same ETag changes nothing', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: PRE,
+      config: { ...DEFAULT_CONFIG, phase: 'pre_event' },
+    });
+    const panesEl = doc.querySelector('[data-testid="display-panes"]');
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-panes"]')).toBe(panesEl);
+    expect(label(doc)).toBe('Coming up');
+    expect(server.configBodiesRead).toBe(1);
+  });
+
+  test('an unknown phase value is ignored, never trusted', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: [{ ...EVENTS[0], phase: 'event' }],
+      config: { ...DEFAULT_CONFIG, phase: 'event' },
+    });
+    server.config = { ...DEFAULT_CONFIG, phase: '<b>live</b>' };
+    server.etag = '"c-junk"';
+    await recheckConfig();
+    expect(label(doc)).toBe('Happening now');
+  });
+
+  test('the event list is always revalidated, so a refresh never shows the last refresh', async () => {
+    const { server, refreshEvents } = await bootPage('?event=evt-9', {
+      events: PRE,
+      seed: (s) => {
+        s.single['evt-9'] = { id: 'evt-9', name: 'Unlisted', phase: 'pre_event' };
+      },
+    });
+    await refreshEvents();
+    expect(server.eventReads.length).toBeGreaterThanOrEqual(4);
+    for (const r of server.eventReads) {
+      expect(r.init?.cache, r.url).toBe('no-cache');
+    }
   });
 });

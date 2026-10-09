@@ -790,7 +790,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 80
+      "testCount": 86
+    },
+    {
+      "file": "workers/oursharedevents/tests/display-phase-parity.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/display-settings.spec.ts",
@@ -847,6 +854,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 31
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-countdown-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-countdown.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/event-date-line.spec.ts",
@@ -1085,6 +1106,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-next-step-dom.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-next-step.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 17
     },
     {
       "file": "workers/oursharedevents/tests/form-page-canonical-title.spec.ts",
@@ -1624,6 +1659,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-picker-stale-response.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
     },
     {
       "file": "workers/oursharedevents/tests/poster-preview-mode.spec.ts",

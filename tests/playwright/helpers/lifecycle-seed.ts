@@ -23,10 +23,10 @@ export interface SeededLifecycle {
   reportPath: string;
 }
 
-const ZONE = 'America/Chicago';
+export const ZONE = 'America/Chicago';
 
 /** The calendar day in the event's zone, `daysOut` days from now (YYYY-MM-DD). */
-function zoneDay(daysOut: number): string {
+export function zoneDay(daysOut: number): string {
   const at = new Date(Date.now() + daysOut * 86_400_000);
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: ZONE,

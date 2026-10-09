@@ -1554,8 +1554,17 @@ body {
       // itself is drawn from data.event (the scoped path); otherwise the card
       // is already on screen from the picker list and only the sponsors and
       // codes are filled. Resolves true when the bundle was usable.
+      // OSE-1441: the picker can switch events while a bundle is still out.
+      // Each call takes the next number; an answer whose number is no longer
+      // the latest is dropped, so a late answer for the event just left never
+      // paints its codes or sponsors (or opens Print) on the one now chosen.
+      // The switch itself clears them: show() redraws the card with an empty
+      // strip and the .qr-loading placeholder before this call goes out.
+      let posterBundleSeq = 0;
       async function loadPosterBundle(eventId, renderEvent) {
         if (!eventId) return false;
+        const seq = ++posterBundleSeq;
+        const current = function () { return seq === posterBundleSeq; };
         // Gate Print for this render cycle until the codes below settle.
         setPrintReady(false);
         const strip = document.getElementById('poster-sponsor-strip');
@@ -1571,7 +1580,7 @@ body {
               '/poster-bundle'
           );
           const data = await res.json();
-          if (!data.ok) return false;
+          if (!current() || !data.ok) return false;
           if (renderEvent) {
             if (!data.event || !data.event.id) return false;
             document.getElementById('poster-area').innerHTML = renderPoster(data.event);
@@ -1593,15 +1602,18 @@ body {
           shown = true;
         } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {
-          const s = document.getElementById('poster-sponsor-strip');
-          if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
-          // AC (OSE-286): re-enable Print only after all QR images finish
-          // loading OR error-out. If any code failed, its .qr-loading
-          // placeholder stays and the @media print rule hides the whole
-          // section — so an incomplete poster still never prints empty boxes.
-          await awaitQrImages();
-          // A scoped poster that never rendered has nothing to print.
-          setPrintReady(shown || !renderEvent);
+          // A dropped answer leaves the strip and Print to the newer call.
+          if (current()) {
+            const s = document.getElementById('poster-sponsor-strip');
+            if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
+            // AC (OSE-286): re-enable Print only after all QR images finish
+            // loading OR error-out. If any code failed, its .qr-loading
+            // placeholder stays and the @media print rule hides the whole
+            // section — so an incomplete poster still never prints empty boxes.
+            await awaitQrImages();
+            // A scoped poster that never rendered has nothing to print.
+            if (current()) setPrintReady(shown || !renderEvent);
+          }
         }
         return shown;
       }

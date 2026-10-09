@@ -8,10 +8,9 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
-import { listedSql } from '../lib/publish-grace';
+import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { HARDENING_HEADERS } from '../lib/security-headers';
-import { computeEventPhase } from '../domain/event-phase';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
@@ -67,15 +66,16 @@ import {
   type DataProviderEnv,
   type DataProviderCtx,
 } from '../lib/data-provider.js';
-import { enrichWithPhase } from '../lib/event-enrich.js';
+import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
-  formatDateOnly,
+  formatHumanDate,
   phaseTimesFor,
   zonedDatePart,
   zoneDisplayName,
 } from '../lib/event-datetime.js';
+import { renderEventCountdown } from '../lib/event-countdown.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 import {
   CANONICAL_PATH,
@@ -1043,19 +1043,6 @@ function formatEventWhen(row: {
   return zone ? `${date} · ${zone}` : date;
 }
 
-function formatHumanDate(iso: string | null): string {
-  if (!iso) return '';
-  // Callers pass `row.start_date` or `zonedDatePart(starts_at)`. Both are meant
-  // to be "YYYY-MM-DD", and formatDateOnly anchors that at UTC so the rendered
-  // day can't drift with the runtime zone (OSE-1363). A row written outside the
-  // API can hold a full timestamp ("2026-08-25 02:25:18"); read its leading
-  // calendar date. A value with no leading date renders nothing: the page never
-  // prints a stored string as is.
-  const day = /^\d{4}-\d{2}-\d{2}(?=$|[T ])/.exec(iso)?.[0];
-  if (!day) return '';
-  return formatDateOnly(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
-
 /**
  * Anonymity affordance — the user-facing version of the architectural
  * separation principle. The platform's DB↔FORMS_DB split + anon_id + 15-min
@@ -1132,6 +1119,8 @@ export function renderPreEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const startHuman = formatEventWhen(row);
+  // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
+  const countdown = renderEventCountdown(row, nonce);
   const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
   const geoLink = renderGeoLink(
     row.lat,
@@ -1189,7 +1178,7 @@ ${SPONSOR_LIST_CSS}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
-      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
+      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
       ${renderTrustLine(row, 'event-trust')}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
@@ -1516,20 +1505,13 @@ function renderTrustLine(row: PublicEventRow, testid: string): string {
   return `<p class="ose-meta" data-testid="${testid}">${host ? `Hosted by ${host} &middot; ` : ''}No account needed to view &middot; Verified event link</p>`;
 }
 
-interface NextEventRow {
-  id: string;
-  title: string;
-  start_date: string | null;
-  location: string | null;
-}
-
 /**
  * OSE-657 recap-first invariant: post-event suggestions are a CURATED few at the
  * margin, never an exhaustive listing. This bound is what makes "tasteful, not
  * bombardment" structural rather than a preference — the render slices to it and
  * the layout-invariant test asserts the rendered count never exceeds it.
  */
-const MAX_POST_EVENT_SUGGESTIONS = 3;
+const MAX_POST_EVENT_SUGGESTIONS = MAX_NEXT_AT_VENUE;
 
 /**
  * Post-event recap render (OSE-245 / ose-client-ready package).
@@ -1887,34 +1869,16 @@ async function fetchEventPageSocialData(
 }
 
 /**
- * A curated few upcoming events at the same venue. A public list, like /events:
- * brand-scoped (OSE-1242, Invariant #9), and listed events only (is_published +
- * publish grace window). Fails to [] so the page around it always renders.
+ * A curated few upcoming events at the same venue (lib/next-at-venue.ts: the
+ * one query, shared with the email-signup confirmation). Fails to [].
  */
-async function fetchNextEventsAtVenue(
-  env: PublicEventEnv,
-  row: PublicEventRow
-): Promise<NextEventRow[]> {
-  try {
-    if (!row.location || !env.DB) return [];
-    const rs = await env.DB.prepare(
-      `SELECT id, title, start_date, location FROM events
-       WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
-         AND is_published = 1 AND ${listedSql()}
-         AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-       ORDER BY datetime(start_date) ASC LIMIT ?4`
-    )
-      .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
-      .all<NextEventRow>();
-    return rs.results ?? [];
-  } catch {
-    return [];
-  }
+function nextEventsAtVenue(env: PublicEventEnv, row: PublicEventRow): Promise<NextEventRow[]> {
+  return fetchNextEventsAtVenue(env.DB, row);
 }
 
 /** OSE-1519: the named page for an event that was live and has been archived. */
 async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): Promise<Response> {
-  const next = await fetchNextEventsAtVenue(env, row);
+  const next = await nextEventsAtVenue(env, row);
   const list = next.length
     ? `<ul class="ose-suggestions" data-testid="ended-next-events">${next
         .map(
@@ -2042,8 +2006,9 @@ export async function handlePublicEventPage(
   // Phase-aware dispatch via the OSE-242 canonical resolver.
   // OSE-1313 — a timed event's phase pivots at its canonical start instant
   // (starts_at) and its date-only end closes at the end of that local day.
+  // OSE-475: the same call the TV's display-config makes (eventPhaseOf).
   const phaseTimes = phaseTimesFor(row);
-  const phase = computeEventPhase({ status: row.status, ...phaseTimes });
+  const phase = eventPhaseOf(row);
 
   // CSP nonce — generated for the response headers regardless of whether
   // the body uses it. `securityHeaders(nonce)` writes the nonce into the
@@ -2064,7 +2029,7 @@ export async function handlePublicEventPage(
   // (OSE-1518) in parallel; both fail open, so the page always renders.
   const [social, nextEvents] = await Promise.all([
     fetchEventPageSocialData(env, row.id),
-    fetchNextEventsAtVenue(env, row),
+    nextEventsAtVenue(env, row),
   ]);
 
   let body: string;
