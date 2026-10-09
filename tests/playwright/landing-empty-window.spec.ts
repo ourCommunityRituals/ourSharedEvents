@@ -14,9 +14,22 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { createLiveEvent, waitUntilListed } from './helpers/sponsor-home-seed';
+import { zoneDay } from './helpers/lifecycle-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const WINDOWS = ['weekend', 'week', 'month', 'next-90'] as const;
+
+/**
+ * Which windows can be empty today. The global setup seeds a live event dated
+ * today in the audit zone (helpers/lifecycle-seed.ts), so the next 7 days, this
+ * month and the next 90 days always hold a card. "This weekend" is the coming
+ * Fri-Sun (lib/event-discovery.ts), so Monday to Thursday it is empty, and
+ * Friday to Sunday today's event fills it and no window is empty at all.
+ */
+function expectedEmptyWindows(): string[] {
+  const dow = new Date(`${zoneDay(0)}T12:00:00Z`).getUTCDay();
+  return dow === 5 || dow === 6 || dow === 0 ? [] : ['weekend'];
+}
 
 async function visibleCards(page: Page): Promise<number> {
   return page.locator('[data-testid="area-list"] [data-testid="area-card"]:visible').count();
@@ -67,13 +80,19 @@ test.describe('landing: an empty time window says so', () => {
     }
 
     test.info().annotations.push({ type: 'empty windows seen', description: empty.join(', ') });
+    // Every day asserts something: Monday to Thursday the weekend message must
+    // have shown; Friday to Sunday no message may show, because every window is full.
     expect(
-      empty.length,
-      'this run saw no empty window, so the message was never exercised; the seeded event sits 45 days out and nothing else should fill "this weekend"'
-    ).toBeGreaterThan(0);
+      empty,
+      'the empty windows follow from the date: the setup event is today, the probe 45 days out'
+    ).toEqual(expectedEmptyWindows());
   });
 
   test('the link in the message leads to a wider list', async ({ page }) => {
+    test.skip(
+      expectedEmptyWindows().length === 0,
+      'Friday to Sunday the setup event fills every window, so no message is drawn; the test above checks none shows'
+    );
     await page.goto('/');
     for (const w of WINDOWS) {
       await page.locator(`label[for="win-${w}"]`).click();
