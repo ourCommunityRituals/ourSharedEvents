@@ -173,6 +173,8 @@ describe('OSE-539 L2: pre-event phase', () => {
     const id = await createEventWithGeo('URL Attribute Test');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain(`data-share-url="https://t.test/events/${id}"`);
+    // OSE-1684: Share hands out the event's short /e/<code> link, so each open
+    // counts as a share (what + when, never who). Six characters, no look-alikes.
+    expect(html).toMatch(/data-share-url="https:\/\/t\.test\/e\/[A-HJKMNP-Z2-9]{6}"/);
   });
 });

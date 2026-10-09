@@ -150,8 +150,9 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     await page.waitForTimeout(2500);
 
     const after = await page.getAttribute('[data-testid="link-poster"]', 'href');
+    // Each event's poster has its own address under /events/<id>/.
     expect(after, 'poster link never re-scoped — the row click did nothing').toMatch(
-      /^\/poster\?event=evt_/
+      /^\/events\/evt_[^/?#]+\/poster$/
     );
     await expect(page.locator('tr.selected')).toHaveCount(1);
     expect(csp).toEqual([]);

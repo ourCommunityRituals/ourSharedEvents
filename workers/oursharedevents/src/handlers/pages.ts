@@ -411,6 +411,8 @@ interface PublicEventEnv extends PagesEnv {
 }
 
 export interface PublicEventRow {
+  /** OSE-1684: the event's short code; the Share button hands out /e/<code>. */
+  share_code?: string | null;
   id: string;
   brand_id: string;
   title: string;
@@ -737,8 +739,15 @@ function renderEventActions(
     </div>
   </details>`
       : '';
+  // OSE-1684: Share hands out the short /e/<code> link, so each open counts as
+  // a share of the event (owner 2026-10-09). The canonical address, og:url and
+  // the calendar entry keep the readable /events/<id>/<name>. No code yet
+  // (an older event admin has not opened): the readable address is shared.
+  const shareLink = row.share_code
+    ? `${new URL(shareUrl).origin}/e/${encodeURIComponent(row.share_code)}`
+    : shareUrl;
   return `<div class="ose-event-actions" data-testid="event-actions">
-  ${renderShareBlock(shareUrl, row.title, nonce, lang, opts.inert === true)}
+  ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
   ${menu}
 </div>`;
 }
@@ -1914,7 +1923,9 @@ async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): P
 export async function handlePublicEventPage(
   request: Request,
   env: PublicEventEnv,
-  eventId: string
+  eventId: string,
+  /** The name after the id in /events/<id>/<name> (OSE-1684); absent on /events/<id>. */
+  requestedSlug?: string
 ): Promise<Response> {
   if (!env.DB) {
     return renderErrorPage(
@@ -1947,9 +1958,11 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
-              e.event_type_id, etr.name AS event_type_name, e.listed_from
+              e.event_type_id, etr.name AS event_type_name, e.listed_from,
+              ec.code AS share_code
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+       LEFT JOIN event_codes ec ON ec.event_id = e.id
        WHERE e.id = ?`
     )
       .bind(eventId)
@@ -2003,6 +2016,18 @@ export async function handlePublicEventPage(
     );
   }
 
+  // /events/<id>/<name>: the id has decided the event; a name that is not this
+  // event's own forwards to the right one. Checked only after the gate above,
+  // so a draft answers the same 404 whatever name is asked and never reveals
+  // its real one.
+  if (requestedSlug !== undefined) {
+    const own = eventPagePath(encodeURIComponent(row.id), row.slug);
+    const asked = new URL(request.url);
+    if (asked.pathname !== own) {
+      return new Response(null, { status: 301, headers: { Location: own + asked.search } });
+    }
+  }
+
   // Phase-aware dispatch via the OSE-242 canonical resolver.
   // OSE-1313 — a timed event's phase pivots at its canonical start instant
   // (starts_at) and its date-only end closes at the end of that local day.
@@ -2021,7 +2046,7 @@ export async function handlePublicEventPage(
   const url = new URL(request.url);
   // Production names one host (the zone also routes www.), so the share link,
   // og:url and the canonical (buildSearchMeta) always agree.
-  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
+  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
@@ -2241,7 +2266,7 @@ export async function handleAdminEventPreviewPage(
  * router, guardAdminObjectScope for the brand, no-store + noindex. draft/ready
  * render poster.html in preview mode (data-preview-event on <body>, so its one
  * data call goes to the admin poster-bundle instead of the public one); active
- * redirects to the real /poster?event=; archived or missing is a 404. The
+ * redirects to the real /events/<id>/poster; archived or missing is a 404. The
  * toolbar is hidden when printing, so a test print looks like the real one.
  */
 export async function handleAdminPosterPreviewPage(
@@ -2278,7 +2303,7 @@ export async function handleAdminPosterPreviewPage(
     );
   }
   const status = (row.status || 'draft').toLowerCase();
-  const posterUrl = `/poster?event=${encodeURIComponent(row.id)}`;
+  const posterUrl = `/events/${encodeURIComponent(row.id)}/poster`;
   if (status === 'active') {
     return new Response(null, {
       status: 303,
@@ -2587,7 +2612,11 @@ export async function handleLandingPage(
 // ─── Shared report page ─────────────────────────────────────────────────────────
 
 export async function handleDisplayPage(env: PagesEnv): Promise<Response> {
-  return html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  const res = html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  // A screen for the venue, not a page to find: it repeats the event page, and
+  // opening it logs sponsor showings (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handlePosterPage(env: PagesEnv, request?: Request): Promise<Response> {
@@ -2607,7 +2636,13 @@ export async function handlePosterPage(env: PagesEnv, request?: Request): Promis
     }
   }
   const content = POSTER_HTML.replace('<body>', `<body data-poster-format="${posterCode}">`);
-  return html(injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster')));
+  const res = html(
+    injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster'))
+  );
+  // The poster repeats the event page; the event page is the one to find
+  // (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {

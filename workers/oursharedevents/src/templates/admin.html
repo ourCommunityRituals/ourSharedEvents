@@ -3106,8 +3106,8 @@
             setCardUrl('wizard-link-public', origin + '/events/' + id);
             // Scoped to this event: a bare /poster or /display shows whichever
             // event is featured, not necessarily the one just made.
-            setCardUrl('wizard-link-poster', origin + '/poster?event=' + id);
-            setCardUrl('wizard-link-display', origin + '/display?event=' + id);
+            setCardUrl('wizard-link-poster', origin + '/events/' + id + '/poster');
+            setCardUrl('wizard-link-display', origin + '/events/' + id + '/tv');
             // The TV section (its own script below) needs the new event's id.
             window.dispatchEvent(
               new CustomEvent('ose:wizard-created', {
@@ -3115,6 +3115,16 @@
               })
             );
             setCardUrl('wizard-link-report', origin + '/admin');
+            // OSE-1684: the short links, once they arrive, replace the long ones
+            // shown (and copied) for the event page, poster and TV.
+            fetch('/api/v2/admin/events/' + id + '/short-links', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+            }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+              if (!d || !d.ok || !d.links || encodeURIComponent(wiz.createdId) !== id) return;
+              if (typeof d.links.share === 'string') setCardUrl('wizard-link-public', origin + d.links.share);
+              if (typeof d.links.poster === 'string') setCardUrl('wizard-link-poster', origin + d.links.poster);
+              if (typeof d.links.tv === 'string') setCardUrl('wizard-link-display', origin + d.links.tv);
+            }).catch(function () { /* the long links stay */ });
             var signupCard = document.getElementById('wizard-link-signup');
             if (signupCard) signupCard.hidden = wiz.signup !== 'create';
             // Admin-only previews: the real page and poster, even as a draft.
@@ -5696,7 +5706,7 @@
          (AdminDisplay.html); this is that card, back. It saves into the event's
          settings (displayPanes / displayDwellSeconds / leagueLinks,
          lib/event-settings.ts) through PUT /api/v2/admin/events/:id, and a TV on
-         /display?event=<id> picks a change up within a minute (it re-checks
+         /events/<id>/tv picks a change up within a minute (it re-checks
          GET /api/v2/events/:id/display-config with that response's ETag).
          League links point at wherever the league already keeps them — a Google
          Sheet, an Excel link, any https page; the TV shows each as a QR. -->
@@ -5743,6 +5753,7 @@
           <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
         </div>
         <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
+        <p class="pd-target" id="tv-code" data-testid="tv-code" hidden>On the TV's browser, type <strong id="tv-code-address" data-testid="tv-code-address"></strong></p>
         <p class="create-msg" id="tv-msg" data-testid="tv-msg" role="status"></p>
       </div>
     </div>
@@ -5833,7 +5844,7 @@
           fill({ panes: DEFAULT_ON, dwell_seconds: 15, league: [], donate: null });
           setDisabled(true);
           var open = $('tv-open');
-          if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
+          if (open) open.setAttribute('href', '/events/' + encodeURIComponent(eventId) + '/tv');
           try {
             var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/display-config');
             var data = await res.json();
@@ -5845,6 +5856,21 @@
           } catch (e) {
             if (tv.eventId === eventId) msg('Could not load the TV settings.', 'error');
           }
+          // The short code to type on the TV (OSE-1684): the event id is too
+          // long for a remote. Minted on first ask; hidden until it arrives.
+          var codeLine = $('tv-code');
+          var codeAddr = $('tv-code-address');
+          if (codeLine) codeLine.hidden = true;
+          fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/short-links', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+          }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          }).then(function (x) {
+            var tvPath = x.d && x.d.links && x.d.links.tv;
+            if (tv.eventId !== eventId || !x.ok || !x.d.ok || typeof tvPath !== 'string') return;
+            if (codeAddr) codeAddr.textContent = location.host + tvPath;
+            if (codeLine) codeLine.hidden = false;
+          }).catch(function () { /* the Open the TV link still works */ });
         };
         var list = $('tv-screens');
         if (list) {
@@ -7025,9 +7051,9 @@
         const id = encodeURIComponent(eventId);
         switch (surface) {
           case 'poster':
-            return '/poster?event=' + id;
+            return '/events/' + id + '/poster';
           case 'display':
-            return '/display?event=' + id;
+            return '/events/' + id + '/tv';
           case 'public':
             return '/events/' + id; // existing public-event route
           case 'report':
@@ -7052,6 +7078,22 @@
         });
         const wrap = document.querySelector('.surface-cards');
         if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
+        // OSE-1684: Copy hands out the event's short links (each open of a
+        // shared one counts as a share; the TV's is typed, not counted). The
+        // Open links keep the plain addresses, so the organizer looking at
+        // their own page is never counted as a share.
+        const SHORT = { public: 'share', poster: 'poster', display: 'tv' };
+        fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/short-links', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+          if (!d || !d.ok || !d.links) return;
+          document.querySelectorAll('.surface-card[data-event-id]').forEach(function (card) {
+            if (card.getAttribute('data-event-id') !== eventId) return;
+            const path = d.links[SHORT[card.dataset.surface]];
+            const copyBtn = card.querySelector('.copy-btn');
+            if (copyBtn && typeof path === 'string') copyBtn.dataset.copyPath = path;
+          });
+        }).catch(function () { /* Copy keeps the plain address */ });
       };
 
       // On window so the delegated dispatcher (OSE-1239) can resolve it; the
@@ -8072,7 +8114,7 @@
           // Built here from the id we already hold, never taken from the
           // response: a server-supplied href is an XSS sink (javascript:) the
           // client has no business trusting (CodeQL js/xss-more-sources).
-          btn.href = '/poster?event=' + encodeURIComponent(String(id));
+          btn.href = '/events/' + encodeURIComponent(String(id)) + '/poster';
           btn.target = '_blank';
           btn.rel = 'noopener';
           btn.setAttribute('data-testid', 'pre-event-poster');

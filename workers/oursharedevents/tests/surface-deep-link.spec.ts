@@ -54,11 +54,12 @@ const CANONICAL_READ = "new URLSearchParams(location.search).get('event')";
 
 // ── Producer side: the admin dashboard emits `event` ─────────────────────────
 
-describe('OSE-1081 — the admin emits ?event= for every scoped surface', () => {
-  test('scopedSurfaceUrl builds poster / display / sharedReport links on `event`', () => {
+describe('OSE-1081 — the admin emits an event-scoped link for every scoped surface', () => {
+  test('scopedSurfaceUrl builds poster / TV under /events/<id>/ and sharedReport on `event`', () => {
     const admin = sourceFile('templates/admin.html');
-    expect(admin).toContain("'/poster?event='");
-    expect(admin).toContain("'/display?event='");
+    // OSE-1684: the poster and TV are the event's own addresses.
+    expect(admin).toContain("return '/events/' + id + '/poster';");
+    expect(admin).toContain("return '/events/' + id + '/tv';");
     expect(admin).toContain("'/sharedReport?event='");
   });
 });

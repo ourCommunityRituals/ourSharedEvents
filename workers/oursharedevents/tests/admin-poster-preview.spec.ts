@@ -107,7 +107,7 @@ describe('admin poster preview: a draft', () => {
     const html = await res.text();
     expect(html).toContain('data-preview-event="evt_pp_draft"');
     expect(html).toContain('data-testid="admin-draft-preview-toolbar"');
-    expect(html).toContain('data-live-url="/poster?event=evt_pp_draft"');
+    expect(html).toContain('data-live-url="/events/evt_pp_draft/poster"');
     // The bar never prints; a test print carries a DRAFT mark instead
     // (OSE-1508), hidden on screen and shown only on paper.
     expect(html).toMatch(/@media print\{\.admin-preview-toolbar\{display:none\}/);
@@ -219,7 +219,7 @@ describe('admin poster preview: other states', () => {
     await seed('evt_pp_live', 'active');
     const res = await SELF.fetch(page('evt_pp_live'), { headers: admin, redirect: 'manual' });
     expect(res.status).toBe(303);
-    expect(res.headers.get('Location')).toBe('/poster?event=evt_pp_live');
+    expect(res.headers.get('Location')).toBe('/events/evt_pp_live/poster');
   });
 
   test('the admin bundle is rate-limited per caller (it draws QR images every call)', async () => {

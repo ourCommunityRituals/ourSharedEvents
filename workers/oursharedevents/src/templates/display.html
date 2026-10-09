@@ -265,14 +265,21 @@
       We count the room, never the person. Nothing about you is collected to show this screen.
     </p>
     <script>
-      // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
-      // scopedSurfaceUrl() emits /display?event=<id>, but this page used to ignore
+      // The event this TV is for: /events/<id>/tv (the address the platform
+      // writes, OSE-1684) or the older /display?event=<id>, which still works.
+      function routeEventId() {
+        const m = location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/tv$/);
+        if (m) return m[1];
+        return new URLSearchParams(location.search).get('event') || '';
+      }
+      // OSE-1081: admin.html's scopedSurfaceUrl() emits a scoped TV address
+      // (now /events/<id>/tv, OSE-1684), but this page used to ignore
       // location.search entirely and always feature items[0] — so a kiosk pointed
       // at a scoped display link showed whichever event happened to sort first.
       // Returns the index of the requested event, or -1 when the param is absent
       // or names an event this page did not fetch (then items[0] still leads).
       function requestedEventIndex(items) {
-        const wanted = new URLSearchParams(location.search).get('event');
+        const wanted = routeEventId();
         if (!wanted) return -1;
         for (let i = 0; i < items.length; i++) {
           if (items[i] && items[i].id === wanted) return i;
@@ -591,7 +598,7 @@
           // A ?event=<id> that is live but not in the public list (unlisted, or
           // another brand's) is fetched by id, so the TV shows THAT event and
           // loads its config. Drafts are not public: the list falls back as before.
-          const wanted = new URLSearchParams(location.search).get('event');
+          const wanted = routeEventId();
           if (wanted && requestedEventIndex(items) === -1) {
             try {
               const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted), { cache: 'no-cache' });

@@ -22,6 +22,7 @@
 // they meant.
 
 import { escapeHtml } from './html-escape.js';
+import { eventPagePath } from './canonical.js';
 import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
@@ -29,6 +30,8 @@ import { orderUpcomingFirst } from './event-discovery.js';
 
 export interface EventListItem {
   id?: unknown;
+  /** Readable name for the address (OSE-1684); in the public projection. */
+  slug?: unknown;
   name?: unknown;
   startDateISO?: unknown;
   venue?: unknown;
@@ -142,7 +145,8 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
     : '';
   const phase = escapeHtml(str(e.phase));
   const wrapped = e.phase === 'post_event';
-  const eventHref = `/events/${safeId}`;
+  // The readable address (OSE-1684); the slug is [a-z0-9-] or left out.
+  const eventHref = eventPagePath(safeId, str(e.slug));
   // A wrapped event links to its recap, never to a registration form.
   const cta = wrapped
     ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`

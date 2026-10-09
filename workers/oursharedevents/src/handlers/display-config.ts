@@ -1,6 +1,6 @@
 // ─── GET /api/v2/events/:id/display-config ─────────────────────────────────────
 //
-// What the TV (/display?event=<id>) should show and for how long, as the
+// What the TV (/events/<id>/tv) should show and for how long, as the
 // organiser saved it in /admin (settings.displayPanes / displayDwellSeconds,
 // lib/event-settings.ts), plus the league's own links (settings.leagueLinks),
 // each with a scan-to-open QR. PO (2026-10-01): leagues keep whatever tools

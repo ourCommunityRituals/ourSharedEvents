@@ -314,7 +314,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 13
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/admin-ui.spec.ts",
@@ -538,7 +538,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 15
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/category-registry.spec.ts",
@@ -856,6 +856,13 @@
       "testCount": 31
     },
     {
+      "file": "workers/oursharedevents/tests/event-code.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/event-countdown-page.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -868,6 +875,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-create-slug-clash.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/event-date-line.spec.ts",
@@ -945,6 +959,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
       "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-screen-addresses.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-screen-route-read.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
@@ -1483,7 +1511,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/pagination-shape-invariant.spec.ts",

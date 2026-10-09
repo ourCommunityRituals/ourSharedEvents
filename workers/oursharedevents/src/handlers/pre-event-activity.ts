@@ -102,6 +102,6 @@ export async function handleAdminPreEventActivity(
     activity: organizerPreEventActivity(activity),
     reach,
     link,
-    poster_url: `/poster?event=${encodeURIComponent(eventId)}`,
+    poster_url: `/events/${encodeURIComponent(eventId)}/poster`,
   });
 }

@@ -180,6 +180,8 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   eventRoute('/api/v2/admin/events/:id/poster-preview', 'GET', '/poster-preview'),
   eventRoute('/api/v2/admin/events/:id/poster-bundle', 'GET', '/poster-bundle'),
   eventRoute('/api/v2/admin/events/:id/display-config', 'GET', '/display-config'),
+  // OSE-1684: the event's short code; a cross-brand POST must not mint or read it.
+  eventRoute('/api/v2/admin/events/:id/short-links', 'POST', '/short-links', { body: () => ({}) }),
   eventRoute('/api/v2/admin/events/:id/poster-codes', 'GET', '/poster-codes'),
   eventRoute('/api/v2/admin/events/:id/poster-codes', 'PUT', '/poster-codes', {
     body: () => ({ codes: [] }),

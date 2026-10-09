@@ -3,8 +3,10 @@ info:
   type: http
   seq: 12
 
-# OSE-1622: an event page names /events/:id as its canonical address whatever
-# query it was asked with. testEventId is the shared seeded event; it has ended,
+# OSE-1622: an event page names one canonical address whatever query it was
+# asked with. OSE-1684: that address is the readable /events/:id/:name (the id
+# decides; the name is the event's write-once slug), or /events/:id when the
+# slug cannot stand in an address. testEventId is the shared seeded event; it has ended,
 # so this is the recap render. 403 is accepted because the edge may challenge a
 # script client on an HTML page; the canonical tests run only on a real 200.
 http:
@@ -29,7 +31,9 @@ runtime:
           });
           test('the canonical is this event page, absolute, with no query', function () {
             expect(href.indexOf('http')).to.eql(0);
-            expect(href.endsWith('/events/' + id)).to.eql(true);
+            const path = href.replace(/^https?:\/\/[^/]+/, '');
+            const readable = new RegExp('^/events/' + id + '(/[a-z0-9]+(-[a-z0-9]+)*)?$');
+            expect(readable.test(path)).to.eql(true);
             expect(href.indexOf('?')).to.eql(-1);
           });
         }

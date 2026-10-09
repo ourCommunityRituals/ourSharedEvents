@@ -134,7 +134,8 @@ describe('OSE-1354 | every listing card is a whole-card link to /events/:id', ()
       ),
     ];
     expect(cards.length).toBeGreaterThan(0);
-    for (const [, id, href] of cards) expect(href).toBe(`/events/${id}`);
+    // The readable address (OSE-1684); these fixtures use the id as the slug.
+    for (const [, id, href] of cards) expect(href).toBe(`/events/${id}/${id}`);
     // And no card-shaped element escaped the pattern above.
     expect(cards.length).toBe(body.split('data-testid="area-card"').length - 1);
   });
@@ -147,7 +148,7 @@ describe('OSE-1354 | every listing card is a whole-card link to /events/:id', ()
       const id = a.match(/data-event-id="([^"]*)"/)?.[1];
       expect(a).toMatch(
         new RegExp(
-          `<a class="event-card-link" href="/events/${id}" data-testid="public-event-card-link"`
+          `<a class="event-card-link" href="/events/${id}/${id}" data-testid="public-event-card-link"`
         )
       );
     }

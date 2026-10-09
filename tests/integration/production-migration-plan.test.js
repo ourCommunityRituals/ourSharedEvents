@@ -51,12 +51,12 @@ describe('the production migration plan matches the migration files', () => {
     expect(range.forms.length).toBeGreaterThan(0);
   });
 
-  test('the range is 0078–0095 (18 files) and 0015–0016 (2 files), as its first table says', () => {
+  test('the range is 0078–0096 (19 files) and 0015–0016 (2 files), as its first table says', () => {
     expect(range.main.map((m) => m.file.slice(0, 4))).toEqual(
-      Array.from({ length: 18 }, (_, i) => String(78 + i).padStart(4, '0'))
+      Array.from({ length: 19 }, (_, i) => String(78 + i).padStart(4, '0'))
     );
     expect(range.forms.map((m) => m.file.slice(0, 4))).toEqual(['0015', '0016']);
-    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 95\s+\| 18\s+\|/);
+    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 96\s+\| 19\s+\|/);
     expect(plan).toMatch(
       /\| Forms \(`ocr-forms-db-production`\)\s+\| 14 \(see note\)\s+\| 16\s+\| 2\s+\|/
     );

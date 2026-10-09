@@ -41,6 +41,9 @@
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
+ *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
+ *   GET /r/:code /c/:code         → 302 to that event's register / check-in form; a share open
+ *   GET /tv/:code                 → 302 to that event's TV; typed on the TV, not counted
  *   GET /poster                   → printable poster with QR codes
  *   GET /sharedReport             → shareable analytics dashboard
  *   GET /api/v2/uec/resolve?code=<id|label>  → UEC code resolution (OSE-320)
@@ -81,6 +84,7 @@
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
  *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league/donate links, any status (admin)
+ *   POST   /api/v2/admin/events/:id/short-links         → the event's code + its five short addresses, minted on first ask (admin, OSE-1684)
  *   PUT    /api/v2/admin/events/:id/poster-codes        → save codes + targets (tier-limited)
  *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
  *                                                         posters/places + scans per day
@@ -291,6 +295,8 @@ import { type MapsEnv } from './lib/maps';
 import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
+import { handleAdminEventCode, handleEventCodeResolve } from './handlers/event-code';
+import { EVENT_CODE_SCREENS, type EventCodeScreen } from './lib/event-code';
 import {
   handleAdminCreatePosterDeployment,
   handleAdminListPosterDeployments,
@@ -573,6 +579,29 @@ export async function route(
     // on and the scan is not counted. Never a 429 on a poster link.
     return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
       handleQrScan(req, e, qrToken, countable)
+    )(request, env);
+  }
+
+  // ── Event codes (OSE-1684) — `/e|p|tv|r|c/<code>` ────────────────────────
+  // PUBLIC: a TV and a passer-by cannot sign in. One code per event, a prefix
+  // per screen. An open of a shared link (/e/ /p/ /r/ /c/) is counted in
+  // share_opens_daily (what + when, never who) inside the same per-caller count
+  // limit as /s/; the handler counts only a GET by a person, of a public event.
+  // /tv/ is typed on the TV, not shared, so it only takes the public read limit.
+  // `/tv` alone is still the display alias.
+  const eventCodeMatch = pathname.match(/^\/(e|p|tv|r|c)\/([^/]{1,40})$/);
+  if (eventCodeMatch && (method === 'GET' || method === 'HEAD')) {
+    const screen = (Object.keys(EVENT_CODE_SCREENS) as EventCodeScreen[]).find(
+      (k) => EVENT_CODE_SCREENS[k] === eventCodeMatch[1]
+    )!;
+    const raw = eventCodeMatch[2];
+    if (screen === 'tv') {
+      return publicReadLimited('event-code', (req, e: typeof env) =>
+        handleEventCodeResolve(req, e, screen, raw)
+      )(request, env);
+    }
+    return publicCountLimited('event-code-share', (req, e: typeof env, countable) =>
+      handleEventCodeResolve(req, e, screen, raw, countable)
     )(request, env);
   }
 
@@ -1265,6 +1294,17 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleAdminDisplayConfig(request, env, adminDisplayConfigMatch[1]);
+  }
+
+  // POST /api/v2/admin/events/:id/short-links — the event's one short code and
+  // its five short addresses (OSE-1684). Minted on first ask; the object-scope
+  // guard above keeps it inside the caller's brands.
+  const adminShortLinksMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/short-links$/);
+  if (adminShortLinksMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminEventCode(request, env, adminShortLinksMatch[1]);
   }
 
   // GET/PUT /api/v2/admin/events/:id/poster-codes — the poster's codes (OSE-1357 p2)
@@ -1986,12 +2026,27 @@ export async function route(
     return handleEventCalendar(request, env, eventCalendarMatch[1]);
   }
 
+  // ── One event's screens under its own address (OSE-1684) ─────────────────
+  // /events/<id>/tv and /events/<id>/poster are the addresses the platform
+  // writes for an event's TV and poster; the pages read the id from the path.
+  // /display?event= and /poster?event= keep working (printed and saved links).
+  const eventScreenMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/(tv|poster)$/);
+  if (eventScreenMatch && (method === 'GET' || method === 'HEAD')) {
+    return eventScreenMatch[2] === 'tv' ? handleDisplayPage(env) : handlePosterPage(env, request);
+  }
+
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
   // /events/:id renders the 5W content + venue map + anonymity affordance.
   // Recipients land here from /s/:code shortlinks (OSE-240). Phase-aware
   // dispatch: pre_event = full render, event/post_event = minimal stub.
   // MUST appear before the generic /events match below or the more-specific
   // path is shadowed.
+  // /events/<id>/<readable-name> (OSE-1684): the same page; the handler
+  // forwards a name that is not the event's own to the right one.
+  const eventNamedMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/);
+  if (eventNamedMatch && method === 'GET') {
+    return handlePublicEventPage(request, env, eventNamedMatch[1], eventNamedMatch[2]);
+  }
   if (pathname.startsWith('/events/') && method === 'GET') {
     const eventId = pathname.slice('/events/'.length);
     // Reject sub-paths like /events/:id/whatever — those don't exist yet.
@@ -2027,6 +2082,17 @@ export async function route(
   ) {
     const target = new URL(request.url);
     target.pathname = '/events';
+    return Response.redirect(target.toString(), 301);
+  }
+  // /event and /event/<rest> are the singular people type; they forward to the
+  // plural, rest of the path and query string kept (/event/:id → /events/:id,
+  // /event/:id/calendar.ics → its .ics). `/event/` alone is an unknown path.
+  if (
+    (pathname === '/event' || (pathname.startsWith('/event/') && pathname.length > 7)) &&
+    (method === 'GET' || method === 'HEAD')
+  ) {
+    const target = new URL(request.url);
+    target.pathname = '/events' + pathname.slice('/event'.length);
     return Response.redirect(target.toString(), 301);
   }
   if (pathname === '/events') {
