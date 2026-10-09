@@ -52,6 +52,29 @@ describe("an event's TV and poster at its own address", () => {
   });
 });
 
+describe('search engines skip the TV and the poster (OSE-1684)', () => {
+  test('every address of the TV and the poster answers noindex', async () => {
+    for (const path of [
+      '/events/evt-1/tv',
+      '/events/evt-1/poster',
+      '/display',
+      '/display?event=evt-1',
+      '/tv',
+      '/poster?event=evt-1',
+      '/posters',
+    ]) {
+      const res = await get(path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get('X-Robots-Tag'), path).toBe('noindex');
+    }
+  });
+
+  test('the events list stays findable', async () => {
+    const res = await get('/events');
+    expect(res.headers.get('X-Robots-Tag')).toBeNull();
+  });
+});
+
 describe('what is not an event screen', () => {
   test('a malformed id, a trailing slash or an unknown screen is a 404', async () => {
     for (const path of [

@@ -2587,7 +2587,11 @@ export async function handleLandingPage(
 // ─── Shared report page ─────────────────────────────────────────────────────────
 
 export async function handleDisplayPage(env: PagesEnv): Promise<Response> {
-  return html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  const res = html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  // A screen for the venue, not a page to find: it repeats the event page, and
+  // opening it logs sponsor showings (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handlePosterPage(env: PagesEnv, request?: Request): Promise<Response> {
@@ -2607,7 +2611,13 @@ export async function handlePosterPage(env: PagesEnv, request?: Request): Promis
     }
   }
   const content = POSTER_HTML.replace('<body>', `<body data-poster-format="${posterCode}">`);
-  return html(injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster')));
+  const res = html(
+    injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster'))
+  );
+  // The poster repeats the event page; the event page is the one to find
+  // (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
