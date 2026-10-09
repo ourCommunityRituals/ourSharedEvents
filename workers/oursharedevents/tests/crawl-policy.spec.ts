@@ -142,7 +142,9 @@ const MUST_BE_CRAWLABLE = [
   ...SITEMAP_STATIC_PATHS,
   '/events?when=week',
   '/events/abc',
+  '/events/abc/trivia-night', // the readable address (OSE-1684)
   '/events/abc/calendar.ics',
+  '/tv', // the TV display alias stays fetchable (it answers noindex)
   '/sponsors/abc', // the public sponsor card, not the token page
   '/sponsor-default-logo.svg',
 ];
@@ -151,6 +153,7 @@ const MUST_BE_CRAWLABLE = [
 const MUST_BE_BLOCKED = [
   '/q/abc',
   '/s/abc',
+  '/tv/K7Q2PX', // TV code lookup (OSE-1684)
   '/api/v2/events',
   '/admin',
   '/admin/events',

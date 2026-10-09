@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 95, forms 14 to 16
+# Production migration plan: main 77 to 96, forms 14 to 16
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0095, forms 0015–0016.
+Covers: main 0078–0096, forms 0015–0016.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 95               | 18       |
+| Main (`ocr-db-production`)        | 77               | 96               | 19       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 16               | 2        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0095
+## Main database, 0078 to 0096
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -112,6 +112,7 @@ a line in this document.
 | `0093_events_listed_from.sql`                    | Adds `events.listed_from`, the time a published event joins the list and map.                          | No   |
 | `0094_shortlink_click_daily.sql`                 | Creates `shortlink_click_daily`, one click count per link per day.                                     | No   |
 | `0095_scan_node_returns_clear_raw_anon_id.sql`   | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                     | Yes  |
+| `0096_event_tv_codes.sql`                        | Creates `event_tv_codes`, one short code per event that an organizer types on a TV.                    | No   |
 
 ## Forms database, 0015 to 0016
 
@@ -218,7 +219,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0095_scan_node_returns_clear_raw_anon_id.sql` and `95`; then
+2. **The level.** Expected: `0096_event_tv_codes.sql` and `96`; then
    `0016_scrub_raw_anonymous_id.sql` and `16`.
 
    ```bash

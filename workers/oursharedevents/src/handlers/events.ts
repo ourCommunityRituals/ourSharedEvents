@@ -1519,6 +1519,7 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
+      delChild('DELETE FROM event_tv_codes        WHERE event_id = ?'),
       env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
     ]);
   } catch (err) {

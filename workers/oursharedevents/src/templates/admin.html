@@ -5743,6 +5743,7 @@
           <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
         </div>
         <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
+        <p class="pd-target" id="tv-code" data-testid="tv-code" hidden>On the TV's browser, type <strong id="tv-code-address" data-testid="tv-code-address"></strong></p>
         <p class="create-msg" id="tv-msg" data-testid="tv-msg" role="status"></p>
       </div>
     </div>
@@ -5845,6 +5846,20 @@
           } catch (e) {
             if (tv.eventId === eventId) msg('Could not load the TV settings.', 'error');
           }
+          // The short code to type on the TV (OSE-1684): the event id is too
+          // long for a remote. Minted on first ask; hidden until it arrives.
+          var codeLine = $('tv-code');
+          var codeAddr = $('tv-code-address');
+          if (codeLine) codeLine.hidden = true;
+          fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/tv-code', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+          }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          }).then(function (x) {
+            if (tv.eventId !== eventId || !x.ok || !x.d || !x.d.ok || typeof x.d.path !== 'string') return;
+            if (codeAddr) codeAddr.textContent = location.host + x.d.path;
+            if (codeLine) codeLine.hidden = false;
+          }).catch(function () { /* the Open the TV link still works */ });
         };
         var list = $('tv-screens');
         if (list) {

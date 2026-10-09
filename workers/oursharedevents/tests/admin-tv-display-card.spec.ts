@@ -39,7 +39,13 @@ const SAVED = {
   donate: { label: 'Donate', url: 'https://donate.example/give' },
 };
 
-function mount(load: Reply = { body: SAVED }, save: Reply = { body: { ok: true } }) {
+const TV_CODE: Reply = { body: { ok: true, code: 'K7Q2PX', path: '/tv/K7Q2PX' } };
+
+function mount(
+  load: Reply = { body: SAVED },
+  save: Reply = { body: { ok: true } },
+  tvCode: Reply = TV_CODE
+) {
   const dom = new JSDOM(`<!doctype html><body>${cardMarkup(ADMIN_HTML)}</body>`, {
     runScripts: 'outside-only',
     url: 'https://admin.test/admin',
@@ -52,7 +58,7 @@ function mount(load: Reply = { body: SAVED }, save: Reply = { body: { ok: true }
   w.fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const method = (init?.method ?? 'GET').toUpperCase();
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    const r = method === 'PUT' ? save : load;
+    const r = url.endsWith('/tv-code') ? tvCode : method === 'PUT' ? save : load;
     const status = r.status ?? 200;
     return { ok: status < 400, status, json: async () => r.body };
   }) as unknown as typeof fetch;
@@ -75,6 +81,27 @@ const flush = async () => {
 };
 
 describe('admin TV display card', () => {
+  test('shows the short code to type on the TV (OSE-1684), after the settings load', async () => {
+    const { $, load, calls } = await mount();
+    expect($('tv-code').hidden).toBe(true);
+    await load();
+    await flush();
+    expect(calls.map((c) => [c.method, c.url])).toEqual([
+      ['GET', `/api/v2/admin/events/${EVT}/display-config`],
+      ['POST', `/api/v2/admin/events/${EVT}/tv-code`],
+    ]);
+    expect($('tv-code').hidden).toBe(false);
+    expect($('tv-code-address').textContent).toBe('admin.test/tv/K7Q2PX');
+  });
+
+  test('a failed code read leaves the line hidden; Open the TV still works', async () => {
+    const { $, load } = await mount(undefined, undefined, { status: 503, body: { ok: false } });
+    await load();
+    await flush();
+    expect($('tv-code').hidden).toBe(true);
+    expect($('tv-open').getAttribute('href')).toBe(`/events/${EVT}/tv`);
+  });
+
   test('loads the saved order: saved screens on, in order; the rest off, after them', async () => {
     const { $, order, load, calls } = await mount();
     await load();

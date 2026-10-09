@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0095_scan_node_returns_clear_raw_anon_id.sql */
-export const REQUIRED_DB_MIGRATION = 95;
+/** Highest migration in migrations/ — currently 0096_event_tv_codes.sql */
+export const REQUIRED_DB_MIGRATION = 96;
 
 /** Highest migration in migrations-forms/ — currently 0016_scrub_raw_anonymous_id.sql */
 export const REQUIRED_FORMS_MIGRATION = 16;

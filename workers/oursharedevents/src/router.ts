@@ -41,6 +41,7 @@
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
+ *   GET /tv/:code                 → 302 to that event's TV (/events/:id/tv); the code is typed on the TV (OSE-1684)
  *   GET /poster                   → printable poster with QR codes
  *   GET /sharedReport             → shareable analytics dashboard
  *   GET /api/v2/uec/resolve?code=<id|label>  → UEC code resolution (OSE-320)
@@ -81,6 +82,7 @@
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
  *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league/donate links, any status (admin)
+ *   POST   /api/v2/admin/events/:id/tv-code             → the event's short TV code, minted on first ask (admin, OSE-1684)
  *   PUT    /api/v2/admin/events/:id/poster-codes        → save codes + targets (tier-limited)
  *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
  *                                                         posters/places + scans per day
@@ -291,6 +293,7 @@ import { type MapsEnv } from './lib/maps';
 import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
+import { handleAdminTvCode, handleTvCodeResolve } from './handlers/tv-code';
 import {
   handleAdminCreatePosterDeployment,
   handleAdminListPosterDeployments,
@@ -573,6 +576,16 @@ export async function route(
     // on and the scan is not counted. Never a 429 on a poster link.
     return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
       handleQrScan(req, e, qrToken, countable)
+    )(request, env);
+  }
+
+  // ── TV code (OSE-1684) — `/tv/<code>`, typed on a TV ─────────────────────
+  // PUBLIC: a TV cannot sign in. Each lookup reads D1, so it takes the public
+  // read limit. `/tv` alone is still the display alias further down.
+  const tvCodeMatch = pathname.match(/^\/tv\/([^/]{1,40})$/);
+  if (tvCodeMatch && (method === 'GET' || method === 'HEAD')) {
+    return publicReadLimited('tv-code', (req, e: typeof env) =>
+      handleTvCodeResolve(req, e, tvCodeMatch[1])
     )(request, env);
   }
 
@@ -1265,6 +1278,17 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleAdminDisplayConfig(request, env, adminDisplayConfigMatch[1]);
+  }
+
+  // POST /api/v2/admin/events/:id/tv-code — the short code the organizer types
+  // on the TV (OSE-1684). Minted on first ask; the object-scope guard above
+  // keeps it inside the caller's brands.
+  const adminTvCodeMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/tv-code$/);
+  if (adminTvCodeMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminTvCode(request, env, adminTvCodeMatch[1]);
   }
 
   // GET/PUT /api/v2/admin/events/:id/poster-codes — the poster's codes (OSE-1357 p2)

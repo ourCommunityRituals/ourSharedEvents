@@ -314,7 +314,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 13
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/admin-ui.spec.ts",
@@ -538,7 +538,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 15
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/category-registry.spec.ts",
@@ -958,7 +958,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/event-screen-route-read.spec.ts",
@@ -1497,7 +1497,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 14
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/page-aliases.spec.ts",
@@ -2821,6 +2821,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/tv-code.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/uec-drift-check.spec.ts",

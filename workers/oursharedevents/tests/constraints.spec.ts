@@ -90,7 +90,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (corridor_readiness_latch — migration 0084, VISION §6.2b latch) = 37.
     // + 1 (scan_cell_aggregates — migration 0087, OSE-1459) = 38.
     // + 1 (shortlink_click_daily — migration 0094, OSE-1613) = 39.
-    expect(names).toHaveLength(39);
+    // + 1 (event_tv_codes — migration 0096, OSE-1684) = 40.
+    expect(names).toHaveLength(40);
   });
 
   test('indexes remain at exactly 79 after idempotent re-run', async () => {
