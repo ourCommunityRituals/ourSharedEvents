@@ -93,8 +93,9 @@ field one of the three regimes would govern.
 
 1. **Brain invariant #29 `declined_regulatory_regimes`** names this standard,
    so the conformance check can see whether each product still refuses. It
-   is partial on creation and goes live when `declined-regimes.invariant.test.ts`
-   is green in both ourSharedEvents and ourWKRP.
+   was partial on creation and went live on 2026-10-09, once
+   `declined-regimes.invariant.test.ts` was green in both ourSharedEvents and
+   ourWKRP.
 2. **OW gate (OW-159).** `tests/security/declined-regimes.invariant.test.ts`
    fails the build if a migration, request schema or page holds any of these,
    or if code names a pool or dataset for a declined regime:

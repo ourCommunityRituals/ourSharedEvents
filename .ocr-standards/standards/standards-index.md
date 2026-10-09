@@ -17,7 +17,7 @@
 | 8 | Bounded PII Retention | live | `tests/e2e/0-architecture/pii-retention.invariant.spec.ts` |
 | 26 | Explicit Identity | partial | `tests/security/explicit-identity.invariant.test.ts` (ourWKRP) |
 | 27 | No Biometric Identifiers | partial | `tests/security/no-biometrics.invariant.test.ts` (ourWKRP; OSE pending) |
-| 29 | Declined Regulatory Regimes | partial | `tests/security/declined-regimes.invariant.test.ts` (ourWKRP); OSE routing + `scripts/guard-declined-regimes.js` |
+| 29 | Declined Regulatory Regimes | live | `tests/security/declined-regimes.invariant.test.ts` (ourWKRP); `tests/e2e/0-architecture/declined-regimes.invariant.test.ts` (OSE meta-gate over its routing + `scripts/guard-declined-regimes.js`) |
 
 ---
 
