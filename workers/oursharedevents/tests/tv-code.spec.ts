@@ -78,6 +78,8 @@ describe('lib/tv-code', () => {
       for (const ch of code) expect(TV_CODE_ALPHABET).toContain(ch);
     }
     for (const ch of '0O1IL') expect(TV_CODE_ALPHABET).not.toContain(ch);
+    expect(TV_CODE_ALPHABET).toHaveLength(31);
+    expect(new Set(TV_CODE_ALPHABET).size).toBe(31);
   });
 
   test('what was typed is read case- and space-insensitively', () => {
