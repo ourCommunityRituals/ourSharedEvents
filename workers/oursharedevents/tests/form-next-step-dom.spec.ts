@@ -125,3 +125,31 @@ describe('S-5.3.1 the registration confirmation offers the next step', () => {
     expect(doc.querySelector('[data-testid="register-next-step"]')).toBeNull();
   });
 });
+
+describe('S-5.3.2 the email-signup confirmation shows next at this venue at once', () => {
+  test('after "You\'re on the list!" the venue list is there', async () => {
+    const { doc, settle } = await mount('email-signup', { ok: true });
+    (doc.getElementById('email') as HTMLInputElement).value = 'a@example.com';
+    submit(doc, 'email-form');
+    await settle();
+    const success = doc.querySelector('[data-testid="form-success"]')!;
+    expect(success.textContent).toContain("You're on the list!");
+    expect(success.querySelector('[data-testid="email-next-venue"]')!.textContent).toContain(
+      'Next at Eagles Hall'
+    );
+    const link = success.querySelector('[data-testid="email-next-venue-link-0"]')!;
+    expect(link.getAttribute('href')).toBe('/events/evt_dom_next_1');
+    expect(link.textContent).toContain('Trivia at the hall');
+    expect(success.textContent).not.toContain('a@example.com');
+  });
+
+  test('an address already on the list gets the same payoff', async () => {
+    const { doc, settle } = await mount('email-signup', { ok: true, duplicate: true });
+    (doc.getElementById('email') as HTMLInputElement).value = 'a@example.com';
+    submit(doc, 'email-form');
+    await settle();
+    const success = doc.querySelector('[data-testid="form-success"]')!;
+    expect(success.textContent).toContain("You're already signed up!");
+    expect(success.querySelector('[data-testid="email-next-venue"]')).not.toBeNull();
+  });
+});

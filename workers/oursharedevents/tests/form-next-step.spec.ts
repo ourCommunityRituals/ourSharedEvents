@@ -35,6 +35,7 @@ interface TestEnv {
 }
 
 const BRAND = 'ose479-test';
+const OTHER_BRAND = 'ose479-other';
 
 async function applyMigrations(): Promise<void> {
   const tenv = env as unknown as TestEnv;
@@ -58,6 +59,11 @@ async function applyMigrations(): Promise<void> {
 
 function dayFromNow(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function minutesFromNow(minutes: number): string {
+  // listed_from is stored as toISOString() (lib/publish-grace.ts).
+  return new Date(Date.now() + minutes * 60_000).toISOString();
 }
 
 async function seedEvent(opts: {
@@ -189,6 +195,113 @@ describe('S-5.3.1 registration → next-step card', () => {
     const script = html.slice(html.indexOf('function showSuccess('));
     expect(script).toContain("getElementById('form-next-step')");
     expect(script).toContain('content.cloneNode(true)');
+  });
+});
+
+describe('S-5.3.2 email signup → next at this venue', () => {
+  test('lists live, listed, future events at the same venue and brand, soonest first', async () => {
+    const venue = 'Ose480 Lanes';
+    const anchor = 'evt_ose480_anchor';
+    await seedEvent({ id: anchor, location: venue });
+    await seedEvent({
+      id: 'evt_ose480_soon',
+      title: 'Soon at the lanes',
+      location: venue,
+      startDate: dayFromNow(5),
+    });
+    await seedEvent({
+      id: 'evt_ose480_later',
+      title: 'Later at the lanes',
+      location: venue,
+      startDate: dayFromNow(20),
+    });
+    // Negatives: each one breaks exactly one listing rule.
+    await seedEvent({
+      id: 'evt_ose480_draft',
+      title: 'Draft at the lanes',
+      location: venue,
+      status: 'draft',
+    });
+    await seedEvent({
+      id: 'evt_ose480_ready',
+      title: 'Ready at the lanes',
+      location: venue,
+      status: 'ready',
+    });
+    await seedEvent({
+      id: 'evt_ose480_offmap',
+      title: 'Off map at the lanes',
+      location: venue,
+      isPublished: 0,
+    });
+    await seedEvent({
+      id: 'evt_ose480_grace',
+      title: 'In grace at the lanes',
+      location: venue,
+      listedFrom: minutesFromNow(30),
+    });
+    await seedEvent({
+      id: 'evt_ose480_past',
+      title: 'Past at the lanes',
+      location: venue,
+      startDate: dayFromNow(-3),
+    });
+    await seedEvent({
+      id: 'evt_ose480_brand',
+      title: 'Other brand at the lanes',
+      location: venue,
+      brand: OTHER_BRAND,
+    });
+    await seedEvent({ id: 'evt_ose480_elsewhere', title: 'Elsewhere', location: 'Somewhere Else' });
+
+    const tpl = nextStepTemplate(await formPage(anchor, '?type=email-signup'));
+    expect(tpl, 'the email page ships the next-step card').not.toBeNull();
+    expect(tpl).toContain('data-testid="email-next-venue"');
+    expect(tpl).toContain(`Next at ${venue}`);
+    const links = [
+      ...tpl!.matchAll(/data-testid="email-next-venue-link-\d+"[^>]*href="\/events\/([^"]+)"/g),
+    ].map((m) => m[1]);
+    expect(links).toEqual(['evt_ose480_soon', 'evt_ose480_later']);
+    for (const absent of [
+      'Draft at',
+      'Ready at',
+      'Off map at',
+      'In grace at',
+      'Past at',
+      'Other brand at',
+      'Elsewhere',
+    ]) {
+      expect(tpl, absent).not.toContain(absent);
+    }
+    expect(tpl).not.toContain(`/events/${anchor}"`);
+    expect(tpl).not.toContain('email-next-browse');
+  });
+
+  test('the ?type=email alias shows the same card', async () => {
+    const tpl = nextStepTemplate(await formPage('evt_ose480_anchor', '?type=email'));
+    expect(tpl).toContain('data-testid="email-next-venue"');
+  });
+
+  test('nothing listed at the venue: no venue card, a link to what else is on', async () => {
+    const venue = 'Ose480 Quiet Room';
+    const anchor = 'evt_ose480_quiet';
+    await seedEvent({ id: anchor, location: venue });
+    await seedEvent({
+      id: 'evt_ose480_quiet_draft',
+      title: 'Quiet draft',
+      location: venue,
+      status: 'draft',
+    });
+    const tpl = nextStepTemplate(await formPage(anchor, '?type=email-signup'));
+    expect(tpl).not.toBeNull();
+    expect(tpl).not.toContain('email-next-venue');
+    expect(tpl).not.toContain('Quiet draft');
+    expect(tpl).toMatch(/data-testid="email-next-browse"[^>]*href="\/events"/);
+  });
+
+  test('the register page does not carry the venue list', async () => {
+    const tpl = nextStepTemplate(await formPage('evt_ose480_anchor'));
+    expect(tpl).not.toContain('email-next-venue');
   });
 });
 

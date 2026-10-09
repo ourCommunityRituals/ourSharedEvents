@@ -173,6 +173,22 @@ export function formatDateOnly(
   return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'UTC' }).format(d);
 }
 
+/**
+ * A calendar day for humans ("Saturday, October 24, 2026"), shared by the event
+ * page, its recap and the form page. Callers pass `start_date` or
+ * `zonedDatePart(starts_at)`. Both are meant to be "YYYY-MM-DD", and
+ * formatDateOnly anchors that at UTC so the rendered day can't drift with the
+ * runtime zone (OSE-1363). A row written outside the API can hold a full
+ * timestamp ("2026-08-25 02:25:18"); read its leading calendar date. A value
+ * with no leading date renders nothing: a page never prints a stored string as is.
+ */
+export function formatHumanDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const day = /^\d{4}-\d{2}-\d{2}(?=$|[T ])/.exec(iso)?.[0];
+  if (!day) return '';
+  return formatDateOnly(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 /** The local calendar date ("YYYY-MM-DD") of a UTC instant in `tz`. */
 export function zonedDatePart(utcIso: string | null | undefined, tz: string | null): string {
   if (!utcIso) return '';

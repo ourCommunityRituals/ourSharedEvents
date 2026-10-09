@@ -22,7 +22,9 @@
 import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
 import { HARDENING_HEADERS } from '../lib/security-headers';
 import { escapeHtml } from '../lib/html-escape';
+import { fetchNextEventsAtVenue, type NextEventRow } from '../lib/next-at-venue';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links';
+import { formatHumanDate } from '../lib/event-datetime';
 import { canonicalOrigin, eventPagePath } from '../lib/canonical';
 import {
   turnstileScriptTag,
@@ -204,7 +206,7 @@ const FORM_CSS = `
   .form-sponsor-thanks img { height: 32px; width: auto; max-width: 120px; object-fit: contain; }
   .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: var(--text); font-weight: 500; }
   /* F5.3: the next step under a confirmation (register: calendar, event page,
-     check-in line). 44px rows, tokens only. */
+     check-in line; email signup: next at this venue). 44px rows, tokens only. */
   .next-step { margin-top: 1.25rem; text-align: left; }
   .next-step h3 { font-size: .85rem; font-weight: 600; color: var(--text-muted); }
   .next-step ul { list-style: none; margin: 0; padding: 0; }
@@ -607,10 +609,15 @@ function emailSignupForm(
       ${FORM_JS_SUBMIT}
       async function handleEmail(e) {
         e.preventDefault();
-        const body = await submitForm('${eventId}', 'email-signup', {
-          email: document.getElementById('email').value,
-          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
-        });
+        let body;
+        try {
+          body = await submitForm('${eventId}', 'email-signup', {
+            email: document.getElementById('email').value,
+            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          });
+        } catch (_) {
+          return; // the friendly error is already on screen
+        }
         showSuccess(body.duplicate ? 'You\\'re already signed up!' : 'You\\'re on the list!');
       }
       document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
@@ -662,6 +669,35 @@ function registerNextStep(row: FormEventRow, shareUrl: string): string {
   return nextStepTemplate(`<div class="next-step" data-testid="register-next-step">
       ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id))}">Back to the event page</a>
       <p data-testid="register-next-checkin">On the day, check in with one tap from the event page or the code at the door. You are counted, never named.</p>
+    </div>`);
+}
+
+/**
+ * S-5.3.2 (OSE-480): after an email signup, what is on next at this venue,
+ * straight away (the same list as the event page and its recap,
+ * lib/next-at-venue.ts). None listed: a link to everything coming up.
+ */
+function emailNextStep(row: FormEventRow, next: NextEventRow[]): string {
+  if (!next.length) {
+    return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
+      <a class="next-step-link" data-testid="email-next-browse" href="/events">See what else is coming up</a>
+    </div>`);
+  }
+  const items = next
+    .map(
+      (
+        ev,
+        i
+      ) => `<li><a class="next-step-link" data-testid="email-next-venue-link-${i}" href="/events/${escapeHtml(encodeURIComponent(ev.id))}">
+          <span>${escapeHtml(ev.title)}</span><span class="next-step-when">${escapeHtml(formatHumanDate(ev.start_date))}</span>
+        </a></li>`
+    )
+    .join('');
+  return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
+      <aside data-testid="email-next-venue" aria-labelledby="email-next-heading">
+        <h3 id="email-next-heading">Next at ${escapeHtml(row.location) || 'this venue'}</h3>
+        <ul>${items}</ul>
+      </aside>
     </div>`);
 }
 
@@ -815,12 +851,9 @@ export async function handleFormPage(
   // (an unknown id has no event page to link back to).
   let nextStep = '';
   if (row) {
-    if (
-      formType !== 'checkin' &&
-      formType !== 'survey' &&
-      formType !== 'email' &&
-      formType !== 'email-signup'
-    ) {
+    if (formType === 'email' || formType === 'email-signup') {
+      nextStep = emailNextStep(row, await fetchNextEventsAtVenue(env.DB, row));
+    } else if (formType !== 'checkin' && formType !== 'survey') {
       // Any other ?type= renders the registration form (formPage's default).
       const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
       nextStep = registerNextStep(row, shareUrl);
