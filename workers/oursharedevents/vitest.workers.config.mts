@@ -361,6 +361,10 @@ export default defineConfig({
           // Must be set in production via Wrangler secret; test value here
           // ensures peppered path exercises correctly in CI.
           FORMS_HASH_PEPPER: 'test-forms-hash-pepper-do-not-use-in-prod',
+          // OSE-1659: keys scan_node_returns.anonymous_id (lib/scan-node-key.ts)
+          // and hashes anon_id_returns. Staging and production must set it;
+          // without it a scan stores no id and returns are not counted.
+          ANON_ID_HASH_PEPPER: 'test-anon-id-hash-pepper-32char-secret',
         },
       },
     }),

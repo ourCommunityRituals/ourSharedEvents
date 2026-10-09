@@ -16,13 +16,15 @@
  *
  * INVARIANTS:
  *  - never-who: the message carries only the anonymized fields the rows already
- *    store (pseudonymous anon id, ua hash, hour-bucket; never a country, OSE-1460) — no exact
+ *    store (keyed scan id, ua hash, hour-bucket; never a country, OSE-1460) — no exact
  *    timestamp, no PII, internal-only. The two opaque row ids are pre-generated
  *    separately so queue retries are idempotent without creating a durable join key.
  *  - SCAN_PATH (no h3-js on the hot path): unchanged — this file only writes the
  *    same rows `handleQrScan` used to; no geo/h3 work here.
  *  - two-DB isolation: writes go only to `DB` (the anonymous surface).
  */
+
+import { isScanNodeKey } from './scan-node-key';
 
 /**
  * The only fields the buffered write needs — each already lands in a scan row
@@ -33,7 +35,13 @@ export interface ScanMessage {
   return_row_id: string;
   event_id: string;
   deployment_id: string;
-  anon_id: string;
+  /**
+   * The keyed scan id (`lib/scan-node-key.ts`, `snk1_…`), never the `ose_anon`
+   * cookie value (OSE-1659); null when ANON_ID_HASH_PEPPER is not set. The field
+   * keeps its old name so a rolled-back consumer still finds it. Whatever it
+   * holds, `buildScanStatements` stores only a well-formed key.
+   */
+  anon_id: string | null;
   ua_hash: string | null;
   /**
    * Always null (OSE-1460: the visitor's country is never read). Kept on the
@@ -56,7 +64,9 @@ export interface ScanBufferEnv {
 /**
  * The /q/ dedup marker for one person at one poster in one hour bucket
  * (OSE-1459). Shared by the hot path, which sets it, and the queue consumer,
- * which releases it when a scan is finally dropped.
+ * which releases it when a scan is finally dropped. The hot path passes the
+ * keyed scan id when it has one, so the marker (1-hour TTL) does not name the
+ * cookie value either.
  */
 export function scanDedupKey(anonId: string, deploymentId: string, scanBucket: string): string {
   return `scan:dedup:${anonId}:${deploymentId}:${scanBucket}`;
@@ -90,7 +100,15 @@ export function buildScanStatements(db: D1Database, msg: ScanMessage): D1Prepare
            (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
          VALUES (?, ?, ?, ?, NULL, ?, datetime('now'))`
       )
-      .bind(msg.return_row_id, msg.event_id, msg.anon_id, msg.ua_hash, msg.scan_bucket),
+      .bind(
+        msg.return_row_id,
+        msg.event_id,
+        // OSE-1659: only a keyed scan id is stored. A raw cookie value (from a
+        // message the previous Worker queued) or anything else becomes NULL.
+        isScanNodeKey(msg.anon_id) ? msg.anon_id : null,
+        msg.ua_hash,
+        msg.scan_bucket
+      ),
   ];
 }
 
@@ -141,8 +159,10 @@ export async function handleScanBatch(
       // On the last delivery the scan is about to be dead-lettered, not
       // stored. Release its hour's dedup marker so the person's next scan in
       // that hour is recorded instead of being taken as a repeat.
-      if (message.attempts > SCAN_QUEUE_MAX_RETRIES && env.RATE_LIMIT_KV) {
-        const m = message.body;
+      // Without ANON_ID_HASH_PEPPER the message carries no id, so its marker
+      // cannot be named here; it expires with its hour (1-hour TTL).
+      const m = message.body;
+      if (message.attempts > SCAN_QUEUE_MAX_RETRIES && env.RATE_LIMIT_KV && m.anon_id) {
         await env.RATE_LIMIT_KV.delete(
           scanDedupKey(m.anon_id, m.deployment_id, m.scan_bucket)
         ).catch(() => {});

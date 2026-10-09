@@ -110,11 +110,10 @@ export default {
     //   corridor) the first night it holds ≥ 5 upcoming published events. A
     //   one-way door; carries no identity. Never throws.
     // runScanReturnsRetention (lib/scan-returns-retention.ts, OSE-1351) reads
-    //   DB.scan_node_returns + DB.anon_id_returns ONLY; off by default
-    //   (env.SCAN_RETURNS_RETENTION_DAYS unset → no-op — Q3-ratified "no
-    //   table-level windowing" stays the default until an explicit ruling
-    //   sets the knob). When set, deletes rows older than the window from
-    //   both tables independently. Does NOT touch the ose_anon cookie
+    //   DB.scan_node_returns + DB.anon_id_returns ONLY; on in every env since
+    //   OSE-1659 (wrangler.toml SCAN_RETURNS_RETENTION_DAYS = "365"; unset →
+    //   no-op). Deletes rows older than the window from both tables
+    //   independently. Does NOT touch the ose_anon cookie
     //   lifetime — that remains a separate open decision. Audits to
     //   admin_audit_log.
     ctx.waitUntil(

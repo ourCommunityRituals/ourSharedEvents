@@ -267,8 +267,25 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   test('set-secrets.sh provisions FORMS_HASH_PEPPER alongside the other required secrets (OSE-1343)', () => {
     const script = readFile('scripts/set-secrets.sh');
     expect(script).toMatch(
-      /SECRETS=\(\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*"RATE_LIMIT_KEY_PEPPER"\s*\n\s*\)/
+      /SECRETS=\(\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*"RATE_LIMIT_KEY_PEPPER"\s*\n\s*"ANON_ID_HASH_PEPPER"\s*\n\s*\)/
     );
+  });
+
+  // OSE-1659: the scan id is keyed with ANON_ID_HASH_PEPPER. It was never in the
+  // provisioning list, so nothing prompted for it. A missing value warns at deploy
+  // (scans keep counting, with no id) rather than failing it.
+  test('both deploy gates warn when ANON_ID_HASH_PEPPER is missing (OSE-1659)', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+    for (const job of ['deploy-staging', 'deploy-production']) {
+      const gate = workflow.jobs[job].steps.find(
+        (step) =>
+          step.name ===
+          'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
+      );
+      expect(gate?.run, job).toMatch(/grep -q "ANON_ID_HASH_PEPPER"/);
+      expect(gate?.run, job).toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
+    }
   });
 
   // ADR-012 gate R2 (OSE-1467): production admin is Cloudflare Access only.

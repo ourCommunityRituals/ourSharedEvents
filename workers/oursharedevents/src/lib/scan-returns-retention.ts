@@ -1,8 +1,8 @@
 /**
  * Scan/report return-signal retention (OSE-1351, follow-up to OSE-1350).
  *
- * WHY. `scan_node_returns.anonymous_id` (raw) and `anon_id_returns.anon_id_hash`
- * (peppered) are the two tables that make cross-event correlation of one
+ * WHY. `scan_node_returns.anonymous_id` (a keyed scan id since OSE-1659; the raw
+ * cookie value before it) and `anon_id_returns.anon_id_hash` (peppered) are the two tables that make cross-event correlation of one
  * pseudonymous visitor possible (see `.claude/sync/LINEAR-MAP.md`, "Known
  * residual: cross-event anon-ID correlation"). OSE-1350 (PR #621) closed the
  * on-request erasure path for any visitor who ever linked an email to their
@@ -17,12 +17,12 @@
  * NEW correlated visits. That reasoning does not, however, bound how long an
  * ALREADY-WRITTEN row survives — which is exactly the gap OSE-1351 tracks.
  *
- * This job does not overturn Q3 by defaulting to on: like OSE-207's
- * subscribers retention, it is OFF BY DEFAULT (unset env knob → no-op with a
- * structured log line) so enabling bounded retention is an explicit,
- * reversible ops decision layered on top of Q3, not a silent behavior change
- * shipped in this PR. Setting `SCAN_RETURNS_RETENTION_DAYS` is the documented
- * way to adopt a bounded window when that ruling is made.
+ * In code it stays OFF BY DEFAULT (unset env knob → no-op with a structured log
+ * line), like OSE-207's subscribers retention. The ruling came with OSE-1659
+ * (2026-10-09): `wrangler.toml` sets `SCAN_RETURNS_RETENTION_DAYS = "365"` in
+ * every env, the `ose_anon` cookie lifetime that Q3 already treats as the bound
+ * on one pseudonym. `tests/scan-returns-retention-config.spec.ts` fails if any
+ * env drops it or sets it below 180 days.
  *
  * WHAT IT DOES:
  *   - `scan_node_returns`: DELETE rows whose `created_at` is older than N days
@@ -91,7 +91,7 @@ export async function runScanReturnsRetention(
       JSON.stringify({
         type: 'SCAN_RETURNS_RETENTION_NOOP',
         reason:
-          'SCAN_RETURNS_RETENTION_DAYS unset or non-positive; scan_node_returns/anon_id_returns retention is uncapped (OSE-1351 — no ruling yet to enable a window)',
+          'SCAN_RETURNS_RETENTION_DAYS unset or non-positive; scan_node_returns/anon_id_returns retention is uncapped (wrangler.toml sets 365 in every env, OSE-1659)',
         timestamp: now,
       })
     );

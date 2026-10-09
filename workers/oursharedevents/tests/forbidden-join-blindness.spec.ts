@@ -28,6 +28,7 @@
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
+import { scanNodeKey } from '../src/lib/scan-node-key';
 
 interface TestEnv {
   DB: D1Database;
@@ -112,7 +113,11 @@ async function seedEventAndDeployment(db: D1Database): Promise<void> {
 }
 
 function makeEnv(kv?: KVNamespace): QrScanEnv {
-  return { DB: tenv().DB, RATE_LIMIT_KV: kv };
+  return {
+    DB: tenv().DB,
+    RATE_LIMIT_KV: kv,
+    ANON_ID_HASH_PEPPER: (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER,
+  };
 }
 
 /**
@@ -169,9 +174,10 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
       .first<Record<string, unknown>>();
     expect(row).not.toBeNull();
 
-    // The WHO row's identity column is EXACTLY the ose_anon cookie value —
-    // proving the id is the anonymous cookie, never derived from the session.
-    expect(row!.anonymous_id).toBe(KNOWN_ANON);
+    // The WHO row's identity column is EXACTLY the keyed id of the ose_anon
+    // cookie (OSE-1659) — derived from the anonymous cookie alone, never from
+    // the session, and never the cookie value itself.
+    expect(row!.anonymous_id).toBe(await scanNodeKey(KNOWN_ANON, makeEnv().ANON_ID_HASH_PEPPER));
 
     // Integrity: the row's SHAPE carries no session column beyond the known
     // anonymous schema (id / event_id / anonymous_id / user_agent_hash /
@@ -234,8 +240,10 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
       .all<{ anonymous_id: string }>();
 
     expect(rows.results.length).toBe(1);
-    // The single row is credited to the anonymous id — the named side (3 profiles
-    // + session + Bearer) contributed nothing joinable.
-    expect(rows.results[0].anonymous_id).toBe(KNOWN_ANON);
+    // The single row is credited to the anonymous id (keyed, OSE-1659) — the
+    // named side (3 profiles + session + Bearer) contributed nothing joinable.
+    expect(rows.results[0].anonymous_id).toBe(
+      await scanNodeKey(KNOWN_ANON, makeEnv().ANON_ID_HASH_PEPPER)
+    );
   });
 });

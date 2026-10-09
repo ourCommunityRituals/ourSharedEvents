@@ -29,18 +29,22 @@
  *   header) BEFORE deleting the email-keyed rows, then uses the returned
  *   anon_id(s) to also purge, in THIS file (which never itself reads a
  *   FORMS_DB identity column, preserving the P5 never-who static gate):
- *     - `scan_node_returns` (raw anon_id match — no pepper needed)
+ *     - `scan_node_returns` (keyed scan id match, OSE-1659; raw match too for
+ *       rows written before migration 0095)
  *     - `anon_id_returns`   (peppered anon_id_hash match — same pepper +
  *       normalization `shared-report.ts` uses at write time)
  *   A visitor who never submitted a form (scan-only, no email ever given) has
  *   no email-to-anon_id link recorded anywhere, so this cannot reach their
- *   scan rows — that residual is unchanged and is documented in
- *   `.claude/sync/LINEAR-MAP.md` alongside OSE-1350's remaining scope (a
- *   retention/TTL policy and/or a shorter `ose_anon` cookie lifetime).
+ *   scan rows. Since #860 (forms migration 0016) that holds for every visitor:
+ *   FORMS_DB stores only per-event keyed ids, so the lookup finds a cookie value
+ *   only in a legacy row. Those scan rows are bounded by the retention window
+ *   (`SCAN_RETURNS_RETENTION_DAYS`, OSE-1351/OSE-1659) instead; ADR-001 records
+ *   why erasure by email does not need to reach them.
  */
 
 import { type FormsDbEnv, hashEmail, assertPepperConfigured } from '../lib/forms-db';
 import { hashAnonIdForReturns } from '../lib/anon-id-hash';
+import { scanNodeKey } from '../lib/scan-node-key';
 import { findAnonIdsLinkedToEmailHash } from '../lib/erasure-anon-lookup';
 
 /**
@@ -62,8 +66,9 @@ export type DataSubjectEnv = FormsDbEnv & {
   FORMS_HASH_PEPPER?: string;
   // OSE-1350: must match ANON_ID_HASH_PEPPER used at write time (shared-report.ts)
   // so the anon_id_returns lookup produces the same anon_id_hash value. If unset,
-  // the anon_id_returns purge is skipped with a warning (see Phase E below) —
-  // scan_node_returns purge (Phase D) is unaffected since it matches on the raw id.
+  // the anon_id_returns purge is skipped with a warning (see Phase E below), and
+  // the scan_node_returns purge (Phase D) can match only raw values. OSE-1659:
+  // the same pepper keys scan_node_returns.anonymous_id (lib/scan-node-key.ts).
   ANON_ID_HASH_PEPPER?: string;
 };
 
@@ -183,47 +188,56 @@ export async function handleDataSubjectErase(
     errors++;
   }
 
-  // Phase D (OSE-1350): purge scan_node_returns rows for any anon_id discovered
-  // above. Matches on the raw anonymous_id column — no pepper required — so
-  // this runs unconditionally regardless of ANON_ID_HASH_PEPPER availability.
+  // Phase D (OSE-1350, OSE-1659): purge scan_node_returns rows for any anon_id
+  // discovered above. The column holds the keyed scan id (lib/scan-node-key.ts),
+  // so the id is keyed the same way first; the raw value is matched too, for a
+  // row written before migration 0095 cleared raw values. Without
+  // ANON_ID_HASH_PEPPER only the raw match can run.
+  //
+  // Phase E (OSE-1350): purge anon_id_returns rows. They hash the keyed scan id
+  // (or, before OSE-1659, the raw id), so both hashes are deleted. A missing
+  // pepper skips this phase with a warning rather than failing the request.
+  //
+  // In practice the set is empty since forms migration 0016 (#860): FORMS_DB
+  // no longer holds a cookie value, so no stored record links an email to a scan
+  // row. Those rows are bounded by SCAN_RETURNS_RETENTION_DAYS instead (ADR-001).
+  if (anonIds.size > 0 && !env.ANON_ID_HASH_PEPPER) {
+    console.warn(
+      JSON.stringify({
+        type: 'ANON_ID_HASH_PEPPER_MISSING',
+        note: 'OSE-1350 erasure: only raw scan_node_returns values can be matched and the anon_id_returns purge is skipped. Set the ANON_ID_HASH_PEPPER secret.',
+      })
+    );
+  }
   for (const anonId of anonIds) {
+    let scanKey: string | null = null;
     try {
-      const res = await env.DB.prepare('DELETE FROM scan_node_returns WHERE anonymous_id = ?')
-        .bind(anonId)
+      scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
+      const res = await env.DB.prepare(
+        'DELETE FROM scan_node_returns WHERE anonymous_id = ? OR anonymous_id = ?'
+      )
+        .bind(anonId, scanKey ?? anonId)
         .run();
       scanReturnsDeleted += res.meta?.changes ?? 0;
     } catch {
       errors++;
     }
-  }
 
-  // Phase E (OSE-1350): purge anon_id_returns rows for any anon_id discovered
-  // above. Requires ANON_ID_HASH_PEPPER to re-derive the same anon_id_hash
-  // shared-report.ts wrote at materialization time. A missing pepper skips
-  // this phase with a warning rather than failing the whole erasure request —
-  // Phase D (scan_node_returns) already ran and is independently valid, and
-  // this table is a secondary aggregate, not the subject's identifiable record.
-  if (anonIds.size > 0) {
-    if (!env.ANON_ID_HASH_PEPPER) {
-      console.warn(
-        JSON.stringify({
-          type: 'ANON_ID_HASH_PEPPER_MISSING',
-          note: 'OSE-1350 anon_id_returns erasure purge skipped. Set wrangler/Doppler secret ANON_ID_HASH_PEPPER to enable.',
-        })
-      );
-    } else {
-      for (const anonId of anonIds) {
-        try {
-          const anonIdHash = await hashAnonIdForReturns(anonId, env.ANON_ID_HASH_PEPPER);
-          if (!anonIdHash) continue;
-          const res = await env.DB.prepare('DELETE FROM anon_id_returns WHERE anon_id_hash = ?')
-            .bind(anonIdHash)
-            .run();
-          anonIdReturnsDeleted += res.meta?.changes ?? 0;
-        } catch {
-          errors++;
-        }
-      }
+    if (!env.ANON_ID_HASH_PEPPER) continue;
+    try {
+      const hashes = [
+        await hashAnonIdForReturns(anonId, env.ANON_ID_HASH_PEPPER),
+        scanKey ? await hashAnonIdForReturns(scanKey, env.ANON_ID_HASH_PEPPER) : null,
+      ].filter((h): h is string => h !== null);
+      if (hashes.length === 0) continue;
+      const res = await env.DB.prepare(
+        `DELETE FROM anon_id_returns WHERE anon_id_hash IN (${hashes.map(() => '?').join(', ')})`
+      )
+        .bind(...hashes)
+        .run();
+      anonIdReturnsDeleted += res.meta?.changes ?? 0;
+    } catch {
+      errors++;
     }
   }
 
