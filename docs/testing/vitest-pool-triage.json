@@ -1108,6 +1108,20 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/form-next-step-dom.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-next-step.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/form-page-canonical-title.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

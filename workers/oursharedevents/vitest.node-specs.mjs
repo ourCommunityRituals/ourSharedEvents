@@ -273,4 +273,7 @@ export const NODE_SPECS = [
   // OSE-1441 - the /poster picker drops a late bundle answer for the event it
   // left: the page script in jsdom with one answer held back.
   'tests/poster-picker-stale-response.spec.ts',
+  // F5.3 — the form page's confirmation: handleFormPage called directly with a
+  // stub DB, its scripts run in jsdom with a stubbed fetch; no cloudflare:test.
+  'tests/form-next-step-dom.spec.ts',
 ];
