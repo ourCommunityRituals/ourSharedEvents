@@ -482,6 +482,9 @@ function isValidContentType(request: Request): boolean {
   return isJsonContentType(request.headers.get('content-type'));
 }
 
+/** Tries a derived slug gets before create answers 409 SLUG_TAKEN. */
+const SLUG_ATTEMPTS = 5;
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -564,7 +567,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const brandId = requestedBrand || (scope.mode === 'scoped' ? scope.brandIds[0] : 'root');
 
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
-  const slug = typeof body.slug === 'string' ? body.slug.slice(0, 100) : slugify(title);
+  // A slug the caller chose is kept as is (and still answers 409 when taken).
+  // A derived one starts from the title; a title with no letters or digits
+  // ("!!!") would derive '' and collide with the next such title, so it is
+  // 'event'.
+  const slugDerived = typeof body.slug !== 'string';
+  const slugBase = slugDerived ? slugify(title) || 'event' : (body.slug as string).slice(0, 100);
+  let slug = slugBase;
   const status =
     typeof body.status === 'string' &&
     (VALID_EVENT_STATES as readonly string[]).includes(body.status)
@@ -755,66 +764,81 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
 
   const now = new Date().toISOString();
 
-  try {
-    await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
-                           what_short, who_host, why_purpose, how_details, where_address,
-                           who_story, who_image_url, what_video_url, what_url,
-                           what_url_enabled, what_url_type,
-                           lat, lon, h3_res9, h3_res7, is_published, created_by,
-                           event_type_id, settings_json, listed_from,
-                           created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        brandId,
-        title,
-        slug,
-        status,
-        description,
-        location,
-        startDate,
-        endDate,
-        timezone,
-        startsAt,
-        coverImageUrl,
-        templateId,
-        whatShort,
-        whoHost,
-        whyPurpose,
-        howDetails,
-        whereAddress,
-        whoStory,
-        whoImageUrl,
-        whatVideoUrl,
-        whatUrl,
-        whatUrlEnabled,
-        whatUrlType,
-        lat,
-        lon,
-        h3Tags?.h3_res9 ?? null,
-        h3Tags?.h3_res7 ?? null,
-        isPublished,
-        createdBy,
-        eventType.id,
-        settingsJson,
-        // Created live (automation): listed at once, but the listing start is
-        // recorded so the corridor latch's settling rule still applies.
-        status === 'active' ? now : null,
-        now,
-        now
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
+                             what_short, who_host, why_purpose, how_details, where_address,
+                             who_story, who_image_url, what_video_url, what_url,
+                             what_url_enabled, what_url_type,
+                             lat, lon, h3_res9, h3_res7, is_published, created_by,
+                             event_type_id, settings_json, listed_from,
+                             created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('UNIQUE constraint')) {
-      return errorResponse('SLUG_TAKEN', `Slug "${slug}" is already in use`, 409, rid);
+        .bind(
+          id,
+          brandId,
+          title,
+          slug,
+          status,
+          description,
+          location,
+          startDate,
+          endDate,
+          timezone,
+          startsAt,
+          coverImageUrl,
+          templateId,
+          whatShort,
+          whoHost,
+          whyPurpose,
+          howDetails,
+          whereAddress,
+          whoStory,
+          whoImageUrl,
+          whatVideoUrl,
+          whatUrl,
+          whatUrlEnabled,
+          whatUrlType,
+          lat,
+          lon,
+          h3Tags?.h3_res9 ?? null,
+          h3Tags?.h3_res7 ?? null,
+          isPublished,
+          createdBy,
+          eventType.id,
+          settingsJson,
+          // Created live (automation): listed at once, but the listing start is
+          // recorded so the corridor latch's settling rule still applies.
+          status === 'active' ? now : null,
+          now,
+          now
+        )
+        .run();
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('UNIQUE constraint')) {
+        // Slugs are unique across the whole platform and write-once (Invariant
+        // 18), so a second "Trivia Night" anywhere used to fail here. A derived
+        // slug gets a short random suffix and the insert runs again.
+        if (slugDerived && attempt < SLUG_ATTEMPTS - 1) {
+          slug = `${slugBase.slice(0, 93)}-${crypto.randomUUID().slice(0, 6)}`;
+          continue;
+        }
+        return errorResponse('SLUG_TAKEN', `Slug "${slug}" is already in use`, 409, rid);
+      }
+      console.error(
+        JSON.stringify({
+          type: 'DB_ERROR',
+          handler: 'handleCreateEvent',
+          error: msg,
+          timestamp: now,
+        })
+      );
+      return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
     }
-    console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleCreateEvent', error: msg, timestamp: now })
-    );
-    return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
   }
 
   // OSE-240: generate a shortlink for every newly-created event. The
