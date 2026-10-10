@@ -528,12 +528,25 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
     }
   });
 
+  // One named reader (owner 2026-10-10): the landing page's "Use my location",
+  // which a person presses, sends only a 5-character geohash box and gets back
+  // a zip. Its limits are asserted in tests/landing-where.spec.ts. No scan or
+  // click path may read position, and no other served file may ask.
+  const POSITION_READERS = ['src/templates/landing.html'];
+
   test('8b. nothing the Worker serves asks the browser for its position (admin included)', () => {
     const served = sourcesMatching(
       (p) => /(^|\/)src\//.test(p) && (p.endsWith('.ts') || p.endsWith('.html'))
     );
     expect(served.length).toBeGreaterThan(20);
-    for (const [p, c] of served) {
+    for (const r of POSITION_READERS) {
+      expect(SCAN_CLICK_PATH as readonly string[]).not.toContain(r);
+      expect(
+        served.some(([p]) => p.endsWith(r)),
+        `${r} missing`
+      ).toBe(true);
+    }
+    for (const [p, c] of served.filter(([p]) => !POSITION_READERS.some((r) => p.endsWith(r)))) {
       expect(c, `${p} calls the browser geolocation API`).not.toMatch(
         /navigator\s*\.\s*geolocation|getCurrentPosition|watchPosition/
       );

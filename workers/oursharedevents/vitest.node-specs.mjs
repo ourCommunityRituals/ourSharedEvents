@@ -166,6 +166,8 @@ export const NODE_SPECS = [
   'tests/admin-stale-panel-undo.spec.ts',
   'tests/event-screen-route-read.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
+  // Landing "where are you?" (2026-10-10): zip table, rough box, the location script's limits.
+  'tests/landing-where-unit.spec.ts',
   'tests/admin-surface-links-not-live.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',

@@ -450,9 +450,15 @@ function buildAreaMarkup(args: {
  * injectEventList / injectLegalFooter: a template without the marker comes back
  * byte-identical.
  */
-export function injectLandingArea(html: string, area: RenderedLandingArea): string {
+export function injectLandingArea(
+  html: string,
+  area: RenderedLandingArea,
+  opts?: { areaFirst?: boolean }
+): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  return injectMarker(orderLandingSections(html, area.defaultView), LANDING_AREA_MARKER, area.html);
+  // A zip search answers with its results first (owner 2026-10-10).
+  const view = opts?.areaFirst ? 'map' : area.defaultView;
+  return injectMarker(orderLandingSections(html, view), LANDING_AREA_MARKER, area.html);
 }
 
 const DOORS_START = '<!--OCR_DOORS_START-->';
