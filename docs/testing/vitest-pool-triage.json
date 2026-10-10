@@ -1395,6 +1395,20 @@
       "testCount": 26
     },
     {
+      "file": "workers/oursharedevents/tests/landing-where-unit.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/landing-where.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 14
+    },
+    {
       "file": "workers/oursharedevents/tests/legal-footer.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2316,7 +2330,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 5
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/security-privacy.spec.ts",

@@ -10,7 +10,7 @@
 
 import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
 import { isGoogleMapsConfigured } from '../lib/maps';
-import { HARDENING_HEADERS } from '../lib/security-headers';
+import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../lib/security-headers';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
@@ -61,6 +61,8 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
+import { readWhere, injectWhere, renderNearEmpty, type WhereState } from '../lib/landing-where';
+import { nearCells } from '../lib/zip-areas';
 import {
   getDataProvider,
   type DataProviderEnv,
@@ -2567,19 +2569,17 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
   }
 }
 
-// ─── Landing page (supply side) — OSE-1312 ────────────────────────────────────
+// ─── Landing page — OSE-1312, "where are you?" (owner 2026-10-10) ──────────────
 //
-// The landing page is the SUPPLY side: two doors + an area view of what's coming
-// together nearby + a never-who panel that is TRUE of this page (no cookies, no
-// analytics, no geolocation). The area view is server-rendered and filtered with
-// CSS-only radios (renderLandingArea), so nothing about the viewer is stored or
-// sent — the page keeps the promise it prints.
+// One question first: your zip (typed, or the nearest zip to a phone's rough
+// box, lib/landing-where.ts). With a zip, the area lists the events whose
+// res-7 cell is within NEAR_RING_STEPS rings of the zip's cell (about 10
+// miles); without one, every listed event, as before. No cookies, no
+// analytics; list/map and window toggles stay CSS-only (renderLandingArea).
 //
-// Data-driven as of slice 2: reads events through the SAME DataProvider seam +
-// enrichWithPhase as `GET /api/v2/events` and handlePublicPage, so the landing
-// area and the JSON API cannot describe different events. A read failure renders
-// the empty area (facilitation surface: nothing to show is a normal state, not a
-// 500), never a broken page.
+// Reads events through the SAME DataProvider seam + enrichWithPhase as
+// `GET /api/v2/events`, so the page and the JSON API cannot describe different
+// events. A read failure renders the empty area, never a broken page.
 type LandingEnv = PagesEnv & DataProviderEnv;
 
 export async function handleLandingPage(
@@ -2587,11 +2587,21 @@ export async function handleLandingPage(
   ctx?: DataProviderCtx | null,
   request?: Request
 ): Promise<Response> {
+  let where: WhereState = { kind: 'none' };
+  try {
+    where = readWhere(request ? new URL(request.url) : null);
+  } catch {
+    where = { kind: 'none' };
+  }
   let area;
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
-    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    let items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    if (where.kind === 'zip') {
+      const near = nearCells(where.area);
+      items = items.filter((e) => typeof e.h3_res7 === 'string' && near.has(e.h3_res7));
+    }
     // §6.2b latch: corridors that have ever reached the threshold stay on the
     // map. Brand-bound read; a missing table (pre-0084) just means none yet.
     // The landing's own latch rides in the same table: once the area has held
@@ -2609,23 +2619,37 @@ export async function handleLandingPage(
     }
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
-    area = renderLandingArea(items as LandingAreaItem[], { latched, areaLatched, sponsorTitles });
+    area = renderLandingArea(items as LandingAreaItem[], {
+      latched,
+      areaLatched: where.kind === 'zip' ? false : areaLatched,
+      sponsorTitles,
+    });
   } catch {
     area = renderEmptyLandingArea();
   }
+  if (where.kind === 'zip' && area.windowCount === 0 && area.types.length === 0) {
+    area = { ...area, html: renderNearEmpty(where.area.zip) };
+  }
   // /home, /welcome, /landing, /about and /info serve this page too; they all
   // name `/` as the canonical.
-  return html(
+  const res = html(
     injectCanonical(
-      injectLandingArea(
-        injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
-        area
+      injectWhere(
+        injectLandingArea(
+          injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
+          area,
+          { areaFirst: where.kind === 'zip' }
+        ),
+        where
       ),
       request,
       env,
       CANONICAL_PATH.landing
     )
   );
+  // The one surface allowed to ask for location, for itself only.
+  res.headers.set('Permissions-Policy', LANDING_PERMISSIONS_POLICY);
+  return res;
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────

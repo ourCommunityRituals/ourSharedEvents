@@ -27,14 +27,15 @@ export const NEVER_WHO_CSS_MARKER = '/*OCR_NEVER_WHO_CSS*/';
 export const NEVER_WHO_LINE = 'Never who, only how many.';
 
 // Per-surface paragraph — wording unchanged from the cards they replace; each is
-// true of the page it sits on (the landing sets no cookies and asks for no
-// location; an event page was reached by a link that counted as one click).
+// true of the page it sits on (the landing sets no cookies and asks for
+// location only when the person chooses to; an event page was reached by a
+// link that counted as one click).
 const BODIES: Record<NeverWhoSurface, string> = {
   landing: `<p>
           Attendance is measured <strong>without gathering who you are</strong>, by default. We
-          count that people came — where and when — never who they are. This page sets no cookies,
-          runs no analytics, and never asks for your location; it only shows you what&#x2019;s
-          around.
+          count that people came — where and when — never who they are. This page sets no cookies and
+          runs no analytics. If you choose &ldquo;Use my location&rdquo;, it uses only your zip
+          area, never your exact spot.
         </p>
         <p>
           Choosing to be named is a feature, not the norm &mdash; nothing names you unless you pick

@@ -78,27 +78,21 @@ describe('OSE-1529 | landing create cards', () => {
     expect(event?.[1]).not.toBe(sponsor?.[1]);
   });
 
-  it('each card says what pressing it does and that sign-in is needed', () => {
-    for (const id of ['door-create-event', 'door-create-sponsor']) {
-      const card = text(block(html, id));
-      expect(card, `${id} must say sign-in is required`).toMatch(/sign-in required/i);
-      expect(card, `${id} must say what happens next`).toMatch(/one-time code/i);
-    }
-    expect(text(block(html, 'door-create-event'))).toMatch(/start (your|an) event/i);
-    expect(text(block(html, 'door-create-sponsor'))).toMatch(/sponsor/i);
-  });
-
-  it('each card has a button affordance (a .btn, labelled with its action)', () => {
+  // Owner 2026-10-10: far less text. Each card is one button that says what it
+  // does and that it signs you in; the why sits behind "Why sign in?".
+  it('each card is one button that says what it does and that it signs you in', () => {
     const ev = block(html, 'door-create-event');
     const sp = block(html, 'door-create-sponsor');
-    expect(ev).toMatch(
-      /<span[^>]*class="[^"]*\bbtn\b[^"]*\bbtn-primary\b[^"]*"[^>]*data-testid="door-event-cta"/
-    );
-    expect(sp).toMatch(
-      /<span[^>]*class="[^"]*\bbtn\b[^"]*\bbtn-primary\b[^"]*"[^>]*data-testid="door-sponsor-cta"/
-    );
-    expect(text(block(html, 'door-event-cta'))).toBe('Sign in to create an event');
-    expect(text(block(html, 'door-sponsor-cta'))).toBe('Sign in to add a sponsor');
+    expect(ev).toMatch(/<span[^>]*class="[^"]*\bbtn\b[^"]*"[^>]*data-testid="door-event-cta"/);
+    expect(sp).toMatch(/<span[^>]*class="[^"]*\bbtn\b[^"]*"[^>]*data-testid="door-sponsor-cta"/);
+    expect(text(ev)).toBe('Sign in to create an event');
+    expect(text(sp)).toBe('Sign in to add a sponsor');
+  });
+
+  it('the why is one note behind a native disclosure, collapsed', () => {
+    const doors = block(html, 'landing-doors');
+    expect(doors).toMatch(/<details class="doors-why">\s*<summary>Why sign in\?<\/summary>/);
+    expect(doors).not.toMatch(/<details[^>]*\bopen\b/);
   });
 
   it('one shared note explains why: email code via Cloudflare Access, no password, never-who', () => {
@@ -116,9 +110,14 @@ describe('OSE-1529 | landing create cards', () => {
     expect(html.match(/data-testid="doors-signin-note"/g)?.length).toBe(1);
   });
 
-  it('still exactly one <h1>, no inline script, no style attribute', () => {
+  // One script since 2026-10-10: "Use my location" (its limits:
+  // tests/landing-where-unit.spec.ts). Nothing else runs here.
+  it('still exactly one <h1>, one script (the location button), no style attribute', () => {
     expect(html.match(/<h1\b/g)?.length).toBe(1);
-    expect(html).not.toMatch(/<script\b/i);
+    const scripts = html.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi) ?? [];
+    expect(scripts.length).toBe(1);
+    expect(scripts[0]).toContain('[data-testid="near-me"]');
+    expect(scripts[0]).not.toMatch(/<script\b[^>]*\bsrc=/i);
     expect(html).not.toMatch(/\sstyle=/i);
   });
 

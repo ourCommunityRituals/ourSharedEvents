@@ -109,7 +109,12 @@ design consults a request's apparent location." Enforcement lives in
   `form-pages.ts`, `pages.ts`) reads `navigator.geolocation`, `request.cf`
   latitude, longitude, city, postal code, metro code or region, or any finer
   `CF-IP*` header. A second 8b test fails if **any** served `src/` file calls the
-  browser geolocation API, and that includes admin.
+  browser geolocation API, and that includes admin. One file is named as an
+  exception (owner decision 2026-10-10): the landing page's "Use my location"
+  in `src/templates/landing.html`. A person presses it (or has already allowed
+  it); it sends only a 5-character geohash box, in a form body, to `POST /near`,
+  which answers with the nearest zip. It is not on the scan/click path, and its
+  limits are tested in `tests/landing-where-unit.spec.ts`.
 - **8c / 8d / 8e** fail if a scan table gains a coordinate or cell column, if
   `shortlinks` gains anything finer than res7, or if any table stores a cell
   finer than res9.

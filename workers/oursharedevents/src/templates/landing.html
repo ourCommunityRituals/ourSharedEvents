@@ -3,25 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OurSharedEvents — host or sponsor a neighborhood gathering</title>
+    <title>OurSharedEvents — what's happening near you</title>
     <meta
       name="description"
-      content="Create an event or sponsor one in your neighborhood. Attendance is measured without gathering who you are."
+      content="Find events near your zip code. Attendance is counted without gathering who you are."
     />
     <link rel="stylesheet" href="/ui.css" />
     <!--
-      OSE-1312: the landing page is the SUPPLY side (someone thinking about hosting or
-      sponsoring). A scanner never lands here — a poster scan resolves straight to the
-      event page. Two doors + what's already happening nearby + a plain never-who
-      statement. NO cookies, NO analytics, NO geolocation prompt: the list/map and
-      window toggles are CSS-only (hidden radios + :checked), so nothing about the
-      viewer is stored or sent. The page must live up to the statement it prints.
+      OSE-1312 / owner 2026-10-10: one question first, "where are you?". A zip box
+      everywhere; on a phone also "Use my location" (the one script below). No
+      cookies, no analytics, no storage. List/map and window toggles are CSS-only.
     -->
-    <!-- Colour tokens (bg, surface, text, accent, on-accent) come from /ui.css,
-         light and dark. They used to be re-declared below as var(--x, fallback)
-         on the same element; a custom property that refers to itself is a cycle,
-         so all five computed to nothing (no accent, no selected-pill highlight,
-         no dark mode). Found by the PR 700 CCR. Only two local aliases remain. -->
     <style>
       [data-surface='ose-landing'] {
         --muted: var(--text-muted, #5a5a5a);
@@ -33,7 +25,6 @@
       html,
       body {
         margin: 0;
-        padding: 0;
         background: var(--bg);
         color: var(--text);
         font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -50,7 +41,6 @@
         background: var(--accent);
         color: var(--on-accent);
         padding: 0.5rem 1rem;
-        border-radius: 6px;
         z-index: 10;
       }
       header {
@@ -61,92 +51,80 @@
         padding: 0.75rem 1.25rem;
         border-bottom: 1px solid var(--line);
       }
-      .logo {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        font-size: 1.15rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        text-decoration: none;
-        color: var(--text);
-      }
-      nav {
-        display: flex;
-        gap: 0.5rem;
-      }
+      .logo,
       nav a {
         display: inline-flex;
         align-items: center;
         min-height: 44px;
+        text-decoration: none;
+      }
+      .logo {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      nav a {
         padding: 0 0.75rem;
         color: var(--muted);
-        text-decoration: none;
-        font-size: 0.95rem;
-        font-weight: 500;
-      }
-      nav a:hover {
-        color: var(--text);
       }
       main {
         max-width: 760px;
         margin: 0 auto;
         padding: 1.5rem 1.25rem 3rem;
       }
-      .doors {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        margin: 0.5rem 0 2rem;
+      .lead {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        line-height: 1.15;
+        margin: 0.25rem 0 1rem;
       }
-      @media (min-width: 640px) {
-        .doors {
-          grid-template-columns: 1fr 1fr;
-        }
+      .where {
+        margin: 0 0 2rem;
+      }
+      .where-label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .where-row {
+        display: flex;
+        gap: 0.5rem;
+        max-width: 420px;
+      }
+      .where-row .input {
+        flex: 1;
+      }
+      .where-msg,
+      .near-note {
+        margin: 0.5rem 0 0;
+        color: var(--muted);
+      }
+      .near-me {
+        margin: 0 0 1rem;
+      }
+      .where-change {
+        font-size: 1rem;
+        font-weight: 400;
+        margin-left: 0.5rem;
+      }
+      .doors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin: 0 0 2rem;
       }
       .door {
-        display: block;
-        min-height: 44px;
-        padding: 1.5rem 1.25rem;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--surface);
         text-decoration: none;
-        color: var(--text);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       }
-      .door:hover,
-      .door:focus-visible {
-        border-color: var(--accent);
-        outline: none;
-      }
-      .door:focus-visible {
-        outline: 3px solid var(--accent);
-        outline-offset: 2px;
-      }
-      .door-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin: 0 0 0.25rem;
-      }
-      .door-sub {
-        margin: 0;
+      .doors-why {
+        flex-basis: 100%;
         color: var(--muted);
-        font-size: 0.95rem;
       }
-      .door-note,
-      .doors-note {
-        margin: 0.75rem 0 0;
-        color: var(--muted);
-        font-size: 0.9rem;
+      .doors-why summary {
+        padding: 0.7rem 0;
+        cursor: pointer;
       }
-      .doors-note {
-        grid-column: 1 / -1;
-        margin: 0;
-      }
-      .door-cta {
-        width: 100%;
-        margin-top: 1rem;
+      .area-section {
+        margin: 0 0 2rem;
       }
       .area-heading {
         font-size: 1.15rem;
@@ -159,15 +137,11 @@
         align-items: center;
         margin: 0 0 1rem;
       }
-      /* CSS-only toggles: hidden radios drive the view + window with no JS/cookies.
-         The chips, their selected look, focus ring and hide rules are emitted by
-         lib/landing-area; the card and chip stylesheet is lib/event-list's. */
       .toggle-radio {
         position: absolute;
         opacity: 0;
         pointer-events: none;
       }
-      /* Map view = a note above the SAME list; cards never hide (OSE-1354). */
       .view-map {
         display: none;
       }
@@ -175,33 +149,20 @@
         display: block;
       }
       /*OCR_EVENT_CARD_CSS*/
-      .empty-state {
+      .empty-state,
+      .near-empty,
+      .map-placeholder {
         border: 1px dashed var(--line);
         border-radius: 10px;
         padding: 1.5rem 1.25rem;
         text-align: center;
         color: var(--muted);
       }
-      .empty-state strong {
+      .empty-state strong,
+      .near-empty strong {
         color: var(--text);
-      }
-      .map-placeholder {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--surface);
-        padding: 2rem 1.25rem;
-        text-align: center;
-        color: var(--muted);
       }
       /*OCR_NEVER_WHO_CSS*/
-      .lead {
-        font-size: clamp(1.5rem, 4vw, 2rem);
-        font-weight: 800;
-        line-height: 1.15;
-        letter-spacing: -0.01em;
-        margin: 0.25rem 0 1.25rem;
-        color: var(--text);
-      }
     </style>
   </head>
   <body>
@@ -216,67 +177,114 @@
     </header>
 
     <main id="main-content" data-testid="landing-main">
-      <!-- The page's single <h1>. Frames the supply-side ask (the two doors
-           below) and gives screen readers + search engines a page-level heading. -->
-      <h1 class="lead" data-testid="landing-h1">Host or sponsor a gathering in your neighborhood</h1>
-      <!-- Two doors: always present. This is the supply-side ask. Fewer than
-           LIST_MAX events: the doors lead and the area follows. At or above it
-           the server moves this block below the area (lib/landing-area.ts
-           orderLandingSections), so the map leads. -->
+      <h1 class="lead" data-testid="landing-h1">What&#x2019;s happening near you?</h1>
+      <section class="where" aria-label="Where are you?" data-testid="landing-where">
+        <div class="near-me" data-testid="near-me" hidden>
+          <button class="btn btn-primary" type="button" data-testid="near-me-button">
+            Use my location
+          </button>
+          <p class="near-note" data-testid="near-me-note" aria-live="polite">
+            We use only your zip area, never your exact spot.
+          </p>
+        </div>
+        <!--OCR_WHERE-->
+        <form id="near-form" method="post" action="/near" hidden>
+          <input type="hidden" name="g" />
+        </form>
+      </section>
+      <!-- Doors lead the area below LIST_MAX events, follow it at or above
+           (lib/landing-area.ts orderLandingSections). -->
       <!--OCR_DOORS_START-->
-      <section class="doors" data-testid="landing-doors" aria-label="Get started">
-        <a class="door" href="/admin#create-event" data-testid="door-create-event">
-          <p class="door-title">Create an event</p>
-          <p class="door-sub">Host a gathering and get a poster, QR codes, and a shareable page.</p>
-          <p class="door-note" data-testid="door-event-note">
-            Sign-in required. You get a one-time code by email, then you start your event.
-          </p>
-          <span class="door-cta btn btn-primary" data-testid="door-event-cta"
+      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
+        <a class="door" href="/admin#create-event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
             >Sign in to create an event</span
-          >
-        </a>
-        <a class="door" href="/admin#sponsors-card" data-testid="door-create-sponsor">
-          <p class="door-title">Create a sponsor</p>
-          <p class="door-sub">Support events in your area. You choose which events you appear on.</p>
-          <p class="door-note" data-testid="door-sponsor-note">
-            Sign-in required. You get a one-time code by email, then the sponsors card opens.
-          </p>
-          <span class="door-cta btn btn-primary" data-testid="door-sponsor-cta"
+          ></a
+        >
+        <a class="door" href="/admin#sponsors-card" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
             >Sign in to add a sponsor</span
-          >
-        </a>
-        <p class="doors-note" data-testid="doors-signin-note">
-          Why sign in? Organizer tools are private and by invitation. Cloudflare Access emails you a
-          one-time code, so OurSharedEvents never sees or stores a password. Attendees never sign
-          in, and nothing here names them.
-        </p>
+          ></a
+        >
+        <details class="doors-why">
+          <summary>Why sign in?</summary>
+          <p data-testid="doors-signin-note">
+            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
+            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
+            nothing here names them.
+          </p>
+        </details>
       </section>
       <!--OCR_DOORS_END-->
 
-      <!-- Area view (OSE-1312 slice 2). The inner markup is server-rendered by
-           renderLandingArea and injected at the marker below: hidden radios +
-           `:checked ~` sibling rules give FIVE CSS-only filter dimensions with
-           NO JS and NO cookies —
-             1. view     — list | map (default by count: list < 10, else map)
-             2. window   — Next 7 days / This month / Next 90 days (the /events `when` set)
-             3. type     — one pill per event-type present, plus "All" (niche discovery)
-             4. product  — All | OSE | OSE+OW hybrid (anon / non-anon invariant pole)
-             5. modality — All | online | in-person ("in reality")
-           Each card is server-tagged when-{week,month,next-90} + type-<slug> +
-           product-{ose} + modality-{online,inperson}. The radios are emitted as
-           siblings before .toggles / .area so the head rules below resolve. -->
-      <section aria-label="What's happening nearby" data-testid="landing-area">
-        <h2 class="area-heading" data-testid="area-heading">Happening near you</h2>
+      <section class="area-section" aria-label="Events" data-testid="landing-area">
+        <h2 class="area-heading" data-testid="area-heading"><!--OCR_AREA_HEADING--></h2>
         <!--OCR_LANDING_AREA-->
       </section>
       <!--OCR_AFTER_AREA-->
 
-      <!-- Never-who statement (Invariant #1 surface language). One line, the
-           paragraph behind a native disclosure; TRUE of this page: no cookies,
-           no analytics, no geolocation prompt run here. Rendered by
-           lib/never-who.ts so every anonymous surface carries the same partial. -->
       <!--OCR_NEVER_WHO-->
     </main>
     <!--OCR_LEGAL_FOOTER-->
+    <script>
+      // "Use my location" (owner 2026-10-10). Phones only, never on its own
+      // unless the person already allowed it. The phone turns its position into
+      // a 5-character geohash box (about 5 km) here, and only that box is sent,
+      // in a form body, to POST /near, which answers with the nearest zip.
+      // Nothing is stored. Gate: tests/landing-where.spec.ts.
+      (function () {
+        var box = document.querySelector('[data-testid="near-me"]');
+        var form = document.getElementById('near-form');
+        var geo = navigator.geolocation;
+        if (!box || !form || !geo || !window.matchMedia('(pointer: coarse)').matches) return;
+        var btn = box.querySelector('button');
+        var note = box.querySelector('p');
+        var B = '0123456789bcdefghjkmnpqrstuvwxyz';
+        function roughBox(lat, lon) {
+          var la = [-90, 90], lo = [-180, 180], h = '', ch = 0, bit = 0, even = true;
+          while (h.length < 5) {
+            var r = even ? lo : la, v = even ? lon : lat, mid = (r[0] + r[1]) / 2;
+            if (v >= mid) { ch = ch * 2 + 1; r[0] = mid; } else { ch = ch * 2; r[1] = mid; }
+            even = !even;
+            if (++bit === 5) { h += B.charAt(ch); ch = 0; bit = 0; }
+          }
+          return h;
+        }
+        function off() {
+          btn.hidden = true;
+          note.textContent = 'Location is off. Type your zip below.';
+        }
+        function find() {
+          btn.disabled = true;
+          note.textContent = 'Finding your zip…';
+          geo.getCurrentPosition(
+            function (p) {
+              form.elements.g.value = roughBox(p.coords.latitude, p.coords.longitude);
+              form.submit();
+            },
+            function () {
+              btn.disabled = false;
+              off();
+            },
+            { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
+          );
+        }
+        btn.addEventListener('click', find);
+        var fresh = location.search === '';
+        function show(state) {
+          if (state === 'denied') return;
+          box.hidden = false;
+          if (state === 'granted' && fresh) find();
+        }
+        if (navigator.permissions && navigator.permissions.query) {
+          navigator.permissions.query({ name: 'geolocation' }).then(
+            function (s) { show(s.state); },
+            function () { show('prompt'); }
+          );
+        } else {
+          show('prompt');
+        }
+      })();
+    </script>
   </body>
 </html>

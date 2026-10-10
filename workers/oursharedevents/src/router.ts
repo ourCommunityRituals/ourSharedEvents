@@ -3,7 +3,8 @@
  *
  * Route table:
  *
- *   GET /                        → landing page
+ *   GET /                        → landing page (?zip= lists events near a zip)
+ *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
@@ -149,6 +150,7 @@ import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
+import { handleNear } from './lib/landing-where.js';
 import {
   isPublicReadLimited,
   publicReadLimitResponse,
@@ -2018,6 +2020,13 @@ export async function route(
     pathname === '/info'
   ) {
     return handleLandingPage(env, ctx, request);
+  }
+
+  // ── Landing "Use my location": a rough box in, the nearest zip out ────────
+  // Owner 2026-10-10. POST only (the box travels in the body, never the
+  // address); anything else is sent to the landing page. lib/landing-where.ts.
+  if (pathname === '/near') {
+    return publicReadLimited('near', handleNear)(request, env);
   }
 
   // ── Public event calendar download (OSE-1358) ─────────────────────────────
