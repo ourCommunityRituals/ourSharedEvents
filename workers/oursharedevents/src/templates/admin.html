@@ -4948,6 +4948,7 @@
     <!-- Selecting an event row upgrades these cards to that event's scoped
          surface (data-surface drives window.scopeSurfaceCards). Unscoped they
          open the event-agnostic shell, so the cards are always functional. -->
+    <p class="create-msg" data-testid="surface-cards-not-live" role="status" hidden>This event is not live yet, so its links show guests a "not open" page. Open shows your preview for now. The links you copy start working when you publish.</p>
     <div class="surface-cards" id="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
       <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
@@ -5008,6 +5009,28 @@
             return null;
         }
       }
+      // A draft or ready event's public pages answer the same 404 as a missing
+      // one, to everybody (pages.ts, EVENT_NOT_OPEN_COPY). So until it is live,
+      // the organizer's Open goes to the admin preview of the same page, and a
+      // note says why. Copy keeps the real links: they work once it is live.
+      // Read from the list row at call time; changeEventStatus calls this again.
+      const PREVIEW = { public: ['/preview', 'Preview Page'], poster: ['/poster-preview', 'Preview Poster'] };
+      window.refreshSurfaceLinks = function (eventId) {
+        const e = window._oseList && window._oseList.byId[String(eventId)];
+        const st = e && e.status;
+        const notLive = st === 'draft' || st === 'ready';
+        document.querySelectorAll('.surface-card[data-event-id]').forEach(function (card) {
+          if (card.getAttribute('data-event-id') !== String(eventId)) return;
+          const pv = PREVIEW[card.dataset.surface];
+          const a = card.querySelector('a');
+          if (!pv || !a) return;
+          if (!a.dataset.openLabel) a.dataset.openLabel = a.textContent.trim();
+          a.setAttribute('href', notLive ? '/api/v2/admin/events/' + encodeURIComponent(eventId) + pv[0] : scopedSurfaceUrl(card.dataset.surface, eventId));
+          a.textContent = notLive ? pv[1] : a.dataset.openLabel;
+        });
+        const note = document.querySelector('[data-testid="surface-cards-not-live"]');
+        if (note) note.hidden = !notLive;
+      };
       // Upgrade all four surface cards to the selected event's scoped surface.
       window.scopeSurfaceCards = function (eventId, eventName) {
         document.querySelectorAll('.surface-card').forEach(function (card) {
@@ -5024,6 +5047,7 @@
         });
         const wrap = document.querySelector('.surface-cards');
         if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
+        window.refreshSurfaceLinks(eventId);
         // OSE-1684: Copy hands out the event's short links (each open of a
         // shared one counts as a share; the TV's is typed, not counted). The
         // Open links keep the plain addresses, so the organizer looking at
@@ -8550,6 +8574,7 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
+          if (window.refreshSurfaceLinks) window.refreshSurfaceLinks(id);
           var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0, Number(e.map_default) === 1), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');

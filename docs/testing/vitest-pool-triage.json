@@ -331,6 +331,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/admin-surface-links-not-live.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-tv-display-card.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -952,6 +959,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-not-open-copy.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
     },
     {
       "file": "workers/oursharedevents/tests/event-page-choices.spec.ts",
