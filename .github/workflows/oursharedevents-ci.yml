@@ -2270,7 +2270,8 @@ jobs:
         run: |
           PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
-            tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
+            tests/ui/smoke/journey-attendee-arc.smoke.spec.ts \
+            tests/ui/smoke/journey-short-codes.smoke.spec.ts
         timeout-minutes: 5
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).

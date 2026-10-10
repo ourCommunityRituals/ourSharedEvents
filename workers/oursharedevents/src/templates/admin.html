@@ -2601,7 +2601,7 @@
         </div>
 
         <!-- Step 3 — sign-ups. Honest options only: the built-in sign-up page
-             already exists for every event (served at /forms/:eventId), so
+             already exists for every event (served at /events/:eventId/register), so
              "yes" simply surfaces its link in step 4. No pretend-saved
              external URLs (provenance/honesty doctrine). -->
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
@@ -5257,7 +5257,7 @@
           // Every value into markup goes through esc() — the href included, since
           // encodeURIComponent leaves ' unescaped (CodeQL js/xss-more-sources).
           var key = esc(t.key), flagKey = esc(t.flagKey);
-          var href = '/forms/' + encodeURIComponent(o.eventId) + '?type=' + encodeURIComponent(t.key) + '&event=' + encodeURIComponent(o.eventName == null ? '' : o.eventName);
+          var href = '/events/' + encodeURIComponent(o.eventId) + '/' + (t.key === 'email' ? 'updates' : encodeURIComponent(t.key));
           return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + key + '" data-enabled="' + (enabled ? 'true' : 'false') + '">' +
             '<div class="form-row-main">' +
               '<a class="form-link" href="' + esc(href) + '" target="_blank" rel="noopener" data-testid="form-link-' + key + '">' +

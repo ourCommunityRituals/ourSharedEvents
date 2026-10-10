@@ -40,3 +40,8 @@ INSERT INTO events (
   'synthetic'
 )
 ON CONFLICT(id) DO UPDATE SET data_class = 'synthetic';
+
+-- Its short code (OSE-1684), so the staging short-code journey has one to open.
+-- Staging already has W8RH3K; a fresh database gets it here. OR IGNORE: an event
+-- keeps the code it has (event_id is UNIQUE), and this never changes it.
+INSERT OR IGNORE INTO event_codes (code, event_id) VALUES ('W8RH3K', 'test-event-001');

@@ -22,7 +22,7 @@
 // they meant.
 
 import { escapeHtml } from './html-escape.js';
-import { eventPagePath } from './canonical.js';
+import { eventFormPath, eventPagePath } from './canonical.js';
 import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
@@ -135,7 +135,6 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   // name/startDateISO/venue; no `|| e.title` dual-reads here.
   const rawName = str(e.name);
   const safeName = escapeHtml(rawName) || (landing ? 'Untitled event' : '');
-  const encodedName = encodeURIComponent(rawName);
   const isoRaw = str(e.startDateISO);
   const dateStr = isoRaw ? escapeHtml(formatEventDate(isoRaw, str(e.timezone) || null)) : '';
   const venueStr = e.venue ? escapeHtml(str(e.venue)) : escapeHtml(opts.venueFallback ?? '');
@@ -150,7 +149,7 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   // A wrapped event links to its recap, never to a registration form.
   const cta = wrapped
     ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`
-    : `<a class="cta" href="/forms/${safeId}?type=register&amp;event=${encodedName}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
+    : `<a class="cta" href="${escapeHtml(eventFormPath(str(e.id), 'register'))}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
   const wrappedTag = wrapped
     ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>'
     : '';
