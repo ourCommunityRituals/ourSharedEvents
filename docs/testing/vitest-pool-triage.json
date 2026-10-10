@@ -415,6 +415,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/archived-before-start.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
+    },
+    {
       "file": "workers/oursharedevents/tests/as-display-public-admin.spec.ts",
       "bucket": "node",
       "needsReview": false,

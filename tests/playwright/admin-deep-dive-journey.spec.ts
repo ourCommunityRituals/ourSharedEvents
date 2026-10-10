@@ -231,18 +231,16 @@ test('a stale panel: the event moved elsewhere; the panel catches up and Undo is
   await undo(page, 'Ready');
 });
 
-// Known defect, stated as the behaviour we want. Goes red the day it is fixed.
+// The event is three weeks out: archived now, it never happened, and the page says so.
 test('archiving an event before its date does not tell the public it happened', async ({
   page,
 }) => {
-  test.fail(
-    true,
-    'Defect: an archived event dated three weeks from now has a public page reading "Happened <future date>".'
-  );
   await selectEvent(page);
   await move(page, 'archived', 'Archived');
   const res = await page.request.get(`/events/${encodeURIComponent(eventId)}`);
-  expect(await res.text()).not.toContain('Happened');
+  const html = await res.text();
+  expect(html).not.toContain('Happened');
+  expect(html).toContain('No longer taking place.');
 });
 
 // OSE-1560: the map is off by default, the panel says so and says it stays true,
