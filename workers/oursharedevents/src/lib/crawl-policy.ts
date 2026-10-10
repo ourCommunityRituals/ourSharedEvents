@@ -67,6 +67,17 @@ export const CRAWL_DISALLOW: readonly string[] = [
   '/sponsor?',
   '/sponsor$',
   '/forms/',
+  // An event's form screens (OSE-1684), the same pages as /forms/. Exact names:
+  // `$` ends the path and `?` takes the ?deployment= form, so an event whose
+  // readable name starts with one (/events/<id>/register-night) stays fetchable.
+  '/events/*/register$',
+  '/events/*/register?',
+  '/events/*/checkin$',
+  '/events/*/checkin?',
+  '/events/*/survey$',
+  '/events/*/survey?',
+  '/events/*/updates$',
+  '/events/*/updates?',
   '/sharedReport',
   '/report',
   '/analytics',

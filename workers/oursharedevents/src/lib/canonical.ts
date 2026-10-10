@@ -74,6 +74,49 @@ export function eventPagePath(eventId: string, slug?: string | null): string {
   return readable ? `/events/${eventId}/${readable}` : `/events/${eventId}`;
 }
 
+/**
+ * An event's form screens under its own address (OSE-1684): sign up, check in,
+ * feedback and "keep me posted". `updates` is the email signup.
+ */
+export const EVENT_FORM_SCREENS = {
+  register: 'register',
+  checkin: 'checkin',
+  survey: 'survey',
+  updates: 'email-signup',
+} as const;
+export type EventFormScreen = keyof typeof EVENT_FORM_SCREENS;
+
+/** The form screen for a `?type=` value (the /forms/ vocabulary), or null. */
+export function formScreenFor(type: string | null | undefined): EventFormScreen | null {
+  switch (type) {
+    case 'register':
+    case 'checkin':
+    case 'survey':
+      return type;
+    case 'email':
+    case 'email-signup':
+      return 'updates';
+    default:
+      return null;
+  }
+}
+
+/**
+ * The address the platform writes for an event's form: /events/<id>/<screen>,
+ * with `?deployment=` when a poster deployment is known. `/forms/<id>?type=`
+ * keeps answering for printed and saved links. An unknown type is the
+ * registration form, as on /forms/.
+ */
+export function eventFormPath(
+  eventId: string,
+  type: string | null | undefined,
+  deploymentId?: string | null
+): string {
+  const screen = formScreenFor(type) ?? 'register';
+  const base = `/events/${encodeURIComponent(eventId)}/${screen}`;
+  return deploymentId ? `${base}?deployment=${encodeURIComponent(deploymentId)}` : base;
+}
+
 /** The one place the tag is spelled; `href` is a complete absolute URL. */
 export function canonicalLinkTagFor(href: string): string {
   return `<link rel="canonical" href="${escapeHtml(href)}" />`;

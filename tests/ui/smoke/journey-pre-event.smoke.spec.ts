@@ -3,7 +3,7 @@
  *
  * The customer path before the event happens:
  *   1. Customer visits /events → sees event cards with Register CTAs
- *   2. Clicks Register on a card → lands on /forms/{eventId}?type=register
+ *   2. Clicks Register on a card → lands on /events/{eventId}/register
  *   3. Form shows event name in header
  *   4. Fills name → submits → success message appears
  *   5. Goes back to /events → card still there (didn't disappear)
@@ -40,8 +40,8 @@ test.describe('Journey: Pre-Event — Customer Registration', () => {
     await ctas.first().click();
     await page.waitForLoadState('networkidle');
 
-    expect(page.url()).toContain('/forms/');
-    expect(page.url()).toContain('type=register');
+    // The event's own sign-up form (OSE-1684).
+    expect(new URL(page.url()).pathname).toMatch(/^\/events\/[^/]+\/register$/);
   });
 
   test('Step 3: Form header shows event name', async ({ page }) => {

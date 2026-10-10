@@ -79,7 +79,7 @@ test.describe('attendee arc — /events/:id across phases', () => {
     // Opt-in continuity CTA present and correctly targeted
     await expect(page.locator('[data-testid="email-signup-link"]')).toHaveAttribute(
       'href',
-      new RegExp(`/forms/${POST}\\?type=email`)
+      new RegExp(`/events/${POST}/updates$`)
     );
     await expect(page.locator('[data-testid="anonymity-affordance"]')).toBeVisible();
     // Regression guard: the old stub message must NOT be the whole page
@@ -116,7 +116,7 @@ test.describe('attendee arc — /events/:id across phases', () => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
     await page.goto(`/events/${POST}`);
     await page.locator('[data-testid="email-signup-link"]').click();
-    await expect(page).toHaveURL(new RegExp(`/forms/${POST}`));
+    await expect(page).toHaveURL(new RegExp(`/events/${POST}/updates$`));
     // The email form page renders an input — the loop is functionally closed
     await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
   });

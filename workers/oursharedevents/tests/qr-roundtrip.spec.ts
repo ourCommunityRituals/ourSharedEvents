@@ -235,7 +235,11 @@ describe('QR round-trip — poster bundle is scannable', () => {
     expect(decoded).not.toBeNull();
 
     const path = new URL(decoded!).pathname;
-    expect(path, 'decoded QR must target /q/ (scan) or /forms/ (direct)').toMatch(/^\/(q|forms)\//);
+    // A scan link (/q/) or the event's own form address (OSE-1684), never the
+    // older /forms/ shape the platform no longer writes.
+    expect(path, 'decoded QR must target /q/ (scan) or /events/<id>/<form> (direct)').toMatch(
+      /^\/(q\/|events\/[^/]+\/(register|checkin|survey|updates)$)/
+    );
 
     const res = await SELF.fetch(`https://example.com${path}`, { redirect: 'manual' });
     expect([200, 302], `following the decoded QR returned ${res.status}`).toContain(res.status);

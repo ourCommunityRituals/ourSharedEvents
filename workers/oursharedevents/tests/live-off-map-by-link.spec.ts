@@ -270,7 +270,7 @@ describe('a live event that is off the map opens by link', () => {
     const page = await get(`/events/${ev.id}`);
     expect(page.status).toBe(200);
     const html = await page.text();
-    const href = html.match(new RegExp(`href="(/forms/${ev.id}\\?type=register[^"]*)"`))?.[1];
+    const href = html.match(new RegExp(`href="(/events/${ev.id}/register[^"]*)"`))?.[1];
     expect(href, 'the page offers Register').toBeTruthy();
 
     const form = await get(href!.replace(/&amp;/g, '&'));
@@ -294,7 +294,7 @@ describe('a live event that is off the map opens by link', () => {
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain('data-testid="event-title-live"');
-    const href = html.match(new RegExp(`href="(/forms/${ev.id}\\?type=checkin[^"]*)"`))?.[1];
+    const href = html.match(new RegExp(`href="(/events/${ev.id}/checkin[^"]*)"`))?.[1];
     expect(href, 'the page offers Check in').toBeTruthy();
 
     const form = await get(href!.replace(/&amp;/g, '&'));
