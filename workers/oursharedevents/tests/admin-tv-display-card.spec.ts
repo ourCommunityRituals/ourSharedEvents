@@ -14,7 +14,7 @@ const EVT = 'evt_tv_card';
 
 function cardMarkup(html: string): string {
   const start = html.indexOf('<div class="card tv-display-card"');
-  const end = html.indexOf('<!-- R4 (OSE-1319)', start);
+  const end = html.indexOf('<!-- Surface links', start);
   expect(start, 'TV card markup').toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return html.slice(start, end);
