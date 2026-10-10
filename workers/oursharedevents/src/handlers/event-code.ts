@@ -36,7 +36,7 @@ import {
 } from '../lib/event-code';
 import { type ShareScreen, isLinkPreviewRequest, recordShareOpen } from '../lib/share-count';
 import { eventPhaseOf } from '../lib/event-enrich';
-import { eventPagePath } from '../lib/canonical';
+import { eventFormPath, eventPagePath } from '../lib/canonical';
 import { renderErrorPage } from './pages';
 import { corsHeaders } from '../lib/cors';
 import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -130,9 +130,9 @@ function targetFor(screen: EventCodeScreen, row: CodeEventRow, isPublic: boolean
     case 'tv':
       return `/events/${id}/tv`;
     case 'register':
-      return `/forms/${id}?type=register`;
+      return eventFormPath(row.id, 'register');
     case 'checkin':
-      return `/forms/${id}?type=checkin`;
+      return eventFormPath(row.id, 'checkin');
   }
 }
 

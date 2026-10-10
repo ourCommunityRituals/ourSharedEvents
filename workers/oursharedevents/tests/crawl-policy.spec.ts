@@ -143,6 +143,8 @@ const MUST_BE_CRAWLABLE = [
   '/events?when=week',
   '/events/abc',
   '/events/abc/trivia-night', // the readable address (OSE-1684)
+  '/events/abc/register-night', // a readable name that starts like a form screen
+  '/events/abc/survey-says',
   '/events/abc/calendar.ics',
   '/tv', // the TV display alias stays fetchable (it answers noindex)
   '/sponsors/abc', // the public sponsor card, not the token page
@@ -170,6 +172,15 @@ const MUST_BE_BLOCKED = [
   '/sponsor', // sponsor home, bare
   '/sponsor?t=signed-token', // sponsor home, signed link
   '/forms/abc',
+  // An event's form screens (OSE-1684), plain and with a poster deployment.
+  '/events/abc/register',
+  '/events/abc/register?deployment=d1',
+  '/events/abc/checkin',
+  '/events/abc/checkin?deployment=d1',
+  '/events/abc/survey',
+  '/events/abc/survey?deployment=d1',
+  '/events/abc/updates',
+  '/events/abc/updates?deployment=d1',
   '/sharedReport',
   '/sharedReport?t=signed-token',
   '/report',

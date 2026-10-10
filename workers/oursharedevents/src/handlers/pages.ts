@@ -85,6 +85,7 @@ import {
   canonicalLinkTagFor,
   canonicalOrigin,
   eventPagePath,
+  eventFormPath,
   injectCanonical,
 } from '../lib/canonical.js';
 
@@ -779,9 +780,7 @@ function eventFormContextFromRequest(request: Request, fallback: EventFormType):
 }
 
 function eventFormHref(eventId: string, ctx: EventFormContext): string {
-  const params = new URLSearchParams({ type: ctx.type });
-  if (ctx.deploymentId) params.set('deployment', ctx.deploymentId);
-  return `/forms/${encodeURIComponent(eventId)}?${params.toString()}`;
+  return eventFormPath(eventId, ctx.type, ctx.deploymentId);
 }
 
 function eventFormCtaLabel(type: EventFormType): string {
@@ -1532,7 +1531,7 @@ const MAX_POST_EVENT_SUGGESTIONS = MAX_NEXT_AT_VENUE;
  * Design intent: closes the ritual loop at exactly the moment it matters.
  *   • Recap frame: same 5W surface, shifted to past tense.
  *   • Return loop: next upcoming event at the same venue, else public listing.
- *   • Opt-in email CTA: routes to existing /forms/:id?type=email (FORMS_DB).
+ *   • Opt-in email CTA: routes to /events/:id/updates, the email signup (FORMS_DB).
  *   • Anonymity affordance retained (Invariant #1 surface language).
  *   • No sponsor logos v1 — display priority is tier-governed (Invariant #5).
  */
@@ -1789,7 +1788,7 @@ ${SPONSOR_LIST_CSS}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
         <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(eventFormPath(row.id, 'email-signup'))}">Keep me posted</a>
       </section>
     </aside>
 

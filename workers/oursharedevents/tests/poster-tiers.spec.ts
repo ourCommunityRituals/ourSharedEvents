@@ -168,13 +168,14 @@ describe('Tier 1 | a native REGISTER code and a SPONSOR code', () => {
     const reg = body.codes.find((c) => c.kind === 'register')!;
     expect(reg.word).toBe('REGISTER');
     expect(reg.target_url).toBeNull(); // a client-sent target is dropped
-    const expected = `${ORIGIN}/forms/${EVT}?type=register`;
+    const expected = `${ORIGIN}/events/${EVT}/register`;
     expect(reg.points_to).toBe(expected);
     const loc = await follow(reg.code);
     expect(loc).toBe(expected);
-    // Nothing but the event id and the form type: no token, deployment or person.
+    // Nothing but the event id and the form (both in the path): no token,
+    // deployment or person, and no query at all.
     const u = new URL(loc!);
-    expect([...u.searchParams.keys()]).toEqual(['type']);
+    expect([...u.searchParams.keys()]).toEqual([]);
   });
 
   test('SPONSOR routes /s/ to the organizer’s https sponsorship page', async () => {

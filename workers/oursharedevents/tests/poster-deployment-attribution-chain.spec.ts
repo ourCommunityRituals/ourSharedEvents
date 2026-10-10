@@ -18,6 +18,7 @@
 import { env } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import { handleFormPage } from '../src/handlers/form-pages';
+import { eventFormPath } from '../src/lib/canonical';
 
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
@@ -69,8 +70,13 @@ describe('OSE-627 | form-layer reads ?deployment= and threads sourcePlacementId'
 
 describe('OSE-627 | bundle + DB-write wiring (source gates)', () => {
   test('poster-bundle formUrl embeds ?deployment=<id>', () => {
+    // The bundle builds its form links with the one writer (OSE-1684), which
+    // carries the deployment as ?deployment=.
     const s = sourceOf('handlers/poster-bundle.ts');
-    expect(s).toContain('deployment=${encodeURIComponent(deploymentId)}');
+    expect(s).toContain('eventFormPath(eventId, type, deploymentId)');
+    expect(eventFormPath('evt_attr', 'register', DEPLOY_ID)).toBe(
+      `/events/evt_attr/register?deployment=${DEPLOY_ID}`
+    );
   });
 
   test('forms.ts reads sourcePlacementId from the request body', () => {

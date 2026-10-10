@@ -39,7 +39,8 @@
  *   GET  /api/v2/admin/events/:id/forms/checkin-count  → check-in count (admin)
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
- *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page
+ *   GET  /events/:id/register|checkin|survey|updates  → public form page (OSE-1684)
+ *   GET  /forms/:eventId?type=register|checkin|survey|email  → the same page at its older address
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
  *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
@@ -250,6 +251,7 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
+import type { EventFormScreen } from './lib/canonical';
 import { handlePrivacyPage } from './handlers/privacy';
 import {
   isFeatureEnabled,
@@ -2042,6 +2044,14 @@ export async function route(
   const eventScreenMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/(tv|poster)$/);
   if (eventScreenMatch && (method === 'GET' || method === 'HEAD')) {
     return eventScreenMatch[2] === 'tv' ? handleDisplayPage(env) : handlePosterPage(env, request);
+  }
+  // Its forms too: /events/<id>/register, /checkin, /survey and /updates (the
+  // email signup). /forms/<id>?type= keeps answering for printed and saved links.
+  const eventFormMatch = pathname.match(
+    /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|updates)$/
+  );
+  if (eventFormMatch && (method === 'GET' || method === 'HEAD')) {
+    return handleFormPage(request, env, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────

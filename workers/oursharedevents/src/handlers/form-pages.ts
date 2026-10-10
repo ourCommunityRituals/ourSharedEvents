@@ -4,13 +4,18 @@
  * Sr Design FE: 10-second comprehension test — customer sees event name,
  * one clear action, and completes the form in under 10 seconds.
  *
- * QR→form routing: ?type= param selects form type.
+ * Each event's forms live under its own address (OSE-1684), and that is what
+ * the platform writes (eventFormPath, lib/canonical.ts):
+ *   GET /events/:eventId/register | checkin | survey | updates (email signup)
+ *
+ * The older /forms/ address keeps answering for printed and saved links;
+ * there the ?type= param selects the form:
  *   GET /forms/:eventId                → registration (default)
  *   GET /forms/:eventId?type=register  → registration
  *   GET /forms/:eventId?type=checkin   → check-in
  *   GET /forms/:eventId?type=survey    → survey
  *   GET /forms/:eventId?type=email        → email signup
- *   GET /forms/:eventId?type=email-signup → email signup (canonical; poster-bundle.ts emits this)
+ *   GET /forms/:eventId?type=email-signup → email signup
  *
  * Lead FE: Forms post to /api/v2/events/:id/forms/:type via fetch().
  * No page reload. Success state shown inline.
@@ -25,7 +30,12 @@ import { escapeHtml } from '../lib/html-escape';
 import { fetchNextEventsAtVenue, type NextEventRow } from '../lib/next-at-venue';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links';
 import { formatHumanDate } from '../lib/event-datetime';
-import { canonicalOrigin, eventPagePath } from '../lib/canonical';
+import {
+  canonicalOrigin,
+  eventPagePath,
+  EVENT_FORM_SCREENS,
+  type EventFormScreen,
+} from '../lib/canonical';
 import {
   turnstileScriptTag,
   turnstileWidgetHtml,
@@ -790,10 +800,15 @@ export async function handleFormPage(
   request: Request,
   env: FormPagesEnv,
   eventId: string,
-  legalTier = 1
+  legalTier = 1,
+  // /events/<id>/<screen> (OSE-1684): the screen names the form, so the
+  // `?type=` of the old /forms/ address is not read.
+  screen?: EventFormScreen
 ): Promise<Response> {
   const url = new URL(request.url);
-  const formType = url.searchParams.get('type') ?? 'register';
+  const formType = screen
+    ? EVENT_FORM_SCREENS[screen]
+    : (url.searchParams.get('type') ?? 'register');
   // OSE-627: deployment ID for poster attribution (written to source_placement_id
   // on form submission so SharedReport can link scans to form registrations).
   const deploymentId = url.searchParams.get('deployment') ?? null;

@@ -207,8 +207,8 @@ describe('the short addresses', () => {
       ['e', `/events/${id}/${ev.slug}`],
       ['p', `/events/${id}/poster`],
       ['tv', `/events/${id}/tv`],
-      ['r', `/forms/${id}?type=register`],
-      ['c', `/forms/${id}?type=checkin`],
+      ['r', `/events/${id}/register`],
+      ['c', `/events/${id}/checkin`],
     ];
     for (const [prefix, location] of want) {
       for (const typed of [code, code.toLowerCase(), `${code.slice(0, 3)}%20${code.slice(3)}`]) {
