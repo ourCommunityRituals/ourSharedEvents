@@ -20,6 +20,12 @@
 // Drafts (CCR 2026-10-09, C1): only a public event is sent to its readable
 // address. Any other event is sent to /events/<id>, which answers the same 404
 // as an unknown event, so a code never reveals a draft's name.
+//
+// Guessing (2026-10-10): a code is six characters from 31, so a caller could
+// try codes until one answers. Wrong guesses are counted per caller
+// (EVENT_CODE_GUESS_MAX a minute, lib/public-read-limit.ts). Past that every
+// code answers 429 for the rest of the minute, right ones too, so a hit cannot
+// be told from a miss. A right code never adds to the count.
 
 import {
   type EventCodeScreen,
@@ -33,10 +39,15 @@ import { eventPhaseOf } from '../lib/event-enrich';
 import { eventPagePath } from '../lib/canonical';
 import { renderErrorPage } from './pages';
 import { corsHeaders } from '../lib/cors';
+import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 
-export interface EventCodeEnv {
+export type EventCodeEnv = PublicReadLimitEnv & {
   DB?: D1Database;
-}
+};
+
+/** Wrong codes a caller may try in a minute before every code is refused. */
+export const EVENT_CODE_GUESS_MAX = 30;
+const GUESS_SCOPE = 'event-code-guess';
 
 const EVENT_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -84,6 +95,20 @@ function notFoundPage(): Response {
   );
 }
 
+function tooManyGuessesPage(): Response {
+  const page = renderErrorPage(
+    429,
+    'Too many codes tried',
+    'Wait a minute, then type the code again.',
+    '/events',
+    'Browse upcoming events'
+  );
+  const headers = new Headers(page.headers);
+  headers.set('Retry-After', '60');
+  headers.set('Cache-Control', 'no-store');
+  return new Response(page.body, { status: 429, headers });
+}
+
 function unavailablePage(): Response {
   return renderErrorPage(
     503,
@@ -125,6 +150,9 @@ export async function handleEventCodeResolve(
   const code = normalizeEventCode(raw);
   if (!code) return notFoundPage();
   if (!env.DB) return unavailablePage();
+  // Checked before the lookup, so past the limit a right code and a wrong one
+  // look the same.
+  if (await isGuessLimited(request, env, GUESS_SCOPE)) return tooManyGuessesPage();
   let row: CodeEventRow | null = null;
   try {
     const eventId = await resolveEventCode(env.DB, code);
@@ -139,7 +167,12 @@ export async function handleEventCodeResolve(
   } catch {
     return unavailablePage();
   }
-  if (!row) return notFoundPage();
+  if (!row) {
+    if (await countGuess(request, env, GUESS_SCOPE, EVENT_CODE_GUESS_MAX)) {
+      return tooManyGuessesPage();
+    }
+    return notFoundPage();
+  }
 
   const isPublic = isPublicEvent(row);
   const shareScreen = SHARE_SCREEN_OF[screen];

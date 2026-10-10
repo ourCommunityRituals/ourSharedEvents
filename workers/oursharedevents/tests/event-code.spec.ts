@@ -31,6 +31,7 @@ import {
   normalizeEventCode,
 } from '../src/lib/event-code';
 import { CRAWL_DISALLOW } from '../src/lib/crawl-policy';
+import { EVENT_CODE_GUESS_MAX } from '../src/handlers/event-code';
 
 const ORIGIN = 'https://t.test';
 const KEY = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -281,6 +282,7 @@ describe('a shared link is counted: what and when, never who', () => {
     expect(kinds?.n).toBe(0);
   });
 
+  // @born-red TL-073 | method: deliberate-fixture-break | date: 2026-10-09
   test('HEAD and link-preview robots open the link but are not counted', async () => {
     const ev = await createEvent(`Short robots ${Date.now()}`);
     await goLive(ev.id, 5);
@@ -326,6 +328,7 @@ describe('a shared link is counted: what and when, never who', () => {
     expect(await sharesOf(ev.id)).toEqual({});
   });
 
+  // @born-red TL-074 | method: design-time-negative-assertion | date: 2026-10-09
   test('the counter holds no person: only event, screen, phase, day and a number', async () => {
     const cols = await db().prepare('PRAGMA table_info(share_opens_daily)').all<{ name: string }>();
     expect((cols.results ?? []).map((c) => c.name).sort()).toEqual([
@@ -363,5 +366,94 @@ describe('a shared link is counted: what and when, never who', () => {
     });
     expect(del.status).toBeLessThan(300);
     expect((await open(`/e/${ev.event_code}`)).status).toBe(404);
+  });
+});
+
+describe('guessing codes is limited; a right code never is (2026-10-10)', () => {
+  const from = (ip: string) => ({ headers: { 'User-Agent': BROWSER, 'CF-Connecting-IP': ip } });
+  // A real code of one event, and wrong ones that cannot match it.
+  const wrong = (n: number) =>
+    `/e/ZZZZ${EVENT_CODE_ALPHABET[n % 31]}${EVENT_CODE_ALPHABET[(n * 7) % 31]}`;
+
+  // @born-red TL-075 | method: deliberate-fixture-break | date: 2026-10-10
+  test('past the limit every code is refused, right ones too, so a hit cannot be told from a miss', async () => {
+    const ev = await createEvent(`Short guess ${Date.now()}`);
+    await goLive(ev.id, 7);
+    const code = String(ev.event_code);
+    const guesser = from('198.51.100.7');
+    for (let i = 0; i < EVENT_CODE_GUESS_MAX; i++) {
+      expect((await open(wrong(i), guesser)).status, `guess ${i + 1}`).toBe(404);
+    }
+    const over = await open(wrong(EVENT_CODE_GUESS_MAX), guesser);
+    expect(over.status).toBe(429);
+    expect(over.headers.get('Retry-After')).toBe('60');
+    // The same caller now gets the same answer for a real code, on every prefix.
+    for (const prefix of ['e', 'p', 'r', 'c', 'tv']) {
+      expect((await open(`/${prefix}/${code}`, guesser)).status, prefix).toBe(429);
+    }
+    // Nobody else is touched.
+    expect((await open(`/e/${code}`, from('198.51.100.8'))).status).toBe(302);
+  });
+
+  test('a right code never counts as a guess: a crowd on one address is never refused', async () => {
+    const ev = await createEvent(`Short crowd ${Date.now()}`);
+    await goLive(ev.id, 7);
+    const crowd = from('203.0.113.20');
+    for (let i = 0; i < EVENT_CODE_GUESS_MAX * 2; i++) {
+      expect((await open(`/e/${ev.event_code}`, crowd)).status, `open ${i + 1}`).toBe(302);
+    }
+    // And the crowd's own typing mistakes still get the plain 404.
+    expect((await open(wrong(1), crowd)).status).toBe(404);
+  });
+
+  test('something that cannot be a code is not looked up and not counted', async () => {
+    const caller = from('203.0.113.21');
+    for (let i = 0; i < EVENT_CODE_GUESS_MAX + 5; i++) {
+      expect((await open('/e/abc', caller)).status).toBe(404);
+    }
+    expect((await open(wrong(2), caller)).status).toBe(404);
+  });
+});
+
+describe('a guessed code of a draft opens nothing about it (2026-10-10)', () => {
+  /** Follow redirects by hand (same site only) and return the last answer. */
+  async function land(path: string): Promise<{ status: number; body: string; path: string }> {
+    let at = path;
+    for (let hop = 0; hop < 4; hop++) {
+      const res = await open(at, asPerson);
+      const next = res.headers.get('location');
+      if (res.status >= 300 && res.status < 400 && next) {
+        const url = new URL(next, ORIGIN);
+        if (url.origin !== ORIGIN) throw new Error(`${path} left the site: ${next}`);
+        at = url.pathname + url.search;
+        continue;
+      }
+      return { status: res.status, body: await res.text(), path: at };
+    }
+    throw new Error(`too many redirects from ${path}`);
+  }
+
+  // @born-red TL-072 | method: deliberate-fixture-break | date: 2026-10-10
+  test('draft and ready: no screen shows the name, and the data behind them refuses', async () => {
+    for (const status of ['draft', 'ready']) {
+      const marker = `Hushhush ${status} ${Date.now()}`;
+      const ev = await createEvent(marker);
+      await db().prepare('UPDATE events SET status = ? WHERE id = ?').bind(status, ev.id).run();
+      for (const prefix of ['e', 'p', 'r', 'c', 'tv']) {
+        const end = await land(`/${prefix}/${ev.event_code}`);
+        expect(end.body, `${status} /${prefix}/ → ${end.path}`).not.toContain(marker);
+        expect(end.body.toLowerCase(), `${status} /${prefix}/`).not.toContain(ev.slug);
+        expect(end.path, `${status} /${prefix}/ lands on`).not.toContain(ev.slug);
+      }
+      for (const api of [
+        `/api/v2/events/${ev.id}`,
+        `/api/v2/events/${ev.id}/poster-bundle`,
+        `/api/v2/events/${ev.id}/display-config`,
+      ]) {
+        const res = await open(api, asPerson);
+        expect(res.status, `${status} ${api}`).not.toBe(200);
+        expect(await res.text(), `${status} ${api}`).not.toContain(marker);
+      }
+    }
   });
 });

@@ -1514,6 +1514,93 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Layer: event short codes (OSE-1684, 2026-10-09/10)
+// One six-character code per event serves /e/ /p/ /tv/ /r/ /c/ (public) and
+// counts shared opens in share_opens_daily. TL-072..075.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const EVENT_SHORT_CODES: ThreatEntry[] = [
+  {
+    id: 'TL-072',
+    layer: 'worker_surface',
+    threat:
+      'Draft exposure through a short code: a guessed or leaked code of a draft or ready event reveals its name or content. Refused — /e/ sends a non-public event to the plain /events/<id> (its ordinary 404, never the readable name), and every screen a code reaches (poster, TV, forms) and the public data behind them (event, poster-bundle, display-config) refuse a draft or ready event.',
+    severity: 'HIGH',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a guessed code of a draft opens nothing about it (2026-10-10) > draft and ready: no screen shows the name, and the data behind them refuses',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the /e/ draft gate removed (a draft redirected to its readable name), and red with the form pages rendering drafts. The older "a draft: the code never reveals its name" test (C1, 2026-10-09) goes red on the first fault too.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-073',
+    layer: 'worker_surface',
+    threat:
+      'Share-count inflation: link-preview robots, HEAD requests or one scripted client add opens to share_opens_daily, so the organizer reads shares that no person made. Refused — only a GET by a person of a public event counts; HEAD and known preview agents get the link but add nothing; past the per-caller limit (publicCountLimited) the link works and nothing is counted.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a shared link is counted: what and when, never who > HEAD and link-preview robots open the link but are not counted',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-09',
+      method: 'deliberate-fixture-break',
+      notes:
+        'CCR 2026-10-09 defect C2: red with the robot and method check removed. A phone brand carrying "bot" (CUBOT) stays counted as a person.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-074',
+    layer: 'd1_boundary',
+    threat:
+      'Identity in the share counter: share_opens_daily or event_codes gains a column that can name or follow a person (IP, cookie, anonymous id, device, referrer), turning a count of when into a record of who. Refused — the counter is event, screen, phase, day and a number; the code table is code, event and creation time.',
+    severity: 'HIGH',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a shared link is counted: what and when, never who > the counter holds no person: only event, screen, phase, day and a number',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-09',
+      method: 'design-time-negative-assertion',
+      notes:
+        'PRAGMA table_info of both tables asserted equal to their exact column lists, so any added column turns it red.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-075',
+    layer: 'worker_surface',
+    threat:
+      'Code guessing: a code is six characters from 31 (about 887 million), every event has one, and /e/ /p/ /r/ /c/ never refuse (publicCountLimited), so a caller could try codes until one answers and find live events that are off the map. Mitigated — wrong guesses are counted per caller (EVENT_CODE_GUESS_MAX = 30 a minute); past that every code answers 429 for the rest of the minute, right ones too, so a hit cannot be told from a miss. A right code never counts, so a crowd on one address is never refused.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > guessing codes is limited; a right code never is (2026-10-10) > past the limit every code is refused, right ones too, so a hit cannot be told from a miss',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the pre-lookup check removed (a real code still answered 302 past the limit) and red with the guess count removed.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'Speed bump, not a wall: many addresses each get their own allowance, and the limit fails open with KV down, like every public read limit. People on one address (the Wi-Fi at a venue) share one allowance, so one of them trying 30 wrong codes stops codes for all of them for a minute; printed poster codes (/s/, /q/) are not affected. /s/ shortlink codes (62 symbols, six long) have no guess limit; whether to add one is open.',
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Layer: link counts and the browser name (owner 2026-10-10). TL-076..078.
 // (TL-072..075 are the event short-code entries, OSE-1684.)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1592,6 +1679,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...PAYMENT_OPS,
   ...SPONSOR_ELIGIBILITY_GATE,
   ...IMPRESSION_PRIVACY_REDTEAM,
+  ...EVENT_SHORT_CODES,
   ...LINK_COUNT_ROBOTS,
 ];
 
