@@ -1909,6 +1909,16 @@ async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): P
 }
 
 /**
+ * The one message a closed event page shows: no such event, a draft, a ready
+ * event, or one taken down. It must stay the same for all of them, so a probe
+ * cannot tell a missing id from an unpublished one. It names "not published
+ * yet" because an organizer opening their own draft's link lands here; the old
+ * wording ("may have been archived") told them something untrue.
+ */
+export const EVENT_NOT_OPEN_COPY =
+  "This event isn't open to the public. It may not be published yet, or it may have been taken down. See what's coming up next.";
+
+/**
  * GET /events/:id — public event landing page. Phase-aware.
  *
  * Recipients land here from `/s/:code` shortlinks. The page renders the
@@ -1943,7 +1953,7 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
@@ -1981,7 +1991,7 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
@@ -2010,7 +2020,7 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
