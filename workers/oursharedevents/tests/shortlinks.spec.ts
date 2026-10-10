@@ -32,6 +32,7 @@ import {
 } from '../src/lib/shortlinks';
 import { isLinkPreviewAgent } from '../src/lib/share-count';
 import { AS_PERSON, PERSON_UA } from './helpers/person-agent';
+import { SHORTLINK_GUESS_MAX } from '../src/handlers/shortlink-resolve';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose240-test';
@@ -604,5 +605,68 @@ describe('link-preview robots open a short link but are not counted (owner 2026-
       expect(isLinkPreviewAgent(ua), name).toBe(true);
     }
     expect(isLinkPreviewAgent(PERSON_UA)).toBe(false);
+  });
+});
+
+describe('guessing short links is limited; a right code never is (2026-10-10)', () => {
+  const from = (ip: string) => ({
+    redirect: 'manual' as const,
+    headers: { 'User-Agent': PERSON_UA, 'CF-Connecting-IP': ip },
+  });
+  // Wrong codes in the right shape: six base-62 characters no real code uses here.
+  const wrong = (n: number) => `zzzz${String(n % 100).padStart(2, '0')}`;
+  const open = (code: string, init: RequestInit) => SELF.fetch(`https://t.test/s/${code}`, init);
+
+  async function newCode(title: string): Promise<string> {
+    const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+      body: JSON.stringify({ title, brand_id: BRAND }),
+    });
+    return ((await create.json()) as CreateEventResponse).shortcode as string;
+  }
+
+  // @born-red TL-079 | method: deliberate-fixture-break | date: 2026-10-10
+  test('past the limit every code is refused, right ones too, so a hit cannot be told from a miss', async () => {
+    const code = await newCode(`Shortlink guess ${Date.now()}`);
+    const guesser = from('198.51.100.70');
+    for (let i = 0; i < SHORTLINK_GUESS_MAX; i++) {
+      expect((await open(wrong(i), guesser)).status, `guess ${i + 1}`).toBe(404);
+    }
+    const over = await open(wrong(SHORTLINK_GUESS_MAX), guesser);
+    expect(over.status).toBe(429);
+    expect(over.headers.get('Retry-After')).toBe('60');
+    expect(over.headers.get('Cache-Control')).toBe('no-store');
+    expect((await open(code, guesser)).status, 'a real code, same caller').toBe(429);
+    // Nobody else is touched.
+    expect((await open(code, from('198.51.100.71'))).status).toBe(302);
+  });
+
+  test('a right code never counts as a guess: a crowd on one address is never refused', async () => {
+    const code = await newCode(`Shortlink crowd ${Date.now()}`);
+    const crowd = from('203.0.113.70');
+    for (let i = 0; i < SHORTLINK_GUESS_MAX * 2; i++) {
+      expect((await open(code, crowd)).status, `open ${i + 1}`).toBe(302);
+    }
+    expect((await open(wrong(1), crowd)).status).toBe(404);
+  });
+
+  test('something that cannot be a code is not looked up and not counted', async () => {
+    const caller = from('203.0.113.71');
+    for (let i = 0; i < SHORTLINK_GUESS_MAX + 5; i++) {
+      expect((await open('abc', caller)).status).toBe(404);
+    }
+    expect((await open(wrong(2), caller)).status).toBe(404);
+  });
+
+  test('the short-code guesses and the short-link guesses are counted apart', async () => {
+    const code = await newCode(`Shortlink apart ${Date.now()}`);
+    const caller = from('203.0.113.72');
+    for (let i = 0; i <= SHORTLINK_GUESS_MAX; i++) {
+      await SELF.fetch(`https://t.test/e/ZZZZ${'23456789'[i % 8]}${'ABCDEFGH'[i % 8]}`, caller);
+    }
+    const e = await SELF.fetch('https://t.test/e/ZZZZ22', caller);
+    expect(e.status, 'the caller is past the /e/ limit').toBe(429);
+    expect((await open(code, caller)).status, '/e/ guesses do not refuse /s/').toBe(302);
   });
 });
