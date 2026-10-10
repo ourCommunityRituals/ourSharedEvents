@@ -1,0 +1,32 @@
+info:
+  name: OSE-1684 | /e/ code | a code that matches nothing is a 404 page
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/e/ZZZZZZ"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: an unknown code is a page that says to check the code, not a redirect.
+        test('404, not a redirect', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getHeader('Location')).to.eql(undefined);
+        });
+        test('the page says the code matched nothing', function () {
+          expect(String(res.getBody())).to.match(/That code didn(&#39;|')t match an event/);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

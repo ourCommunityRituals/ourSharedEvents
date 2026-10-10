@@ -1,0 +1,39 @@
+info:
+  name: OSE-1684 | /e/ code | opens the event page
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/e/{{eventCode}}"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (handleEventCodeResolve): a public request, no sign-in. The code
+        // answers 302 to the event page: its readable address when the event is
+        // public, else the plain /events/<id> (whose 404 never names a draft).
+        const id = bru.getEnvVar('testEventId');
+        if (bru.getVar('eventCode')) {
+          test('302 to the event page, never cached', function () {
+            expect(res.getStatus()).to.eql(302);
+            expect(res.getHeader('Cache-Control')).to.eql('no-store');
+          });
+          test('Location is /events/<id> or /events/<id>/<readable-name>', function () {
+            const loc = String(res.getHeader('Location') || '').replace(/^https?:\/\/[^/]+/, '');
+            const ok = new RegExp('^/events/' + id + '(/[a-z0-9]+(-[a-z0-9]+)*)?$');
+            expect(ok.test(loc), loc).to.eql(true);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -24,7 +24,13 @@
 // is a speed bump on a scraper, not an authentication boundary, and it should
 // never be load-bearing enough to be worth an outage.
 
-import { checkRateLimit, type RateLimitEnv } from './rate-limit';
+import {
+  checkRateLimit,
+  isBucketTripped,
+  parseRateLimitEntry,
+  rateLimitKvKey,
+  type RateLimitEnv,
+} from './rate-limit';
 import {
   EDGE_WINDOW_SECONDS,
   PUBLIC_READ_EDGE_MAX,
@@ -204,4 +210,53 @@ export function publicCountLimited<E>(
     if (!edgeCallerIp(request)) return handler(request, env, true);
     return handler(request, env, !(await isPublicReadLimited(request, env, scope, max)));
   };
+}
+
+/**
+ * Limit WRONG GUESSES at a short code, not visits. OSE-1684.
+ *
+ * An event code is six characters from 31, so about 887 million codes, and
+ * every event gets one. The links it serves (/e/ /p/ /r/ /c/) sit behind
+ * `publicCountLimited`, which never refuses, so without this a caller could try
+ * codes without end and find events that are off the map, which before needed
+ * the event's full id.
+ *
+ * Two calls, one bucket per caller and scope:
+ * - `countGuess` records one wrong guess; true once the caller is past `max`.
+ * - `isGuessLimited` only reads the bucket. A route checks it BEFORE looking a
+ *   code up and refuses every code while it is true, right ones too: refusing
+ *   only the misses would still tell a caller which codes are real.
+ *
+ * A right code never adds to the count, so a crowd sharing one address and one
+ * link is never refused. KV only (no edge layer), so the two calls read and
+ * write the same count. Same key and fail-open rule as `isPublicReadLimited`:
+ * with KV down, nothing is refused.
+ */
+export async function countGuess(
+  request: Request,
+  env: PublicReadLimitEnv,
+  scope: string,
+  max: number
+): Promise<boolean> {
+  try {
+    return await checkRateLimit(env, callerKey(request, scope), max);
+  } catch {
+    return false;
+  }
+}
+
+export async function isGuessLimited(
+  request: Request,
+  env: PublicReadLimitEnv,
+  scope: string
+): Promise<boolean> {
+  const kv = env.RATE_LIMIT_KV;
+  if (!kv) return false;
+  try {
+    const kvKey = await rateLimitKvKey(callerKey(request, scope), env.RATE_LIMIT_KEY_PEPPER);
+    const entry = parseRateLimitEntry(await kv.get(kvKey));
+    return entry !== null && Date.now() < entry.resetAt && isBucketTripped(entry);
+  } catch {
+    return false;
+  }
 }
