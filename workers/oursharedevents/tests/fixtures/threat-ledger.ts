@@ -1197,7 +1197,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-057',
     layer: 'worker_surface',
     threat:
-      'Public check-in and survey forms have no per-event cap: every public form POST is behind the router\'s KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).',
+      "Public check-in and survey forms have no per-event cap: every public form POST is behind the router's KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).",
     severity: 'MEDIUM',
     target_invariant: null, // resource abuse / input handling, not PII retention (#8)
     mitigation_story: 'OSE-1465',
@@ -1513,6 +1513,69 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: link counts and the browser name (owner 2026-10-10). TL-076..078.
+// (TL-072..075 are the event short-code entries, OSE-1684.)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LINK_COUNT_ROBOTS: ThreatEntry[] = [
+  {
+    id: 'TL-076',
+    layer: 'worker_surface',
+    threat:
+      'Robot-inflated link taps: chat and social apps fetch a /s/ link the moment it is pasted (iMessage, Slack, WhatsApp, Discord previews), and each fetch counted as a tap. The taps feed the organizer cards, the dashboards, the sponsor page and the SharedReport, and can push a count past the floor of 5 with fewer than 5 people. Refused — a link-preview robot, or a request with no user agent, gets the same redirect and adds no tap (isLinkPreviewRequest, the rule the short codes use).',
+    severity: 'MEDIUM',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/shortlinks.spec.ts > link-preview robots open a short link but are not counted (owner 2026-10-10) > each robot gets the same redirect as a person, and adds no tap',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the robot check removed from handleShortlinkResolve. A companion test goes red when the robot list matches a bare "pinterest", which also caught people inside the Pinterest app.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'Email scanners that present a browser user agent (Safe Links, Proofpoint) are still counted; a robot list cannot tell them from a person, and the address may not be read. Counts before 2026-10-10 include robot fetches and cannot be corrected.',
+  },
+  {
+    id: 'TL-077',
+    layer: 'worker_surface',
+    threat:
+      'Browser-name creep: once one public path reads the User-Agent, others start to, and it ends up logged, hashed or stored as a device fingerprint. Refused — ADR-001 (amended 2026-10-10): a public handler never reads it; only named readers in lib do, each answering robot or not and keeping nothing. Any other User-Agent read in src/ fails the gate.',
+    severity: 'HIGH',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/anonymity-gate.spec.ts > ADR-001 (2026-10-10): the browser name is read only by named readers > no file outside the named readers reads User-Agent',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with a new User-Agent read planted in pages.ts, and red (with the per-handler gate) when the short-code handler read the header itself. Found while building TL-076: handleEventCodeResolve had read it unchecked because its file was not in the anonymity gate; it is registered now.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-078',
+    layer: 'd1_boundary',
+    threat:
+      'Stored browser fingerprint on scans: the poster-scan path writes an unsalted SHA-256 of the User-Agent (16 hex characters) to scan_node_returns.user_agent_hash, next to the keyed scan id. Browser strings are few enough to reverse by dictionary, so the row keeps a device trait the other readers are not allowed to keep.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: null,
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Found 2026-10-10 while listing the User-Agent readers for TL-077 (src/handlers/qr-scan.ts hashUserAgent, src/lib/scan-buffer.ts). Not changed here: whether the column is needed at all is an owner decision.',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1529,12 +1592,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...PAYMENT_OPS,
   ...SPONSOR_ELIGIBILITY_GATE,
   ...IMPRESSION_PRIVACY_REDTEAM,
+  ...LINK_COUNT_ROBOTS,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-09-02',
+  last_updated: '2026-10-10',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;

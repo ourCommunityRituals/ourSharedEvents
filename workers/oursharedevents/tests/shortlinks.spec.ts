@@ -30,6 +30,8 @@ import {
   resolveCode,
   incrementClick,
 } from '../src/lib/shortlinks';
+import { isLinkPreviewAgent } from '../src/lib/share-count';
+import { AS_PERSON, PERSON_UA } from './helpers/person-agent';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose240-test';
@@ -414,6 +416,7 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
 
     const res = await SELF.fetch(`https://t.test/s/${created.shortcode}`, {
       redirect: 'manual',
+      headers: AS_PERSON,
     });
     expect(res.status).toBe(302);
     const location = res.headers.get('Location');
@@ -437,7 +440,10 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
 
     // Three redirects → three increments
     for (let i = 0; i < 3; i++) {
-      const res = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+      const res = await SELF.fetch(`https://t.test/s/${code}`, {
+        redirect: 'manual',
+        headers: AS_PERSON,
+      });
       expect(res.status).toBe(302);
     }
 
@@ -533,5 +539,70 @@ describe('OSE-240: anonymity-principle compliance', () => {
       violations,
       `shortlink-resolve.ts reads per-attendee identity (violates OSE anonymity principle): ${violations.join(', ')}`
     ).toEqual([]);
+  });
+});
+
+describe('link-preview robots open a short link but are not counted (owner 2026-10-10)', () => {
+  const PINTEREST_APP =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [Pinterest/iOS]';
+  const ROBOTS: Record<string, string | null> = {
+    'iMessage preview':
+      'Mozilla/5.0 (Macintosh) AppleWebKit/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0',
+    'Slack unfurl': 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)',
+    'WhatsApp and Signal preview': 'WhatsApp/2.23.20.0',
+    'Discord embed': 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+    'Pinterest robot': 'Pinterest/0.2 (+https://www.pinterest.com/bot.html)',
+    Pinterestbot: 'Mozilla/5.0 (compatible; Pinterestbot/1.0; +http://www.pinterest.com/bot.html)',
+    'no user agent at all': null,
+  };
+
+  async function newCode(title: string): Promise<string> {
+    const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+      body: JSON.stringify({ title, brand_id: BRAND }),
+    });
+    const created = (await create.json()) as CreateEventResponse;
+    return created.shortcode as string;
+  }
+  async function clicksOf(code: string): Promise<number> {
+    const row = await (env as unknown as TestEnv).DB.prepare(
+      'SELECT clicks FROM shortlinks WHERE code = ?'
+    )
+      .bind(code)
+      .first<{ clicks: number }>();
+    return Number(row?.clicks) || 0;
+  }
+  const open = (code: string, ua: string | null) =>
+    SELF.fetch(`https://t.test/s/${code}`, {
+      redirect: 'manual',
+      headers: ua === null ? {} : { 'User-Agent': ua },
+    });
+
+  // @born-red TL-076 | method: deliberate-fixture-break | date: 2026-10-10
+  test('each robot gets the same redirect as a person, and adds no tap', async () => {
+    const code = await newCode(`Robot taps ${Date.now()}`);
+    const person = await open(code, PERSON_UA);
+    expect(person.status).toBe(302);
+    for (const [name, ua] of Object.entries(ROBOTS)) {
+      const res = await open(code, ua);
+      expect(res.status, name).toBe(302);
+      expect(res.headers.get('Location'), name).toBe(person.headers.get('Location'));
+    }
+    expect(await clicksOf(code)).toBe(1);
+  });
+
+  test('a person in the Pinterest app is a person', async () => {
+    expect(isLinkPreviewAgent(PINTEREST_APP)).toBe(false);
+    const code = await newCode(`Pinterest app ${Date.now()}`);
+    await open(code, PINTEREST_APP);
+    expect(await clicksOf(code)).toBe(1);
+  });
+
+  test('every robot above is recognised by the shared rule (the one /e/ uses too)', () => {
+    for (const [name, ua] of Object.entries(ROBOTS)) {
+      expect(isLinkPreviewAgent(ua), name).toBe(true);
+    }
+    expect(isLinkPreviewAgent(PERSON_UA)).toBe(false);
   });
 });

@@ -28,7 +28,7 @@ import {
   normalizeEventCode,
   resolveEventCode,
 } from '../lib/event-code';
-import { type ShareScreen, isLinkPreviewAgent, recordShareOpen } from '../lib/share-count';
+import { type ShareScreen, isLinkPreviewRequest, recordShareOpen } from '../lib/share-count';
 import { eventPhaseOf } from '../lib/event-enrich';
 import { eventPagePath } from '../lib/canonical';
 import { renderErrorPage } from './pages';
@@ -148,7 +148,7 @@ export async function handleEventCodeResolve(
     countable &&
     isPublic &&
     request.method === 'GET' &&
-    !isLinkPreviewAgent(request.headers.get('User-Agent'))
+    !isLinkPreviewRequest(request)
   ) {
     // A failed count never blocks the link.
     try {

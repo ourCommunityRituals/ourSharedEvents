@@ -141,6 +141,14 @@ const PUBLIC_HANDLER_FILES: FileRegistry[] = [
     exportFinderDescription: '`export (async )? function handle*`',
   },
   {
+    relPath: 'src/handlers/event-code.ts',
+    description: 'public short codes (/e/ /p/ /tv/ /r/ /c/), OSE-1684',
+    gatedHandlers: ['handleEventCodeResolve'],
+    exemptHandlers: ['handleAdminEventCode'], // admin-authenticated (router guard)
+    exportFinder: /export (?:async )?function (handle\w+)/g,
+    exportFinderDescription: '`export (async )? function handle*`',
+  },
+  {
     relPath: 'src/handlers/privacy.ts',
     description: 'privacy policy page (/privacy) — the irony surface',
     gatedHandlers: ['handlePrivacyPage'],
@@ -200,4 +208,58 @@ describe('OSE-274/275/276: anonymity-principle static gate (bug fix — every pu
       });
     });
   }
+});
+
+// ─── The browser name is read only by named readers (ADR-001, 2026-10-10) ────
+//
+// Owner decision 2026-10-10: link counts drop link-preview robots, which needs
+// the browser name (User-Agent). A public handler still never reads it. It is
+// read only in the files below, each for one stated reason. A new read anywhere
+// else in src/ fails here, so the exception cannot widen without a decision.
+const USER_AGENT_READERS: Record<string, string> = {
+  'src/lib/share-count.ts':
+    'isLinkPreviewRequest: robot or not, for link counts (/s/ and the short codes); returns a boolean, keeps nothing',
+  'src/lib/invalid-traffic.ts':
+    'isAutomatedClient: robot or not, for the sponsor proof layer (OSE-1310); returns a boolean, keeps nothing',
+  'src/handlers/qr-scan.ts':
+    'pre-existing: stores an unsalted hash of it on scan_node_returns.user_agent_hash; open as TL-078',
+};
+const USER_AGENT_READ = /headers\.get\(\s*['"`]user-agent['"`]\s*\)/i;
+
+describe('ADR-001 (2026-10-10): the browser name is read only by named readers', () => {
+  const sources: Record<string, string> = JSON.parse(
+    (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+  );
+  const srcFiles = Object.entries(sources)
+    .map(([p, text]) => [p.replace(/\\/g, '/'), text] as const)
+    .filter(([p]) => /\/src\/.*\.ts$/.test(p));
+
+  // @born-red TL-077 | method: deliberate-fixture-break | date: 2026-10-10
+  test('no file outside the named readers reads User-Agent', () => {
+    expect(srcFiles.length, 'the source files must be loaded').toBeGreaterThan(50);
+    const outside = srcFiles
+      .filter(([, text]) => USER_AGENT_READ.test(text))
+      .map(([p]) => p.slice(p.indexOf('/src/') + 1))
+      .filter((rel) => !(rel in USER_AGENT_READERS));
+    expect(outside, `User-Agent read outside the named readers: ${outside.join(', ')}`).toEqual([]);
+  });
+
+  test('every named reader still exists and still reads it (the list cannot go stale)', () => {
+    for (const rel of Object.keys(USER_AGENT_READERS)) {
+      expect(USER_AGENT_READ.test(loadSource(rel)), rel).toBe(true);
+    }
+  });
+
+  test('the link-count reader answers yes or no, and keeps nothing', () => {
+    const body = extractFunctionBody(loadSource('src/lib/share-count.ts'), 'isLinkPreviewRequest');
+    expect(body, 'isLinkPreviewRequest must exist in lib/share-count.ts').not.toBeNull();
+    expect(loadSource('src/lib/share-count.ts')).toMatch(
+      /export function isLinkPreviewRequest\(request: Request\): boolean/
+    );
+    for (const kept of [/console\./, /\.prepare\(/, /\.put\(/, /fetch\(/, /\benv\b/]) {
+      expect(body!, `isLinkPreviewRequest must not log or store (${kept.source})`).not.toMatch(
+        kept
+      );
+    }
+  });
 });

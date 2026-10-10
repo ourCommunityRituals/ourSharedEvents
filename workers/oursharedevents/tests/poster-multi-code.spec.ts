@@ -20,6 +20,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { AS_PERSON } from './helpers/person-agent';
 
 const ADMIN_HEADERS = {
   Authorization: 'Bearer test-admin-key-e2e-2026',
@@ -97,7 +98,7 @@ async function putCodes(body: unknown, id = EVT): Promise<{ status: number; body
 }
 
 async function follow(code: string): Promise<string | null> {
-  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual' });
+  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual', headers: AS_PERSON });
   expect(res.status).toBe(302);
   return res.headers.get('Location');
 }

@@ -33,6 +33,7 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { tagsConsistent } from '../src/lib/h3-tagging';
+import { AS_PERSON } from './helpers/person-agent';
 
 const ADMIN_HEADERS = {
   Authorization: 'Bearer test-admin-key-e2e-2026',
@@ -582,7 +583,10 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
       .bind(code)
       .run();
 
-    const click = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    const click = await SELF.fetch(`https://t.test/s/${code}`, {
+      redirect: 'manual',
+      headers: AS_PERSON,
+    });
     expect(click.status).toBe(302);
     const row = await tenv.DB.prepare('SELECT clicks FROM shortlinks WHERE code = ?')
       .bind(code)

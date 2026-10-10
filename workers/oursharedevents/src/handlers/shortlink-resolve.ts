@@ -9,6 +9,13 @@
  * public event page `/events/:id` (OSE-243a) or the check-in form. The JSON
  * endpoint `/api/v2/events/:id` was the target before OSE-243a.
  *
+ * Robots (owner 2026-10-10): chat and social apps fetch a link the moment it
+ * is pasted, to draw its preview card. That fetch gets the redirect like
+ * anyone else but is not counted as a tap; the rule is the one /e/ uses
+ * (isLinkPreviewRequest, lib/share-count.ts), which reads the browser name,
+ * answers yes or no and keeps nothing; this handler never reads it. Email scanners that look like browsers are
+ * still counted: a robot list cannot tell them from a person.
+ *
  * Anonymity-principle compliance (reinforced 2026-05-14):
  *   - No IP read. No anon_id read. No session cookie set/read.
  *     The `Referer` header is NOT logged.
@@ -32,6 +39,7 @@ import {
   type ShortlinksEnv,
 } from '../lib/shortlinks';
 import { internalTarget } from '../lib/poster-codes';
+import { isLinkPreviewRequest } from '../lib/share-count';
 
 export type ShortlinkResolveEnv = ShortlinksEnv;
 
@@ -70,7 +78,10 @@ export async function handleShortlinkResolve(
   // RETURNING round trip), so the count is current when the 302 lands.
   // Past the caller's limit (OSE-1496) the link still works and the click is
   // not counted, so one client cannot run the count up. See publicCountLimited.
-  if (countable) await incrementClick(env, code);
+  // A link-preview robot is sent on but not counted.
+  if (countable && !isLinkPreviewRequest(request)) {
+    await incrementClick(env, code);
+  }
 
   // 302 to the public event HTML page. OSE-243a wired /events/:id to
   // handlePublicEventPage which renders the 5W content + venue map +
