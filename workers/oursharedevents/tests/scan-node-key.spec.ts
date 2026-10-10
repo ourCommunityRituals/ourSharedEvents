@@ -21,7 +21,7 @@ import { eventAnonKey } from '../src/lib/event-anon-key';
 import { hashAnonIdForReturns } from '../src/lib/anon-id-hash';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { handleScanBatch, type ScanMessage } from '../src/lib/scan-buffer';
-import { materializeAnonIdReturns } from '../src/lib/shared-report';
+import { aggregateScanBuckets, materializeAnonIdReturns } from '../src/lib/shared-report';
 import { handleDataSubjectErase, type DataSubjectEnv } from '../src/handlers/data-subject';
 import { hashEmail } from '../src/lib/forms-db';
 
@@ -304,6 +304,83 @@ describe('the scan write never stores a raw cookie value', () => {
       { DB: mainDb() }
     );
     expect(await storedScanIds(eventId)).toEqual([null]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 3b. A keyed scan keeps no browser-name hash (TL-078, 2026-10-10)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function storedUaHashes(eventId: string): Promise<Array<string | null>> {
+  const rows = await mainDb()
+    .prepare('SELECT user_agent_hash FROM scan_node_returns WHERE event_id = ?')
+    .bind(eventId)
+    .all<{ user_agent_hash: string | null }>();
+  return rows.results.map((r) => r.user_agent_hash);
+}
+
+async function distinctVisitors(eventId: string): Promise<number> {
+  await aggregateScanBuckets({ DB: mainDb() });
+  const row = await mainDb()
+    .prepare('SELECT SUM(distinct_agent_hashes) AS n FROM scan_aggregates WHERE event_id = ?')
+    .bind(eventId)
+    .first<{ n: number | null }>();
+  return row?.n ?? 0;
+}
+
+describe('TL-078: a keyed scan keeps no browser-name hash (2026-10-10)', () => {
+  // @born-red TL-078 | method: deliberate-fixture-break | date: 2026-10-10
+  test('INTEGRATION | GET /q/<token> with the pepper set | the row has the keyed id and no browser-name hash', async () => {
+    const { eventId, token } = await newEvent();
+    await scan(newCookieValue(), token);
+    expect((await storedScanIds(eventId)).map(isScanNodeKey)).toEqual([true]);
+    expect(await storedUaHashes(eventId)).toEqual([null]);
+  });
+
+  test('INTEGRATION | two browsers with the same browser name | still counted as two visitors, by keyed id alone', async () => {
+    const { eventId, token } = await newEvent();
+    await scan(newCookieValue(), token);
+    await scan(newCookieValue(), token);
+    expect(await storedUaHashes(eventId)).toEqual([null, null]);
+    expect(await distinctVisitors(eventId)).toBe(2);
+  });
+
+  test('INTEGRATION | no pepper | the hash is kept as the fallback, so the visitor count is not zero', async () => {
+    const { eventId, token } = await newEvent();
+    const noPepper = { ...(env as unknown as QrScanEnv), ANON_ID_HASH_PEPPER: undefined };
+    await handleQrScan(
+      new Request(`https://t.test/q/${token}`, {
+        headers: { Cookie: `ose_anon=${newCookieValue()}`, 'User-Agent': 'scan-node-key-spec' },
+      }),
+      noPepper,
+      token
+    );
+    expect(await storedScanIds(eventId)).toEqual([null]);
+    const [hash] = await storedUaHashes(eventId);
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+    expect(await distinctVisitors(eventId)).toBe(1);
+  });
+
+  test('INTEGRATION | a queued message with a keyed id and a hash (from the previous Worker) | the hash is not stored', async () => {
+    const { eventId } = await newEvent();
+    const key = await scanNodeKey(newCookieValue(), tenv().ANON_ID_HASH_PEPPER);
+    const msg: ScanMessage = {
+      placement_row_id: `spe_${crypto.randomUUID()}`,
+      return_row_id: `snr_${crypto.randomUUID()}`,
+      event_id: eventId,
+      deployment_id: `pd-${eventId}`,
+      anon_id: key,
+      ua_hash: 'deadbeefdeadbeef',
+      country: null,
+      scan_bucket: '2026-10-10T12:00',
+    };
+    const message = { body: msg, attempts: 1, ack: () => {}, retry: () => {} };
+    await handleScanBatch(
+      { queue: 'ose-scans', messages: [message] } as unknown as MessageBatch<ScanMessage>,
+      { DB: mainDb() }
+    );
+    expect(await storedScanIds(eventId)).toEqual([key]);
+    expect(await storedUaHashes(eventId)).toEqual([null]);
   });
 });
 

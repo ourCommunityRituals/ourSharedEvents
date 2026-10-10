@@ -2590,21 +2590,19 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env production 2>&1 || true)"
-          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER; do
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER ANON_ID_HASH_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
-              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447). Provision it: bash scripts/set-secrets.sh production"
+              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447; for ANON_ID_HASH_PEPPER, scans with no id and no return counts per OSE-1659). Provision it: bash scripts/set-secrets.sh production"
               echo "$OUT"
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
-          # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
-          # hashes anon_id_returns. Without it scans are stored with no id and
-          # returns are not counted, but nothing breaks and nothing leaks, so a
-          # missing value is a warning until it has been provisioned once.
-          if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
-            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the production worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh production"
-          fi
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER, ANON_ID_HASH_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # OSE-1659 / TL-078 (2026-10-10): ANON_ID_HASH_PEPPER is required on
+          # production. Without it a scan has no keyed id, so the browser-name hash
+          # is the only thing the visitor count can use, and returns are not counted.
+          # Staging still only warns (its step above) until it is provisioned there.
+
           # ADR-012 gate R2 (OSE-1467): static admin credentials must be ABSENT on
           # production. Their presence is a standing admin path that bypasses Access.
           for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do

@@ -222,7 +222,7 @@ const USER_AGENT_READERS: Record<string, string> = {
   'src/lib/invalid-traffic.ts':
     'isAutomatedClient: robot or not, for the sponsor proof layer (OSE-1310); returns a boolean, keeps nothing',
   'src/handlers/qr-scan.ts':
-    'pre-existing: stores an unsalted hash of it on scan_node_returns.user_agent_hash; open as TL-078',
+    'TL-078: hashed and stored only for a scan with no keyed id (ANON_ID_HASH_PEPPER unset), the visitor-count fallback; production requires the pepper',
 };
 const USER_AGENT_READ = /headers\.get\(\s*['"`]user-agent['"`]\s*\)/i;
 

@@ -1650,16 +1650,22 @@ const LINK_COUNT_ROBOTS: ThreatEntry[] = [
     id: 'TL-078',
     layer: 'd1_boundary',
     threat:
-      'Stored browser fingerprint on scans: the poster-scan path writes an unsalted SHA-256 of the User-Agent (16 hex characters) to scan_node_returns.user_agent_hash, next to the keyed scan id. Browser strings are few enough to reverse by dictionary, so the row keeps a device trait the other readers are not allowed to keep.',
+      'Stored browser fingerprint on scans: the poster-scan path writes an unsalted SHA-256 of the User-Agent (16 hex characters) to scan_node_returns.user_agent_hash, next to the keyed scan id. Browser strings are few enough to reverse by dictionary, so the row keeps a device trait the other readers are not allowed to keep. Mitigated 2026-10-10 — a scan with a keyed id reads no browser name and stores no hash (qr-scan.ts and the shared write in scan-buffer.ts, which also covers messages the previous Worker queued). Only a scan with no id stores it, because the visitor count then has nothing else, and production refuses to deploy without ANON_ID_HASH_PEPPER.',
     severity: 'MEDIUM',
     target_invariant: { number: 1, name: 'anonymous_id' },
-    mitigation_story: null,
-    test_ref: null,
-    status: 'open',
-    red_birth: null,
-    last_run_green: null,
+    mitigation_story: 'OSE-1659',
+    test_ref:
+      'tests/scan-node-key.spec.ts > TL-078: a keyed scan keeps no browser-name hash (2026-10-10) > GET /q/<token> with the pepper set | the row has the keyed id and no browser-name hash',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Three of the four tests in that block were red on main (the scan, two browsers counted by keyed id alone, and a queued message from the previous Worker); the no-pepper fallback test passes on both, by design. The production deploy gate test in tests/integration/infra-consistency.test.js was red on the old workflow.',
+    },
+    last_run_green: '2026-10-10',
     notes:
-      'Found 2026-10-10 while listing the User-Agent readers for TL-077 (src/handlers/qr-scan.ts hashUserAgent, src/lib/scan-buffer.ts). Not changed here: whether the column is needed at all is an owner decision.',
+      'Read 2026-10-10: staging has 119 scan rows, none with a keyed id (ANON_ID_HASH_PEPPER is not set there; the deploy log warns), all with the hash; production has none. No migration: no row anywhere has both. Left: set the pepper on staging, then the 119 old rows can be cleared and the fallback removed.',
   },
   {
     id: 'TL-079',
