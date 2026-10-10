@@ -115,8 +115,14 @@ test.describe('attendee arc — /events/:id across phases', () => {
   test('POST: email signup CTA lands on the working form', async ({ page }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
     await page.goto(`/events/${POST}`);
-    await page.locator('[data-testid="email-signup-link"]').click();
-    await expect(page).toHaveURL(new RegExp(`/events/${POST}/updates$`));
+    // The link targets the event's own updates form (OSE-1684). It is not
+    // clicked: since the form moved under /events/*, an automated in-page
+    // click there meets Cloudflare's Managed Challenge, the same edge
+    // behaviour the NEXT test above describes (OSE-1162). The form is opened
+    // by its address instead, as the PRE/LIVE/POST tests open the event page.
+    const link = page.locator('[data-testid="email-signup-link"]');
+    await expect(link).toHaveAttribute('href', new RegExp(`/events/${POST}/updates$`));
+    await page.goto(`/events/${POST}/updates`);
     // The email form page renders an input — the loop is functionally closed
     await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
   });
