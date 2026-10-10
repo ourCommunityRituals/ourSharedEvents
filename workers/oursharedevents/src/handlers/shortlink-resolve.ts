@@ -16,6 +16,15 @@
  * answers yes or no and keeps nothing; this handler never reads it. Email scanners that look like browsers are
  * still counted: a robot list cannot tell them from a person.
  *
+ * Wrong guesses (2026-10-10, TL-079): a code is six characters from 62, and
+ * every printed poster carries some. Wrong codes are counted per caller
+ * (SHORTLINK_GUESS_MAX a minute, countGuess in lib/public-read-limit.ts, the
+ * same limiter as the event short codes but its own count). Past that every
+ * code answers 429 for the rest of the minute, right ones too, so a hit cannot
+ * be told from a miss. A right code never counts, so a crowd scanning one
+ * printed code on one Wi-Fi is never refused. The caller key is a peppered
+ * hash that lives 60 s in KV; this handler reads no address itself.
+ *
  * Anonymity-principle compliance (reinforced 2026-05-14):
  *   - No IP read. No anon_id read. No session cookie set/read.
  *     The `Referer` header is NOT logged.
@@ -25,8 +34,9 @@
  *   - 404 on bad/unknown code so probing reveals no information.
  *
  * Failure modes:
- *   - Malformed code (wrong length / non-base62 char) → 404
- *   - Unknown code → 404
+ *   - Malformed code (wrong length / non-base62 char) → 404, not counted
+ *   - Unknown code → 404, counted as a wrong guess
+ *   - Past the guess limit → 429 for every code, Retry-After 60
  *   - DB missing → 503 (caller should know infra is degraded)
  *   - Counter increment fails → still 302 (the redirect is the user
  *     contract; the counter is a nice-to-have for ops)
@@ -40,8 +50,27 @@ import {
 } from '../lib/shortlinks';
 import { internalTarget } from '../lib/poster-codes';
 import { isLinkPreviewRequest } from '../lib/share-count';
+import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 
-export type ShortlinkResolveEnv = ShortlinksEnv;
+/** Wrong /s/ codes one caller may try in a minute (same as the event short codes). */
+export const SHORTLINK_GUESS_MAX = 30;
+const GUESS_SCOPE = 'shortlink-guess';
+
+function tooManyGuesses(): Response {
+  return new Response(
+    JSON.stringify({ ok: false, code: 'TOO_MANY_GUESSES', error: 'Too many links tried' }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '60',
+        'Cache-Control': 'no-store',
+      },
+    }
+  );
+}
+
+export type ShortlinkResolveEnv = ShortlinksEnv & PublicReadLimitEnv;
 
 export async function handleShortlinkResolve(
   request: Request,
@@ -63,8 +92,13 @@ export async function handleShortlinkResolve(
     });
   }
 
+  // Checked before the lookup, so past the limit a right code and a wrong one
+  // look the same.
+  if (await isGuessLimited(request, env, GUESS_SCOPE)) return tooManyGuesses();
+
   const row = await resolveCode(env, code);
   if (!row) {
+    if (await countGuess(request, env, GUESS_SCOPE, SHORTLINK_GUESS_MAX)) return tooManyGuesses();
     // Same 404 shape for unknown vs malformed so probing reveals nothing.
     return new Response(JSON.stringify({ ok: false, code: 'NOT_FOUND', error: 'Link not found' }), {
       status: 404,

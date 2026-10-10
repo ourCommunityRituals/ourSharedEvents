@@ -2463,7 +2463,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 33
+      "testCount": 37
     },
     {
       "file": "workers/oursharedevents/tests/signed-link-page-headers.spec.ts",

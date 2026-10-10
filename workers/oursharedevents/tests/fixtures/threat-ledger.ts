@@ -1596,7 +1596,7 @@ const EVENT_SHORT_CODES: ThreatEntry[] = [
     },
     last_run_green: '2026-10-10',
     notes:
-      'Speed bump, not a wall: many addresses each get their own allowance, and the limit fails open with KV down, like every public read limit. People on one address (the Wi-Fi at a venue) share one allowance, so one of them trying 30 wrong codes stops codes for all of them for a minute; printed poster codes (/s/, /q/) are not affected. /s/ shortlink codes (62 symbols, six long) have no guess limit; whether to add one is open.',
+      'Speed bump, not a wall: many addresses each get their own allowance, and the limit fails open with KV down, like every public read limit. People on one address (the Wi-Fi at a venue) share one allowance, so one of them trying 30 wrong codes stops codes for all of them for a minute; printed poster codes (/s/, /q/) are not affected. /s/ shortlink codes have their own guess limit since 2026-10-10 (TL-079).',
   },
 ];
 
@@ -1660,6 +1660,27 @@ const LINK_COUNT_ROBOTS: ThreatEntry[] = [
     last_run_green: null,
     notes:
       'Found 2026-10-10 while listing the User-Agent readers for TL-077 (src/handlers/qr-scan.ts hashUserAgent, src/lib/scan-buffer.ts). Not changed here: whether the column is needed at all is an owner decision.',
+  },
+  {
+    id: 'TL-079',
+    layer: 'worker_surface',
+    threat:
+      'Short-link guessing: a /s/ code is six characters from 62 (about 56.8 billion), every printed poster carries several, and /s/ never refused (publicCountLimited), so a caller could try codes until one answered and reach live events that are off the map. The redirect also carries the event id, for a draft too (its page is the ordinary 404). Mitigated — wrong codes are counted per caller (SHORTLINK_GUESS_MAX = 30 a minute, its own count apart from the event short codes); past that every code answers 429 for the rest of the minute, right ones too. A right code never counts, so a crowd scanning one printed code on one Wi-Fi is never refused.',
+    severity: 'LOW',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/shortlinks.spec.ts > guessing short links is limited; a right code never is (2026-10-10) > past the limit every code is refused, right ones too, so a hit cannot be told from a miss',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red on the resolver from main (a real code still answered 302 past the limit), and red with only the before-lookup check removed.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'From the CCR of 2026-10-10. Speed bump, not a wall, like TL-075: many addresses each get their own allowance, and the limit fails open with KV down. A draft id in the redirect is accepted: /e/ does the same (TL-072), and the page it reaches says nothing about the event.',
   },
 ];
 
