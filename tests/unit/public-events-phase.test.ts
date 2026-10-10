@@ -370,7 +370,7 @@ describe('OSE-1243 | the card → registration CTA contract', () => {
     expect(cta.tagName.toLowerCase()).toBe('a');
   });
 
-  test('the href is the event\'s own sign-up form, /events/{id}/register (OSE-1684)', () => {
+  test("the href is the event's own sign-up form, /events/{id}/register (OSE-1684)", () => {
     const { el } = render([evt()]);
     const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
     const url = new URL(href, 'https://x.test');
@@ -447,7 +447,9 @@ describe('OSE-1243 | non-ASCII content renders intact', () => {
 
   test('a non-ASCII name shows intact and the CTA href stays plain', () => {
     const { el } = render([{ id: 'e', name: '\u{1F3B5} Fest', phase: 'pre_event' }]);
-    expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toBe('\u{1F3B5} Fest');
+    expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toBe(
+      '\u{1F3B5} Fest'
+    );
     const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
     expect(href).toBe('/events/e/register');
   });
