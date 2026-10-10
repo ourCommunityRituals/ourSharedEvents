@@ -22,6 +22,13 @@
  * precedence." So Your events sits above Create Event, and once the list shows
  * the host has events (or a saved selection says they are coming back to one)
  * the form folds into "+ Start a new event". A first visit keeps it open.
+ *
+ * Owner, later the same day, on the jump bar: "Dashboard, Links, Registration
+ * (change it to Reg & Forms), Sponsors (as expandable card so if present already
+ * or want to configure is possible, but does not take up too much screen space),
+ * Poster, TV", to run through the whole page. So the selected event's cards now
+ * follow that order (Poster art stays beside Posters), and Sponsors folds to its
+ * title and a one-line summary until opened.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -37,13 +44,13 @@ const PAGE_ORDER = [
   'portfolio-rollup',
   'events-section',
   'create-event-card',
-  'sponsors-card',
+  'admin-dashboard-card',
+  'surface-cards',
   'forms-card',
+  'sponsors-card',
   'poster-deployments-card',
   'poster-art-card',
   'tv-display-card',
-  'surface-cards',
-  'admin-dashboard-card',
 ];
 
 function byTestId(id: string): Element {
@@ -95,14 +102,14 @@ describe('admin page order', () => {
   test('the event list says the cards are below it, and they are', () => {
     const list = byTestId('events-section');
     expect(list.textContent || '').toMatch(/cards below/);
-    for (const id of PAGE_ORDER.slice(PAGE_ORDER.indexOf('sponsors-card'))) {
+    for (const id of PAGE_ORDER.slice(PAGE_ORDER.indexOf('admin-dashboard-card'))) {
       expect(isBefore(list, byTestId(id)), `${id} is below the event list`).toBe(true);
     }
   });
 
   test('the intro names the cards in the order they appear', () => {
     const text = (byTestId('admin-intro').textContent || '').toLowerCase();
-    const words = ['sponsors', 'registration', 'posters', 'tv', 'links', 'dashboard'];
+    const words = ['dashboard', 'links', 'reg & forms', 'sponsors', 'posters', 'tv'];
     let from = 0;
     for (const w of words) {
       const at = text.indexOf(w, from);
@@ -211,6 +218,118 @@ describe('admin page order', () => {
     test('the event list tells the card when it has events', () => {
       expect(ADMIN_HTML).toContain(
         'if (L.items.length && window.oseCreateCard) window.oseCreateCard.returning();'
+      );
+    });
+  });
+
+  test('the bar and the card both say "Reg & Forms"', () => {
+    expect(byTestId('ecb-nav-forms').textContent?.trim()).toBe('Reg & Forms');
+    expect(byTestId('forms-card').querySelector('.mcard-title')?.textContent?.trim()).toBe(
+      'Reg & Forms'
+    );
+  });
+
+  describe('Sponsors folds to one line until opened', () => {
+    function sponsorScript(): string {
+      const t = Array.from(doc.querySelectorAll('script'))
+        .map((el) => el.textContent || '')
+        .find((x) => x.includes('window.oseSponsorsCard = (function'));
+      expect(t, 'the sponsors card script').toBeDefined();
+      return t!;
+    }
+
+    function sponsorsDom(items: unknown[] | null) {
+      const card = byTestId('sponsors-card');
+      const dom = new JSDOM('<!doctype html><body>' + card.outerHTML + '</body>', {
+        runScripts: 'outside-only',
+        url: 'https://stg.oursharedevents.com/admin',
+      });
+      const w = dom.window as unknown as Window & {
+        eval: (s: string) => void;
+        fetch: unknown;
+        _loadSponsorsForEvent: (id: string) => Promise<void>;
+      };
+      w.fetch = async (url: string) => ({
+        json: async () =>
+          String(url).includes('/api/v2/admin/sponsors')
+            ? { ok: true, items: items || [] }
+            : { ok: true, items: [] },
+      });
+      w.eval(sponsorScript());
+      const q = (id: string) => w.document.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+      return {
+        w,
+        body: q('sponsors-card-body'),
+        btn: q('sponsors-card-toggle'),
+        sum: q('sponsors-summary'),
+      };
+    }
+
+    const placed = {
+      id: 's1',
+      name: 'Bakery',
+      tier: 'gold',
+      is_active: 1,
+      sponsor_accepted: 1,
+      event_id: 'e1',
+    };
+    const asked = {
+      id: 's2',
+      name: 'Hardware',
+      tier: 'silver',
+      is_active: 1,
+      event_id: 'e1',
+      placement_source: 'sponsor_request',
+      placement_active: 0,
+      organizer_accepted: null,
+    };
+
+    test('it starts folded: the list is hidden and the button says Show', () => {
+      const { body, btn, sum } = sponsorsDom(null);
+      expect(body.hidden).toBe(true);
+      expect(btn.textContent?.trim()).toBe('Show');
+      expect(btn.getAttribute('aria-expanded')).toBe('false');
+      expect(sum.textContent).toBe('Select an event to see its sponsors.');
+    });
+
+    test('the summary says how many sponsors the event has, and the card stays folded', async () => {
+      const { w, body, sum } = sponsorsDom([placed]);
+      await w._loadSponsorsForEvent('e1');
+      expect(sum.textContent).toBe('1 sponsor.');
+      expect(body.hidden).toBe(true);
+    });
+
+    test('no sponsors reads "None yet."', async () => {
+      const { w, sum } = sponsorsDom([]);
+      await w._loadSponsorsForEvent('e1');
+      expect(sum.textContent).toBe('None yet.');
+    });
+
+    test('a sponsor asking to join opens the card so Approve is in view', async () => {
+      const { w, body, sum } = sponsorsDom([placed, asked]);
+      await w._loadSponsorsForEvent('e1');
+      expect(sum.textContent).toBe('1 sponsor · 1 asked to join.');
+      expect(body.hidden).toBe(false);
+    });
+
+    test('Show opens the list and Hide folds it again', () => {
+      const { body, btn } = sponsorsDom(null);
+      btn.click();
+      expect(body.hidden).toBe(false);
+      expect(btn.textContent?.trim()).toBe('Hide');
+      btn.click();
+      expect(body.hidden).toBe(true);
+    });
+
+    test('+ Add Sponsor opens the card before the form', () => {
+      const { w, body } = sponsorsDom(null);
+      (w.document.getElementById('add-spon-toggle') as HTMLElement).click();
+      expect(body.hidden).toBe(false);
+    });
+
+    test('the jump bar opens the card when it jumps to Sponsors', () => {
+      expect(ADMIN_HTML).toContain(
+        "if (cls === 'sponsors-card' && window.oseSponsorsCard) window.oseSponsorsCard.open();"
       );
     });
   });
