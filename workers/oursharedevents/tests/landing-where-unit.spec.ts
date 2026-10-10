@@ -33,7 +33,7 @@ import {
 
 /** The landing page's one script, as served. */
 const SCRIPT = (() => {
-  const all = [...LANDING_HTML.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)];
+  const all = [...LANDING_HTML.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)];
   expect(all.length).toBe(1);
   return all[0][1];
 })();

@@ -114,7 +114,7 @@ describe('OSE-1529 | landing create cards', () => {
   // tests/landing-where-unit.spec.ts). Nothing else runs here.
   it('still exactly one <h1>, one script (the location button), no style attribute', () => {
     expect(html.match(/<h1\b/g)?.length).toBe(1);
-    const scripts = html.match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi) ?? [];
+    const scripts = html.match(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi) ?? [];
     expect(scripts.length).toBe(1);
     expect(scripts[0]).toContain('[data-testid="near-me"]');
     expect(scripts[0]).not.toMatch(/<script\b[^>]*\bsrc=/i);
