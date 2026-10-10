@@ -160,6 +160,7 @@ export const NODE_SPECS = [
   'tests/log-never-who.spec.ts',
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
+  'tests/admin-card-order.spec.ts',
   'tests/event-screen-route-read.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).

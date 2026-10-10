@@ -51,6 +51,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/admin-card-order.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-context-bar.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
