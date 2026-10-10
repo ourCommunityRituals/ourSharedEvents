@@ -2204,7 +2204,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 15
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/scan-path-consistency.spec.ts",
