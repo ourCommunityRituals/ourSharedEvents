@@ -7,7 +7,10 @@
  *
  * Privacy invariants:
  *   - Only scan_bucket (hour-granularity UTC) is stored — no exact timestamp.
- *   - user_agent_hash is SHA-256 truncated to 16 hex chars — not reversible.
+ *   - user_agent_hash is written only when the scan has no keyed id
+ *     (ANON_ID_HASH_PEPPER unset), as the visitor-count fallback (TL-078). It is
+ *     an unsalted SHA-256 truncated to 16 hex chars, so it is a device trait, not
+ *     a secret; production refuses to deploy without the pepper.
  *   - anonymous_id is a keyed scan id derived from the HttpOnly cookie
  *     (lib/scan-node-key.ts, OSE-1659) — never the cookie value, no PII, no IP.
  *   - No visitor location: the Cloudflare country header is never read, so country_code stays
@@ -184,8 +187,9 @@ export async function handleQrScan(
 
   if (!isDuplicate) {
     const bucket = scanBucket(nowDate);
-    const ua = request.headers.get('User-Agent') ?? '';
-    const uaHash = await hashUserAgent(ua);
+    // TL-078: the browser-name hash is only the fallback for a scan with no
+    // keyed id. With the id, the browser name is not read at all.
+    const uaHash = scanKey ? null : await hashUserAgent(request.headers.get('User-Agent') ?? '');
 
     try {
       // OSE-798: the placement event (WHERE) and the node return (WHO) are

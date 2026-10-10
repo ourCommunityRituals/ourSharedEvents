@@ -127,6 +127,7 @@ const SECRETS_OK = JSON.stringify(
     'FORMS_HASH_PEPPER',
     'SHARED_REPORT_SIGNING_SECRET',
     'RATE_LIMIT_KEY_PEPPER',
+    'ANON_ID_HASH_PEPPER',
     'GOOGLE_MAPS_API_KEY',
   ].map((name) => ({ name, type: 'secret_text' })),
   null,
@@ -492,7 +493,7 @@ describe('production secrets (names only)', () => {
     expect(r.fix).toContain('wrangler secret list --env production');
   });
 
-  test('passes when the four required names are there and no static admin credential is', () => {
+  test('passes when the five required names are there and no static admin credential is', () => {
     expect(pf.checkSecrets(SECRETS_OK).status).toBe('pass');
   });
 
@@ -501,6 +502,7 @@ describe('production secrets (names only)', () => {
     'FORMS_HASH_PEPPER',
     'SHARED_REPORT_SIGNING_SECRET',
     'RATE_LIMIT_KEY_PEPPER',
+    'ANON_ID_HASH_PEPPER',
   ])('fault: %s is missing', (name) => {
     const r = pf.checkSecrets(SECRETS_OK.replace(`"${name}"`, '"SOMETHING_ELSE"'));
     expect(r.status).toBe('fail');

@@ -42,6 +42,7 @@ export interface ScanMessage {
    * holds, `buildScanStatements` stores only a well-formed key.
    */
   anon_id: string | null;
+  /** Browser-name hash; stored only when `anon_id` is not a keyed id (TL-078). */
   ua_hash: string | null;
   /**
    * Always null (OSE-1460: the visitor's country is never read). Kept on the
@@ -86,6 +87,9 @@ export const SCAN_QUEUE_MAX_RETRIES = 3;
  * ids so the two tables still do not gain a shared durable correlation key.
  */
 export function buildScanStatements(db: D1Database, msg: ScanMessage): D1PreparedStatement[] {
+  // OSE-1659: only a keyed scan id is stored. A raw cookie value (from a
+  // message the previous Worker queued) or anything else becomes NULL.
+  const scanKey = isScanNodeKey(msg.anon_id) ? msg.anon_id : null;
   return [
     db
       .prepare(
@@ -103,10 +107,12 @@ export function buildScanStatements(db: D1Database, msg: ScanMessage): D1Prepare
       .bind(
         msg.return_row_id,
         msg.event_id,
-        // OSE-1659: only a keyed scan id is stored. A raw cookie value (from a
-        // message the previous Worker queued) or anything else becomes NULL.
-        isScanNodeKey(msg.anon_id) ? msg.anon_id : null,
-        msg.ua_hash,
+        scanKey,
+        // TL-078 (2026-10-10): a row with a keyed id keeps no browser-name hash.
+        // The hash is only the visitor-count fallback for a scan with no id
+        // (ANON_ID_HASH_PEPPER unset), so it is stored only then. Applies to
+        // messages the previous Worker queued, too.
+        scanKey ? null : msg.ua_hash,
         msg.scan_bucket
       ),
   ];

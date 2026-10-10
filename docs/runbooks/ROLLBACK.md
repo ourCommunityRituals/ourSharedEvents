@@ -192,7 +192,7 @@ Cloudflare can make any of a Worker's last 100 versions live again, at once. Thi
    npx wrangler secret list --env production
    ```
 
-   `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` must not be in the list. `SHARED_REPORT_SIGNING_SECRET`, `FORMS_ENCRYPTION_KEY`, `FORMS_HASH_PEPPER` and `RATE_LIMIT_KEY_PEPPER` must be.
+   `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` must not be in the list. `SHARED_REPORT_SIGNING_SECRET`, `FORMS_ENCRYPTION_KEY`, `FORMS_HASH_PEPPER`, `RATE_LIMIT_KEY_PEPPER` and `ANON_ID_HASH_PEPPER` must be.
 
 5. The same day: do §3, then §4, so `main` and production match again. Merge nothing else until then.
 
