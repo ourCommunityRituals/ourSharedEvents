@@ -21,6 +21,7 @@ const EVENT = process.env.SMOKE_EVENT_CODES || 'test-event-001';
 const CODE_IN_SHARE_LINK = /\/e\/([A-HJKMNP-Z2-9]{6})(?![A-Za-z0-9])/;
 
 test.describe('Journey: short codes reach their page on staging', () => {
+  // Serial: if the first test finds no code, the rest do not run (no skips).
   test.describe.configure({ mode: 'serial' });
 
   let code = '';
@@ -71,7 +72,6 @@ test.describe('Journey: short codes reach their page on staging', () => {
 
   for (const hop of HOPS) {
     test(`/${hop.prefix}/<code> opens the ${hop.what}`, async ({ page }) => {
-      test.skip(!code, 'no code was handed out (the first test says why)');
       const res = await page.goto(`/${hop.prefix}/${code}`, { waitUntil: 'domcontentloaded' });
       expect(res?.status(), `/${hop.prefix}/${code} ends on a page that opens`).toBe(200);
       expect(new URL(page.url()).pathname).toMatch(hop.lands);
@@ -86,7 +86,6 @@ test.describe('Journey: short codes reach their page on staging', () => {
   }
 
   test('a code typed in lower case and with a space still opens the event', async ({ page }) => {
-    test.skip(!code, 'no code was handed out');
     const typed = `${code.slice(0, 3).toLowerCase()}%20${code.slice(3).toLowerCase()}`;
     const res = await page.goto(`/e/${typed}`, { waitUntil: 'domcontentloaded' });
     expect(res?.status()).toBe(200);

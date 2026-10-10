@@ -101,10 +101,8 @@ describe('OSE-1518 three plain choices (before the event)', () => {
   test('each choice goes where it says: register form, check-in form, the events list', async () => {
     await seed({ id: 'evt_1518_links' });
     const html = await page('/events/evt_1518_links');
-    expect(tag(html, 'event-rsvp')).toContain('href="/forms/evt_1518_links?type=register"');
-    expect(tag(html, 'event-choice-checkin')).toContain(
-      'href="/forms/evt_1518_links?type=checkin"'
-    );
+    expect(tag(html, 'event-rsvp')).toContain('href="/events/evt_1518_links/register"');
+    expect(tag(html, 'event-choice-checkin')).toContain('href="/events/evt_1518_links/checkin"');
     expect(tag(html, 'event-choice-looking')).toContain('href="/events"');
   });
 
@@ -126,10 +124,12 @@ describe('OSE-1518 three plain choices (before the event)', () => {
   test('a poster scan context keeps its form first and still offers the three choices', async () => {
     await seed({ id: 'evt_1518_ctx' });
     const html = await page('/events/evt_1518_ctx?type=survey&deployment=pd_1518');
-    expect(tag(html, 'event-rsvp')).toContain('type=survey&amp;deployment=pd_1518');
+    expect(tag(html, 'event-rsvp')).toContain('/evt_1518_ctx/survey?deployment=pd_1518');
     expect(html).toContain('Share feedback');
-    expect(tag(html, 'event-choice-register')).toContain('type=register&amp;deployment=pd_1518');
-    expect(tag(html, 'event-choice-checkin')).toContain('type=checkin&amp;deployment=pd_1518');
+    expect(tag(html, 'event-choice-register')).toContain(
+      '/evt_1518_ctx/register?deployment=pd_1518'
+    );
+    expect(tag(html, 'event-choice-checkin')).toContain('/evt_1518_ctx/checkin?deployment=pd_1518');
     expect(tid(html, 'event-choice-looking')).toBeGreaterThan(-1);
   });
 
@@ -162,6 +162,7 @@ describe('OSE-1518 three plain choices (before the event)', () => {
       expect(open).toContain('data-preview-inert="true"');
       expect(open).not.toContain('href=');
     }
+    expect(html).not.toContain('/events/evt_1518_prev/register');
     expect(html).not.toContain('/forms/evt_1518_prev');
   });
 });
@@ -178,9 +179,7 @@ describe('OSE-1518 three plain choices (while the event is on)', () => {
     expect(register, 'register follows check-in').toBeGreaterThan(checkin);
     expect(looking).toBeGreaterThan(register);
     expect(tag(html, 'event-checkin')).toContain('ose-choice-primary');
-    expect(tag(html, 'event-choice-register')).toContain(
-      'href="/forms/evt_1518_now?type=register"'
-    );
+    expect(tag(html, 'event-choice-register')).toContain('href="/events/evt_1518_now/register"');
   });
 
   test('Share and Add to calendar are a pair below the choices', async () => {
