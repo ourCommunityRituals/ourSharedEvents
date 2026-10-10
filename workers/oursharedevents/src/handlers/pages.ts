@@ -2586,7 +2586,7 @@ export async function handleLandingPage(
   ctx?: DataProviderCtx | null,
   request?: Request
 ): Promise<Response> {
-  let where: WhereState = { kind: 'none' };
+  let where: WhereState;
   try {
     where = readWhere(request ? new URL(request.url) : null);
   } catch {
