@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 96, forms 14 to 16
+# Production migration plan: main 77 to 97, forms 14 to 16
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0096, forms 0015–0016.
+Covers: main 0078–0097, forms 0015–0016.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 96               | 19       |
+| Main (`ocr-db-production`)        | 77               | 97               | 20       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 16               | 2        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0096
+## Main database, 0078 to 0097
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -113,6 +113,7 @@ a line in this document.
 | `0094_shortlink_click_daily.sql`                 | Creates `shortlink_click_daily`, one click count per link per day.                                           | No   |
 | `0095_scan_node_returns_clear_raw_anon_id.sql`   | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                           | Yes  |
 | `0096_event_codes.sql`                           | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity). | No   |
+| `0097_event_type_watch_party.sql`                | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.  | Yes  |
 
 ## Forms database, 0015 to 0016
 
@@ -123,7 +124,7 @@ a line in this document.
 
 ## The migrations that write or remove rows
 
-Seven files. Each is listed with what it changes, why it is safe on production as it is
+Eight files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -186,6 +187,19 @@ today, and what would be different if production held data.
 - **After the deploy:** the scan write stores only a keyed id, whichever Worker queued
   the scan, so no raw value can come back.
 
+### `0097_event_type_watch_party.sql`
+
+- **`INSERT INTO event_type_registry`**: adds one row, `SOC-WATCHPARTY-001` "Watch
+  Party", in Social & Community Dining. `INSERT OR IGNORE`, so a second run adds nothing.
+- **Two `INSERT INTO template_event_types`**: map it to `bar_night` and
+  `community_gathering`, so a sponsor can reach it.
+- **`UPDATE event_templates`**: recomputes `max_clearance_tier` for every template, the
+  same statement 0057 and 0063 ran. The new type is tier 1 like every other, so no
+  template's value changes.
+- **Safe because** it only adds catalog rows. It touches no event, scan or form row.
+- **Check:** `SELECT name, category_code FROM event_type_registry WHERE uec_code = 'SOC-WATCHPARTY-001';`
+  returns `Watch Party`, `SOC`.
+
 ### `0016_scrub_raw_anonymous_id.sql` (forms)
 
 - **Four `UPDATE` statements**, one each on `form_registrations`, `checkin_counts`,
@@ -219,7 +233,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0096_event_codes.sql` and `96`; then
+2. **The level.** Expected: `0097_event_type_watch_party.sql` and `97`; then
    `0016_scrub_raw_anonymous_id.sql` and `16`.
 
    ```bash

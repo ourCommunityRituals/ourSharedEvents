@@ -1007,7 +1007,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 17
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",

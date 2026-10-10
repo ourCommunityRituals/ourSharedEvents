@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0096_event_codes.sql */
-export const REQUIRED_DB_MIGRATION = 96;
+/** Highest migration in migrations/ — currently 0097_event_type_watch_party.sql */
+export const REQUIRED_DB_MIGRATION = 97;
 
 /** Highest migration in migrations-forms/ — currently 0016_scrub_raw_anonymous_id.sql */
 export const REQUIRED_FORMS_MIGRATION = 16;
