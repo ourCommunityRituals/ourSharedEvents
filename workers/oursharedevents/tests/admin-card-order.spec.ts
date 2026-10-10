@@ -11,11 +11,17 @@
  * on 2026-09-05 (OSE-1238): Create Event -> Sponsors -> Registration -> Posters
  * -> the links.
  *
- * Now there is one order: the intro, Create Event, the totals, Your events (pick
- * one), then the selected event's cards in the OSE-1238 build sequence, with the
+ * Now there is one order: the intro, the totals, Your events (pick one), Create
+ * Event, then the selected event's cards in the OSE-1238 build sequence, with the
  * two poster cards side by side and the dashboard (the results) last. The jump
  * bar and the intro both follow it, and this file fails if any of the three
  * drifts.
+ *
+ * Owner, same day: "When returning on an edit or draft flow, the create event
+ * should be suppressed into a button option with the Your Events taking
+ * precedence." So Your events sits above Create Event, and once the list shows
+ * the host has events (or a saved selection says they are coming back to one)
+ * the form folds into "+ Start a new event". A first visit keeps it open.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -28,9 +34,9 @@ const main = doc.querySelector('main#main-content') as HTMLElement;
 /** The page's sections and cards, in the order a host works through them. */
 const PAGE_ORDER = [
   'admin-intro',
-  'create-event-card',
   'portfolio-rollup',
   'events-section',
+  'create-event-card',
   'sponsors-card',
   'forms-card',
   'poster-deployments-card',
@@ -128,5 +134,84 @@ describe('admin page order', () => {
     const card = w.document.querySelector('.tv-display-card') as HTMLElement;
     expect(scrolled).toBe(1);
     expect(card.style.scrollMarginTop).toBe('136px');
+  });
+
+  describe('Create Event folds into a button for a returning host', () => {
+    function foldScript(): string {
+      const t = Array.from(doc.querySelectorAll('script'))
+        .map((el) => el.textContent || '')
+        .find((x) => x.includes('window.oseCreateCard = {'));
+      expect(t, 'the fold script').toBeDefined();
+      return t!;
+    }
+
+    function cardDom(saved: string | null) {
+      const card = byTestId('create-event-card');
+      const dom = new JSDOM('<!doctype html><body>' + card.outerHTML + '</body>', {
+        runScripts: 'outside-only',
+        url: 'https://stg.oursharedevents.com/admin',
+      });
+      const w = dom.window as unknown as Window & {
+        eval: (s: string) => void;
+        oseCreateCard?: { returning: () => void };
+      };
+      if (saved) w.sessionStorage.setItem('ose_selected_event_id', saved);
+      w.eval(foldScript());
+      const q = (id: string) => w.document.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+      return {
+        w,
+        form: q('create-event-form'),
+        btn: q('create-event-toggle'),
+        note: q('create-event-collapsed-note'),
+      };
+    }
+
+    test('a first visit (no events yet) keeps the form open and no button', () => {
+      const { form, btn, note } = cardDom(null);
+      expect(form.hidden).toBe(false);
+      expect(btn.hidden).toBe(true);
+      expect(note.hidden).toBe(true);
+    });
+
+    test('once the list has events the form folds into the button', () => {
+      const { w, form, btn, note } = cardDom(null);
+      w.oseCreateCard!.returning();
+      expect(form.hidden).toBe(true);
+      expect(btn.hidden).toBe(false);
+      expect(btn.getAttribute('aria-expanded')).toBe('false');
+      expect(btn.textContent?.trim()).toBe('+ Start a new event');
+      expect(note.hidden).toBe(false);
+    });
+
+    test('coming back to a saved event folds it before the list loads', () => {
+      const { form, btn } = cardDom('evt_saved');
+      expect(form.hidden).toBe(true);
+      expect(btn.hidden).toBe(false);
+    });
+
+    test('the button opens the form (start over), focuses the name, and closes it again', () => {
+      const { w, form, btn } = cardDom(null);
+      w.oseCreateCard!.returning();
+      btn.click();
+      expect(form.hidden).toBe(false);
+      expect(btn.getAttribute('aria-expanded')).toBe('true');
+      expect(w.document.activeElement?.id).toBe('create-title');
+      btn.click();
+      expect(form.hidden).toBe(true);
+    });
+
+    test('a later list refresh never closes a form the host opened', () => {
+      const { w, form, btn } = cardDom(null);
+      w.oseCreateCard!.returning();
+      btn.click();
+      w.oseCreateCard!.returning();
+      expect(form.hidden).toBe(false);
+    });
+
+    test('the event list tells the card when it has events', () => {
+      expect(ADMIN_HTML).toContain(
+        'if (L.items.length && window.oseCreateCard) window.oseCreateCard.returning();'
+      );
+    });
   });
 });

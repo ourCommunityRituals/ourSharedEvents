@@ -27,7 +27,22 @@ async function openAdvanced(page: Page): Promise<void> {
   await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
   await page.goto('/admin', { waitUntil: 'domcontentloaded' });
   await page.getByTestId('admin-path-advanced').click();
+  await expect(page.getByTestId('events-section')).toBeVisible();
+}
+
+/**
+ * A returning host (the phone audit seeds events first) finds Your events first
+ * and Create Event folded into one button (owner 2026-10-10); the button opens
+ * the form.
+ */
+async function openCreateForm(page: Page): Promise<void> {
+  await openAdvanced(page);
+  const toggle = page.getByTestId('create-event-toggle');
+  await expect(toggle).toBeVisible();
+  await expect(page.getByTestId('create-event-form')).toBeHidden();
+  await toggle.click();
   await expect(page.getByTestId('create-event-form')).toBeVisible();
+  await expect(page.getByTestId('create-title')).toBeFocused();
 }
 
 async function selectEvent(page: Page): Promise<void> {
@@ -70,7 +85,7 @@ test.beforeAll(() => {
 test('fat finger: Create with no name says what is missing and creates nothing', async ({
   page,
 }) => {
-  await openAdvanced(page);
+  await openCreateForm(page);
   let posted = false;
   page.on('request', (r) => {
     if (r.method() === 'POST' && r.url().endsWith('/api/v2/admin/events')) posted = true;
@@ -86,7 +101,7 @@ test('create from the full form: the event is a draft only the organizer can see
   page,
   request,
 }) => {
-  await openAdvanced(page);
+  await openCreateForm(page);
   const created = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v2/admin/events')
   );

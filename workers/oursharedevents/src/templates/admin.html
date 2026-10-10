@@ -3457,7 +3457,7 @@
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
-            var card = document.querySelector('[data-testid="create-event-card"]');
+            var card = document.querySelector('[data-testid="admin-intro"]');
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
 
@@ -4216,15 +4216,169 @@
       <section class="admin-intro" data-testid="admin-intro" aria-labelledby="admin-intro-heading">
         <h2 id="admin-intro-heading">Manage events from one clear workspace</h2>
         <p>
-          Create an event, or choose one from Your events. Its cards follow in the
-          order you set it up: sponsors, registration, posters, TV, links, and last
-          the dashboard. The bar at the top jumps to each one.
+          Choose an event in Your events to edit it, or start a new one below the
+          list. Its cards follow in the order you set it up: sponsors, registration,
+          posters, TV, links, and last the dashboard. The bar at the top jumps to
+          each one.
         </p>
+      </section>
+
+      <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
+         K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
+      <section
+        id="portfolio-rollup"
+        class="portfolio-rollup stats-row"
+        data-testid="portfolio-rollup"
+        aria-label="Portfolio totals across your brand's events"
+        hidden
+      >
+        <div class="rollup-stat stat-card" data-testid="rollup-events">
+          <span class="rollup-num stat-value" data-testid="rollup-events-num">—</span>
+          <span class="rollup-label stat-label">Events</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-registrations">
+          <span class="rollup-num stat-value" data-testid="rollup-registrations-num">—</span>
+          <span class="rollup-label stat-label">Registered</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-checkins">
+          <span class="rollup-num stat-value" data-testid="rollup-checkins-num">—</span>
+          <span class="rollup-label stat-label">Checked in</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-sponsors">
+          <span class="rollup-num stat-value" data-testid="rollup-sponsors-num">—</span>
+          <span class="rollup-label stat-label">Active sponsors</span>
+        </div>
+      </section>
+
+      <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
+      <div class="section-head">
+        <div>
+          <p class="section-eyebrow">Event workspace</p>
+          <h2 id="events-heading">Your events</h2>
+          <p class="section-help">
+            Filter the list, select one event, then manage only that event in the cards below.
+          </p>
+        </div>
+      </div>
+      <!-- Status panel — hydrates from ose:event-selected like the four
+           management cards. This is the ONLY place in the admin an event moves
+           between draft / ready / live / archived: before it, the UI could
+           create drafts and nothing else, so every event stayed invisible. -->
+      <div class="card" id="event-status-card" data-testid="event-status-card" hidden>
+        <div class="event-status-panel">
+          <div class="event-status-current">
+            <strong id="event-status-name" data-testid="event-status-name"></strong>
+            <span class="badge" id="event-status-badge" data-testid="event-status-badge"></span>
+          </div>
+          <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
+          <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
+          <!-- OSE-1560 — the map setting, always visible, with its one control.
+               The toast that announces a change is OSE-1564; this is the part
+               that has to stay true after any toast is gone. -->
+          <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
+          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
+          <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <!-- Event timeline — the selected event's whole chain at a glance:
+           setup → live → poster out → people scanning → sponsors on → report.
+           Hydrates from the same ose:event-selected event as every other card.
+           It reads what the other cards already load (list row, stats, poster
+           deployments, sponsors) and adds nothing new to the wire. The one
+           thing it adds is the NEXT STEP: a single link into whichever card
+           is the thing to do now, so the organizer never has to work out where
+           in the flow they are. -->
+      <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Event checklist</h3>
+          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
+        </div>
+        <div class="mcard-body">
+          <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
+          <!-- Organizer inbox: sponsors still to answer, and ones who declined,
+               surfaced here instead of only as badges in the sponsors table. -->
+          <section id="event-inbox" data-testid="event-inbox" aria-labelledby="event-inbox-title" hidden>
+            <h4 class="tl-label" id="event-inbox-title">Needs your attention</h4>
+            <ul class="pc-list" id="event-inbox-list" data-testid="event-inbox-list"></ul>
+          </section>
+        </div>
+      </div>
+      <!-- Pre-event window: the poster is out and the event hasn't started. The
+           organizer sees the poster's link (and its QR, the same link as a
+           picture) and whether the poster is working — scans, link taps,
+           posters out, places covered, scans per day. Counts only, never who.
+           Hidden outside the pre-event phase. -->
+      <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Before the event</h3>
+          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
+        </div>
+        <div class="mcard-body">
+          <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
+          <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
+          <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
+            <span class="wizard-card-title">Your poster link</span>
+            <span class="wizard-card-url" id="pre-event-link" data-testid="pre-event-link"></span>
+            <img id="pre-event-qr" data-testid="pre-event-qr" alt="" hidden />
+          </div>
+          <!-- The admin's wrapping stat grid (2-up on a phone), not @ocr/ui's
+               .stats-row: that one scrolls sideways and hid "Places" at 375px. -->
+          <div class="dashboard-stats" role="group" aria-label="Poster activity" data-testid="pre-event-stats">
+            <div class="dash-stat scans"><span class="dash-stat__num" id="pre-event-clicks" data-testid="pre-event-clicks">—</span><span class="dash-stat__label">Link taps</span></div>
+            <div class="dash-stat registrations"><span class="dash-stat__num" id="pre-event-scans" data-testid="pre-event-scans">—</span><span class="dash-stat__label">Poster scans</span></div>
+            <div class="dash-stat appearances"><span class="dash-stat__num" id="pre-event-posters" data-testid="pre-event-posters">—</span><span class="dash-stat__label">Posters out</span></div>
+            <div class="dash-stat checkins"><span class="dash-stat__num" id="pre-event-places" data-testid="pre-event-places">—</span><span class="dash-stat__label">Places</span></div>
+          </div>
+          <div class="pre-spark" id="pre-event-spark" data-testid="pre-event-spark"></div>
+          <!-- Reach: link taps per code, then scans per venue area and community place. -->
+          <section id="pre-event-reach" data-testid="pre-event-reach" aria-labelledby="pre-event-reach-title" hidden>
+            <h4 class="pd-card-title" id="pre-event-reach-title">Taps and scans, by place</h4>
+            <p class="tl-detail" data-testid="pre-event-reach-taps"></p>
+            <p class="tl-detail" data-testid="pre-event-reach-venue"></p>
+            <p class="tl-detail" data-testid="pre-event-reach-community"></p>
+          </section>
+        </div>
+      </div>
+      <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
+        <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
+        <label class="events-filter-mine"><input type="checkbox" id="events-sort-upcoming" data-testid="events-sort-upcoming" /> Soonest first</label>
+      </div>
+      <div id="events" data-testid="events-container">
+        <div class="skeleton-table" data-testid="skeleton-events">
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+        </div>
+      </div>
       </section>
 
       <!-- Create Event Card -->
       <div class="create-card" data-testid="create-event-card">
         <h2>Create Event</h2>
+        <!-- Returning with events (owner 2026-10-10): Your events comes first and
+             this form folds into one button, so a host back to finish a draft
+             or edit an event is not scrolled past a new-event form. A first
+             visit with no events keeps it open. See the script after this card. -->
+        <p class="muted-sm" data-testid="create-event-collapsed-note" hidden>
+          To edit an event, choose it in Your events above. To start another, press the button.
+        </p>
+        <button
+          type="button"
+          class="add-spon-btn"
+          id="create-event-toggle"
+          data-testid="create-event-toggle"
+          aria-expanded="true"
+          aria-controls="create-event-form"
+          hidden
+        >
+          + Start a new event
+        </button>
         <form
           id="create-event-form"
           data-testid="create-event-form"
@@ -4538,141 +4692,44 @@
           </div>
         </form>
       </div>
-
-      <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
-         K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
-      <section
-        id="portfolio-rollup"
-        class="portfolio-rollup stats-row"
-        data-testid="portfolio-rollup"
-        aria-label="Portfolio totals across your brand's events"
-        hidden
-      >
-        <div class="rollup-stat stat-card" data-testid="rollup-events">
-          <span class="rollup-num stat-value" data-testid="rollup-events-num">—</span>
-          <span class="rollup-label stat-label">Events</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-registrations">
-          <span class="rollup-num stat-value" data-testid="rollup-registrations-num">—</span>
-          <span class="rollup-label stat-label">Registered</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-checkins">
-          <span class="rollup-num stat-value" data-testid="rollup-checkins-num">—</span>
-          <span class="rollup-label stat-label">Checked in</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-sponsors">
-          <span class="rollup-num stat-value" data-testid="rollup-sponsors-num">—</span>
-          <span class="rollup-label stat-label">Active sponsors</span>
-        </div>
-      </section>
-
-      <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
-      <div class="section-head">
-        <div>
-          <p class="section-eyebrow">Event workspace</p>
-          <h2 id="events-heading">Your events</h2>
-          <p class="section-help">
-            Filter the list, select one event, then manage only that event in the cards below.
-          </p>
-        </div>
-      </div>
-      <!-- Status panel — hydrates from ose:event-selected like the four
-           management cards. This is the ONLY place in the admin an event moves
-           between draft / ready / live / archived: before it, the UI could
-           create drafts and nothing else, so every event stayed invisible. -->
-      <div class="card" id="event-status-card" data-testid="event-status-card" hidden>
-        <div class="event-status-panel">
-          <div class="event-status-current">
-            <strong id="event-status-name" data-testid="event-status-name"></strong>
-            <span class="badge" id="event-status-badge" data-testid="event-status-badge"></span>
-          </div>
-          <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
-          <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
-          <!-- OSE-1560 — the map setting, always visible, with its one control.
-               The toast that announces a change is OSE-1564; this is the part
-               that has to stay true after any toast is gone. -->
-          <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
-          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
-          <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
-        </div>
-      </div>
-      <!-- Event timeline — the selected event's whole chain at a glance:
-           setup → live → poster out → people scanning → sponsors on → report.
-           Hydrates from the same ose:event-selected event as every other card.
-           It reads what the other cards already load (list row, stats, poster
-           deployments, sponsors) and adds nothing new to the wire. The one
-           thing it adds is the NEXT STEP: a single link into whichever card
-           is the thing to do now, so the organizer never has to work out where
-           in the flow they are. -->
-      <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Event checklist</h3>
-          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
-        </div>
-        <div class="mcard-body">
-          <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
-          <!-- Organizer inbox: sponsors still to answer, and ones who declined,
-               surfaced here instead of only as badges in the sponsors table. -->
-          <section id="event-inbox" data-testid="event-inbox" aria-labelledby="event-inbox-title" hidden>
-            <h4 class="tl-label" id="event-inbox-title">Needs your attention</h4>
-            <ul class="pc-list" id="event-inbox-list" data-testid="event-inbox-list"></ul>
-          </section>
-        </div>
-      </div>
-      <!-- Pre-event window: the poster is out and the event hasn't started. The
-           organizer sees the poster's link (and its QR, the same link as a
-           picture) and whether the poster is working — scans, link taps,
-           posters out, places covered, scans per day. Counts only, never who.
-           Hidden outside the pre-event phase. -->
-      <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Before the event</h3>
-          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
-        </div>
-        <div class="mcard-body">
-          <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
-          <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
-          <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
-            <span class="wizard-card-title">Your poster link</span>
-            <span class="wizard-card-url" id="pre-event-link" data-testid="pre-event-link"></span>
-            <img id="pre-event-qr" data-testid="pre-event-qr" alt="" hidden />
-          </div>
-          <!-- The admin's wrapping stat grid (2-up on a phone), not @ocr/ui's
-               .stats-row: that one scrolls sideways and hid "Places" at 375px. -->
-          <div class="dashboard-stats" role="group" aria-label="Poster activity" data-testid="pre-event-stats">
-            <div class="dash-stat scans"><span class="dash-stat__num" id="pre-event-clicks" data-testid="pre-event-clicks">—</span><span class="dash-stat__label">Link taps</span></div>
-            <div class="dash-stat registrations"><span class="dash-stat__num" id="pre-event-scans" data-testid="pre-event-scans">—</span><span class="dash-stat__label">Poster scans</span></div>
-            <div class="dash-stat appearances"><span class="dash-stat__num" id="pre-event-posters" data-testid="pre-event-posters">—</span><span class="dash-stat__label">Posters out</span></div>
-            <div class="dash-stat checkins"><span class="dash-stat__num" id="pre-event-places" data-testid="pre-event-places">—</span><span class="dash-stat__label">Places</span></div>
-          </div>
-          <div class="pre-spark" id="pre-event-spark" data-testid="pre-event-spark"></div>
-          <!-- Reach: link taps per code, then scans per venue area and community place. -->
-          <section id="pre-event-reach" data-testid="pre-event-reach" aria-labelledby="pre-event-reach-title" hidden>
-            <h4 class="pd-card-title" id="pre-event-reach-title">Taps and scans, by place</h4>
-            <p class="tl-detail" data-testid="pre-event-reach-taps"></p>
-            <p class="tl-detail" data-testid="pre-event-reach-venue"></p>
-            <p class="tl-detail" data-testid="pre-event-reach-community"></p>
-          </section>
-        </div>
-      </div>
-      <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
-        <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
-        <label class="events-filter-mine"><input type="checkbox" id="events-sort-upcoming" data-testid="events-sort-upcoming" /> Soonest first</label>
-      </div>
-      <div id="events" data-testid="events-container">
-        <div class="skeleton-table" data-testid="skeleton-events">
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-        </div>
-      </div>
-      </section>
+      <script>
+        // Folds the Create Event form into its button once the event list shows
+        // this host already has events (or a saved selection says they are
+        // coming back to one). Decided once per page, so it never closes a form
+        // the host has opened.
+        (function () {
+          var form = document.getElementById('create-event-form');
+          var btn = document.getElementById('create-event-toggle');
+          var note = document.querySelector('[data-testid="create-event-collapsed-note"]');
+          if (!form || !btn) return;
+          var decided = false;
+          function setOpen(open) {
+            form.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.textContent = open ? 'Hide the new-event form' : '+ Start a new event';
+            if (note) note.hidden = open;
+          }
+          btn.addEventListener('click', function () {
+            var open = form.hidden;
+            setOpen(open);
+            if (open) {
+              var title = document.getElementById('create-title');
+              if (title) title.focus();
+            }
+          });
+          window.oseCreateCard = {
+            returning: function () {
+              if (decided) return;
+              decided = true;
+              btn.hidden = false;
+              setOpen(false);
+            },
+          };
+          try {
+            if (sessionStorage.getItem('ose_selected_event_id')) window.oseCreateCard.returning();
+          } catch (e) {}
+        })();
+      </script>
 
       <!-- ── Build sequence (OSE-1238) ──────────────────────────────────────
            Create the event, then the things that hang off it, in the order a
@@ -4689,7 +4746,8 @@
            that escaped the landmark.
 
            Whole-page order (2026-10-10, owner: "the card flow jumps around"):
-           intro, Create Event, totals, Your events, then these cards in the
+           intro, totals, Your events, Create Event (one button once the
+           host has events, owner 2026-10-10), then these cards in the
            build sequence, the two poster cards together, and the Event
            Dashboard (the results) last. The jump bar and the intro follow the
            same order; tests/admin-card-order.spec.ts fails if any drifts. -->
@@ -7700,6 +7758,8 @@
           });
           var hasMore = !!(data.pagination && data.pagination.hasMore);
           L.cursor = hasMore ? data.pagination.nextCursor : null;
+          // The host has events, so Your events leads and Create folds away.
+          if (L.items.length && window.oseCreateCard) window.oseCreateCard.returning();
 
           if (!L.items.length) {
             var empty =
