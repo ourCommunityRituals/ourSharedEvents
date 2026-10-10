@@ -63,6 +63,8 @@ PII-bearing columns use one of three patterns:
 
 The **`pii-invariant.spec.ts`** gate (OSE-207) asserts that no table in either database carries a raw network identifier column (`ip_address`, `client_ip`, `cf_connecting_ip`, `x_forwarded_for`, etc.).
 
+**The browser name (`User-Agent`).** _Amended 2026-10-10 (owner decision, OSE-1684)._ A public handler never reads it. It may be read only by a named reader in `src/lib/` that reduces it to robot or not and keeps nothing: no log line, no stored value, no hash. Two such readers exist: `isLinkPreviewRequest` (`lib/share-count.ts`), so link counts (`/s/` and the event short codes) do not count link-preview robots, and `isAutomatedClient` (`lib/invalid-traffic.ts`), which keeps robots out of the sponsor proof layer (OSE-1310). A third, older read in `handlers/qr-scan.ts` stores an unsalted hash of it on `scan_node_returns.user_agent_hash`; that breaks this rule and is open as threat TL-078. `tests/anonymity-gate.spec.ts` fails on a `User-Agent` read in any other file of `src/`. Before this amendment the rule existed only in that gate's list of forbidden reads, and the short-code handler (`handlers/event-code.ts`) had read the header without being checked, because its file was not registered in the gate.
+
 The user-facing artifact of this decision is the **anonymity affordance** rendered on every public event page (`handlePublicEventPage` in `src/handlers/pages.ts`, OSE-243a). It states the architectural truth in plain language so attendees can read and verify the claim before deciding to RSVP.
 
 ## Alternatives Considered
@@ -132,6 +134,7 @@ Described above under [Decision](#decision). Accepted.
 - **Static gates:**
   - `workers/oursharedevents/tests/architecture.spec.ts` — handler ↔ database binding gate (OSE-205, PR #148).
   - `workers/oursharedevents/tests/pii-invariant.spec.ts` — forbidden raw-PII column gate (OSE-207, PR #153).
+  - `workers/oursharedevents/tests/anonymity-gate.spec.ts` — no public handler reads per-attendee identity (IP, cookie, referrer, browser name), and the browser name is read only by the named readers above (2026-10-10).
 - **Code:**
   - `workers/oursharedevents/src/lib/anonymous-id.ts` — anon_id cookie contract.
   - `workers/oursharedevents/src/lib/forms-db.ts` — `bucketTimestamp()`, `hashEmail()`, `encryptEmail()`, `decryptEmail()`.

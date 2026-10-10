@@ -27,6 +27,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { floorTaps } from '../src/lib/poster-reach';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import { AS_PERSON } from './helpers/person-agent';
 
 const ADMIN = {
   Authorization: 'Bearer test-admin-key-e2e-2026',
@@ -94,7 +95,7 @@ async function putCodes(body: unknown, id = EVT) {
   return { status: res.status, body: (await res.json()) as CodesBody };
 }
 async function follow(code: string): Promise<string | null> {
-  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual' });
+  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual', headers: AS_PERSON });
   expect(res.status).toBe(302);
   return res.headers.get('Location');
 }

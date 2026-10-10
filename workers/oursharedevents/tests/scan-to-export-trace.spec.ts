@@ -63,6 +63,7 @@ import { phaseTimesFor } from '../src/lib/event-datetime';
 import { bigQueryInsertRows } from '../src/cloud/bigquery';
 import { gridDisk } from 'h3-js';
 import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
+import { AS_PERSON } from './helpers/person-agent';
 
 // OSE-1416: every row a test sends must fit its pool table (bigquery/*.schema.json),
 // or the real insertAll would reject it. Checked after every test in this file.
@@ -317,7 +318,10 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       )
       .bind(code, eventId)
       .run();
-    const click = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    const click = await SELF.fetch(`https://t.test/s/${code}`, {
+      redirect: 'manual',
+      headers: AS_PERSON,
+    });
     expect(click.status).toBe(302);
 
     const row = await tenv()
