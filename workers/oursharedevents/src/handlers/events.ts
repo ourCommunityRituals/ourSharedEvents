@@ -1430,6 +1430,10 @@ export async function handleUpdateEvent(
       ok: true,
       status: 200,
       id: eventId,
+      // A status write says the status it moved FROM (the one the guarded
+      // UPDATE matched), so the admin's Undo returns there even when its own
+      // panel was showing an older status.
+      ...(observedStatus !== undefined ? { from: observedStatus } : {}),
       ...(listedFrom !== undefined ? { listedFrom } : {}),
       ...(mapChosenNow !== null ? { map: mapState(mapChosenNow, false) } : {}),
     },

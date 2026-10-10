@@ -8477,10 +8477,11 @@
             if (seen[next[i]]) continue;
             var p2 = path.concat(next[i]);
             if (next[i] === to) return p2.slice(1);
-            // Never pass THROUGH archived on the way somewhere else: it is a
-            // real state with its own meaning, not a shortcut (Live -> draft
-            // must go via Ready, not via Archived).
-            if (next[i] === 'archived') continue;
+            // Never pass THROUGH archived or Live on the way somewhere else:
+            // each is a real state with its own meaning, not a shortcut (Live
+            // -> draft goes via Ready, not via Archived; Archived -> Ready goes
+            // via draft, never public for a moment on the way).
+            if (next[i] === 'archived' || next[i] === 'active') continue;
             seen[next[i]] = true;
             queue.push(p2);
           }
@@ -8507,8 +8508,13 @@
         for (var i = 0; i < route.length; i++) {
           var r = await transition(id, at, route[i]);
           last = r.data;
+          // The server says where the event really was (another tab may have
+          // moved it); the first hop's answer is the true origin, so Undo
+          // goes back there, not to what this page last showed.
+          var seen = r.data && typeof r.data.from === 'string' && STATUS_EDGES[r.data.from] ? r.data.from : null;
+          if (i === 0 && seen) from = seen;
           if (!r.res.ok || !r.data.ok) {
-            if (current) current.status = at;
+            if (current) current.status = seen || at;
             return { ok: false, from: from, code: r.data && r.data.code, missing: r.data && r.data.missing, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
           }
           at = route[i];
@@ -8537,6 +8543,13 @@
       window.goLiveFromDraft = function (id, knownFrom) {
         return window.moveEventTo(id, 'active', knownFrom);
       };
+      function paintRowStatus(id, st) {
+        var row = document.querySelector('[data-testid="event-row-' + id + '"]');
+        if (!row) return;
+        row.setAttribute('data-status', st);
+        var b = row.querySelector('[data-testid="event-status"]');
+        if (b) { b.className = 'badge ' + st; b.textContent = window.friendlyStatus(st); }
+      }
       window.changeEventStatus = async function (id, to, btn) {
         var e = window._oseList.byId[String(id)];
         if (!e) return;
@@ -8546,16 +8559,14 @@
         buttons.forEach(function (b) { b.disabled = true; });
         if (btn) btn.textContent = 'Saving…';
         var result = await window.moveEventTo(id, to);
+        // Undo goes back to where the server says the event was, which is not
+        // what this panel showed if another tab moved it meanwhile.
+        if (result.from) from = result.from;
         if (result.ok) {
           e.status = to;
           // Re-render the row badge in place (no refetch: status is the only
           // thing that changed and the server confirmed it).
-          var row = document.querySelector('[data-testid="event-row-' + id + '"]');
-          if (row) {
-            row.setAttribute('data-status', to);
-            var b = row.querySelector('[data-testid="event-status"]');
-            if (b) { b.className = 'badge ' + to; b.textContent = window.friendlyStatus(to); }
-          }
+          paintRowStatus(id, to);
           window.renderEventStatus(id);
           // OSE-1360: the checklist and dashboard re-derive from the NEW status
           // (a stale "ready" step on a published event was the bug), and the
@@ -8588,6 +8599,8 @@
           if (window._oseList.status !== 'all' && window._oseList.status !== to) window.renderEventsList({ reset: true });
         } else {
           buttons.forEach(function (b) { b.disabled = false; });
+          // The server may have said where the event really is; row and panel catch up.
+          paintRowStatus(id, e.status || 'draft');
           window.renderEventStatus(id);
           if (msg) { msg.textContent = result.error; msg.className = 'create-msg error'; if (result.code === 'CORE_VALUES_MISSING' && result.missing) msg.setAttribute('data-missing', result.missing.join(',')); else msg.removeAttribute('data-missing'); }
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error');

@@ -67,6 +67,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
+import { archivedBeforeStart } from '../lib/archived-before-start.js';
 import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
@@ -1581,6 +1582,16 @@ export function renderPostEventHtml(
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row);
   const mapImg = venueMapImg(row, 'venue-map-post');
+  // Archived before its day: it never happened. Same page shape (nothing to
+  // join), but no "Happened", no "wrap" and no numbers that say it took place.
+  const calledOff = archivedBeforeStart(row);
+  const whenLine = calledOff
+    ? whenHuman
+      ? `No longer taking place. It was planned for ${whenHuman}`
+      : 'No longer taking place.'
+    : whenHuman
+      ? `Happened ${whenHuman}`
+      : 'This event has ended.';
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
@@ -1603,7 +1614,7 @@ export function renderPostEventHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} — recap</title>
+  <title>${title} — ${calledOff ? 'no longer taking place' : 'recap'}</title>
 ${ogMeta}
 ${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
@@ -1643,10 +1654,10 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
-    <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    <span class="ose-phase-chip" data-testid="event-phase-chip">${calledOff ? 'Not happening' : "This one's a wrap"}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     ${renderEventTypeMeta(row, 'event-type-post')}
-    <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
+    <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
     ${
       // OSE-1513: sponsors sit by the title on every phase. Still spend-blind
       // here (names/links only, no tier/spend).
@@ -1670,7 +1681,7 @@ ${SPONSOR_LIST_CSS}
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
         <h2 id="recap-heading">What this was</h2>
         ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
-        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
+        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">${calledOff ? "The host didn't write this one up." : "The host hasn't written this one up yet. The numbers below are the story."}</p>` : ''}
         ${whatLink}
       </section>
 
@@ -1708,7 +1719,9 @@ ${SPONSOR_LIST_CSS}
       }
 
       ${(() => {
-        if (!social) return '';
+        // Called off: no "By the numbers". Counts would read as a turnout for
+        // an event that did not take place.
+        if (!social || calledOff) return '';
         // OSE-1201: "attendance" is a banned lexicon word (it claims people; the
         // platform counts signals). The ratio is labelled by what was measured —
         // check-ins over registrations — never by a word that implies bodies.

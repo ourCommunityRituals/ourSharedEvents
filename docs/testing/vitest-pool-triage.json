@@ -317,6 +317,20 @@
       "testCount": 2
     },
     {
+      "file": "workers/oursharedevents/tests/admin-stale-panel-undo.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-status-write-from.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-surface-links-not-live.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -420,6 +434,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/archived-before-start.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/as-display-public-admin.spec.ts",
@@ -1021,7 +1042,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 17
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",
