@@ -1,0 +1,57 @@
+info:
+  name: OSE-1684 | short links | admin gets the event code and its five addresses
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/short-links"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract (workers/oursharedevents/src/handlers/event-code.ts, handleAdminEventCode):
+        // one code per event, minted on first ask and the same ever after: six
+        // characters with no look-alikes (no 0/O, 1/I/L), and its five short addresses.
+        const ct = res.getHeader('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked: the admin route is protected', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+        } else {
+          const json = res.getBody();
+          test('200 with ok: true', function () {
+            expect(res.getStatus()).to.eql(200);
+            expect(json.ok).to.eql(true);
+          });
+          test('the code is six characters from the no-look-alike alphabet', function () {
+            expect(json.code).to.match(/^[A-HJKMNP-Z2-9]{6}$/);
+          });
+          test('five short addresses, one per screen', function () {
+            expect(json.links).to.be.an('object');
+            const paths = Object.values(json.links).map(String);
+            for (const prefix of ['/e/', '/p/', '/tv/', '/r/', '/c/']) {
+              expect(paths.some((p) => p.endsWith(prefix + json.code)), prefix).to.eql(true);
+            }
+          });
+          bru.setVar('eventCode', json.code);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
