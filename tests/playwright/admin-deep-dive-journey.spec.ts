@@ -206,15 +206,12 @@ test('Publish → Take offline → Publish → Back to draft: the public page fo
   expect(await publicStatus(page)).toBe(404);
 });
 
-// Known defect, stated as the behaviour we want. Goes red the day it is fixed.
+// Another tab moved the event. Undo goes back to where the server says it was
+// (PUT status answers with `from`), not to what this panel last showed.
 test('a stale panel: the event moved elsewhere; the panel catches up and Undo is honest', async ({
   page,
   request,
 }) => {
-  test.fail(
-    true,
-    'Defect: Undo returns the event to the status the stale panel showed (Draft), not the one it had (Ready).'
-  );
   await selectEvent(page);
   await expect(page.getByTestId('event-status-badge')).toHaveText('Draft');
   // Someone else (another tab, another organizer) marks it ready.

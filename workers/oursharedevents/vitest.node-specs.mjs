@@ -161,6 +161,9 @@ export const NODE_SPECS = [
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
   'tests/admin-card-order.spec.ts',
+  // A stale status panel: Undo returns to where the server says the event was
+  // (the events script run in jsdom against an in-memory status endpoint).
+  'tests/admin-stale-panel-undo.spec.ts',
   'tests/event-screen-route-read.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
