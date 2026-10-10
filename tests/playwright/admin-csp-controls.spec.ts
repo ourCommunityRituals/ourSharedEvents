@@ -146,13 +146,18 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     const before = await page.getAttribute('[data-testid="link-poster"]', 'href');
     expect(before, 'poster link should start unscoped').toBe('/poster');
 
+    const clickedId = await rows.first().getAttribute('data-event-id');
+    const clickedStatus = await rows.first().getAttribute('data-status');
     await rows.first().click();
     await page.waitForTimeout(2500);
 
     const after = await page.getAttribute('[data-testid="link-poster"]', 'href');
-    // Each event's poster has its own address under /events/<id>/.
-    expect(after, 'poster link never re-scoped — the row click did nothing').toMatch(
-      /^\/events\/evt_[^/?#]+\/poster$/
+    // Each event's poster has its own address under /events/<id>/. An event
+    // that is not live yet (draft, ready) answers that address with the public
+    // "not open" page, so admin opens its poster preview instead (2026-10-10).
+    const notLive = clickedStatus === 'draft' || clickedStatus === 'ready';
+    expect(after, 'poster link never re-scoped — the row click did nothing').toBe(
+      notLive ? `/api/v2/admin/events/${clickedId}/poster-preview` : `/events/${clickedId}/poster`
     );
     await expect(page.locator('tr.selected')).toHaveCount(1);
     expect(csp).toEqual([]);
