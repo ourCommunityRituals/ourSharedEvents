@@ -423,7 +423,9 @@ describe('a guessed code of a draft opens nothing about it (2026-10-10)', () => 
       const res = await open(at, asPerson);
       const next = res.headers.get('location');
       if (res.status >= 300 && res.status < 400 && next) {
-        at = next.startsWith(ORIGIN) ? next.slice(ORIGIN.length) : next;
+        const url = new URL(next, ORIGIN);
+        if (url.origin !== ORIGIN) throw new Error(`${path} left the site: ${next}`);
+        at = url.pathname + url.search;
         continue;
       }
       return { status: res.status, body: await res.text(), path: at };
