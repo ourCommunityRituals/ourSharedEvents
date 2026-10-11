@@ -29,19 +29,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     await expect(page.locator('[data-testid="event-main"], main').first()).toBeVisible();
     // 5W content present
     await expect(page.locator('[data-testid="venue-map"]')).toBeVisible();
-    // Wayfinding = OSE-660 universal geo-link: privacy-first, opens the visitor's
-    // OWN maps app via a geo: URI (coordinates) or maps.apple.com (address
-    // fallback), link-out only with rel="noopener noreferrer" — NEVER a Google-
-    // specific embed/tracker on the anonymous surface. (The old gmaps-link
-    // assertion was drift — a contract the app never shipped, OSE-1106.)
-    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
-      'href',
-      /^geo:|^https:\/\/maps\.apple\.com\//
-    );
-    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
-      'rel',
-      'noopener noreferrer'
-    );
+    // Wayfinding = OSE-660 directions: link-out only, rel="noopener noreferrer",
+    // never an embed or tracker on the anonymous surface. Owner 2026-10-11: one
+    // "Directions" button with two choices, Google Maps and Apple Maps (#925).
+    await expect(page.locator('[data-testid="geo-link"]')).toBeVisible();
+    for (const [which, host] of [
+      ['google', /^https:\/\/www\.google\.com\/maps\/search\//],
+      ['apple', /^https:\/\/maps\.apple\.com\//],
+    ] as const) {
+      const link = page.locator(`[data-testid="geo-link-${which}"]`);
+      await expect(link).toHaveAttribute('href', host);
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     // Share path: OG tags rendered server-side
     expect(await page.locator('meta[property="og:title"]').count()).toBe(1);
     // Anonymity affordance is part of the contract on every phase
