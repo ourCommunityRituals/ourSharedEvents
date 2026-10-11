@@ -8,18 +8,16 @@
  * the default, never an outside address.
  *
  * Covers: the card markup on /events and on the landing, the rule for which
- * value is shown, the default image route, and the swap for a picture that
+ * value is shown, the default image route, and the default behind a picture that
  * fails to load.
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { renderEventList } from '../src/lib/event-list';
+import { EVENT_CARD_CSS, renderEventList } from '../src/lib/event-list';
 import {
   EVENT_DEFAULT_THUMB_PATH,
   EVENT_DEFAULT_THUMB_SVG,
   eventThumbSrc,
-  EVENT_THUMB_SWAP_SCRIPT,
-  injectEventThumbSwap,
 } from '../src/lib/event-thumb';
 
 const E = env as unknown as { DB: D1Database; TEST_MIGRATION_STATEMENTS: string };
@@ -113,7 +111,7 @@ describe('the card markup', () => {
     );
   });
 
-  test('the card list itself carries no script; the page adds the swap', () => {
+  test('a picture that fails to load leaves the default in view, with no script', () => {
     const { html } = renderEventList([
       {
         id: 'a',
@@ -124,12 +122,10 @@ describe('the card markup', () => {
       },
     ]);
     expect(html).not.toMatch(/<script/i);
-    // The page gains the swap once, just before </body>.
-    const page = injectEventThumbSwap('<html><body><main>x</main></body></html>');
-    expect(page).toBe(`<html><body><main>x</main>${EVENT_THUMB_SWAP_SCRIPT}</body></html>`);
-    expect(EVENT_THUMB_SWAP_SCRIPT).toContain(`'${EVENT_DEFAULT_THUMB_PATH}'`);
-    expect(EVENT_THUMB_SWAP_SCRIPT).toContain('img.event-thumb');
-    expect(EVENT_THUMB_SWAP_SCRIPT).toContain('naturalWidth===0');
+    // The picture sits in a box whose background is the default image.
+    expect(html).toMatch(/<span class="event-thumb-box"><img class="event-thumb" /);
+    const rule = EVENT_CARD_CSS.slice(EVENT_CARD_CSS.indexOf('.event-card .event-thumb-box {'));
+    expect(rule.slice(0, rule.indexOf('}'))).toContain(`url('${EVENT_DEFAULT_THUMB_PATH}')`);
   });
 });
 
@@ -143,10 +139,6 @@ describe('on the served pages', () => {
     expect(thumbOf(html, 'evt_thumb_none')).toBe(EVENT_DEFAULT_THUMB_PATH);
     expect(thumbOf(html, 'evt_thumb_outside')).toBe(EVENT_DEFAULT_THUMB_PATH);
     expect(html).not.toContain('https://example.com/outside.png');
-    // The swap script carries the page's CSP nonce.
-    expect(html).toMatch(
-      /<script nonce="[^"]+">\(function\(\)\{var d='\/event-default-thumb\.svg'/
-    );
   });
 
   test('the landing cards show the same picture', async () => {
@@ -157,9 +149,6 @@ describe('on the served pages', () => {
     const card = html.slice(at, html.indexOf('</article>', at));
     expect(card).toContain(`src="${ART}"`);
     expect(card).toContain('data-testid="area-card-thumb"');
-    expect(html).toMatch(
-      /<script nonce="[^"]+">\(function\(\)\{var d='\/event-default-thumb\.svg'/
-    );
   });
 });
 

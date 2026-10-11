@@ -26,7 +26,6 @@ import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import PUBLIC_HTML from '../templates/public.html';
 import ADMIN_HTML from '../templates/admin.html';
 import LANDING_HTML from '../templates/landing.html';
-import { injectEventThumbSwap } from '../lib/event-thumb';
 import { readLatches } from '../lib/corridor-latch';
 import ADMIN_SIGNIN_HTML from '../templates/admin-signin.html';
 import DISPLAY_HTML from '../templates/display.html';
@@ -380,11 +379,9 @@ export async function handlePublicPage(
   // One address per list: ?q= / ?when= variants all point search engines here.
   const withCanonical = injectCanonical(shell, request, env, CANONICAL_PATH.events);
   return html(
-    injectEventThumbSwap(
-      injectEventList(
-        injectDiscoveryFilters(withCanonical, renderDiscoveryFilters(filters, shown, wrappedShown)),
-        list
-      )
+    injectEventList(
+      injectDiscoveryFilters(withCanonical, renderDiscoveryFilters(filters, shown, wrappedShown)),
+      list
     )
   );
 }
@@ -2644,10 +2641,7 @@ export async function handleLandingPage(
     injectCanonical(
       injectWhere(
         injectLandingArea(
-          injectNeverWho(
-            injectEventCardCss(injectEventThumbSwap(injectLegalFooter(LANDING_HTML, 'landing'))),
-            'landing'
-          ),
+          injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
           area,
           { areaFirst: where.kind === 'zip' }
         ),

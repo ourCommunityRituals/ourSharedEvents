@@ -27,7 +27,7 @@ import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
 import { orderUpcomingFirst } from './event-discovery.js';
-import { eventThumbSrc } from './event-thumb.js';
+import { EVENT_DEFAULT_THUMB_PATH, eventThumbSrc } from './event-thumb.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -162,7 +162,9 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   const classes = ['event-card', ...(opts.extraClasses ?? [])].join(' ');
   // Owner 2026-10-11: every card shows a picture, the poster art or the
   // default (lib/event-thumb.ts). Decorative: the name sits beside it.
-  const thumb = `<img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}">`;
+  // The box shows the default behind the picture, so one that fails to load
+  // leaves the default in view (no script).
+  const thumb = `<span class="event-thumb-box"><img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}"></span>`;
   return `
           <article class="${classes}" data-testid="${landing ? 'area-card' : 'public-event-card'}" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
@@ -244,7 +246,9 @@ export const EVENT_CARD_CSS = `
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-      .event-card .event-thumb { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-hover); }
+      .event-card .event-thumb-box { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-hover) url('${EVENT_DEFAULT_THUMB_PATH}') center / cover no-repeat; }
+      .event-card .event-thumb { display: block; position: relative; width: 64px; height: 64px; object-fit: cover; }
+      .event-card .event-thumb::before { content: ''; position: absolute; inset: 0; background: var(--surface-hover) url('${EVENT_DEFAULT_THUMB_PATH}') center / cover no-repeat; }
       .event-card .event-info { position: relative; z-index: 2; pointer-events: none; flex: 1 1 12rem; min-width: 0; }
       .event-card h3 { overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
       .event-card .meta { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
