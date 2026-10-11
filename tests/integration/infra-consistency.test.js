@@ -345,6 +345,10 @@ describe('Postman is gone: tests and infra live under bruno/', () => {
     const seeds = [];
     for (const w of workflows()) {
       for (const m of w.text.matchAll(/--file\s+(?:\.\.\/)+(\S+\.sql)/g)) seeds.push(m[1]);
+      // scripts/ci/d1-seed-staging.mjs <DB> <file.sql> [file.sql ...]
+      for (const m of w.text.matchAll(/d1-seed-staging\.mjs\s+\w+((?:[ \t]+\S+\.sql)+)/g)) {
+        for (const f of m[1].trim().split(/\s+/)) seeds.push(f.replace(/^(?:\.\.\/)+/, ''));
+      }
     }
     expect(seeds.length).toBeGreaterThan(0);
     const misplaced = seeds.filter(
