@@ -70,11 +70,19 @@ export function eventDefaultThumbResponse(): Response {
 
 /**
  * Swaps a card picture that fails to load (an upload that is gone) to the
- * default. It runs once after the cards, so it also catches a picture that
- * failed before it ran. The default is a fixed path, never read from the page.
+ * default. It runs once at the end of the page, after the cards, so it also
+ * catches a picture that failed before it ran. The default is a fixed path,
+ * never read from the page. It is added by the page (injectEventThumbSwap),
+ * never by the card list, so the list markup stays free of script.
  */
 export const EVENT_THUMB_SWAP_SCRIPT =
   "<script>(function(){var d='" +
   EVENT_DEFAULT_THUMB_PATH +
   "';function s(i){if(i.getAttribute('src')!==d)i.setAttribute('src',d);}" +
   "document.querySelectorAll('img.event-thumb').forEach(function(i){if(i.complete&&i.naturalWidth===0)s(i);else i.addEventListener('error',function(){s(i);});});})();</script>";
+
+/** Adds the swap script before </body> on a page that shows event cards. */
+export function injectEventThumbSwap(html: string): string {
+  const at = html.lastIndexOf('</body>');
+  return at < 0 ? html : html.slice(0, at) + EVENT_THUMB_SWAP_SCRIPT + html.slice(at);
+}

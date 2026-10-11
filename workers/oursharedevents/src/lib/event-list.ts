@@ -27,7 +27,7 @@ import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
 import { orderUpcomingFirst } from './event-discovery.js';
-import { EVENT_THUMB_SWAP_SCRIPT, eventThumbSrc } from './event-thumb.js';
+import { eventThumbSrc } from './event-thumb.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -226,7 +226,7 @@ export function renderEventList(
     html += ordered.wrapped.map(card).join('');
   }
 
-  return { html: html + EVENT_THUMB_SWAP_SCRIPT, countText, upcoming };
+  return { html, countText, upcoming };
 }
 
 // ─── The stylesheet (one copy, both pages) ─────────────────────────────────────

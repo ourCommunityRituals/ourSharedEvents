@@ -236,7 +236,13 @@ describe('OSE-1243 | hostile and malformed input', () => {
     // contains it, and the assertion would pass just as happily on markup that
     // spelled the attribute differently. What must be true is that the parser
     // built no element and no handler from it.
-    expect(el.querySelector('img')).toBeNull();
+    // The card's own picture (owner 2026-10-11) is the one image allowed, and
+    // it is the fixed default, not anything built from the payload.
+    expect(el.querySelector('img:not(.event-thumb)')).toBeNull();
+    expect(el.querySelectorAll('img.event-thumb')).toHaveLength(1);
+    expect(el.querySelector('img.event-thumb')?.getAttribute('src')).toBe(
+      '/event-default-thumb.svg'
+    );
     const venue = el.querySelector('[data-testid="public-event-venue"]') as HTMLElement;
     expect(venue.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(venue.children.length).toBe(0);

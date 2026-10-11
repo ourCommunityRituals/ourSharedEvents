@@ -64,7 +64,6 @@ import {
   type WhenOption,
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
-import { EVENT_THUMB_SWAP_SCRIPT } from './event-thumb.js';
 import { renderAttendeeMap } from './attendee-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 
@@ -434,7 +433,7 @@ function buildAreaMarkup(args: {
           <div class="view-map" data-testid="area-map">
             ${mapHtml}
           </div>
-          <div class="view-list" data-testid="area-list">${emptyMessages}${cards}${cards ? EVENT_THUMB_SWAP_SCRIPT : ''}
+          <div class="view-list" data-testid="area-list">${emptyMessages}${cards}
           </div>
         </div>`;
 

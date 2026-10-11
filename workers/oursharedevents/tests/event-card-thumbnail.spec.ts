@@ -18,6 +18,7 @@ import {
   EVENT_DEFAULT_THUMB_PATH,
   EVENT_DEFAULT_THUMB_SVG,
   eventThumbSrc,
+  injectEventThumbSwap,
 } from '../src/lib/event-thumb';
 
 const E = env as unknown as { DB: D1Database; TEST_MIGRATION_STATEMENTS: string };
@@ -111,7 +112,7 @@ describe('the card markup', () => {
     );
   });
 
-  test('a picture that fails to load is swapped to the default', () => {
+  test('the card list itself carries no script; the page adds the swap', () => {
     const { html } = renderEventList([
       {
         id: 'a',
@@ -121,7 +122,9 @@ describe('the card markup', () => {
         cover_image_url: ART,
       },
     ]);
-    const script = html.slice(html.lastIndexOf('<script'));
+    expect(html).not.toMatch(/<script/i);
+    const page = injectEventThumbSwap('<html><body><main>x</main></body></html>');
+    const script = page.slice(page.indexOf('<script'), page.indexOf('</body>'));
     expect(script).toContain(`'${EVENT_DEFAULT_THUMB_PATH}'`);
     expect(script).toContain('img.event-thumb');
     expect(script).toContain('naturalWidth===0');
@@ -152,6 +155,9 @@ describe('on the served pages', () => {
     const card = html.slice(at, html.indexOf('</article>', at));
     expect(card).toContain(`src="${ART}"`);
     expect(card).toContain('data-testid="area-card-thumb"');
+    expect(html).toMatch(
+      /<script nonce="[^"]+">\(function\(\)\{var d='\/event-default-thumb\.svg'/
+    );
   });
 });
 
