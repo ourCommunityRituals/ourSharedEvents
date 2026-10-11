@@ -106,7 +106,7 @@ interface SharedReport {
   event_end_date: string | null; // ISO
 
   // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
-  unique_gatherings: number | null;
+  distinct_scanners: number | null;
 
   // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
   //    of its confirmed series (`venue_pct`, OSE-1652) or in its corridor (`corridor_pct`).
@@ -187,7 +187,7 @@ interface SharedReport {
     instances: Array<{
       event_id: string;
       start_date: string;
-      unique_gatherings: number | null;
+      distinct_scanners: number | null;
     }>;
   };
 

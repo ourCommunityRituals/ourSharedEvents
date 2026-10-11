@@ -43,7 +43,7 @@ const FULL_REPORT: Record<string, unknown> = {
   event_title: 'Sponsor Audit Test Event',
   event_start_date: '2026-08-03T18:00:00Z',
   event_end_date: '2026-08-03T22:00:00Z',
-  unique_gatherings: 50,
+  distinct_scanners: 50,
   sponsor_impressions: [{ sponsor_id: 'sp_test', impressions: 100 }],
   poster_attribution: { views: 300, scans: 60 },
   return_rate: 0.35,
@@ -65,9 +65,7 @@ describe('OSE-561 S1/S2 — depth escalation: local token cannot reach premium f
     const { report } = filterReportByDepth(FULL_REPORT, resolved);
 
     // Fields that exist in premium but not in mid are premium-only
-    const premiumOnly = DEPTH_SECTIONS.premium.filter(
-      (f) => !DEPTH_SECTIONS.mid.includes(f)
-    );
+    const premiumOnly = DEPTH_SECTIONS.premium.filter((f) => !DEPTH_SECTIONS.mid.includes(f));
     for (const field of premiumOnly) {
       expect(
         report,
@@ -86,17 +84,14 @@ describe('OSE-561 S1/S2 — depth escalation: local token cannot reach premium f
     // Every local section field must be present in mid output
     for (const field of DEPTH_SECTIONS.local) {
       if (field in FULL_REPORT) {
-        expect(
-          report,
-          `mid-depth response must include local field "${field}"`
-        ).toHaveProperty(field);
+        expect(report, `mid-depth response must include local field "${field}"`).toHaveProperty(
+          field
+        );
       }
     }
 
     // Fields in premium but not in mid are premium-only — must be absent
-    const premiumOnly = DEPTH_SECTIONS.premium.filter(
-      (f) => !DEPTH_SECTIONS.mid.includes(f)
-    );
+    const premiumOnly = DEPTH_SECTIONS.premium.filter((f) => !DEPTH_SECTIONS.mid.includes(f));
     for (const field of premiumOnly) {
       expect(
         report,
@@ -113,10 +108,9 @@ describe('OSE-561 S1/S2 — depth escalation: local token cannot reach premium f
 
     for (const field of DEPTH_SECTIONS.premium) {
       if (field in FULL_REPORT) {
-        expect(
-          report,
-          `premium-depth response must include field "${field}"`
-        ).toHaveProperty(field);
+        expect(report, `premium-depth response must include field "${field}"`).toHaveProperty(
+          field
+        );
       }
     }
   });
@@ -146,16 +140,14 @@ describe('OSE-561 S3 — TL-038: sponsor_id claim validated before data is serve
     const src = sources[readHandlerKey!];
 
     // The handler must compare the token's event ID claim against the URL path
-    expect(
-      src,
-      'shared-report-read.ts must validate claim.eventId against path :id'
-    ).toMatch(/claim\.eventId\s*!==\s*eventId/);
+    expect(src, 'shared-report-read.ts must validate claim.eventId against path :id').toMatch(
+      /claim\.eventId\s*!==\s*eventId/
+    );
 
     // It must return 403 on mismatch — not serve data
-    expect(
-      src,
-      'shared-report-read.ts must return 403 when event_id claim mismatches'
-    ).toMatch(/403/);
+    expect(src, 'shared-report-read.ts must return 403 when event_id claim mismatches').toMatch(
+      /403/
+    );
   });
 
   test('verifySignedLinkToken is called before any data access', () => {
@@ -168,12 +160,14 @@ describe('OSE-561 S3 — TL-038: sponsor_id claim validated before data is serve
     // Token verification must precede buildSharedReport
     const verifyIdx = src.indexOf('verifySignedLinkToken');
     const buildIdx = src.indexOf('buildSharedReport');
-    expect(verifyIdx, 'verifySignedLinkToken must appear before buildSharedReport').toBeGreaterThanOrEqual(0);
-    expect(buildIdx, 'buildSharedReport must appear in read handler').toBeGreaterThanOrEqual(0);
     expect(
       verifyIdx,
-      'verifySignedLinkToken must be called before buildSharedReport'
-    ).toBeLessThan(buildIdx);
+      'verifySignedLinkToken must appear before buildSharedReport'
+    ).toBeGreaterThanOrEqual(0);
+    expect(buildIdx, 'buildSharedReport must appear in read handler').toBeGreaterThanOrEqual(0);
+    expect(verifyIdx, 'verifySignedLinkToken must be called before buildSharedReport').toBeLessThan(
+      buildIdx
+    );
   });
 });
 
@@ -194,10 +188,9 @@ describe('OSE-561 S4/S5 — TL-039: every access path writes to report_access_lo
     expect(src, 'shared-report-read.ts must import logReportAccess').toContain('logReportAccess');
 
     // Must call logReportAccess with 'granted' somewhere in the file
-    expect(
-      src,
-      'shared-report-read.ts must call logReportAccess with "granted"'
-    ).toMatch(/logReportAccess\([^)]*'granted'/);
+    expect(src, 'shared-report-read.ts must call logReportAccess with "granted"').toMatch(
+      /logReportAccess\([^)]*'granted'/
+    );
   });
 
   // @born-red TL-039 | method: design-time-negative-assertion | date: 2026-08-03
@@ -209,23 +202,19 @@ describe('OSE-561 S4/S5 — TL-039: every access path writes to report_access_lo
     const src = sources[readHandlerKey!]!;
 
     // Must call logReportAccess with 'denied' (at least once — for invalid token + event_id mismatch)
-    expect(
-      src,
-      'shared-report-read.ts must call logReportAccess with "denied"'
-    ).toMatch(/logReportAccess\([^)]*'denied'/);
+    expect(src, 'shared-report-read.ts must call logReportAccess with "denied"').toMatch(
+      /logReportAccess\([^)]*'denied'/
+    );
 
     // Denied calls must use ctx.waitUntil (fire-and-forget, non-blocking)
-    expect(
-      src,
-      'logReportAccess must be wrapped in ctx.waitUntil'
-    ).toMatch(/waitUntil\(\s*logReportAccess/);
+    expect(src, 'logReportAccess must be wrapped in ctx.waitUntil').toMatch(
+      /waitUntil\(\s*logReportAccess/
+    );
   });
 
   test('logReportAccess in audit-log.ts uses only INSERT (no UPDATE of existing rows per access)', () => {
     const sources = loadSources();
-    const auditKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('lib/audit-log')
-    );
+    const auditKey = Object.keys(sources).find((k) => normalizePath(k).includes('lib/audit-log'));
     expect(auditKey, 'audit-log.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
 
     const src = sources[auditKey!]!;

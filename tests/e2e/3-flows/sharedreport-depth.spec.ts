@@ -46,6 +46,25 @@ async function fetchReport(
 }
 
 test.describe('SharedReport depth gate', () => {
+  // OSE-818 (owner 2026-10-11): the scan count is `distinct_scanners` at every
+  // depth, on the deployed Worker. The old key `unique_gatherings` is gone.
+  for (const [who, token] of [
+    ['admin', ADMIN_TOKEN],
+    ['local sponsor', LOCAL_TOKEN],
+    ['mid sponsor', MID_TOKEN],
+  ] as const) {
+    test(`${who} token → distinct_scanners, never unique_gatherings`, async ({ request }) => {
+      test.skip(!POST || !token, 'fixtures not seeded');
+      const res = await fetchReport(request, POST!, token!);
+      expect(res.status()).toBe(200);
+      const report = (await res.json()).report as Record<string, unknown>;
+      expect('distinct_scanners' in report).toBe(true);
+      const v = report.distinct_scanners;
+      expect(v === null || (typeof v === 'number' && Number.isInteger(v) && v >= 5)).toBe(true);
+      expect('unique_gatherings' in report).toBe(false);
+    });
+  }
+
   test('no token → 401', async ({ request }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
     const res = await request.get(reportUrl(POST!));
@@ -77,7 +96,7 @@ test.describe('SharedReport depth gate', () => {
     // section present, including the two above Mid.
     const report = body.report as Record<string, unknown>;
     expect('event_id' in report).toBe(true);
-    expect('unique_gatherings' in report).toBe(true);
+    expect('distinct_scanners' in report).toBe(true);
     // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
     // headcount_trend is the genuinely premium-only section — present here.

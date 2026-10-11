@@ -6,7 +6,7 @@
  *   docs/features/SHARED-REPORT-READ-API.md
  *
  * Six fields per Session 1 ratified contract:
- *   1. unique_gatherings        — from scan_aggregates.distinct_agent_hashes (summed)
+ *   1. distinct_scanners        — from scan_aggregates.distinct_agent_hashes (summed)
  *   2. return_rate              — % of distinct anons also seen at another event
  *      (of the confirmed series, and of the corridor)
  *   3. corridor_density         — this event's anon count vs rolling baseline
@@ -138,13 +138,13 @@ export interface SharedReport {
   event_start_date: string;
   event_end_date: string | null;
 
-  unique_gatherings: number | null;
+  distinct_scanners: number | null;
 
   /**
    * Rc — anonymous digital click-out counts from the /s/ routing layer, per
    * destination kind (public/donate/signup/…). Group-level counter only (no IP,
    * no per-visitor id, no cookie, no referrer); each kind passes the same K=5
-   * floor as unique_gatherings, and `total` is the sum of the kinds that are
+   * floor as distinct_scanners, and `total` is the sum of the kinds that are
    * published (null when none is), so a sub-K count never ships and cannot be
    * had by subtraction. This is the digital half of the flywheel — surfaced on
    * the SharedReport / post-event recap only (never pre/event/poster, OSE-509).
@@ -252,7 +252,7 @@ export interface SharedReport {
     instances: Array<{
       event_id: string;
       start_date: string;
-      unique_gatherings: number | null;
+      distinct_scanners: number | null;
     }>;
   };
 
@@ -318,7 +318,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // OSE-1376: hour labels render in the event's zone (fallback: platform home zone).
   const reportZone = resolveEventZone(event.timezone);
 
-  // 2. unique_gatherings — sum scan_aggregates.distinct_agent_hashes over all buckets
+  // 2. distinct_scanners — sum scan_aggregates.distinct_agent_hashes over all buckets
   //    for this event. OSE-683: each bucket is a contributing bucket — apply the
   //    per-bucket K-anon floor BEFORE summation (a bucket with distinct_agent_hashes < K
   //    is dropped, not summed raw). NULL if no scan_aggregates rows exist at all
@@ -344,7 +344,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // through the shared OSE-665 renderer. floored.count is exact when the
   // survivor sum clears K, else null (suppressed).
   const flooredGatherings = floorTotalOfParts((saBuckets.results ?? []).map((r) => r.count));
-  const uniqueGatherings = hasAnyBucket ? flooredGatherings.count : null;
+  const distinctScanners = hasAnyBucket ? flooredGatherings.count : null;
 
   // 3. return_rate — for distinct anon_id_hashes at this event, how many
   //    were also seen at prior events (any other venue_id).
@@ -697,7 +697,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
   // total (and does not, on its own, count the sponsor into the class): only
   // rows that individually clear K contribute, matching the campaign_summary and
-  // unique_gatherings treatment so no surface leaks a sub-K aggregate.
+  // distinct_scanners treatment so no surface leaks a sub-K aggregate.
   const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
   for (const row of sponsorImpressions) {
     const floored = applyCountFloor(row.count);
@@ -878,11 +878,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // falling back to the venue preview as if there were no scans.
     corridorMap = { svg: '', suppressed: [], cell_count: 0, source: 'suppressed' };
   } else if (event.h3_res7 && !h3TagsCorrupt) {
-    // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
+    // Launch-day fallback: res7 neighborhood hex lit with distinctScanners count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
     // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
-    const count = uniqueGatherings ?? 0;
+    const count = distinctScanners ?? 0;
     buildCorridorMap(
       [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
       'fallback'
@@ -901,7 +901,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const trendInstances: Array<{
     event_id: string;
     start_date: string;
-    unique_gatherings: number | null;
+    distinct_scanners: number | null;
   }> = [];
   if (event.series_id) {
     const series = await confirmedSeriesOf(db, event);
@@ -909,14 +909,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
       // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend
-      // instance's headcount — the SAME grain as the top-level unique_gatherings.
+      // instance's headcount — the SAME grain as the top-level distinct_scanners.
       // The previous `SELECT SUM(distinct_agent_hashes) ...` subquery summed buckets RAW
       // per instance, so a per-instance trend point could publish a sub-K sum
       // (or launder a sub-K bucket into it) — exactly the leak the ratified
       // per-bucket rule forbids. Fetch the events in the series and their raw
       // buckets, then floor PER CONTRIBUTING BUCKET before summation (drop
       // sub-K buckets; a survivor sum that itself fails to clear K is nulled),
-      // mirroring `uniqueGatherings` above. An instance with no buckets at all
+      // mirroring `distinctScanners` above. An instance with no buckets at all
       // stays null (materialization pending for that instance).
       const inst = await db
         .prepare(
@@ -943,7 +943,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
-          unique_gatherings: instHasBucket ? instFloored.count : null,
+          distinct_scanners: instHasBucket ? instFloored.count : null,
         });
       }
     } else {
@@ -962,7 +962,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // Surface materialization pending when essentially no signal exists yet.
-  if (uniqueGatherings === null && distinctAnonsHere === 0 && sponsorImpressions.length === 0) {
+  if (distinctScanners === null && distinctAnonsHere === 0 && sponsorImpressions.length === 0) {
     suppression.push({
       field: '_event',
       reason: 'materialization_pending',
@@ -1002,7 +1002,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       event_title: event.title,
       event_start_date: event.start_date,
       event_end_date: event.end_date,
-      unique_gatherings: uniqueGatherings,
+      distinct_scanners: distinctScanners,
       click_outs: clickOuts,
       return_rate: {
         venue_pct: venuePct,

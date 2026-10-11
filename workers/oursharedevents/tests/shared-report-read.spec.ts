@@ -208,7 +208,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.event_id).toBe('test-evt-read-full');
-    expect(r.report.unique_gatherings).toBe(42);
+    expect(r.report.distinct_scanners).toBe(42);
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
     // was a private 3), so the sample size is published. The venue rate counts
     // people seen at another event of a confirmed series (OSE-1652); this event
@@ -409,11 +409,11 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      report: { event_id: string; unique_gatherings: number };
+      report: { event_id: string; distinct_scanners: number };
     };
     expect(body.ok).toBe(true);
     expect(body.report.event_id).toBe('test-evt-read-200');
-    expect(body.report.unique_gatherings).toBe(30);
+    expect(body.report.distinct_scanners).toBe(30);
   });
 
   test('returns Cache-Control: no-store (+ Vary: Authorization) for a closed event', async () => {
@@ -521,12 +521,12 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      reports: Record<string, { unique_gatherings: number }>;
+      reports: Record<string, { distinct_scanners: number }>;
       errors: Record<string, { code: string }>;
     };
     expect(body.ok).toBe(true);
-    expect(body.reports['test-evt-read-batch-1'].unique_gatherings).toBe(12);
-    expect(body.reports['test-evt-read-batch-2'].unique_gatherings).toBe(7);
+    expect(body.reports['test-evt-read-batch-1'].distinct_scanners).toBe(12);
+    expect(body.reports['test-evt-read-batch-2'].distinct_scanners).toBe(7);
     expect(body.errors['evt-does-not-exist'].code).toBe('NOT_FOUND');
   });
 
@@ -615,7 +615,7 @@ describe('OSE-577 — batch service-token class split (cross-product fails close
     expect(body.ok).toBe(true);
     const report = body.reports['test-evt-read-577-internal'];
     expect(report).toBeDefined();
-    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('distinct_scanners');
     expect(report).toHaveProperty('headcount_trend'); // premium-only field
     expect(report).toHaveProperty('sponsor_class_breakdown');
   });
@@ -686,7 +686,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     expect(report).toBeDefined();
     // All sections present — no field stripping
     expect(report).toHaveProperty('event_id');
-    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('distinct_scanners');
     expect(report).toHaveProperty('headcount_trend');
     expect(report).toHaveProperty('return_rate');
     expect(report).toHaveProperty('poster_attribution');

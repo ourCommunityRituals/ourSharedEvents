@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Minimum required fields for the OSE SharedReport interface. Removing any field from top_level_fields, sponsor_impressions_fields, or campaign_summary_fields MUST be accompanied by removing it here and bumping the version — that makes the break visible in a diff rather than silent. Adding new fields is always safe (additive). This snapshot is the output-side complement to public-events.snapshot.json: the public API snapshot protects what consumers GET from /api/v2/events; this snapshot protects what enterprise sponsors and organizers see in /api/v2/events/:id/shared-report.",
   "interface": "SharedReport",
   "source": "workers/oursharedevents/src/lib/shared-report-builder.ts",
@@ -8,7 +8,7 @@
     "event_title",
     "event_start_date",
     "event_end_date",
-    "unique_gatherings",
+    "distinct_scanners",
     "return_rate",
     "corridor_density",
     "sponsor_impressions",

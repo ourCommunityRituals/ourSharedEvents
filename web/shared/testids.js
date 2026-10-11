@@ -648,7 +648,7 @@
       'shared-report-skip-link',
       'signed-link-content',
       'signed-link-corridor-density',
-      'signed-link-distinct-gatherings',
+      'signed-link-distinct-scanners',
       'signed-link-error',
       'signed-link-event-date',
       'signed-link-event-title',
