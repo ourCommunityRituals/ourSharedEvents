@@ -196,6 +196,16 @@ describe('GET /sponsor — the page', () => {
     expect(html).not.toContain('"ok":false');
   });
 
+  // Less text (owner 2026-10-11): each error page says what to do in one line.
+  test('the two error pages each say what to do in one short line', async () => {
+    const reopen = await (await SELF.fetch('https://t.test/sponsor')).text();
+    expect(reopen).toContain('Open it from your message or email. It still works.');
+    expect(reopen).not.toContain('address bar');
+    const invalid = await (await SELF.fetch('https://t.test/sponsor?t=bad.token')).text();
+    expect(invalid).toContain('Ask the organizer for a fresh link.');
+    expect(invalid).not.toContain('copied incompletely');
+  });
+
   test('cross-tenant claim (sponsor in another brand) is the same invalid page', async () => {
     const { res } = await pageFor('shs-other', BRAND);
     expect(res.status).toBe(401);

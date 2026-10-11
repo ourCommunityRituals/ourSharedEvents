@@ -177,7 +177,7 @@ function invalidLinkPage(): Response {
     renderErrorPage(
       401,
       'This sponsor link isn’t valid',
-      'It may have expired, or it was copied incompletely. Ask the event organizer for a fresh link.',
+      'Ask the organizer for a fresh link.',
       '/events',
       'See what’s happening'
     )
@@ -195,7 +195,7 @@ function reopenLinkPage(): Response {
     renderErrorPage(
       401,
       'Open your sponsor link again',
-      'This page opens from the link the organizer sent you. To keep that link private it is not kept in the address bar, so a refresh or the Back button cannot reopen the page. Open the link again from your message or email. It still works.',
+      'Open it from your message or email. It still works.',
       '/events',
       'See what’s happening'
     )
