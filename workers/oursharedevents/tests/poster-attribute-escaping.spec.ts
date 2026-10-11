@@ -412,7 +412,13 @@ describe('the poster (/poster?event=): what an organizer or a sponsor types', ()
     expect(map.getAttribute('href')).toBe(
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hostile('VENUE'))}`
     );
-    expect(map.textContent).toBe(`${hostile('VENUE')} · Map`);
+    expect(map.textContent).toBe('Google Maps');
+    expect(doc.querySelector('[data-testid="poster-directions-summary"]')!.textContent).toBe(
+      `${hostile('VENUE')} · Directions`
+    );
+    expect(doc.querySelector('[data-testid="poster-open-map-apple"]')!.getAttribute('href')).toBe(
+      `https://maps.apple.com/?q=${encodeURIComponent(hostile('VENUE'))}`
+    );
     const sponsors = [...doc.querySelectorAll('[data-testid="poster-sponsor-item"]')];
     expect(sponsors.map((s) => s.getAttribute('aria-label'))).toEqual([
       hostile('SPONSORTITLE'),
@@ -740,6 +746,11 @@ describe("a code's link and picture (made by the server; checked on the page all
       expect(map.getAttribute('href')).toBe(
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`
       );
+      const apple = doc.querySelector('[data-testid="poster-open-map-apple"]')!;
+      expect(names(apple)).toEqual(['data-testid', 'href', 'rel', 'target']);
+      expect(apple.getAttribute('href')).toBe(
+        `https://maps.apple.com/?q=${encodeURIComponent(venue)}`
+      );
     }
   });
 
@@ -818,8 +829,9 @@ describe('the page has one escaper, and it escapes quote marks', () => {
 // written at the top of that file.
 //
 // This page needs two things the report page does not, and names both here:
-//   - one address that leaves the site: the venue's map search. Its start is
-//     fixed text and the venue follows it through encodeURIComponent;
+//   - two addresses that leave the site: the venue's map searches, Google Maps
+//     and Apple Maps (owner 2026-10-11). Each start is fixed text and the venue
+//     follows it through encodeURIComponent;
 //   - three addresses that come whole from the bundle. Each passes a function
 //     on the page first (posterArtAddress, slotLink, slotPicture) and is then
 //     escaped. The source check only sees THAT each address goes through its
@@ -827,9 +839,10 @@ describe('the page has one escaper, and it escapes quote marks', () => {
 
 const HELPER = 'escapePosterHtml';
 const MAP_START = 'https://www.google.com/maps/search/?api=1&amp;query=';
+const APPLE_MAP_START = 'https://maps.apple.com/?q=';
 const RULES: MarkupRules = {
   helper: HELPER,
-  addressStarts: [MAP_START],
+  addressStarts: [MAP_START, APPLE_MAP_START],
   addressMakers: ['posterArtAddress', 'slotLink', 'slotPicture'],
 };
 const checkPage = (page: string) => checkMarkupPage(page, RULES);
@@ -881,12 +894,13 @@ describe('the source: every value written into an attribute goes through the esc
     expect(checkPage(POSTER_HTML).findings).toEqual([]);
   });
 
-  test('the same check, with only the report page’s rules, refuses this page’s four addresses and nothing else', () => {
+  test('the same check, with only the report page’s rules, refuses this page’s five addresses and nothing else', () => {
     // The negative control for the two extra rules: take them away and exactly
     // the writes they are there for are named.
     const { findings } = checkMarkupPage(POSTER_HTML, { helper: HELPER });
     expect(findings.map((f) => f.replace(/^line \d+: /, '')).sort()).toEqual(
       [
+        '`encodeURIComponent(venue)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`encodeURIComponent(venue)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(artAddress)` is written into an address, <img src="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(link)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
@@ -987,6 +1001,15 @@ describe('the source: every value written into an attribute goes through the esc
     [
       'the venue escaped, not encoded, in the map link',
       (p) => p.replace(MAP_START + "' + encodeURIComponent(venue)", MAP_START + "' + esc(venue)"),
+      /`esc\(venue\)` is written into an address, <a href="…">/,
+    ],
+    [
+      'the venue escaped, not encoded, in the Apple Maps link',
+      (p) =>
+        p.replace(
+          APPLE_MAP_START + "' + encodeURIComponent(venue)",
+          APPLE_MAP_START + "' + esc(venue)"
+        ),
       /`esc\(venue\)` is written into an address, <a href="…">/,
     ],
     [
