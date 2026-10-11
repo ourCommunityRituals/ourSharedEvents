@@ -210,6 +210,8 @@ export const NODE_SPECS = [
   'tests/public-projection-routing.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
   'tests/event-form-link-writers.spec.ts',
+  // OSE-1684 last rule: the route table keeps every event screen under /events/<id>/.
+  'tests/event-address-route-table.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
