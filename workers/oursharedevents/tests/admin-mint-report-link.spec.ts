@@ -330,3 +330,35 @@ describe('admin Shared Report Links: when no link can be made', () => {
     expect(doc.getElementById('admin-status')!.textContent).toBe('Select an event first.');
   });
 });
+
+// OSE-1650 (owner 2026-10-11): a sponsor gets Local or Mid, Mid by default,
+// never Premium. Before this the form offered Local and "Premium — full
+// intelligence"; the server caps a sponsor at Mid and drops anything above the
+// cap to Local, so picking Premium handed the sponsor the smallest report.
+describe('admin Shared Report Links: what depth a sponsor link gets', () => {
+  test('a sponsor can be given Mid or Local, Mid first and chosen; never Premium', async () => {
+    const { $ } = await mount();
+    const depth = $<HTMLSelectElement>('mint-depth')!;
+    expect(Array.from(depth.options).map((o) => o.value)).toEqual(['mid', 'local']);
+    expect(depth.value).toBe('mid');
+    for (const o of Array.from(depth.options)) expect(o.textContent).not.toMatch(/premium/i);
+  });
+
+  test('Sponsor with the depth left as it is sends depth "mid"', async () => {
+    const { w, $, posts } = await mount();
+    const roleSelect = $<HTMLSelectElement>('mint-role')!;
+    roleSelect.value = 'sponsor';
+    roleSelect.dispatchEvent(new w.Event('change', { bubbles: true }));
+    $<HTMLInputElement>('mint-sponsor-id')!.value = 'sp_form';
+    $<HTMLButtonElement>('mint-link-btn')!.click();
+    await flush();
+
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0].body).toEqual({
+      role: 'sponsor',
+      ttl_days: 7,
+      depth: 'mid',
+      sponsor_id: 'sp_form',
+    });
+  });
+});

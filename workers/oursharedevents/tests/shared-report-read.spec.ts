@@ -21,6 +21,7 @@ import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
+import ADMIN_HTML from '../src/templates/admin.html';
 
 interface TestEnv {
   DB: D1Database;
@@ -1551,5 +1552,97 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     expect(report).not.toHaveProperty('headcount_trend');
     expect(report).not.toHaveProperty('corridor_map');
     expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+});
+
+// ── OSE-1650 — the admin form's sponsor depth is the depth the sponsor gets ──
+// Owner decision 2026-10-11: a sponsor link is Local or Mid, Mid by default, no
+// Premium. The form used to offer Local and Premium, and a Premium claim on a
+// sponsor link reads as Local (resolveDepth caps a sponsor at Mid and drops
+// anything above the cap to Local).
+describe('OSE-1650 — sponsor link depth: what the form offers is what the link shows', () => {
+  beforeEach(resetForTest);
+
+  /** The admin form's depth choices for a sponsor, in order, as served. */
+  const formDepths = (): string[] => {
+    const select = ADMIN_HTML.match(/<select id="mint-depth"[^>]*>([\s\S]*?)<\/select>/);
+    expect(select, 'the mint form has a depth select').not.toBeNull();
+    return [...select![1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
+  };
+
+  const mintViaRoute = (eventId: string, body: Record<string, unknown>) =>
+    SELF.fetch(`https://test.local/api/v2/admin/events/${eventId}/shared-report/mint-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+      body: JSON.stringify(body),
+    });
+
+  test("Sponsor + the form's first choice: the link reads the Mid report", async () => {
+    const eventId = 'evt-1650-form';
+    await seedEvent({ id: eventId, start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate(eventId, 20);
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650',
+      eventId,
+      name: 'Form Sponsor',
+      tier: 'silver',
+    });
+
+    // The body the form sends for Sponsor (tests/admin-mint-report-link.spec.ts).
+    const minted = await mintViaRoute(eventId, {
+      role: 'sponsor',
+      ttl_days: 7,
+      depth: formDepths()[0],
+      sponsor_id: 'sp-1650',
+    });
+    expect(minted.status).toBe(200);
+    const { token } = (await minted.json()) as { token: string };
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/${eventId}/shared-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    const { report } = (await res.json()) as { report: Record<string, unknown> };
+    // Mid's next step is Premium; Local's is Mid. Mid keeps poster attribution.
+    expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('premium');
+    expect(report).toHaveProperty('poster_attribution');
+    expect(report).not.toHaveProperty('headcount_trend');
+  });
+
+  test('every depth the form offers a sponsor is one the route accepts for a sponsor', async () => {
+    const eventId = 'evt-1650-each';
+    await seedEvent({ id: eventId });
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650e',
+      eventId,
+      name: 'Each Sponsor',
+      tier: 'silver',
+    });
+    expect(formDepths()).toEqual(['mid', 'local']);
+    for (const depth of formDepths()) {
+      const res = await mintViaRoute(eventId, { role: 'sponsor', depth, sponsor_id: 'sp-1650e' });
+      expect(res.status, depth).toBe(200);
+    }
+  });
+
+  test('a sponsor link cannot be minted at Premium: 400, and nothing is minted', async () => {
+    const eventId = 'evt-1650-premium';
+    await seedEvent({ id: eventId });
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650p',
+      eventId,
+      name: 'Premium Ask',
+      tier: 'silver',
+    });
+    const res = await mintViaRoute(eventId, {
+      role: 'sponsor',
+      depth: 'premium',
+      sponsor_id: 'sp-1650p',
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; token?: string; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.token).toBeUndefined();
+    expect(body.error).toBe('depth must be "local" or "mid" for a sponsor');
   });
 });

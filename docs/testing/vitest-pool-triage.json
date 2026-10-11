@@ -223,7 +223,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 10
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
@@ -2491,7 +2491,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 63
+      "testCount": 66
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",
