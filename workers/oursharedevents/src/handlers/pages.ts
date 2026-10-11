@@ -722,7 +722,7 @@ function renderEventActions(
   opts: { calendar?: boolean; inert?: boolean } = {}
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
-  const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
+  const icsLabel = lang === 'es' ? 'Apple u Outlook' : 'Apple or Outlook';
   const calendarHref = `/events/${esc(row.id)}/calendar.ics`;
   // OSE-1358: one "Add to calendar" control offering the standard targets. A
   // CSP-safe <details> disclosure (no JS) — Google Calendar (Android + web) via a

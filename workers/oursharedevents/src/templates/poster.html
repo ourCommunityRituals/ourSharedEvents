@@ -61,8 +61,7 @@ body {
 .page-header .print-btn:not(:disabled):hover {
   color: var(--text);
 }
-/* OSE-286: the Print control became a <button>; reset native chrome so
-   it reads as the header link it replaced, and dim it while disabled. */
+/* OSE-286: Print is a <button> styled as a link; dim while disabled. */
 .print-controls {
   display: inline-flex;
   align-items: center;
@@ -158,9 +157,7 @@ body {
   font-size: 1rem;
   color: var(--text-muted);
 }
-/* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
-   --border, --text-muted), not hardcoded hex — so the poster art viewport
-   can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+/* Colours are @ocr/ui tokens, never hex. */
 .poster-art {
   margin: 1rem 0 1.25rem;
   border-radius: 10px;
@@ -298,7 +295,16 @@ body {
   max-width: none;
   font-size: 0.85rem;
 }
+.poster-directions,
+.poster-directions summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  cursor: pointer;
+}
 .meta-text a,
+.poster-directions summary,
 .poster--digital .qr-slot-code {
   display: inline-flex;
   align-items: center;
@@ -1162,8 +1168,12 @@ body {
         const whenHtml = digital && event.id
           ? '<a href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
           : whenText;
+        // Owner 2026-10-11: one Directions button, two choices (Google Maps,
+        // Apple Maps), as on the event page.
         const venueHtml = digital
-          ? '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">' + esc(venue) + ' &middot; Map</a>'
+          ? '<details class="poster-directions" data-testid="poster-directions"><summary data-testid="poster-directions-summary">' + esc(venue) + ' &middot; Directions</summary>' +
+            '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a> ' +
+            '<a href="https://maps.apple.com/?q=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a></details>'
           : esc(venue);
 
         // OSE-1516: the layout starts from the artwork alone (the codes are not

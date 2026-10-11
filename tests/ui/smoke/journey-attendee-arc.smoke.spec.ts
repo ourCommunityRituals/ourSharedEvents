@@ -52,16 +52,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     test.skip(!LIVE, 'SMOKE_EVENT_LIVE not seeded');
     await page.goto(`/events/${LIVE}`);
     await expect(page.locator('[data-testid="venue-map-live"]')).toBeVisible();
-    // LIVE variant of the OSE-660 geo-link (same privacy-first contract, distinct
-    // testid emitted by renderEventLiveHtml) — OSE-1106.
-    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
-      'href',
-      /^geo:|^https:\/\/maps\.apple\.com\//
-    );
-    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
-      'rel',
-      'noopener noreferrer'
-    );
+    // LIVE variant of the OSE-660 directions (same privacy-first contract,
+    // distinct testid emitted by renderEventLiveHtml) — OSE-1106. Owner
+    // 2026-10-11: one button, two choices, Google Maps and Apple Maps.
+    await expect(page.locator('[data-testid="geo-link-live"]')).toBeVisible();
+    for (const [which, host] of [
+      ['google', /^https:\/\/www\.google\.com\/maps\/search\//],
+      ['apple', /^https:\/\/maps\.apple\.com\//],
+    ] as const) {
+      const link = page.locator(`[data-testid="geo-link-live-${which}"]`);
+      await expect(link).toHaveAttribute('href', host);
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     await expect(page.locator('[data-testid="anonymity-affordance"]')).toBeVisible();
   });
 
