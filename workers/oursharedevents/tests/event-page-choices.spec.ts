@@ -191,6 +191,44 @@ describe('OSE-1518 three plain choices (while the event is on)', () => {
   });
 });
 
+describe('less text on the event page (owner 2026-10-11): each choice says only what it asks', () => {
+  /** The note under a choice, or null when it has none. */
+  const noteOf = (html: string, testid: string) => {
+    const t = tag(html, testid);
+    const id = t.match(/aria-describedby="([^"]+)"/)?.[1];
+    if (!id) return null;
+    return html.match(new RegExp(`<p class="ose-choice-note" id="${id}">([^<]*)</p>`))?.[1] ?? null;
+  };
+
+  test('before the event: Register says what it asks for; the other two carry no note', async () => {
+    await seed({ id: 'evt_less_pre' });
+    const html = await page('/events/evt_less_pre');
+    expect(noteOf(html, 'event-rsvp')).toBe('Asks for your name and email.');
+    // The label already says "anonymously", so a note would repeat it.
+    expect(noteOf(html, 'event-choice-checkin')).toBeNull();
+    expect(noteOf(html, 'event-choice-looking')).toBeNull();
+    expect(html).not.toContain('Nothing to fill in');
+    expect(html).not.toContain('Save a spot.');
+  });
+
+  test('while it is on: Check in keeps its promise, because its label does not say it', async () => {
+    await seed({ id: 'evt_less_live', start: inDays(-1), end: inDays(1) });
+    const html = await page('/events/evt_less_live');
+    expect(noteOf(html, 'event-checkin')).toBe('Counted, never named.');
+    expect(noteOf(html, 'event-choice-register')).toBe('Asks for your name and email.');
+    expect(noteOf(html, 'event-choice-looking')).toBeNull();
+  });
+
+  test('the header names the host and nothing else', async () => {
+    await seed({ id: 'evt_less_host' });
+    const html = await page('/events/evt_less_host');
+    expect(tag(html, 'event-trust')).not.toBe('');
+    expect(html).toContain('Hosted by The Host');
+    expect(html).not.toContain('No account needed to view');
+    expect(html).not.toContain('Verified event link');
+  });
+});
+
 describe('OSE-1518 next at this venue on the event page', () => {
   async function seedVenue(): Promise<void> {
     await seed({ id: 'evt_1518_v_self', title: 'Self Night', location: 'Eagles Hall' });
