@@ -131,7 +131,14 @@ export function provenanceBannerMarkup(state: SurfaceProvenance): string {
 export function injectProvenanceBanner(htmlDoc: string, state: SurfaceProvenance): string {
   const markup = provenanceBannerMarkup(state);
   if (!markup) return htmlDoc;
-  return htmlDoc.replace(/(<body[^>]*>)/i, `$1${markup}`);
+  // Linear on purpose: /(<body[^>]*>)/i rescans to the end from every "<body"
+  // that has no ">" after it, which is quadratic (CodeQL js/polynomial-redos).
+  // The first "<body", then the first ">" after it: the same tag that regex finds.
+  const open = /<body/i.exec(htmlDoc);
+  if (!open) return htmlDoc;
+  const close = htmlDoc.indexOf('>', open.index);
+  if (close === -1) return htmlDoc;
+  return htmlDoc.slice(0, close + 1) + markup + htmlDoc.slice(close + 1);
 }
 
 /**
