@@ -216,6 +216,8 @@ export const NODE_SPECS = [
   // OSE-1347 deploy D1 canonical-shape verifier. Pure parser/diff/query-builder
   // tests over the migration SQL + fake D1 query runner; no cloudflare:test.
   'tests/d1-canonical-shape.spec.ts',
+  // Owner 2026-10-11: nothing in FORMS_DB outlives 90 days (reads migration SQL + wrangler.toml).
+  'tests/forms-retention-ceiling.spec.ts',
   // OSE-1313 event date+time+timezone → UTC. Pure Intl/Date math over
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',

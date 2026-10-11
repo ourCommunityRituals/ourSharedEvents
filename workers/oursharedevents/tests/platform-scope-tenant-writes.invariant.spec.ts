@@ -31,13 +31,26 @@ import { PLATFORM_BRAND_ID } from '../src/lib/admin-brand-scope';
 
 interface TestEnv {
   DB: D1Database;
+  FORMS_DB: D1Database;
   TEST_MIGRATION_STATEMENTS: string;
+  TEST_FORMS_MIGRATION_STATEMENTS: string;
 }
 
 const routerEnv = env as unknown as RouterEnv;
 
 async function applyMigrations(): Promise<void> {
-  const statements: string[] = JSON.parse((env as unknown as TestEnv).TEST_MIGRATION_STATEMENTS);
+  const E = env as unknown as TestEnv;
+  // FORMS_DB too: S12 counts `subscribers`, which lives there since OSE-1661.
+  for (const stmt of JSON.parse(E.TEST_FORMS_MIGRATION_STATEMENTS) as string[]) {
+    try {
+      await E.FORMS_DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
+      throw e;
+    }
+  }
+  const statements: string[] = JSON.parse(E.TEST_MIGRATION_STATEMENTS);
   for (const stmt of statements) {
     try {
       await env.DB.prepare(stmt).run();
@@ -91,6 +104,14 @@ async function call(
 
 async function count(sql: string, ...binds: unknown[]): Promise<number> {
   const row = await env.DB.prepare(sql)
+    .bind(...binds)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/** The same, in FORMS_DB (where `subscribers` lives since OSE-1661). */
+async function formsCount(sql: string, ...binds: unknown[]): Promise<number> {
+  const row = await (env as unknown as TestEnv).FORMS_DB.prepare(sql)
     .bind(...binds)
     .first<{ n: number }>();
   return row?.n ?? 0;
@@ -166,12 +187,12 @@ describe('AUD-3 — platform-owned routes refuse brand-scoped admins', () => {
   }
 
   test('S12: a brand-A admin cannot erase another tenant’s subscriber', async () => {
-    const before = await count('SELECT COUNT(*) AS n FROM subscribers');
+    const before = await formsCount('SELECT COUNT(*) AS n FROM subscribers');
     const res = await call('POST', '/api/v2/admin/data-subject/erase', asEmail(SCOPED_A), {
       email: 'victim@example.org',
     });
     expect(res.status).toBe(404);
-    expect(await count('SELECT COUNT(*) AS n FROM subscribers')).toBe(before);
+    expect(await formsCount('SELECT COUNT(*) AS n FROM subscribers')).toBe(before);
   });
 });
 

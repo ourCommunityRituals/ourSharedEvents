@@ -96,7 +96,7 @@ async function seedSubject(tag: string): Promise<Subject> {
   )
     .bind(`reg-${crypto.randomUUID()}`, emailHash, anonId)
     .run();
-  await E.DB.prepare(
+  await E.FORMS_DB.prepare(
     `INSERT INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, 'enc-trace', 'iph', 'landing')`
   )
     .bind(emailHash)

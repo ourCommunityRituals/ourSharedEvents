@@ -79,7 +79,6 @@ const DB_TABLES = [
   'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
   'sponsor_impressions', // 0022 (0067: FK repointed to sponsor_business)
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
-  'subscribers', // 0008
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;
 
@@ -90,6 +89,7 @@ const FORMS_DB_TABLES = [
   'form_registrations', // 0001
   'form_surveys', // 0003
   'pii_audit_log', // 0009
+  'subscribers', // 0017 (OSE-1661 — the landing-page email list, moved from DB by main 0098)
 ] as const;
 
 // Migration 0025 documents (in its body) that triggers were removed from D1

@@ -59,7 +59,7 @@ import { findAnonIdsLinkedToEmailHash } from '../lib/erasure-anon-lookup';
  * stable pseudonym of the person being erased. Only counts leave this handler.
  */
 export type DataSubjectEnv = FormsDbEnv & {
-  /** Main DB binding — host of `subscribers`, `scan_node_returns`, `anon_id_returns`. */
+  /** Main DB binding — host of `scan_node_returns` and `anon_id_returns`. */
   DB: D1Database;
   // OSE-598: must match FORMS_HASH_PEPPER used at write time so deletion
   // lookups produce the same hash value as the stored email_hash columns.
@@ -176,11 +176,12 @@ export async function handleDataSubjectErase(
   }
 
   // Phase C (OSE-207): delete subscribers by peppered email_hash (A-5,
-  // migration 0071). Lives in the main DB, not FORMS_DB. The same emailHash
-  // computed above matches subscribers.email_hash because both derive from the
-  // identical trim+lowercase+HMAC normalization. Never touches raw email.
+  // migration 0071). Lives in FORMS_DB since OSE-1661 (forms migration 0017).
+  // The same emailHash computed above matches subscribers.email_hash because
+  // both derive from the identical trim+lowercase+HMAC normalization. Never
+  // touches raw email.
   try {
-    const res = await env.DB.prepare('DELETE FROM subscribers WHERE email_hash = ?')
+    const res = await env.FORMS_DB.prepare('DELETE FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .run();
     subscribersDeleted = res.meta?.changes ?? 0;

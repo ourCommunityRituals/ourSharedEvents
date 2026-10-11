@@ -92,6 +92,8 @@ import {
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  /** Forms database: identified-person tables, including `subscribers` (OSE-1661). */
+  FORMS_DB?: D1Database;
   GOOGLE_MAPS_API_KEY?: string;
   /**
    * OSE-207 — per-environment pepper for peppered SHA-256 IP hashing in
@@ -119,10 +121,10 @@ export interface PagesEnv extends TurnstileEnv {
   /**
    * OSE-207 — subscribers TTL retention window in days.
    *
-   * Read by the scheduled `runSubscribersRetentionLifecycle` job in
-   * `src/index.ts`. When unset, the worker falls back to a default 365-day
-   * bounded window so subscriber PII is not retained forever. When set to a
-   * non-positive integer, the cron explicitly disables retention for that run.
+   * Read by phase 4 of the scheduled `runFormDataLifecycle` job in
+   * `src/index.ts` (`subscriberRetentionDays`). A whole number from 1 to 90
+   * shortens the window; anything else, or unset, means 90 days (owner
+   * 2026-10-11). It cannot switch the sweep off.
    *
    * Independent of the data-subject right-to-erase Phase C handler in
    * `src/handlers/data-subject.ts`, which deletes by email on demand.
@@ -2511,7 +2513,9 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     );
     if (turnstileDeny) return turnstileDeny;
 
-    // Persist to D1 if available (graceful fallback if DB not provisioned).
+    // Persist to D1 if available (graceful fallback if FORMS_DB not provisioned).
+    // The list lives in FORMS_DB, with the other identified-person tables, not
+    // in the anonymous DB (OSE-1661, owner 2026-10-11; forms migration 0017).
     // Data-at-rest doctrine (A-5): subscribers.email is NEVER stored plaintext
     // (migration 0071). We store two derived columns, mirroring email_signups:
     //   - email_hash: peppered HMAC-SHA256 (dedup UNIQUE + erasure lookup key)
@@ -2522,7 +2526,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     //   - A structured warning is emitted when the pepper is missing so
     //     ops can detect the misconfiguration.
     let persisted = false;
-    if (env.DB) {
+    if (env.FORMS_DB) {
       // A-5: never fall back to plaintext. Without the encryption key we cannot
       // store the email at rest safely — refuse (mirror the email-signup 503).
       if (!env.FORMS_ENCRYPTION_KEY) {
@@ -2545,7 +2549,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
         // (requirePepper throws if FORMS_HASH_PEPPER is unset; caught below).
         const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true });
         const emailEncrypted = await encryptText(email, env.FORMS_ENCRYPTION_KEY);
-        await env.DB.prepare(
+        await env.FORMS_DB.prepare(
           'INSERT INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, ?, ?, ?) ON CONFLICT (email_hash) DO NOTHING'
         )
           .bind(emailHash, emailEncrypted, ipHash, 'landing')

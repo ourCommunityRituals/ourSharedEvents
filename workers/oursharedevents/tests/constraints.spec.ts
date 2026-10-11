@@ -91,7 +91,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (scan_cell_aggregates — migration 0087, OSE-1459) = 38.
     // + 1 (shortlink_click_daily — migration 0094, OSE-1613) = 39.
     // + 2 (event_codes, share_opens_daily — migration 0096, OSE-1684) = 41.
-    expect(names).toHaveLength(41);
+    // − 1 (subscribers — migration 0098, moved to FORMS_DB, OSE-1661) = 40.
+    expect(names).toHaveLength(40);
   });
 
   test('indexes remain at exactly 79 after idempotent re-run', async () => {

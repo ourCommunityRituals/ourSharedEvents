@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 97, forms 14 to 16
+# Production migration plan: main 77 to 98, forms 14 to 17
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0097, forms 0015–0016.
+Covers: main 0078–0098, forms 0015–0017.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,8 +11,8 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 97               | 20       |
-| Forms (`ocr-forms-db-production`) | 14 (see note)    | 16               | 2        |
+| Main (`ocr-db-production`)        | 77               | 98               | 21       |
+| Forms (`ocr-forms-db-production`) | 14 (see note)    | 17               | 3        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
 - The forms level of 14 is the last one written down (2026-09-21). It may be 15. The
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0097
+## Main database, 0078 to 0098
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -114,17 +114,19 @@ a line in this document.
 | `0095_scan_node_returns_clear_raw_anon_id.sql`   | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                           | Yes  |
 | `0096_event_codes.sql`                           | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity). | No   |
 | `0097_event_type_watch_party.sql`                | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.  | Yes  |
+| `0098_drop_subscribers_from_anonymous_db.sql`    | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.    | Yes  |
 
-## Forms database, 0015 to 0016
+## Forms database, 0015 to 0017
 
 | File                              | What it does                                                                        | Rows |
 | --------------------------------- | ----------------------------------------------------------------------------------- | ---- |
 | `0015_checkin_walk_in_count.sql`  | Adds `checkin_counts.walk_in_count`, a count of walk-in check-ins. Default 0.       | No   |
 | `0016_scrub_raw_anonymous_id.sql` | Clears the raw anonymous id from the four form tables. Rows and other columns stay. | Yes  |
+| `0017_subscribers.sql`            | Creates `subscribers`, the landing-page email list, in the forms database.          | No   |
 
 ## The migrations that write or remove rows
 
-Eight files. Each is listed with what it changes, why it is safe on production as it is
+Nine files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -200,6 +202,22 @@ today, and what would be different if production held data.
 - **Check:** `SELECT name, category_code FROM event_type_registry WHERE uec_code = 'SOC-WATCHPARTY-001';`
   returns `Watch Party`, `SOC`.
 
+### `0098_drop_subscribers_from_anonymous_db.sql`
+
+- **Removes the table `subscribers`**: takes the landing-page email list out of the main
+  database, which is the anonymous side of the two-database wall. Owner decision
+  2026-10-11 (OSE-1661). Forms `0017` creates the same table in the forms database,
+  and the new Worker reads and writes it there.
+- **Safe because** production's `subscribers` held **0 rows** (read 2026-10-11).
+  Nothing is lost.
+- **If it held rows:** they would be gone. A migration cannot copy rows from one
+  database to the other. Staging held 1 test row, which is not carried over.
+- **Between the migration and the new Worker:** the old Worker's subscribe and admin
+  list would fail on the missing table. A failed subscribe is logged and the visitor
+  still sees success, as before. Production is not launched, so no one is subscribing.
+- **Check:** `SELECT COUNT(*) FROM sqlite_master WHERE name = 'subscribers';` returns
+  `0` on the main database and `1` on the forms database.
+
 ### `0016_scrub_raw_anonymous_id.sql` (forms)
 
 - **Four `UPDATE` statements**, one each on `form_registrations`, `checkin_counts`,
@@ -233,8 +251,8 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0097_event_type_watch_party.sql` and `97`; then
-   `0016_scrub_raw_anonymous_id.sql` and `16`.
+2. **The level.** Expected: `0098_drop_subscribers_from_anonymous_db.sql` and `98`;
+   then `0017_subscribers.sql` and `17`.
 
    ```bash
    npx wrangler d1 execute DB --env production --remote --command "SELECT (SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1) AS latest, (SELECT COUNT(*) FROM d1_migrations) AS applied;"
@@ -276,6 +294,8 @@ The deploy job does the first three itself and goes red if any fails.
 - **Values cleared by `0089` and forms `0016`** are gone. On production today there are
   none to clear.
 - **The row deleted by `0086`**, if it existed. It was test data.
+- **The main database's `subscribers` rows, removed by `0098`.** On production there
+  were none.
 - **Rows the nightly job deletes after `0091`.** On production today there are none.
 - **The whole database can be rewound** to the restore point you noted. The command,
   its conditions and its stop line are in

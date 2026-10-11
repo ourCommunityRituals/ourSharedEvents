@@ -33,12 +33,12 @@ Words used on this page:
 
 ## 2. The four databases
 
-| Environment | Database name             | Called in code | Holds                                                                                            |
-| ----------- | ------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
-| staging     | `ocr-db-staging`          | `DB`           | Events, sponsors, short links, scan counts, the admin audit log, email subscribers.              |
-| staging     | `ocr-forms-db-staging`    | `FORMS_DB`     | Registrations, check-in counts, surveys, email sign-ups, feature flags, the record of deletions. |
-| production  | `ocr-db-production`       | `DB`           | The same as staging `DB`, for real visitors.                                                     |
-| production  | `ocr-forms-db-production` | `FORMS_DB`     | The same as staging `FORMS_DB`, for real visitors.                                               |
+| Environment | Database name             | Called in code | Holds                                                                                                               |
+| ----------- | ------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| staging     | `ocr-db-staging`          | `DB`           | Events, sponsors, short links, scan counts, the admin audit log.                                                    |
+| staging     | `ocr-forms-db-staging`    | `FORMS_DB`     | Registrations, check-in counts, surveys, email sign-ups, email subscribers, feature flags, the record of deletions. |
+| production  | `ocr-db-production`       | `DB`           | The same as staging `DB`, for real visitors.                                                                        |
+| production  | `ocr-forms-db-production` | `FORMS_DB`     | The same as staging `FORMS_DB`, for real visitors.                                                                  |
 
 Both kinds hold personal data. The forms database holds names and encrypted emails. The main database holds encrypted subscriber emails and scan rows keyed by an anonymous id. The names and ids are in `workers/oursharedevents/wrangler.toml`.
 
@@ -194,7 +194,7 @@ A restore brings back personal data that had been deleted. This section deletes 
 The nightly job runs at 03:00 UTC (`src/index.ts`). It decides what to delete from dates stored in the rows, so the next run deletes the restored rows again:
 
 - registrations past their expiry, survey answers not yet scrubbed, and email sign-ups past their retention date (forms database);
-- subscribers older than `SUBSCRIBERS_RETENTION_DAYS`, or 365 days if that is not set (main database);
+- subscribers older than `SUBSCRIBERS_RETENTION_DAYS`, or 365 days if that is not set (forms database since OSE-1661; main database before);
 - return counts made under an old pepper, up to 50,000 rows a night (main database).
 
 Forms personal data past its retention date is deleted every night by design. A restore brings it back for one day at most.
@@ -227,11 +227,11 @@ npx wrangler d1 execute ocr-forms-db-production --env production --remote --comm
 
 **Which jobs matter.** Look at `details` in the list from §6 step 3:
 
-| You restored       | A job needs repeating if `details` shows                                     |
-| ------------------ | ---------------------------------------------------------------------------- |
-| The forms database | `signupsDeleted` or `registrationsDeleted` above 0                           |
-| The main database  | `subscribersDeleted`, `scanReturnsDeleted` or `anonIdReturnsDeleted` above 0 |
-| Either             | `errors` above 0. The counts cannot be trusted, so repeat it.                |
+| You restored       | A job needs repeating if `details` shows                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| The forms database | `signupsDeleted`, `registrationsDeleted` or `subscribersDeleted` above 0 |
+| The main database  | `scanReturnsDeleted` or `anonIdReturnsDeleted` above 0                   |
+| Either             | `errors` above 0. The counts cannot be trusted, so repeat it.            |
 
 **Steps, for each job that matters:**
 

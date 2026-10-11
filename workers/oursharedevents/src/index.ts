@@ -15,6 +15,11 @@ import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import {
+  FORMS_RETENTION_CEILING_DAYS,
+  REGISTRATION_TTL_DAYS,
+  SUBSCRIBER_RETENTION_DAYS,
+} from './lib/retention-windows';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
@@ -83,9 +88,9 @@ export default {
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
     // runBigQueryBackup reads from the main DB and is kept separate for isolation.
-    // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
-    //   default bounded retention is 365 days when the env knob is unset, and a
-    //   non-positive explicit value disables the sweep. Audits to DB.admin_audit_log.
+    //   Its Phase 4 deletes email-list rows (subscribers, FORMS_DB since
+    //   OSE-1661) older than subscriberRetentionDays(): 1 to 90 days, default
+    //   90 (owner 2026-10-11). Audited to pii_audit_log like the other phases.
     // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
     //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
     //   structured warning). Phases 2 + 3 (corridor baseline + event-series
@@ -120,7 +125,6 @@ export default {
       Promise.all([
         runFormDataLifecycle(env),
         runBigQueryBackup(env),
-        runSubscribersRetentionLifecycle(env),
         runSharedReportPipeline(env),
         runSecurityMetricsCron(env),
         runDraftExpiry(env),
@@ -224,16 +228,33 @@ async function logPiiAudit(
   }
 }
 
+/**
+ * How many days an email-list row is kept (OSE-207). SUBSCRIBERS_RETENTION_DAYS
+ * may shorten the window; anything that is not a whole number from 1 to the
+ * forms ceiling (90, owner 2026-10-11) falls back to SUBSCRIBER_RETENTION_DAYS,
+ * so a setting can neither switch the sweep off nor keep emails past 90 days.
+ */
+export function subscriberRetentionDays(raw: string | undefined): number {
+  const n = raw == null ? NaN : Number(String(raw).trim());
+  return Number.isInteger(n) && n >= 1 && n <= FORMS_RETENTION_CEILING_DAYS
+    ? n
+    : SUBSCRIBER_RETENTION_DAYS;
+}
+
 async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
   const results: Record<string, unknown> = { timestamp: now };
 
   // ── Phase 1: Delete expired registrations ──────────────────────────────
+  // A row with no expires_at ages out REGISTRATION_TTL_DAYS after it was made,
+  // so no registration is kept for ever (OSE-1685, owner 2026-10-11).
   try {
     const del = await env.FORMS_DB.prepare(
-      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?'
+      `DELETE FROM form_registrations
+        WHERE (expires_at IS NOT NULL AND expires_at < ?)
+           OR (expires_at IS NULL AND created_at < datetime('now', ?))`
     )
-      .bind(now)
+      .bind(now, `-${REGISTRATION_TTL_DAYS} days`)
       .run();
     const count = del.meta?.changes ?? 0;
     results.registrationsDeleted = count;
@@ -313,6 +334,33 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', 0, 1);
   }
 
+  // ── Phase 4: Delete email-list rows past their window (OSE-207, OSE-1661) ─
+  // The landing-page list (subscribers) moved to FORMS_DB in OSE-1661 and is
+  // swept here with the other forms tables, so it is audited the same way.
+  try {
+    const days = subscriberRetentionDays(env.SUBSCRIBERS_RETENTION_DAYS);
+    const del = await env.FORMS_DB.prepare(
+      "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
+    )
+      .bind(`-${days} days`)
+      .run();
+    const count = del.meta?.changes ?? 0;
+    results.subscribersDeleted = count;
+    results.subscriberRetentionDays = days;
+    await logPiiAudit(env.FORMS_DB, 'subscribers_delete', count, 0);
+  } catch (err) {
+    results.subscribersError = err instanceof Error ? err.message : String(err);
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'subscribers',
+        error: results.subscribersError,
+        timestamp: now,
+      })
+    );
+    await logPiiAudit(env.FORMS_DB, 'subscribers_delete', 0, 1);
+  }
+
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));
 }
 
@@ -323,118 +371,6 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
  * FORMS_DB-only (required by the forms-security isolation gate).
  * This function reads from the main DB (events table) and writes to BigQuery.
  */
-
-/**
- * Subscribers retention lifecycle — OSE-207 / BE-17.
- *
- * Touches DB.subscribers ONLY. Lives outside runFormDataLifecycle so the
- * forms-security S4 isolation gate stays intact (that gate is now precisely
- * scoped to runFormDataLifecycle's function body, not the whole file).
- *
- * Default posture:
- *   - rolling subscriber list data is bounded by a finite retention window.
- *   - env.SUBSCRIBERS_RETENTION_DAYS is the override knob. If unset, we fall
- *     back to a default 365-day window so the system does not silently retain
- *     the email list forever.
- *   - If set to 0 or a non-positive value, the cron explicitly disables the
- *     retention sweep and logs a no-op rather than silently deleting an
- *     uncapped list.
- *
- * Every run writes an admin_audit_log row (action=SUBSCRIBERS_RETENTION,
- * actor=system:lifecycle) so ops can audit retention activity over time.
- */
-const DEFAULT_SUBSCRIBERS_RETENTION_DAYS = 365;
-
-async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
-  const now = new Date().toISOString();
-  const raw = env.SUBSCRIBERS_RETENTION_DAYS;
-  const configured = raw != null ? parseInt(String(raw), 10) : NaN;
-  const days =
-    Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUBSCRIBERS_RETENTION_DAYS;
-
-  if (raw != null && (!Number.isFinite(configured) || configured <= 0)) {
-    console.log(
-      JSON.stringify({
-        type: 'SUBSCRIBERS_RETENTION_NOOP',
-        reason: 'SUBSCRIBERS_RETENTION_DAYS is non-positive; retention is explicitly disabled',
-        timestamp: now,
-      })
-    );
-    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'disabled' });
-    return;
-  }
-
-  let deleted = 0;
-  let errors = 0;
-  try {
-    const res = await env.DB.prepare(
-      "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
-    )
-      .bind(`-${days} days`)
-      .run();
-    deleted = res.meta?.changes ?? 0;
-  } catch (err) {
-    errors = 1;
-    console.error(
-      JSON.stringify({
-        type: 'SUBSCRIBERS_RETENTION_ERROR',
-        error: err instanceof Error ? err.message : String(err),
-        days,
-        timestamp: now,
-      })
-    );
-  }
-
-  console.log(
-    JSON.stringify({
-      type: 'SUBSCRIBERS_RETENTION_COMPLETE',
-      days,
-      deleted,
-      errors,
-      timestamp: now,
-    })
-  );
-  await logSubscribersRetentionAudit(env, 'success', deleted, errors, { days });
-}
-
-/**
- * Write the retention run to admin_audit_log so retention activity has a
- * durable trail alongside admin reads (OSE-212 audit log pattern).
- */
-async function logSubscribersRetentionAudit(
-  env: RouterEnv,
-  outcomeRaw: 'success' | 'noop',
-  deleted: number,
-  errors: number,
-  details: Record<string, unknown>
-): Promise<void> {
-  const id = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
-  // Map our two non-failure outcomes to OSE-212's audit-outcome column:
-  // 'success' for an executed run (including 0-deleted), 'success' for noop
-  // (informational — not a failure). 'denied' is reserved for real failures.
-  const outcome = errors > 0 ? 'denied' : 'success';
-  try {
-    await env.DB.prepare(
-      `INSERT INTO admin_audit_log
-         (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        'SUBSCRIBERS_RETENTION',
-        'system:lifecycle',
-        'subscribers',
-        null,
-        id, // request_id = audit row id for scheduled jobs (no inbound request)
-        outcome,
-        null,
-        JSON.stringify({ ...details, deleted, errors, outcomeRaw })
-      )
-      .run();
-  } catch {
-    // Audit failures must never break the lifecycle job.
-  }
-}
 
 // ─── Security Metrics Cron ────────────────────────────────────────────────────
 //
