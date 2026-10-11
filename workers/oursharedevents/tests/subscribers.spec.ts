@@ -16,6 +16,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { hashEmail, encryptText, decryptText } from '../src/lib/pii';
+import { subscriberRetentionDays } from '../src/index';
 
 // Must match the workers test env in vitest.workers.config.mts so in-test
 // hashes line up with what the subscribe handler writes.
@@ -345,7 +346,7 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
   // The scheduled() handler isn't directly invokable from cloudflare:test
   // SELF.fetch (it's only fired by Cloudflare's cron in real deploys), so
   // this test asserts that the DELETE pattern used by
-  // runSubscribersRetentionLifecycle in src/index.ts performs the
+  // runFormDataLifecycle (phase 4) in src/index.ts performs the
   // expected retention semantics when executed directly against FORMS_DB.
 
   test('DELETE WHERE created_at < datetime("now", "-N days") removes old rows only', async () => {
@@ -378,23 +379,18 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     expect(recentStill).not.toBeNull();
   });
 
-  test('source code: runSubscribersRetentionLifecycle defaults to a bounded retention window', () => {
-    // The retention cron must not leave subscriber PII uncapped by default.
-    // A blank/unset env knob falls back to a finite default window, while an
-    // explicit non-positive value remains a no-op/disabled state.
-    const sources: Record<string, string> = JSON.parse(
-      (env as unknown as { TEST_SOURCE_FILES_JSON: string }).TEST_SOURCE_FILES_JSON
-    );
-    const indexFile = Object.entries(sources).find(([p]) =>
-      p.replace(/\\/g, '/').endsWith('src/index.ts')
-    );
-    expect(indexFile, 'src/index.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
-    const content = indexFile![1];
-
-    expect(content).toMatch(/SUBSCRIBERS_RETENTION_DAYS/);
-    expect(content).toMatch(/DEFAULT_SUBSCRIBERS_RETENTION_DAYS/);
-    expect(content).toMatch(/365/);
-    expect(content).toMatch(/SUBSCRIBERS_RETENTION_NOOP/);
+  // OSE-1661 / owner 2026-10-11: the sweep is phase 4 of runFormDataLifecycle,
+  // and its window is 1 to 90 days. A setting outside that, or one that is not
+  // a whole number, falls back to 90: it can neither turn the sweep off nor keep
+  // emails longer than the forms ceiling.
+  test('the email-list window is 1 to 90 days, 90 by default, and cannot be switched off', () => {
+    expect(subscriberRetentionDays(undefined)).toBe(90);
+    expect(subscriberRetentionDays('30')).toBe(30);
+    expect(subscriberRetentionDays(' 45 ')).toBe(45);
+    expect(subscriberRetentionDays('90')).toBe(90);
+    for (const bad of ['365', '91', '0', '-1', '', 'abc', '30.5']) {
+      expect(subscriberRetentionDays(bad), bad).toBe(90);
+    }
   });
 });
 

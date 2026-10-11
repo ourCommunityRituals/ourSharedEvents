@@ -50,7 +50,7 @@ const RETENTION: Record<string, Rule> = {
   subscribers: {
     kind: 'deleted-after',
     days: SUBSCRIBER_RETENTION_DAYS,
-    how: 'created_at (runSubscribersRetentionLifecycle; SUBSCRIBERS_RETENTION_DAYS overrides)',
+    how: 'created_at (runFormDataLifecycle phase 4; SUBSCRIBERS_RETENTION_DAYS may shorten it)',
   },
   feature_flags: { kind: 'no-person-data', why: 'plan switches per brand or event' },
   pii_audit_log: { kind: 'no-person-data', why: 'counts of what each erasure or sweep removed' },

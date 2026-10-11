@@ -121,10 +121,10 @@ export interface PagesEnv extends TurnstileEnv {
   /**
    * OSE-207 — subscribers TTL retention window in days.
    *
-   * Read by the scheduled `runSubscribersRetentionLifecycle` job in
-   * `src/index.ts`. When unset, the worker falls back to a default 365-day
-   * bounded window so subscriber PII is not retained forever. When set to a
-   * non-positive integer, the cron explicitly disables retention for that run.
+   * Read by phase 4 of the scheduled `runFormDataLifecycle` job in
+   * `src/index.ts` (`subscriberRetentionDays`). A whole number from 1 to 90
+   * shortens the window; anything else, or unset, means 90 days (owner
+   * 2026-10-11). It cannot switch the sweep off.
    *
    * Independent of the data-subject right-to-erase Phase C handler in
    * `src/handlers/data-subject.ts`, which deletes by email on demand.

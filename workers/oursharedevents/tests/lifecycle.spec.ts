@@ -170,6 +170,11 @@ describe('lifecycle — subscribers: deleted after SUBSCRIBER_RETENTION_DAYS (90
         .first()) !== null;
     expect(await has(oldHash)).toBe(false);
     expect(await has(newHash)).toBe(true);
+    // Audited with the other forms phases, in pii_audit_log (OSE-1661).
+    const audit = await formsDb()
+      .prepare(`SELECT COUNT(*) AS n FROM pii_audit_log WHERE phase = 'subscribers_delete'`)
+      .first<{ n: number }>();
+    expect(audit?.n ?? 0).toBeGreaterThan(0);
   });
 });
 
