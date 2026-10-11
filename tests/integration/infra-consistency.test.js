@@ -503,7 +503,6 @@ describe('D1 staging database health', () => {
     'poster_deployments',
     'scans',
     'scan_aggregates',
-    'subscribers',
     'event_templates',
   ];
 
@@ -514,6 +513,7 @@ describe('D1 staging database health', () => {
     'email_signups',
     'feature_flags',
     'pii_audit_log',
+    'subscribers', // moved from the main DB, OSE-1661
   ];
 
   test.skipIf(!canQueryD1)('ocr-db-staging has core tables', async () => {

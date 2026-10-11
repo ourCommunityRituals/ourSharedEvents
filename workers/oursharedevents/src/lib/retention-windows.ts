@@ -10,3 +10,18 @@ export const REGISTRATION_TTL_DAYS = 90;
 
 /** An email sign-up is deleted this long after it is made. */
 export const EMAIL_RETENTION_DAYS = 30;
+
+/**
+ * A landing-page email-list row (`subscribers`, FORMS_DB) is deleted this long
+ * after it is made, unless SUBSCRIBERS_RETENTION_DAYS sets a shorter or longer
+ * window. Owner decision 2026-10-11: 90 days, like registrations; it was 365
+ * while the table sat in the main DB.
+ */
+export const SUBSCRIBER_RETENTION_DAYS = 90;
+
+/**
+ * The longest any forms-database table may keep a person's data, in days
+ * (owner decision 2026-10-11). tests/forms-retention-ceiling.spec.ts holds
+ * every FORMS_DB table to it.
+ */
+export const FORMS_RETENTION_CEILING_DAYS = 90;

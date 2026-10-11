@@ -48,7 +48,6 @@ const EXPECTED_TABLES = [
   'sponsor_event_types',
   'sponsor_impressions',
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
-  'subscribers',
 ] as const;
 
 const EXPECTED_INDEXES = [
@@ -169,9 +168,6 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // scan_cell_aggregates (0087, OSE-1459): id, event_id, bucket_date, bucket_hour,
   //   h3_res9, h3_res7, scan_count, computed_at = 8.
   scan_cell_aggregates: 8,
-  // subscribers: 5 (pre-0071) − plaintext email + email_hash + email_encrypted
-  // (migration 0071, A-5 data-at-rest doctrine) = 6.
-  subscribers: 6,
   node_hierarchy: 14,
   corridors: 22,
   sponsor_event_types: 5,

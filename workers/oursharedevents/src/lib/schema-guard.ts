@@ -24,11 +24,11 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0097_event_type_watch_party.sql */
-export const REQUIRED_DB_MIGRATION = 97;
+/** Highest migration in migrations/ — currently 0098_drop_subscribers_from_anonymous_db.sql */
+export const REQUIRED_DB_MIGRATION = 98;
 
-/** Highest migration in migrations-forms/ — currently 0016_scrub_raw_anonymous_id.sql */
-export const REQUIRED_FORMS_MIGRATION = 16;
+/** Highest migration in migrations-forms/ — currently 0017_subscribers.sql */
+export const REQUIRED_FORMS_MIGRATION = 17;
 
 export interface SchemaGuardEnv {
   DB?: D1Database;

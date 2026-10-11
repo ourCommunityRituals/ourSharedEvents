@@ -123,9 +123,10 @@ SCAN_RETURNS_RETENTION_DAYS = "365"
 # event is live by link but off the list, map, sitemap and sponsor discovery,
 # so Undo leaves no public trace. 0 turns it off; capped at 60.
 PUBLISH_GRACE_MINUTES = "10"
-# Subscriber retention defaults to a 365-day bounded window so the email list does
+# Subscriber retention: 90 days, like registrations (owner 2026-10-11; was 365).
+# The email list (FORMS_DB since OSE-1661) never outlives the forms ceiling, and does
 # not retain PII forever when no explicit override is configured.
-SUBSCRIBERS_RETENTION_DAYS = "365"
+SUBSCRIBERS_RETENTION_DAYS = "90"
 # Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 scale-readiness lever (OSE-1378): Turnstile bot-check on mutation endpoints.

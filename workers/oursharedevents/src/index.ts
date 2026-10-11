@@ -15,6 +15,7 @@ import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import { REGISTRATION_TTL_DAYS, SUBSCRIBER_RETENTION_DAYS } from './lib/retention-windows';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
@@ -83,9 +84,10 @@ export default {
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
     // runBigQueryBackup reads from the main DB and is kept separate for isolation.
-    // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
-    //   default bounded retention is 365 days when the env knob is unset, and a
-    //   non-positive explicit value disables the sweep. Audits to DB.admin_audit_log.
+    // runSubscribersRetentionLifecycle (OSE-207) deletes from FORMS_DB.subscribers
+    //   only (the table moved there in OSE-1661); default bounded retention is
+    //   90 days (SUBSCRIBER_RETENTION_DAYS) when the env knob is unset, and a non-positive explicit value
+    //   disables the sweep. Audits a count-only row to DB.admin_audit_log.
     // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
     //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
     //   structured warning). Phases 2 + 3 (corridor baseline + event-series
@@ -229,11 +231,15 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   const results: Record<string, unknown> = { timestamp: now };
 
   // ── Phase 1: Delete expired registrations ──────────────────────────────
+  // A row with no expires_at ages out REGISTRATION_TTL_DAYS after it was made,
+  // so no registration is kept for ever (OSE-1685, owner 2026-10-11).
   try {
     const del = await env.FORMS_DB.prepare(
-      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?'
+      `DELETE FROM form_registrations
+        WHERE (expires_at IS NOT NULL AND expires_at < ?)
+           OR (expires_at IS NULL AND created_at < datetime('now', ?))`
     )
-      .bind(now)
+      .bind(now, `-${REGISTRATION_TTL_DAYS} days`)
       .run();
     const count = del.meta?.changes ?? 0;
     results.registrationsDeleted = count;
@@ -327,15 +333,18 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
 /**
  * Subscribers retention lifecycle — OSE-207 / BE-17.
  *
- * Touches DB.subscribers ONLY. Lives outside runFormDataLifecycle so the
- * forms-security S4 isolation gate stays intact (that gate is now precisely
- * scoped to runFormDataLifecycle's function body, not the whole file).
+ * Deletes from FORMS_DB.subscribers only (the table moved there from the main
+ * DB in OSE-1661, forms migration 0017); its audit row, counts only, goes to the
+ * main DB's admin_audit_log. Lives outside runFormDataLifecycle so the
+ * forms-security S4 isolation gate stays intact (that gate is precisely scoped
+ * to runFormDataLifecycle's function body, not the whole file).
  *
  * Default posture:
  *   - rolling subscriber list data is bounded by a finite retention window.
  *   - env.SUBSCRIBERS_RETENTION_DAYS is the override knob. If unset, we fall
- *     back to a default 365-day window so the system does not silently retain
- *     the email list forever.
+ *     back to SUBSCRIBER_RETENTION_DAYS (90, lib/retention-windows.ts; owner
+ *     2026-10-11, was 365) so the email list is not kept longer than the
+ *     forms-database ceiling.
  *   - If set to 0 or a non-positive value, the cron explicitly disables the
  *     retention sweep and logs a no-op rather than silently deleting an
  *     uncapped list.
@@ -343,7 +352,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
  * Every run writes an admin_audit_log row (action=SUBSCRIBERS_RETENTION,
  * actor=system:lifecycle) so ops can audit retention activity over time.
  */
-const DEFAULT_SUBSCRIBERS_RETENTION_DAYS = 365;
+const DEFAULT_SUBSCRIBERS_RETENTION_DAYS = SUBSCRIBER_RETENTION_DAYS;
 
 async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
@@ -367,7 +376,7 @@ async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
   let deleted = 0;
   let errors = 0;
   try {
-    const res = await env.DB.prepare(
+    const res = await env.FORMS_DB.prepare(
       "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
     )
       .bind(`-${days} days`)

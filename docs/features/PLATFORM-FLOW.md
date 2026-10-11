@@ -162,7 +162,7 @@ Each surface is a self-contained HTML page embedded in the Worker bundle.
 
 ```
 Landing (/)
-  └── Email capture → POST /subscribe → D1 subscribers table
+  └── Email capture → POST /subscribe → FORMS_DB subscribers table
 
 Public (/events)
   └── JS fetch → GET /api/v2/events → Event cards rendered

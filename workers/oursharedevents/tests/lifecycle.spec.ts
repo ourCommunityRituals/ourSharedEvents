@@ -12,6 +12,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:
 import { describe, test, expect, beforeAll } from 'vitest';
 import worker from '../src/index';
 import type { RouterEnv } from '../src/router';
+import { REGISTRATION_TTL_DAYS, SUBSCRIBER_RETENTION_DAYS } from '../src/lib/retention-windows';
 
 // ── DB setup ───────────────────────────────────────────────────────────────────
 
@@ -100,12 +101,15 @@ describe('lifecycle — phase 1: expired registrations', () => {
     expect(live).not.toBeNull();
   });
 
-  test('preserves registrations with no expires_at', async () => {
-    const id = `p1-noexp-${crypto.randomUUID()}`;
+  // OSE-1685 / owner 2026-10-11 (90 days for everything in the forms DB): a row
+  // with no expires_at used to be kept for ever (`expires_at IS NOT NULL` in the
+  // delete). It now ages out on its own date, REGISTRATION_TTL_DAYS after it was made.
+  test('a registration with no expires_at is kept while it is younger than the window', async () => {
+    const id = `p1-noexp-new-${crypto.randomUUID()}`;
     await formsDb()
       .prepare(
-        `INSERT INTO form_registrations (id, event_id, registration_bucket, status)
-         VALUES (?, 'lc-test', '2026-04', 'confirmed')`
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, status, created_at)
+         VALUES (?, 'lc-test', '2026-04', 'confirmed', datetime('now', '-10 days'))`
       )
       .bind(id)
       .run();
@@ -117,6 +121,55 @@ describe('lifecycle — phase 1: expired registrations', () => {
       .bind(id)
       .first();
     expect(row).not.toBeNull();
+  });
+
+  test('a registration with no expires_at is deleted once it is older than the window', async () => {
+    const id = `p1-noexp-old-${crypto.randomUUID()}`;
+    await formsDb()
+      .prepare(
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, status, created_at)
+         VALUES (?, 'lc-test', '2026-04', 'confirmed', datetime('now', ?))`
+      )
+      .bind(id, `-${REGISTRATION_TTL_DAYS + 1} days`)
+      .run();
+
+    await triggerScheduled();
+
+    const row = await formsDb()
+      .prepare('SELECT id FROM form_registrations WHERE id = ?')
+      .bind(id)
+      .first();
+    expect(row).toBeNull();
+  });
+});
+
+// ── Subscribers (landing-page email list, FORMS_DB since OSE-1661) ─────────────
+
+describe('lifecycle — subscribers: deleted after SUBSCRIBER_RETENTION_DAYS (90)', () => {
+  test('with no setting, the nightly job drops rows past 90 days and keeps newer ones', async () => {
+    expect(SUBSCRIBER_RETENTION_DAYS).toBe(90);
+    const oldHash = `lc-sub-old-${crypto.randomUUID()}`;
+    const newHash = `lc-sub-new-${crypto.randomUUID()}`;
+    const seed = (hash: string, age: string) =>
+      formsDb()
+        .prepare(
+          `INSERT INTO subscribers (email_hash, email_encrypted, source, created_at)
+           VALUES (?, 'v1:test', 'landing', datetime('now', ?))`
+        )
+        .bind(hash, age)
+        .run();
+    await seed(oldHash, `-${SUBSCRIBER_RETENTION_DAYS + 1} days`);
+    await seed(newHash, `-${SUBSCRIBER_RETENTION_DAYS - 1} days`);
+
+    await triggerScheduled();
+
+    const has = async (hash: string) =>
+      (await formsDb()
+        .prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+        .bind(hash)
+        .first()) !== null;
+    expect(await has(oldHash)).toBe(false);
+    expect(await has(newHash)).toBe(true);
   });
 });
 

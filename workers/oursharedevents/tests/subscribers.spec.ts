@@ -42,14 +42,14 @@ async function seedSubscriber(email: string, ipHash: string, createdAt?: string)
   const emailEncrypted = await encryptText(email, FORMS_ENCRYPTION_KEY);
   if (createdAt) {
     await tenv()
-      .DB.prepare(
+      .FORMS_DB.prepare(
         'INSERT OR IGNORE INTO subscribers (email_hash, email_encrypted, ip_hash, source, created_at) VALUES (?, ?, ?, ?, ?)'
       )
       .bind(emailHash, emailEncrypted, ipHash, 'landing', createdAt)
       .run();
   } else {
     await tenv()
-      .DB.prepare(
+      .FORMS_DB.prepare(
         'INSERT OR IGNORE INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, ?, ?, ?)'
       )
       .bind(emailHash, emailEncrypted, ipHash, 'landing')
@@ -91,15 +91,23 @@ beforeAll(async () => {
 // L2 SCHEMA — PRAGMA-level assertions on the subscribers table
 // ═════════════════════════════════════════════════════════════════════════════
 
+describe('L2: subscribers lives in FORMS_DB, not the anonymous DB (OSE-1661)', () => {
+  test('the table is in FORMS_DB and not in DB', async () => {
+    const q = "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='subscribers'";
+    expect((await tenv().DB.prepare(q).first<{ n: number }>())?.n).toBe(0);
+    expect((await tenv().FORMS_DB.prepare(q).first<{ n: number }>())?.n).toBe(1);
+  });
+});
+
 describe('L2: subscribers schema after migration 0028', () => {
   test('ip_address column does NOT exist (raw IP banned)', async () => {
-    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all();
+    const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(subscribers)').all();
     const cols = info.results.map((r) => (r as { name: string }).name);
     expect(cols).not.toContain('ip_address');
   });
 
   test('ip_hash column exists with TEXT affinity', async () => {
-    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all<{
+    const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(subscribers)').all<{
       name: string;
       type: string;
     }>();
@@ -109,13 +117,13 @@ describe('L2: subscribers schema after migration 0028', () => {
   });
 
   test('plaintext email column does NOT exist (A-5: encrypted at rest)', async () => {
-    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all();
+    const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(subscribers)').all();
     const cols = info.results.map((r) => (r as { name: string }).name);
     expect(cols).not.toContain('email');
   });
 
   test('email_hash + email_encrypted columns exist (dedup key + read-back)', async () => {
-    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all<{
+    const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(subscribers)').all<{
       name: string;
     }>();
     const cols = info.results.map((r) => r.name);
@@ -126,11 +134,13 @@ describe('L2: subscribers schema after migration 0028', () => {
   test('email_hash carries the UNIQUE constraint for idempotent dedup', async () => {
     // migration 0071: UNIQUE moved from plaintext email → peppered email_hash.
     const idx = await tenv()
-      .DB.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='subscribers'")
+      .FORMS_DB.prepare(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='subscribers'"
+      )
       .all<{ sql: string | null }>();
     const sqls = idx.results.map((r) => r.sql ?? '').join('\n');
     const tableDdl = await tenv()
-      .DB.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='subscribers'")
+      .FORMS_DB.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='subscribers'")
       .first<{ sql: string }>();
     const allDdl = sqls + '\n' + (tableDdl?.sql ?? '');
     expect(allDdl.toUpperCase()).toContain('UNIQUE');
@@ -158,7 +168,7 @@ describe('L2 behavioral: POST /subscribe writes ip_hash, never raw IP', () => {
 
     const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const row = await tenv()
-      .DB.prepare('SELECT ip_hash FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT ip_hash FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first<{ ip_hash: string | null }>();
 
@@ -198,7 +208,7 @@ describe('L2 behavioral: POST /subscribe writes ip_hash, never raw IP', () => {
 
     const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const count = await tenv()
-      .DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first<{ n: number }>();
     expect(count!.n).toBe(1);
@@ -226,7 +236,7 @@ describe('A-5: subscribe stores email_hash + email_encrypted, never plaintext', 
 
     const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const row = await tenv()
-      .DB.prepare('SELECT * FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT * FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first<Record<string, unknown>>();
 
@@ -274,7 +284,7 @@ describe('A-5: subscribe stores email_hash + email_encrypted, never plaintext', 
 
     const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const count = await tenv()
-      .DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first<{ n: number }>();
     expect(count!.n).toBe(1);
@@ -336,7 +346,7 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
   // SELF.fetch (it's only fired by Cloudflare's cron in real deploys), so
   // this test asserts that the DELETE pattern used by
   // runSubscribersRetentionLifecycle in src/index.ts performs the
-  // expected retention semantics when executed directly against DB.
+  // expected retention semantics when executed directly against FORMS_DB.
 
   test('DELETE WHERE created_at < datetime("now", "-N days") removes old rows only', async () => {
     // Seed two rows: one 400 days old, one 10 days old
@@ -350,19 +360,19 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
 
     // Apply the same SQL the cron uses, with a 365-day window.
     const res = await tenv()
-      .DB.prepare("DELETE FROM subscribers WHERE created_at < datetime('now', ?)")
+      .FORMS_DB.prepare("DELETE FROM subscribers WHERE created_at < datetime('now', ?)")
       .bind('-365 days')
       .run();
     expect((res.meta?.changes ?? 0) >= 1).toBe(true);
 
     const oldStill = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
       .bind(oldHash)
       .first();
     expect(oldStill).toBeNull();
 
     const recentStill = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
       .bind(recentHash)
       .first();
     expect(recentStill).not.toBeNull();
@@ -395,7 +405,7 @@ describe('L2 behavioral: data-subject erase removes subscribers row', () => {
     const emailHash = await seedSubscriber(email, 'cccccccccccccccccccccccccccccccc');
 
     const beforeRow = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first();
     expect(beforeRow).not.toBeNull();
@@ -420,7 +430,7 @@ describe('L2 behavioral: data-subject erase removes subscribers row', () => {
     expect(body).not.toHaveProperty('emailHash');
 
     const afterRow = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .FORMS_DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
       .bind(emailHash)
       .first();
     expect(afterRow).toBeNull();
