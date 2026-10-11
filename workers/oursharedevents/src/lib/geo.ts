@@ -126,7 +126,6 @@ export async function geocodeVenue(
     console.error(
       JSON.stringify({
         type: 'GEO_FETCH_ERROR',
-        address: trimmed,
         error: err instanceof Error ? err.message : String(err),
         timestamp: new Date().toISOString(),
       })
@@ -143,7 +142,6 @@ export async function geocodeVenue(
     console.warn(
       JSON.stringify({
         type: 'GEO_UPSTREAM_STATUS',
-        address: trimmed,
         status: upstream.status,
         timestamp: new Date().toISOString(),
       })
@@ -182,7 +180,6 @@ export async function geocodeVenue(
     console.warn(
       JSON.stringify({
         type: 'GEO_UPSTREAM_STATUS',
-        address: trimmed,
         googleStatus: payload.status,
         timestamp: new Date().toISOString(),
       })
