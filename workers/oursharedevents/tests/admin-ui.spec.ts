@@ -336,14 +336,16 @@ describe('ADMIN-14 Structure: Surface cards in admin HTML', () => {
   ];
 
   for (const s of surfaces) {
-    test(`${s.key} card has card, link, copy button, and QR hint`, async () => {
+    // Owner 2026-10-10: less to read. Each card is its title, Open and Copy;
+    // the one-line description and the "QR-ready: /path" line are gone.
+    test(`${s.key} card has card, link and copy button, and no extra text lines`, async () => {
       const html = await fetchAdminHtml();
       expect(html).toContain(`data-testid="card-${s.key}"`);
       expect(html).toContain(`data-testid="link-${s.key}"`);
       expect(html).toContain(`href="${s.href}"`);
       expect(html).toContain(`data-testid="copy-${s.key}"`);
-      expect(html).toContain(`QR-ready: ${s.href}`);
       expect(html).toContain(s.title);
+      expect(html).not.toContain(`data-testid="qr-hint-${s.key}"`);
     });
   }
 

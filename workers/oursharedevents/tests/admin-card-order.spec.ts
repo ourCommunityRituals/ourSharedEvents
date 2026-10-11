@@ -99,23 +99,21 @@ describe('admin page order', () => {
     }
   });
 
-  test('the event list says the cards are below it, and they are', () => {
+  test('the selected event\'s cards are all below the event list', () => {
     const list = byTestId('events-section');
-    expect(list.textContent || '').toMatch(/cards below/);
     for (const id of PAGE_ORDER.slice(PAGE_ORDER.indexOf('admin-dashboard-card'))) {
       expect(isBefore(list, byTestId(id)), `${id} is below the event list`).toBe(true);
     }
   });
 
-  test('the intro names the cards in the order they appear', () => {
-    const text = (byTestId('admin-intro').textContent || '').toLowerCase();
-    const words = ['dashboard', 'links', 'reg & forms', 'sponsors', 'posters', 'tv'];
-    let from = 0;
-    for (const w of words) {
-      const at = text.indexOf(w, from);
-      expect(at, `intro names "${w}" after the one before it`).toBeGreaterThan(-1);
-      from = at + w.length;
-    }
+  // Owner 2026-10-10, later: "way too busy". The intro used to describe the
+  // card order in words (and had to be kept in step with it); now it is only its
+  // heading, so there is no sentence that can drift from the page. The order
+  // itself is still held by the tests above and the jump-bar test.
+  test('the intro is only its heading, with no instructions to drift from the page', () => {
+    const intro = byTestId('admin-intro');
+    expect(intro.querySelectorAll('p').length).toBe(0);
+    expect((intro.textContent || '').trim()).toBe('Manage events from one clear workspace');
   });
 
   test('a jump lands the card under the sticky bar, not beneath it', () => {
