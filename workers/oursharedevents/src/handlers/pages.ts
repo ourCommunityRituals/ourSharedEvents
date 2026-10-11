@@ -38,6 +38,7 @@ import {
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
 import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
+import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import {
   parseDiscoveryFilters,
   applyDiscoveryFilters,
@@ -859,7 +860,8 @@ const SPONSOR_LIST_CSS = `
  * Share + Add to calendar: one pair on a row. At phone width each takes half
  * (flex-basis 120px, so two fit even at 320px); a single control takes the row.
  */
-const EVENT_ACTIONS_CSS = `
+const EVENT_ACTIONS_CSS =
+  `
     .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
     .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
     .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
@@ -868,7 +870,8 @@ const EVENT_ACTIONS_CSS = `
     .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
     .ose-calendar-summary::-webkit-details-marker { display: none; }
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }`;
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
+  BACK_BUTTON_CSS;
 
 /**
  * OSE-1518: the plain choices. Register (or check-in while the event is on)
@@ -881,8 +884,7 @@ const EVENT_CHOICES_CSS = `
     .ose-choice-btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; background: transparent; color: var(--ose-accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-choice-primary { background: var(--ose-accent); color: var(--on-accent); font-weight: 700; }
     .ose-choice-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-choice-note { margin: 0; font-size: 0.85rem; color: var(--ose-muted); }
-    .ose-back { margin: 1.5rem 0 0.5rem; }`;
+    .ose-choice-note { margin: 0; font-size: 0.85rem; color: var(--ose-muted); }`;
 
 /** The "Next at this venue" list, shared by the event page and the recap. */
 const NEXT_AT_VENUE_CSS = `
@@ -934,14 +936,12 @@ const CHOICE_COPY = {
     registerNote: 'Asks for your name and email.',
     checkinLabel: 'Count me in, anon',
     checkinNote: 'Counted, never named.',
-    backLabel: 'Back',
     heading: 'How would you like to take part?',
   },
   es: {
     registerNote: 'Pide tu nombre y correo.',
     checkinLabel: 'Cuenta conmigo, de forma anónima',
     checkinNote: 'Te contamos, nunca te nombramos.',
-    backLabel: 'Volver',
     heading: '¿Cómo quieres participar?',
   },
 } as const;
@@ -953,7 +953,7 @@ const CHOICE_COPY = {
  * or the form a poster scan asked for (?type=). Whichever of register /
  * check-in is not first follows it, so both are always on offer. The third
  * choice, "Just looking", became the Back button at the foot of the page
- * (owner 2026-10-11, renderBackButton). Links only: no field of ours, and "plant my flag"
+ * (owner 2026-10-11, lib/back-button.ts). Links only: no field of ours, and "plant my flag"
  * stays a link out to ourWKRP, never a profile flow here. In an admin draft
  * preview every choice is shown but switched off (no href).
  */
@@ -1016,31 +1016,6 @@ function renderEventChoices(
   return `<section class="ose-choices" data-testid="event-choices" aria-label="${esc(t.heading)}">
     ${items.join('\n    ')}
   </section>`;
-}
-
-/**
- * Back, at the foot of the event page (owner 2026-10-11: "Just looking" moved
- * to the bottom and became Back, in the same place on every phase, so a
- * visitor learns where it is). When the visitor came from a page (a referrer)
- * and this tab has history, it goes back there, on this site or not. Opened
- * fresh from a QR code or a shared link there is neither, and a new tab can
- * still count a blank first entry, so the link opens the events list, which
- * is also what it does with no script. In an admin draft preview it is off.
- */
-/** One id for Back: its two forms never render together, and the script selects it. */
-const BACK_TESTID = 'event-back';
-
-function renderBackButton(lang: 'en' | 'es', nonce: string, inert: boolean): string {
-  const label = CHOICE_COPY[lang].backLabel;
-  if (inert) {
-    return `<nav class="ose-back" aria-label="${esc(label)}">
-      <a class="ose-choice-btn" data-testid="${BACK_TESTID}" data-preview-inert="true" aria-disabled="true">${label}</a>
-    </nav>`;
-  }
-  return `<nav class="ose-back" aria-label="${esc(label)}">
-      <a class="ose-choice-btn" data-testid="${BACK_TESTID}" href="/events">${label}</a>
-    </nav>
-<script nonce="${nonce}">(function(){var a=document.querySelector('[data-testid="${BACK_TESTID}"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>`;
 }
 
 function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
@@ -1291,7 +1266,7 @@ ${SPONSOR_LIST_CSS}
 
     ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
-    ${renderBackButton(lang, nonce, preview)}
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, inert: preview, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1484,7 +1459,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
-    ${renderBackButton(lang, nonce, false)}
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1826,6 +1801,8 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
+
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
   </main>

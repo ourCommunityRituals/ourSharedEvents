@@ -30,6 +30,7 @@ import { escapeHtml } from '../lib/html-escape';
 import { fetchNextEventsAtVenue, type NextEventRow } from '../lib/next-at-venue';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links';
 import { formatHumanDate } from '../lib/event-datetime';
+import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import {
   canonicalOrigin,
   eventPagePath,
@@ -796,7 +797,7 @@ function formPage(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
   <link rel="stylesheet" href="/ui.css" />
-  <style>${FORM_CSS}</style>
+  <style>${FORM_CSS}${BACK_BUTTON_CSS}</style>
   ${turnstileScript}
 </head>
 <body>
@@ -810,7 +811,8 @@ function formPage(
        Renders as a thin row under the dark header. Non-critical;
        silently absent if no sponsors are configured for this event. -->
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
-  <main id="main-content" data-testid="form-main">${formHtml}${nextStep}</main>
+  <main id="main-content" data-testid="form-main">${formHtml}${nextStep}
+  ${renderBackButton({ fallbackHref: `/events/${encodeURIComponent(eventId)}`, nonce, testid: 'form-back' })}</main>
   <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;

@@ -11,6 +11,7 @@ import SPONSOR_CARD_HTML from '../templates/sponsor-card.html';
 import { escapeHtml as esc } from './html-escape';
 import { injectMarker } from './inject-marker';
 import { injectLegalFooter } from './legal-footer';
+import { renderBackButton } from './back-button';
 import { sponsorLogoPath } from './sponsor-logo';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorTitle, telHref } from './sponsor-card';
 
@@ -81,5 +82,16 @@ export function renderSponsorCardPage(row: SponsorCardRow): string {
   page = injectMarker(page, '<!--OCR_SPONSOR_LOGO-->', logo);
   page = injectMarker(page, '<!--OCR_SPONSOR_LINES-->', lines.join(''));
   page = injectMarker(page, '<!--OCR_SPONSOR_ACTIONS-->', actions.join(''));
+  // Back, last on the page as on every public page (owner 2026-10-11). The
+  // card's buttons are the hub's, so Back is too; html() adds the nonce.
+  page = injectMarker(
+    page,
+    '<!--OCR_SPONSOR_BACK-->',
+    renderBackButton({
+      fallbackHref: '/events',
+      testid: 'sponsor-card-back',
+      className: 'btn btn-secondary btn-block',
+    })
+  );
   return injectLegalFooter(page, 'public');
 }

@@ -499,6 +499,13 @@
       "testCount": 20
     },
     {
+      "file": "workers/oursharedevents/tests/back-button-everywhere.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/beacon-token.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
