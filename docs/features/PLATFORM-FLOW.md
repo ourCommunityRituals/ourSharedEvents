@@ -132,7 +132,7 @@ GET /api/v2/admin/events/:id/forms/email-signups   → count only
 ```
 Daily cron trigger (Cloudflare Worker scheduled event)
         │
-        ├── Phase 1: DELETE expired registrations (90 days after event)
+        ├── Phase 1: DELETE expired registrations (90 days after registering)
         │
         ├── Phase 2: SCRUB survey PII (whitelist approach — keep ratings, scrub strings)
         │

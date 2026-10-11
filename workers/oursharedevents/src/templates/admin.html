@@ -2112,6 +2112,9 @@
           'mint-link': function (el) {
             if (window.mintReportLink) window.mintReportLink(argOf(el, 'event-id'), el);
           },
+          'copy-registrant-emails': function (el) {
+            if (window.copyRegistrantEmails) window.copyRegistrantEmails(argOf(el, 'event-id'), el);
+          },
           'mint-copy': function (el) {
             var value = argOf(el, 'url') || argOf(el, 'token') || '';
             if (!navigator.clipboard) return;
@@ -5142,6 +5145,10 @@
 
         panel.innerHTML =
           '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' + section.upsellHtml +
+          '<div class="registrant-contacts" data-testid="registrant-contacts">' +
+            '<button type="button" class="btn btn-secondary" data-action="copy-registrant-emails" data-event-id="' + esc(eventId) + '" data-testid="copy-registrant-emails">Copy registrants\u2019 emails</button>' +
+            '<p class="sub-line" role="status" aria-live="polite" data-testid="registrant-contacts-msg"></p>' +
+          '</div>' +
           '<div class="report-links-section" data-testid="report-links-section">' +
             '<h3>Shared Report Links</h3>' +
             '<p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
@@ -5260,6 +5267,31 @@
       };
 
       // S-3.5.1 — generate a signed link token via the admin mint endpoint
+      // Owner 2026-10-11: the emails registrants chose to leave, for this event,
+      // so the organizer can write if it moves or is cancelled. The read is
+      // audited server-side; the list is copied, never kept on the page.
+      window.copyRegistrantEmails = async function(eventId, btn) {
+        var msg = document.querySelector('[data-testid="registrant-contacts-msg"]');
+        var say = function (t) { if (msg) msg.textContent = t; };
+        if (!eventId) return;
+        btn.disabled = true;
+        say('');
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/forms/contacts');
+          var data = await res.json();
+          if (!res.ok || !data || !data.ok) throw new Error('read');
+          var emails = (data.items || []).map(function (i) { return i.email; }).filter(Boolean);
+          if (!emails.length) { say('No one has left an email.'); return; }
+          if (!navigator.clipboard) throw new Error('clipboard');
+          await navigator.clipboard.writeText(emails.join(', '));
+          say('Copied ' + emails.length + (emails.length === 1 ? ' email.' : ' emails.'));
+        } catch (e) {
+          say('Could not load the emails. Try again.');
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
       window.mintReportLink = async function(eventId, btn) {
         if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
         const role = document.getElementById('mint-role').value;

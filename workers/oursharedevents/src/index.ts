@@ -87,6 +87,9 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
+    // runRegistrationContactClear (owner 2026-10-11) clears a registrant's name
+    //   and email the day after the event's last date: it reads event dates
+    //   from DB and writes only FORMS_DB; only event ids pass between them.
     // runBigQueryBackup reads from the main DB and is kept separate for isolation.
     //   Its Phase 4 deletes email-list rows (subscribers, FORMS_DB since
     //   OSE-1661) older than subscriberRetentionDays(): 1 to 90 days, default
@@ -124,6 +127,7 @@ export default {
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
+        runRegistrationContactClear(env),
         runBigQueryBackup(env),
         runSharedReportPipeline(env),
         runSecurityMetricsCron(env),
@@ -226,6 +230,89 @@ async function logPiiAudit(
   } catch {
     // Audit log write failure must not break the lifecycle job
   }
+}
+
+/**
+ * Registrant contact clearing (owner 2026-10-11).
+ *
+ * A registrant may leave a name and an email so the organizer can reach them
+ * if the event moves or is cancelled. Once the event is over there is nothing
+ * left to tell them, so the night after the day after its last date (end date,
+ * else start date), name and email are cleared. The row and its email hash
+ * stay until the row's own expiry, so counts and erasure by email still work.
+ *
+ * The event's date lives in DB and the contact in FORMS_DB, so this runs
+ * outside runFormDataLifecycle (forms-security S4 keeps that FORMS_DB-only).
+ * Only event ids pass between the two: FORMS_DB names which events still hold
+ * contacts, DB says which of those have ended, FORMS_DB clears those. A
+ * rescheduled event is read at its new date. An event id with no event row
+ * has nothing to tell anyone about, so it is cleared too. Bounded per night
+ * (CONTACT_CLEAR_MAX_PAGES pages of CONTACT_CLEAR_PAGE event ids); audited
+ * to pii_audit_log as 'registrations_contact_clear'.
+ */
+// D1 allows at most 100 bound values in one statement, so event ids go in
+// pages of 90. Pages walk event ids in order, so a night with many open events
+// still reaches the ended ones after them.
+const CONTACT_CLEAR_PAGE = 90;
+const CONTACT_CLEAR_MAX_PAGES = 50;
+
+const HOLDS_CONTACT_SQL = `(attendee_email_encrypted IS NOT NULL
+       OR attendee_name_encrypted IS NOT NULL
+       OR attendee_name IS NOT NULL)`;
+
+async function runRegistrationContactClear(env: RouterEnv): Promise<void> {
+  let cleared = 0;
+  let errors = 0;
+  try {
+    let after = '';
+    for (let page = 0; page < CONTACT_CLEAR_MAX_PAGES; page++) {
+      const held = await env.FORMS_DB.prepare(
+        `SELECT DISTINCT event_id FROM form_registrations
+          WHERE event_id > ? AND ${HOLDS_CONTACT_SQL}
+          ORDER BY event_id
+          LIMIT ?`
+      )
+        .bind(after, CONTACT_CLEAR_PAGE)
+        .all<{ event_id: string }>();
+      const ids = (held.results ?? []).map((r) => r.event_id).filter(Boolean);
+      if (!ids.length) break;
+      after = ids[ids.length - 1];
+      const marks = ids.map(() => '?').join(', ');
+      // An event still open, or that ended yesterday or later, keeps its contacts.
+      const open = await env.DB.prepare(
+        `SELECT id FROM events
+          WHERE id IN (${marks})
+            AND substr(COALESCE(end_date, start_date, ''), 1, 10) >= date('now', '-1 day')`
+      )
+        .bind(...ids)
+        .all<{ id: string }>();
+      const keep = new Set((open.results ?? []).map((r) => r.id));
+      const done = ids.filter((id) => !keep.has(id));
+      if (done.length) {
+        const res = await env.FORMS_DB.prepare(
+          `UPDATE form_registrations
+              SET attendee_name = NULL, attendee_name_encrypted = NULL, attendee_email_encrypted = NULL
+            WHERE event_id IN (${done.map(() => '?').join(', ')})
+              AND ${HOLDS_CONTACT_SQL}`
+        )
+          .bind(...done)
+          .run();
+        cleared += res.meta?.changes ?? 0;
+      }
+      if (ids.length < CONTACT_CLEAR_PAGE) break;
+    }
+  } catch (err) {
+    errors = 1;
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'registrations_contact_clear',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  await logPiiAudit(env.FORMS_DB, 'registrations_contact_clear', cleared, errors);
 }
 
 /**

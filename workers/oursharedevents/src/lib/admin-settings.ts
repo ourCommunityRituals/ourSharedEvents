@@ -180,7 +180,7 @@ export function buildAdminSettings(input: { tier: Tier; env: AdminSettingsEnv })
     },
     {
       key: 'retention_registrations',
-      text: `Registrations are deleted ${REGISTRATION_TTL_DAYS} days after the event.`,
+      text: `A registrant's name and email are cleared the day after the event. The rest is deleted ${REGISTRATION_TTL_DAYS} days after they register.`,
     },
     {
       key: 'retention_email',

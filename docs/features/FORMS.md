@@ -20,13 +20,14 @@
 5. See confirmation: "You're registered!"
 
 **What's collected:**
-| Field | Required | Stored As |
-|-------|----------|-----------|
-| Name | Yes | Plain text (max 200 chars) |
-| Email | No | SHA-256 hash only (never stored raw) |
-| Source placement | No | Which QR code / sponsor placement referred them |
 
-**Privacy:** Email is hashed on submission. Registration records auto-delete 90 days after event ends (via scheduled lifecycle job).
+| Field            | Required | Stored As                                       |
+| ---------------- | -------- | ----------------------------------------------- |
+| Name             | Yes      | Plain text (max 200 chars)                      |
+| Email            | No       | SHA-256 hash only (never stored raw)            |
+| Source placement | No       | Which QR code / sponsor placement referred them |
+
+**Privacy:** Email is optional. It is hashed on submission and, if given, kept encrypted so the organizer can tell the person if plans change (admin: "Copy registrants’ emails"). Name and email are cleared the day after the event; the record itself auto-deletes 90 days after registering (via scheduled lifecycle job).
 
 **Tier:** Available on Free, Mid, and Enterprise.
 
@@ -44,9 +45,10 @@
 4. Running count displayed below: "23 checked in"
 
 **What's collected:**
-| Field | Required | Stored As |
-|-------|----------|-----------|
-| Count | Auto | Running integer per event |
+
+| Field | Required | Stored As                 |
+| ----- | -------- | ------------------------- |
+| Count | Auto     | Running integer per event |
 
 **Privacy:** Zero PII. Only an aggregate count is stored.
 
@@ -70,10 +72,11 @@
 6. See confirmation: "Thanks for your feedback!"
 
 **What's collected:**
-| Field | Required | Stored As |
-|-------|----------|-----------|
-| Overall rating | No (but prompted) | Integer 1-5 |
-| Comments | No | Free text, then PII-scrubbed by lifecycle job |
+
+| Field          | Required          | Stored As                                     |
+| -------------- | ----------------- | --------------------------------------------- |
+| Overall rating | No (but prompted) | Integer 1-5                                   |
+| Comments       | No                | Free text, then PII-scrubbed by lifecycle job |
 
 **Privacy:** Survey responses are PII-scrubbed by the daily scheduled job. The scrubber uses a whitelist approach: numeric values and safe keys (rating, score, count, etc.) are kept; all other string values become `[SCRUBBED]`. Admin only sees scrubbed surveys.
 
@@ -94,9 +97,10 @@
 5. See confirmation: "You're on the list!" (or "You're already signed up!" for duplicates)
 
 **What's collected:**
-| Field | Required | Stored As |
-|-------|----------|-----------|
-| Email | Yes | SHA-256 hash (for dedup) + AES-256-GCM encrypted (for retrieval) |
+
+| Field | Required | Stored As                                                        |
+| ----- | -------- | ---------------------------------------------------------------- |
+| Email | Yes      | SHA-256 hash (for dedup) + AES-256-GCM encrypted (for retrieval) |
 
 **Privacy:** Email is both hashed (for dedup checking) and encrypted (for later retrieval). Encryption uses PBKDF2-derived AES-256-GCM with 100,000 iterations. Encrypted emails auto-delete after 30 days via lifecycle job.
 

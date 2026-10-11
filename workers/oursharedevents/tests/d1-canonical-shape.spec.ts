@@ -30,6 +30,7 @@ describe('OSE-1347 canonical D1 shape verifier', () => {
         'consent_given_at',
         'consent_type',
         'attendee_name_encrypted',
+        'attendee_email_encrypted',
       ])
     );
   });

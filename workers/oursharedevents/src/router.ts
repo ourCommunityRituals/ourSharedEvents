@@ -244,6 +244,7 @@ import {
   handleFormSurvey,
   handleFormEmailSignup,
   handleAdminRegistrations,
+  handleAdminRegistrantContacts,
   handleAdminCheckinCount,
   handleAdminSurveys,
   handleAdminEmailSignupCount,
@@ -1415,7 +1416,7 @@ export async function route(
 
   // ── Admin form endpoints (auth-gated) ──────────────────────────────────────
   const adminFormsMatch = pathname.match(
-    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|checkin-count|surveys|email-signups)$/
+    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|contacts|checkin-count|surveys|email-signups)$/
   );
   if (adminFormsMatch && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
@@ -1427,6 +1428,7 @@ export async function route(
     const [, eventId, formType] = adminFormsMatch;
     const formsActionMap: Record<string, string> = {
       registrations: 'READ_REGISTRATIONS',
+      contacts: 'READ_REGISTRANT_CONTACTS',
       'checkin-count': 'READ_CHECKIN_COUNT',
       surveys: 'READ_SURVEYS',
       'email-signups': 'READ_EMAIL_SIGNUPS',
@@ -1435,6 +1437,9 @@ export async function route(
     switch (formType) {
       case 'registrations':
         formsRes = await handleAdminRegistrations(request, env, eventId);
+        break;
+      case 'contacts':
+        formsRes = await handleAdminRegistrantContacts(request, env, eventId);
         break;
       case 'checkin-count':
         formsRes = await handleAdminCheckinCount(request, env, eventId);
