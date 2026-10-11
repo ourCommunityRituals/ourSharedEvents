@@ -1027,17 +1027,20 @@ function renderEventChoices(
  * still count a blank first entry, so the link opens the events list, which
  * is also what it does with no script. In an admin draft preview it is off.
  */
+/** One id for Back: its two forms never render together, and the script selects it. */
+const BACK_TESTID = 'event-back';
+
 function renderBackButton(lang: 'en' | 'es', nonce: string, inert: boolean): string {
   const label = CHOICE_COPY[lang].backLabel;
   if (inert) {
     return `<nav class="ose-back" aria-label="${esc(label)}">
-      <a class="ose-choice-btn" data-testid="event-back" data-preview-inert="true" aria-disabled="true">${label}</a>
+      <a class="ose-choice-btn" data-testid="${BACK_TESTID}" data-preview-inert="true" aria-disabled="true">${label}</a>
     </nav>`;
   }
   return `<nav class="ose-back" aria-label="${esc(label)}">
-      <a class="ose-choice-btn" data-testid="event-back" href="/events">${label}</a>
+      <a class="ose-choice-btn" data-testid="${BACK_TESTID}" href="/events">${label}</a>
     </nav>
-<script nonce="${nonce}">(function(){var a=document.querySelector('[data-testid="event-back"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>`;
+<script nonce="${nonce}">(function(){var a=document.querySelector('[data-testid="${BACK_TESTID}"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>`;
 }
 
 function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
