@@ -2376,9 +2376,9 @@
     },
     {
       "file": "workers/oursharedevents/tests/schema-lexicon.spec.ts",
-      "bucket": "workerd",
-      "needsReview": false,
-      "reason": "runtime marker(s): env.DB",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 5
     },
     {
