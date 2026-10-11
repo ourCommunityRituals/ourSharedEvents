@@ -34,7 +34,7 @@ const tenv = () => env as unknown as TestEnv;
 
 /** Both persistence layers, each with its own migrations. */
 const DATABASES = [
-  { name: 'DB', db: () => tenv().DB, statements: () => tenv().TEST_MIGRATION_STATEMENTS },
+  { name: 'DB', db: () => env.DB, statements: () => tenv().TEST_MIGRATION_STATEMENTS },
   {
     name: 'FORMS_DB',
     db: () => tenv().FORMS_DB,
