@@ -127,10 +127,23 @@ test.describe('attendee arc — /events/:id across phases', () => {
     // Say what came back, so a red run tells the Worker's answer from the
     // edge's: Cloudflare sets cf-mitigated on a challenge or block it serves
     // instead of the Worker (as trace-scan-staging.sh reads it for /q/).
+    const mitigated = res?.headers()['cf-mitigated'];
     const got =
       `status ${res?.status() ?? 'none'}, ` +
-      `cf-mitigated ${res?.headers()['cf-mitigated'] ?? 'absent'}, ` +
+      `cf-mitigated ${mitigated ?? 'absent'}, ` +
       `title "${await page.title()}", url ${page.url()}`;
+    // Even opened by its address, the form under /events/* can meet the edge's
+    // Managed Challenge from a CI runner (2026-10-11: every T4 attempt on main).
+    // The Worker never ran, so there is nothing of ours to assert. As with the
+    // next-event test (#440, owner decision 2026-09-01; owner again 2026-10-11),
+    // the link's target is asserted above, the form's render is proven by the
+    // worker's event-form-addresses.spec.ts (/updates shows form-email), and
+    // live Chrome coverage returns with the CI-scoped WAF skip (OSE-1162).
+    // Only a challenge skips; a block or any other answer still fails below.
+    if (mitigated === 'challenge') {
+      test.info().annotations.push({ type: 'edge challenge', description: got });
+      test.skip(true, `Cloudflare challenged the updates form (${got}); OSE-1162`);
+    }
     // The email form page renders an input — the loop is functionally closed
     await expect(
       page.locator('input[type="email"], input[name="email"]').first(),
