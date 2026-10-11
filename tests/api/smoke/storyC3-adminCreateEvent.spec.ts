@@ -529,7 +529,8 @@ test.describe('Create Event — Success Paths', () => {
       start_date: '2026-12-31',
       end_date: '2026-12-31',
       timezone: 'America/Chicago',
-      cover_image_url: 'https://example.com/image.jpg',
+      // Artwork is an uploaded file under /api/v2/uploads/ (OSE-1658).
+      cover_image_url: '/api/v2/uploads/poster-art/example.png',
       template_id: 'tmpl_001',
     });
     expect(res.status()).toBe(201);

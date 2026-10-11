@@ -905,6 +905,13 @@
       "testCount": 12
     },
     {
+      "file": "workers/oursharedevents/tests/event-artwork-address.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/event-card-filter.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1049,7 +1056,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 23
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/event-screen-addresses.spec.ts",

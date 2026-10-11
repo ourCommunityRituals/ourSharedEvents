@@ -46,13 +46,25 @@ import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
 import { ensureEventCode } from '../lib/event-code';
 import { maybeTag } from '../lib/h3-tagging';
-import { eventPlaceText, lookUpEventPlace, placeState, savePlaceLookup, type PlaceState } from '../lib/event-place';
+import {
+  eventPlaceText,
+  lookUpEventPlace,
+  placeState,
+  savePlaceLookup,
+  type PlaceState,
+} from '../lib/event-place';
 import { type MapsEnv } from '../lib/maps';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
+import { isUploadedArtworkPath } from '../lib/event-thumb';
+
+// OSE-1658: the one answer for an artwork address that is not an upload.
+const INVALID_COVER = 'INVALID_COVER_IMAGE_URL';
+const INVALID_COVER_MESSAGE =
+  'cover_image_url must be an uploaded file under /api/v2/uploads/ (upload it in Poster art), or null to clear';
 import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
 import {
   buildEventTypeCatalog,
@@ -710,8 +722,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       );
     }
   }
+  // OSE-1658 (owner decision A, 2026-10-11): artwork is an uploaded file under
+  // /api/v2/uploads/, or nothing. Refused, never cut to fit.
+  const coverRaw = body.cover_image_url;
   const coverImageUrl =
-    typeof body.cover_image_url === 'string' ? body.cover_image_url.slice(0, 500) : null;
+    coverRaw === undefined || coverRaw === null || coverRaw === '' ? null : coverRaw;
+  if (coverImageUrl !== null && !isUploadedArtworkPath(coverImageUrl)) {
+    return errorResponse(INVALID_COVER, INVALID_COVER_MESSAGE, 400, rid);
+  }
   const templateId = typeof body.template_id === 'string' ? body.template_id.slice(0, 64) : null;
 
   // OSE-1344 — the Category → Type picker posts `event_type_id`. Optional (an
@@ -1011,7 +1029,7 @@ export async function handleUpdateEvent(
     start_date: { max: 30 },
     end_date: { max: 30 },
     timezone: { max: 50 },
-    cover_image_url: { max: 500 },
+    // cover_image_url is checked below (OSE-1658), not cut to fit.
     status: { max: 20 },
     template_id: { max: 64 },
     // OSE-239a: 5W content fields (added by OSE-236 migration 0029). All
@@ -1039,6 +1057,21 @@ export async function handleUpdateEvent(
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
       }
+    }
+  }
+
+  // OSE-1658 — artwork: an uploaded file under /api/v2/uploads/; null or ''
+  // clears it; anything else is refused and nothing is written.
+  if ('cover_image_url' in body) {
+    const cover = body.cover_image_url;
+    if (cover === null || cover === '') {
+      sets.push('cover_image_url = ?');
+      values.push(null);
+    } else if (isUploadedArtworkPath(cover)) {
+      sets.push('cover_image_url = ?');
+      values.push(cover);
+    } else {
+      return errorResponse(INVALID_COVER, INVALID_COVER_MESSAGE, 400, rid);
     }
   }
 
