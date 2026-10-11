@@ -130,7 +130,7 @@ beforeAll(async () => {
                          qr_verified, listed_from, created_by, event_type_id, settings_json)
      VALUES (?, ?, 'Harbor Bocce Night', 'harbor-bocce-night', 'active', 'Weekly bocce.',
              'Eagles Hall', '2026-09-26', 'America/Chicago', '2026-09-26T23:00:00Z',
-             'https://img.example.com/c.png', 'Bocce for everyone', 'Harbor County League',
+             '/api/v2/uploads/poster-art/c.png', 'Bocce for everyone', 'Harbor County League',
              'Keep the league going', 'Bring your own balls', '12 Main St',
              'A long story about the host.', 'https://img.example.com/h.png',
              'https://video.example.com/v', 'https://tickets.example.com/bocce', 1, 'tickets',
@@ -254,6 +254,23 @@ describe('POST /api/v2/admin/events/:id/repeat — the copy', () => {
       expect(row[col], col).toEqual(src[col]);
     }
     expect(row.event_type_id).toBe(typeId);
+  });
+
+  // OSE-1658: artwork saved before the upload-only rule can be an outside
+  // address. Create refuses one now, so a repeat that copied it would fail.
+  test('artwork saved as an outside address is left behind, and the repeat still works', async () => {
+    const LEGACY = 'evt-rep-legacy-art';
+    await (env as unknown as { DB: D1Database }).DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, cover_image_url)
+       VALUES (?, ?, 'Legacy Art Event', 'legacy-art-event', 'active', 'https://img.example.com/old.png')`
+    )
+      .bind(LEGACY, BRAND_A)
+      .run();
+    const res = await repeat(LEGACY, asEmail(OWNER_A));
+    expect(res.status).toBe(201);
+    const row = await rowOf(((await res.json()) as { id: string }).id);
+    expect(row.title).toBe('Legacy Art Event');
+    expect(row.cover_image_url).toBeNull();
   });
 
   test('carries the settings (TV screens, seconds, poster QR switch)', async () => {
