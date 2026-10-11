@@ -18,6 +18,7 @@ import {
   EVENT_DEFAULT_THUMB_PATH,
   EVENT_DEFAULT_THUMB_SVG,
   eventThumbSrc,
+  EVENT_THUMB_SWAP_SCRIPT,
   injectEventThumbSwap,
 } from '../src/lib/event-thumb';
 
@@ -123,11 +124,12 @@ describe('the card markup', () => {
       },
     ]);
     expect(html).not.toMatch(/<script/i);
+    // The page gains the swap once, just before </body>.
     const page = injectEventThumbSwap('<html><body><main>x</main></body></html>');
-    const script = page.slice(page.indexOf('<script'), page.indexOf('</body>'));
-    expect(script).toContain(`'${EVENT_DEFAULT_THUMB_PATH}'`);
-    expect(script).toContain('img.event-thumb');
-    expect(script).toContain('naturalWidth===0');
+    expect(page).toBe(`<html><body><main>x</main>${EVENT_THUMB_SWAP_SCRIPT}</body></html>`);
+    expect(EVENT_THUMB_SWAP_SCRIPT).toContain(`'${EVENT_DEFAULT_THUMB_PATH}'`);
+    expect(EVENT_THUMB_SWAP_SCRIPT).toContain('img.event-thumb');
+    expect(EVENT_THUMB_SWAP_SCRIPT).toContain('naturalWidth===0');
   });
 });
 
