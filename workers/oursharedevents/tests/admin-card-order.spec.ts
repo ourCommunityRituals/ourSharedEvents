@@ -81,7 +81,12 @@ describe('admin page order', () => {
   });
 
   test('the selected-event jump bar lists its cards in the same order as the page', () => {
-    const buttons = Array.from(doc.querySelectorAll('#event-context-bar .ecb-nav button'));
+    // The bar leads with the way back to Your events, which sits above every
+    // card; the rest are the card jumps.
+    const all = Array.from(doc.querySelectorAll('#event-context-bar .ecb-nav button'));
+    expect(all[0]?.getAttribute('data-action')).toBe('go-your-events');
+    const buttons = all.filter((b) => b.getAttribute('data-action') === 'ecb-jump');
+    expect(buttons.length).toBe(all.length - 1);
     expect(buttons.length).toBeGreaterThanOrEqual(5);
     const targets = buttons.map((b) => {
       const cls = b.getAttribute('data-target') || '';
@@ -99,7 +104,7 @@ describe('admin page order', () => {
     }
   });
 
-  test('the selected event\'s cards are all below the event list', () => {
+  test("the selected event's cards are all below the event list", () => {
     const list = byTestId('events-section');
     for (const id of PAGE_ORDER.slice(PAGE_ORDER.indexOf('admin-dashboard-card'))) {
       expect(isBefore(list, byTestId(id)), `${id} is below the event list`).toBe(true);
