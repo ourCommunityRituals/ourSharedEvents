@@ -71,6 +71,7 @@
  *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
+ *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
@@ -159,6 +160,7 @@ import {
   publicReadLimited,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
   handleListEvents,
@@ -623,6 +625,10 @@ export async function route(
     )(request, env);
   }
 
+  // OSE default event card image — static, same-origin, locked down.
+  if (pathname === EVENT_DEFAULT_THUMB_PATH && method === 'GET') {
+    return eventDefaultThumbResponse();
+  }
   // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();

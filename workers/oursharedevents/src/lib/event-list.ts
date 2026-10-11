@@ -27,6 +27,7 @@ import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
 import { orderUpcomingFirst } from './event-discovery.js';
+import { EVENT_THUMB_SWAP_SCRIPT, eventThumbSrc } from './event-thumb.js';
 
 export interface EventListItem {
   id?: unknown;
@@ -37,6 +38,8 @@ export interface EventListItem {
   venue?: unknown;
   phase?: unknown;
   timezone?: unknown;
+  /** The event's poster art (an R2 upload path), shown as the card's picture. */
+  cover_image_url?: unknown;
 }
 
 export interface RenderedEventList {
@@ -157,9 +160,13 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
     ? `<p class="meta" data-testid="public-event-sponsor">Supported by ${escapeHtml(opts.sponsorTitle)}</p>`
     : '';
   const classes = ['event-card', ...(opts.extraClasses ?? [])].join(' ');
+  // Owner 2026-10-11: every card shows a picture, the poster art or the
+  // default (lib/event-thumb.ts). Decorative: the name sits beside it.
+  const thumb = `<img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}">`;
   return `
           <article class="${classes}" data-testid="${landing ? 'area-card' : 'public-event-card'}" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
+            ${thumb}
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="${landing ? 'area-card-name' : 'public-event-name'}">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="${landing ? 'area-card-meta' : 'public-event-meta'}">${datePart}${venuePart}</p>
@@ -219,7 +226,7 @@ export function renderEventList(
     html += ordered.wrapped.map(card).join('');
   }
 
-  return { html, countText, upcoming };
+  return { html: html + EVENT_THUMB_SWAP_SCRIPT, countText, upcoming };
 }
 
 // ─── The stylesheet (one copy, both pages) ─────────────────────────────────────
@@ -237,6 +244,7 @@ export const EVENT_CARD_CSS = `
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      .event-card .event-thumb { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-hover); }
       .event-card .event-info { position: relative; z-index: 2; pointer-events: none; flex: 1 1 12rem; min-width: 0; }
       .event-card h3 { overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
       .event-card .meta { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
@@ -245,7 +253,7 @@ export const EVENT_CARD_CSS = `
       .event-card .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       .event-card .cta-secondary { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
       @media (max-width: 480px) {
-        .event-card .event-info { flex-basis: 100%; }
+        .event-card .event-info { flex: 1 1 0; }
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
