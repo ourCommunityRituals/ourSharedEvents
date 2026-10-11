@@ -90,6 +90,17 @@ describe('OSE-1518 three plain choices (before the event)', () => {
     expect(looking, 'just looking comes last').toBeGreaterThan(checkin);
   });
 
+  test('the labels are short: "Register" and "Count me in, anon" (owner 2026-10-11)', async () => {
+    await seed({ id: 'evt_short_labels' });
+    const html = await page('/events/evt_short_labels');
+    const text = (t: string) =>
+      html.match(new RegExp(`data-testid="${t}"[^>]*>([^<]*)</a>`))?.[1] ?? null;
+    expect(text('event-rsvp')).toBe('Register');
+    expect(text('event-choice-checkin')).toBe('Count me in, anon');
+    expect(html).not.toContain('Register for this event');
+    expect(html).not.toContain('Count me in, anonymously');
+  });
+
   test('Register is the primary action; the others are secondary', async () => {
     await seed({ id: 'evt_1518_primary' });
     const html = await page('/events/evt_1518_primary');
@@ -204,7 +215,7 @@ describe('less text on the event page (owner 2026-10-11): each choice says only 
     await seed({ id: 'evt_less_pre' });
     const html = await page('/events/evt_less_pre');
     expect(noteOf(html, 'event-rsvp')).toBe('Asks for your name and email.');
-    // The label already says "anonymously", so a note would repeat it.
+    // The label already says "anon", so a note would repeat it.
     expect(noteOf(html, 'event-choice-checkin')).toBeNull();
     expect(noteOf(html, 'event-choice-looking')).toBeNull();
     expect(html).not.toContain('Nothing to fill in');

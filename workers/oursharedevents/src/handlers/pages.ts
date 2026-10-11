@@ -795,7 +795,7 @@ function eventFormCtaLabel(type: EventFormType): string {
       return 'Get event updates';
     case 'register':
     default:
-      return 'Register for this event';
+      return 'Register';
   }
 }
 
@@ -926,12 +926,13 @@ function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): s
 
 // Less text (owner 2026-10-11): a note says only what the choice asks of you.
 // Register names what it collects. Check-in keeps its promise only where its
-// label ("Check in at this event") does not already say "anonymously". Just
-// looking asks for nothing, so it has no note.
+// label ("Check in at this event") does not already say "anon". Just looking
+// asks for nothing, so it has no note. Short labels (owner 2026-10-11):
+// "Register" and "Count me in, anon".
 const CHOICE_COPY = {
   en: {
     registerNote: 'Asks for your name and email.',
-    checkinLabel: 'Count me in, anonymously',
+    checkinLabel: 'Count me in, anon',
     checkinNote: 'Counted, never named.',
     lookingLabel: 'Just looking',
     heading: 'How would you like to take part?',
