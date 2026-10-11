@@ -20,6 +20,7 @@
  * | all refused by CSP at click time | date: 2026-09-05
  */
 import { test, expect, type Page } from '@playwright/test';
+import { createLiveEvent } from './helpers/sponsor-home-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER ?? '';
 
@@ -160,6 +161,32 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
       notLive ? `/api/v2/admin/events/${clickedId}/poster-preview` : `/events/${clickedId}/poster`
     );
     await expect(page.locator('tr.selected')).toHaveCount(1);
+    expect(csp).toEqual([]);
+  });
+
+  // The test above clicks whichever row is first, and a just-seeded draft is
+  // always first, so it only ever checked the preview branch. This one picks a
+  // live event's own row, so the live address is checked every run.
+  test('selecting a live event scopes the poster link to its own address', async ({ page }) => {
+    const csp = watchCsp(page);
+    const { id } = await createLiveEvent(
+      page.request,
+      ADMIN_BEARER,
+      `CSP live poster ${Date.now()}`
+    );
+    await waitForEventInAdminList(page, id);
+    await openAdvanced(page);
+
+    const row = page.locator(`[data-testid="event-row-${id}"]`);
+    await expect(row, 'the live event has a row').toBeVisible({ timeout: 15000 });
+    await expect(row).toHaveAttribute('data-status', 'active');
+    expect(await page.getAttribute('[data-testid="link-poster"]', 'href')).toBe('/poster');
+
+    await row.click();
+    await expect(page.locator('[data-testid="link-poster"]')).toHaveAttribute(
+      'href',
+      `/events/${id}/poster`
+    );
     expect(csp).toEqual([]);
   });
 
