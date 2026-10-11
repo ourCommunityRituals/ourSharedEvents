@@ -291,4 +291,6 @@ export const NODE_SPECS = [
   // F5.3 — the form page's confirmation: handleFormPage called directly with a
   // stub DB, its scripts run in jsdom with a stubbed fetch; no cloudflare:test.
   'tests/form-next-step-dom.spec.ts',
+  // Form pages, less text (owner 2026-10-11): the same jsdom render as above.
+  'tests/form-pages-less-text.spec.ts',
 ];

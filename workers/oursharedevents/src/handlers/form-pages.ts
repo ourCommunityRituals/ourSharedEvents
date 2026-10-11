@@ -83,6 +83,24 @@ function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string,
 
 // ── GDPR Art. 13 privacy notice (BE-9 / BE-10) ───────────────────────────────
 
+/**
+ * The one line under each form: what that form keeps, and for how long. Each
+ * line matches the retention in the details below it (owner 2026-10-11).
+ */
+function privacySummary(formType: string): string {
+  switch (formType) {
+    case 'checkin':
+      return 'Counted, never named.';
+    case 'survey':
+      return 'Comments are cleaned of personal details within 24 hours.';
+    case 'email':
+    case 'email-signup':
+      return 'Your email is deleted after 30 days.';
+    default:
+      return 'Your name and email are cleared the day after the event.';
+  }
+}
+
 function privacyNotice(formType: string, legalTier = 1): string {
   let purpose: string;
   let legalBasis: string;
@@ -130,11 +148,7 @@ function privacyNotice(formType: string, legalTier = 1): string {
   }
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    <p class="privacy-summary" data-testid="privacy-summary">${
-      formType === 'register'
-        ? 'Your name and email are cleared the day after the event.'
-        : 'We never store your name once the event ends.'
-    }</p>
+    <p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType)}</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Privacy details</summary>
       <p>
@@ -385,7 +399,7 @@ const FORM_JS_SUBMIT = `
     // only now, after the submit succeeded. A clone of inert server markup.
     var next = document.getElementById('form-next-step');
     document.getElementById('form-area').innerHTML =
-      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p>' + thanks + '</div>';
+      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2>' + thanks + '</div>';
     var done = document.querySelector('[data-testid="form-success"]');
     if (next && next.content && done) {
       done.insertBefore(next.content.cloneNode(true), done.querySelector('.form-sponsor-thanks'));
@@ -687,7 +701,7 @@ function registerNextStep(row: FormEventRow, shareUrl: string): string {
     : '';
   return nextStepTemplate(`<div class="next-step" data-testid="register-next-step">
       ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id, row.slug))}">Back to the event page</a>
-      <p data-testid="register-next-checkin">On the day, check in with one tap from the event page or the code at the door. You are counted, never named.</p>
+      <p data-testid="register-next-checkin">On the day, check in with one tap.</p>
     </div>`);
 }
 
