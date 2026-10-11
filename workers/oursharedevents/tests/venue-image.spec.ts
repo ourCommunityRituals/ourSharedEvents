@@ -45,6 +45,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 async function seed(
@@ -112,12 +113,21 @@ describe('the route is rate-limited like every other public read', () => {
       put: async (k: string, v: string) => void store.set(k, v),
     } as unknown as KVNamespace;
 
+    // This drains the per-minute count, so the burst limiter in front of it
+    // (60 per 10 s, real clock) is left unbound and the clock is held: a slow
+    // runner can then neither roll the minute nor let the burst window answer
+    // for it (#863: drain the layer you assert on).
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    const extraEnv = { RATE_LIMIT_KV, PUBLIC_READ_EDGE_LIMITER: undefined };
+
     let last = new Response('');
-    for (let i = 0; i <= PUBLIC_READ_MAX + 1; i++) {
+    for (let i = 1; i <= PUBLIC_READ_MAX + 1; i++) {
       // No params: the cheapest request the route answers. The limit sits in
       // front of the handler, so it still counts.
-      last = await get('', { ip: '203.0.113.21', extraEnv: { RATE_LIMIT_KV } });
-      if (i < PUBLIC_READ_MAX + 1) await last.body?.cancel();
+      last = await get('', { ip: '203.0.113.21', extraEnv });
+      if (i === PUBLIC_READ_MAX)
+        expect(last.status, `request ${i} is within the limit`).not.toBe(429);
+      if (i <= PUBLIC_READ_MAX) await last.body?.cancel();
     }
     expect(last.status).toBe(429);
     expect(last.headers.get('Retry-After')).toBeTruthy();
