@@ -891,6 +891,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/event-address-route-table.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/event-anon-key.spec.ts",
       "bucket": "node",
       "needsReview": false,
