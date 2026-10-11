@@ -5,9 +5,13 @@
  * 1. The real tree matches its baseline exactly (a new one fails; a fixed one
  *    fails until the baseline is lowered, so the gain is locked in).
  * 2. Every baseline entry carries a real reason.
- * 3. The baseline cannot exceed the base branch's copy (when origin/main has one).
+ * 3. The baseline cannot exceed the base branch's copy (when origin/main has one;
+ *    a local convenience only, since a shallow CI checkout has no origin/main).
  * 4. Hermetic born-red cases: a throwaway tree with a baseline, then one injected
  *    continue-on-error / skip / orphan spec each turn the script red.
+ * 5. CI wiring (OSE-1691): the T0 lint shard runs this script with
+ *    --base-config, blocking. Before OSE-1691 nothing in CI ran it, and (3)
+ *    returned early in CI, so a raised baseline passed every check (#933).
  */
 
 const { spawnSync } = require('child_process');
@@ -58,11 +62,40 @@ describe('CI integrity ratchets (OSE-1606): the real tree', () => {
       cwd: ROOT,
       encoding: 'utf-8',
     });
-    if (show.status !== 0) return; // new file, shallow clone or no origin: CI's --base-config step is not available here
+    // No origin/main here (a shallow CI checkout, a fresh clone): nothing to
+    // compare locally. CI's own comparison is the lint-shard step, held in
+    // place by "the lint shard runs the ratchet against the base branch" below.
+    if (show.status !== 0) return;
     const baseFile = join(mkdtempSync(join(tmpdir(), 'ci-int-base-')), 'base.json');
     writeFileSync(baseFile, show.stdout);
     const r = run(ROOT, '--base-config', baseFile);
     expect(r.stderr).not.toContain('baseline raised');
+  });
+
+  test('the lint shard runs the ratchet against the base branch, blocking (OSE-1691)', () => {
+    const yaml = require('js-yaml');
+    const wf = yaml.load(
+      readFileSync(join(ROOT, '.github', 'workflows', 'oursharedevents-ci.yml'), 'utf-8')
+    );
+    const hits = [];
+    for (const [name, job] of Object.entries(wf.jobs || {})) {
+      for (const s of job.steps || []) {
+        if (/scripts\/ci\/ci-integrity-ratchets\.mjs/.test(String(s.run || '')))
+          hits.push({ name, job, s });
+      }
+    }
+    expect(hits.length, 'a CI step runs ci-integrity-ratchets.mjs').toBeGreaterThanOrEqual(1);
+    const { name, job, s } = hits[0];
+    const run = String(s.run);
+    expect(s.if, `${name}: runs in the lint shard`).toMatch(/matrix\.shard == 'lint'/);
+    expect(run, `${name}: compares with the base branch's baseline`).toMatch(
+      /--base-config "\$RUNNER_TEMP\/base-ci-integrity\.json"/
+    );
+    expect(run, `${name}: reads the base copy of the baseline`).toContain(
+      'FETCH_HEAD:.ci-integrity-baseline.json'
+    );
+    expect(s['continue-on-error'], `${name}: blocking`).toBeUndefined();
+    expect(job['continue-on-error'], `${name}: job is blocking`).toBeUndefined();
   });
 });
 

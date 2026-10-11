@@ -731,6 +731,29 @@ jobs:
           fi
           node ../packages/ui/scripts/check-spoke-styles.mjs --root . "${ARGS[@]}"
 
+      # CI integrity ratchets (OSE-1606, wired by OSE-1691). continue-on-error
+      # steps, test skips and orphan specs may only shrink; the counts live in
+      # .ci-integrity-baseline.json. Until OSE-1691 nothing in CI ran this
+      # script: a test only compared against origin/main when a shallow checkout
+      # happened to have it, so a raised baseline passed. On a PR the baseline is
+      # compared with the base branch's copy, so a PR may lower it, never raise
+      # it. A deliberate raise (owner decision) is an admin merge over this red
+      # step, with the reason recorded on the baseline entry.
+      - name: 'Lint: CI integrity ratchets (skips, continue-on-error, orphan specs)'
+        if: matrix.shard == 'lint'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          ARGS=()
+          if [ -n "$BASE_REF" ]; then
+            git fetch -q --depth=1 origin "$BASE_REF"
+            if git cat-file -e FETCH_HEAD:.ci-integrity-baseline.json 2>/dev/null; then
+              git show FETCH_HEAD:.ci-integrity-baseline.json > "$RUNNER_TEMP/base-ci-integrity.json"
+              ARGS=(--base-config "$RUNNER_TEMP/base-ci-integrity.json")
+            fi
+          fi
+          node scripts/ci/ci-integrity-ratchets.mjs --root . "${ARGS[@]}"
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
