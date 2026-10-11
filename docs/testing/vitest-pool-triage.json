@@ -1010,6 +1010,13 @@
       "testCount": 42
     },
     {
+      "file": "workers/oursharedevents/tests/event-place.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 16
+    },
+    {
       "file": "workers/oursharedevents/tests/event-price.spec.ts",
       "bucket": "node",
       "needsReview": false,

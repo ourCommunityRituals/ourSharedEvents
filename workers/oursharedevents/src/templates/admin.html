@@ -2463,7 +2463,7 @@
                 type="text"
                 id="wizard-event-venue"
                 data-testid="wizard-event-venue"
-                placeholder="Rock Island Public House"
+                placeholder="Rock Island Public House, Blue Island"
                 maxlength="500"
                 required
                 aria-required="true"
@@ -3297,6 +3297,10 @@
                 var mapNoteEl = document.getElementById('wizard-map-note');
                 if (mapNoteEl) {
                   var mapNote = data.map && data.map.note ? String(data.map.note) : '';
+                  // The zip search finds an event by its place on the map.
+                  if (data.place === 'not_found') {
+                    mapNote = (mapNote ? mapNote + ' ' : '') + 'We couldn’t find that place on the map. Add the town or street so nearby searches show it.';
+                  }
                   mapNoteEl.textContent = mapNote;
                   mapNoteEl.hidden = !mapNote;
                 }

@@ -46,6 +46,8 @@ import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
 import { ensureEventCode } from '../lib/event-code';
 import { maybeTag } from '../lib/h3-tagging';
+import { eventPlaceText, lookUpEventPlace, placeState, savePlaceLookup, type PlaceState } from '../lib/event-place';
+import { type MapsEnv } from '../lib/maps';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -70,7 +72,7 @@ import { explicitMapChoice, mapState } from '../lib/map-default';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
+export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv, MapsEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
   PUBLISH_GRACE_MINUTES?: string;
@@ -900,6 +902,27 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     });
   }
 
+  // Owner report 2026-10-11: the zip search lists an event only by its map
+  // cell, and no create form sent coordinates. With none given, the place is
+  // looked up once (lib/event-place.ts); a failed lookup never fails the create.
+  let place: PlaceState = h3Tags ? 'on_map' : 'not_looked_up';
+  if (!h3Tags) {
+    try {
+      const r = await lookUpEventPlace(env, whereAddress, location);
+      await savePlaceLookup(env.DB, id, r, now);
+      place = placeState(r);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          type: 'EVENT_PLACE_LOOKUP_FAILED',
+          eventId: id,
+          error: err instanceof Error ? err.message : String(err),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }
+
   return Response.json(
     {
       ok: true,
@@ -910,6 +933,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       event_code: eventCode,
       starts_at: startsAt,
       timezone,
+      place,
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
       map: mapState(isPublished === 1, mapChoice === null),
@@ -1100,6 +1124,40 @@ export async function handleUpdateEvent(
       sets.push('lon = ?');
       values.push(v === null ? null : (v as number));
       geoUpdated = true;
+    }
+  }
+
+  // Owner report 2026-10-11: a changed place (street address or place name)
+  // with no coordinates in the same request is looked up again after the save
+  // (lib/event-place.ts). The old point described the old place, so it goes
+  // first, in this same UPDATE: a lookup that then fails leaves no point, never
+  // a wrong one. Text that did not change does not cost a lookup.
+  let placeChanged = false;
+  let newPlace: { where_address: unknown; location: unknown } | null = null;
+  if (('location' in body || 'where_address' in body) && !geoUpdated) {
+    const stored = await env.DB.prepare('SELECT location, where_address FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ location: string | null; where_address: string | null }>();
+    if (stored) {
+      const pick = (field: 'location' | 'where_address'): unknown =>
+        field in body
+          ? typeof body[field] === 'string'
+            ? (body[field] as string).slice(0, 500)
+            : null
+          : stored[field];
+      newPlace = { where_address: pick('where_address'), location: pick('location') };
+      placeChanged =
+        eventPlaceText(newPlace.where_address, newPlace.location) !==
+        eventPlaceText(stored.where_address, stored.location);
+      if (placeChanged) {
+        sets.push(
+          'lat = NULL',
+          'lon = NULL',
+          'h3_res9 = NULL',
+          'h3_res7 = NULL',
+          'place_checked_at = NULL'
+        );
+      }
     }
   }
 
@@ -1425,11 +1483,33 @@ export async function handleUpdateEvent(
     return errorResponse('DB_ERROR', 'Failed to update event', 503, rid);
   }
 
+  // The place changed: look it up now that the save has landed. A failure
+  // here is not a failed save; the nightly job tries again.
+  let place: PlaceState | undefined;
+  if (placeChanged && newPlace) {
+    place = 'not_looked_up';
+    try {
+      const r = await lookUpEventPlace(env, newPlace.where_address, newPlace.location);
+      await savePlaceLookup(env.DB, eventId, r);
+      place = placeState(r);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          type: 'EVENT_PLACE_LOOKUP_FAILED',
+          eventId,
+          error: err instanceof Error ? err.message : String(err),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }
+
   return Response.json(
     {
       ok: true,
       status: 200,
       id: eventId,
+      ...(place !== undefined ? { place } : {}),
       // A status write says the status it moved FROM (the one the guarded
       // UPDATE matched), so the admin's Undo returns there even when its own
       // panel was showing an older status.

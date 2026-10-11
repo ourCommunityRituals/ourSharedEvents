@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 98, forms 14 to 18
+# Production migration plan: main 77 to 99, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0098, forms 0015–0018.
+Covers: main 0078–0099, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 98               | 21       |
+| Main (`ocr-db-production`)        | 77               | 99               | 22       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0098
+## Main database, 0078 to 0099
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -115,6 +115,7 @@ a line in this document.
 | `0096_event_codes.sql`                           | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity). | No   |
 | `0097_event_type_watch_party.sql`                | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.  | Yes  |
 | `0098_drop_subscribers_from_anonymous_db.sql`    | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.    | Yes  |
+| `0099_event_place_checked_at.sql`                | Adds `events.place_checked_at`, when the event's place was last looked up on the map. Old events keep none.  | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -252,7 +253,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0098_drop_subscribers_from_anonymous_db.sql` and `98`;
+2. **The level.** Expected: `0099_event_place_checked_at.sql` and `99`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

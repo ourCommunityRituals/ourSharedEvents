@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:401':
+  'handlers/events.ts:403':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -121,7 +121,8 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'public list handler land above it; 394→399 by OSE-1644, whose ' +
     'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
     'by OSE-1500, whose one-line content-type import lands above it; 400→401 by ' +
-    'OSE-1684, whose one-line event-code import lands above it. Scope ' +
+    'OSE-1684, whose one-line event-code import lands above it; 401→403 by the ' +
+    'event place lookup, whose event-place and maps imports land above it. Scope ' +
     'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':
@@ -129,6 +130,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
     '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
     'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
+  'lib/event-place.ts:163':
+    'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11). ' +
+    'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
+    'saves looked places up, for every brand, at most 25 a night. It writes each ' +
+    'row back by id and returns nothing to any caller; not reachable from any ' +
+    'request path.',
   'handlers/bigquery.ts:83':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +

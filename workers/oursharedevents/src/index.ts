@@ -15,6 +15,7 @@ import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import { runEventPlaceBackfill } from './lib/event-place';
 import {
   FORMS_RETENTION_CEILING_DAYS,
   REGISTRATION_TTL_DAYS,
@@ -124,6 +125,11 @@ export default {
     //   independently. Does NOT touch the ose_anon cookie
     //   lifetime — that remains a separate open decision. Audits to
     //   admin_audit_log.
+    // runEventPlaceBackfill (lib/event-place.ts, owner report 2026-10-11) looks
+    //   up the place of at most PLACE_BACKFILL_MAX (25) events a night that were
+    //   saved before saves looked places up: not archived, not over, no
+    //   coordinates, never looked up. DB.events only; a no-op without the Maps
+    //   key. At most 25 billed Geocoding requests a night.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
@@ -134,6 +140,7 @@ export default {
         runDraftExpiry(env),
         runCorridorLatch(env),
         runScanReturnsRetention(env),
+        runEventPlaceBackfill(env),
       ])
     );
   },
