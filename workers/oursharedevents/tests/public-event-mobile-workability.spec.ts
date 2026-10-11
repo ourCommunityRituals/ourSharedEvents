@@ -21,7 +21,7 @@
  *   - html, body { overflow-x: hidden; }
  *   - body { overflow-wrap: anywhere; word-break: break-word; }
  *   - .ose-venue-map { max-width: 100%; }
- *   - .ose-choice-btn { min-height: 44px; } (OSE-1518: register, check-in and just-looking share it)
+ *   - .ose-choice-btn { min-height: 44px; } (OSE-1518: register, check-in and Back share it)
  *     (touch-target floor, invariant 14)
  *
  * The defensive rules are deliberately applied at the html/body

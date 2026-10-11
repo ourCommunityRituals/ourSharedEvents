@@ -993,7 +993,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 22
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/event-phase-coherence.spec.ts",
