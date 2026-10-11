@@ -138,6 +138,25 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
+      # Same rule as the charter, applied to what Claude Code loads by itself:
+      # AGENTS.md, CLAUDE.md (and anything it imports) and .claude/ (skills,
+      # agents, settings, hooks) come from the BASE branch, so a PR cannot
+      # rewrite its own reviewer's instructions or add a hook that runs in this
+      # job. The PR's changes to them are still reviewed through the diff.
+      - name: Reviewer instructions from base branch
+        if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          rm -rf .claude AGENTS.md CLAUDE.md workers/oursharedevents/CLAUDE.md
+          for p in .claude AGENTS.md CLAUDE.md workers/oursharedevents/CLAUDE.md; do
+            if [ -n "$(git ls-tree --name-only "origin/${BASE_REF}" -- "${p}")" ]; then
+              git checkout "origin/${BASE_REF}" -- "${p}"
+            fi
+          done
+          echo "Instructions in use (from origin/${BASE_REF}):"
+          ls -d .claude AGENTS.md CLAUDE.md 2>/dev/null || true
+
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
       # attacker code with this job's Claude credentials + write scopes. Bump via Dependabot.
       - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1

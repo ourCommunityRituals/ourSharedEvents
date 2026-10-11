@@ -70,7 +70,7 @@ This binds every agent. For Claude Code, `.claude/hooks/policy-gate.mjs` blocks 
 - The full pyramid, no partial pyramids: security (XSS, injection, auth boundaries), lint, contract (API shape, D1 schema parity), unit, integration (Worker D1 + forms security), API (Bruno on staging), E2E (Playwright).
 - A CI/CD testing ticket is attached to the story.
 - After first launch (`PRODUCTION_LIVE`), production deploy + smoke join the Done bar.
-- Keep Linear matched to `main` with evidence comments: In Progress at merge; when T1–T4 are green, comment the run id and move the story on. Check with `gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push`, then `gh run view <id> --json jobs`.
+- Keep Linear matched to `main` with evidence comments (owner, 2026-10-06: no need to ask first): In Progress at merge; when T1–T4 are green for the merge SHA, comment the run id and move it to Done. If any part cannot be verified from code or CI (owner actions, other repos), move it to In Review and say what was not verified. Check with `gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push`, then `gh run view <id> --json jobs`.
 
 ## Pull requests (Linear close-guard)
 

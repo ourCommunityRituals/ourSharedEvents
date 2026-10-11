@@ -104,6 +104,18 @@ Evidence:
 - **G4/G5:** cross-repo pointers stay stale until their own PRs. Agents in this repo read AGENTS.md directly.
 - **Agents' `tools:` lists aren't enforced at call time** (hub README, 2026-09-01). Read-only is by instruction, and CLAUDE.md says so.
 
+## Update, same day (reactive correction after loop 5)
+
+- **G2, answered provisionally from the owner's recorded direction** (memory, 2026-10-06: "Please keep linear as close to the code as possible"; no need to ask before each write; do not mark Done on evidence that can't be verified). AGENTS.md now says: In Progress at merge; Done once T1–T4 are green for the merge SHA, with the run id; In Review, saying what was not verified, when part of it can't be checked from code or CI. **Still needs the owner's yes.**
+- **New finding S1 (High, Dr of Security; existed before this branch, and the branch widened it): the CI reviewer took its instructions from the PR.**
+  - `claude-review.yml` loads its charter from the base branch so that "a PR must not be able to rewrite its own reviewer's instructions".
+  - But Claude Code in that job also loads `CLAUDE.md` (now `AGENTS.md` too) and `.claude/` (skills, agents, settings and hooks) from the PR checkout.
+  - Limited in practice: fork PRs get no secrets, and Copilot PRs need human approval (ADR-020).
+  - **Fixed:** a step restores those files from the base branch before the reviewer starts. Behavioral tests in `tests/integration/claude-review-switch.test.js` (3 added, 23/23) build a throwaway repo where the PR rewrites AGENTS.md and CLAUDE.md and adds a hook. Planted faults (skip the restore; skip the removal) each turn them red. Found while checking G3; the colon-free `git ls-tree` form keeps the step portable to Windows Git Bash.
+- **G3 changes shape.** The reviewer now reads `main`'s instructions, so the `@AGENTS.md` import can only be observed after merge. Check the first Claude review on a PR opened after this merges.
+
+Score: S1 is closed. G2's answer is written but not confirmed. **Still 84% until the owner answers G1 and G2** (94% after); G3 is confirmed after merge; G4 and G5 are proposed as accepted risks.
+
 ## Human gate (one pass for all five loops)
 
 1. Loops 1–5 above: do you accept the findings and fixes as recorded?
