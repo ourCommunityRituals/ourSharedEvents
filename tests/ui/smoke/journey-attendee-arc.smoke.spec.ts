@@ -122,8 +122,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     // by its address instead, as the PRE/LIVE/POST tests open the event page.
     const link = page.locator('[data-testid="email-signup-link"]');
     await expect(link).toHaveAttribute('href', new RegExp(`/events/${POST}/updates$`));
-    await page.goto(`/events/${POST}/updates`);
+    const res = await page.goto(`/events/${POST}/updates`);
+    // Say what came back, so a red run tells the Worker's answer from the
+    // edge's: Cloudflare sets cf-mitigated on a challenge or block it serves
+    // instead of the Worker (as trace-scan-staging.sh reads it for /q/).
+    const got =
+      `status ${res?.status() ?? 'none'}, ` +
+      `cf-mitigated ${res?.headers()['cf-mitigated'] ?? 'absent'}, ` +
+      `title "${await page.title()}", url ${page.url()}`;
     // The email form page renders an input — the loop is functionally closed
-    await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
+    await expect(
+      page.locator('input[type="email"], input[name="email"]').first(),
+      `the updates form shows an email box (${got})`
+    ).toBeVisible();
   });
 });
