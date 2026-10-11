@@ -29,6 +29,20 @@ async function backToListBy(page: Page, control: string): Promise<void> {
   await page.click(`[data-testid="${control}"]`);
   await expect.poll(onFilter, { message: 'focus lands on the list filter' }).toBe(true);
   await expect(page.locator('#events-heading')).toBeInViewport();
+  // In view and not under the selected event's bar, which stays at the top of
+  // the screen (three rows tall on a phone).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const top = document.getElementById('events-heading')!.getBoundingClientRect().top;
+          const bar = document.getElementById('event-context-bar');
+          const under = bar && !bar.hidden ? bar.getBoundingClientRect().bottom : 0;
+          return top >= under;
+        }),
+      { message: 'the list heading is not hidden under the bar' }
+    )
+    .toBe(true);
 }
 
 test.describe('admin: back to Your events', () => {

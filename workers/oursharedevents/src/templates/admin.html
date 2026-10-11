@@ -3486,9 +3486,16 @@
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
-            var list = document.getElementById('events-section');
-            if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
             if (typeof window.focusEventsList === 'function') window.focusEventsList();
+            // After the focus (which does not scroll): the list's top lands
+            // just below the selected event's bar, which stays at the top of
+            // the screen and on a phone is three rows tall.
+            var list = document.getElementById('events-section');
+            if (list) {
+              var bar = document.getElementById('event-context-bar');
+              var under = bar && !bar.hidden ? bar.getBoundingClientRect().bottom + 8 : 0;
+              window.scrollTo({ top: list.getBoundingClientRect().top + window.scrollY - under, behavior: 'smooth' });
+            }
           }
 
           function chooseAdvanced() {
@@ -7811,7 +7818,9 @@
         var hasDrafts = window._oseList.items.some(function (e) { return e.status === 'draft'; });
         if (window._oseList.status === 'all' && hasDrafts) window.setEventsFilter('draft');
         var first = document.querySelector('[data-action="events-filter"][aria-pressed="true"]');
-        if (first) first.focus();
+        // No scroll here: the caller places the list (a focus jump would land
+        // on the filter row and push the list's heading off the top).
+        if (first) first.focus({ preventScroll: true });
       };
       (function () {
         var mineEl = document.getElementById('events-filter-mine');
