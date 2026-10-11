@@ -164,7 +164,7 @@ describe('split-claude-md (transitional)', () => {
     expect(readFileSync(join(root, 'docs/brain/CONSTRAINTS.md'), 'utf-8')).toContain(
       '## 4. Section 4'
     );
-    expect(existsSync(join(root, 'docs/brain/.split-fingerprint.json'))).toBe(true);
+    expect(existsSync(join(root, 'docs/brain/.split-fingerprint.txt'))).toBe(true);
   });
 
   test('a change to a generated section (§3) is carried over silently', () => {

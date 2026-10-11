@@ -15,7 +15,7 @@
 //   docs/brain/STORY-FORMAT.md  <- §6 Story Format
 // The other parts (preamble, §5, §7, §8) were rewritten by hand into
 // AGENTS.md and the slim CLAUDE.md. Their hashes are kept in
-// docs/brain/.split-fingerprint.json; when main changes one of them the script
+// docs/brain/.split-fingerprint.txt; when main changes one of them the script
 // still writes the generated files, names the changed parts and exits 3, so the
 // change gets ported by hand. --accept records the new hashes after porting.
 //
@@ -45,7 +45,24 @@ const GENERATED = [
   { file: 'docs/brain/STORY-FORMAT.md', parts: ['6'], title: 'Story format (from CLAUDE.md §6)' },
 ];
 const HAND_PORTED = ['preamble', '5', '7', '8'];
-const FINGERPRINT = 'docs/brain/.split-fingerprint.json';
+// One "key hash" pair per line. The hashes are section fingerprints, not
+// secrets; each line carries detect-secrets' own allowlist marker so the S0
+// committed-secret gate skips it (16 hex characters read as high entropy).
+const FINGERPRINT = 'docs/brain/.split-fingerprint.txt';
+const PRAGMA = '# pragma: allowlist secret';
+
+function readFingerprint(file) {
+  const pairs = readFileSync(file, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.match(/^(\S+)\s+([0-9a-f]+)/))
+    .filter(Boolean);
+  return Object.fromEntries(pairs.map((m) => [m[1], m[2]]));
+}
+
+function writeFingerprint(file, fp) {
+  const lines = Object.entries(fp).map(([key, h]) => `${key} ${h}  ${PRAGMA}`);
+  writeFileSync(file, lines.join('\n') + '\n');
+}
 
 function args(argv) {
   const out = { root: process.cwd(), accept: false };
@@ -116,9 +133,9 @@ function main() {
 
   const now = Object.fromEntries(HAND_PORTED.map((p) => [p, hash(parts[p])]));
   const fpFile = join(opt.root, FINGERPRINT);
-  const before = existsSync(fpFile) ? JSON.parse(readFileSync(fpFile, 'utf8')) : null;
+  const before = existsSync(fpFile) ? readFingerprint(fpFile) : null;
   if (!before || opt.accept) {
-    writeFileSync(fpFile, JSON.stringify(now, null, 2) + '\n');
+    writeFingerprint(fpFile, now);
     process.stdout.write(`${before ? 'accepted' : 'recorded'} fingerprint of hand-ported parts\n`);
     process.exit(0);
   }
