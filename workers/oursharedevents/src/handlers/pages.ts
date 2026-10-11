@@ -924,21 +924,23 @@ function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): s
     </aside>`;
 }
 
+// Less text (owner 2026-10-11): a note says only what the choice asks of you.
+// Register names what it collects. Check-in keeps its promise only where its
+// label ("Check in at this event") does not already say "anonymously". Just
+// looking asks for nothing, so it has no note.
 const CHOICE_COPY = {
   en: {
-    registerNote: 'Save a spot. We ask for your name and an email.',
+    registerNote: 'Asks for your name and email.',
     checkinLabel: 'Count me in, anonymously',
-    checkinNote: 'One tap. You are counted, never named.',
+    checkinNote: 'Counted, never named.',
     lookingLabel: 'Just looking',
-    lookingNote: 'Nothing to fill in. See what else is on.',
     heading: 'How would you like to take part?',
   },
   es: {
-    registerNote: 'Guarda tu lugar. Pedimos tu nombre y un correo.',
+    registerNote: 'Pide tu nombre y correo.',
     checkinLabel: 'Cuenta conmigo, de forma anónima',
-    checkinNote: 'Un toque. Te contamos, nunca te nombramos.',
+    checkinNote: 'Te contamos, nunca te nombramos.',
     lookingLabel: 'Solo estoy mirando',
-    lookingNote: 'Nada que llenar. Mira qué más hay.',
     heading: '¿Cómo quieres participar?',
   },
 } as const;
@@ -970,11 +972,10 @@ function renderEventChoices(
     cls: string,
     link: string,
     label: string,
-    note: string,
+    note: string | null,
     noteId: string
   ) => `<div class="ose-choice">
-      <a class="ose-choice-btn${cls}" data-testid="${testid}"${link}${off} aria-describedby="${noteId}">${label}</a>
-      <p class="ose-choice-note" id="${noteId}">${note}</p>
+      <a class="ose-choice-btn${cls}" data-testid="${testid}"${link}${off}${note ? ` aria-describedby="${noteId}"` : ''}>${label}</a>${note ? `\n      <p class="ose-choice-note" id="${noteId}">${note}</p>` : ''}
     </div>`;
   const items: string[] = [
     choice(
@@ -1005,7 +1006,7 @@ function renderEventChoices(
         '',
         href('checkin'),
         t.checkinLabel,
-        t.checkinNote,
+        null,
         'choice-note-checkin'
       )
     );
@@ -1016,7 +1017,7 @@ function renderEventChoices(
       '',
       inert ? '' : ' href="/events"',
       t.lookingLabel,
-      t.lookingNote,
+      null,
       'choice-note-looking'
     )
   );
@@ -1513,9 +1514,10 @@ ${NEVER_WHO_CSS}
  * only renders for an event the organizer took live, which is what "verified
  * event link" means here (the QR check that moves it to active).
  */
+// Less text (owner 2026-10-11): the header names the host and nothing more.
 function renderTrustLine(row: PublicEventRow, testid: string): string {
   const host = esc(row.who_host);
-  return `<p class="ose-meta" data-testid="${testid}">${host ? `Hosted by ${host} &middot; ` : ''}No account needed to view &middot; Verified event link</p>`;
+  return host ? `<p class="ose-meta" data-testid="${testid}">Hosted by ${host}</p>` : '';
 }
 
 /**
