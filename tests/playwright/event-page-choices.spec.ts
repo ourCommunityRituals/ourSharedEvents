@@ -1,12 +1,14 @@
 /**
- * OSE-1518: the three plain choices on the public event page, in real layout.
+ * OSE-1518: the plain choices on the public event page, in real layout, and
+ * Back at the foot of the page (owner 2026-10-11, in place of "Just looking").
  *
  * The worker-pool spec (workers/oursharedevents/tests/event-page-choices.spec.ts)
  * proves the markup and the order. This proves what only a browser measures:
- * Register is the first button and runs the full width of the column, the three
+ * Register is the first button and runs the full width of the column, the
  * choices are tall enough to tap, Share and Add to calendar sit side by side
- * below them (a pair, not a stack), nothing scrolls sideways, and each choice
- * goes where it says.
+ * below them (a pair, not a stack), nothing scrolls sideways, each choice goes
+ * where it says, and Back goes back, or to the events list when there is
+ * nowhere to go back to.
  *
  * Runs against the local worker of playwright.mobile.config.ts and seeds its
  * own event through the admin API.
@@ -61,7 +63,7 @@ async function boxes<K extends string>(page: Page, ids: readonly K[]): Promise<R
 }
 
 for (const width of [375, 320]) {
-  test(`at ${width}px: Register is first and full width, the three choices are tappable`, async ({
+  test(`at ${width}px: Register is first and full width, the choices and Back are tappable`, async ({
     page,
   }) => {
     await open(page, width);
@@ -69,21 +71,22 @@ for (const width of [375, 320]) {
       'event-choices',
       'event-rsvp',
       'event-choice-checkin',
-      'event-choice-looking',
+      'event-back',
       'event-where',
     ] as const);
     const column = b['event-choices'];
     const register = b['event-rsvp'];
     const checkin = b['event-choice-checkin'];
-    const looking = b['event-choice-looking'];
+    const back = b['event-back'];
 
-    // First, and as wide as the column they sit in.
+    // First, and as wide as the column they sit in. Back is at the foot,
+    // the same width.
     expect(register.y).toBeLessThan(checkin.y);
-    expect(checkin.y).toBeLessThan(looking.y);
+    expect(checkin.y).toBeLessThan(back.y);
     expect(Math.abs(register.width - column.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(checkin.width - column.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(looking.width - column.width)).toBeLessThanOrEqual(1);
-    for (const choice of [register, checkin, looking])
+    expect(Math.abs(back.width - column.width)).toBeLessThanOrEqual(1);
+    for (const choice of [register, checkin, back])
       expect(choice.height).toBeGreaterThanOrEqual(MIN_TOUCH);
 
     // The facts come first: the choices are below the Where card.
@@ -96,17 +99,15 @@ for (const width of [375, 320]) {
   }) => {
     await open(page, width);
     const b = await boxes(page, [
-      'event-choice-looking',
+      'event-choice-checkin',
       'share-btn',
       'add-to-calendar-summary',
     ] as const);
-    const looking = b['event-choice-looking'];
+    const last = b['event-choice-checkin'];
     const share = b['share-btn'];
     const calendar = b['add-to-calendar-summary'];
 
-    expect(share.y, 'the pair is below the last choice').toBeGreaterThan(
-      looking.y + looking.height - 1
-    );
+    expect(share.y, 'the pair is below the last choice').toBeGreaterThan(last.y + last.height - 1);
     expect(Math.abs(share.y - calendar.y), 'one row, side by side').toBeLessThanOrEqual(4);
     expect(share.x + share.width).toBeLessThanOrEqual(calendar.x + 1);
     for (const half of [share, calendar]) {
@@ -129,10 +130,27 @@ test('each choice goes where it says', async ({ page }) => {
   await open(page, 375);
   await page.getByTestId('event-choice-checkin').click();
   await expect(page.getByTestId('checkin-submit')).toBeVisible();
+});
 
-  await open(page, 375);
-  await page.getByTestId('event-choice-looking').click();
-  await expect(page).toHaveURL(/\/events$/);
+test('Back, opened fresh from a code or a link, goes to the events list', async ({ context }) => {
+  const fresh = await context.newPage();
+  await open(fresh, 375);
+  expect(await fresh.evaluate(() => document.referrer), 'nothing to go back to').toBe('');
+  await fresh.getByTestId('event-back').click();
+  await expect(fresh).toHaveURL(/\/events$/);
+  await fresh.close();
+});
+
+test('Back, reached from another page, goes back to that page', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/privacy');
+  // Follow a link the way a visitor does, so the event page has a referrer.
+  await page.evaluate((id) => {
+    window.location.href = `/events/${encodeURIComponent(id)}`;
+  }, eventId);
+  await expect(page.getByTestId('event-back')).toBeVisible();
+  await page.getByTestId('event-back').click();
+  await expect(page).toHaveURL(/\/privacy$/);
 });
 
 test('the choices make no request that carries a cookie or an identity', async ({

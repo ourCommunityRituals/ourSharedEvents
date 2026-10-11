@@ -9,8 +9,9 @@
  * public-event-stakeholder-surfaces.spec.ts. This spec adds what sits in the ask:
  *
  *   Register first and full width (pre-event) / Check in first (on now),
- *   "count me in anonymously" (the check-in form), "just looking" (a way out
- *   that asks for nothing), then Share and Add to calendar as a pair BELOW.
+ *   "count me in, anon" (the check-in form), then Share and Add to calendar as
+ *   a pair BELOW. "Just looking" became Back at the foot of the page (owner
+ *   2026-10-11): back to the last page, else the events list.
  *
  * Constraint kept: "plant my flag" is a link out to ourWKRP at most, never a
  * profile flow inside OSE, so the choices hold no form field of their own.
@@ -78,16 +79,16 @@ const tag = (html: string, t: string) =>
   html.match(new RegExp(`<[a-z]+ [^>]*data-testid="${t}"[^>]*>`))?.[0] ?? '';
 
 describe('OSE-1518 three plain choices (before the event)', () => {
-  test('Register first, then count me in anonymously, then just looking, in that order', async () => {
+  test('Register first, then count me in, anon; Just looking is no longer a choice', async () => {
     await seed({ id: 'evt_1518_pre' });
     const html = await page('/events/evt_1518_pre');
     expect(tid(html, 'event-choices'), '[OSE-1518] the choices block renders').toBeGreaterThan(-1);
     const register = tid(html, 'event-rsvp');
     const checkin = tid(html, 'event-choice-checkin');
-    const looking = tid(html, 'event-choice-looking');
     expect(register, 'Register link').toBeGreaterThan(tid(html, 'event-choices'));
     expect(checkin, 'check-in follows Register').toBeGreaterThan(register);
-    expect(looking, 'just looking comes last').toBeGreaterThan(checkin);
+    expect(tid(html, 'event-choice-looking')).toBe(-1);
+    expect(html).not.toContain('Just looking');
   });
 
   test('the labels are short: "Register" and "Count me in, anon" (owner 2026-10-11)', async () => {
@@ -106,15 +107,14 @@ describe('OSE-1518 three plain choices (before the event)', () => {
     const html = await page('/events/evt_1518_primary');
     expect(tag(html, 'event-rsvp')).toContain('ose-choice-primary');
     expect(tag(html, 'event-choice-checkin')).not.toContain('ose-choice-primary');
-    expect(tag(html, 'event-choice-looking')).not.toContain('ose-choice-primary');
+    expect(tag(html, 'event-back')).not.toContain('ose-choice-primary');
   });
 
-  test('each choice goes where it says: register form, check-in form, the events list', async () => {
+  test('each choice goes where it says: register form, check-in form', async () => {
     await seed({ id: 'evt_1518_links' });
     const html = await page('/events/evt_1518_links');
     expect(tag(html, 'event-rsvp')).toContain('href="/events/evt_1518_links/register"');
     expect(tag(html, 'event-choice-checkin')).toContain('href="/events/evt_1518_links/checkin"');
-    expect(tag(html, 'event-choice-looking')).toContain('href="/events"');
   });
 
   test('the choices follow the facts and come before Share and Add to calendar, which come before Why', async () => {
@@ -132,7 +132,7 @@ describe('OSE-1518 three plain choices (before the event)', () => {
     );
   });
 
-  test('a poster scan context keeps its form first and still offers the three choices', async () => {
+  test('a poster scan context keeps its form first and still offers register and check-in', async () => {
     await seed({ id: 'evt_1518_ctx' });
     const html = await page('/events/evt_1518_ctx?type=survey&deployment=pd_1518');
     expect(tag(html, 'event-rsvp')).toContain('/evt_1518_ctx/survey?deployment=pd_1518');
@@ -141,7 +141,7 @@ describe('OSE-1518 three plain choices (before the event)', () => {
       '/evt_1518_ctx/register?deployment=pd_1518'
     );
     expect(tag(html, 'event-choice-checkin')).toContain('/evt_1518_ctx/checkin?deployment=pd_1518');
-    expect(tid(html, 'event-choice-looking')).toBeGreaterThan(-1);
+    expect(tid(html, 'event-back')).toBeGreaterThan(-1);
   });
 
   test('never a profile flow inside OSE: the choices hold no field of their own', async () => {
@@ -167,7 +167,7 @@ describe('OSE-1518 three plain choices (before the event)', () => {
     const html = renderPreEventHtml(row, 'https://t.test/events/evt_1518_prev', undefined, {
       preview: true,
     });
-    for (const t of ['event-rsvp', 'event-choice-checkin', 'event-choice-looking']) {
+    for (const t of ['event-rsvp', 'event-choice-checkin', 'event-back']) {
       const open = tag(html, t);
       expect(open, `${t} renders`).not.toBe('');
       expect(open).toContain('data-preview-inert="true"');
@@ -178,17 +178,76 @@ describe('OSE-1518 three plain choices (before the event)', () => {
   });
 });
 
+describe('Back at the foot of the event page (owner 2026-10-11)', () => {
+  test('before the event: Back is the last thing above the anonymity line', async () => {
+    await seed({ id: 'evt_back_pre' });
+    const html = await page('/events/evt_back_pre');
+    const back = tid(html, 'event-back');
+    expect(back, 'Back renders').toBeGreaterThan(-1);
+    expect(back, 'below Share and Add to calendar').toBeGreaterThan(tid(html, 'event-actions'));
+    expect(back, 'below the deeper detail').toBeGreaterThan(tid(html, 'event-why'));
+    expect(back, 'above the anonymity line').toBeLessThan(
+      html.indexOf('Never who, only how many.')
+    );
+    expect(html.match(/data-testid="event-back"[^>]*>([^<]*)<\/a>/)?.[1]).toBe('Back');
+  });
+
+  test('with no page to go back to, Back opens the events list; with one, it goes back', async () => {
+    await seed({ id: 'evt_back_href' });
+    const html = await page('/events/evt_back_href');
+    expect(tag(html, 'event-back')).toContain('href="/events"');
+    const script =
+      html
+        .split(/<script\b/i)
+        .map((c) => c.split(/<\/script/i)[0])
+        .find((c) => c.includes('[data-testid="event-back"]')) ?? '';
+    expect(script, 'the Back script ships with the page').toContain('history.back()');
+    expect(script).toContain('history.length<2');
+    expect(script, 'no referrer means nothing to go back to').toContain('!document.referrer');
+  });
+
+  test('while the event is on, Back sits in the same place', async () => {
+    await seed({ id: 'evt_back_live', start: inDays(-1), end: inDays(1) });
+    const html = await page('/events/evt_back_live');
+    const back = tid(html, 'event-back');
+    expect(back).toBeGreaterThan(tid(html, 'event-actions'));
+    expect(back).toBeLessThan(html.indexOf('Never who, only how many.'));
+  });
+
+  test('Spanish: Volver; the draft preview switches it off', async () => {
+    const { renderPreEventHtml } = await import('../src/handlers/pages');
+    const row = {
+      id: 'evt_back_es',
+      brand_id: 'root',
+      title: 'Noche',
+      status: 'active',
+      start_date: inDays(3),
+      location: 'The Venue',
+    } as unknown as Parameters<typeof renderPreEventHtml>[0];
+    const es = renderPreEventHtml(row, 'https://t.test/events/evt_back_es', undefined, {
+      lang: 'es',
+    });
+    expect(es.match(/data-testid="event-back"[^>]*>([^<]*)<\/a>/)?.[1]).toBe('Volver');
+    const prev = renderPreEventHtml(row, 'https://t.test/events/evt_back_es', undefined, {
+      preview: true,
+    });
+    expect(tag(prev, 'event-back')).toContain('data-preview-inert="true"');
+    expect(tag(prev, 'event-back')).not.toContain('href=');
+  });
+});
+
 describe('OSE-1518 three plain choices (while the event is on)', () => {
-  test('check in first, then register, then just looking', async () => {
+  test('check in first, then register, then Back at the foot', async () => {
     await seed({ id: 'evt_1518_now', start: inDays(-1), end: inDays(1) });
     const html = await page('/events/evt_1518_now');
     expect(html, 'the live render is the one under test').toContain('event-title-live');
     const checkin = tid(html, 'event-checkin');
     const register = tid(html, 'event-choice-register');
-    const looking = tid(html, 'event-choice-looking');
+    const back = tid(html, 'event-back');
     expect(tid(html, 'event-choices')).toBeGreaterThan(-1);
     expect(register, 'register follows check-in').toBeGreaterThan(checkin);
-    expect(looking).toBeGreaterThan(register);
+    expect(back).toBeGreaterThan(tid(html, 'event-actions'));
+    expect(tid(html, 'event-choice-looking')).toBe(-1);
     expect(tag(html, 'event-checkin')).toContain('ose-choice-primary');
     expect(tag(html, 'event-choice-register')).toContain('href="/events/evt_1518_now/register"');
   });
@@ -211,13 +270,12 @@ describe('less text on the event page (owner 2026-10-11): each choice says only 
     return html.match(new RegExp(`<p class="ose-choice-note" id="${id}">([^<]*)</p>`))?.[1] ?? null;
   };
 
-  test('before the event: Register says what it asks for; the other two carry no note', async () => {
+  test('before the event: Register says what it asks for; check-in carries no note', async () => {
     await seed({ id: 'evt_less_pre' });
     const html = await page('/events/evt_less_pre');
     expect(noteOf(html, 'event-rsvp')).toBe('Asks for your name and email.');
     // The label already says "anon", so a note would repeat it.
     expect(noteOf(html, 'event-choice-checkin')).toBeNull();
-    expect(noteOf(html, 'event-choice-looking')).toBeNull();
     expect(html).not.toContain('Nothing to fill in');
     expect(html).not.toContain('Save a spot.');
   });
@@ -227,7 +285,6 @@ describe('less text on the event page (owner 2026-10-11): each choice says only 
     const html = await page('/events/evt_less_live');
     expect(noteOf(html, 'event-checkin')).toBe('Counted, never named.');
     expect(noteOf(html, 'event-choice-register')).toBe('Asks for your name and email.');
-    expect(noteOf(html, 'event-choice-looking')).toBeNull();
   });
 
   test('the header names the host and nothing else', async () => {
