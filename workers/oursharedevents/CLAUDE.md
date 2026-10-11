@@ -1,12 +1,9 @@
 # CLAUDE.md — Worker scope: `workers/oursharedevents/`
 
 > **Scope guard.** This is the **worker-local** brain for the OSE Cloudflare
-> Worker. The full product/company context (phases, scrum POVs, roadmap,
-> ecosystem) lives in the **repo-root** `../../CLAUDE.md` — do **not** load that
-> 300+-line product file for worker-level ops. Read this file for the worker's
-> hard boundaries; reach for the root file only when you need product context.
-> Added under COST-403 / OSE-785 (Cost Sustainability — Hygiene) to stop the
-> worker inheriting the whole product file by default.
+> Worker. The repo-wide contract is `../../AGENTS.md` (invariants, approvals,
+> Definition of Done); product context is in `../../docs/brain/`. Read this file
+> for the worker's hard boundaries. Added under COST-403 / OSE-785.
 
 ---
 
@@ -90,7 +87,7 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
   `tests/e2e/0-architecture/*.invariant.spec.ts` and gate **every** PR/push via
   the T0 Gate `invariants` shard (OSE-350). A new structural invariant spec
   must be listed in that step (enforced by `tests/integration/infra-consistency.test.js`).
-- **Merged vs Done:** see root `CLAUDE.md` §5, "Two stages: Merged, then Done"
+- **Merged vs Done:** see `../../AGENTS.md`, "Definition of Done: two stages"
   (OSE-1443). That is the only definition, so don't restate it here. A green
   local `tsc`/vitest run counts as neither.
 
@@ -123,6 +120,7 @@ of the PR body). This silently closed multi-part stories 3× in one day
 
 ## Where the rest lives
 
-- Product/company context, scrum POVs, roadmap → root `../../CLAUDE.md`.
-- Work queue → root `../../STORIES.md`.
+- Repo contract → `../../AGENTS.md`; product context → `../../docs/brain/PRODUCT.md`;
+  role current states → `../../docs/brain/ROLE-STATE.md`.
+- Work queue → Linear (team OSE); `../../STORIES.md` is historical.
 - Security baselines, threat ledger, CONFORMANCE → `docs/security/`.
