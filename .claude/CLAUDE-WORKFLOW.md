@@ -40,7 +40,7 @@
 10. Update STORIES.md      → mark IN PROGRESS
 ```
 
-See CLAUDE.md §5 "The Loop" for full protocol. The ADR/code reconciliation step is mandatory whenever the story touches architecture, behavior contracts, invariants, or CI policy.
+See `AGENTS.md` (Definition of Done) and the root `CLAUDE.md` session protocol. The ADR/code reconciliation step is mandatory whenever the story touches architecture, behavior contracts, invariants, or CI policy.
 
 ---
 
