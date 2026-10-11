@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-11 — 611 ids.
+ * Generated 2026-10-11 — 614 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -536,7 +536,7 @@
       'display-wall-sponsor-logo',
       'display-wall-sponsor-name',
     ]),
-    // poster.html — 39 ids
+    // poster.html — 42 ids
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
@@ -546,6 +546,8 @@
       'poster-card',
       'poster-card-header',
       'poster-container',
+      'poster-directions',
+      'poster-directions-summary',
       'poster-empty',
       'poster-error',
       'poster-event-nav',
@@ -562,6 +564,7 @@
       'poster-meta-venue',
       'poster-nav-events',
       'poster-open-map',
+      'poster-open-map-apple',
       'poster-org',
       'poster-page-title',
       'poster-print',

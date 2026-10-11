@@ -1343,7 +1343,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 6
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/geo.spec.ts",
