@@ -399,12 +399,6 @@
         color: var(--text);
         font-size: 1.25rem;
       }
-      .admin-intro p,
-      .section-help {
-        color: var(--text-muted);
-        font-size: 0.92rem;
-        line-height: 1.5;
-      }
       .section-head {
         display: flex;
         align-items: flex-start;
@@ -416,14 +410,6 @@
         margin: 0.1rem 0 0.25rem;
         color: var(--text);
         font-size: 1.15rem;
-      }
-      .section-eyebrow {
-        margin: 0;
-        color: var(--text-muted);
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
       }
       #events-section {
         margin-top: 1rem;
@@ -2420,7 +2406,6 @@
         <div class="wizard-main">
         <!-- Step 1 — the only must-answer questions. Date pre-fills to today. -->
         <div class="wizard-step active" id="wizard-step-1" data-testid="wizard-step-1">
-          <p class="wizard-step-help">Tell us about your event. You can change any of this later.</p>
           <div class="create-form">
             <div class="full-width">
               <label for="wizard-event-name">What's it called? <span class="required-star">*</span></label>
@@ -2529,9 +2514,7 @@
               </button>
             </div>
             <p class="wizard-publish-note" data-testid="wizard-publish-note">
-              If it's your home, this is the choice that matters. You can change it
-              later &mdash; but anything already public may have been copied, so it's
-              worth getting right now.
+              At home? Keep it off the map. Anything already public may have been copied.
             </p>
           </div>
         </div>
@@ -2624,7 +2607,7 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. They start working for guests when you publish in the next step. Until then, use Preview to see the page and poster exactly as guests will.</p>
+          <p class="wizard-step-help">Your links. They work once you publish. Use Preview to check them first.</p>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
@@ -2666,7 +2649,7 @@
                Saves on change through the same PUT { settings } as that card. -->
           <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
             <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
-            <p class="wizard-step-help">A TV at the venue shows these screens in turn. You can change it any time. Press Show me to watch it cycle.</p>
+            <p class="wizard-step-help">The TV at the venue shows these in turn.</p>
             <p><strong>Your TV will show:</strong> <span data-testid="wizard-tv-summary"></span></p>
             <!-- Optional: a demo plays only when asked; nothing moves on its own. -->
             <button type="button" class="wizard-copy-btn" data-testid="wizard-tv-demo-toggle">Show me</button>
@@ -2684,7 +2667,7 @@
               <label class="create-publish-label" for="wizard-tv-speed-30"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-30" data-testid="wizard-tv-speed" value="30" /><span>Slow: 30 seconds</span></label>
             </div>
             <p class="create-msg" data-testid="wizard-tv-msg" role="status" aria-live="polite"></p>
-            <p class="wizard-step-help">Want a different order, or league schedule links? Use the event's TV display card after you press Done.</p>
+            <p class="wizard-step-help">More TV options are in the event's TV display card.</p>
           </section>
         </div>
 
@@ -2707,8 +2690,7 @@
                404'd; the state machine had no driver from the UI. -->
           <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
             <p class="wizard-step-help" id="wizard-go-live-help">
-              Right now this is a <strong>draft</strong>: your links won't work until you publish.
-              Publish when the details are right — you can take it back offline any time.
+              This is a <strong>draft</strong>. Links work once you publish. You can take it offline any time.
             </p>
             <button
               type="button"
@@ -2737,7 +2719,7 @@
             <li id="wizardCheckReport">📊 After the event, share the results report</li>
           </ul>
           <p class="wizard-step-help muted-sm">
-            Not ready yet? Press Done — it stays in <em>Your events</em> as a draft. Drafts nobody touches for 30 days are archived automatically so the list stays clean.
+            Not ready? Press Done. It stays a draft in <em>Your events</em>. Drafts nobody touches for 30 days are archived automatically.
           </p>
         </div>
 
@@ -2785,7 +2767,7 @@
             <span data-testid="wizard-preview-where"></span>
             <span class="muted-sm" data-testid="wizard-preview-map"></span>
           </div>
-          <p class="wizard-step-help muted-sm">The top of your event page. Drawn on this screen as you type; nothing is public until you publish.</p>
+          <p class="wizard-step-help muted-sm">Nothing is public until you publish.</p>
         </aside>
         </div>
       </section>
@@ -4214,11 +4196,6 @@
 
       <section class="admin-intro" data-testid="admin-intro" aria-labelledby="admin-intro-heading">
         <h2 id="admin-intro-heading">Manage events from one clear workspace</h2>
-        <p>
-          Choose an event in Your events to edit it, or start a new one below the
-          list. Its cards follow: dashboard, links, reg &amp; forms, sponsors, posters
-          and TV. The bar at the top jumps to each one.
-        </p>
       </section>
 
       <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
@@ -4251,11 +4228,7 @@
       <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
       <div class="section-head">
         <div>
-          <p class="section-eyebrow">Event workspace</p>
           <h2 id="events-heading">Your events</h2>
-          <p class="section-help">
-            Filter the list, select one event, then manage only that event in the cards below.
-          </p>
         </div>
       </div>
       <!-- Status panel — hydrates from ose:event-selected like the four
@@ -4364,7 +4337,7 @@
              or edit an event is not scrolled past a new-event form. A first
              visit with no events keeps it open. See the script after this card. -->
         <p class="muted-sm" data-testid="create-event-collapsed-note" hidden>
-          To edit an event, choose it in Your events above. To start another, press the button.
+          To edit an event, pick it above.
         </p>
         <button
           type="button"
@@ -4952,39 +4925,31 @@
     <div class="surface-cards" id="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
       <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
-        <p>Print-ready event poster with QR codes</p>
         <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
         <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
           Copy URL
         </button>
-        <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
       </div>
       <div class="card surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
         <h3>TV Display</h3>
-        <p>Bar TV / kiosk live event display</p>
         <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
         <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
           Copy URL
         </button>
-        <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
       </div>
       <div class="card surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
         <h3>Public Page</h3>
-        <p>Customer-facing events listing</p>
         <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
         <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
           Copy URL
         </button>
-        <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
       </div>
       <div class="card surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
         <h3>Shared Report</h3>
-        <p>Post-event analytics dashboard</p>
         <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
         <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
           Copy URL
         </button>
-        <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
       </div>
     </div>
 
@@ -5630,9 +5595,8 @@
                 data-testid="spon-covenant-note"
                 aria-labelledby="spon-placement-label"
               >
-                Uniform placement — same size &amp; slot on every surface. Tier sets a
-                <strong>capped, locally-floored share of rotation frequency</strong>
-                (never a bigger logo, better slot, or fixed position).
+                Same size and slot for every sponsor. Tier sets only a
+                <strong>capped, locally-floored share of rotation</strong>.
               </p>
               <span
                 class="is-local-pill"
@@ -7383,9 +7347,6 @@
         <h2 class="mcard-title">TV display</h2>
       </div>
       <div class="mcard-body">
-        <p class="pd-target" data-testid="tv-intro">
-          What the TV at the venue shows, in order, and for how long. Screens with nothing to show are skipped.
-        </p>
         <h3 class="pd-card-title" id="tv-screens-title">Screens, in order</h3>
         <ol class="pc-list" id="tv-screens" data-testid="tv-screens" aria-labelledby="tv-screens-title"></ol>
         <div class="create-form">
@@ -7395,8 +7356,7 @@
           </div>
           <h3 class="pd-card-title full-width" id="tv-league-title">League links</h3>
           <p class="pd-target full-width" data-testid="tv-league-hint">
-            Paste where the league already keeps it: a Google Sheet, an Excel link, any https page (up to 154 bytes once encoded, so
-            it fits in a QR code: plain letters and digits are 1 byte each, spaces and accented letters count for more). Leave blank to skip.
+            A Google Sheet, Excel or any https link. Leave blank to skip.
           </p>
           <div class="full-width">
             <label for="tv-league-schedule">Schedule</label>

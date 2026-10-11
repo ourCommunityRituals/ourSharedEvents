@@ -79,13 +79,12 @@ if (OSE_TPL) {
     const report = readFileSync(join(OSE_TPL, 'shared-report.html'), 'utf8');
 
     assert.match(admin, /data-testid="admin-intro"/, 'admin intro present');
-    assert.match(admin, /Manage events from one clear workspace/, 'admin intro copy present');
-    assert.match(
-      admin,
-      /class="section-eyebrow">Event workspace<\/p>/,
-      'admin event workspace label present'
-    );
-    assert.match(admin, /Filter the list, select one event/, 'admin event help copy present');
+    assert.match(admin, /Manage events from one clear workspace/, 'admin intro heading present');
+    // Owner 2026-10-10: less to read. The heading stays; the instructions under
+    // it and the "Event workspace" label over "Your events" are gone.
+    assert.doesNotMatch(admin, /Its cards follow: dashboard/, 'admin intro has no instructions');
+    assert.doesNotMatch(admin, /class="section-eyebrow">Event workspace/, 'no extra label');
+    assert.doesNotMatch(admin, /Filter the list, select one event/, 'no event help line');
 
     assert.match(report, /data-testid="report-intro"/, 'report intro present');
     assert.match(report, /data-testid="report-toolbar"/, 'report export toolbar present');
