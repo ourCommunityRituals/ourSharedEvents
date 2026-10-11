@@ -273,6 +273,8 @@ export const NODE_SPECS = [
   // The admin Shared Report Links panel: the page's own scripts run in jsdom as
   // classic scripts, with a stubbed fetch that answers the way the mint route does.
   'tests/admin-mint-report-link.spec.ts',
+  // Owner 2026-10-11: copy registrants' emails (jsdom, the page's own scripts).
+  'tests/admin-registrant-contacts.spec.ts',
   // Every name a template's inline script uses is declared where that script
   // can see it: the TypeScript checker over each template's scripts (node:fs).
   'tests/template-script-names.spec.ts',

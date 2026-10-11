@@ -109,11 +109,13 @@ function privacyNotice(formType: string, legalTier = 1): string {
         'Your email is encrypted at rest and automatically deleted after <strong>30</strong> days.';
       break;
     default: // register
+      // Owner 2026-10-11: the email is optional and only lets the organizer
+      // reach you about this event (a new date, a cancellation).
       purpose =
-        'We collect your name (required) and email (optional) to register you for this event.';
-      legalBasis =
-        'GDPR Art. 6(1)(a) — your <strong>consent</strong>. Your data is <strong>deleted when the event ends</strong>.';
-      retention = 'Registration data is deleted automatically when the event ends.';
+        'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.';
+      legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
+      retention =
+        'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted after 90 days.';
   }
 
   let addenda = '';
@@ -128,7 +130,11 @@ function privacyNotice(formType: string, legalTier = 1): string {
   }
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    <p class="privacy-summary" data-testid="privacy-summary">We never store your name once the event ends.</p>
+    <p class="privacy-summary" data-testid="privacy-summary">${
+      formType === 'register'
+        ? 'Your name and email are cleared the day after the event.'
+        : 'We never store your name once the event ends.'
+    }</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Privacy details</summary>
       <p>
@@ -156,6 +162,7 @@ const FORM_CSS = `
   .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
   .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
   .form-intro { color: var(--text-muted); font-size: .9rem; margin-bottom: 1rem; }
+  .field-note { color: var(--text-muted); font-size: .85rem; margin: -.25rem 0 .4rem; }
   label { display: block; font-size: .85rem; font-weight: 500; color: var(--text); margin-bottom: .25rem; }
   /* Walkthrough 2026-09-03: inputs measured 42px at 390px — under the 44px floor
      (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics.
@@ -458,7 +465,8 @@ function registrationForm(
         <label for="name">Your name</label>
         <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
         <label for="email">Email (optional)</label>
-        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="error-msg" />
+        <p class="field-note" id="register-email-note" data-testid="register-email-note">Only to tell you if plans change.</p>
+        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="register-email-note error-msg" />
         <button type="submit" data-testid="register-submit">Register</button>
         ${privacyNotice('register', legalTier)}
       </form>
@@ -605,7 +613,7 @@ function emailSignupForm(
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
-      <p class="form-intro">Get notified about future events. We'll never share your email.</p>
+      <p class="form-intro">One email when something's coming up. Never shared.</p>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="email-form">
         ${hiddenDeployment}

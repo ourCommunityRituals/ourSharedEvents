@@ -113,10 +113,26 @@ describe('BE-9 L1: privacy notice present on all 4 form types (including check-i
 });
 
 describe('BE-9 L1: form-type-specific notice content', () => {
+  // Owner 2026-10-11: the email is optional and is only for reaching the
+  // person about this event; name and email are cleared the day after it.
   test('register form notice mentions consent and name/email retention', async () => {
     const html = await formHtml('register');
     expect(html).toContain('consent');
-    expect(html).toContain('deleted when the event ends');
+    expect(html).toContain('cleared the day after the event');
+    expect(html).not.toContain('deleted when the event ends');
+  });
+
+  test('the updates form says what it sends in one short line', async () => {
+    const html = await formHtml('email');
+    expect(html).toContain(
+      '<p class="form-intro">One email when something\'s coming up. Never shared.</p>'
+    );
+  });
+
+  test('register form says what the optional email is for, in one line', async () => {
+    const html = await formHtml('register');
+    expect(html).toContain('<label for="email">Email (optional)</label>');
+    expect(html).toContain('data-testid="register-email-note">Only to tell you if plans change.<');
   });
 
   test('checkin form notice states anonymous-only collection', async () => {

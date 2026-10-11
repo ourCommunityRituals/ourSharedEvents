@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 98, forms 14 to 17
+# Production migration plan: main 77 to 98, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0098, forms 0015–0017.
+Covers: main 0078–0098, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -12,7 +12,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
 | Main (`ocr-db-production`)        | 77               | 98               | 21       |
-| Forms (`ocr-forms-db-production`) | 14 (see note)    | 17               | 3        |
+| Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
 - The forms level of 14 is the last one written down (2026-09-21). It may be 15. The
@@ -116,13 +116,14 @@ a line in this document.
 | `0097_event_type_watch_party.sql`                | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.  | Yes  |
 | `0098_drop_subscribers_from_anonymous_db.sql`    | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.    | Yes  |
 
-## Forms database, 0015 to 0017
+## Forms database, 0015 to 0018
 
-| File                              | What it does                                                                        | Rows |
-| --------------------------------- | ----------------------------------------------------------------------------------- | ---- |
-| `0015_checkin_walk_in_count.sql`  | Adds `checkin_counts.walk_in_count`, a count of walk-in check-ins. Default 0.       | No   |
-| `0016_scrub_raw_anonymous_id.sql` | Clears the raw anonymous id from the four form tables. Rows and other columns stay. | Yes  |
-| `0017_subscribers.sql`            | Creates `subscribers`, the landing-page email list, in the forms database.          | No   |
+| File                                    | What it does                                                                                                  | Rows |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---- |
+| `0015_checkin_walk_in_count.sql`        | Adds `checkin_counts.walk_in_count`, a count of walk-in check-ins. Default 0.                                 | No   |
+| `0016_scrub_raw_anonymous_id.sql`       | Clears the raw anonymous id from the four form tables. Rows and other columns stay.                           | Yes  |
+| `0017_subscribers.sql`                  | Creates `subscribers`, the landing-page email list, in the forms database.                                    | No   |
+| `0018_registration_email_encrypted.sql` | Adds `form_registrations.attendee_email_encrypted`, so an organizer can reach a registrant who left an email. | No   |
 
 ## The migrations that write or remove rows
 
@@ -252,7 +253,7 @@ The deploy job does the first three itself and goes red if any fails.
    Both say `No migrations to apply`.
 
 2. **The level.** Expected: `0098_drop_subscribers_from_anonymous_db.sql` and `98`;
-   then `0017_subscribers.sql` and `17`.
+   then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash
    npx wrangler d1 execute DB --env production --remote --command "SELECT (SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1) AS latest, (SELECT COUNT(*) FROM d1_migrations) AS applied;"

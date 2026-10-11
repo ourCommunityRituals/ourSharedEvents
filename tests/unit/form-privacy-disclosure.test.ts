@@ -21,7 +21,8 @@ describe('OSE-R-009 — form privacy notice disclosure', () => {
     const detailsSummary = details?.querySelector('summary');
 
     expect(notice).not.toBeNull();
-    expect(summary?.textContent).toBe('We never store your name once the event ends.');
+    // Owner 2026-10-11: what the code does, the night after the day after the event.
+    expect(summary?.textContent).toBe('Your name and email are cleared the day after the event.');
     expect(detailsSummary?.textContent).toBe('Privacy details');
     expect(details?.hasAttribute('open')).toBe(false);
     expect(details?.textContent).toContain('GDPR Art. 6(1)(a)');

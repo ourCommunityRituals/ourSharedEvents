@@ -268,6 +268,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/admin-registrant-contacts.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-registrations-paging.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -2207,6 +2214,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/registrant-contact.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/registration-self-delete.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2358,7 +2372,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 33
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/seo-canonical-schema.spec.ts",
