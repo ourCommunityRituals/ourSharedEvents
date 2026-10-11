@@ -100,15 +100,14 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
         <h2 data-testid="discover-title">${esc(e.title)}</h2>
         <p class="sh-when">${esc(humanDate(e.start_date))}</p>
         <p class="sh-meta">${e.location ? esc(e.location) : ''}${Number(e.near) === 1 ? `${e.location ? ' · ' : ''}<span class="sh-state live" data-testid="discover-near">Near you</span>` : ''}</p>
-        <p class="sh-why">Asking tells the organizer you would like to back this event. Your name appears only if they say yes.</p>
         <div class="sh-actions"><button type="button" class="btn btn-primary" data-action="sponsor-request" data-event-id="${esc(e.id)}" data-testid="discover-ask">Ask to join</button></div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
       </article>`
   );
   parts.push(
     cards.length
-      ? `<p class="sh-section-title">Events you could back</p><div class="sh-list" data-testid="sponsor-home-discover">${cards.join('')}</div>`
-      : `<p class="sh-section-title">Events you could back</p><div class="sh-empty" data-testid="sponsor-home-discover-empty">Nothing new to ask about right now. When an organizer publishes an upcoming event, it shows up here.</div>`
+      ? `<p class="sh-section-title">Events you could back</p><p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" data-testid="sponsor-home-discover">${cards.join('')}</div>`
+      : `<p class="sh-section-title">Events you could back</p><div class="sh-empty" data-testid="sponsor-home-discover-empty">Nothing new right now.</div>`
   );
   return parts.join('');
 }
@@ -209,7 +208,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
         <p class="sh-when" data-testid="placement-when">${esc(humanDate(p.start_date))}</p>
         <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
         <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
-        ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting shows your name on this event's page, poster, and live screen.</p>` : ''}
+        ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting puts your name on this event's page, poster and TV screen.</p>` : ''}
         ${(() => {
           // Pre-event window: an accepted, listed, not-yet-started placement
           // shows how far the posters carrying this sponsor's name are reaching.
@@ -226,7 +225,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
 
   const list =
     cards.length === 0
-      ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>`
+      ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet.</div>`
       : `<p class="sh-section-title">Your placements</p><div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`;
 
   // injectMarker (not String.replace) so a sponsor name or placement markup
