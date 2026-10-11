@@ -2029,6 +2029,7 @@
       </h1>
       <span>Admin</span>
       <nav aria-label="More admin pages">
+        <button type="button" class="btn btn-link" data-action="go-your-events" data-testid="admin-nav-your-events" hidden>Your events</button>
         <a class="btn btn-link" href="/api/v2/admin/screens/logs" data-testid="admin-nav-logs">Logs</a>
         <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="admin-nav-settings">Settings</a>
       </nav>
@@ -2067,6 +2068,9 @@
         var ACTIONS = {
           'ecb-jump': function (el) {
             if (window.ecbJump) window.ecbJump(argOf(el, 'target'));
+          },
+          'go-your-events': function () {
+            if (window.oseGoYourEvents) window.oseGoYourEvents();
           },
           'copy-url': function (el) {
             var fn = window.copyUrl;
@@ -2251,6 +2255,7 @@
       >
         <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
         <nav class="ecb-nav" aria-label="Jump to management card">
+          <button type="button" data-testid="ecb-nav-your-events" data-action="go-your-events">Your events</button>
           <button type="button" data-testid="ecb-nav-dashboard" data-action="ecb-jump" data-target="dashboard-card">Dashboard</button>
           <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Links</button>
           <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Reg &amp; Forms</button>
@@ -3401,7 +3406,53 @@
            * reaches. The chooser's job is to make the path VISIBLE from the
            * front door, not to build a second one.
            */
+          // Leaving the front door for the dashboard is one history entry, so
+          // the browser's Back brings the front door back instead of leaving
+          // admin (owner, 2026-10-11: "once in the full admin screen, you are
+          // stuck"). Only from the front door's own entry: moving around the
+          // dashboard adds nothing.
+          function leaveDoor() {
+            try {
+              if (history.state && history.state.oseAdmin === 'chooser') {
+                history.pushState({ oseAdmin: 'dashboard' }, '', location.pathname + location.search);
+              }
+            } catch (e) {
+              /* see pushWizardStep */
+            }
+          }
+          function showDoor() {
+            document.body.classList.remove('wizard-active');
+            document.body.classList.add('chooser-active');
+            document.getElementById('launch-wizard').hidden = true;
+            document.getElementById('admin-path-chooser').hidden = false;
+            window.scrollTo(0, 0);
+          }
+          function showDashboard() {
+            document.body.classList.remove('wizard-active');
+            document.body.classList.remove('chooser-active');
+            document.getElementById('launch-wizard').hidden = true;
+            document.getElementById('admin-path-chooser').hidden = true;
+          }
+
+          // The header's "Your events" is the way back to the list from
+          // anywhere past the front door. The front door already has that door,
+          // and the wizard has its own Back, so it shows on neither.
+          (function syncYourEventsLink() {
+            var link = document.querySelector('[data-testid="admin-nav-your-events"]');
+            if (!link || typeof MutationObserver !== 'function') return;
+            var sync = function () {
+              var cls = document.body.classList;
+              link.hidden = cls.contains('chooser-active') || cls.contains('wizard-active');
+            };
+            new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            sync();
+          })();
+          window.oseGoYourEvents = function () {
+            startMyEvents();
+          };
+
           function startSponsor() {
+            leaveDoor();
             document.body.classList.remove('wizard-active');
             // Reveal the dashboard (the sponsors card lives in it) — the front
             // door steps aside.
@@ -3430,6 +3481,7 @@
            * reason to come back), otherwise All.
            */
           function startMyEvents() {
+            leaveDoor();
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
@@ -3440,6 +3492,7 @@
           }
 
           function chooseAdvanced() {
+            leaveDoor();
             // Reveal the full dashboard and clear the doorway.
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
@@ -3645,6 +3698,11 @@
               return;
             }
             closeWizard({ fromHistory: true });
+            // Back to the front door's own entry shows the front door; forward
+            // (or back out of the wizard) to a dashboard entry shows the
+            // dashboard. An entry with no state (an in-page anchor) moves nothing.
+            if (st && st.oseAdmin === 'chooser') showDoor();
+            else if (st && st.oseAdmin === 'dashboard') showDashboard();
           });
 
           // The front door owns the URL on load (OSE-1315): no stray
@@ -7944,6 +8002,12 @@
                 document.body.classList.remove('chooser-active');
                 var chooser = document.getElementById('admin-path-chooser');
                 if (chooser) chooser.hidden = true;
+                // As a front-door door does: Back returns to the front door.
+                try {
+                  if (history.state && history.state.oseAdmin === 'chooser') {
+                    history.pushState({ oseAdmin: 'dashboard' }, '', location.pathname + location.search);
+                  }
+                } catch (e) {}
                 savedRow.classList.add('selected');
                 savedRow.scrollIntoView({ block: 'center' });
                 var ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
