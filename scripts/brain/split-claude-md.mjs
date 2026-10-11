@@ -11,8 +11,9 @@
 // Writes, verbatim from the monolith:
 //   docs/brain/PRODUCT.md       <- §1 Architecture Decisions + §2 Ecosystem
 //   docs/brain/ROLE-STATE.md    <- §3 Scrum Team, role current states
+//   docs/brain/CONSTRAINTS.md   <- §4 Known Constraints
 //   docs/brain/STORY-FORMAT.md  <- §6 Story Format
-// The other parts (preamble, §4, §5, §7, §8) were rewritten by hand into
+// The other parts (preamble, §5, §7, §8) were rewritten by hand into
 // AGENTS.md and the slim CLAUDE.md. Their hashes are kept in
 // docs/brain/.split-fingerprint.json; when main changes one of them the script
 // still writes the generated files, names the changed parts and exits 3, so the
@@ -36,9 +37,14 @@ const GENERATED = [
     parts: ['3'],
     title: 'Role current states (from CLAUDE.md §3)',
   },
+  {
+    file: 'docs/brain/CONSTRAINTS.md',
+    parts: ['4'],
+    title: 'Known constraints (from CLAUDE.md §4)',
+  },
   { file: 'docs/brain/STORY-FORMAT.md', parts: ['6'], title: 'Story format (from CLAUDE.md §6)' },
 ];
-const HAND_PORTED = ['preamble', '4', '5', '7', '8'];
+const HAND_PORTED = ['preamble', '5', '7', '8'];
 const FINGERPRINT = 'docs/brain/.split-fingerprint.json';
 
 function args(argv) {

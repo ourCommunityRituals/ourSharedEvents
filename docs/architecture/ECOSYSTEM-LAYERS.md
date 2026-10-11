@@ -100,15 +100,15 @@ ADR-008 (hub ADR, Proposed) calls the `ourCommunityRituals` repo "the hub" becau
 
 ## Where things live
 
-| I need to…                                                | Go to                                                 |
-| --------------------------------------------------------- | ----------------------------------------------------- |
-| Change colours, type or shared components                 | Spine: `packages/ui`, then bump the pin in each spoke |
-| Read or change the org vision, an invariant or a standard | Hub: `OCR-docs`                                       |
-| Change an anonymous-event behaviour                       | OSE                                                   |
-| Change a named-profile behaviour                          | OW                                                    |
-| Brand a client or run a season                            | OSM (staff-run, from Bruno)                           |
-| Give a person a profile page                              | OA, served by OW                                      |
-| Look up whether a story is Done                           | OSE `CLAUDE.md` §5: merged, then staging chain green  |
+| I need to…                                                | Go to                                                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| Change colours, type or shared components                 | Spine: `packages/ui`, then bump the pin in each spoke                 |
+| Read or change the org vision, an invariant or a standard | Hub: `OCR-docs`                                                       |
+| Change an anonymous-event behaviour                       | OSE                                                                   |
+| Change a named-profile behaviour                          | OW                                                                    |
+| Brand a client or run a season                            | OSM (staff-run, from Bruno)                                           |
+| Give a person a profile page                              | OA, served by OW                                                      |
+| Look up whether a story is Done                           | OSE `AGENTS.md`, Definition of Done: merged, then staging chain green |
 
 ## What stays true
 

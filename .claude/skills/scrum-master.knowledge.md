@@ -143,7 +143,7 @@ New idea → .claude/inputs/YYYY-MM-DD-idea.md
 
 ## Definition of Done (per story)
 
-From CLAUDE.md §5 — all 6 role POVs must be satisfied:
+From `AGENTS.md`, Definition of Done — all role POVs must be satisfied:
 
 - [ ] Worker route code implemented
 - [ ] Tests written (Jest/Vitest + Playwright)

@@ -83,7 +83,7 @@
 #
 # Functional (Tier 4) runs on every push to main (and tag), after T1 Deploy and the
 # T2 → T3 chain are green, so every merge shows the full test scope on staging.
-# That is the "Done" bar in CLAUDE.md §5 (T1–T4 green for the merge SHA). It costs
+# That is the "Done" bar in AGENTS.md (T1–T4 green for the merge SHA). It costs
 # more runner minutes than the old dispatch-only setup; that is accepted. Nightly
 # skips it (no deploy). On dispatch, tick run_functional to run it without deploying.
 #

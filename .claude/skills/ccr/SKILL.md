@@ -9,14 +9,15 @@ Full protocol: `.claude/skills/ccr-protocol.md` (read the sections you need). Wo
 
 ## 1. Classify (sets the loop count)
 
-| Under review                                                                            | Loops                     |
-| --------------------------------------------------------------------------------------- | ------------------------- |
-| Typo, comment, formatting (all six Lite criteria hold)                                  | CCR Lite: 1               |
-| Bug fix                                                                                 | 3                         |
-| Security fix                                                                            | 3–4                       |
-| Major upgrade                                                                           | 4–5                       |
-| Architecture change; governance files (AGENTS.md, CLAUDE.md, STORIES.md, this protocol) | 5+                        |
-| Compliance surface                                                                      | 5+, human gate every loop |
+| Under review                                                       | Loops                     |
+| ------------------------------------------------------------------ | ------------------------- |
+| Typo, comment, formatting (all six Lite criteria hold)             | CCR Lite: 1               |
+| Bug fix                                                            | 3                         |
+| Security fix                                                       | 3–4                       |
+| Major upgrade                                                      | 4–5                       |
+| Architecture change                                                | 5+                        |
+| Governance files (AGENTS.md, CLAUDE.md, STORIES.md, this protocol) | 5+, human gate every loop |
+| Compliance surface                                                 | 5+, human gate every loop |
 
 The owner may ask for more loops. Never fewer.
 
@@ -30,7 +31,7 @@ Loop 1 surface pass, loop 2 pressure pass, loop 3 confirmation, then more as cla
 
 ## 3. Score
 
-`Score = 100 − Σ (unresolved finding × weight)`. Weights are fixed: **Regulatory 25 · Critical 15 · High 10 · Medium 5 · Low 2**.
+`Score = 100 − Σ (unresolved finding × weight)`. Weights are fixed: **Regulatory 25 · Critical 15 · High 10 · Medium 5 · Low 2**, adjusted by the loop-position and environment modifiers in the full protocol. No AI-assisted output earns artifact status below 95%.
 
 - **Security Critical gets no partial credit:** any unresolved one floors the system score at 0%.
 - Keep two numbers apart: the **system score** (the thing under review) and the **assessment confidence** (how sure you are of the findings).

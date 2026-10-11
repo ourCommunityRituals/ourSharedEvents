@@ -161,6 +161,9 @@ describe('split-claude-md (transitional)', () => {
     expect(readFileSync(join(root, 'docs/brain/STORY-FORMAT.md'), 'utf-8')).toContain(
       '## 6. Section 6'
     );
+    expect(readFileSync(join(root, 'docs/brain/CONSTRAINTS.md'), 'utf-8')).toContain(
+      '## 4. Section 4'
+    );
     expect(existsSync(join(root, 'docs/brain/.split-fingerprint.json'))).toBe(true);
   });
 

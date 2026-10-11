@@ -7,11 +7,11 @@ The contract every agent follows is `AGENTS.md`, imported above. This file adds 
 ## Session protocol
 
 1. **One story or one review per session.** Use `/clear` between unrelated tasks, and start a fresh session rather than letting one run long. Every turn re-reads the whole conversation.
-2. **Pick work from Linear** (team OSE), not STORIES.md. Check `.claude/inputs/` for new intake items.
+2. **Pick work from Linear** (team OSE), not STORIES.md, respecting prerequisites. Check `.claude/inputs/` for new intake items.
 3. **Confirm direct source + test evidence** before treating any ticket, doc or role-state line as true.
 4. Implement the complete story: route code, tests at both layers, migrations if needed, and every role view (`docs/brain/ROLE-STATE.md` lists the roles).
 5. Open the PR (`Part of OSE-###`), then follow the two stages in AGENTS.md: Merged, then Done.
-6. **After a merged PR, update `docs/brain/ROLE-STATE.md`**, not this file. Record what changed for each affected role, with dates and evidence. This file and AGENTS.md change only when a rule changes.
+6. **After a merged PR**, set the story to In Progress with an evidence comment, then **update `docs/brain/ROLE-STATE.md`**, not this file. Record what changed for each affected role, with dates and evidence. This file and AGENTS.md change only when a rule changes.
 
 ## Models and effort
 
