@@ -155,7 +155,9 @@ test('Accept: the sponsor is on the event page, form page, poster and TV', async
 
 // OSE-1520: one card on /events and the landing. At phone width the button
 // drops under the text and the title keeps the card, instead of being squeezed
-// to a sliver beside the button (137px on staging).
+// to a sliver beside the button (137px on staging). Since the card picture
+// (owner 2026-10-11) the title shares its row with the 64px picture, so the
+// picture and the title together must span most of the card.
 for (const [name, path, cardTestId] of [
   ['events list', '/events', 'public-event-card'],
   ['landing', '/', 'area-card'],
@@ -170,10 +172,15 @@ for (const [name, path, cardTestId] of [
     const box = (await card.boundingBox())!;
     const info = (await card.getByTestId('public-event-info').boundingBox())!;
     const cta = (await card.getByTestId('public-event-cta').boundingBox())!;
+    const thumb = (await card.locator('img.event-thumb').boundingBox())!;
     expect(cta.y, 'the button starts below the text').toBeGreaterThanOrEqual(
       info.y + info.height - 1
     );
-    expect(info.width / box.width, 'the title has most of the card').toBeGreaterThan(0.8);
+    expect(thumb.y, 'the picture sits on the title row').toBeLessThan(info.y + info.height);
+    expect(
+      (info.x + info.width - thumb.x) / box.width,
+      'the picture and the title have most of the card'
+    ).toBeGreaterThan(0.8);
     expect(cta.height, 'the button is a 44px target').toBeGreaterThanOrEqual(44);
     const { scrollWidth, clientWidth } = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
