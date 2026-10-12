@@ -81,6 +81,18 @@ export function scanDedupKey(anonId: string, deploymentId: string, scanBucket: s
 export const SCAN_QUEUE_MAX_RETRIES = 3;
 
 /**
+ * The `created_at` both split tables store: the scan's hour bucket, and nothing
+ * finer (OSE-923, N-DS-2). The two rows of one scan are written in one batch, so
+ * a second-precision stamp would let (event_id, created_at) join who to where one
+ * scan at a time, whatever the bucket size. `scan_bucket` is `YYYY-MM-DDTHH:00`;
+ * the stamp is the same hour in the table's `YYYY-MM-DD HH:MM:SS` shape. No clock
+ * is read, so a queued scan processed later still gets its own hour.
+ */
+export function hourStamp(scanBucket: string): string {
+  return `${scanBucket.slice(0, 10)} ${scanBucket.slice(11, 13)}:00:00`;
+}
+
+/**
  * The two INSERTs for one scan — split so no durable row carries both a placement
  * id (WHERE) and a session-derived value (WHO) (OSE-798, doctrine rule 6). Row PKs
  * are generated before enqueue and replayed on retry; they are independent opaque
@@ -95,14 +107,20 @@ export function buildScanStatements(db: D1Database, msg: ScanMessage): D1Prepare
       .prepare(
         `INSERT OR IGNORE INTO scan_placement_events
            (id, event_id, poster_deployment_id, scan_bucket, created_at)
-         VALUES (?, ?, ?, ?, datetime('now'))`
+         VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(msg.placement_row_id, msg.event_id, msg.deployment_id, msg.scan_bucket),
+      .bind(
+        msg.placement_row_id,
+        msg.event_id,
+        msg.deployment_id,
+        msg.scan_bucket,
+        hourStamp(msg.scan_bucket)
+      ),
     db
       .prepare(
         `INSERT OR IGNORE INTO scan_node_returns
            (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
-         VALUES (?, ?, ?, ?, NULL, ?, datetime('now'))`
+         VALUES (?, ?, ?, ?, NULL, ?, ?)`
       )
       .bind(
         msg.return_row_id,
@@ -113,7 +131,8 @@ export function buildScanStatements(db: D1Database, msg: ScanMessage): D1Prepare
         // (ANON_ID_HASH_PEPPER unset), so it is stored only then. Applies to
         // messages the previous Worker queued, too.
         scanKey ? null : msg.ua_hash,
-        msg.scan_bucket
+        msg.scan_bucket,
+        hourStamp(msg.scan_bucket)
       ),
   ];
 }
