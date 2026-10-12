@@ -46,7 +46,7 @@ Also named as exposed in OSE-1467 but **not in this repo**, so check where they 
 | `STAGING_BASE_URL`                                            | `security-monitoring.yml`                                 | Has a default (`https://stg.oursharedevents.com`). It is a URL, not a secret; better as a repo **variable**, or drop it.                                                              |
 | `OSE_ADMIN_BEARER`                                            | `mobile-workability-audit.yml` (deployed-staging job)     | That job skips `/admin`. The blocking PR-code audit does not use it. Decide whether to keep the deployed-staging job at all.                                                          |
 
-Repo **variables** also unset (not secrets, listed so they are not forgotten): `PRODUCTION_LIVE`, `PR_REVIEWER`, `RED_TEAM_BASE_URL`.
+Repo **variables** that are unset: `PR_REVIEWER` and `RED_TEAM_BASE_URL` (both have working defaults). `PRODUCTION_LIVE` is also unset and **stays unset**: production is on hold by the owner's decision of 2026-10-12. It is not on this queue.
 
 ## 4. Delete (set, no longer used)
 
@@ -60,7 +60,7 @@ Repo **variables** also unset (not secrets, listed so they are not forgotten): `
 
 | Secret                                   | Read by                                                                                         | Effect in production                                                                          |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `ANON_ID_HASH_PEPPER`                    | `handlers/data-subject.ts` (erasure checks for it explicitly); `scripts/set-secrets.sh` sets it | **Confirm before launch.** Erasure of scan/return rows needs it.                              |
+| `ANON_ID_HASH_PEPPER`                    | `handlers/data-subject.ts` (erasure checks for it explicitly); `scripts/set-secrets.sh` sets it | Erasure of scan/return rows needs it. Set it before production handles an erasure request.    |
 | `GOOGLE_MAPS_API_KEY`                    | `lib/maps.ts`, `lib/geo.ts`, `lib/event-place.ts`                                               | Venue map image and geocoding are off. Related: OSE-1688 (turn on Geocoding, cap the quota).  |
 | `WIF_PRIVATE_KEY_PEM`, `WIF_PUBLIC_JWKS` | `cloud/bigquery.ts`, `google/auth.ts`                                                           | BigQuery backup cannot authenticate. A data-protection key: never bulk-written (standard §3). |
 

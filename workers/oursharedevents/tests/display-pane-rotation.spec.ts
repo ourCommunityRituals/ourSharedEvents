@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { JSDOM } from 'jsdom';
 import DISPLAY_HTML from '../src/templates/display.html';
+import { EVENT_DEFAULT_THUMB_PATH, eventThumbSrc } from '../src/lib/event-thumb';
 
 // The TV display's pane rotation, ported from the GAS display's rotation
 // engine (MVP-EVENT-TOOLKIT, startRotationEngine). These tests RUN the engine
@@ -1312,5 +1313,89 @@ describe('display page: a phase crossing shows on the minute check (OSE-475)', (
     for (const r of server.eventReads) {
       expect(r.init?.cache, r.url).toBe('no-cache');
     }
+  });
+});
+
+describe('OSE-1678 | "Also coming up" shows each event\'s picture', () => {
+  const ART = '/api/v2/uploads/events/evt-2/poster.png';
+  const thumbs = (doc: Document) => [
+    ...doc.querySelectorAll<HTMLImageElement>('[data-testid="display-upcoming-thumb"]'),
+  ];
+
+  test('the card picture rule is the same one the /events cards use (lib/event-thumb.ts)', () => {
+    const begin = DISPLAY_HTML.indexOf('// @ose-event-thumb:begin');
+    const end = DISPLAY_HTML.indexOf('// @ose-event-thumb:end');
+    expect(begin, 'the rule is marked in the template').toBeGreaterThan(-1);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- template code under test
+    const tvRule = new Function(`${DISPLAY_HTML.slice(begin, end)}; return eventThumbSrc;`)() as (
+      v: unknown
+    ) => string;
+    for (const v of [
+      ART,
+      '/api/v2/uploads/a.png',
+      null,
+      undefined,
+      '',
+      42,
+      'https://example.com/a.png',
+      '//evil.test/a.png',
+      'javascript:alert(1)',
+      '/api/v2/uploads/../admin',
+      '/api/v2/uploads/./a.png',
+      '/api/v2/uploads/a"b',
+      '/api/v2/uploads/' + 'a'.repeat(490),
+    ]) {
+      expect(tvRule(v), String(v).slice(0, 40)).toBe(eventThumbSrc(v));
+    }
+  });
+
+  test('a card with poster art shows it; one without shows the Ring', async () => {
+    const { doc } = await bootPage('', {
+      events: [
+        EVENTS[0],
+        { ...EVENTS[1], cover_image_url: ART },
+        { id: 'evt-3', name: 'Quiz Night', venue: 'Hall', startDateISO: '2026-10-29' },
+      ] as typeof EVENTS,
+    });
+    expect(thumbs(doc).map((img) => img.getAttribute('src'))).toEqual([
+      ART,
+      EVENT_DEFAULT_THUMB_PATH,
+    ]);
+    for (const img of thumbs(doc)) {
+      expect(img.getAttribute('alt'), 'decorative: the name sits beside it').toBe('');
+      expect(img.closest('[data-testid="display-upcoming-card"]')).not.toBeNull();
+    }
+  });
+
+  test('an outside address in the column never reaches the TV', async () => {
+    const { doc } = await bootPage('', {
+      events: [
+        EVENTS[0],
+        { ...EVENTS[1], cover_image_url: 'https://x.test/a.png' },
+      ] as typeof EVENTS,
+    });
+    expect(thumbs(doc).map((img) => img.getAttribute('src'))).toEqual([EVENT_DEFAULT_THUMB_PATH]);
+    expect(doc.body.innerHTML).not.toContain('x.test');
+  });
+
+  test('a picture that fails to load turns into the Ring, never a sponsor logo or a broken icon', async () => {
+    const { doc } = await bootPage('', {
+      events: [EVENTS[0], { ...EVENTS[1], cover_image_url: ART }] as typeof EVENTS,
+    });
+    const [img] = thumbs(doc);
+    const w = doc.defaultView!;
+    img.dispatchEvent(new w.Event('error'));
+    expect(img.getAttribute('src')).toBe(EVENT_DEFAULT_THUMB_PATH);
+    expect(img.style.display).toBe('');
+    // Only if the Ring itself fails is the picture hidden.
+    img.dispatchEvent(new w.Event('error'));
+    expect(img.style.display).toBe('none');
+  });
+
+  test('a sponsor logo that fails still falls back to the sponsor default', async () => {
+    const { doc } = await bootPage();
+    const logo = doc.querySelector<HTMLImageElement>('[data-testid="display-sponsor-logo"]')!;
+    logo.dispatchEvent(new doc.defaultView!.Event('error'));
+    expect(logo.getAttribute('src')).toBe('/sponsor-default-logo.svg');
   });
 });

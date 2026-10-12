@@ -754,6 +754,15 @@ jobs:
           fi
           node scripts/ci/ci-integrity-ratchets.mjs --root . "${ARGS[@]}"
 
+      # Staging and production stay in sync (owner, 2026-10-12): every difference
+      # between [env.staging] and [env.production] in wrangler.toml is named, with
+      # its reason, or this fails. Undecided items are printed on every run and
+      # block the --strict check that precedes announcing production. No network.
+      - name: 'Lint: staging and production config parity'
+        if: matrix.shard == 'lint'
+        run: node scripts/ci/env-parity.mjs
+
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'

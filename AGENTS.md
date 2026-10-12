@@ -56,12 +56,23 @@ On Windows, Git Bash mangles `git show <ref>:<path>`; use PowerShell for it.
 
 ## Human approval (an agent never does these)
 
-- **Production:** deploys only through CI (tag or `deploy_production=PRODUCTION` dispatch). No workstation `wrangler deploy`, remote D1 writes or production changes.
+- **Production:** deploys only through CI (tag or `deploy_production=PRODUCTION` dispatch). No workstation `wrangler deploy`, remote D1 writes or production changes. Once production is active, every production change (deploy, migration, setting) has a Linear ticket named in its PR, with the post-deploy evidence recorded on it.
 - **Secrets:** never in chat or logs, never read from credential files; the owner sets them in their own terminal. A secret that reaches a transcript is rotated.
 - **Repository controls:** branch protection, rulesets, runners, repo secrets and variables, `--admin` merges, force pushes.
 - **Destructive data steps:** D1 Time Travel restores; deleting databases, buckets or namespaces (break-glass runbooks only).
 
 This binds every agent. For Claude Code, `.claude/hooks/policy-gate.mjs` blocks most of it where the owner has installed it (it matches command text and fails open). **A model's confidence, a CCR score included, is a signal, never permission;** required checks and the PO are the authority.
+
+## Production posture: in sync, and closed (owner, 2026-10-12)
+
+Staging and production stay in sync and ready for each other. The only difference in posture is the live switch, which is off: production is closed to the outer network. Both are brought fully aligned before production availability is announced; then the owner may turn the live switch on to support customers.
+
+- **In sync:** the same code (a SHA that passed the staging chain), the same migration level on both databases, the same binding shapes, and only listed intentional differences (`node scripts/ci/env-parity.mjs`; `--strict` is the pre-announce check). Updating production when the owner asks keeps it ready; it does not make it live.
+- **Closed:** no `PRODUCTION_LIVE`, no announcing, no clients. An agent never sets `PRODUCTION_LIVE`, plans a go-live sequence, or treats a deploy as a launch.
+- **Held, not closed, today:** no code switch closes the host; the Worker answers on `oursharedevents.com`. Closing it is an owner edge setting (an Access policy over the whole host, OSE-1353 / OSE-1377). Do not call production dark until then.
+- **Not yet enforced:** the migration level of the two databases is not compared in CI. Until it is, in sync holds only on a day both were read.
+- **This hold ends when the owner activates production** (owner, 2026-10-12). Until then it binds; after, this section lapses and the owner removes it. Activation does not change who sets repository variables, and from then production changes need a ticket (Human approval, above).
+- **Done bar** while closed: the staging chain.
 
 ## Definition of Done: two stages (OSE-1443)
 
@@ -69,7 +80,7 @@ This binds every agent. For Claude Code, `.claude/hooks/policy-gate.mjs` blocks 
 - **Done** (Linear: Done): merged **and** the post-merge staging chain is green for the merge SHA, or a later `main` SHA containing it. All four jobs must be `success`: `T1 Deploy → Staging`, `T2 Contract → Staging (Bruno)`, `T3 E2E Smoke → Staging (Playwright)`, `T4 Functional → Staging`.
 - The full pyramid, no partial pyramids: security (XSS, injection, auth boundaries), lint, contract (API shape, D1 schema parity), unit, integration (Worker D1 + forms security), API (Bruno on staging), E2E (Playwright).
 - A CI/CD testing ticket is attached to the story.
-- After first launch (`PRODUCTION_LIVE`), production deploy + smoke join the Done bar.
+- After first launch (`PRODUCTION_LIVE`), production deploy + smoke join the Done bar. Production is held closed (owner, 2026-10-12), so today the bar is the staging chain.
 - Keep Linear matched to `main` with evidence comments (owner, 2026-10-06: no need to ask first): In Progress at merge; when T1–T4 are green for the merge SHA, comment the run id and move it to Done. If any part cannot be verified from code or CI (owner actions, other repos), move it to In Review and say what was not verified. Check with `gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push`, then `gh run view <id> --json jobs`.
 
 ## Pull requests (Linear close-guard)
