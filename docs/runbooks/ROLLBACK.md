@@ -24,7 +24,7 @@ Owner rule, 2026-10-12. A release can be called **no-go immediately**, inside a 
 git diff --name-only <previous-release-sha> <this-release-sha> -- workers/oursharedevents/migrations workers/oursharedevents/migrations-forms
 ```
 
-Any `DROP TABLE`, `RENAME` or column removal in those files makes the release **not roll-back-able**. The first production deploy is one: `0098` drops `subscribers`, `0102` rebuilds `sponsor_impressions` as `sponsor_displays`, `0103` renames `visit_count`. For such a release, "no-go" means fix forward quickly (the revert PR in §3 restores the old code only when the schema it needs is still there). See [§2](#2-read-first-what-a-rollback-does-not-undo).
+A table removal, a rename or a column removal in those files makes the release **not roll-back-able**. The first production deploy is one: `0098` drops `subscribers`, `0102` rebuilds `sponsor_impressions` as `sponsor_displays`, `0103` renames `visit_count`. For such a release, "no-go" means fix forward quickly (the revert PR in §3 restores the old code only when the schema it needs is still there). See [§2](#2-read-first-what-a-rollback-does-not-undo).
 
 **The window.** It opens when the deploy finishes. It closes at the first of these:
 
