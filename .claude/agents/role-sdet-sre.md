@@ -1,6 +1,6 @@
 ---
 name: role-sdet-sre
-description: Sr SDET/SRE lens: CI gates, observability, performance, reliability. Use inside a CCR loop or for pipeline and monitoring questions.
+description: Sr SDET/SRE lens. CI gates, observability, performance, reliability. Use inside a CCR loop or for pipeline and monitoring questions.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

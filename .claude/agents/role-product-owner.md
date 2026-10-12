@@ -1,6 +1,6 @@
 ---
 name: role-product-owner
-description: Product Owner / business lens: acceptance criteria, scope, priority, launch impact, cost. Use inside a CCR loop or for business decisions.
+description: Product Owner / business lens. Acceptance criteria, scope, priority, launch impact, cost. Use inside a CCR loop or for business decisions.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

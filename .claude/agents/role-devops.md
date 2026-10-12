@@ -1,6 +1,6 @@
 ---
 name: role-devops
-description: DevOps Mgr lens: provisioning, Wrangler config, environments, secrets management, deploy and rollback. Use inside a CCR loop or for infrastructure questions.
+description: DevOps Mgr lens. Provisioning, Wrangler config, environments, secrets management, deploy and rollback. Use inside a CCR loop or for infrastructure questions.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

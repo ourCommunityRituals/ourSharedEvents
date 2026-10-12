@@ -112,7 +112,39 @@ describe('agent instruction budget: born red', () => {
       (r) => put(r, '.claude/agents/bare.md', 'no frontmatter\n'),
       /bare\.md needs frontmatter/,
     ],
+    // The defect that shipped: an unquoted ": " in a description is invalid YAML,
+    // and Claude Code drops the agent or skill without an error.
+    [
+      'agent whose description has an unquoted colon',
+      (r) =>
+        put(
+          r,
+          '.claude/agents/role-x.md',
+          '---\nname: role-x\ndescription: Backend lens: routes and queries\nmodel: sonnet\n---\n'
+        ),
+      /role-x\.md frontmatter is not valid YAML/,
+    ],
+    [
+      'skill whose description has an unquoted colon',
+      (r) =>
+        put(
+          r,
+          '.claude/skills/ccr/SKILL.md',
+          '---\nname: ccr\ndescription: Reviews: the standard\n---\n'
+        ),
+      /ccr\/SKILL\.md frontmatter is not valid YAML/,
+    ],
   ];
+
+  test('a quoted description may contain a colon', () => {
+    const root = validTree();
+    put(
+      root,
+      '.claude/agents/role-y.md',
+      '---\nname: role-y\ndescription: "Backend lens: routes and queries"\nmodel: sonnet\n---\n'
+    );
+    expect(runBudget(root).status).toBe(0);
+  });
 
   test.each(FAULTS)('%s turns it red', (_name, inject, message) => {
     const root = validTree();

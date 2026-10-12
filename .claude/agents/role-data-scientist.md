@@ -1,6 +1,6 @@
 ---
 name: role-data-scientist
-description: Sr Data Scientist lens: aggregates, floors, SharedReport metrics, BigQuery boundary, re-identification risk. Use inside a CCR loop or for analytics questions.
+description: Sr Data Scientist lens. Aggregates, floors, SharedReport metrics, BigQuery boundary, re-identification risk. Use inside a CCR loop or for analytics questions.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

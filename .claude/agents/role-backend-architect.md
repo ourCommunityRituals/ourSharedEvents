@@ -1,6 +1,6 @@
 ---
 name: role-backend-architect
-description: Lead Backend Architect lens: Worker routes, D1 queries and migrations, API contracts, auth, feature flags. Use inside a CCR loop or for a backend design question.
+description: Lead Backend Architect lens. Worker routes, D1 queries and migrations, API contracts, auth, feature flags. Use inside a CCR loop or for a backend design question.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

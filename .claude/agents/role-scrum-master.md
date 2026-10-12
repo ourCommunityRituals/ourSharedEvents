@@ -1,6 +1,6 @@
 ---
 name: role-scrum-master
-description: Scrum Master lens: story sizing, sequencing, Definition of Done, Linear accuracy. Use inside a CCR loop or for planning.
+description: Scrum Master lens. Story sizing, sequencing, Definition of Done, Linear accuracy. Use inside a CCR loop or for planning.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

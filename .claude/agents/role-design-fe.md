@@ -1,6 +1,6 @@
 ---
 name: role-design-fe
-description: Sr Design FE lens: mobile-first UX, design tokens, accessibility, test ids. Use inside a CCR loop or for UI review.
+description: Sr Design FE lens. Mobile-first UX, design tokens, accessibility, test ids. Use inside a CCR loop or for UI review.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
