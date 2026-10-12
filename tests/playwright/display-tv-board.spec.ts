@@ -304,6 +304,53 @@ test.describe('a 4K TV', () => {
   });
 });
 
+// OSE-1678: each "Also coming up" card leads with a picture (the event's poster
+// art, else the Ring), one size for every card, at 720p and at 4K.
+for (const [label, size] of [
+  ['720p', { width: 1280, height: 720 }],
+  ['4K', UHD],
+] as const) {
+  test(`"Also coming up" at ${label}: every card has its picture, all one size, inside the card`, async ({
+    page,
+  }) => {
+    await open(page, size, `/display?event=${plain.id}&panes=upcoming`);
+    const thumbs = page.getByTestId('display-upcoming-thumb');
+    await expect(thumbs.first()).toBeVisible();
+    const m = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLImageElement>('[data-testid="display-upcoming-card"]')].map(
+        (card) => {
+          const img = card.querySelector<HTMLImageElement>(
+            '[data-testid="display-upcoming-thumb"]'
+          );
+          const c = card.getBoundingClientRect();
+          const b = img ? img.getBoundingClientRect() : null;
+          return {
+            has: !!img,
+            loaded: !!img && img.complete && img.naturalWidth > 0,
+            w: b ? Math.round(b.width) : 0,
+            h: b ? Math.round(b.height) : 0,
+            inside:
+              !!b &&
+              b.left >= c.left &&
+              b.right <= c.right &&
+              b.top >= c.top &&
+              b.bottom <= c.bottom,
+          };
+        }
+      )
+    );
+    expect(m.length, 'the screen lists upcoming events').toBeGreaterThan(0);
+    for (const card of m) {
+      expect(card.has && card.loaded, 'each card shows a loaded picture').toBe(true);
+      expect(card.inside, 'the picture sits inside its card').toBe(true);
+      expect(card.w, 'square').toBe(card.h);
+    }
+    expect(new Set(m.map((c) => c.w)).size, 'one size for every card').toBe(1);
+    // Two text lines tall: 7vh, never under 56px.
+    expect(m[0].w).toBeGreaterThanOrEqual(Math.max(56, Math.floor(size.height * 0.07)) - 1);
+  });
+}
+
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`axe WCAG 2.1 AA at 1080p, ${colorScheme}: nothing serious on any screen`, async ({
     page,
