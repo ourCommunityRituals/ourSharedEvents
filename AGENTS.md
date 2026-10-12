@@ -63,13 +63,24 @@ On Windows, Git Bash mangles `git show <ref>:<path>`; use PowerShell for it.
 
 This binds every agent. For Claude Code, `.claude/hooks/policy-gate.mjs` blocks most of it where the owner has installed it (it matches command text and fails open). **A model's confidence, a CCR score included, is a signal, never permission;** required checks and the PO are the authority.
 
+## Production posture: in sync, and closed (owner, 2026-10-12)
+
+Staging and production stay **in sync and ready for each other**. The one difference in posture is the **live switch, and it is off**: production is closed to the outer network.
+
+- **In sync** means the same code (the SHA that passed the staging chain), the same migration level on both databases, and the same binding shapes, with every intentional difference listed in `wrangler.toml` and nothing else. Updating production (migrations, a CI deploy) is allowed when the owner asks; it keeps production ready and does not make it live.
+- **Closed** means no `PRODUCTION_LIVE`, no announcing, no clients, and no step that makes production reachable from the outer network. An agent never sets `PRODUCTION_LIVE`, never proposes a go-live sequence as the plan, and never treats a deploy as a launch.
+- **What is true today:** there is no code switch that closes the production host. The Worker answers on `oursharedevents.com` (read live 2026-10-03). Closing it is an edge setting the owner makes (an Access policy over the whole production host, OSE-1353 / OSE-1377), not something a PR can claim. Until that is set, say "held, not closed" and do not call production dark.
+- **What is not enforced yet:** nothing in CI compares staging and production continuously. `scripts/compare-environments.js` is from the Apps Script era and fails on a missing root `wrangler.toml`; `scripts/prod-preflight.mjs` checks the checkout and saved readings only. Until a parity gate exists, production is in sync only on the day someone reads both.
+- **The live switch comes after sync, and it is for customers.** Once staging and production are sufficiently in sync, the owner may turn the live switch on to support customers. Not before, and not as a way to reach sync. "Sufficiently" is the owner's call; a proposed bar, for the owner to accept or change: the production Worker runs a SHA that passed the staging chain; both production databases are at the migration level the code requires; production bindings are real and not shared with staging; the only differences between the two are the listed intentional ones; production smoke passes while the host is still closed.
+- **The Done bar** is the staging chain while production is held closed. The "after first launch" line below applies only if the owner takes production live.
+
 ## Definition of Done: two stages (OSE-1443)
 
 - **Merged** (Linear: In Progress): on `main`; levels 1–5 ran on the PR; a named CI job goes red if it regresses.
 - **Done** (Linear: Done): merged **and** the post-merge staging chain is green for the merge SHA, or a later `main` SHA containing it. All four jobs must be `success`: `T1 Deploy → Staging`, `T2 Contract → Staging (Bruno)`, `T3 E2E Smoke → Staging (Playwright)`, `T4 Functional → Staging`.
 - The full pyramid, no partial pyramids: security (XSS, injection, auth boundaries), lint, contract (API shape, D1 schema parity), unit, integration (Worker D1 + forms security), API (Bruno on staging), E2E (Playwright).
 - A CI/CD testing ticket is attached to the story.
-- After first launch (`PRODUCTION_LIVE`), production deploy + smoke join the Done bar.
+- After first launch (`PRODUCTION_LIVE`), production deploy + smoke join the Done bar. Production is held closed (owner, 2026-10-12), so today the bar is the staging chain.
 - Keep Linear matched to `main` with evidence comments (owner, 2026-10-06: no need to ask first): In Progress at merge; when T1–T4 are green for the merge SHA, comment the run id and move it to Done. If any part cannot be verified from code or CI (owner actions, other repos), move it to In Review and say what was not verified. Check with `gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push`, then `gh run view <id> --json jobs`.
 
 ## Pull requests (Linear close-guard)
