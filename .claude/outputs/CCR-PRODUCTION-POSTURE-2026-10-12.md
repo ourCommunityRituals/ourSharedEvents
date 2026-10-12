@@ -199,3 +199,49 @@ the report on a multi-hour staging event shows a scanner count that does not exc
    and through which Access app (C1)?
 5. **Governance.** Does the owner want the 5+ loop pass on the `AGENTS.md` posture text before it is
    treated as settled?
+
+## Addendum: readings taken after the worksheet (2026-10-12 22:16 UTC) and the path to 95%
+
+### Readings (read-only; proven)
+
+| Reading                                  | Result                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET https://oursharedevents.com/health` | **200**, `env: production`, `version: "main"` (the old, unstamped build), `db: ok`    |
+| `GET https://oursharedevents.com/events` | **200**, HTML, to an unauthenticated outside client                                   |
+| `GET https://oursharedevents.com/admin`  | **401** JSON `UNAUTH` from the Worker (not an Access challenge)                       |
+| Production main D1 (`ocr-db-production`) | **77 migrations applied**, latest `0077_…`; **0 events, 0 scan rows (WHO and WHERE)** |
+| Production forms D1                      | **14 migrations applied**, latest `0014_…`; **0 registrations**                       |
+
+What these change:
+
+- **A3 stops being an assumption.** Production is 26 main and 4 forms migrations behind; the pending set is as the plan lists. The finding stays (it is a real gap) but as a proven one.
+- **C1 is resolved as an assumption** and replaced by a proven exposure, **R1 (Low, 2): production is reachable from the outside while "held".** There is no event, scan or registration to expose, and `/admin` refuses without a signed Access token. The posture text's "held, not closed" is true as written.
+- The deployed Worker is the old build (`version: "main"`), which is why `/health` still carries `_debug`.
+
+Score on the new readings: 71 − 5 (C1) + 2 (R1) = **68 unresolved → 32%**.
+
+### Reaching 95%
+
+Score is 100 minus the unresolved weight, so at most **5 points** may remain. Of the 68, at least 63 must go.
+
+| Finding                       | Pts | Working solution                                                                                                                                                                                                              | Who                                   | Closes when                                                                                        |
+| ----------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| A1 rollback caveat            | 10  | merge #971; add `scripts/ci/release-rollbackability.mjs` that lists the release's removing or renaming migrations and prints NOT ROLLBACK-ABLE in the deploy summary; adopt expand/contract (two releases) for future renames | agent builds, owner merges            | merged, with a test that goes red on a planted rename                                              |
+| B1 "distinct" sums hours      | 10  | rename the key to `scanner_hours` (a breaking wire change, free before customers); add a separate event-level distinct count, floored at 5, as its own field                                                                  | owner picks the name, agent builds    | snapshot bumps; a multi-hour staging event shows `scanner_hours` ≥ browsers and the new field ≤ it |
+| A2 drill unrun                | 10  | `workflow_dispatch` staging workflow that runs drills 1 and 2 (rollback inside the window; fix forward), including **rolling back across migration 0102 to prove A1**; drill 3 (restore) stays manual                         | agent builds, owner triggers          | run ids recorded in `STAGING-DRILL.md`; the runbooks stop saying "Not yet practised"               |
+| A3 production behind          | 5   | the production update through CI (owner's trigger); re-read both databases with the same two queries                                                                                                                          | owner                                 | main 103, forms 18 read back                                                                       |
+| A4 config-only parity         | 5   | a scheduled read-only workflow with a **least-privilege token (D1 read, both databases)** in environment secrets (after OSE-1662), reading both levels into `env-parity`                                                      | owner creates the token, agent builds | weekly run green; a planted lag turns it red                                                       |
+| A5 audience unpinned          | 5   | owner reads the production Access app's AUD tag (not a secret); agent commits it to `[env.production.vars]` and makes the preflight **fail** on an empty production `CF_ACCESS_AUD`                                           | owner, then agent                     | preflight red on empty (test), green with the tag                                                  |
+| B2 hourly floor               | 5   | resolved by B1's event-level distinct (small events still get an honest count); measure on real shape, not staging test traffic                                                                                               | agent                                 | decision recorded with the numbers                                                                 |
+| B5 ticket rule is text        | 5   | require a ticket ID on the production deploy: `workflow_dispatch` input or the annotated tag message; the job fails without one and writes it to the summary                                                                  | agent builds                          | deploy refuses without `OSE-####` (test)                                                           |
+| B6 window signal              | 5   | owner sets the length; runbook gets the read-only query that shows the first visitor write (WHO or form rows above the pre-deploy count)                                                                                      | owner, agent                          | number set; query in §0                                                                            |
+| R1 reachable while held       | 2   | the Access policy over the whole host (OSE-1353)                                                                                                                                                                              | owner                                 | outside GET returns an Access challenge                                                            |
+| B4 `return_count` counts runs | 2   | rename to `run_count` (one small migration)                                                                                                                                                                                   | owner chooses                         | gate passes with the new name                                                                      |
+| C2 byte headroom              | 2   | trim `AGENTS.md` below 11.5 KB                                                                                                                                                                                                | agent                                 | budget script reports it                                                                           |
+| B3 two fields one number      | 2   | accept (documented)                                                                                                                                                                                                           | n/a                                   | counts as unresolved                                                                               |
+
+**Arithmetic of the minimum path.** 68 − (10 + 10 + 10 + 5 + 5 + 5 + 5 + 5 + 5) = 8 left (R1, B4, C2, B3 at 2 each).
+Fixing C2 → 6 (**94%**, still short). Fixing R1 **or** B4 as well → 4 (**96%**, passes). B3 stays as accepted.
+
+**The three items that decide it** are owner acts, not code: the production update (A3), the Access app
+and audience (A5, R1), and running the drill (A2). Without those the ceiling is **68%**, whatever else is built.
