@@ -237,6 +237,8 @@ function workstation() {
   // W8 the gh keyring identity on this machine is not an admin-scoped token
   const st = gh(['auth', 'status']);
   const scopes = (st.stdout + st.stderr).match(/Token scopes:\s*(.*)/i)?.[1] ?? '';
+  // a fine-grained token has no classic scopes line; it is what agents should use
+  const fineGrained = /Token:\s*github_pat_/i.test(st.stdout + st.stderr);
   const adminScopes = scopes
     .split(',')
     .map((x) => x.replace(/['\s]/g, ''))
@@ -244,12 +246,14 @@ function workstation() {
   add(
     'W8',
     'The GitHub token available to agents has no admin scopes',
-    !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
-    !scopes
-      ? 'could not read token scopes'
-      : adminScopes.length
-        ? adminScopes.join(', ')
-        : 'no admin scopes'
+    fineGrained ? 'PASS' : !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
+    fineGrained
+      ? 'fine-grained token (no classic scopes)'
+      : !scopes
+        ? 'could not read token scopes'
+        : adminScopes.length
+          ? adminScopes.join(', ')
+          : 'no admin scopes'
   );
 
   // W9 informational: pre-trusted worktrees
@@ -497,11 +501,17 @@ if (isMain) {
     ...(only === 'workstation' ? [] : github()),
   ];
   const planes = ['workstation', 'github'].filter((p) => !only || p === only);
+  // A verifier pointed at another home folder or at fixture answers is a test, not a reading.
+  const overrides = [
+    fixtureMode() && 'OCR_GH_FIXTURE',
+    process.env.CLAUDE_HOME && 'CLAUDE_HOME',
+  ].filter(Boolean);
   if (process.argv.includes('--json')) {
     console.log(
       JSON.stringify(
         {
           fixtureMode: fixtureMode(),
+          overrides,
           checks: all.map((c) => ({ ...c, detail: redact(c.detail) })),
           grades: Object.fromEntries(
             planes.map((p) => [p, grade(all.filter((c) => c.plane === p))])
@@ -512,8 +522,11 @@ if (isMain) {
       )
     );
   } else {
-    if (fixtureMode())
-      console.log('*** FIXTURE MODE: gh answers come from OCR_GH_FIXTURE, not GitHub ***');
+    if (overrides.length) {
+      console.log(
+        `*** NOT A REAL READING: ${overrides.join(' and ')} set; this output proves nothing about this machine ***`
+      );
+    }
     for (const p of planes) {
       const cs = all.filter((c) => c.plane === p);
       console.log(`\n${p.toUpperCase()}  grade ${grade(cs)}`);
@@ -521,5 +534,6 @@ if (isMain) {
         console.log(`  ${c.status.padEnd(4)} ${c.id}  ${c.title}\n        ${redact(c.detail)}`);
     }
   }
-  process.exit(all.some((c) => c.status === 'FAIL') ? 1 : 0);
+  // an overridden run never exits 0, so a script cannot take it for a pass
+  process.exit(overrides.length ? 3 : all.some((c) => c.status === 'FAIL') ? 1 : 0);
 }
