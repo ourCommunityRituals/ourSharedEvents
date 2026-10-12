@@ -65,14 +65,13 @@ This binds every agent. For Claude Code, `.claude/hooks/policy-gate.mjs` blocks 
 
 ## Production posture: in sync, and closed (owner, 2026-10-12)
 
-Staging and production stay **in sync and ready for each other**. The one difference in posture is the **live switch, and it is off**: production is closed to the outer network.
+Staging and production stay in sync and ready for each other. The only difference in posture is the live switch, which is off: production is closed to the outer network. Both are brought fully aligned before production availability is announced; then the owner may turn the live switch on to support customers.
 
-- **In sync** means the same code (the SHA that passed the staging chain), the same migration level on both databases, and the same binding shapes, with every intentional difference listed in `wrangler.toml` and nothing else. Updating production (migrations, a CI deploy) is allowed when the owner asks; it keeps production ready and does not make it live.
-- **Closed** means no `PRODUCTION_LIVE`, no announcing, no clients, and no step that makes production reachable from the outer network. An agent never sets `PRODUCTION_LIVE`, never proposes a go-live sequence as the plan, and never treats a deploy as a launch.
-- **What is true today:** there is no code switch that closes the production host. The Worker answers on `oursharedevents.com` (read live 2026-10-03). Closing it is an edge setting the owner makes (an Access policy over the whole production host, OSE-1353 / OSE-1377), not something a PR can claim. Until that is set, say "held, not closed" and do not call production dark.
-- **What is not enforced yet:** nothing in CI compares staging and production continuously. `scripts/compare-environments.js` is from the Apps Script era and fails on a missing root `wrangler.toml`; `scripts/prod-preflight.mjs` checks the checkout and saved readings only. Until a parity gate exists, production is in sync only on the day someone reads both.
-- **Slow and steady: align fully, then announce.** Both environments are brought fully aligned before production availability is announced. Once they are, the owner may turn the live switch on to support customers. Not before, and not as a way to reach alignment. What "fully aligned" needs is the owner's call; a proposed bar, for the owner to accept or change: the production Worker runs a SHA that passed the staging chain; both production databases are at the migration level the code requires; production bindings are real and not shared with staging; the only differences between the two are the listed intentional ones; production smoke passes while the host is still closed.
-- **The Done bar** is the staging chain while production is held closed. The "after first launch" line below applies only if the owner takes production live.
+- **In sync:** the same code (a SHA that passed the staging chain), the same migration level on both databases, the same binding shapes, and only listed intentional differences (`node scripts/ci/env-parity.mjs`; `--strict` is the pre-announce check). Updating production when the owner asks keeps it ready; it does not make it live.
+- **Closed:** no `PRODUCTION_LIVE`, no announcing, no clients. An agent never sets `PRODUCTION_LIVE`, plans a go-live sequence, or treats a deploy as a launch.
+- **Held, not closed, today:** no code switch closes the host, and the Worker answers on `oursharedevents.com`. Closing it is an edge setting the owner makes (an Access policy over the whole host, OSE-1353 / OSE-1377). Do not call production dark until then.
+- **Not yet enforced:** the migration level of the two databases is not compared in CI. Until it is, in sync holds only on a day both were read.
+- **Done bar** while closed: the staging chain.
 
 ## Definition of Done: two stages (OSE-1443)
 
