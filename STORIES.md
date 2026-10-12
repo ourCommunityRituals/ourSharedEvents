@@ -752,9 +752,9 @@ The current `filterReportByDepth` implementation treats `local`/`mid`/`premium` 
 
 ```json
 "sponsor_class_breakdown": {
-  "local":   { "sponsor_count": 3, "total_impressions": 142 },
-  "mid":     { "sponsor_count": 1, "total_impressions": 87  },
-  "premium": { "sponsor_count": 1, "total_impressions": 210 }
+  "local":   { "sponsor_count": 3, "total_displays": 142 },
+  "mid":     { "sponsor_count": 1, "total_displays": 87  },
+  "premium": { "sponsor_count": 1, "total_displays": 210 }
 }
 ```
 
