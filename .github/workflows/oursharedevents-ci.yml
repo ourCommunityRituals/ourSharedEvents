@@ -756,11 +756,15 @@ jobs:
 
       # Staging and production stay in sync (owner, 2026-10-12): every difference
       # between [env.staging] and [env.production] in wrangler.toml is named, with
-      # its reason, or this fails. Undecided items are printed on every run and
-      # block the --strict check that precedes announcing production. No network.
+      # its reason, or this fails. Undecided items are printed on every run. While
+      # production is held this run is lenient; once the owner sets PRODUCTION_LIVE
+      # it runs --strict, so going live with an undecided difference turns every
+      # run red instead of passing quietly. No network.
       - name: 'Lint: staging and production config parity'
         if: matrix.shard == 'lint'
-        run: node scripts/ci/env-parity.mjs
+        env:
+          PARITY_ARGS: ${{ vars.PRODUCTION_LIVE == 'true' && '--strict' || '' }}
+        run: node scripts/ci/env-parity.mjs $PARITY_ARGS
 
 
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
