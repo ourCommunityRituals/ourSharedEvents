@@ -17,6 +17,15 @@ Owner rule, 2026-10-12. A release can be called **no-go immediately**, inside a 
 | The evidence | the signal that made it no-go, on the release ticket                                            | the ticket for the fix, with the post-deploy evidence                                       |
 | Data         | rolling back code does not undo a migration ([§2](#2-read-first-what-a-rollback-does-not-undo)) | a data problem is a [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md) matter, never a rollback |
 
+**Check this before calling a rollback (CCR 2026-10-12, finding A1).** A rollback puts the old code on the new database. If a migration in the release **removed or renamed** something the old code reads, that code cannot run, and the answer inside the window is the same as after it: **fix forward**. List the release's migrations and read them:
+
+```bash
+# No environment (git only)
+git diff --name-only <previous-release-sha> <this-release-sha> -- workers/oursharedevents/migrations workers/oursharedevents/migrations-forms
+```
+
+A table removal, a rename or a column removal in those files makes the release **not roll-back-able**. The first production deploy is one: `0098` drops `subscribers`, `0102` rebuilds `sponsor_impressions` as `sponsor_displays`, `0103` renames `visit_count`. For such a release, "no-go" means fix forward quickly (the revert PR in §3 restores the old code only when the schema it needs is still there). See [§2](#2-read-first-what-a-rollback-does-not-undo).
+
 **The window.** It opens when the deploy finishes. It closes at the first of these:
 
 - the **proposed length passes: 60 minutes** after the production smoke has passed (the owner sets the number; this one is a proposal); or
