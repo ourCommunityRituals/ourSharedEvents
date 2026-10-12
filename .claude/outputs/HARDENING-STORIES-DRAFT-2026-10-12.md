@@ -40,6 +40,35 @@ x.mjs`, `npx --yes <pkg>`, a path built at run time) [H]. The only real control 
    (`required_pull_request_reviews: null` [P]); `gh pr merge` without `--admin`/`--auto` passes
    the hook [H]. HARD-0 adds an interim block; it does not make the merge safe.
 
+## Decisions recorded 2026-10-12 (PO, in answer to the worksheet's seven questions)
+
+| #   | Question                             | Decision                                   | Effect                                                                                                                                                                           |
+| --- | ------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Cloudflare isolation                 | **One account, environment gating only**   | HARD-5's account-decision criterion becomes "written into the runbook"; R1 (agent → production via a `main` merge) is an accepted residual                                       |
+| 2   | `full-pipeline/*`                    | **Keep, behind a reviewer**                | HARD-3: a separate `staging-pr` environment with the owner as reviewer (a reviewer on `staging` itself would hold every `main` deploy)                                           |
+| 3   | Required review before the freeze    | **Before launch, conditional on progress** | HARD-2: scratch-repo rehearsal 10-13/14; apply 10-16/17 only if the rehearsal and HARD-5a's PAT split are done by then, else after launch with "unreviewed merge" stated as OPEN |
+| 4   | The PAT behind `OCR_PROPAGATE_TOKEN` | **Read it, rotate it, split it — tonight** | HARD-5a runs with the token overhaul (`TOKEN-OVERHAUL-TONIGHT-2026-10-12.md`)                                                                                                    |
+| 5   | Agent account                        | **Undecided; recommendation below**        | HARD-1                                                                                                                                                                           |
+| 6   | Hook strategy                        | **Undecided; recommendation below**        | HARD-10                                                                                                                                                                          |
+| 7   | Linear                               | **Stories enter under OSE-1488**           | created 2026-10-12                                                                                                                                                               |
+
+**Recommendation for 5 and 6 (one decision, not two; a single-pass judgement, not a CCR).** Both
+ask where agents run. Windows 11 Home has no Windows Sandbox, but WSL2 does run: a distribution
+with `[interop] enabled=false`, `appendWindowsPath=false` and `[automount] enabled=false` cannot
+see `C:\`, the credential manager or `~/.ssh` on Windows. Clone the repository inside it, give it
+the agent's HTTPS fine-grained token only, and keep the hook as the second layer. That is HARD-1's
+"separate identity over every channel" and HARD-10's "sandbox" at once. A spike (one day) must show
+that `npm test`, the worker suite and the Playwright audit run there; if they do not, fall back to a
+standard-user Windows account. A machine-user account costs an enterprise seat as an outside
+collaborator (unconfirmed; the org billing page shows it); a GitHub App installation token has no
+seat and cannot be admin, at the price of a token-minting helper. A formal CCR on this one
+decision is available and would take a spike's result as its evidence.
+
+**Production is on hold by the PO's decision of 2026-10-12 and resumes when the owner activates it
+(AGENTS.md).** The calendar below is anchored to the 2026-10-20 freeze and 2026-10-24 date, not to
+a production go-live; if activation moves, the "before launch" items move with it, the order does
+not.
+
 ## What changed from v2 (read first)
 
 | v2 claim or gap                                                 | Reality                                                                                                                                                                                                                                                                                                               | Now handled in                                               |
@@ -67,9 +96,14 @@ x.mjs`, `npx --yes <pkg>`, a path built at run time) [H]. The only real control 
 
 - [ ] `apply-github.mjs --apply` (owner's terminal) creates: the tag ruleset on `refs/tags/v*`
       (admin-role bypass only); `production` with the owner as reviewer and deploy refs `main` and
-      `v*` tags; **and `staging` with a custom deployment policy of branch `main` plus tag `v*`**
-      (this retires the opt-in `full-pipeline/*`-on-PR run; the owner accepts that, or keeps it
-      behind a reviewer instead). **A no-reviewer smoke environment also has a branch policy.**
+      `v*` tags; **and `staging` with a custom deployment policy of branch `main` plus tag `v*`**.
+      **Decided 2026-10-12: `full-pipeline/*` stays, behind a reviewer.** A reviewer on `staging`
+      itself would hold every `main` deploy (about 20 merges a day), so the PR path gets its own
+      environment, **`staging-pr`**, with the owner as required reviewer and no branch policy: an
+      owner-made edit to `deploy-staging` sets `environment: ${{ github.event_name ==
+    'pull_request' && 'staging-pr' || 'staging' }}`. The job does not start, and so no secret is
+      released, until the owner approves after reading the PR head. **A no-reviewer smoke
+      environment also has a branch policy.**
 - [ ] Proof that a PR from a `full-pipeline/x` branch is **refused** by GitHub ("not allowed to
       deploy"), with that response as evidence **[I until proven]**.
 - [ ] The probe tag name matches the ruleset but not the deploy trigger `v*.*.*`
@@ -111,7 +145,7 @@ red-first, lock file updated, mutation-checked.
 **Exploit items (before launch):**
 
 - [ ] **`--dry-run` is a standalone argument**, not a substring of a value: `npx --yes wrangler
-    deploy --env production --var X:--dry-run` refused **[H, allowed today]**; also
+  deploy --env production --var X:--dry-run` refused **[H, allowed today]**; also
       `npx --yes`/`--package` prefixes before a watched program.
 - [ ] **`mcp-cloudflare-write` matches write verbs on any server name** (UUID-named servers'
       `d1_database_delete`, `kv_namespace_delete` are allowed today [H]; latent for the UUID-named
@@ -120,7 +154,7 @@ red-first, lock file updated, mutation-checked.
       secret_put, d1_delete_database, kv_put); the rule covers those by name [H].)
 - [ ] **Interim merge rule:** `gh pr merge` (any flags) and the GraphQL `mergePullRequest` are
       refused for the agent until HARD-2 is verified, and `gh label create` / `pr edit
-    --add-label` for `security:human-override` is refused.
+  --add-label` for `security:human-override` is refused.
 - [ ] The matcher and W1 cover `Monitor`, `WebFetch` and `Glob`; W1's `coversMcp` checks `mcp__.*`
       **and** the shell tools, not the substring `mcp__`. `WebFetch` is refused for hosts outside
       an allowlist; `npx`/`npm install` of an unpinned package is refused.
@@ -170,7 +204,7 @@ Workflows scope is needed), HARD-0's named verifier items (W8/G6 capability prob
 **Acceptance criteria**
 
 - [ ] **The agent runs as a standard user, not a local Administrator** (`net localgroup
-    administrators` lists the owner's account today [P]; one UAC click by the same person
+  administrators` lists the owner's account today [P]; one UAC click by the same person
       elevates). The "separate OS account" is a boundary only if the agent session is the
       unprivileged one and the admin account is not signed in alongside it.
 
@@ -235,10 +269,11 @@ generated per-job map · **Parent fit:** OSE-1110
 
 **Acceptance criteria**
 
-- [ ] **Decision recorded before 2026-10-20:** a second Cloudflare account for production
-      (real isolation, one-time migration cost), or "one account; environment gating only; a
-      staging deploy token is production-capable" written into the runbook. The criterion
-      "staging token cannot read production D1" is **removed**.
+- [ ] **Decided 2026-10-12: one Cloudflare account, environment gating only.** Written into the
+      runbook as "a staging deploy token is production-capable"; the residual risk (a `main`
+      merge runs T1 with a production-capable token) is accepted by the PO, and a second account
+      stays a later option. The criterion "staging token cannot read production D1" is
+      **removed**.
 - [ ] **Property:** no production-capable credential exists at repository level; it exists only as
       an environment secret released to `production`; a probe workflow on a PR branch receives an
       **empty value** for it (evidence: the run log).
@@ -293,8 +328,9 @@ after it · **Owner:** PO applies, agent prepares · **Closes:** CCR F9 (part), 
 - [ ] `BRANCH_PROTECTION_READ_TOKEN` is an **environment secret on a `main`-only environment**,
       the drift job declares `environment:`, and `gate-execution-reconciler` no longer references
       it; drift is green for three consecutive nights (red on 10-11 and 10-12 [P]).
-- [ ] Applied **before** 2026-10-20 (rehearsal on the scratch repository 10-13/14, apply
-      10-16/17) or after 2026-10-24, never inside the window; a security-fix exception to the
+- [ ] **Decided 2026-10-12: before launch, considering progress.** Applied **before** 2026-10-20
+      (rehearsal on the scratch repository 10-13/14, apply 10-16/17) only if the rehearsal and
+      HARD-5a's PAT split are done by 10-16; otherwise after 2026-10-24, never inside the window; a security-fix exception to the
       freeze is written down. Then, and only then, the governance wording in the #958/#963 proposal
       is applied.
 - [ ] **Admin runs are pinned to an owner-reviewed SHA recorded outside the repository** and
@@ -317,7 +353,7 @@ hook that logs v2) · **Owner:** PO (terminal) · **Closes:** CCR F13
       so a later run can be diffed against it.
 - [ ] **Offline replay as a smoke test, not a rate, with a pass rule:** the owner supplies a
       **must-allow list** (the commands that make a normal day: git status/diff/commit, `npm
-    test`, `gh pr create`, `wrangler dev`) and the replay passes only if every one is allowed;
+  test`, `gh pr create`, `wrangler dev`) and the replay passes only if every one is allowed;
       every other block is labelled by the owner. Bias noted: the window is the hardening sprint
       and includes denied/errored calls. Transcripts are redacted in a non-printing process.
 - [ ] **Today, before any of this:** the `mcp__cloudflare__*` connector in this session lists
