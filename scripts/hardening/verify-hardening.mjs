@@ -5,6 +5,7 @@
 //
 //   node scripts/hardening/verify-hardening.mjs            # table + grade, exit 1 on any FAIL
 //   node scripts/hardening/verify-hardening.mjs --json
+//   node scripts/hardening/verify-hardening.mjs --only=workstation|github
 //   node scripts/hardening/verify-hardening.mjs --self-test
 //
 // It never writes, never prints a settings value or a token, and treats a check it
@@ -12,9 +13,13 @@
 //
 // Grade rubric (ours, not an industry standard): per plane, 0 FAIL = A, +0 WARN = A+;
 // 1-2 FAIL = B; 3-4 = C; 5-6 = D; more = F.
+//
+// What a PASS means, and does not: the checks read configuration. W6 reads the hook's own audit
+// log, which a process with file access could write; it is evidence the hook ran, not proof.
+// OCR_GH_FIXTURE answers gh calls from a file (tests); the output says so when it is set.
 
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -22,36 +27,71 @@ import {
   PROPOSED,
   REPO,
   claudeHome,
+  fixtureMode,
   gh,
   ghJson,
+  hookFromMain,
   hookInstallPath,
   readJson,
   readSettings,
   redact,
 } from './lib.mjs';
 
-const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 
 // Allow rules that hand an agent code execution, a network path or the owner identity.
 export const RISKY_VERBS = [
   'curl',
   'wget',
   'npx',
+  'npx wrangler',
+  'python -c',
+  'python3 -c',
+  'node -e',
+  'node -p',
+  'perl -e',
+  'ruby -e',
   'claude',
   'node',
   'python',
   'python3',
   'py',
+  'perl',
+  'ruby',
+  'deno',
+  'bun',
   'git',
+  'gh',
   'gh api',
   'winget',
   'npm install',
   'npm i',
+  'npm run',
+  'npm exec',
+  'pnpm',
+  'yarn',
+  'docker',
   'powershell',
   'pwsh',
+  'pwsh -c',
+  'powershell -c',
   'cmd',
+  'cmd /c',
   'bash',
+  'bash -c',
   'sh',
+  'sh -c',
+  'env',
+  'xargs',
+  'ssh',
+  'scp',
+  'nc',
+  'iwr',
+  'irm',
+  'iex',
+  'Invoke-WebRequest',
+  'Invoke-RestMethod',
+  'Invoke-Expression',
 ];
 /** Returns a short label when an allow rule is open-ended exec, network or identity access. */
 export function isRiskyAllowRule(rule) {
@@ -102,15 +142,23 @@ function workstation() {
   const home = claudeHome();
   const s = readSettings();
 
-  // W1 hook wired AND the installed copy is the repo's current copy
-  const wired = JSON.stringify(s.hooks?.PreToolUse ?? []).includes('policy-gate.mjs');
+  // W1 hook wired for shell + file + MCP tools, and the installed copy is the one on origin/main
+  const entry = (s.hooks?.PreToolUse ?? []).find((e) =>
+    JSON.stringify(e).includes('policy-gate.mjs')
+  );
+  const wired = Boolean(entry);
+  const coversMcp = String(entry?.matcher ?? '').includes('mcp__');
   const installed = existsSync(hookInstallPath());
-  const same = installed && existsSync(HOOK_SOURCE) && sha(hookInstallPath()) === sha(HOOK_SOURCE);
+  const main = hookFromMain();
+  const reference = main ?? (existsSync(HOOK_SOURCE) ? readFileSync(HOOK_SOURCE, 'utf8') : null);
+  const same =
+    installed && reference != null && sha(readFileSync(hookInstallPath())) === sha(reference);
   add(
     'W1',
-    'Policy gate wired in settings and installed copy matches the repo',
-    wired && same ? 'PASS' : 'FAIL',
-    `wired=${wired} installed=${installed} identical=${same}`
+    'Policy gate wired for shell, file and MCP tools, installed copy equals origin/main',
+    wired && coversMcp && same ? 'PASS' : 'FAIL',
+    `wired=${wired} coversMcp=${coversMcp} installed=${installed} identical=${same} ` +
+      `(reference: ${main ? 'origin/main' : 'working copy; run git fetch origin main'})`
   );
 
   // W2 no open-ended exec / network / identity allow rules
@@ -146,21 +194,24 @@ function workstation() {
     missing.length ? `missing ${missing.length}: ${missing.join(' | ')}` : 'complete'
   );
 
-  // W6 live proof: the hook has actually logged calls recently
+  // W6 the hook has actually blocked something in the last 7 days (the owner's born-red test)
   const auditDir = join(home, '.claude', 'audit');
-  let recent = 0;
+  let blocks = 0;
   if (existsSync(auditDir)) {
-    const cutoff = Date.now() - 7 * 864e5;
+    const cutoff = Date.now() - 8 * 864e5;
     for (const f of readdirSync(auditDir)) {
       const m = f.match(/^policy-(\d{4}-\d{2}-\d{2})\.jsonl$/);
-      if (m && Date.parse(m[1]) >= cutoff - 864e5) recent += 1;
+      if (!m || Date.parse(m[1]) < cutoff) continue;
+      for (const line of readFileSync(join(auditDir, f), 'utf8').split('\n')) {
+        if (/"decision":"block"/.test(line)) blocks += 1;
+      }
     }
   }
   add(
     'W6',
-    'Policy gate is live: audit log written within the last 7 days',
-    recent > 0 ? 'PASS' : 'FAIL',
-    `${recent} audit file(s)`
+    'Policy gate is live: it has blocked a call within the last 7 days',
+    blocks > 0 ? 'PASS' : 'FAIL',
+    `${blocks} block record(s) in the audit log`
   );
 
   // W7 MCP servers launched through npx are version-pinned
@@ -193,7 +244,7 @@ function workstation() {
   add(
     'W8',
     'The GitHub token available to agents has no admin scopes',
-    !st.ok && !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
+    !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
     !scopes
       ? 'could not read token scopes'
       : adminScopes.length
@@ -220,6 +271,9 @@ function workstation() {
   );
   return checks;
 }
+
+// The admin repository role: the only bypass the tag ruleset may have (GitHub role id 5).
+const ADMIN_ROLE = { actor_id: 5, actor_type: 'RepositoryRole' };
 
 function github() {
   const checks = [];
@@ -258,14 +312,10 @@ function github() {
     );
   }
 
-  // G3 tag ruleset with no bypass
+  // G3 tag ruleset: active, blocks create/update/delete, bypass limited to the admin role
   const rs = ghJson(['api', `repos/${REPO}/rulesets`]);
-  if (!rs.ok)
-    unverifiable(
-      'G3',
-      'Release tags v*.*.* are locked by an active ruleset with no bypass',
-      rs.error
-    );
+  const g3 = 'Release tags v*.*.* are locked by an active ruleset (bypass: admin role only)';
+  if (!rs.ok) unverifiable('G3', g3, rs.error);
   else {
     let found = null;
     for (const brief of rs.data ?? []) {
@@ -275,48 +325,55 @@ function github() {
       const inc = full.data?.conditions?.ref_name?.include ?? [];
       const types = new Set((full.data?.rules ?? []).map((x) => x.type));
       const covers = inc.some((i) => /^refs\/tags\/v/.test(i) || i === '~ALL');
+      const bypass = full.data?.bypass_actors ?? [];
+      const onlyAdminRole = bypass.every(
+        (b) => b.actor_type === ADMIN_ROLE.actor_type && b.actor_id === ADMIN_ROLE.actor_id
+      );
       if (
         covers &&
         types.has('creation') &&
         types.has('update') &&
         types.has('deletion') &&
-        (full.data?.bypass_actors ?? []).length === 0
+        onlyAdminRole
       )
         found = brief.name;
     }
-    add(
-      'G3',
-      'Release tags v*.*.* are locked by an active ruleset with no bypass',
-      found ? 'PASS' : 'FAIL',
-      found ?? 'no matching active tag ruleset'
-    );
+    add('G3', g3, found ? 'PASS' : 'FAIL', found ?? 'no matching active tag ruleset');
   }
 
-  // G4 production environment has a required reviewer and protected-branch deploys
+  // G4 production environment: a reviewer, and deploys limited to main and release tags
+  const g4 = 'production environment requires a reviewer and limits deploy refs';
   const env = ghJson(['api', `repos/${REPO}/environments/production`]);
-  if (!env.ok) unverifiable('G4', 'production environment requires a reviewer', env.error);
+  if (!env.ok) unverifiable('G4', g4, env.error);
   else {
     const rules = env.data?.protection_rules ?? [];
     const reviewers = rules.some(
       (x) => x.type === 'required_reviewers' && (x.reviewers ?? []).length > 0
     );
-    const branches = env.data?.deployment_branch_policy != null;
+    const policy = env.data?.deployment_branch_policy;
+    let refsLimited = policy?.protected_branches === true;
+    let refs = refsLimited ? 'protected branches' : 'none';
+    if (policy?.custom_branch_policies === true) {
+      const pol = ghJson([
+        'api',
+        `repos/${REPO}/environments/production/deployment-branch-policies`,
+      ]);
+      const names = (pol.data?.branch_policies ?? []).map((p) => `${p.type ?? 'branch'}:${p.name}`);
+      refsLimited = names.length > 0 && !names.some((n) => /:\*$/.test(n));
+      refs = names.join(', ') || 'none';
+    }
     add(
       'G4',
-      'production environment requires a reviewer and limits deploy branches',
-      reviewers && branches ? 'PASS' : 'FAIL',
-      `reviewers=${reviewers} branchPolicy=${branches}`
+      g4,
+      reviewers && refsLimited ? 'PASS' : 'FAIL',
+      `reviewers=${reviewers} refs=[${refs}] (a reviewer who is also the agent can approve their own deploy until G6 passes)`
     );
   }
 
   // G5 deploy credentials are not repository-level secrets
+  const g5 = 'Deploy credentials live in environment secrets, not repository secrets';
   const sec = gh(['secret', 'list']);
-  if (!sec.ok)
-    unverifiable(
-      'G5',
-      'Deploy credentials live in environment secrets, not repository secrets',
-      sec.stderr.split('\n')[0]
-    );
+  if (!sec.ok) unverifiable('G5', g5, sec.stderr.split('\n')[0]);
   else {
     const names = sec.stdout
       .split('\n')
@@ -327,9 +384,19 @@ function github() {
     );
     add(
       'G5',
-      'Deploy credentials live in environment secrets, not repository secrets',
+      g5,
       deploy.length === 0 ? 'PASS' : 'FAIL',
       deploy.length ? `${deploy.length} repo-level: ${deploy.join(', ')}` : 'none at repo level'
+    );
+    // G7 the PR security reviewer has a credential (warn: the job is advisory)
+    const hasKey = names.includes('CLAUDE_CODE_OAUTH_TOKEN') || names.includes('ANTHROPIC_API_KEY');
+    add(
+      'G7',
+      'Claude PR security review has a credential (otherwise it skips with a warning)',
+      hasKey ? 'PASS' : 'WARN',
+      hasKey
+        ? 'present'
+        : 'not a repository secret (organization or environment secret not checked)'
     );
   }
 
@@ -348,18 +415,6 @@ function github() {
       `${me.data.login} admin=${admin}`
     );
   }
-
-  // G7 the PR security reviewer has a credential (warn: the job is advisory)
-  const names = new Set(
-    (gh(['secret', 'list']).stdout || '').split('\n').map((l) => l.split('\t')[0].trim())
-  );
-  const hasKey = names.has('CLAUDE_CODE_OAUTH_TOKEN') || names.has('ANTHROPIC_API_KEY');
-  add(
-    'G7',
-    'Claude PR security review has a credential (otherwise it skips with a warning)',
-    hasKey ? 'PASS' : 'WARN',
-    hasKey ? 'present' : 'not a repository secret (organization or environment secret not checked)'
-  );
   return checks;
 }
 
@@ -388,6 +443,21 @@ function selfTest() {
     'open verbs flagged'
   );
   assert(
+    riskyAllowRules([
+      'Bash(gh:*)',
+      'Bash(npx wrangler:*)',
+      'Bash(pwsh -c:*)',
+      'Bash(bash -c:*)',
+      'Bash(python -c:*)',
+      'Bash(env:*)',
+      'Bash(xargs:*)',
+      'Bash(npm run:*)',
+      'PowerShell(iwr:*)',
+      'PowerShell(Invoke-Expression:*)',
+    ]).length === 10,
+    'the verbs the QA lens found open are flagged'
+  );
+  assert(
     riskyAllowRules(['Bash(git status*)', 'Bash(npm test *)', 'Bash(gh pr:*)', 'Read(//c/x/**)'])
       .length === 0,
     'narrow rules pass'
@@ -406,7 +476,10 @@ function selfTest() {
     'pinned npx passes'
   );
   assert(grade([{ status: 'PASS' }]) === 'A+' && grade([{ status: 'WARN' }]) === 'A', 'grade A/A+');
+  assert(grade(Array(2).fill({ status: 'FAIL' })) === 'B', 'grade B at 2 fails');
+  assert(grade(Array(3).fill({ status: 'FAIL' })) === 'C', 'grade C at 3 fails');
   assert(grade(Array(5).fill({ status: 'FAIL' })) === 'D', 'grade D');
+  assert(grade(Array(7).fill({ status: 'FAIL' })) === 'F', 'grade F');
   assert(existsSync(PROPOSED), 'proposed settings file exists');
   console.log('self-test ok');
 }
@@ -417,7 +490,7 @@ if (isMain) {
     selfTest();
     process.exit(0);
   }
-  // --only=workstation skips every GitHub call (offline, and what the tests use)
+  // --only=workstation skips every GitHub call except `gh auth status` for the token scopes
   const only = process.argv.find((a) => a.startsWith('--only='))?.split('=')[1];
   const all = [
     ...(only === 'github' ? [] : workstation()),
@@ -428,6 +501,7 @@ if (isMain) {
     console.log(
       JSON.stringify(
         {
+          fixtureMode: fixtureMode(),
           checks: all.map((c) => ({ ...c, detail: redact(c.detail) })),
           grades: Object.fromEntries(
             planes.map((p) => [p, grade(all.filter((c) => c.plane === p))])
@@ -438,6 +512,8 @@ if (isMain) {
       )
     );
   } else {
+    if (fixtureMode())
+      console.log('*** FIXTURE MODE: gh answers come from OCR_GH_FIXTURE, not GitHub ***');
     for (const p of planes) {
       const cs = all.filter((c) => c.plane === p);
       console.log(`\n${p.toUpperCase()}  grade ${grade(cs)}`);
