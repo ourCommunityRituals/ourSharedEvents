@@ -326,6 +326,42 @@ describe('apply-workstation', () => {
   });
 });
 
+describe('guards found in the confirmation pass', () => {
+  it('applyTo refuses the real home folder unless the CLI confirmed the owner', async () => {
+    const ws = await import(pathToFileURL(join(DIR, 'apply-workstation.mjs')).href);
+    const lib = await import(pathToFileURL(join(DIR, 'lib.mjs')).href);
+    const home = require('os').homedir();
+    expect(() => ws.applyTo(home, 'process.exit(0);', lib.readJson(lib.PROPOSED))).toThrow(
+      /refuses the real home/
+    );
+  });
+
+  it('a verifier run with CLAUDE_HOME or a fixture says so and never exits 0', () => {
+    const fixture = join(scratch('ose-ghfix-'), 'gh.json');
+    writeFileSync(fixture, JSON.stringify(GOOD_GH()));
+    const r = run('verify-hardening.mjs', ['--only=workstation'], {
+      CLAUDE_HOME: scratchHome(BAD),
+      OCR_GH_FIXTURE: fixture,
+    });
+    expect(r.status).toBe(3);
+    expect(r.stdout).toMatch(/NOT A REAL READING/);
+    const j = JSON.parse(
+      run('verify-hardening.mjs', ['--json', '--only=workstation'], {
+        CLAUDE_HOME: scratchHome(BAD),
+        OCR_GH_FIXTURE: fixture,
+      }).stdout
+    );
+    expect(j.overrides).toEqual(['OCR_GH_FIXTURE', 'CLAUDE_HOME']);
+  });
+
+  it('W8 passes for a fine-grained token, which has no classic scopes line', async () => {
+    const { home } = await hardenedHome();
+    const m = GOOD_GH();
+    m['auth status'] = { stdout: 'github.com\n  - Token: github_pat_************\n' };
+    expect(verify(home, m, 'workstation').W8).toBe('PASS');
+  });
+});
+
 describe('apply-github', () => {
   it('--apply refuses before any gh call when there is no terminal', () => {
     // an empty fixture answers nothing: a gh call would exit 2, the guard must exit 3 first

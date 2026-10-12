@@ -18,9 +18,11 @@
 // log, which a process with file access could write; it is evidence the hook ran, not proof.
 // OCR_GH_FIXTURE answers gh calls from a file (tests); the output says so when it is set.
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { homedir, tmpdir, userInfo } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   HOOK_SOURCE,
@@ -237,6 +239,8 @@ function workstation() {
   // W8 the gh keyring identity on this machine is not an admin-scoped token
   const st = gh(['auth', 'status']);
   const scopes = (st.stdout + st.stderr).match(/Token scopes:\s*(.*)/i)?.[1] ?? '';
+  // a fine-grained token has no classic scopes line; it is what agents should use
+  const fineGrained = /Token:\s*github_pat_/i.test(st.stdout + st.stderr);
   const adminScopes = scopes
     .split(',')
     .map((x) => x.replace(/['\s]/g, ''))
@@ -244,12 +248,14 @@ function workstation() {
   add(
     'W8',
     'The GitHub token available to agents has no admin scopes',
-    !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
-    !scopes
-      ? 'could not read token scopes'
-      : adminScopes.length
-        ? adminScopes.join(', ')
-        : 'no admin scopes'
+    fineGrained ? 'PASS' : !scopes ? 'FAIL' : adminScopes.length === 0 ? 'PASS' : 'FAIL',
+    fineGrained
+      ? 'fine-grained token (no classic scopes)'
+      : !scopes
+        ? 'could not read token scopes'
+        : adminScopes.length
+          ? adminScopes.join(', ')
+          : 'no admin scopes'
   );
 
   // W9 informational: pre-trusted worktrees
@@ -418,7 +424,25 @@ function github() {
   return checks;
 }
 
-export function grade(checks) {
+export // The account database says where the home folder is; an environment variable can say otherwise.
+function homeDiffersFromAccount() {
+  try {
+    return resolve(homedir()).toLowerCase() !== resolve(userInfo().homedir).toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+// A gh that lives under the temp folder is a stand-in, not the installed CLI.
+function ghFromTempFolder() {
+  const where = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['gh'], {
+    encoding: 'utf8',
+  });
+  const first = (where.stdout || '').split(/\r?\n/)[0].trim().toLowerCase();
+  return Boolean(first) && first.startsWith(resolve(tmpdir()).toLowerCase());
+}
+
+function grade(checks) {
   const fail = checks.filter((c) => c.status === 'FAIL').length;
   const warn = checks.filter((c) => c.status === 'WARN').length;
   if (fail === 0) return warn === 0 ? 'A+' : 'A';
@@ -497,11 +521,19 @@ if (isMain) {
     ...(only === 'workstation' ? [] : github()),
   ];
   const planes = ['workstation', 'github'].filter((p) => !only || p === only);
+  // A verifier pointed at another home folder or at fixture answers is a test, not a reading.
+  const overrides = [
+    fixtureMode() && 'OCR_GH_FIXTURE',
+    process.env.CLAUDE_HOME && 'CLAUDE_HOME',
+    homeDiffersFromAccount() && 'USERPROFILE/HOME',
+    ghFromTempFolder() && 'gh on PATH from a temp folder',
+  ].filter(Boolean);
   if (process.argv.includes('--json')) {
     console.log(
       JSON.stringify(
         {
           fixtureMode: fixtureMode(),
+          overrides,
           checks: all.map((c) => ({ ...c, detail: redact(c.detail) })),
           grades: Object.fromEntries(
             planes.map((p) => [p, grade(all.filter((c) => c.plane === p))])
@@ -512,8 +544,11 @@ if (isMain) {
       )
     );
   } else {
-    if (fixtureMode())
-      console.log('*** FIXTURE MODE: gh answers come from OCR_GH_FIXTURE, not GitHub ***');
+    if (overrides.length) {
+      console.log(
+        `*** NOT A REAL READING: ${overrides.join(' and ')} set; this output proves nothing about this machine ***`
+      );
+    }
     for (const p of planes) {
       const cs = all.filter((c) => c.plane === p);
       console.log(`\n${p.toUpperCase()}  grade ${grade(cs)}`);
@@ -521,5 +556,6 @@ if (isMain) {
         console.log(`  ${c.status.padEnd(4)} ${c.id}  ${c.title}\n        ${redact(c.detail)}`);
     }
   }
-  process.exit(all.some((c) => c.status === 'FAIL') ? 1 : 0);
+  // an overridden run never exits 0, so a script cannot take it for a pass
+  process.exit(overrides.length ? 3 : all.some((c) => c.status === 'FAIL') ? 1 : 0);
 }

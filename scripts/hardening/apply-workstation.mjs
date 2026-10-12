@@ -22,7 +22,9 @@
 
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { homedir, userInfo } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRiskyAllowRule } from './verify-hardening.mjs';
 import {
@@ -119,7 +121,34 @@ export function plan(current, proposed, hookCommand) {
  * Writes the hook and the merged settings under `home`. The CLI calls this after the terminal
  * check; tests call it directly with a scratch folder.
  */
-export function applyTo(home, hookText, proposed) {
+// Held by this module only: nothing that imports it can obtain it, so only main() below, after the
+// terminal prompt, can write the real home folder.
+const OWNER_CAPABILITY = Symbol('owner-terminal-confirmed');
+
+function isRealHome(p) {
+  const real = (x) => {
+    try {
+      return realpathSync.native(x).toLowerCase();
+    } catch {
+      return resolve(x).toLowerCase();
+    }
+  };
+  const target = real(p);
+  const homes = [homedir()];
+  try {
+    homes.push(userInfo().homedir);
+  } catch {
+    /* no account database: the environment's home is still checked */
+  }
+  return homes.some((h) => real(h) === target);
+}
+
+export function applyTo(home, hookText, proposed, opts = {}) {
+  // The CLI sets ownerConfirmed after the terminal prompt. Any other caller (a script that
+  // imports this module) can write a scratch folder, never the real home.
+  if (isRealHome(home) && opts.capability !== OWNER_CAPABILITY) {
+    throw new Error('applyTo refuses the real home folder without the owner terminal confirmation');
+  }
   const file = settingsPath(home);
   const hookFile = hookInstallPath(home);
   const hookCommand = `node "${hookFile.replace(/\\/g, '/')}"`;
@@ -172,7 +201,7 @@ async function main() {
     return;
   }
   await requireOwnerTerminal(`write ${settingsPath(home)}`);
-  const done = applyTo(home, hookText, readJson(PROPOSED));
+  const done = applyTo(home, hookText, readJson(PROPOSED), { capability: OWNER_CAPABILITY });
   console.log(`\nApplied ${done.length} change(s). Start a NEW session, then run:`);
   console.log('  node scripts/hardening/verify-hardening.mjs');
   console.log(

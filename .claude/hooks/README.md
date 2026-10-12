@@ -13,7 +13,7 @@ Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 | File                          | What it is                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                                 |
-| `policy-gate.test.mjs`        | 277 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
+| `policy-gate.test.mjs`        | 487 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
 | `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning)           |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
@@ -56,9 +56,17 @@ agent could add to a command.
 
 ## Rules added 2026-10-12 (agent workstation review)
 
-Rules read the command word and subcommand (`git push`, `gh release create`), after quotes, `.exe`
-and backticks are stripped, so a commit message that mentions `git push --tags` is not blocked and
-`gh.exe` or `"git"` are not a way round.
+A shell call is tokenised like a shell would read it (quotes, escapes, `;` `&` `|` `&&` `||`, newlines,
+redirects, `$(…)` and backticks, heredocs). Each simple command becomes a unit; a unit that hands text to an
+interpreter or wrapper (`bash -c`, `powershell -Command`, `cmd /c`, `eval`, `iex`, `env`, `sudo`, `timeout`,
+`xargs`, `find -exec`) is unwrapped and read again. Quoted text is data (a commit message, an `echo`) unless it
+is given to an interpreter, and a heredoc body is kept whenever anything on its line can execute it. Rules look
+at the program and its arguments, so `git commit -m "git push --tags"` is fine and `bash -c "git push --tags"`
+is not. `cd` is followed, so `cd ~/.claude && cat config.json` is the same file as `cat ~/.claude/config.json`.
+
+The analysis **fails closed**: past 1.5 M characters, 6 levels of nesting, 2,500 commands or 3 seconds, or on any
+exception, the call is refused with `[analysis-failed]`. (Unparseable hook input still fails open, because a
+harness change must not lock every session.) A UNC or network path is never opened while analysing it.
 
 | Rule                                          | Blocks                                                                                                                                                 | Why                                                                                    |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -80,6 +88,15 @@ and backticks are stripped, so a commit message that mentions `git push --tags` 
 | `persistence`                                 | git hooks, scheduled tasks, shell profile, registry run keys, `npm config set registry`                                                                | runs or installs later                                                                 |
 | `owner-script`                                | `scripts/hardening/apply-*.mjs --apply`                                                                                                                | owner terminal only                                                                    |
 | `credential-glob`                             | a wildcard under `.claude`                                                                                                                             | reaches `.credentials.json`                                                            |
+| `git-config-list`                             | `git config --list`, `--get-regexp`, `--show-origin` (not `--local`)                                                                                   | prints remote URLs and helpers that can carry tokens                                   |
+| `gh-review-approve`                           | `gh pr review --approve`                                                                                                                               | an agent does not approve pull requests                                                |
+| `gh-config`                                   | `gh alias set`, `gh extension install`, `gh config set`                                                                                                | changes what later gh commands do                                                      |
+| `encoded-command`                             | `powershell -EncodedCommand`                                                                                                                           | cannot be read, so cannot be checked                                                   |
+| `git-env`                                     | `GIT_CONFIG_*`, `GIT_SSH*`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_EXEC_PATH`… set inline or exported                                               | changes how git runs later commands                                                    |
+| `pipe-to-shell`                               | anything but `echo`/`printf` piped into `bash`, `sh`, `iex`, `pwsh`, `cmd` (a download included)                                                       | code that cannot be read first; `echo "…"                                              | bash` is read as the command it carries |
+| `gh-foreign-repo`                             | `gh -R other/repo`, `--hostname`, `GH_HOST`, `GH_REPO`                                                                                                 | gh pointed outside the organisation                                                    |
+| `mcp-code-execution`                          | the Cloudflare connector's `d1_database_query`, `browser_run_code_unsafe`, Chrome `javascript_tool`, `firebase_deploy`                                 | arbitrary SQL, script or deploy on a connected service                                 |
+| `analysis-failed`                             | a call that is too large, nested too deeply, has too many commands, or cannot be analysed within 3 s                                                   | a gate that gives up quietly can be made to give up                                    |
 | `mcp-cloudflare-write`, `mcp-session-control` | Cloudflare write tools; permission mode, remote control, connector toggles, session messaging                                                          | the same actions without a shell                                                       |
 
 `mcp__terminal__run_in_terminal` is checked as a shell. The matcher in `settings.user.proposed.json`
