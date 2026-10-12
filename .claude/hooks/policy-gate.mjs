@@ -70,7 +70,34 @@ function ghApiIsMutating(seg) {
 }
 
 const GH_SENSITIVE_PATH =
-  /(branches\/[^\s/]+\/protection|\/rulesets\b|actions\/(secrets|variables|runners|permissions)\b|\/hooks\b|\/collaborators\b|\/environments\b|\/keys\b)/i;
+  /(branches\/[^\s/]+\/protection|\/rulesets\b|actions\/(secrets|variables|runners|permissions)\b|\/hooks\b|\/collaborators\b|\/environments\b|\/keys\b|\/git\/(refs|tags)\b|\/releases\b)/i;
+
+// Hosts a data-bearing request (upload, POST body) may go to from a workstation.
+// Anything else is an owner decision: it is how a prompt-injected agent sends data out.
+const UPLOAD_ALLOWED_HOSTS =
+  /^(localhost|127\.0\.0\.1|\[?::1\]?|([\w-]+\.)*oursharedevents\.com|api\.github\.com)$/i;
+
+function isUploadToUnknownHost(seg) {
+  const curlLike = /\b(curl|wget)(\.exe)?\b/i.test(seg);
+  const psWeb = /\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b/i.test(seg);
+  if (!curlLike && !psWeb) return false;
+  const sends = curlLike
+    ? /(\s-d\b|\s--data(-\w+)?\b|\s-F\b|\s--form(-string)?\b|\s-T\b|\s--upload-file\b|\s--json\b|\s-X\s*(POST|PUT|PATCH)\b|\s--request[ =](POST|PUT|PATCH)\b|\s--post-(data|file)\b|\s--method[ =](POST|PUT|PATCH)\b)/i.test(
+        seg
+      )
+    : /(\s-Method\s+(Post|Put|Patch)\b|\s-Body\b|\s-InFile\b)/i.test(seg);
+  if (!sends) return false;
+  const hosts = [...seg.matchAll(/(?:https?|ftp):\/\/([^/\s"':?#]+)/gi)].map((m) => m[1]);
+  // No URL to check means the destination is unknown, so treat it as unknown.
+  return hosts.length === 0 || hosts.some((h) => !UPLOAD_ALLOWED_HOSTS.test(h));
+}
+
+// Home-level Claude config and hooks: an agent never rewrites its own guard or permissions.
+const HOME_CLAUDE_CONFIG =
+  /(~|%USERPROFILE%|\$env:USERPROFILE|\$HOME|[A-Za-z]:[\\/]Users[\\/][^\\/\s"']+|\/c\/Users\/[^/\s"']+|\/(home|Users)\/[^/\s"']+)[\\/]\.claude[\\/](settings(\.local)?\.json|hooks[\\/]|\.credentials)|[\\/]\.claude\.json\b/i;
+const MCP_JSON = /(^|[\\/\s"'=])\.mcp\.json\b/i;
+const SHELL_WRITE_VERB =
+  /(>|\bset-content\b|\badd-content\b|\bout-file\b|\btee\b|\bcp\b|\bcopy(-item)?\b|\bmv\b|\bmove(-item)?\b|\bsed\s+-i\b|\bnew-item\b|\bremove-item\b|\brm\b|\bdel\b|\bwritealltext\b|\bwrite-output\b)/i;
 
 // Each rule: [id, reason, test(segment) -> true when the segment must be blocked]
 const SHELL_RULES = [
@@ -159,6 +186,68 @@ const SHELL_RULES = [
       ghApiIsMutating(s) &&
       (/(?:-X|--method)[ =]?delete\b/i.test(s) || GH_SENSITIVE_PATH.test(s)),
   ],
+  // 2026-10-11 hardening. The reasons name the path each rule closes.
+  [
+    'git-tag-push',
+    'A pushed v*.*.* tag starts the production deploy chain; the owner pushes release tags.',
+    (s) =>
+      /\bgit\b/i.test(s) &&
+      /\bpush\b/i.test(s) &&
+      /(\s--tags\b|\s--follow-tags\b|refs\/tags\/|\s\+?v\d+\.\d+\.\d+\S*(?=\s|$))/i.test(s),
+  ],
+  [
+    'gh-release-create',
+    'Creating a release creates a tag, which starts the production deploy chain.',
+    (s) => /\bgh\s+release\s+create\b/i.test(s),
+  ],
+  [
+    'prod-dispatch',
+    'Production deploys are dispatched by the owner, with the typed confirmation.',
+    (s) =>
+      /deploy_production/i.test(s) &&
+      /(\bgh\b|\bcurl\b|\binvoke-(rest|web)method\b|\biwr\b|\birm\b)/i.test(s),
+  ],
+  [
+    'gh-auth-token',
+    'Printing or changing the GitHub token hands an agent the owner identity.',
+    (s) =>
+      /\bgh\s+auth\s+(token|refresh|login|logout|setup-git|switch)\b/i.test(s) ||
+      /\bgh\s+auth\s+status\b.*(\s-t\b|\s--show-token\b)/i.test(s),
+  ],
+  [
+    'credential-store',
+    'The OS credential store and git credential helpers are never queried by an agent.',
+    (s) =>
+      /\bgit\s+credential(-\w+)?\s+(fill|approve|reject|get)\b/i.test(s) ||
+      /\bgit\s+credential-manager\b/i.test(s) ||
+      /\b(cmdkey|vaultcmd)\b/i.test(s) ||
+      /Get-StoredCredential|\[Windows\.Security\.Credentials/i.test(s),
+  ],
+  [
+    'git-remote-redirect',
+    'Adding a remote or pushing to a raw URL sends the repository somewhere the owner has not chosen.',
+    (s) =>
+      /\bgit\b/i.test(s) &&
+      (/\bremote\s+(add|set-url|set-head)\b/i.test(s) ||
+        (/\bpush\b/i.test(s) && /(https?:\/\/|ssh:\/\/|git:\/\/|git@[\w.-]+:)/i.test(s))),
+  ],
+  [
+    'net-upload',
+    'Data-bearing requests only go to localhost, *.oursharedevents.com and api.github.com.',
+    isUploadToUnknownHost,
+  ],
+  [
+    'bypass-permissions',
+    'A nested agent started with permissions bypassed is outside every rule here.',
+    (s) => /--dangerously-skip-permissions\b|--permission-mode[ =]bypassPermissions\b/i.test(s),
+  ],
+  [
+    'self-config',
+    'An agent does not change its own MCP servers, permissions or hooks; the owner does that.',
+    (s) =>
+      /\bclaude\s+mcp\s+(add|add-json|add-from-claude-desktop|remove)\b/i.test(s) ||
+      ((HOME_CLAUDE_CONFIG.test(s) || MCP_JSON.test(s)) && SHELL_WRITE_VERB.test(s)),
+  ],
 ];
 
 function checkShell(command) {
@@ -186,6 +275,20 @@ function checkFile(tool, input) {
   const path = input.file_path ?? input.notebook_path ?? input.path ?? '';
   if (path && SENSITIVE_PATH.test(path)) {
     return ['credential-file', 'Credential files are never read or edited by an agent.'];
+  }
+  // Writes only: reading settings is how an inventory gets done. An agent that can edit
+  // its own permissions, hooks or MCP servers can switch every other rule off.
+  if (path && tool !== 'Read' && tool !== 'Grep') {
+    const norm = normalisePath(path);
+    const home = normalisePath(homedir());
+    const projectSettings = /(^|\/)\.claude\/settings(\.local)?\.json$/;
+    const homeConfig = norm === `${home}/.claude.json` || norm.startsWith(`${home}/.claude/hooks/`);
+    if (projectSettings.test(norm) || homeConfig || /(^|\/)\.mcp\.json$/.test(norm)) {
+      return [
+        'self-config',
+        'An agent does not change its own MCP servers, permissions or hooks; the owner does that.',
+      ];
+    }
   }
   // A content search over the home folder or ~/.claude would print matches from
   // config.json and .credentials.json. Narrower folders (projects/, memory/) are fine.

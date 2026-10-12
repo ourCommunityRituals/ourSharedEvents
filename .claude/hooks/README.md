@@ -13,7 +13,7 @@ Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 | File                          | What it is                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                       |
-| `policy-gate.test.mjs`        | 72 cases: must-block, must-allow near-misses, fail-open, audit redaction                               |
+| `policy-gate.test.mjs`        | 120 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-11, see below) |
 | `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning) |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
