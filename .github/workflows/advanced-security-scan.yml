@@ -6,7 +6,7 @@
 # Kept (non-redundant with S0):
 #   1. SBOM Generation         - Supply chain transparency (advisory)
 #   2. License Compliance      - Detect copyleft/problematic licenses
-#   3. GitHub Dependency Review - PR-scoped dependency diff analysis (disabled until GHAS)
+#   3. GitHub Dependency Review - placeholder; the review runs in dependency-review.yml
 #
 # @see .github/workflows/oursharedevents-ci.yml - S0 Security (CodeQL + SBOM + npm audit)
 # @see docs/SECURITY.md - Vulnerability remediation guide
@@ -258,20 +258,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # DISABLED: Requires Dependency Graph + GitHub Advanced Security.
-      # Enable at: Settings → Security → Code security and analysis
-      #   → Dependency graph ✓  → GitHub Advanced Security ✓
-      # Then uncomment the step below and remove the skip step.
-      #
-      # - name: Dependency Review
-      #   uses: actions/dependency-review-action@v4
-      #   with:
-      #     fail-on-severity: high
-      #     deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
-      #     comment-summary-in-pr: always
+      # The pull request review runs in dependency-review.yml, which holds the
+      # only copy of its settings (severity threshold and licence allowlist).
+      # This workflow has no pull_request trigger, so this job never runs.
 
-      - name: Dependency Review (skipped — GHAS not enabled)
-        run: echo "⏭️ Dependency Review requires GitHub Advanced Security. Enable in repo settings to activate this gate."
+      - name: Dependency Review (runs in dependency-review.yml)
+        run: echo "⏭️ Dependency Review runs on pull requests in dependency-review.yml."
 
   # ============================================================================
   # SUMMARY AGGREGATOR
