@@ -170,7 +170,9 @@ independent review of whatever F8 decision is taken.
 ## Limits of this worksheet
 
 - Mutation round 3 had two anchors that no longer exist after the tokenizer rewrite
-  ("wrappers not unwrapped", "encoded command allowed"); those two faults were not re-planted.
+  ("wrappers not unwrapped", "encoded command allowed"). **Update, same day, after merge:** both
+  were re-planted against the merged hook, plus "eval / iex not unwrapped"; all three turn the
+  suite red (15, 2 and 4 failing cases). No survivor is open from the three rounds.
 - The reviewer corpus is adversarial and partly opinionated; 312 unexpected is not a defect count.
 - No required check on `main` reviews the hook's rule list; the lock file makes weakening a visible
   diff line, not a blocked merge.
