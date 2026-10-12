@@ -23,7 +23,6 @@ import { isRiskyAllowRule } from './verify-hardening.mjs';
 import {
   HOOK_SOURCE,
   PROPOSED,
-  claudeHome,
   hookInstallPath,
   readJson,
   readSettings,
