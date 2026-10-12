@@ -2361,6 +2361,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/scan-split-hour-precision.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/scan-to-export-trace.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

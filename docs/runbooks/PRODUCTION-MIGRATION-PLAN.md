@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 99, forms 14 to 18
+# Production migration plan: main 77 to 100, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0099, forms 0015–0018.
+Covers: main 0078–0100, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 99               | 22       |
+| Main (`ocr-db-production`)        | 77               | 100              | 23       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0099
+## Main database, 0078 to 0100
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -116,6 +116,7 @@ a line in this document.
 | `0097_event_type_watch_party.sql`                | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.  | Yes  |
 | `0098_drop_subscribers_from_anonymous_db.sql`    | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.    | Yes  |
 | `0099_event_place_checked_at.sql`                | Adds `events.place_checked_at`, when the event's place was last looked up on the map. Old events keep none.  | No   |
+| `0100_scan_split_tables_hour_precision.sql`      | Truncates `created_at` on `scan_placement_events` and `scan_node_returns` to the scan's hour. Counts stay.   | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -128,7 +129,7 @@ a line in this document.
 
 ## The migrations that write or remove rows
 
-Nine files. Each is listed with what it changes, why it is safe on production as it is
+Ten files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -190,6 +191,19 @@ today, and what would be different if production held data.
   visitors. That is the stated cost.
 - **After the deploy:** the scan write stores only a keyed id, whichever Worker queued
   the scan, so no raw value can come back.
+
+### `0100_scan_split_tables_hour_precision.sql`
+
+- **Four `UPDATE`s**, two each on `scan_placement_events` and `scan_node_returns`: set `created_at` to the scan's hour bucket
+  (`scan_bucket`, in `YYYY-MM-DD HH:00:00` shape). A row whose bucket is not in the
+  expected shape keeps its stamp's hour. Nothing else changes.
+- **Why:** both tables were written in one batch with a second-precision stamp, so a
+  join on event and `created_at` linked who to where one scan at a time (OSE-923,
+  CCR N-DS-2).
+- **Safe because** no reader selects `created_at` from either table; only the
+  return-signal retention sweep read it, and it now reads `scan_bucket`. Scan totals
+  and reports do not change. Production has no scans (0 rows).
+- **If it did truncate:** the seconds are gone. That is the intent.
 
 ### `0097_event_type_watch_party.sql`
 
@@ -253,7 +267,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0099_event_place_checked_at.sql` and `99`;
+2. **The level.** Expected: `0100_scan_split_tables_hour_precision.sql` and `100`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

@@ -25,7 +25,7 @@
  */
 
 /** Highest migration in migrations/ — currently 0099_event_place_checked_at.sql */
-export const REQUIRED_DB_MIGRATION = 99;
+export const REQUIRED_DB_MIGRATION = 100;
 
 /** Highest migration in migrations-forms/ — currently 0018_registration_email_encrypted.sql */
 export const REQUIRED_FORMS_MIGRATION = 18;

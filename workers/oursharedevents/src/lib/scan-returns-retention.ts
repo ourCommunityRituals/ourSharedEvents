@@ -25,8 +25,9 @@
  * env drops it or sets it below 180 days.
  *
  * WHAT IT DOES:
- *   - `scan_node_returns`: DELETE rows whose `created_at` is older than N days
- *     (same clock the row is written with — see `lib/scan-buffer.ts`).
+ *   - `scan_node_returns`: DELETE rows whose `scan_bucket` (the scan's hour) is
+ *     older than N days. Keyed on the bucket, not `created_at`, because neither
+ *     split table keeps a time finer than the hour (OSE-923, migration 0100).
  *   - `anon_id_returns`: DELETE rows whose `last_seen_at` is older than N days
  *     — keyed off the most recent return, not the first sighting, so a
  *     pseudonym that keeps returning within the window never ages out even if
@@ -103,7 +104,7 @@ export async function runScanReturnsRetention(
 
   try {
     const res = await env.DB.prepare(
-      "DELETE FROM scan_node_returns WHERE created_at < datetime('now', ?)"
+      "DELETE FROM scan_node_returns WHERE scan_bucket < strftime('%Y-%m-%dT%H:00', 'now', ?)"
     )
       .bind(window)
       .run();
