@@ -8,10 +8,10 @@ M1 rule (project "First Scan"): if the production `scans` count is still 0 when 
 date passes, stop feature work and write the outcome and its reason here before
 anything else is picked up.
 
-| Date       | Story         | Who            | Outcome  | In their words |
-| ---------- | ------------- | -------------- | -------- | -------------- |
-| 2026-10-12 | OSE-796 (C2)  | Eagles Hall, P | **open** |                |
-| 2026-10-12 | OSE-979 (C2b) | Harbor Cabins  | **open** |                |
+| Date       | Story         | Who            | Outcome                         | In their words                                                           |
+| ---------- | ------------- | -------------- | ------------------------------- | ------------------------------------------------------------------------ |
+| 2026-10-12 | OSE-796 (C2)  | Eagles Hall, P | **open: expected yes, no date** | Owner: Eagles runs on Thursdays without Matt. No named Thursday yet.     |
+| 2026-10-12 | OSE-979 (C2b) | Harbor Cabins  | **open: expected yes, no date** | Owner: Harbor Cabins is expected to run without Matt. No named date yet. |
 
 ## How to fill a line
 
