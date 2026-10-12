@@ -48,15 +48,8 @@ export const BANNED_SCHEMA_TERMS: ReadonlySet<string> = new Set([
  * source instead of hidden by a weakened word list.
  */
 export const EXEMPT_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
-  // The `sponsor_impressions` render-event log + its 3 indexes carry
-  // "impressions". The full impressions→display rename also changes the
-  // SharedReport `sponsor_impressions` field + snapshot (a cross-surface
-  // contract), so it is its own focused reconciliation. Tracked by OSE-931
-  // (rename sponsor_impressions → sponsor_displays end to end).
-  ['sponsor_impressions', 'OSE-931'],
-  ['idx_sponsor_impressions_sponsor', 'OSE-931'],
-  ['idx_sponsor_impressions_event', 'OSE-931'],
-  ['idx_sponsor_impressions_h3_res7', 'OSE-931'],
+  // OSE-931 (2026-10-12): `sponsor_impressions` and its 3 indexes became
+  // `sponsor_displays` (migration 0102), so their exemptions are gone.
   // `anon_id_returns.visit_count` + its index carry "visit" and reach the
   // SharedReport export (shared-report-export.ts) — renaming the export field
   // changes the BigQuery-bound contract, so it is a deliberate, separate
@@ -86,12 +79,8 @@ export interface LexiconViolation {
  * EXEMPT_IDENTIFIERS: each names the ticket that removes it.
  */
 export const EXEMPT_PAYLOAD_KEYS: ReadonlyMap<string, string> = new Map([
-  // The SharedReport impressions family moves with the table's rename to
-  // "displays": the top-level field and depth section, the campaign_summary
-  // fields, and sponsor_class_breakdown.<class>.total_impressions.
-  ['sponsor_impressions', 'OSE-931'],
-  ['total_impressions', 'OSE-931'],
-  ['impressions_by_surface', 'OSE-931'],
+  // Empty since OSE-931 (2026-10-12): the impressions family on the report
+  // became sponsor_displays / total_displays / displays_by_surface.
 ]);
 
 /** A banned token in a key of a JSON payload, with the dotted path to it. */

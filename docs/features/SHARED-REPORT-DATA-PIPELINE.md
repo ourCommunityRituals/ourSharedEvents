@@ -50,10 +50,10 @@ CREATE TABLE scan_aggregates (
 
 **Critical note:** the comment in 0006 says _"WRITTEN BY SCHEDULED WORKER ONLY — never by user-facing endpoints."_ That discipline is preserved. The new pipeline below builds on this — no real-time aggregation, all materialization is cron-driven.
 
-### `sponsor_impressions` (migration 0022)
+### `sponsor_displays` (migration 0022)
 
 ```sql
-CREATE TABLE sponsor_impressions (
+CREATE TABLE sponsor_displays (
   id         TEXT PRIMARY KEY,
   sponsor_id TEXT NOT NULL,
   event_id   TEXT NOT NULL,
@@ -222,7 +222,7 @@ SELECT
 FROM scan_aggregates sa
 LEFT JOIN (SELECT venue_id, return_rate FROM anon_id_returns_view) rr ON ...
 LEFT JOIN corridor_density_baseline cdb ON sa.event_id->corridor + dow + hour
-LEFT JOIN (SELECT event_id, COUNT(*) FILTER (...) AS impression_count FROM sponsor_impressions) si ON ...
+LEFT JOIN (SELECT event_id, COUNT(*) FILTER (...) AS impression_count FROM sponsor_displays) si ON ...
 LEFT JOIN (SELECT series_id, JSON_GROUP_ARRAY(headcount) FROM ... ORDER BY date) hcs ON ...
 WHERE sa.event_id = ?
 ```
@@ -233,18 +233,18 @@ Per-event aggregates flow to BigQuery `general` dataset after D1 materialization
 
 Export contract (one row per event):
 
-| field                  | type       | source                                                  |
-| ---------------------- | ---------- | ------------------------------------------------------- |
-| event_id               | string     | events.id                                               |
-| corridor_id            | string     | events.corridor_id                                      |
-| event_date             | date       | events.start_date                                       |
-| distinct_scanners      | int        | scan_aggregates.distinct_agent_hashes                   |
-| return_rate_pct        | float      | anon_id_returns aggregate                               |
-| corridor_density_ratio | float      | scan_aggregates ÷ corridor_density_baseline.window_30d  |
-| sponsor_impressions    | int        | sponsor_impressions count where event_type='impression' |
-| sponsor_clicks         | int        | sponsor_impressions count where event_type='click'      |
-| headcount_trend        | array[int] | event_series rolling headcounts                         |
-| materialized_at        | timestamp  | computed_at of the aggregation                          |
+| field                  | type       | source                                                 |
+| ---------------------- | ---------- | ------------------------------------------------------ |
+| event_id               | string     | events.id                                              |
+| corridor_id            | string     | events.corridor_id                                     |
+| event_date             | date       | events.start_date                                      |
+| distinct_scanners      | int        | scan_aggregates.distinct_agent_hashes                  |
+| return_rate_pct        | float      | anon_id_returns aggregate                              |
+| corridor_density_ratio | float      | scan_aggregates ÷ corridor_density_baseline.window_30d |
+| sponsor_displays       | int        | sponsor_displays count where event_type='impression'   |
+| sponsor_clicks         | int        | sponsor_displays count where event_type='click'        |
+| headcount_trend        | array[int] | event_series rolling headcounts                        |
+| materialized_at        | timestamp  | computed_at of the aggregation                         |
 
 **Crucial:** NO `anon_id` or `anon_id_hash` field in the BigQuery export. The export is per-event, not per-attendee.
 
@@ -337,7 +337,7 @@ After this chain lands, **OSE-245 (post-event rendering) can ship a real SharedR
 - **Specific column-level statistics** — confidence intervals, sample-size annotations, etc. live in the renderer (OSE-245), not the pipeline.
 - **HIPAA / COPPA aggregate schemas** — those are Phase 4 / Phase 5 work, with their own physically-separate D1 databases per the BEACHHEAD-ICP 5-phase model.
 - **Multi-tenant aggregates** — Enterprise tier (OSE-254) will eventually scope aggregates per `tenant_id`; this design leaves room for that column to be added later.
-- **Partner-sponsor funnel attribution** — OSE-282 introduces a fourth SKU dimension (partner-sponsor cross-venue commerce) that needs its own attribution column. The schema above is forward-compatible: when OSE-282 ships, `sponsor_impressions` extends with an optional `partner_sponsor_id` column, and the SharedReport export gets `partner_funnel_scans` + `partner_funnel_clicks` columns.
+- **Partner-sponsor funnel attribution** — OSE-282 introduces a fourth SKU dimension (partner-sponsor cross-venue commerce) that needs its own attribution column. The schema above is forward-compatible: when OSE-282 ships, `sponsor_displays` extends with an optional `partner_sponsor_id` column, and the SharedReport export gets `partner_funnel_scans` + `partner_funnel_clicks` columns.
 
 ---
 
@@ -444,7 +444,7 @@ Total additional Session 2-3 work: **~3 hours** beyond the original estimate. St
 - OSE-245 — post-event SharedReport rendering (the downstream renderer this unblocks)
 - OSE-178 — SPON-5 sponsor analytics pane (the renderer that reads the export)
 - OSE-282 — partner-sponsor commerce (forward-compatible extension point)
-- Migration 0006 (scan_aggregates) + 0022 (sponsor_impressions) + 0029 (events_5w_and_corridor) — existing primitives this builds on
+- Migration 0006 (scan_aggregates) + 0022 (sponsor_displays) + 0029 (events_5w_and_corridor) — existing primitives this builds on
 - `src/lib/anonymous-id.ts` — anon_id contract
 - `src/lib/pool-contract.ts` — regulatory pool routing
 

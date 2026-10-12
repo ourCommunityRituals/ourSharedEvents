@@ -34,7 +34,7 @@
 -- production.
 
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
-DELETE FROM sponsor_impressions WHERE sponsor_id IN
+DELETE FROM sponsor_displays WHERE sponsor_id IN
   ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN
   ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');

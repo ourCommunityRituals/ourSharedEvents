@@ -127,7 +127,7 @@ test.describe('SharedReport depth gate', () => {
     test.skip(!POST || !LOCAL_TOKEN, 'fixtures not seeded');
     const res = await fetchReport(request, POST!, LOCAL_TOKEN!);
     const body = await res.json();
-    const impressions = body.report?.sponsor_impressions;
+    const impressions = body.report?.sponsor_displays;
     if (Array.isArray(impressions) && impressions.length > 0) {
       // Every row must belong to the token's sponsor_id claim
       const ids = new Set(impressions.map((r: { sponsor_id: string }) => r.sponsor_id));

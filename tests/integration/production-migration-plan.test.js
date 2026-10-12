@@ -51,12 +51,12 @@ describe('the production migration plan matches the migration files', () => {
     expect(range.forms.length).toBeGreaterThan(0);
   });
 
-  test('the range is 0078–0101 (24 files) and 0015–0018 (4 files), as its first table says', () => {
+  test('the range is 0078–0102 (25 files) and 0015–0018 (4 files), as its first table says', () => {
     expect(range.main.map((m) => m.file.slice(0, 4))).toEqual(
-      Array.from({ length: 24 }, (_, i) => String(78 + i).padStart(4, '0'))
+      Array.from({ length: 25 }, (_, i) => String(78 + i).padStart(4, '0'))
     );
     expect(range.forms.map((m) => m.file.slice(0, 4))).toEqual(['0015', '0016', '0017', '0018']);
-    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 101\s+\| 24\s+\|/);
+    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 102\s+\| 25\s+\|/);
     expect(plan).toMatch(
       /\| Forms \(`ocr-forms-db-production`\)\s+\| 14 \(see note\)\s+\| 18\s+\| 4\s+\|/
     );
@@ -81,7 +81,7 @@ describe('the production migration plan matches the migration files', () => {
     const headed = [...plan.matchAll(/^### `([^`]+)`/gm)].map((h) => h[1]);
     expect(headed.sort()).toEqual(derived.sort());
     expect(plan).toContain(
-      `${['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'][derived.length]} files.`
+      `${['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'][derived.length]} files.`
     );
   });
 
@@ -116,6 +116,10 @@ describe('the production migration plan matches the migration files', () => {
     ]);
     expect(found(range.main, '0095')).toEqual(['UPDATE scan_node_returns']);
     expect(found(range.main, '0098')).toEqual(['DROP TABLE subscribers']);
+    expect(found(range.main, '0102')).toEqual([
+      'INSERT INTO sponsor_displays',
+      'DROP TABLE sponsor_impressions',
+    ]);
     expect(found(range.main, '0101')).toEqual(['DELETE FROM scan_node_returns']);
     expect(found(range.main, '0100')).toEqual([
       'UPDATE scan_placement_events',

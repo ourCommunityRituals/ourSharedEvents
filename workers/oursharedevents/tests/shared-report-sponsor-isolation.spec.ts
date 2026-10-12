@@ -11,7 +11,7 @@
  * unobservable. This spec seeds TWO and exercises the real request path
  * (SELF.fetch), so it bites on the handler's scoping logic:
  *
- *   • src/handlers/shared-report-read.ts:110-117 — filter sponsor_impressions to
+ *   • src/handlers/shared-report-read.ts:110-117 — filter sponsor_displays to
  *     the token's sponsor_id; a sponsor token with NO sponsor_id sees ZERO rows
  *     (OSE-595 fail-closed), not every competitor's data.
  *   • src/handlers/shared-report-read.ts:119-157 — Q6: RE-DERIVE campaign_summary
@@ -29,9 +29,9 @@
  *   report-depth.ts:169-188), so it holds unless BOTH are neutralized — a
  *   regression in either alone is still caught by the campaign assertions.
  *
- * HARNESS NOTE: seeding sponsor_impressions requires migrations to apply EXACTLY
+ * HARNESS NOTE: seeding sponsor_displays requires migrations to apply EXACTLY
  * ONCE per isolate — re-applying migration 0018 (ALTER TABLE sponsors RENAME TO
- * sponsors_old) rewrites the sponsor_impressions FK to a table it then drops,
+ * sponsors_old) rewrites the sponsor_displays FK to a table it then drops,
  * dangling it so any later INSERT raises "no such table: sponsors_old". Same
  * migrate-once guard proven in shared-report-kanon-floor.spec.ts (see its header).
  */
@@ -53,7 +53,7 @@ const SIGNING_SECRET = 'test-shared-report-signing-secret-do-not-use';
 // ─── Harness ──────────────────────────────────────────────────────────────────
 
 // Apply EXACTLY ONCE per isolate (see header — 0018 rename corrupts the
-// sponsor_impressions FK on a second apply).
+// sponsor_displays FK on a second apply).
 let migrated = false;
 async function applyMigrations(): Promise<void> {
   if (migrated) return;
@@ -80,8 +80,8 @@ async function clearTables(): Promise<void> {
   const db = tenv().DB;
   await db.prepare(`DELETE FROM scan_aggregates`).run();
   await db.prepare(`DELETE FROM anon_id_returns`).run();
-  // Child rows first (FK order): sponsor_impressions → asset/placement → business.
-  await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-iso-%'`).run();
+  // Child rows first (FK order): sponsor_displays → asset/placement → business.
+  await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-iso-%'`).run();
   await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-iso-%'`).run();
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-iso-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-iso-%'`).run();
@@ -123,7 +123,7 @@ async function seedScanAggregate(eventId: string, uniqueAgents: number): Promise
 }
 
 /**
- * Seed N sponsor_impressions rows for one (sponsor × surface) bucket — the grain
+ * Seed N sponsor_displays rows for one (sponsor × surface) bucket — the grain
  * the builder GROUP BYs on, so COUNT(*) = n is the count the reader sees.
  */
 async function seedImpressions(opts: {
@@ -136,7 +136,7 @@ async function seedImpressions(opts: {
   for (let i = 0; i < opts.n; i++) {
     await db
       .prepare(
-        `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
          VALUES (?, ?, ?, ?, 'p1', 'impression', datetime('now'))`
       )
       .bind(
@@ -170,12 +170,12 @@ interface ImpressionRow {
 }
 interface CampaignRow {
   campaign_id: string;
-  total_impressions: number;
+  total_displays: number;
   sponsor_count: number;
-  impressions_by_surface: Record<string, number>;
+  displays_by_surface: Record<string, number>;
 }
 interface Report {
-  sponsor_impressions?: ImpressionRow[];
+  sponsor_displays?: ImpressionRow[];
   campaign_summary?: CampaignRow[] | null;
   [k: string]: unknown;
 }
@@ -233,7 +233,7 @@ describe('OSE-1172 — sponsor-slice isolation on the SharedReport read path (TL
 
   test('row isolation (TL-040): sp-A token sees ONLY sp-A impression rows, never sp-B', async () => {
     const report = await readReport(EVT, SP_A);
-    const rows = report.sponsor_impressions ?? [];
+    const rows = report.sponsor_displays ?? [];
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.sponsor_id === SP_A)).toBe(true);
     expect(rows.some((r) => r.sponsor_id === SP_B)).toBe(false);
@@ -244,26 +244,26 @@ describe('OSE-1172 — sponsor-slice isolation on the SharedReport read path (TL
     const row = (report.campaign_summary ?? []).find((c) => c.campaign_id === CAMPAIGN);
     expect(row).toBeDefined();
     // A alone = 7. Combined with B (9) = 16 would be a peer leak.
-    expect(row!.total_impressions).toBe(A_POSTER);
-    expect(row!.total_impressions).not.toBe(COMBINED);
+    expect(row!.total_displays).toBe(A_POSTER);
+    expect(row!.total_displays).not.toBe(COMBINED);
     // The aggregate must never reveal that a co-sponsor shares the campaign.
     expect(row!.sponsor_count).toBe(1);
-    expect(row!.impressions_by_surface.poster).toBe(A_POSTER);
+    expect(row!.displays_by_surface.poster).toBe(A_POSTER);
   });
 
   test('isolation is not size/order dependent: sp-B (higher volume) still sees only its own slice', async () => {
     const report = await readReport(EVT, SP_B);
-    const rows = report.sponsor_impressions ?? [];
+    const rows = report.sponsor_displays ?? [];
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.sponsor_id === SP_B)).toBe(true);
     const row = (report.campaign_summary ?? []).find((c) => c.campaign_id === CAMPAIGN);
-    expect(row!.total_impressions).toBe(B_POSTER);
-    expect(row!.total_impressions).not.toBe(COMBINED);
+    expect(row!.total_displays).toBe(B_POSTER);
+    expect(row!.total_displays).not.toBe(COMBINED);
   });
 
   test('fail-closed (OSE-595): a sponsor token with NO sponsor_id sees ZERO impression rows', async () => {
     const report = await readReport(EVT); // sponsor role, no sponsor_id claim
-    expect(report.sponsor_impressions ?? []).toEqual([]);
+    expect(report.sponsor_displays ?? []).toEqual([]);
     // and the re-derived campaign_summary carries nothing to leak
     const summary = report.campaign_summary;
     expect(summary === null || (Array.isArray(summary) && summary.length === 0)).toBe(true);

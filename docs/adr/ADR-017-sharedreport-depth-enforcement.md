@@ -160,6 +160,6 @@ recorded in the OCR-docs brain `architectural-invariants.yaml`:
   express, the read-time model needs revisiting.
 - If depth ever needs to vary a _value_ (not merely presence) for a tier, that is
   an Invariant #5 change and must reopen this decision, not patch around it.
-- If `distinct_scanners` / `sponsor_impressions` are renamed off the banned
+- If `distinct_scanners` / `sponsor_displays` are renamed off the banned
   lexicon (OSE-815 §9 decision 2), the wire keys change and the contract table
   here and in the feature spec must move together.

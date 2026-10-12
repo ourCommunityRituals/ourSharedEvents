@@ -1618,14 +1618,14 @@ export async function handleDeleteEvent(
 
     // Guard: never hard-delete an event that has already met reality. `scans`
     // was split (OSE-798) into a placement side and a session/return side;
-    // `sponsor_impressions` is the sponsor-visibility ledger. Any of them being
+    // `sponsor_displays` is the sponsor-visibility ledger. Any of them being
     // non-empty means real, value-bearing rows hang off this event — refuse and
     // let the operator archive (PUT status=archived) instead of destroying data.
     const dep = await env.DB.prepare(
       `SELECT
          (SELECT COUNT(*) FROM scan_node_returns     WHERE event_id = ?) +
          (SELECT COUNT(*) FROM scan_placement_events WHERE event_id = ?) +
-         (SELECT COUNT(*) FROM sponsor_impressions   WHERE event_id = ?) AS n`
+         (SELECT COUNT(*) FROM sponsor_displays   WHERE event_id = ?) AS n`
     )
       .bind(eventId, eventId, eventId)
       .first<{ n: number }>();
@@ -1641,12 +1641,12 @@ export async function handleDeleteEvent(
     // FK-safe cascade. D1 enforces the foreign keys on the child tables, so the
     // event row cannot be removed while any child references it. Delete the
     // event's owned rows children-first, in one atomic batch, then the row. The
-    // guard above guarantees scan_*/sponsor_impressions are empty, so in
+    // guard above guarantees scan_*/sponsor_displays are empty, so in
     // practice this clears only derived/config rows (the OSE-240 shortlink, and
     // any poster deployments / sponsor placements an admin attached).
     // The current child tables carrying an event_id FK into events(id), ordered
     // children-first so each delete satisfies the FK on the next. (The scan_* and
-    // sponsor_impressions rows are already empty per the guard above; they stay
+    // sponsor_displays rows are already empty per the guard above; they stay
     // in the list so the cascade is FK-complete on its own terms and survives a
     // future guard change. scan_placement_events precedes poster_deployments
     // because it also FKs poster_deployments.)
@@ -1656,7 +1656,7 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM scan_node_returns     WHERE event_id = ?'),
       delChild('DELETE FROM scan_aggregates       WHERE event_id = ?'),
       delChild('DELETE FROM scan_cell_aggregates  WHERE event_id = ?'),
-      delChild('DELETE FROM sponsor_impressions   WHERE event_id = ?'),
+      delChild('DELETE FROM sponsor_displays   WHERE event_id = ?'),
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),

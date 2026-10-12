@@ -2554,7 +2554,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
-      "testCount": 9
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts",
@@ -2737,6 +2737,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-displays-rename.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-draft-capture.spec.ts",

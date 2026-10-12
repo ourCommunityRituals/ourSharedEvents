@@ -1178,12 +1178,12 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-056',
     layer: 'pipeline',
     threat:
-      "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_impressions (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
+      "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_displays (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
     severity: 'CRITICAL',
     target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-595',
     test_ref:
-      'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_impressions',
+      'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_displays',
     status: 'tested',
     red_birth: {
       date: '2026-08-03',
@@ -1403,18 +1403,18 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
     id: 'TL-066',
     layer: 'worker_surface',
     threat:
-      'Impression de-anonymization: recover WHO from device-minute impressions via session/timing/cross-state joins. Refused — sponsor_impressions carries zero attendee-identifying columns (no ip/ua/anon_id/session/device/user_id/email/lat/lon), so there is nothing to correlate to an individual.',
+      'Impression de-anonymization: recover WHO from device-minute impressions via session/timing/cross-state joins. Refused — sponsor_displays carries zero attendee-identifying columns (no ip/ua/anon_id/session/device/user_id/email/lat/lon), so there is nothing to correlate to an individual.',
     severity: 'HIGH',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
     mitigation_story: 'OSE-661',
     test_ref:
-      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_impressions schema carries zero attendee-identifying columns',
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_displays schema carries zero attendee-identifying columns',
     status: 'tested',
     red_birth: {
       date: '2026-08-22',
       method: 'design-time-negative-assertion',
       notes:
-        'PRAGMA table_info(sponsor_impressions) asserted against a forbidden identity-column set. Goes red the moment an ip/anon_id/session/device/lat/lon column is added to the impression table.',
+        'PRAGMA table_info(sponsor_displays) asserted against a forbidden identity-column set. Goes red the moment an ip/anon_id/session/device/lat/lon column is added to the impression table.',
     },
     last_run_green: '2026-08-22',
   },
@@ -1441,18 +1441,18 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
     id: 'TL-068',
     layer: 'worker_surface',
     threat:
-      'Channel-cap on impressions: read in-event device impressions at a finer geo grain than presence allows. Refused — impressions are captured at h3_res7 (~5 km² corridor cell) ONLY; no finer res8/res9 column exists on sponsor_impressions and the INSERT binds only res7 (OSE-635 res7-cap).',
+      'Channel-cap on impressions: read in-event device impressions at a finer geo grain than presence allows. Refused — impressions are captured at h3_res7 (~5 km² corridor cell) ONLY; no finer res8/res9 column exists on sponsor_displays and the INSERT binds only res7 (OSE-635 res7-cap).',
     severity: 'HIGH',
     target_invariant: { number: 2, name: 'hyperlocal_geo_resolution' },
     mitigation_story: 'OSE-635',
     test_ref:
-      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_impressions carries h3_res7 but NO finer h3_res8/res9 grain',
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_displays carries h3_res7 but NO finer h3_res8/res9 grain',
     status: 'tested',
     red_birth: {
       date: '2026-08-22',
       method: 'design-time-negative-assertion',
       notes:
-        'Schema + static gate: sponsor_impressions has h3_res7 and neither h3_res8 nor h3_res9; the impression INSERT column list carries only h3_res7. Goes red if a finer cell column/write is introduced.',
+        'Schema + static gate: sponsor_displays has h3_res7 and neither h3_res8 nor h3_res9; the impression INSERT column list carries only h3_res7. Goes red if a finer cell column/write is introduced.',
     },
     last_run_green: '2026-08-22',
   },

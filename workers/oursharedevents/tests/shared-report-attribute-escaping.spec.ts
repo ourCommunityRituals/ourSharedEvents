@@ -281,7 +281,7 @@ function report(fill: Fill): Record<string, unknown> {
     distinct_scanners: 84,
     return_rate: { venue_pct: 31.4, corridor_pct: 50, sample_size: 84 },
     corridor_density: { this_event_count: 84, density_ratio_30d: 2.1, density_ratio_90d: 1.05 },
-    sponsor_impressions: [
+    sponsor_displays: [
       {
         sponsor_id: 'sp_1',
         sponsor_name: fill('BUSINESS'),
@@ -293,9 +293,9 @@ function report(fill: Fill): Record<string, unknown> {
       { sponsor_id: 'sp_2', sponsor_name: fill('BUSINESS2'), surface: 'poster', count: 3 },
     ],
     sponsor_class_breakdown: {
-      local: { sponsor_count: 1, total_impressions: 3 },
-      mid: { sponsor_count: 0, total_impressions: 0 },
-      premium: { sponsor_count: 1, total_impressions: 12 },
+      local: { sponsor_count: 1, total_displays: 3 },
+      mid: { sponsor_count: 0, total_displays: 0 },
+      premium: { sponsor_count: 1, total_displays: 12 },
     },
     poster_attribution: [
       {
@@ -402,11 +402,11 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
       distinct_scanners: t,
       return_rate: { venue_pct: t, corridor_pct: t, sample_size: t },
       corridor_density: { this_event_count: t, density_ratio_30d: t, density_ratio_90d: t },
-      sponsor_impressions: [{ sponsor_name: plain('BUSINESS'), surface: 'poster', count: t }],
+      sponsor_displays: [{ sponsor_name: plain('BUSINESS'), surface: 'poster', count: t }],
       sponsor_class_breakdown: {
-        local: { sponsor_count: t, total_impressions: t },
-        mid: { sponsor_count: t, total_impressions: t },
-        premium: { sponsor_count: t, total_impressions: t },
+        local: { sponsor_count: t, total_displays: t },
+        mid: { sponsor_count: t, total_displays: t },
+        premium: { sponsor_count: t, total_displays: t },
       },
       poster_attribution: [
         { location: plain('POSTERPLACE'), scan_count: t, first_scan_at: t, last_scan_at: t },

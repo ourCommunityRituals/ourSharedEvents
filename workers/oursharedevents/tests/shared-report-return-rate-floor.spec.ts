@@ -11,7 +11,7 @@
  *      (`"2 of 3 required distinct anons"`), as did the corridor baseline's
  *      (`"3 of 10 required"`) and the corridor map's hidden-area counts. A
  *      suppression string that prints the count is the count (D4).
- *   3. `sponsor_impressions[].count` shipped raw at every depth, beside campaign
+ *   3. `sponsor_displays[].count` shipped raw at every depth, beside campaign
  *      rollups computed from the same rows with the per-bucket floor (D2).
  *
  * Every test ends with the never-who assertion over the payload.
@@ -82,7 +82,7 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM anon_id_returns`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
-  await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-rrf-%'`).run();
+  await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-rrf-%'`).run();
@@ -155,7 +155,7 @@ async function seedImpressions(
   for (let i = 0; i < n; i++) {
     await tenv()
       .DB.prepare(
-        `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
          VALUES (?, ?, ?, ?, 'p1', 'impression', datetime('now'))`
       )
       .bind(`si-rrf-${sponsorId}-${surface}-${i}`, sponsorId, eventId, surface)
@@ -465,7 +465,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
   });
 });
 
-describe('sponsor_impressions[].count passes the same floor as its rollups', () => {
+describe('sponsor_displays[].count passes the same floor as its rollups', () => {
   beforeEach(async () => {
     await applyMigrations();
     await clearTables();
@@ -492,7 +492,7 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const rows = r.report.sponsor_impressions;
+    const rows = r.report.sponsor_displays;
     expect(rows.map((x) => x.surface)).toEqual(['poster']);
     expect(rows[0]!.count).toBe(CORRIDOR_MAP_MIN_COUNT + 2);
     // Every published count clears the floor, the same rule the rollups apply.
@@ -512,8 +512,8 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     const r = await buildSharedReport(tenv().DB, ev);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.sponsor_impressions).toEqual([]);
-    expect(r.report.sponsor_class_breakdown.mid.total_impressions).toBe(0);
+    expect(r.report.sponsor_displays).toEqual([]);
+    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(0);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 
@@ -527,9 +527,9 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     const r = await buildSharedReport(tenv().DB, ev);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const published = r.report.sponsor_impressions.reduce((n, x) => n + x.count, 0);
+    const published = r.report.sponsor_displays.reduce((n, x) => n + x.count, 0);
     expect(published).toBe(6);
-    expect(r.report.sponsor_class_breakdown.mid.total_impressions).toBe(published);
+    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(published);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 });

@@ -126,7 +126,7 @@ const SIBLING_ATTENDEES = 30;
 
 let migrated = false;
 async function applyMigrations(): Promise<void> {
-  // Once per isolate: a second apply rewrites sponsor_impressions' foreign key
+  // Once per isolate: a second apply rewrites sponsor_displays' foreign key
   // (see the note in shared-report-kanon-floor.spec.ts).
   if (migrated) return;
   const stmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
@@ -157,7 +157,7 @@ async function clearWorld(): Promise<void> {
     db.prepare(`DELETE FROM scan_cell_aggregates`),
     db.prepare(`DELETE FROM scan_placement_events`),
     db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'nbr-%'`),
-    db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'nbr-%'`),
+    db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'nbr-%'`),
@@ -345,7 +345,7 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       imps.push(
         db
           .prepare(
-            `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+            `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
              VALUES (?, ?, ?, ?, 'p1', 'impression', ?)`
           )
           .bind(`${sponsor}-${surface}-${i}`, sponsor, eventId, surface, STAMP)
@@ -608,7 +608,7 @@ describe('the harness can see: a full report, and each lever above the floor', (
       'click_outs',
       'return_rate',
       'corridor_density',
-      'sponsor_impressions',
+      'sponsor_displays',
       'campaign_summary',
       'sponsor_class_breakdown',
       'poster_attribution',
@@ -757,17 +757,17 @@ const REGISTRY: Record<string, How> = {
   },
   'corridor_density.bucket_dow': { how: 'key', min: 0, max: 6 },
   'corridor_density.bucket_hour': { how: 'key', min: 0, max: 23 },
-  'sponsor_impressions[].count': FLOORED, // a row under the floor is dropped
-  'campaign_summary[].total_impressions': SUM,
-  'campaign_summary[].impressions_by_surface.*': SUM,
+  'sponsor_displays[].count': FLOORED, // a row under the floor is dropped
+  'campaign_summary[].total_displays': SUM,
+  'campaign_summary[].displays_by_surface.*': SUM,
   'campaign_summary[].sponsor_count': NOT_PEOPLE,
-  'sponsor_class_breakdown.*.total_impressions': { ...SUM, orZero: true },
+  'sponsor_class_breakdown.*.total_displays': { ...SUM, orZero: true },
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
   'headcount_trend.instances[].distinct_scanners': SUM,
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
-  'sponsor_impressions.length': NOT_PEOPLE,
+  'sponsor_displays.length': NOT_PEOPLE,
   'campaign_summary.length': NOT_PEOPLE,
   'poster_attribution.length': NOT_PEOPLE,
   'headcount_trend.instances.length': NOT_PEOPLE,

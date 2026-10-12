@@ -72,7 +72,7 @@ async function seed(): Promise<void> {
   for (let i = 0; i < 6; i++) {
     await db
       .prepare(
-        `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
          VALUES (?, 'sp-payload-lexicon', ?, 'display', 'p1', 'impression', datetime('now'))`
       )
       .bind(`si-payload-lexicon-${i}`, EVT)
@@ -103,8 +103,8 @@ beforeAll(async () => {
 describe('OSE-818 — SharedReport payload keys speak the lexicon', () => {
   test('the built report carries the seeded data (the walk has something to read)', () => {
     expect(report.distinct_scanners).toBe(16);
-    expect(Array.isArray(report.sponsor_impressions)).toBe(true);
-    expect((report.sponsor_impressions as unknown[]).length).toBeGreaterThan(0);
+    expect(Array.isArray(report.sponsor_displays)).toBe(true);
+    expect((report.sponsor_displays as unknown[]).length).toBeGreaterThan(0);
   });
 
   test('no key anywhere in a built report carries a banned token', () => {
@@ -149,12 +149,31 @@ describe('OSE-818 — SharedReport payload keys speak the lexicon', () => {
   });
 });
 
+describe('OSE-931 — sponsor_impressions is sponsor_displays (PO 2026-08-20)', () => {
+  test('the report carries the displays family, with no exemption left', () => {
+    expect('sponsor_impressions' in report).toBe(false);
+    expect('sponsor_displays' in report).toBe(true);
+    expect(EXEMPT_PAYLOAD_KEYS.size).toBe(0);
+    const row = (report.sponsor_displays as Array<Record<string, unknown>>)[0];
+    expect(row).toBeDefined();
+  });
+
+  test('the contract and every depth carry the new name only', () => {
+    expect(SNAPSHOT.top_level_fields).toContain('sponsor_displays');
+    expect(SNAPSHOT.top_level_fields).not.toContain('sponsor_impressions');
+    for (const [depth, list] of Object.entries(DEPTH_SECTIONS)) {
+      expect(list, depth).not.toContain('sponsor_impressions');
+    }
+    expect(SNAPSHOT.version).toBe('3.0.0');
+  });
+});
+
 describe('OSE-818 — unique_gatherings is distinct_scanners (owner 2026-10-11)', () => {
   test('the report, the contract and every depth carry the new name only', () => {
     expect('unique_gatherings' in report).toBe(false);
     expect(SNAPSHOT.top_level_fields).toContain('distinct_scanners');
     expect(SNAPSHOT.top_level_fields).not.toContain('unique_gatherings');
-    expect(SNAPSHOT.version).toBe('2.0.0');
+    expect(SNAPSHOT.version).toBe('3.0.0');
     for (const [depth, list] of Object.entries(DEPTH_SECTIONS)) {
       expect(list, depth).toContain('distinct_scanners');
       expect(list, depth).not.toContain('unique_gatherings');
@@ -178,6 +197,9 @@ describe('the key walk bites (negative control)', () => {
   });
 
   test('values are not keys, and an exempt key is skipped', () => {
-    expect(findBannedPayloadKeys({ label: 'unique visits', sponsor_impressions: [] })).toEqual([]);
+    const exempt = new Map([['legacy_unique_key', 'OSE-0']]);
+    expect(
+      findBannedPayloadKeys({ label: 'unique visits', legacy_unique_key: [] }, undefined, exempt)
+    ).toEqual([]);
   });
 });

@@ -44,7 +44,7 @@ interface SharedReportFixture {
     density_ratio_30d: number | null;
     density_ratio_90d: number | null;
   };
-  sponsor_impressions: Array<{
+  sponsor_displays: Array<{
     sponsor_id: string;
     sponsor_name: string;
     surface: string;
@@ -87,7 +87,7 @@ function makeReportFixture(overrides: Partial<SharedReportFixture> = {}): Shared
       density_ratio_30d: 1.35,
       density_ratio_90d: 1.18,
     },
-    sponsor_impressions: [
+    sponsor_displays: [
       {
         sponsor_id: 'sp_1',
         sponsor_name: 'Reckless Records',

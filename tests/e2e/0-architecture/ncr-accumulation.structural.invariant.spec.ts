@@ -21,7 +21,7 @@
  *   - scan_aggregates are pre-computed rollups WRITTEN BY THE SCHEDULED WORKER
  *     ONLY — no user-facing endpoint writes them.
  *   - scan data is PERMANENT (no PII ⇒ no TTL) — the compound asset.
- *   - sponsor_impressions capture surface + placement for attribution.
+ *   - sponsor_displays capture surface + placement for attribution.
  *
  * Source of truth (asserted here):
  *   - migrations/0003_create_poster_deployments.sql   (lat/lng atoms)
@@ -130,16 +130,16 @@ test.describe('Invariant 4: NCR Data Accumulation — structural code-shape lock
     );
   });
 
-  test('OSE-INV4 | schema | 0022 sponsor_impressions capture surface + placement', () => {
+  test('OSE-INV4 | schema | 0022 sponsor_displays capture surface + placement', () => {
     const migration = join(MIGRATIONS_DIR, '0022_create_sponsor_impressions.sql');
     expect(existsSync(migration), '0022_create_sponsor_impressions.sql must exist').toBe(true);
     const sql = readFileSync(migration, 'utf8');
     // surface + placement are the attribution atoms — which surface showed the
     // sponsor, in which placement. Both NOT NULL so every impression is attributable.
-    expect(sql, 'sponsor_impressions must carry surface TEXT NOT NULL').toMatch(
+    expect(sql, 'sponsor_displays must carry surface TEXT NOT NULL').toMatch(
       /surface\s+TEXT\s+NOT\s+NULL/i
     );
-    expect(sql, 'sponsor_impressions must carry placement TEXT NOT NULL').toMatch(
+    expect(sql, 'sponsor_displays must carry placement TEXT NOT NULL').toMatch(
       /placement\s+TEXT\s+NOT\s+NULL/i
     );
   });
@@ -235,7 +235,7 @@ test.describe('Invariant 4: NCR Data Accumulation — structural code-shape lock
     // constraint only via defaults; naming them explicitly is the contract.
     expect(
       src,
-      'sponsors.ts must INSERT INTO sponsor_impressions naming surface + placement columns'
-    ).toMatch(/INSERT\s+INTO\s+sponsor_impressions\s*\([^)]*\bsurface\b[^)]*\bplacement\b/i);
+      'sponsors.ts must INSERT INTO sponsor_displays naming surface + placement columns'
+    ).toMatch(/INSERT\s+INTO\s+sponsor_displays\s*\([^)]*\bsurface\b[^)]*\bplacement\b/i);
   });
 });

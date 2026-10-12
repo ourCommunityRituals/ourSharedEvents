@@ -20,7 +20,7 @@
  *     for forms.ts / events.ts / health.ts / pages.ts / feature-flags handler+lib.
  *   - This file adds the missing L1 sponsors.ts static gate, the missing
  *     forward L2 PRAGMA (`FORMS_DB` has none of [events, sponsors, scans,
- *     sponsor_impressions]), the missing DB.feature_flags PRAGMA, and a
+ *     sponsor_displays]), the missing DB.feature_flags PRAGMA, and a
  *     structured `console.log` summary of pass count for CI observability.
  *
  * All L1 gates are pure string checks (<1s). The L2 gates run after the
@@ -172,13 +172,7 @@ describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant 
   test('FORMS_DB usage in data-subject.ts does not reference anon-surface tables', () => {
     expectPass('L1.data-subject-formsdb-scope', () => {
       const content = getSource('src/handlers/data-subject.ts');
-      const anonTables = [
-        'events',
-        'sponsors',
-        'scans',
-        'sponsor_impressions',
-        'poster_deployments',
-      ];
+      const anonTables = ['events', 'sponsors', 'scans', 'sponsor_displays', 'poster_deployments'];
       for (const table of anonTables) {
         expect(content).not.toMatch(new RegExp(`FORMS_DB\\.prepare\\(['"]\\.* FROM ${table}`, 'i'));
       }
@@ -273,13 +267,13 @@ describe('L2: FORMS_DB does not contain anonymous-surface tables', () => {
   // This is the forward direction that forms-security.spec.ts S14 did not
   // assert — S14 covers DB-has-no-forms-tables, this asserts the symmetric
   // FORMS_DB-has-no-anon-tables guarantee.
-  test('events / sponsors / scans / sponsor_impressions not in FORMS_DB', async () => {
+  test('events / sponsors / scans / sponsor_displays not in FORMS_DB', async () => {
     const names = await tableNames(tenv().FORMS_DB);
     expectPass('L2.forms-db-no-anon-tables', () => {
       expect(names).not.toContain('events');
       expect(names).not.toContain('sponsors');
       expect(names).not.toContain('scans');
-      expect(names).not.toContain('sponsor_impressions');
+      expect(names).not.toContain('sponsor_displays');
       // Defensive extras documented by the brain invariants:
       expect(names).not.toContain('poster_deployments');
       expect(names).not.toContain('sponsor_event_types');

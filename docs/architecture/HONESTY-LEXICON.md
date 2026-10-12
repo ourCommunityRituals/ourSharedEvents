@@ -55,7 +55,7 @@ and claims nothing about who saw it or for how long.
 **On the record (PO, 2026-08-20): what we labelled "impressions" was always meant
 to be "display".** The name was borrowed from ad-tech by mistake — a misapplied
 name and definition over a concept that was legitimate all along (the ad was on
-screen). So `sponsor_impressions → sponsor_displays` is a **pure lexical fix**,
+screen). So `sponsor_displays → sponsor_displays` is a **pure lexical fix**,
 not a change to what is counted. The substance was never the ad-tech impression;
 only the word was wrong.
 
@@ -73,7 +73,7 @@ positive; only a column literally named `unique_*` is.
 
 | Banned                               | Honest                         | Why                                                            |
 | ------------------------------------ | ------------------------------ | -------------------------------------------------------------- |
-| `impression` / `sponsor_impressions` | `display` / `sponsor_displays` | render fact, not claimed view                                  |
+| `impression` / `sponsor_displays`    | `display` / `sponsor_displays` | render fact, not claimed view                                  |
 | `impression_token`                   | `display_token`                | the token names a display slot, not an audience claim          |
 | `unique_agents`                      | `distinct_agent_hashes`        | describes the data (distinct hashes), drops the re-id word     |
 | `visit_count` (on `anon_id_returns`) | `return_count`                 | a **return**, aligned to the table; not a "visit"              |

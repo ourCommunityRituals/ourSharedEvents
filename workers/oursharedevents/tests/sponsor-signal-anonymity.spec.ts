@@ -7,7 +7,7 @@
  * the SOURCE shape on both sides of the wire; this proves the RUNTIME behavior:
  *
  *   Even when a request arrives WITH the anonymous-scan cookie present
- *   (Cookie: ose_anon=anon_...), the persisted sponsor_impressions row contains
+ *   (Cookie: ose_anon=anon_...), the persisted sponsor_displays row contains
  *   NO identity — not the cookie value, not any anon/ip/user-agent column.
  *
  * This is the server half of "impossible by construction": the client omits
@@ -89,10 +89,10 @@ async function createSponsor(eventId: string, name: string): Promise<string> {
   return body.id;
 }
 
-/** All persisted sponsor_impressions rows for an event, as plain objects. */
+/** All persisted sponsor_displays rows for an event, as plain objects. */
 async function signalRows(eventId: string): Promise<Array<Record<string, unknown>>> {
   const tenv = env as unknown as TestEnv;
-  const r = await tenv.DB.prepare('SELECT * FROM sponsor_impressions WHERE event_id = ?')
+  const r = await tenv.DB.prepare('SELECT * FROM sponsor_displays WHERE event_id = ?')
     .bind(eventId)
     .all<Record<string, unknown>>();
   return r.results ?? [];
@@ -117,7 +117,7 @@ let sponsorId = '';
 beforeAll(async () => {
   await applyMigrations();
   const tenv = env as unknown as TestEnv;
-  await tenv.DB.prepare('DELETE FROM sponsor_impressions WHERE event_id = ?').bind(EVENT_ID).run();
+  await tenv.DB.prepare('DELETE FROM sponsor_displays WHERE event_id = ?').bind(EVENT_ID).run();
   await tenv.DB.prepare("DELETE FROM events WHERE brand_id = 'nw-test'").run();
   await seedEvent(EVENT_ID);
   sponsorId = await createSponsor(EVENT_ID, 'NW Signal Sponsor');
@@ -154,14 +154,16 @@ describe('OSE-1164 — sponsor signal is never-who even with a cookie present', 
       expect(res.status, `${kind} must be accepted`).toBe(201);
 
       const rows = await signalRows(EVENT_ID);
-      const mine = rows.filter((r) => r.event_type === kind);
+      // The render beacon stores 'display' since OSE-931 (it stored 'impression').
+      const stored = kind === 'impression' ? 'display' : kind;
+      const mine = rows.filter((r) => r.event_type === stored);
       expect(mine.length, `exactly one ${kind} row expected`).toBe(1);
       const row = mine[0];
 
       // 1. No forbidden identity column exists on the row.
       const cols = Object.keys(row).map((c) => c.toLowerCase());
       for (const bad of FORBIDDEN_COLUMNS) {
-        expect(cols.includes(bad), `sponsor_impressions row must not have a '${bad}' column`).toBe(
+        expect(cols.includes(bad), `sponsor_displays row must not have a '${bad}' column`).toBe(
           false
         );
       }
@@ -174,7 +176,7 @@ describe('OSE-1164 — sponsor signal is never-who even with a cookie present', 
       // 3. Only the sanctioned aggregate fields carry data.
       expect(row.sponsor_id).toBe(sponsorId);
       expect(row.event_id).toBe(EVENT_ID);
-      expect(row.event_type).toBe(kind);
+      expect(row.event_type).toBe(stored);
     });
   }
 });

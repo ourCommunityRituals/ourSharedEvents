@@ -104,7 +104,7 @@ function fullReport(): SharedReport {
       bucket_dow: 6,
       bucket_hour: 23,
     },
-    sponsor_impressions: [
+    sponsor_displays: [
       {
         sponsor_id: SPONSOR_ID,
         sponsor_name: 'Corner Bakery',
@@ -121,15 +121,15 @@ function fullReport(): SharedReport {
       {
         campaign_id: 'camp_1',
         campaign_title: 'Spring Push',
-        total_impressions: 12,
+        total_displays: 12,
         sponsor_count: 1,
-        impressions_by_surface: { poster: 12 },
+        displays_by_surface: { poster: 12 },
       },
     ],
     sponsor_class_breakdown: {
-      local: { sponsor_count: 0, total_impressions: 0 },
-      mid: { sponsor_count: 0, total_impressions: 0 },
-      premium: { sponsor_count: 1, total_impressions: 12 },
+      local: { sponsor_count: 0, total_displays: 0 },
+      mid: { sponsor_count: 0, total_displays: 0 },
+      premium: { sponsor_count: 1, total_displays: 12 },
     },
     poster_attribution: [
       {

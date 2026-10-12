@@ -48,7 +48,7 @@ competitive view — never per-competitor, so it is never a paid section.
 | --------------------------------------------------------------- | :---: | :-: | :-----: |
 | `event_id` / `event_title` / dates                              |   ●   |  ●  |    ●    |
 | `distinct_scanners`                                             |   ●   |  ●  |    ●    |
-| `sponsor_impressions` (own rows only)                           |   ●   |  ●  |    ●    |
+| `sponsor_displays` (own rows only)                              |   ●   |  ●  |    ●    |
 | `sponsor_class_breakdown`                                       |   ●   |  ●  |    ●    |
 | `campaign_summary`                                              |       |  ●  |    ●    |
 | `poster_attribution`                                            |       |  ●  |    ●    |
@@ -76,7 +76,7 @@ competitive view — never per-competitor, so it is never a paid section.
 
 ## Scope isolation (the critical path)
 
-A sponsor sees only **their own** `sponsor_impressions` rows. This is independent
+A sponsor sees only **their own** `sponsor_displays` rows. This is independent
 of depth and always binds server-side:
 
 - **`sponsor` + a `sponsor_id`** on the token → filtered to that sponsor's rows.
@@ -162,7 +162,7 @@ symmetry). Both run in the T0 Gate `tests`/`node` shards on every PR.
    change** (snapshot `shared-report.snapshot.json` 1.0.0 → 2.0.0). It counts
    distinct anonymous scanners, each bucket floored at 5 before summing; label
    "Distinct scanners". Payload, depth sections, report page, demo and docs
-   moved together. `sponsor_impressions` → `sponsor_displays` follows (OSE-931).
+   moved together. `sponsor_displays` → `sponsor_displays` follows (OSE-931).
 3. If depth gating is ever extended to the batch/service path, define the
    bypass explicitly rather than special-casing at the call site (OSE-577 settled
    the current class split).

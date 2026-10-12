@@ -1119,7 +1119,7 @@
             .replace(/\b\w/g, (c) => c.toUpperCase());
         const titleDepth = (d) => (d ? String(d).charAt(0).toUpperCase() + String(d).slice(1) : '');
 
-        const sponsorRows = (report.sponsor_impressions || [])
+        const sponsorRows = (report.sponsor_displays || [])
           .map(
             (s) =>
               '<tr data-testid="signed-link-sponsor-row">' +
@@ -1291,8 +1291,8 @@
           (report.sponsor_class_breakdown
             ? (function() {
                 const scb = report.sponsor_class_breakdown;
-                const localImpr = scb.local ? scb.local.total_impressions : 0;
-                const paidImpr = (scb.mid ? scb.mid.total_impressions : 0) + (scb.premium ? scb.premium.total_impressions : 0);
+                const localImpr = scb.local ? scb.local.total_displays : 0;
+                const paidImpr = (scb.mid ? scb.mid.total_displays : 0) + (scb.premium ? scb.premium.total_displays : 0);
                 const localSponsors = scb.local ? scb.local.sponsor_count : 0;
                 const midSponsors = scb.mid ? scb.mid.sponsor_count : 0;
                 const premiumSponsors = scb.premium ? scb.premium.sponsor_count : 0;
@@ -1307,8 +1307,8 @@
                   '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Displays</th></tr></thead>' +
                   '<tbody>' +
                   '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_displays : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_displays : 0) + '</td></tr>' +
                   '</tbody></table>' +
                   '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
                   '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +

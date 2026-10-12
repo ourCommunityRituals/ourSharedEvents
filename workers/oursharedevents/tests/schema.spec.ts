@@ -46,7 +46,7 @@ const EXPECTED_TABLES = [
   'sponsor_asset', // 0066 (OSE-799 A2 — durable creative)
   'sponsor_business', // 0065 (OSE-799 A2 — durable identity)
   'sponsor_event_types',
-  'sponsor_impressions',
+  'sponsor_displays',
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
 ] as const;
 
@@ -92,8 +92,8 @@ const EXPECTED_INDEXES = [
   'idx_sponsor_areas_sponsor',
   'idx_sponsor_areas_zip',
   // Sponsor impressions (migration 0022)
-  'idx_sponsor_impressions_sponsor',
-  'idx_sponsor_impressions_event',
+  'idx_sponsor_displays_sponsor',
+  'idx_sponsor_displays_event',
   // Regulatory schema (migration 0023)
   'idx_event_type_registry_phase',
   'idx_event_type_registry_uec',
@@ -123,8 +123,8 @@ const EXPECTED_INDEXES = [
   // corridor_density_snapshots (migration 0044 — OER longitudinal archive)
   'idx_cds_corridor_dow_hour',
   'idx_cds_snapshot_date',
-  // sponsor_impressions geo (migration 0048 — OSE-635 digital click geo privacy)
-  'idx_sponsor_impressions_h3_res7',
+  // sponsor_displays geo (migration 0048 — OSE-635 digital click geo privacy)
+  'idx_sponsor_displays_h3_res7',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -173,8 +173,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   corridors: 22,
   sponsor_event_types: 5,
   sponsor_areas: 7,
-  // sponsor_impressions: 7 (pre-OSE-635) + 1 (h3_res7, migration 0048) = 8.
-  sponsor_impressions: 8,
+  // sponsor_displays: 7 (pre-OSE-635) + 1 (h3_res7, migration 0048) = 8.
+  sponsor_displays: 8,
   // + category_code (migration 0076, OSE-1344) = 11.
   event_type_registry: 11,
   corridor_regulatory_status: 5,
@@ -327,7 +327,7 @@ describe('Gate 5: Index verification', () => {
     // + 4 (idx_security_metrics_*, idx_security_alerts_* — migration 0042)
     // + 6 (idx_report_access_log_*, idx_export_manifest_* — migration 0043) = 52
     // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
-    // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
+    // + 1 (idx_sponsor_displays_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
     // + 1 (idx_events_brand_h3res7_status_start — migration 0069, OSE-1242) = 58.

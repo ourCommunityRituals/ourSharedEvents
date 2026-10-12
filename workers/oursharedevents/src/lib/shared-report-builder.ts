@@ -10,7 +10,7 @@
  *   2. return_rate              — % of distinct anons also seen at another event
  *      (of the confirmed series, and of the corridor)
  *   3. corridor_density         — this event's anon count vs rolling baseline
- *   4. sponsor_impressions[]    — per sponsor × surface
+ *   4. sponsor_displays[]    — per sponsor × surface
  *   5. poster_attribution[]     — per poster deployment
  *   6. headcount_trend          — across confirmed event_series instances
  *
@@ -184,7 +184,7 @@ export interface SharedReport {
     bucket_hour: number | null;
   };
 
-  sponsor_impressions: Array<{
+  sponsor_displays: Array<{
     sponsor_id: string;
     sponsor_name: string;
     /** The name the public sees: display name, else the business name (OSE-1431). */
@@ -200,17 +200,17 @@ export interface SharedReport {
   /**
    * Per-campaign aggregate for this event. Null when no sponsors have a
    * campaign_id. Exposed at mid/premium depth — enterprise comparison surface.
-   * Each row aggregates all sponsor_impressions rows for the campaign so a
+   * Each row aggregates all sponsor_displays rows for the campaign so a
    * brand can compare campaign reach across events via the batch endpoint.
-   * impressions_by_surface lets enterprise see which placement formats drove
+   * displays_by_surface lets enterprise see which placement formats drove
    * reach without additional client-side grouping.
    */
   campaign_summary: Array<{
     campaign_id: string;
     campaign_title: string;
-    total_impressions: number;
+    total_displays: number;
     sponsor_count: number;
-    impressions_by_surface: Record<string, number>;
+    displays_by_surface: Record<string, number>;
   }> | null;
 
   /**
@@ -224,9 +224,9 @@ export interface SharedReport {
    * data IN the report, not access gates ON the reader.
    */
   sponsor_class_breakdown: {
-    local: { sponsor_count: number; total_impressions: number };
-    mid: { sponsor_count: number; total_impressions: number };
-    premium: { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_displays: number };
+    mid: { sponsor_count: number; total_displays: number };
+    premium: { sponsor_count: number; total_displays: number };
   };
 
   poster_attribution: Array<{
@@ -569,7 +569,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  // 5. sponsor_impressions — per sponsor × surface, including campaign linkage,
+  // 5. sponsor_displays — per sponsor × surface, including campaign linkage,
   //    sponsor tier, and local-sponsor flag. D1 returns INTEGER booleans (0/1).
   // OSE-799 A2: identity (name) comes from sponsor_business; the per-event
   // economics (campaign, tier, locality) come from the sponsor_placement for THIS
@@ -587,7 +587,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
          sp.locality_band   AS is_local,
          si.surface         AS surface,
          COUNT(*)           AS count
-       FROM sponsor_impressions si
+       FROM sponsor_displays si
        LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        LEFT JOIN sponsor_placement sp
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
@@ -615,7 +615,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // OSE-711 reasoning for poster rows). Dropping also keeps the rows and the
   // campaign / class totals in agreement, so a reader cannot subtract one
   // against the other down to a sub-K cohort.
-  const sponsorImpressions = (impressions.results ?? [])
+  const sponsorDisplays = (impressions.results ?? [])
     .filter((r) => !applyCountFloor(r.count).suppressed)
     .map((r) => ({
       sponsor_id: r.sponsor_id,
@@ -633,50 +633,50 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       count: r.count,
     }));
 
-  // Derive campaign_summary by aggregating sponsorImpressions rows that have
+  // Derive campaign_summary by aggregating sponsorDisplays rows that have
   // a campaign_id. No extra DB call — the data is already fetched above.
   // OSE-683: each (sponsor × surface) impression row is a contributing bucket.
   // Apply the per-bucket K-anon floor BEFORE summation — a row with count < K is
   // DROPPED, never summed raw — so a sub-K impression cohort can't be laundered
   // into a campaign total (nor recovered by differencing against the exact
-  // per-surface sponsor_impressions rows the same reader can already see).
+  // per-surface sponsor_displays rows the same reader can already see).
   const campaignMap = new Map<
     string,
     {
       campaign_id: string;
       campaign_title: string;
-      total_impressions: number;
+      total_displays: number;
       sponsor_count: number;
-      impressions_by_surface: Record<string, number>;
+      displays_by_surface: Record<string, number>;
     }
   >();
-  for (const row of sponsorImpressions) {
+  for (const row of sponsorDisplays) {
     if (!row.campaign_id) continue;
     const floored = applyCountFloor(row.count);
     if (floored.count === null) continue; // sub-K bucket — drop before summation
     const contribution = floored.count;
     const existing = campaignMap.get(row.campaign_id);
     if (existing) {
-      existing.total_impressions += contribution;
+      existing.total_displays += contribution;
       existing.sponsor_count += 1;
-      existing.impressions_by_surface[row.surface] =
-        (existing.impressions_by_surface[row.surface] ?? 0) + contribution;
+      existing.displays_by_surface[row.surface] =
+        (existing.displays_by_surface[row.surface] ?? 0) + contribution;
     } else {
       campaignMap.set(row.campaign_id, {
         campaign_id: row.campaign_id,
         campaign_title: row.campaign_title ?? 'unknown',
-        total_impressions: contribution,
+        total_displays: contribution,
         sponsor_count: 1,
-        impressions_by_surface: { [row.surface]: contribution },
+        displays_by_surface: { [row.surface]: contribution },
       });
     }
   }
   const campaignSummary =
     campaignMap.size > 0
-      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+      ? [...campaignMap.values()].sort((a, b) => b.total_displays - a.total_displays)
       : null;
 
-  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorImpressions.
+  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorDisplays.
   // Mapping: is_local=true → 'local'; non-local + tier in top set → 'premium'; else → 'mid'.
   // Inline classification — this file must stay tier-blind (invariant #5 tier_equity).
   const PREMIUM_TIERS = new Set(['title', 'platinum', 'gold']);
@@ -685,13 +685,13 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
   }
   const sponsorClassBreakdown: {
-    local: { sponsor_count: number; total_impressions: number };
-    mid: { sponsor_count: number; total_impressions: number };
-    premium: { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_displays: number };
+    mid: { sponsor_count: number; total_displays: number };
+    premium: { sponsor_count: number; total_displays: number };
   } = {
-    local: { sponsor_count: 0, total_impressions: 0 },
-    mid: { sponsor_count: 0, total_impressions: 0 },
-    premium: { sponsor_count: 0, total_impressions: 0 },
+    local: { sponsor_count: 0, total_displays: 0 },
+    mid: { sponsor_count: 0, total_displays: 0 },
+    premium: { sponsor_count: 0, total_displays: 0 },
   };
   // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
   // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
@@ -699,7 +699,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // rows that individually clear K contribute, matching the campaign_summary and
   // distinct_scanners treatment so no surface leaks a sub-K aggregate.
   const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
-  for (const row of sponsorImpressions) {
+  for (const row of sponsorDisplays) {
     const floored = applyCountFloor(row.count);
     if (floored.count === null) continue; // sub-K bucket — drop before summation
     const cls = classifySponsor(row.sponsor_tier, row.is_local);
@@ -707,7 +707,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       seenSponsorClass.set(row.sponsor_id, cls);
       sponsorClassBreakdown[cls].sponsor_count += 1;
     }
-    sponsorClassBreakdown[cls].total_impressions += floored.count;
+    sponsorClassBreakdown[cls].total_displays += floored.count;
   }
 
   // 6. poster_attribution — per poster_deployment_id
@@ -962,11 +962,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // Surface materialization pending when essentially no signal exists yet.
-  if (distinctScanners === null && distinctAnonsHere === 0 && sponsorImpressions.length === 0) {
+  if (distinctScanners === null && distinctAnonsHere === 0 && sponsorDisplays.length === 0) {
     suppression.push({
       field: '_event',
       reason: 'materialization_pending',
-      detail: 'no scan_aggregates, anon_id_returns, or sponsor_impressions for this event yet',
+      detail: 'no scan_aggregates, anon_id_returns, or sponsor_displays for this event yet',
     });
   }
 
@@ -1018,7 +1018,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         bucket_dow: corridorDow,
         bucket_hour: corridorHour,
       },
-      sponsor_impressions: sponsorImpressions,
+      sponsor_displays: sponsorDisplays,
       campaign_summary: campaignSummary,
       sponsor_class_breakdown: sponsorClassBreakdown,
       poster_attribution: posterAttribution,
