@@ -53,8 +53,10 @@ jobs:
     environment: staging
     steps:
       - name: 'Refuse unless STAGING was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "STAGING" ]; then
+          if [ "$CONFIRM" != "STAGING" ]; then
             echo "::error::Type STAGING in the confirm input. This workflow runs against staging only."
             exit 1
           fi
