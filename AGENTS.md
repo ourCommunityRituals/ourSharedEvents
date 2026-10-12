@@ -71,6 +71,7 @@ Staging and production stay in sync and ready for each other. The only differenc
 - **Closed:** no `PRODUCTION_LIVE`, no announcing, no clients. An agent never sets `PRODUCTION_LIVE`, plans a go-live sequence, or treats a deploy as a launch.
 - **Held, not closed, today:** no code switch closes the host, and the Worker answers on `oursharedevents.com`. Closing it is an edge setting the owner makes (an Access policy over the whole host, OSE-1353 / OSE-1377). Do not call production dark until then.
 - **Not yet enforced:** the migration level of the two databases is not compared in CI. Until it is, in sync holds only on a day both were read.
+- **This hold ends when the owner activates production** (owner, 2026-10-12). Until the owner says production is active, it binds. After that the restraints in this section lapse and the owner removes the section. Activation does not change who sets repository variables: `PRODUCTION_LIVE` stays an owner step (Human approval, above).
 - **Done bar** while closed: the staging chain.
 
 ## Definition of Done: two stages (OSE-1443)
