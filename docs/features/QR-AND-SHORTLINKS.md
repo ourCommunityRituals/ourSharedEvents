@@ -109,7 +109,12 @@ design consults a request's apparent location." Enforcement lives in
   `form-pages.ts`, `pages.ts`) reads `navigator.geolocation`, `request.cf`
   latitude, longitude, city, postal code, metro code or region, or any finer
   `CF-IP*` header. A second 8b test fails if **any** served `src/` file calls the
-  browser geolocation API, and that includes admin.
+  browser geolocation API, and that includes admin. One file is named as an
+  exception (owner decision 2026-10-10): the landing page's "Use my location"
+  in `src/templates/landing.html`. A person presses it (or has already allowed
+  it); it sends only a 5-character geohash box, in a form body, to `POST /near`,
+  which answers with the nearest zip. It is not on the scan/click path, and its
+  limits are tested in `tests/landing-where-unit.spec.ts`.
 - **8c / 8d / 8e** fail if a scan table gains a coordinate or cell column, if
   `shortlinks` gains anything finer than res7, or if any table stores a cell
   finer than res9.
@@ -205,7 +210,7 @@ is not, the hidden cells can be recovered by subtraction: total minus the sum
 of the shown cells equals the sum of the hidden ones. Two rules cover this:
 
 - **OSE-683 drop-before-sum.** `sumContributingBuckets` drops every contributing
-  bucket under K before summing. It is used for `unique_gatherings` and the
+  bucket under K before summing. It is used for `distinct_scanners` and the
   portfolio rollups (`src/lib/shared-report-builder.ts`,
   `src/handlers/portfolio-rollup.ts`).
 - **Single rung per reader** (memo R1/R2). A reader never sees two time
@@ -286,7 +291,7 @@ Everything below was read from the handlers named. "Exact" means the raw count.
 
 | Signal                                       | Organizer (admin)                                                                                                                | Sponsor, via their `/sponsor?t=` home link                                                                                                                                                                        | SharedReport, **sponsor** token                                                                              | Attendee / public / TV display                                  |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| QR scans, event total                        | **Exact**: `/stats` (`src/handlers/event-stats.ts`) and pre-event card (`src/handlers/pre-event-activity.ts`)                    | **Floored**. Shown only on an **accepted** placement (`sponsor_accepted = 1`) of a publicly renderable (active) event in the **pre-event** phase (`src/lib/sponsor-home-render.ts`, `canRender(state, 'public')`) | Not a section. `unique_gatherings` (distinct hashes, drop-before-sum, floored) at every depth                | **None**                                                        |
+| QR scans, event total                        | **Exact**: `/stats` (`src/handlers/event-stats.ts`) and pre-event card (`src/handlers/pre-event-activity.ts`)                    | **Floored**. Shown only on an **accepted** placement (`sponsor_accepted = 1`) of a publicly renderable (active) event in the **pre-event** phase (`src/lib/sponsor-home-render.ts`, `canRender(state, 'public')`) | Not a section. `distinct_scanners` (distinct hashes, drop-before-sum, floored) at every depth                | **None**                                                        |
 | QR scans per day (14 days)                   | **Exact** (admin card chart, `admin.html` reads `scansByDay`)                                                                    | Not shown. Computed floored, never rendered                                                                                                                                                                       | not sent                                                                                                     | None                                                            |
 | QR scans per poster, with its res9 cell      | Via the SharedReport only: organizer/admin get the full report, `poster_attribution` floored, **sub-5 posters dropped entirely** | Not shown                                                                                                                                                                                                         | `poster_attribution` at **mid+** depth, same floor and drop (`tests/poster-attribution-kanon-floor.spec.ts`) | None                                                            |
 | Short-link taps, event total                 | **Floored**: the taps on the codes with 5 or more each (`floorTotalOfParts`); pre-event card and Live page (§4)                  | **Floored**, same gating as scans                                                                                                                                                                                 | Not sent (`click_outs` is not in `DEPTH_SECTIONS`)                                                           | None                                                            |
@@ -382,8 +387,9 @@ never touches the WHO side, the request, or FORMS_DB" in
 `tests/pre-event-activity.spec.ts` enforces that.
 
 - The **organizer** sees it on the admin pre-event card, with the public short
-  link and its QR ("link first"): scans exact, taps floored. The tap total is
-  the sum of the codes that have 5 or more taps each (§4).
+  link and its QR ("link first"): scans and taps floored. The tap total is
+  the sum of the codes that have 5 or more taps each (§4); every scan figure is
+  the sum of the poster-hours with 5 or more (OSE-1656, `lib/scan-cells.ts`).
 - The **sponsor** sees one floored sentence on each accepted pre-event placement:
   "So far: N link taps · M poster scans. Your name is on P posters in Q places."
   (`renderPreEventReach`). N is the same figure the organizer's card shows: the
@@ -493,10 +499,10 @@ Unless noted, gates run in CI: 0-architecture structural specs in **T0 Gate
    into**, recorded on a deployment OCR created. Deriving it from the visitor's
    request would reverse §9.2 and fail gate 8b. That would need a new ADR, not a
    code change.
-4. **Organizer exact vs. uniform floor** (§5). Ratify the per-data-class policy:
-   anonymous scans and taps exact for the organizer, identity-derived counts
-   floored. The alternative is to amend the OSE-665 wording in
-   `count-floor.ts`.
+4. ~~**Organizer exact vs. uniform floor** (§5).~~ Decided 2026-10-08 (owner
+   ruling: no exceptions, at any tier): scans and taps are floored for the
+   organizer too (OSE-1656 for scans, #871 for taps). The organizer's own
+   registration and survey lists stay row-level (`count-floor.ts` scope note).
 5. ~~Fix `click_outs` to drop-before-sum, and flip its test (§4).~~ Done
    2026-10-07.
 6. **Retention of `scan_node_returns`.** The sweep exists but is off by default.

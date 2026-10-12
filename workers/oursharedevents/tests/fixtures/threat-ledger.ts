@@ -1178,12 +1178,12 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-056',
     layer: 'pipeline',
     threat:
-      "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_impressions (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
+      "Sponsor token without sponsor_id leaks all competitors' impression data: filterReportByDepth had two cases for sponsor_displays (scoped filter vs pass-all), with no distinction between admin-null (intentional full view) and sponsor-null (missing scope). A sponsor token minted without sponsor_id received every competitor's impression rows.",
     severity: 'CRITICAL',
     target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-595',
     test_ref:
-      'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_impressions',
+      'tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_displays',
     status: 'tested',
     red_birth: {
       date: '2026-08-03',
@@ -1197,7 +1197,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-057',
     layer: 'worker_surface',
     threat:
-      'Public check-in and survey forms have no per-event cap: every public form POST is behind the router\'s KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).',
+      "Public check-in and survey forms have no per-event cap: every public form POST is behind the router's KV-backed per-IP limiter (60/min, src/router.ts; the KV key is a SHA-256 of the IP), but nothing bounds submissions to one event_id spread across many IPs, so checkin_counts and form_surveys can be inflated by a sender rotating IPs. Registration and email-signup also carry a 10/min per ip:event handler limit (isFormRateLimited); the anonymous handlers do not read the IP themselves (TL-026).",
     severity: 'MEDIUM',
     target_invariant: null, // resource abuse / input handling, not PII retention (#8)
     mitigation_story: 'OSE-1465',
@@ -1403,18 +1403,18 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
     id: 'TL-066',
     layer: 'worker_surface',
     threat:
-      'Impression de-anonymization: recover WHO from device-minute impressions via session/timing/cross-state joins. Refused — sponsor_impressions carries zero attendee-identifying columns (no ip/ua/anon_id/session/device/user_id/email/lat/lon), so there is nothing to correlate to an individual.',
+      'Impression de-anonymization: recover WHO from device-minute impressions via session/timing/cross-state joins. Refused — sponsor_displays carries zero attendee-identifying columns (no ip/ua/anon_id/session/device/user_id/email/lat/lon), so there is nothing to correlate to an individual.',
     severity: 'HIGH',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
     mitigation_story: 'OSE-661',
     test_ref:
-      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_impressions schema carries zero attendee-identifying columns',
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_displays schema carries zero attendee-identifying columns',
     status: 'tested',
     red_birth: {
       date: '2026-08-22',
       method: 'design-time-negative-assertion',
       notes:
-        'PRAGMA table_info(sponsor_impressions) asserted against a forbidden identity-column set. Goes red the moment an ip/anon_id/session/device/lat/lon column is added to the impression table.',
+        'PRAGMA table_info(sponsor_displays) asserted against a forbidden identity-column set. Goes red the moment an ip/anon_id/session/device/lat/lon column is added to the impression table.',
     },
     last_run_green: '2026-08-22',
   },
@@ -1441,18 +1441,18 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
     id: 'TL-068',
     layer: 'worker_surface',
     threat:
-      'Channel-cap on impressions: read in-event device impressions at a finer geo grain than presence allows. Refused — impressions are captured at h3_res7 (~5 km² corridor cell) ONLY; no finer res8/res9 column exists on sponsor_impressions and the INSERT binds only res7 (OSE-635 res7-cap).',
+      'Channel-cap on impressions: read in-event device impressions at a finer geo grain than presence allows. Refused — impressions are captured at h3_res7 (~5 km² corridor cell) ONLY; no finer res8/res9 column exists on sponsor_displays and the INSERT binds only res7 (OSE-635 res7-cap).',
     severity: 'HIGH',
     target_invariant: { number: 2, name: 'hyperlocal_geo_resolution' },
     mitigation_story: 'OSE-635',
     test_ref:
-      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_impressions carries h3_res7 but NO finer h3_res8/res9 grain',
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_displays carries h3_res7 but NO finer h3_res8/res9 grain',
     status: 'tested',
     red_birth: {
       date: '2026-08-22',
       method: 'design-time-negative-assertion',
       notes:
-        'Schema + static gate: sponsor_impressions has h3_res7 and neither h3_res8 nor h3_res9; the impression INSERT column list carries only h3_res7. Goes red if a finer cell column/write is introduced.',
+        'Schema + static gate: sponsor_displays has h3_res7 and neither h3_res8 nor h3_res9; the impression INSERT column list carries only h3_res7. Goes red if a finer cell column/write is introduced.',
     },
     last_run_green: '2026-08-22',
   },
@@ -1513,6 +1513,183 @@ const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: event short codes (OSE-1684, 2026-10-09/10)
+// One six-character code per event serves /e/ /p/ /tv/ /r/ /c/ (public) and
+// counts shared opens in share_opens_daily. TL-072..075.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const EVENT_SHORT_CODES: ThreatEntry[] = [
+  {
+    id: 'TL-072',
+    layer: 'worker_surface',
+    threat:
+      'Draft exposure through a short code: a guessed or leaked code of a draft or ready event reveals its name or content. Refused — /e/ sends a non-public event to the plain /events/<id> (its ordinary 404, never the readable name), and every screen a code reaches (poster, TV, forms) and the public data behind them (event, poster-bundle, display-config) refuse a draft or ready event.',
+    severity: 'HIGH',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a guessed code of a draft opens nothing about it (2026-10-10) > draft and ready: no screen shows the name, and the data behind them refuses',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the /e/ draft gate removed (a draft redirected to its readable name), and red with the form pages rendering drafts. The older "a draft: the code never reveals its name" test (C1, 2026-10-09) goes red on the first fault too.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-073',
+    layer: 'worker_surface',
+    threat:
+      'Share-count inflation: link-preview robots, HEAD requests or one scripted client add opens to share_opens_daily, so the organizer reads shares that no person made. Refused — only a GET by a person of a public event counts; HEAD and known preview agents get the link but add nothing; past the per-caller limit (publicCountLimited) the link works and nothing is counted.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a shared link is counted: what and when, never who > HEAD and link-preview robots open the link but are not counted',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-09',
+      method: 'deliberate-fixture-break',
+      notes:
+        'CCR 2026-10-09 defect C2: red with the robot and method check removed. A phone brand carrying "bot" (CUBOT) stays counted as a person.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-074',
+    layer: 'd1_boundary',
+    threat:
+      'Identity in the share counter: share_opens_daily or event_codes gains a column that can name or follow a person (IP, cookie, anonymous id, device, referrer), turning a count of when into a record of who. Refused — the counter is event, screen, phase, day and a number; the code table is code, event and creation time.',
+    severity: 'HIGH',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > a shared link is counted: what and when, never who > the counter holds no person: only event, screen, phase, day and a number',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-09',
+      method: 'design-time-negative-assertion',
+      notes:
+        'PRAGMA table_info of both tables asserted equal to their exact column lists, so any added column turns it red.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-075',
+    layer: 'worker_surface',
+    threat:
+      'Code guessing: a code is six characters from 31 (about 887 million), every event has one, and /e/ /p/ /r/ /c/ never refuse (publicCountLimited), so a caller could try codes until one answers and find live events that are off the map. Mitigated — wrong guesses are counted per caller (EVENT_CODE_GUESS_MAX = 30 a minute); past that every code answers 429 for the rest of the minute, right ones too, so a hit cannot be told from a miss. A right code never counts, so a crowd on one address is never refused.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/event-code.spec.ts > guessing codes is limited; a right code never is (2026-10-10) > past the limit every code is refused, right ones too, so a hit cannot be told from a miss',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the pre-lookup check removed (a real code still answered 302 past the limit) and red with the guess count removed.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'Speed bump, not a wall: many addresses each get their own allowance, and the limit fails open with KV down, like every public read limit. People on one address (the Wi-Fi at a venue) share one allowance, so one of them trying 30 wrong codes stops codes for all of them for a minute; printed poster codes (/s/, /q/) are not affected. /s/ shortlink codes have their own guess limit since 2026-10-10 (TL-079).',
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: link counts and the browser name (owner 2026-10-10). TL-076..078.
+// (TL-072..075 are the event short-code entries, OSE-1684.)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LINK_COUNT_ROBOTS: ThreatEntry[] = [
+  {
+    id: 'TL-076',
+    layer: 'worker_surface',
+    threat:
+      'Robot-inflated link taps: chat and social apps fetch a /s/ link the moment it is pasted (iMessage, Slack, WhatsApp, Discord previews), and each fetch counted as a tap. The taps feed the organizer cards, the dashboards, the sponsor page and the SharedReport, and can push a count past the floor of 5 with fewer than 5 people. Refused — a link-preview robot, or a request with no user agent, gets the same redirect and adds no tap (isLinkPreviewRequest, the rule the short codes use).',
+    severity: 'MEDIUM',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/shortlinks.spec.ts > link-preview robots open a short link but are not counted (owner 2026-10-10) > each robot gets the same redirect as a person, and adds no tap',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with the robot check removed from handleShortlinkResolve. A companion test goes red when the robot list matches a bare "pinterest", which also caught people inside the Pinterest app.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'Email scanners that present a browser user agent (Safe Links, Proofpoint) are still counted; a robot list cannot tell them from a person, and the address may not be read. Counts before 2026-10-10 include robot fetches and cannot be corrected.',
+  },
+  {
+    id: 'TL-077',
+    layer: 'worker_surface',
+    threat:
+      'Browser-name creep: once one public path reads the User-Agent, others start to, and it ends up logged, hashed or stored as a device fingerprint. Refused — ADR-001 (amended 2026-10-10): a public handler never reads it; only named readers in lib do, each answering robot or not and keeping nothing. Any other User-Agent read in src/ fails the gate.',
+    severity: 'HIGH',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/anonymity-gate.spec.ts > ADR-001 (2026-10-10): the browser name is read only by named readers > no file outside the named readers reads User-Agent',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red with a new User-Agent read planted in pages.ts, and red (with the per-handler gate) when the short-code handler read the header itself. Found while building TL-076: handleEventCodeResolve had read it unchecked because its file was not in the anonymity gate; it is registered now.',
+    },
+    last_run_green: '2026-10-10',
+  },
+  {
+    id: 'TL-078',
+    layer: 'd1_boundary',
+    threat:
+      'Stored browser fingerprint on scans: the poster-scan path writes an unsalted SHA-256 of the User-Agent (16 hex characters) to scan_node_returns.user_agent_hash, next to the keyed scan id. Browser strings are few enough to reverse by dictionary, so the row keeps a device trait the other readers are not allowed to keep. Mitigated 2026-10-10 — a scan with a keyed id reads no browser name and stores no hash (qr-scan.ts and the shared write in scan-buffer.ts, which also covers messages the previous Worker queued). Only a scan with no id stores it, because the visitor count then has nothing else, and production refuses to deploy without ANON_ID_HASH_PEPPER.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: 'OSE-1659',
+    test_ref:
+      'tests/scan-node-key.spec.ts > TL-078: a keyed scan keeps no browser-name hash (2026-10-10) > GET /q/<token> with the pepper set | the row has the keyed id and no browser-name hash',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Three of the four tests in that block were red on main (the scan, two browsers counted by keyed id alone, and a queued message from the previous Worker); the no-pepper fallback test passes on both, by design. The production deploy gate test in tests/integration/infra-consistency.test.js was red on the old workflow.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'Read 2026-10-10: staging has 119 scan rows, none with a keyed id (ANON_ID_HASH_PEPPER is not set there; the deploy log warns), all with the hash; production has none. No migration: no row anywhere has both. Left: set the pepper on staging, then the 119 old rows can be cleared and the fallback removed.',
+  },
+  {
+    id: 'TL-079',
+    layer: 'worker_surface',
+    threat:
+      'Short-link guessing: a /s/ code is six characters from 62 (about 56.8 billion), every printed poster carries several, and /s/ never refused (publicCountLimited), so a caller could try codes until one answered and reach live events that are off the map. The redirect also carries the event id, for a draft too (its page is the ordinary 404). Mitigated — wrong codes are counted per caller (SHORTLINK_GUESS_MAX = 30 a minute, its own count apart from the event short codes); past that every code answers 429 for the rest of the minute, right ones too. A right code never counts, so a crowd scanning one printed code on one Wi-Fi is never refused.',
+    severity: 'LOW',
+    target_invariant: null,
+    mitigation_story: 'OSE-1684',
+    test_ref:
+      'tests/shortlinks.spec.ts > guessing short links is limited; a right code never is (2026-10-10) > past the limit every code is refused, right ones too, so a hit cannot be told from a miss',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Red on the resolver from main (a real code still answered 302 past the limit), and red with only the before-lookup check removed.',
+    },
+    last_run_green: '2026-10-10',
+    notes:
+      'From the CCR of 2026-10-10. Speed bump, not a wall, like TL-075: many addresses each get their own allowance, and the limit fails open with KV down. A draft id in the redirect is accepted: /e/ does the same (TL-072), and the page it reaches says nothing about the event.',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1529,12 +1706,14 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...PAYMENT_OPS,
   ...SPONSOR_ELIGIBILITY_GATE,
   ...IMPRESSION_PRIVACY_REDTEAM,
+  ...EVENT_SHORT_CODES,
+  ...LINK_COUNT_ROBOTS,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-09-02',
+  last_updated: '2026-10-10',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;

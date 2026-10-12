@@ -1,5 +1,7 @@
 # ourSharedEvents — Story Registry
 
+> **Historical.** The work queue is Linear (team OSE) and the rules are in `AGENTS.md`. This file is kept for its history; do not pick work from it, and ignore any instruction below that conflicts with AGENTS.md (for example, never give an agent an API key).
+
 Master list of all development stories. Read top to bottom — this is the order you do the work.
 Synced with Linear: fill in `Linear #` when issues are created.
 
@@ -750,9 +752,9 @@ The current `filterReportByDepth` implementation treats `local`/`mid`/`premium` 
 
 ```json
 "sponsor_class_breakdown": {
-  "local":   { "sponsor_count": 3, "total_impressions": 142 },
-  "mid":     { "sponsor_count": 1, "total_impressions": 87  },
-  "premium": { "sponsor_count": 1, "total_impressions": 210 }
+  "local":   { "sponsor_count": 3, "total_displays": 142 },
+  "mid":     { "sponsor_count": 1, "total_displays": 87  },
+  "premium": { "sponsor_count": 1, "total_displays": 210 }
 }
 ```
 

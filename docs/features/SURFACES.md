@@ -36,7 +36,7 @@
 - Validates email format client-side before submission
 - Server-side validation: format, max 254 chars, non-empty
 - Rate limited: 10 requests per IP per minute (in-memory sliding window)
-- Persists to D1 `subscribers` table (best-effort if DB available)
+- Persists to the `subscribers` table in FORMS_DB (best-effort if FORMS_DB is available; moved from the main DB in OSE-1661)
 - Duplicate emails silently accepted (ON CONFLICT DO NOTHING)
 
 ---

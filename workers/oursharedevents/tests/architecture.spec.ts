@@ -20,7 +20,7 @@
  *     for forms.ts / events.ts / health.ts / pages.ts / feature-flags handler+lib.
  *   - This file adds the missing L1 sponsors.ts static gate, the missing
  *     forward L2 PRAGMA (`FORMS_DB` has none of [events, sponsors, scans,
- *     sponsor_impressions]), the missing DB.feature_flags PRAGMA, and a
+ *     sponsor_displays]), the missing DB.feature_flags PRAGMA, and a
  *     structured `console.log` summary of pass count for CI observability.
  *
  * All L1 gates are pure string checks (<1s). The L2 gates run after the
@@ -29,6 +29,7 @@
 
 import { env } from 'cloudflare:test';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { dbWallViolations, readSchemaColumns } from './helpers/identity-columns';
 
 interface TestEnv {
   DB: D1Database;
@@ -150,14 +151,17 @@ describe('L1: handlers/feature-flags.ts never references env.DB', () => {
 
 describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant #1)', () => {
   // data-subject.ts is the ONLY authorised handler that touches BOTH databases:
-  //   FORMS_DB — DELETE from email_signups, form_registrations; INSERT into pii_audit_log
-  //   DB       — DELETE from subscribers only (by peppered email_hash; GDPR Art.17 / OSE-207 / A-5)
+  //   FORMS_DB — DELETE from email_signups, form_registrations, subscribers (by
+  //              peppered email_hash; GDPR Art.17 / OSE-207 / A-5; subscribers
+  //              moved here in OSE-1661); INSERT into pii_audit_log
+  //   DB       — DELETE-only, from the scan tables keyed by the browser id
   // This guard locks the scope to those operations. Any SELECT, JOIN, or new
   // table reference across the DB boundary would be an unreviewable cross-link.
-  test('DB usage in data-subject.ts is DELETE-only on subscribers table', () => {
+  test('DB usage in data-subject.ts is DELETE-only; subscribers is erased in FORMS_DB', () => {
     expectPass('L1.data-subject-db-scope', () => {
       const content = getSource('src/handlers/data-subject.ts');
-      expect(content).toMatch(/env\.DB\.prepare\('DELETE FROM subscribers/);
+      expect(content).toMatch(/env\.FORMS_DB\.prepare\('DELETE FROM subscribers/);
+      expect(content).not.toMatch(/env\.DB\.prepare\([^)]*subscribers/);
       expect(content).not.toMatch(/env\.DB\.prepare\('SELECT/i);
       expect(content).not.toMatch(/env\.DB\.prepare\("SELECT/i);
       expect(content).not.toMatch(/env\.DB\.prepare\(`SELECT/i);
@@ -168,13 +172,7 @@ describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant 
   test('FORMS_DB usage in data-subject.ts does not reference anon-surface tables', () => {
     expectPass('L1.data-subject-formsdb-scope', () => {
       const content = getSource('src/handlers/data-subject.ts');
-      const anonTables = [
-        'events',
-        'sponsors',
-        'scans',
-        'sponsor_impressions',
-        'poster_deployments',
-      ];
+      const anonTables = ['events', 'sponsors', 'scans', 'sponsor_displays', 'poster_deployments'];
       for (const table of anonTables) {
         expect(content).not.toMatch(new RegExp(`FORMS_DB\\.prepare\\(['"]\\.* FROM ${table}`, 'i'));
       }
@@ -213,6 +211,10 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //                      before any sum (#7). Never a row, never a PII column;
   //                      requireAdmin-gated + brand-scoped (#9).
   //                      Authorized: OSE-1468 governed dashboards.
+  //   subscribers.ts   — reads the landing-page email list (subscribers moved to
+  //                      FORMS_DB in OSE-1661) for the platform-only, audited
+  //                      admin list. requireAdmin + platform-only gated.
+  // pages.ts also writes the landing-page subscribe row (handleSubscribe).
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
@@ -226,6 +228,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/portfolio-rollup.ts',
       'src/handlers/event-stats.ts',
       'src/handlers/dashboards.ts',
+      'src/handlers/subscribers.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;
@@ -264,19 +267,62 @@ describe('L2: FORMS_DB does not contain anonymous-surface tables', () => {
   // This is the forward direction that forms-security.spec.ts S14 did not
   // assert — S14 covers DB-has-no-forms-tables, this asserts the symmetric
   // FORMS_DB-has-no-anon-tables guarantee.
-  test('events / sponsors / scans / sponsor_impressions not in FORMS_DB', async () => {
+  test('events / sponsors / scans / sponsor_displays not in FORMS_DB', async () => {
     const names = await tableNames(tenv().FORMS_DB);
     expectPass('L2.forms-db-no-anon-tables', () => {
       expect(names).not.toContain('events');
       expect(names).not.toContain('sponsors');
       expect(names).not.toContain('scans');
-      expect(names).not.toContain('sponsor_impressions');
+      expect(names).not.toContain('sponsor_displays');
       // Defensive extras documented by the brain invariants:
       expect(names).not.toContain('poster_deployments');
       expect(names).not.toContain('sponsor_event_types');
       expect(names).not.toContain('sponsor_areas');
       expect(names).not.toContain('corridors');
     });
+  });
+});
+
+describe('L2: the two-database wall, derived from the live schema (OSE-1661)', () => {
+  // The named lists below this block were the whole check until OSE-1661, and
+  // `subscribers` (email_hash + email_encrypted) sat in DB through them. These
+  // read every table and column after all migrations instead.
+  test('no table exists in both DB and FORMS_DB', async () => {
+    const inDb = new Set(await tableNames(tenv().DB));
+    const both = (await tableNames(tenv().FORMS_DB)).filter((t) => inDb.has(t));
+    expectPass('L2.no-shared-tables', () => {
+      expect(inDb.size).toBeGreaterThan(30);
+      expect(both).toEqual([]);
+    });
+  });
+
+  test('no DB column says who a person is (email, phone, name), hashed or not', async () => {
+    const columns = await readSchemaColumns(tenv().DB, 'DB');
+    const offenders = dbWallViolations(columns);
+    expectPass('L2.db-wall-identity-columns', () => {
+      expect(columns.length).toBeGreaterThan(100);
+      expect(
+        offenders,
+        `Identity columns in the anonymous DB: [${offenders.join(', ')}]. Move the table to ` +
+          'FORMS_DB, or add a reviewed exemption in tests/helpers/identity-columns.ts.'
+      ).toEqual([]);
+    });
+  });
+
+  test('planted: an email-shaped column in DB fails the wall even when hashed', () => {
+    expect(
+      dbWallViolations([
+        { binding: 'DB', table: 'fixture', column: 'email_hash' },
+        { binding: 'DB', table: 'fixture', column: 'guest_name' },
+        { binding: 'DB', table: 'fixture', column: 'phone' },
+        // The same column in FORMS_DB is not a wall question.
+        { binding: 'FORMS_DB', table: 'fixture', column: 'email_hash' },
+      ])
+    ).toEqual([
+      'DB.fixture.email_hash (email)',
+      'DB.fixture.guest_name (person-name)',
+      'DB.fixture.phone (phone)',
+    ]);
   });
 });
 
@@ -292,6 +338,7 @@ describe('L2: DB does not contain identified-user-surface tables', () => {
       expect(names).not.toContain('checkin_counts');
       expect(names).not.toContain('form_config');
       expect(names).not.toContain('pii_audit_log');
+      expect(names).not.toContain('subscribers'); // moved to FORMS_DB, OSE-1661
     });
   });
 });

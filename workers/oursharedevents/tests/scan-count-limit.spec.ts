@@ -28,6 +28,7 @@ import { handleQrScan } from '../src/handlers/qr-scan';
 import { handleShortlinkResolve } from '../src/handlers/shortlink-resolve';
 import { createShortlink } from '../src/lib/shortlinks';
 import ROUTER_SOURCE from '../src/router.ts?raw';
+import { AS_PERSON } from './helpers/person-agent';
 
 interface TestEnv {
   DB: D1Database;
@@ -260,7 +261,7 @@ describe('a scan that is not countable still sends the visitor on, and writes no
 describe('a short-link click that is not countable still redirects, and adds no click', () => {
   const click = (countable: boolean) =>
     handleShortlinkResolve(
-      new Request(`https://t.test/s/${shortCode}`),
+      new Request(`https://t.test/s/${shortCode}`, { headers: AS_PERSON }),
       tenv(),
       shortCode,
       countable
@@ -285,7 +286,7 @@ describe('through the real routes', () => {
   const hit = (path: string, ip: string) =>
     SELF.fetch(`https://localhost${path}`, {
       redirect: 'manual',
-      headers: { 'CF-Connecting-IP': ip },
+      headers: { 'CF-Connecting-IP': ip, ...AS_PERSON },
     });
 
   /**

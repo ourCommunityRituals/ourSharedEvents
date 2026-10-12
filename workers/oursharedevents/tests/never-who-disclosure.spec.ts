@@ -129,7 +129,11 @@ describe('OSE-1372 | never-who is one line + a native disclosure on every anonym
     const html = await (await SELF.fetch('https://t.test/')).text();
     const d = disclosure(html);
     expect(d).toContain('data-testid="landing-privacy"');
-    expect(d).toContain('This page sets no cookies,');
+    expect(d).toContain('This page sets no cookies and');
+    // Location is the person's choice, and only the zip area is used (2026-10-10).
+    expect(d).toContain('If you choose &ldquo;Use my location&rdquo;, it uses only your zip');
+    expect(d).toContain('area, never your exact spot.');
+    expect(d).not.toContain('never asks for your location');
     expect(d).toContain('data-testid="privacy-more"');
     expect(html).not.toContain('<!--OCR_NEVER_WHO-->');
     expect(html).not.toContain('/*OCR_NEVER_WHO_CSS*/');

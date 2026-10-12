@@ -69,8 +69,8 @@ const FULL_REPORT = {
   event_title: 'Test Event',
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
-  unique_gatherings: 42,
-  sponsor_impressions: [
+  distinct_scanners: 42,
+  sponsor_displays: [
     { sponsor_id: 'sp_A', impressions: 100 },
     { sponsor_id: 'sp_B', impressions: 50 },
   ],
@@ -90,7 +90,7 @@ describe('B. read-side depth is omission-only', () => {
       expect(allowed.has(key), `unexpected key "${key}" in local tier`).toBe(true);
     }
     // Values are NOT transformed
-    expect(report.unique_gatherings).toBe(42);
+    expect(report.distinct_scanners).toBe(42);
     expect(report.event_id).toBe('evt_test');
     // Premium-only field absent
     expect('headcount_trend' in report).toBe(false);
@@ -111,13 +111,13 @@ describe('B. read-side depth is omission-only', () => {
     const { report } = filterReportByDepth({ ...FULL_REPORT }, resolved);
     expect('headcount_trend' in report).toBe(true);
     expect(report.headcount_trend).toEqual(FULL_REPORT.headcount_trend);
-    expect(report.unique_gatherings).toBe(42);
+    expect(report.distinct_scanners).toBe(42);
   });
 
   it('sponsor scope: local sponsor sees only their own impressions — no cross-contamination', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...FULL_REPORT }, resolved);
-    const impressions = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const impressions = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(impressions.every((r) => r.sponsor_id === 'sp_A')).toBe(true);
     expect(impressions.some((r) => r.sponsor_id === 'sp_B')).toBe(false);
   });

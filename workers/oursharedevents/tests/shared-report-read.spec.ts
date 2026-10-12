@@ -21,6 +21,7 @@ import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
+import ADMIN_HTML from '../src/templates/admin.html';
 
 interface TestEnv {
   DB: D1Database;
@@ -68,8 +69,8 @@ async function clearReadTables(): Promise<void> {
   // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
   await db.prepare(`DELETE FROM scan_placement_events`).run();
   await db.prepare(`DELETE FROM scan_node_returns`).run();
-  // NOTE: sponsor_impressions has a trigger referencing sponsors_old; we
-  // don't seed sponsor_impressions in this spec so skip clearing it.
+  // NOTE: sponsor_displays has a trigger referencing sponsors_old; we
+  // don't seed sponsor_displays in this spec so skip clearing it.
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
   // Sponsors and campaigns FK on events — must be deleted before events.
   // OSE-799 A2: the event FK is on sponsor_placement now (sponsor_business has none).
@@ -197,7 +198,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
       start_date: '2026-05-07T19:00:00Z',
     });
     await seedScanAggregate('test-evt-read-full', 42);
-    await seedAnonReturn({ hash: 'a'.repeat(32), venueId: 'test-evt-read-full', visit_count: 2 });
+    await seedAnonReturn({ hash: 'a'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'b'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'c'.repeat(32), venueId: 'test-evt-read-full' });
     await seedAnonReturn({ hash: 'd'.repeat(32), venueId: 'test-evt-read-full' });
@@ -207,17 +208,18 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.event_id).toBe('test-evt-read-full');
-    expect(r.report.unique_gatherings).toBe(42);
+    expect(r.report.distinct_scanners).toBe(42);
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
-    // was a private 3), so the sample size is published. One of the five came
-    // more than once: 20% of 5 is that one person, so the rate is withheld.
-    // (This test used to pin venue_pct = 20.)
+    // was a private 3), so the sample size is published. The venue rate counts
+    // people seen at another event of a confirmed series (OSE-1652); this event
+    // is in none, so there is nothing to compare with. (This test used to pin
+    // venue_pct = 20 from a visit_count of 2, which counts job runs.)
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
     expect(r.report.return_rate.venue_pct).toBeNull();
     expect(r.report._meta.suppression_reasons).toContainEqual(
       expect.objectContaining({
         field: 'return_rate.venue_pct',
-        reason: 'below_min_sample_size',
+        reason: 'no_series',
       })
     );
     // No baseline seeded → corridor_density_30d/90d nulled with reason
@@ -407,11 +409,11 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      report: { event_id: string; unique_gatherings: number };
+      report: { event_id: string; distinct_scanners: number };
     };
     expect(body.ok).toBe(true);
     expect(body.report.event_id).toBe('test-evt-read-200');
-    expect(body.report.unique_gatherings).toBe(30);
+    expect(body.report.distinct_scanners).toBe(30);
   });
 
   test('returns Cache-Control: no-store (+ Vary: Authorization) for a closed event', async () => {
@@ -519,12 +521,12 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      reports: Record<string, { unique_gatherings: number }>;
+      reports: Record<string, { distinct_scanners: number }>;
       errors: Record<string, { code: string }>;
     };
     expect(body.ok).toBe(true);
-    expect(body.reports['test-evt-read-batch-1'].unique_gatherings).toBe(12);
-    expect(body.reports['test-evt-read-batch-2'].unique_gatherings).toBe(7);
+    expect(body.reports['test-evt-read-batch-1'].distinct_scanners).toBe(12);
+    expect(body.reports['test-evt-read-batch-2'].distinct_scanners).toBe(7);
     expect(body.errors['evt-does-not-exist'].code).toBe('NOT_FOUND');
   });
 
@@ -613,7 +615,7 @@ describe('OSE-577 — batch service-token class split (cross-product fails close
     expect(body.ok).toBe(true);
     const report = body.reports['test-evt-read-577-internal'];
     expect(report).toBeDefined();
-    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('distinct_scanners');
     expect(report).toHaveProperty('headcount_trend'); // premium-only field
     expect(report).toHaveProperty('sponsor_class_breakdown');
   });
@@ -684,7 +686,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     expect(report).toBeDefined();
     // All sections present — no field stripping
     expect(report).toHaveProperty('event_id');
-    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('distinct_scanners');
     expect(report).toHaveProperty('headcount_trend');
     expect(report).toHaveProperty('return_rate');
     expect(report).toHaveProperty('poster_attribution');
@@ -708,13 +710,13 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
       reports: Record<string, { sponsor_class_breakdown: unknown }>;
     };
     const breakdown = body.reports['test-evt-sr25-breakdown']?.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');
     expect(breakdown).toHaveProperty('premium');
     expect(typeof breakdown!.local.sponsor_count).toBe('number');
-    expect(typeof breakdown!.local.total_impressions).toBe('number');
+    expect(typeof breakdown!.local.total_displays).toBe('number');
     expect(typeof breakdown!.mid.sponsor_count).toBe('number');
     expect(typeof breakdown!.premium.sponsor_count).toBe('number');
   });
@@ -735,7 +737,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     };
     expect(body.ok).toBe(true);
     const breakdown = body.report.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');
@@ -1193,7 +1195,7 @@ describe('H3 corridor map + open-question resolutions', () => {
   // Q6 — campaign_summary re-scoped for sponsor tokens (static + logic verification)
   test('Q6 static: handler re-derives campaign_summary after applying sponsor scope', () => {
     // Verify the handler code contains the campaign re-derivation logic.
-    // sponsor_impressions has a trigger referencing sponsors_old which prevents
+    // sponsor_displays has a trigger referencing sponsors_old which prevents
     // direct DB seeding in this test environment, so we verify via static analysis.
     const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
     const files = JSON.parse(src) as Record<string, string>;
@@ -1240,7 +1242,7 @@ describe('H3 corridor map + open-question resolutions', () => {
       {
         campaign_id: string;
         campaign_title: string;
-        total_impressions: number;
+        total_displays: number;
         sponsor_count: number;
       }
     >();
@@ -1248,19 +1250,19 @@ describe('H3 corridor map + open-question resolutions', () => {
       if (!row.campaign_id) continue;
       const ex = campaignMap.get(row.campaign_id);
       if (ex) {
-        ex.total_impressions += row.count;
+        ex.total_displays += row.count;
         ex.sponsor_count += 1;
       } else
         campaignMap.set(row.campaign_id, {
           campaign_id: row.campaign_id,
           campaign_title: row.campaign_title ?? 'unknown',
-          total_impressions: row.count,
+          total_displays: row.count,
           sponsor_count: 1,
         });
     }
     const derived = campaignMap.size > 0 ? [...campaignMap.values()] : null;
     expect(derived).not.toBeNull();
-    expect(derived![0]!.total_impressions).toBe(5);
+    expect(derived![0]!.total_displays).toBe(5);
     expect(derived![0]!.sponsor_count).toBe(1); // not 2 — only sp-q6-a's row is in scope
   });
 
@@ -1516,7 +1518,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     );
     expect(report).not.toHaveProperty('headcount_trend'); // premium-only, withheld
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: tier-neutral
-    expect(report).toHaveProperty('sponsor_impressions');
+    expect(report).toHaveProperty('sponsor_displays');
     expect(report).toHaveProperty('upgrade');
     const upgrade = report.upgrade as { locked_sections: string[]; next_depth: string | null };
     expect(upgrade.next_depth).toBe('premium');
@@ -1534,7 +1536,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     expect(report).not.toHaveProperty('corridor_map'); // mid section, withheld at local
     expect(report).not.toHaveProperty('poster_attribution');
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: survives even at local
-    expect(report).toHaveProperty('sponsor_impressions');
+    expect(report).toHaveProperty('sponsor_displays');
     const upgrade = report.upgrade as { next_depth: string | null };
     expect(upgrade.next_depth).toBe('mid');
   });
@@ -1550,5 +1552,97 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     expect(report).not.toHaveProperty('headcount_trend');
     expect(report).not.toHaveProperty('corridor_map');
     expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+});
+
+// ── OSE-1650 — the admin form's sponsor depth is the depth the sponsor gets ──
+// Owner decision 2026-10-11: a sponsor link is Local or Mid, Mid by default, no
+// Premium. The form used to offer Local and Premium, and a Premium claim on a
+// sponsor link reads as Local (resolveDepth caps a sponsor at Mid and drops
+// anything above the cap to Local).
+describe('OSE-1650 — sponsor link depth: what the form offers is what the link shows', () => {
+  beforeEach(resetForTest);
+
+  /** The admin form's depth choices for a sponsor, in order, as served. */
+  const formDepths = (): string[] => {
+    const select = ADMIN_HTML.match(/<select id="mint-depth"[^>]*>([\s\S]*?)<\/select>/);
+    expect(select, 'the mint form has a depth select').not.toBeNull();
+    return [...select![1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1]);
+  };
+
+  const mintViaRoute = (eventId: string, body: Record<string, unknown>) =>
+    SELF.fetch(`https://test.local/api/v2/admin/events/${eventId}/shared-report/mint-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+      body: JSON.stringify(body),
+    });
+
+  test("Sponsor + the form's first choice: the link reads the Mid report", async () => {
+    const eventId = 'evt-1650-form';
+    await seedEvent({ id: eventId, start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate(eventId, 20);
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650',
+      eventId,
+      name: 'Form Sponsor',
+      tier: 'silver',
+    });
+
+    // The body the form sends for Sponsor (tests/admin-mint-report-link.spec.ts).
+    const minted = await mintViaRoute(eventId, {
+      role: 'sponsor',
+      ttl_days: 7,
+      depth: formDepths()[0],
+      sponsor_id: 'sp-1650',
+    });
+    expect(minted.status).toBe(200);
+    const { token } = (await minted.json()) as { token: string };
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/${eventId}/shared-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    const { report } = (await res.json()) as { report: Record<string, unknown> };
+    // Mid's next step is Premium; Local's is Mid. Mid keeps poster attribution.
+    expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('premium');
+    expect(report).toHaveProperty('poster_attribution');
+    expect(report).not.toHaveProperty('headcount_trend');
+  });
+
+  test('every depth the form offers a sponsor is one the route accepts for a sponsor', async () => {
+    const eventId = 'evt-1650-each';
+    await seedEvent({ id: eventId });
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650e',
+      eventId,
+      name: 'Each Sponsor',
+      tier: 'silver',
+    });
+    expect(formDepths()).toEqual(['mid', 'local']);
+    for (const depth of formDepths()) {
+      const res = await mintViaRoute(eventId, { role: 'sponsor', depth, sponsor_id: 'sp-1650e' });
+      expect(res.status, depth).toBe(200);
+    }
+  });
+
+  test('a sponsor link cannot be minted at Premium: 400, and nothing is minted', async () => {
+    const eventId = 'evt-1650-premium';
+    await seedEvent({ id: eventId });
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-1650p',
+      eventId,
+      name: 'Premium Ask',
+      tier: 'silver',
+    });
+    const res = await mintViaRoute(eventId, {
+      role: 'sponsor',
+      depth: 'premium',
+      sponsor_id: 'sp-1650p',
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; token?: string; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.token).toBeUndefined();
+    expect(body.error).toBe('depth must be "local" or "mid" for a sponsor');
   });
 });

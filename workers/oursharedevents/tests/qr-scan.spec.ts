@@ -28,6 +28,7 @@ import { vi, describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { SCAN_QUEUE_MAX_RETRIES } from '../src/lib/scan-buffer';
+import { isScanNodeKey } from '../src/lib/scan-node-key';
 
 interface TestEnv {
   DB: D1Database;
@@ -148,6 +149,7 @@ function makeEnv(kv?: KVNamespace): QrScanEnv {
   return {
     DB: tenv().DB,
     RATE_LIMIT_KV: kv,
+    ANON_ID_HASH_PEPPER: (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER,
   };
 }
 
@@ -379,7 +381,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(row!.country_code).toBeNull();
   });
 
-  test('OSE-625 | UNIT | scan row values | anonymous_id stored (not null)', async () => {
+  test('OSE-625 | UNIT | scan row values | anonymous_id stored (not null) — a keyed scan id, never the cookie (OSE-1659)', async () => {
     const kv = makeInMemoryKV();
     await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
@@ -389,7 +391,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
       .first<{ anonymous_id: string }>();
 
     expect(row!.anonymous_id).not.toBeNull();
-    expect(row!.anonymous_id).toMatch(/^anon_/);
+    expect(isScanNodeKey(row!.anonymous_id)).toBe(true);
   });
 
   test('OSE-625 | UNIT | invalid token shape (no qrt_ prefix) | 302 to homepage, no DB write', async () => {

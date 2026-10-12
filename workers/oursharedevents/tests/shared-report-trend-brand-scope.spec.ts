@@ -164,8 +164,8 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     // Brand B's floored headcounts must not appear anywhere in brand A's report.
     const json = JSON.stringify(r.report);
     expect(json).not.toContain('test-evt-trend-b');
-    expect(json).not.toContain('"unique_gatherings":77');
-    expect(json).not.toContain('"unique_gatherings":88');
+    expect(json).not.toContain('"distinct_scanners":77');
+    expect(json).not.toContain('"distinct_scanners":88');
 
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
@@ -206,7 +206,7 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.headcount_trend.series_id).toBe('srs-trend-own');
-    expect(r.report.headcount_trend.instances.map((i) => i.unique_gatherings)).toEqual([6, 8, 10]);
+    expect(r.report.headcount_trend.instances.map((i) => i.distinct_scanners)).toEqual([6, 8, 10]);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 });

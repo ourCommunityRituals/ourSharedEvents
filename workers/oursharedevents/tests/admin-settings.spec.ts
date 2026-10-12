@@ -241,6 +241,10 @@ describe('fixed list: numbers come from the code that enforces them', () => {
 
   test('retention windows: registrations and email sign-ups', () => {
     expect(text('retention_registrations')).toContain(`${REGISTRATION_TTL_DAYS} days`);
+    // Owner 2026-10-11: counted from registering, and name and email go first.
+    expect(text('retention_registrations')).toBe(
+      `A registrant's name and email are cleared the day after the event. The rest is deleted ${REGISTRATION_TTL_DAYS} days after they register.`
+    );
     expect(text('retention_email')).toContain(`${EMAIL_RETENTION_DAYS} days`);
   });
 

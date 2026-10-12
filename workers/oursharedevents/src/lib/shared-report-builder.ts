@@ -6,11 +6,11 @@
  *   docs/features/SHARED-REPORT-READ-API.md
  *
  * Six fields per Session 1 ratified contract:
- *   1. unique_gatherings        — from scan_aggregates.distinct_agent_hashes (summed)
- *   2. return_rate              — % of distinct anons seen at prior events
- *      (per-venue + per-corridor variants)
+ *   1. distinct_scanners        — from scan_aggregates.distinct_agent_hashes (summed)
+ *   2. return_rate              — % of distinct anons also seen at another event
+ *      (of the confirmed series, and of the corridor)
  *   3. corridor_density         — this event's anon count vs rolling baseline
- *   4. sponsor_impressions[]    — per sponsor × surface
+ *   4. sponsor_displays[]    — per sponsor × surface
  *   5. poster_attribution[]     — per poster deployment
  *   6. headcount_trend          — across confirmed event_series instances
  *
@@ -66,6 +66,34 @@ function corridorKeyOf(event: {
 // OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
 // before surfacing in poster_attribution. Sub-second precision exposes timing
 // patterns that can correlate individual scan events across anonymised reports.
+/**
+ * The event's series, when it is confirmed and belongs to the event's brand.
+ *
+ * Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
+ * across brands. `event_series` has no brand column, so the series' brand is
+ * its anchor event's brand; a series anchored at another brand's event is
+ * withheld whole (its name is another tenant's label). Callers brand-fence the
+ * series' instances as well, so legacy cross-brand rows cannot leak.
+ */
+async function confirmedSeriesOf(
+  db: D1Database,
+  event: { series_id: string | null; brand_id: string }
+): Promise<{ id: string; series_name: string } | null> {
+  if (!event.series_id) return null;
+  const series = await db
+    .prepare(
+      `SELECT es.id, es.series_name, es.state
+         FROM event_series es
+         JOIN events anchor ON anchor.id = es.venue_id
+        WHERE es.id = ? AND anchor.brand_id = ?`
+    )
+    .bind(event.series_id, event.brand_id)
+    .first<{ id: string; series_name: string; state: string }>();
+  return series && series.state === 'confirmed'
+    ? { id: series.id, series_name: series.series_name }
+    : null;
+}
+
 function bucketToHour(iso: string): string {
   // OSE-1376: created_at is SQLite `datetime('now')` ("YYYY-MM-DD HH:MM:SS", UTC,
   // no offset) — parse it as UTC explicitly, never as the runtime's local time.
@@ -77,7 +105,23 @@ function bucketToHour(iso: string): string {
 
 // Why a return rate is withheld over a sample that is itself published. Names
 // the floor, never an observed count (OSE-1421).
+const CORRIDOR_RATE_WITHHELD_DETAIL = `a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people could be worked out from this rate or from another event's in this corridor`;
 const RATE_WITHHELD_DETAIL = `one side of this rate is a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people`;
+
+/**
+ * A return rate as the report publishes it: `flooredRatePct`, and never 100%.
+ *
+ * `flooredRatePct` lets the people a rate does not count be none (the nested
+ * rule shared with the returns export). The report is read live, so 100%
+ * turning into a dash when one more person comes says that person did not
+ * return: "none" and "1 to 4" must look the same (OSE-1649 item 3, owner
+ * ruling 2026-10-08, no exceptions). The returns export keeps the shared rule:
+ * it publishes weekly snapshots rounded down to multiples of 5, the owner's
+ * measure against differencing (2026-10-01).
+ */
+function reportRatePct(part: number, whole: number): number | null {
+  return part >= whole ? null : flooredRatePct(part, whole);
+}
 
 export type SuppressionReasonCode =
   'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
@@ -94,13 +138,13 @@ export interface SharedReport {
   event_start_date: string;
   event_end_date: string | null;
 
-  unique_gatherings: number | null;
+  distinct_scanners: number | null;
 
   /**
    * Rc — anonymous digital click-out counts from the /s/ routing layer, per
    * destination kind (public/donate/signup/…). Group-level counter only (no IP,
    * no per-visitor id, no cookie, no referrer); each kind passes the same K=5
-   * floor as unique_gatherings, and `total` is the sum of the kinds that are
+   * floor as distinct_scanners, and `total` is the sum of the kinds that are
    * published (null when none is), so a sub-K count never ships and cannot be
    * had by subtraction. This is the digital half of the flywheel — surfaced on
    * the SharedReport / post-event recap only (never pre/event/poster, OSE-509).
@@ -112,9 +156,11 @@ export interface SharedReport {
 
   /**
    * `sample_size` is the people seen at the event, published from K = 5. A
-   * rate is null unless the people it counts are at least K and the people it
-   * does not count are none or at least K (`flooredRatePct`): beside its sample
-   * size, a rate is otherwise a head count under the floor.
+   * rate is null unless the people it counts and the people it does not count
+   * are each at least K (`reportRatePct`): beside its sample size, a rate is
+   * otherwise a head count under the floor, and 100% turning into a dash would
+   * single one person out (OSE-1649). The corridor rate is also withheld
+   * whenever another event in the corridor must withhold its own.
    */
   return_rate: {
     venue_pct: number | null;
@@ -138,7 +184,7 @@ export interface SharedReport {
     bucket_hour: number | null;
   };
 
-  sponsor_impressions: Array<{
+  sponsor_displays: Array<{
     sponsor_id: string;
     sponsor_name: string;
     /** The name the public sees: display name, else the business name (OSE-1431). */
@@ -154,17 +200,17 @@ export interface SharedReport {
   /**
    * Per-campaign aggregate for this event. Null when no sponsors have a
    * campaign_id. Exposed at mid/premium depth — enterprise comparison surface.
-   * Each row aggregates all sponsor_impressions rows for the campaign so a
+   * Each row aggregates all sponsor_displays rows for the campaign so a
    * brand can compare campaign reach across events via the batch endpoint.
-   * impressions_by_surface lets enterprise see which placement formats drove
+   * displays_by_surface lets enterprise see which placement formats drove
    * reach without additional client-side grouping.
    */
   campaign_summary: Array<{
     campaign_id: string;
     campaign_title: string;
-    total_impressions: number;
+    total_displays: number;
     sponsor_count: number;
-    impressions_by_surface: Record<string, number>;
+    displays_by_surface: Record<string, number>;
   }> | null;
 
   /**
@@ -178,9 +224,9 @@ export interface SharedReport {
    * data IN the report, not access gates ON the reader.
    */
   sponsor_class_breakdown: {
-    local: { sponsor_count: number; total_impressions: number };
-    mid: { sponsor_count: number; total_impressions: number };
-    premium: { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_displays: number };
+    mid: { sponsor_count: number; total_displays: number };
+    premium: { sponsor_count: number; total_displays: number };
   };
 
   poster_attribution: Array<{
@@ -206,7 +252,7 @@ export interface SharedReport {
     instances: Array<{
       event_id: string;
       start_date: string;
-      unique_gatherings: number | null;
+      distinct_scanners: number | null;
     }>;
   };
 
@@ -272,7 +318,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // OSE-1376: hour labels render in the event's zone (fallback: platform home zone).
   const reportZone = resolveEventZone(event.timezone);
 
-  // 2. unique_gatherings — sum scan_aggregates.distinct_agent_hashes over all buckets
+  // 2. distinct_scanners — sum scan_aggregates.distinct_agent_hashes over all buckets
   //    for this event. OSE-683: each bucket is a contributing bucket — apply the
   //    per-bucket K-anon floor BEFORE summation (a bucket with distinct_agent_hashes < K
   //    is dropped, not summed raw). NULL if no scan_aggregates rows exist at all
@@ -298,7 +344,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // through the shared OSE-665 renderer. floored.count is exact when the
   // survivor sum clears K, else null (suppressed).
   const flooredGatherings = floorTotalOfParts((saBuckets.results ?? []).map((r) => r.count));
-  const uniqueGatherings = hasAnyBucket ? flooredGatherings.count : null;
+  const distinctScanners = hasAnyBucket ? flooredGatherings.count : null;
 
   // 3. return_rate — for distinct anon_id_hashes at this event, how many
   //    were also seen at prior events (any other venue_id).
@@ -316,56 +362,100 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // narrows a returner to one of two specific people). Suppressed per S5-Q5.
   if (distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT) {
     sampleSize = distinctAnonsHere;
-    // venue_pct — same-venue means same event_id in v1 (no separate venues
-    // table). So venue_pct asks: of the anons at THIS event, what fraction
-    // were also at the SAME event before? With (anon, venue) PK and an
-    // event having a single venue_id, this would be 100% by construction
-    // — so we instead interpret "venue" as "this event_id" and the answer
-    // is "how many returners have visit_count > 1" (came multiple times
-    // to the same event window — relevant only for multi-day events).
-    const repeatRow = await db
-      .prepare(
-        `SELECT COUNT(*) AS c FROM anon_id_returns
-         WHERE venue_id = ? AND visit_count > 1`
-      )
-      .bind(eventId)
-      .first<{ c: number }>();
-    // A rate beside its sample size IS its numerator (20% of 5 is one person),
-    // and the rest of the group is its complement. `flooredRatePct` publishes
-    // the rate only when neither is a group under the floor; otherwise null.
-    venuePct = flooredRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
-    if (venuePct === null) {
+    // venue_pct — of the people at THIS event, how many came to another event
+    // of its confirmed series: the same place, again (OSE-1652). A venue is
+    // not a row of its own; a confirmed series is how the schema says "this
+    // gathering recurs here" (0033/0034), and it is the grouping the headcount
+    // trend reads. Counted as distinct events, like corridor_pct and the
+    // returns export. Never `visit_count`: the nightly job adds one to it on
+    // every run over the same scans, so it counts runs, not returns, and read
+    // as a return it made six one-time visitors a 100% rate.
+    const series = await confirmedSeriesOf(db, event);
+    if (series) {
+      const repeatRow = await db
+        .prepare(
+          `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
+           FROM anon_id_returns a
+           JOIN events e ON e.id = a.venue_id
+           WHERE e.series_id = ?
+             AND e.brand_id = ?
+             AND a.venue_id != ?
+             AND a.anon_id_hash IN (
+               SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
+             )`
+        )
+        .bind(series.id, event.brand_id, eventId, eventId)
+        .first<{ c: number }>();
+      // A rate beside its sample size IS its numerator (20% of 5 is one person),
+      // and the rest of the group is its complement. `flooredRatePct` publishes
+      // the rate only when neither is a group under the floor; otherwise null.
+      venuePct = reportRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
+      if (venuePct === null) {
+        suppression.push({
+          field: 'return_rate.venue_pct',
+          reason: 'below_min_sample_size',
+          detail: RATE_WITHHELD_DETAIL,
+        });
+      }
+    } else {
       suppression.push({
         field: 'return_rate.venue_pct',
-        reason: 'below_min_sample_size',
-        detail: RATE_WITHHELD_DETAIL,
+        reason: 'no_series',
+        detail: 'event is not part of a confirmed series',
       });
     }
 
     // corridor_pct — fraction of anons at THIS event who appeared at any
     // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
     // to corridor_id for legacy events geocoded before BE-24b landed.
+    //
+    // A corridor's rates are published together or not at all (OSE-1649 item
+    // 1). With two events in a corridor, "seen at both" is one number that each
+    // report divides by its own sample size. If this event withholds its rate
+    // because 1 to 4 of its people went nowhere else, the other event's rate
+    // times its published sample size is that same overlap, and this event's
+    // sample size minus it is the withheld group. So every event in the
+    // corridor whose sample size is published (K or more people) is read here,
+    // and if any of them must withhold its corridor rate, all of them do. An
+    // event under K publishes no sample size, so nothing can be subtracted
+    // from it, and it does not hold the others back.
     const corridorKey = corridorKeyOf(event);
     if (corridorKey) {
-      const corridorRow = await db
+      const corridorRows = await db
         .prepare(
-          `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
-           FROM anon_id_returns a
-           JOIN events e ON e.id = a.venue_id
-           WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
-             AND a.venue_id != ?
-             AND a.anon_id_hash IN (
-               SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
-             )`
+          `SELECT a.venue_id AS event_id,
+                  COUNT(DISTINCT a.anon_id_hash) AS people,
+                  COUNT(DISTINCT CASE WHEN EXISTS (
+                    SELECT 1 FROM anon_id_returns o
+                      JOIN events oe ON oe.id = o.venue_id
+                     WHERE o.anon_id_hash = a.anon_id_hash
+                       AND o.venue_id != a.venue_id
+                       AND COALESCE(LOWER(oe.h3_res7), oe.corridor_id) = ?
+                  ) THEN a.anon_id_hash END) AS elsewhere
+             FROM anon_id_returns a
+             JOIN events e ON e.id = a.venue_id
+            WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
+            GROUP BY a.venue_id`
         )
-        .bind(corridorKey, eventId, eventId)
-        .first<{ c: number }>();
-      corridorPct = flooredRatePct(corridorRow?.c ?? 0, distinctAnonsHere);
+        .bind(corridorKey, corridorKey)
+        .all<{ event_id: string; people: number; elsewhere: number }>();
+      const rows = corridorRows.results ?? [];
+      const own = rows.find((r) => r.event_id === eventId);
+      const ownRate = reportRatePct(own?.elsewhere ?? 0, distinctAnonsHere);
+      const anotherWithholds = rows.some(
+        (r) =>
+          r.event_id !== eventId &&
+          r.people >= CORRIDOR_MAP_MIN_COUNT &&
+          reportRatePct(r.elsewhere, r.people) === null
+      );
+      corridorPct = anotherWithholds ? null : ownRate;
       if (corridorPct === null) {
+        // One reason for both cases: a different string for "another event
+        // withholds" would say that this event's own rate passed.
         suppression.push({
           field: 'return_rate.corridor_pct',
           reason: 'below_min_sample_size',
-          detail: RATE_WITHHELD_DETAIL,
+          detail: CORRIDOR_RATE_WITHHELD_DETAIL,
         });
       }
     } else {
@@ -375,7 +465,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         detail: 'event has no h3_res7 or corridor_id',
       });
     }
-  } else if (distinctAnonsHere > 0) {
+  } else {
+    // Said at 0 people as at 1 to 4 (OSE-1649 item 2): a note that appeared
+    // only when someone was there would tell "nobody" from "1 to 4".
     suppression.push({
       field: 'return_rate',
       reason: 'below_min_sample_size',
@@ -420,7 +512,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // ratios are NOT computed, so they cannot leak the raw numerator by division.
     const flooredThisEvent = applyCountFloor(distinctAnonsHere);
     thisEventCount = flooredThisEvent.count;
-    if (flooredThisEvent.suppressed && distinctAnonsHere > 0) {
+    // Said at 0 as at 1 to 4 (OSE-1649 item 2).
+    if (flooredThisEvent.suppressed) {
       suppression.push({
         field: 'corridor_density.this_event_count',
         reason: 'below_min_sample_size',
@@ -476,7 +569,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  // 5. sponsor_impressions — per sponsor × surface, including campaign linkage,
+  // 5. sponsor_displays — per sponsor × surface, including campaign linkage,
   //    sponsor tier, and local-sponsor flag. D1 returns INTEGER booleans (0/1).
   // OSE-799 A2: identity (name) comes from sponsor_business; the per-event
   // economics (campaign, tier, locality) come from the sponsor_placement for THIS
@@ -494,7 +587,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
          sp.locality_band   AS is_local,
          si.surface         AS surface,
          COUNT(*)           AS count
-       FROM sponsor_impressions si
+       FROM sponsor_displays si
        LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        LEFT JOIN sponsor_placement sp
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
@@ -522,7 +615,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // OSE-711 reasoning for poster rows). Dropping also keeps the rows and the
   // campaign / class totals in agreement, so a reader cannot subtract one
   // against the other down to a sub-K cohort.
-  const sponsorImpressions = (impressions.results ?? [])
+  const sponsorDisplays = (impressions.results ?? [])
     .filter((r) => !applyCountFloor(r.count).suppressed)
     .map((r) => ({
       sponsor_id: r.sponsor_id,
@@ -540,50 +633,50 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       count: r.count,
     }));
 
-  // Derive campaign_summary by aggregating sponsorImpressions rows that have
+  // Derive campaign_summary by aggregating sponsorDisplays rows that have
   // a campaign_id. No extra DB call — the data is already fetched above.
   // OSE-683: each (sponsor × surface) impression row is a contributing bucket.
   // Apply the per-bucket K-anon floor BEFORE summation — a row with count < K is
   // DROPPED, never summed raw — so a sub-K impression cohort can't be laundered
   // into a campaign total (nor recovered by differencing against the exact
-  // per-surface sponsor_impressions rows the same reader can already see).
+  // per-surface sponsor_displays rows the same reader can already see).
   const campaignMap = new Map<
     string,
     {
       campaign_id: string;
       campaign_title: string;
-      total_impressions: number;
+      total_displays: number;
       sponsor_count: number;
-      impressions_by_surface: Record<string, number>;
+      displays_by_surface: Record<string, number>;
     }
   >();
-  for (const row of sponsorImpressions) {
+  for (const row of sponsorDisplays) {
     if (!row.campaign_id) continue;
     const floored = applyCountFloor(row.count);
     if (floored.count === null) continue; // sub-K bucket — drop before summation
     const contribution = floored.count;
     const existing = campaignMap.get(row.campaign_id);
     if (existing) {
-      existing.total_impressions += contribution;
+      existing.total_displays += contribution;
       existing.sponsor_count += 1;
-      existing.impressions_by_surface[row.surface] =
-        (existing.impressions_by_surface[row.surface] ?? 0) + contribution;
+      existing.displays_by_surface[row.surface] =
+        (existing.displays_by_surface[row.surface] ?? 0) + contribution;
     } else {
       campaignMap.set(row.campaign_id, {
         campaign_id: row.campaign_id,
         campaign_title: row.campaign_title ?? 'unknown',
-        total_impressions: contribution,
+        total_displays: contribution,
         sponsor_count: 1,
-        impressions_by_surface: { [row.surface]: contribution },
+        displays_by_surface: { [row.surface]: contribution },
       });
     }
   }
   const campaignSummary =
     campaignMap.size > 0
-      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+      ? [...campaignMap.values()].sort((a, b) => b.total_displays - a.total_displays)
       : null;
 
-  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorImpressions.
+  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorDisplays.
   // Mapping: is_local=true → 'local'; non-local + tier in top set → 'premium'; else → 'mid'.
   // Inline classification — this file must stay tier-blind (invariant #5 tier_equity).
   const PREMIUM_TIERS = new Set(['title', 'platinum', 'gold']);
@@ -592,21 +685,21 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
   }
   const sponsorClassBreakdown: {
-    local: { sponsor_count: number; total_impressions: number };
-    mid: { sponsor_count: number; total_impressions: number };
-    premium: { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_displays: number };
+    mid: { sponsor_count: number; total_displays: number };
+    premium: { sponsor_count: number; total_displays: number };
   } = {
-    local: { sponsor_count: 0, total_impressions: 0 },
-    mid: { sponsor_count: 0, total_impressions: 0 },
-    premium: { sponsor_count: 0, total_impressions: 0 },
+    local: { sponsor_count: 0, total_displays: 0 },
+    mid: { sponsor_count: 0, total_displays: 0 },
+    premium: { sponsor_count: 0, total_displays: 0 },
   };
   // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
   // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
   // total (and does not, on its own, count the sponsor into the class): only
   // rows that individually clear K contribute, matching the campaign_summary and
-  // unique_gatherings treatment so no surface leaks a sub-K aggregate.
+  // distinct_scanners treatment so no surface leaks a sub-K aggregate.
   const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
-  for (const row of sponsorImpressions) {
+  for (const row of sponsorDisplays) {
     const floored = applyCountFloor(row.count);
     if (floored.count === null) continue; // sub-K bucket — drop before summation
     const cls = classifySponsor(row.sponsor_tier, row.is_local);
@@ -614,7 +707,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       seenSponsorClass.set(row.sponsor_id, cls);
       sponsorClassBreakdown[cls].sponsor_count += 1;
     }
-    sponsorClassBreakdown[cls].total_impressions += floored.count;
+    sponsorClassBreakdown[cls].total_displays += floored.count;
   }
 
   // 6. poster_attribution — per poster_deployment_id
@@ -763,12 +856,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // poster_attribution drops (OSE-711). Only cells at or above the floor exist
   // on the map.
   const shownCells = cellData.filter((r) => r.count >= CORRIDOR_MAP_MIN_COUNT);
-  const hiddenCells = cellData.length - shownCells.length;
-  if (hiddenCells > 0) {
+  // The note is given whenever the map is drawn from poster cells, not only
+  // when one was dropped (OSE-1649 item 2): a note that appeared only then
+  // would tell a poster with no scans from one with 1 to 4.
+  if (cellData.length > 0) {
     suppression.push({
       field: 'corridor_map',
       reason: 'below_min_sample_size',
-      detail: `some areas not shown — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
+      detail: `areas with fewer than ${CORRIDOR_MAP_MIN_COUNT} scans are not shown`,
     });
   }
 
@@ -783,11 +878,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // falling back to the venue preview as if there were no scans.
     corridorMap = { svg: '', suppressed: [], cell_count: 0, source: 'suppressed' };
   } else if (event.h3_res7 && !h3TagsCorrupt) {
-    // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
+    // Launch-day fallback: res7 neighborhood hex lit with distinctScanners count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
     // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
-    const count = uniqueGatherings ?? 0;
+    const count = distinctScanners ?? 0;
     buildCorridorMap(
       [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
       'fallback'
@@ -806,35 +901,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const trendInstances: Array<{
     event_id: string;
     start_date: string;
-    unique_gatherings: number | null;
+    distinct_scanners: number | null;
   }> = [];
   if (event.series_id) {
-    // Part of OSE-1421 (owner ruling 2026-10-01): a series never groups events
-    // across brands. `event_series` has no brand column, so the series' brand is
-    // its anchor event's brand; a series anchored at another brand's event is
-    // withheld whole (its name is another tenant's label), and the instances
-    // below are brand-fenced as well, so legacy cross-brand rows cannot leak.
-    const series = await db
-      .prepare(
-        `SELECT es.id, es.series_name, es.state
-           FROM event_series es
-           JOIN events anchor ON anchor.id = es.venue_id
-          WHERE es.id = ? AND anchor.brand_id = ?`
-      )
-      .bind(event.series_id, event.brand_id)
-      .first<{ id: string; series_name: string; state: string }>();
-    if (series && series.state === 'confirmed') {
+    const series = await confirmedSeriesOf(db, event);
+    if (series) {
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
       // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend
-      // instance's headcount — the SAME grain as the top-level unique_gatherings.
+      // instance's headcount — the SAME grain as the top-level distinct_scanners.
       // The previous `SELECT SUM(distinct_agent_hashes) ...` subquery summed buckets RAW
       // per instance, so a per-instance trend point could publish a sub-K sum
       // (or launder a sub-K bucket into it) — exactly the leak the ratified
       // per-bucket rule forbids. Fetch the events in the series and their raw
       // buckets, then floor PER CONTRIBUTING BUCKET before summation (drop
       // sub-K buckets; a survivor sum that itself fails to clear K is nulled),
-      // mirroring `uniqueGatherings` above. An instance with no buckets at all
+      // mirroring `distinctScanners` above. An instance with no buckets at all
       // stays null (materialization pending for that instance).
       const inst = await db
         .prepare(
@@ -861,7 +943,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
-          unique_gatherings: instHasBucket ? instFloored.count : null,
+          distinct_scanners: instHasBucket ? instFloored.count : null,
         });
       }
     } else {
@@ -880,11 +962,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // Surface materialization pending when essentially no signal exists yet.
-  if (uniqueGatherings === null && distinctAnonsHere === 0 && sponsorImpressions.length === 0) {
+  if (distinctScanners === null && distinctAnonsHere === 0 && sponsorDisplays.length === 0) {
     suppression.push({
       field: '_event',
       reason: 'materialization_pending',
-      detail: 'no scan_aggregates, anon_id_returns, or sponsor_impressions for this event yet',
+      detail: 'no scan_aggregates, anon_id_returns, or sponsor_displays for this event yet',
     });
   }
 
@@ -920,7 +1002,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       event_title: event.title,
       event_start_date: event.start_date,
       event_end_date: event.end_date,
-      unique_gatherings: uniqueGatherings,
+      distinct_scanners: distinctScanners,
       click_outs: clickOuts,
       return_rate: {
         venue_pct: venuePct,
@@ -936,7 +1018,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         bucket_dow: corridorDow,
         bucket_hour: corridorHour,
       },
-      sponsor_impressions: sponsorImpressions,
+      sponsor_displays: sponsorDisplays,
       campaign_summary: campaignSummary,
       sponsor_class_breakdown: sponsorClassBreakdown,
       poster_attribution: posterAttribution,

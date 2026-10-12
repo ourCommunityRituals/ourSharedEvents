@@ -85,7 +85,7 @@ never to an event's `end_date`, never to `phase`. They do not touch
 
 The **only** code path that deletes poster or scan rows is the admin
 `DELETE /events/:id` cascade (`handlers/events.ts`). That path is **guarded**:
-if any `scan_node_returns`, `scan_placement_events`, or `sponsor_impressions`
+if any `scan_node_returns`, `scan_placement_events`, or `sponsor_displays`
 rows exist for the event it returns **409 `EVENT_HAS_ACTIVITY`** and directs the
 admin to archive instead.
 

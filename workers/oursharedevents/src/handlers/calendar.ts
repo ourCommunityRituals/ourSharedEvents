@@ -26,10 +26,11 @@ function notFound(): Response {
   );
 }
 
+// Any line break becomes "\n", a lone CR included: a raw CR would end the line.
 function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
-    .replace(/\r?\n/g, '\\n')
+    .replace(/\r\n|\r|\n/g, '\\n')
     .replace(/;/g, '\\;')
     .replace(/,/g, '\\,');
 }
@@ -91,16 +92,36 @@ function icsDateProperty(name: 'DTSTART' | 'DTEND', date: Date, timezone: string
   }
 }
 
+/** UTF-8 length of one code point. */
+function utf8Octets(ch: string): number {
+  const cp = ch.codePointAt(0) ?? 0;
+  return cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+}
+
+/**
+ * RFC 5545 §3.1: content lines are at most 75 octets, folded with CRLF + one
+ * space, and a fold never splits a UTF-8 sequence. Counts octets, walks whole
+ * code points (so an emoji is never cut into two U+FFFD), and leaves room for
+ * the leading space on each continuation line.
+ */
 function foldIcsLine(line: string): string {
-  if (line.length <= 75) return line;
   const chunks: string[] = [];
-  let rest = line;
-  while (rest.length > 75) {
-    chunks.push(rest.slice(0, 75));
-    rest = rest.slice(75);
+  let current = '';
+  let octets = 0;
+  let limit = 75;
+  for (const ch of line) {
+    const size = utf8Octets(ch);
+    if (octets + size > limit) {
+      chunks.push(current);
+      current = '';
+      octets = 0;
+      limit = 74;
+    }
+    current += ch;
+    octets += size;
   }
-  chunks.push(rest);
-  return chunks.map((chunk, index) => (index === 0 ? chunk : ` ${chunk}`)).join('\r\n');
+  chunks.push(current);
+  return chunks.join('\r\n ');
 }
 
 function calendarFileName(title: string): string {

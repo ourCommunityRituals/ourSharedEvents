@@ -138,6 +138,90 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
+      # Same rule as the charter, applied to what Claude Code loads by itself:
+      # AGENTS.md, CLAUDE.md (and anything it imports) and .claude/ (skills,
+      # agents, settings, hooks) come from the BASE branch, so a PR cannot
+      # rewrite its own reviewer's instructions or add a hook that runs in this
+      # job. The PR's changes to them are still reviewed through the diff.
+      - name: Reviewer instructions from base branch
+        if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          rm -rf .claude AGENTS.md CLAUDE.md workers/oursharedevents/CLAUDE.md
+          for p in .claude AGENTS.md CLAUDE.md workers/oursharedevents/CLAUDE.md; do
+            if [ -n "$(git ls-tree --name-only "origin/${BASE_REF}" -- "${p}")" ]; then
+              git checkout "origin/${BASE_REF}" -- "${p}"
+            fi
+          done
+          echo "Instructions in use (from origin/${BASE_REF}):"
+          ls -d .claude AGENTS.md CLAUDE.md 2>/dev/null || true
+
+      # PR risk picks the reviewer model: fixed path rules in
+      # scripts/ci/pr-risk.mjs, no model involved. low (docs and notes only) ->
+      # Haiku, normal -> Sonnet, high (migrations, auth, PII, the under-5 floor,
+      # CI and gates, agent governance, dependencies) -> Opus. These steps are
+      # written so they cannot fail (every command has a fallback) and so need no
+      # continue-on-error: a failure leaves the normal reviewer, never no review.
+      - name: List changed files
+        id: files
+        if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          CHANGED: ${{ runner.temp }}/changed.txt
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename' > "$CHANGED"; then
+            : > "$CHANGED"
+            echo "::warning title=Changed files not listed::the PR file list could not be read; the normal reviewer will be used."
+          fi
+          echo "changed files: $(wc -l < "$CHANGED")"
+
+      # The classifier is the BASE branch's copy, so a PR cannot edit the rules
+      # to rate itself low. The model name comes from the case statement below,
+      # never from the script's output, so nothing a script prints can reach
+      # the reviewer's command line.
+      - name: Classify PR risk
+        id: risk
+        if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          CHANGED: ${{ runner.temp }}/changed.txt
+          WORK: ${{ runner.temp }}/base-pr-risk
+        run: |
+          risk=normal
+          blob="$(git ls-tree "origin/${BASE_REF}" -- scripts/ci/pr-risk.mjs 2>/dev/null | awk '{print $3}' || true)"
+          if [ -n "$blob" ] && [ -s "$CHANGED" ] && mkdir -p "$WORK/scripts/ci" && git cat-file blob "$blob" > "$WORK/scripts/ci/pr-risk.mjs"; then
+            if json="$(node "$WORK/scripts/ci/pr-risk.mjs" --files "$CHANGED")"; then
+              risk="$(printf '%s' "$json" | node -e 'let s="";process.stdin.on("data",(d)=>(s+=d)).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).risk))}catch{}})' || true)"
+            fi
+          else
+            echo "::warning title=PR risk not classified::no classifier on ${BASE_REF} or no changed-file list; using the normal reviewer."
+          fi
+          case "$risk" in
+            low) model=claude-haiku-5-5 ;;
+            high) model=claude-opus-5-5 ;;
+            *) risk=normal; model=claude-sonnet-5-5 ;;
+          esac
+          echo "risk=${risk}" >> "$GITHUB_OUTPUT"
+          echo "model=${model}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=PR risk: ${risk}::reviewer model ${model}"
+
+      - name: Label PR risk
+        if: steps.risk.outputs.risk != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RISK: ${{ steps.risk.outputs.risk }}
+        run: |
+          gh label create "risk:low" --color 0e8a16 --description "Docs and notes only (pr-risk.mjs)" 2>/dev/null || true
+          gh label create "risk:normal" --color fbca04 --description "Application code or tests (pr-risk.mjs)" 2>/dev/null || true
+          gh label create "risk:high" --color d93f0b --description "Sensitive paths: needs the deep review (pr-risk.mjs)" 2>/dev/null || true
+          for r in low normal high; do
+            if [ "$r" != "$RISK" ]; then gh pr edit "$PR" --remove-label "risk:${r}" 2>/dev/null || true; fi
+          done
+          gh pr edit "$PR" --add-label "risk:${RISK}" || echo "::warning title=Risk label not set::could not label the PR risk:${RISK}."
+
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
       # attacker code with this job's Claude credentials + write scopes. Bump via Dependabot.
       - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
@@ -157,10 +241,11 @@ jobs:
             charter below.
 
             ${{ steps.charter.outputs.text }}
-          # Model via claude_args (v1 has no `model` input). Owner may raise to
-          # claude-opus-5-5 for depth; --max-turns bounds spend per PR.
+          # Model via claude_args (v1 has no `model` input), chosen by the
+          # "Classify PR risk" step; Sonnet when that step did not run.
+          # --max-turns bounds spend per PR.
           claude_args: |
-            --model claude-sonnet-5-5
+            --model ${{ steps.risk.outputs.model || 'claude-sonnet-5-5' }}
             --max-turns 30
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
 

@@ -75,11 +75,11 @@ const STAMP = '2026-05-08 03:00:00';
 interface World {
   /** People in the event's second hour bucket (scan_aggregates). */
   hourPeople: number;
-  /** People in a second hour bucket of the sibling event in the same series. */
+  /** People in a second hour bucket of the earlier event in the same series. */
   siblingHourPeople: number;
   /** People seen at this event (anon_id_returns rows). */
   attendees: number;
-  /** Of those, how many came more than once (visit_count > 1). */
+  /** Of those, how many were also at the earlier event of the series (OSE-1652). */
   cameTwice: number;
   /** Of those, how many were also seen at the sibling event in the corridor. */
   seenElsewhere: number;
@@ -126,7 +126,7 @@ const SIBLING_ATTENDEES = 30;
 
 let migrated = false;
 async function applyMigrations(): Promise<void> {
-  // Once per isolate: a second apply rewrites sponsor_impressions' foreign key
+  // Once per isolate: a second apply rewrites sponsor_displays' foreign key
   // (see the note in shared-report-kanon-floor.spec.ts).
   if (migrated) return;
   const stmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
@@ -157,7 +157,7 @@ async function clearWorld(): Promise<void> {
     db.prepare(`DELETE FROM scan_cell_aggregates`),
     db.prepare(`DELETE FROM scan_placement_events`),
     db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'nbr-%'`),
-    db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'nbr-%'`),
+    db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'nbr-%'`),
     db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'nbr-%'`),
@@ -174,13 +174,17 @@ const hash = (prefix: string, i: number): string => `${prefix}${String(i).padSta
 /** Seed one whole dataset for `eventId`. Deterministic: same world, same rows. */
 async function seedWorld(eventId: string, w: World): Promise<void> {
   const db = tenv().DB;
+  // Two other events, one per question, so each lever moves one thing. `sib`
+  // shares the corridor cell and no series (corridor_pct); `ser` is the earlier
+  // event of the series and has no cell (venue_pct and headcount_trend).
   const sib = `${eventId}-sib`;
+  const ser = `${eventId}-ser`;
   const series = `${eventId}-series`;
   const camp = `${eventId}-camp`;
   const sp = (x: string) => `${eventId}-sp${x}`;
 
   const stmts: D1PreparedStatement[] = [];
-  const event = (id: string, start: string, end: string) =>
+  const event = (id: string, start: string, end: string, cell: string | null = CELL7) =>
     db
       .prepare(
         `INSERT INTO events
@@ -189,9 +193,10 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
          VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, 'America/Chicago',
                  ?, ?, ?, ?)`
       )
-      .bind(id, `Neighbour ${id}`, id, CELL7, start, end, STAMP, STAMP);
+      .bind(id, `Neighbour ${id}`, id, cell, start, end, STAMP, STAMP);
   stmts.push(event(eventId, '2026-05-07T19:00:00Z', '2026-05-07T23:00:00Z'));
   stmts.push(event(sib, '2026-04-30T19:00:00Z', '2026-04-30T23:00:00Z'));
+  stmts.push(event(ser, '2026-04-23T19:00:00Z', '2026-04-23T23:00:00Z', null));
   stmts.push(
     db
       .prepare(
@@ -200,7 +205,7 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       )
       .bind(series, eventId, STAMP, STAMP),
     // The series points at its anchor event, so the events join it afterwards.
-    db.prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`).bind(series, eventId, sib)
+    db.prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`).bind(series, eventId, ser)
   );
 
   // People per hour bucket. A constant sub-K bucket rides along (3), so a rule
@@ -216,11 +221,13 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
   stmts.push(bucket(eventId, 19, 20), bucket(eventId, 21, 3));
   if (w.hourPeople > 0) stmts.push(bucket(eventId, 20, w.hourPeople));
   stmts.push(bucket(sib, 19, 12), bucket(sib, 21, 3));
-  if (w.siblingHourPeople > 0) stmts.push(bucket(sib, 20, w.siblingHourPeople));
+  stmts.push(bucket(ser, 19, 12), bucket(ser, 21, 3));
+  if (w.siblingHourPeople > 0) stmts.push(bucket(ser, 20, w.siblingHourPeople));
 
-  // People seen at the event. The first `cameTwice` came more than once; the
-  // LAST `seenElsewhere` were also at the sibling. The sibling's own row count
-  // is held constant, so the only thing that moves is the overlap.
+  // People seen at the event. The first `cameTwice` were also at the earlier
+  // event of the series; the LAST `seenElsewhere` were also at the corridor
+  // sibling. `visit_count` stays 1: it counts job runs, and nothing reads it.
+  // The sibling's own row count is held constant, so only the overlap moves.
   const anon = (h: string, venue: string, visits: number) =>
     db
       .prepare(
@@ -230,7 +237,8 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       )
       .bind(h, venue, STAMP, STAMP, visits, STAMP);
   for (let i = 0; i < w.attendees; i++) {
-    stmts.push(anon(hash('aaaa', i), eventId, i < w.cameTwice ? 2 : 1));
+    stmts.push(anon(hash('aaaa', i), eventId, 1));
+    if (i < w.cameTwice) stmts.push(anon(hash('aaaa', i), ser, 1));
   }
   for (let i = 0; i < w.seenElsewhere; i++) {
     stmts.push(anon(hash('aaaa', w.attendees - 1 - i), sib, 1));
@@ -337,7 +345,7 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       imps.push(
         db
           .prepare(
-            `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+            `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
              VALUES (?, ?, ?, ?, 'p1', 'impression', ?)`
           )
           .bind(`${sponsor}-${surface}-${i}`, sponsor, eventId, surface, STAMP)
@@ -596,11 +604,11 @@ describe('the harness can see: a full report, and each lever above the floor', (
     const numeric = [...admin].filter(([, v]) => typeof v === 'number').map(([p]) => p);
     // Every top-level section of the report has at least one number in it.
     for (const section of [
-      'unique_gatherings',
+      'distinct_scanners',
       'click_outs',
       'return_rate',
       'corridor_density',
-      'sponsor_impressions',
+      'sponsor_displays',
       'campaign_summary',
       'sponsor_class_breakdown',
       'poster_attribution',
@@ -640,56 +648,25 @@ describe('the harness can see: a full report, and each lever above the floor', (
 });
 
 /**
- * OPEN findings: pairs where a published field still moves. They are NOT
- * accepted behaviour. Each is pinned to the exact fields that move, so a new
- * one fails, and one that gets closed fails until its entry is removed: the
- * list can only shrink. Keys are the pair's own title, `lever: n -> n+1`.
+ * The list is empty (OSE-1649). The three kinds it held are closed in
+ * `shared-report-builder.ts`, and each pair below now asserts that nothing
+ * published moves:
+ *
+ * - ACROSS TWO REPORTS: with two events in a corridor, "seen at both" is one
+ *   number each report divides by its own sample size, so the sibling's rate
+ *   gave back this event's withheld group. A corridor's rates are now
+ *   published together or not at all.
+ * - NONE AGAINST SOME, by a note: the return-rate, head-count and map notes
+ *   appeared only when something was under the floor. They are now given at
+ *   0 as at 1 to 4.
+ * - NONE AGAINST SOME, by rule: 100% was published and "all but one" was not.
+ *   The report's rates never publish 100% now (the returns export keeps the
+ *   shared nested rule: weekly snapshots rounded down to multiples of 5).
+ *
+ * A new leak goes here with the exact fields that move, and fails when it
+ * stops reproducing, so the list can only shrink.
  */
-const NOTE = (i: number): string[] =>
-  ['detail', 'field', 'reason'].map((k) => `report._meta.suppression_reasons[${i}].${k}`);
-/** `n` notes appearing in `_meta.suppression_reasons`. */
-const NOTES = (n: number): string[] => [
-  ...Array.from({ length: n }, (_, i) => NOTE(i)).flat(),
-  'report._meta.suppression_reasons.length',
-];
-/** The same fields as a signed link and as the batch read spell them. */
-const everywhere = (paths: string[]): string[] =>
-  [...paths, ...paths.map((p) => p.replace(/^report\./, `report.${EVENT}.`))].sort();
-
-/**
- * ACROSS TWO REPORTS. With two events in a corridor, "seen at both" is one
- * number, and each event's report divides it by its own head count. This event
- * withholds its rate, because the people seen nowhere else are 1 to 4. The
- * sibling event still publishes ITS rate (both of its sides clear the floor),
- * and that rate times the sibling's sample size is the same overlap. A reader
- * holding both reports subtracts it from this event's sample size. Flooring one
- * report at a time cannot see this; it needs a rule across reports.
- */
-const SIBLING_RATE = `report.${EVENT}-sib.return_rate.corridor_pct`;
-
-const OPEN: Record<string, string[]> = {
-  'people seen nowhere else in the corridor: 1 -> 2': [SIBLING_RATE],
-  'people seen nowhere else in the corridor: 2 -> 3': [SIBLING_RATE],
-  'people seen nowhere else in the corridor: 3 -> 4': [SIBLING_RATE],
-
-  // NONE AGAINST SOME, by a note. The report explains a withheld figure
-  // ("hidden, not enough data yet") only when something IS under the floor, so
-  // the note tells none from 1 to 4. `applyCountFloor` reads 0 to 4 alike;
-  // these notes do not. They reach every depth, including a local sponsor link
-  // that is not sent the section the note is about.
-  'people seen at the event: 0 -> 1': everywhere(NOTES(2)),
-  "a map cell's only scans: 0 -> 1": everywhere(NOTES(1)),
-
-  // NONE AGAINST SOME, by rule. The nested-count rule (`floorNestedCounts`,
-  // shared with the returns export) publishes a part equal to its whole, so
-  // "everyone returned" (100%) is published and "all but one" is withheld.
-  // Closing it means never publishing 100%, in the report and the export alike.
-  'people who came only once: 0 -> 1': everywhere([...NOTES(1), 'report.return_rate.venue_pct']),
-  'people seen nowhere else in the corridor: 0 -> 1': [
-    ...everywhere([...NOTES(1), 'report.return_rate.corridor_pct']),
-    SIBLING_RATE,
-  ].sort(),
-};
+const OPEN: Record<string, string[]> = {};
 
 const titleOf = (lever: Lever, n: number): string => `${lever.name}: ${n} -> ${n + 1}`;
 
@@ -759,7 +736,7 @@ const SUM: How = { how: 'sum of floored parts', floor: K };
 const NOT_PEOPLE: How = { how: 'not people' };
 
 const REGISTRY: Record<string, How> = {
-  unique_gatherings: SUM, // people per hour bucket, each bucket floored
+  distinct_scanners: SUM, // people per hour bucket, each bucket floored
   'click_outs.by_kind.*': FLOORED,
   'click_outs.total': SUM, // the published kinds
   'return_rate.sample_size': FLOORED,
@@ -780,17 +757,17 @@ const REGISTRY: Record<string, How> = {
   },
   'corridor_density.bucket_dow': { how: 'key', min: 0, max: 6 },
   'corridor_density.bucket_hour': { how: 'key', min: 0, max: 23 },
-  'sponsor_impressions[].count': FLOORED, // a row under the floor is dropped
-  'campaign_summary[].total_impressions': SUM,
-  'campaign_summary[].impressions_by_surface.*': SUM,
+  'sponsor_displays[].count': FLOORED, // a row under the floor is dropped
+  'campaign_summary[].total_displays': SUM,
+  'campaign_summary[].displays_by_surface.*': SUM,
   'campaign_summary[].sponsor_count': NOT_PEOPLE,
-  'sponsor_class_breakdown.*.total_impressions': { ...SUM, orZero: true },
+  'sponsor_class_breakdown.*.total_displays': { ...SUM, orZero: true },
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
-  'headcount_trend.instances[].unique_gatherings': SUM,
+  'headcount_trend.instances[].distinct_scanners': SUM,
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
-  'sponsor_impressions.length': NOT_PEOPLE,
+  'sponsor_displays.length': NOT_PEOPLE,
   'campaign_summary.length': NOT_PEOPLE,
   'poster_attribution.length': NOT_PEOPLE,
   'headcount_trend.instances.length': NOT_PEOPLE,

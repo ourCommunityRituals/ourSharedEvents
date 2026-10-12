@@ -22,7 +22,7 @@
  *   – Filtering is by OMISSION only — no value is ever transformed, rounded,
  *     or degraded per tier. Same pipeline, same numbers, fewer sections.
  *   – Sponsor slice isolation: role=sponsor sees only their own
- *     sponsor_impressions rows (cross-contamination = critical bug per the
+ *     sponsor_displays rows (cross-contamination = critical bug per the
  *     April 7 CCR).
  */
 
@@ -38,8 +38,8 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
-    'sponsor_impressions',
+    'distinct_scanners',
+    'sponsor_displays',
     // sponsor_class_breakdown is CLASS-level aggregate (never per-competitor) —
     // the tier-neutral competitive-intel delivery SR-25 chose over field-stripping.
     // Present at every depth (OSE-719 decision, 2026-08-28): the depth gate strips
@@ -56,8 +56,8 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
-    'sponsor_impressions',
+    'distinct_scanners',
+    'sponsor_displays',
     'campaign_summary',
     'poster_attribution',
     'return_rate',
@@ -73,8 +73,8 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
-    'sponsor_impressions',
+    'distinct_scanners',
+    'sponsor_displays',
     'campaign_summary',
     'poster_attribution',
     'return_rate',
@@ -106,7 +106,7 @@ export interface DepthClaimInput {
 
 export interface ResolvedDepth {
   depth: ReportDepth;
-  /** When set, sponsor_impressions is filtered to this sponsor only. */
+  /** When set, sponsor_displays is filtered to this sponsor only. */
   sponsorScope: string | null;
   /**
    * True when the token role is 'sponsor'. Distinguishes the two null-scope cases:
@@ -167,7 +167,7 @@ export function filterReportByDepth<T extends Record<string, unknown>>(
 
   for (const key of Object.keys(report)) {
     if (!allowed.has(key)) continue;
-    if (key === 'sponsor_impressions') {
+    if (key === 'sponsor_displays') {
       const rows = report[key];
       if (resolved.sponsorScope) {
         // Scoped sponsor token — filter to own rows only

@@ -98,11 +98,12 @@ describe('OSE-539 L1: static source checks', () => {
     // dark support is covered by tests/public-surface-swappable.spec.ts.
     expect(sourceFile('handlers/pages.ts')).toContain('/ui.css');
   });
-  test('pages.ts builds the geo: link via the extracted renderGeoLink helper (OSE-660)', () => {
-    // OSE-660: the geo: URI builder was extracted to src/lib/geo-link.ts. pages.ts
-    // consumes renderGeoLink; the geo: scheme lives (and is unit-tested) there.
+  test('pages.ts builds the directions via the extracted renderGeoLink helper (OSE-660)', () => {
+    // OSE-660: the directions builder lives in src/lib/geo-link.ts, where it is
+    // unit-tested. Owner 2026-10-11: it offers Google Maps and Apple Maps.
     expect(sourceFile('handlers/pages.ts')).toContain('renderGeoLink');
-    expect(sourceFile('lib/geo-link.ts')).toContain('geo:');
+    expect(sourceFile('lib/geo-link.ts')).toContain('https://www.google.com/maps/search/');
+    expect(sourceFile('lib/geo-link.ts')).toContain('https://maps.apple.com/');
   });
   test('pages.ts has Spanish share label', () => {
     expect(sourceFile('handlers/pages.ts')).toContain('Compartir este evento');
@@ -113,7 +114,7 @@ describe('OSE-539 L1: static source checks', () => {
   test('pages.ts has clipboard fallback', () => {
     expect(sourceFile('handlers/pages.ts')).toContain('navigator.clipboard');
   });
-  test('pages.ts no longer uses Google Maps search link (replaced by geo: / Apple Maps)', () => {
+  test('pages.ts does not hardcode the old Google Maps addresses (geo-link.ts builds them)', () => {
     // The old hardcoded gmaps search link should be gone
     expect(sourceFile('handlers/pages.ts')).not.toContain('maps.google.com/maps/search');
     expect(sourceFile('handlers/pages.ts')).not.toContain('maps.google.com/dir');
@@ -130,15 +131,16 @@ describe('OSE-539 L2: pre-event phase', () => {
     expect(html).toContain('Share this event');
   });
 
-  test('geo-link uses geo: URI when lat/lon present', async () => {
+  test('directions offer Google Maps and Apple Maps at the coordinates when lat/lon present', async () => {
     const id = await createEventWithGeo('Geo Event', 40.7128, -74.006, 'Eagles Hall');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('data-testid="geo-link"');
-    expect(html).toContain('geo:40.7128,-74.006');
+    expect(html).toContain('https://www.google.com/maps/search/?api=1&amp;query=40.7128%2C-74.006');
+    expect(html).toContain('https://maps.apple.com/?ll=40.7128,-74.006');
   });
 
-  test('geo-link falls back to Apple Maps when no lat/lon', async () => {
+  test('directions search the address on both maps when no lat/lon', async () => {
     const id = await createEventWithGeo(
       'Address Only Event',
       undefined,
@@ -148,7 +150,8 @@ describe('OSE-539 L2: pre-event phase', () => {
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('data-testid="geo-link"');
-    expect(html).toContain('maps.apple.com');
+    expect(html).toContain('https://maps.apple.com/?q=123%20Main%20St');
+    expect(html).toContain('https://www.google.com/maps/search/?api=1&amp;query=123%20Main%20St');
   });
 
   test('Spanish share label rendered for Accept-Language: es', async () => {
@@ -173,6 +176,8 @@ describe('OSE-539 L2: pre-event phase', () => {
     const id = await createEventWithGeo('URL Attribute Test');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain(`data-share-url="https://t.test/events/${id}"`);
+    // OSE-1684: Share hands out the event's short /e/<code> link, so each open
+    // counts as a share (what + when, never who). Six characters, no look-alikes.
+    expect(html).toMatch(/data-share-url="https:\/\/t\.test\/e\/[A-HJKMNP-Z2-9]{6}"/);
   });
 });

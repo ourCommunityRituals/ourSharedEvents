@@ -41,7 +41,7 @@
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 63253,
+      "own-stylesheet": 62806,
       "raw-hex": 28,
       "foreign-stylesheet": 0
     },
@@ -53,13 +53,13 @@
     },
     "workers/oursharedevents/src/templates/landing.html": {
       "own-tokens": 0,
-      "own-stylesheet": 4123,
+      "own-stylesheet": 2905,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/poster.html": {
       "own-tokens": 0,
-      "own-stylesheet": 17455,
+      "own-stylesheet": 17375,
       "raw-hex": 6,
       "foreign-stylesheet": 0
     },

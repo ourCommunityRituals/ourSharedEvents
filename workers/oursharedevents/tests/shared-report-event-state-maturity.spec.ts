@@ -22,7 +22,7 @@
  *
  *   1. STATE-INVARIANCE — identical data on an `active`, a `draft`, and an
  *      `archived` event yields an IDENTICAL section set + identical
- *      unique_gatherings. Guards against anyone later slipping an event-status
+ *      distinct_scanners. Guards against anyone later slipping an event-status
  *      gate into the builder, which would break the tier-blind/state-blind
  *      substrate doctrine.
  *   2. DATA-MATURITY through the K-floor, as seen on the read path — 0 scans →
@@ -33,7 +33,7 @@
  * @born-red invariant#tenant/#5 | method: event-state-blind-read | armed: 2026-09-08
  *   (1) STATE-INVARIANCE reddens if a `WHERE status = 'active'` gate is added to
  *       the builder's event lookup: the draft/archived reads then empty or 404 and
- *       the section-set / unique_gatherings equality assertions fail.
+ *       the section-set / distinct_scanners equality assertions fail.
  *   (2) MATURITY reddens if the per-bucket floor is neutralized (raw SUM): the
  *       sub-K row (agents=3) then publishes 3, tripping `forbid: 3`. Proven at the
  *       builder level in shared-report-kanon-floor.spec.ts; this spec proves the
@@ -49,7 +49,7 @@
  *
  * HARNESS NOTE: migrations apply EXACTLY ONCE per isolate — re-applying migration
  * 0018 (ALTER TABLE sponsors RENAME TO sponsors_old) dangles the
- * sponsor_impressions FK. Same guard proven in shared-report-kanon-floor.spec.ts.
+ * sponsor_displays FK. Same guard proven in shared-report-kanon-floor.spec.ts.
  *
  * PLATFORM NOTE: this is a workerd-pool spec; the pool SEGFAULTS on native Windows
  * (OSE-696), so the authoritative green is Linux CI (see
@@ -129,12 +129,14 @@ async function seedBucket(eventId: string, suffix: string, uniqueAgents: number)
 }
 
 interface Report {
-  unique_gatherings?: number | null;
+  distinct_scanners?: number | null;
   [k: string]: unknown;
 }
 
 /** Read the report via the wire as an ADMIN token (premium depth = full section set). */
-async function readAsAdmin(eventId: string): Promise<{ status: number; body: { ok: boolean; report?: Report; code?: string } }> {
+async function readAsAdmin(
+  eventId: string
+): Promise<{ status: number; body: { ok: boolean; report?: Report; code?: string } }> {
   const token = await mintSignedLinkToken(
     { SHARED_REPORT_SIGNING_SECRET: SIGNING_SECRET },
     eventId,
@@ -185,10 +187,10 @@ describe('OSE-1172 — the SharedReport section set is event-STATUS-blind (state
     const keys = (r: typeof active) => Object.keys(r.body.report ?? {}).sort();
     expect(keys(draft)).toEqual(keys(active));
     expect(keys(archived)).toEqual(keys(active));
-    expect(draft.body.report?.unique_gatherings).toBe(active.body.report?.unique_gatherings);
-    expect(archived.body.report?.unique_gatherings).toBe(active.body.report?.unique_gatherings);
+    expect(draft.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
+    expect(archived.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
     // Sanity: the shared value is the real floored count, not null.
-    expect(active.body.report?.unique_gatherings).toBe(7);
+    expect(active.body.report?.distinct_scanners).toBe(7);
   });
 });
 
@@ -207,9 +209,27 @@ describe('OSE-1172 — data maturity flows through the K=5 floor to the wire (no
   //                  shared-report-kanon-floor.spec.ts, which hedges the same). The
   //                  load-bearing part is `forbid`: it must NEVER be the raw count.
   //   'exact'      — a ≥K bucket publishes its true count.
-  const cases: { name: string; agents: number; mode: 'null' | 'suppressed' | 'exact'; forbid: number | null; value: number | null }[] = [
-    { name: 'no scans yet (young event) → unique_gatherings null', agents: 0, mode: 'null', forbid: null, value: null },
-    { name: 'a sub-K bucket → suppressed, NEVER the raw count', agents: 3, mode: 'suppressed', forbid: 3, value: null },
+  const cases: {
+    name: string;
+    agents: number;
+    mode: 'null' | 'suppressed' | 'exact';
+    forbid: number | null;
+    value: number | null;
+  }[] = [
+    {
+      name: 'no scans yet (young event) → distinct_scanners null',
+      agents: 0,
+      mode: 'null',
+      forbid: null,
+      value: null,
+    },
+    {
+      name: 'a sub-K bucket → suppressed, NEVER the raw count',
+      agents: 3,
+      mode: 'suppressed',
+      forbid: 3,
+      value: null,
+    },
     { name: 'a ≥K bucket → published exact', agents: 5, mode: 'exact', forbid: null, value: 5 },
   ];
   test.each(cases)('$name', async ({ agents, mode, forbid, value }) => {
@@ -219,7 +239,7 @@ describe('OSE-1172 — data maturity flows through the K=5 floor to the wire (no
 
     const { status, body } = await readAsAdmin(id);
     expect(status).toBe(200);
-    const got = body.report?.unique_gatherings;
+    const got = body.report?.distinct_scanners;
 
     if (mode === 'null') expect(got).toBeNull();
     if (mode === 'suppressed') expect(got === null || got === 0).toBe(true);

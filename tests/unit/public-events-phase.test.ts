@@ -81,7 +81,7 @@ describe('OSE-1205 | /events phase-aware cards', () => {
     expect(cardLink.getAttribute('href')).toBe('/events/evt-next');
     const cta = card.querySelector('[data-testid="public-event-cta"]') as HTMLAnchorElement;
     expect(cta.getAttribute('data-cta')).toBe('register');
-    expect(cta.getAttribute('href')).toMatch(/^\/forms\/evt-next\?type=register/);
+    expect(cta.getAttribute('href')).toBe('/events/evt-next/register');
     expect(cta.textContent).toBe('Register');
   });
 
@@ -236,7 +236,13 @@ describe('OSE-1243 | hostile and malformed input', () => {
     // contains it, and the assertion would pass just as happily on markup that
     // spelled the attribute differently. What must be true is that the parser
     // built no element and no handler from it.
-    expect(el.querySelector('img')).toBeNull();
+    // The card's own picture (owner 2026-10-11) is the one image allowed, and
+    // it is the fixed default, not anything built from the payload.
+    expect(el.querySelector('img:not(.event-thumb)')).toBeNull();
+    expect(el.querySelectorAll('img.event-thumb')).toHaveLength(1);
+    expect(el.querySelector('img.event-thumb')?.getAttribute('src')).toBe(
+      '/event-default-thumb.svg'
+    );
     const venue = el.querySelector('[data-testid="public-event-venue"]') as HTMLElement;
     expect(venue.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(venue.children.length).toBe(0);
@@ -257,11 +263,11 @@ describe('OSE-1243 | hostile and malformed input', () => {
     expect(card.hasAttribute('onmouseover')).toBe(false);
   });
 
-  test('an ampersand in the name survives the round trip through the CTA href', () => {
+  test('an ampersand in the name shows intact and cannot reach the CTA href', () => {
     const { el } = render([{ ...upcoming, name: 'Bocce & Beer' }]);
     expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toBe('Bocce & Beer');
     const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
-    expect(new URL(href, 'https://x.test').searchParams.get('event')).toBe('Bocce & Beer');
+    expect(href).toBe('/events/evt-next/register');
   });
 
   test('missing name, date and venue render a card rather than throwing', () => {
@@ -370,13 +376,13 @@ describe('OSE-1243 | the card → registration CTA contract', () => {
     expect(cta.tagName.toLowerCase()).toBe('a');
   });
 
-  test('the href is /forms/{id}?type=register with the name as a query param', () => {
+  test("the href is the event's own sign-up form, /events/{id}/register (OSE-1684)", () => {
     const { el } = render([evt()]);
     const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
     const url = new URL(href, 'https://x.test');
-    expect(url.pathname).toBe('/forms/evt_abc_123');
-    expect(url.searchParams.get('type')).toBe('register');
-    expect(url.searchParams.get('event')).toBe('Community BBQ');
+    expect(url.pathname).toBe('/events/evt_abc_123/register');
+    // The form page never read the name from the address; it is no longer put there.
+    expect([...url.searchParams.keys()]).toEqual([]);
   });
 
   test('the aria-label names the event, so a screen reader hears which one', () => {
@@ -395,8 +401,8 @@ describe('OSE-1243 | the card → registration CTA contract', () => {
     const hrefs = [...el.querySelectorAll('[data-testid="public-event-cta"]')].map((n) =>
       n.getAttribute('href')
     );
-    expect(hrefs[0]).toContain('/forms/evt_1');
-    expect(hrefs[1]).toContain('/forms/evt_2');
+    expect(hrefs[0]).toContain('/events/evt_1/register');
+    expect(hrefs[1]).toContain('/events/evt_2/register');
   });
 
   test('cards render in the order the provider returned them', () => {
@@ -445,9 +451,12 @@ describe('OSE-1243 | non-ASCII content renders intact', () => {
     );
   });
 
-  test('the CTA query param round-trips non-ASCII names', () => {
+  test('a non-ASCII name shows intact and the CTA href stays plain', () => {
     const { el } = render([{ id: 'e', name: '\u{1F3B5} Fest', phase: 'pre_event' }]);
+    expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toBe(
+      '\u{1F3B5} Fest'
+    );
     const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
-    expect(new URL(href, 'https://x.test').searchParams.get('event')).toBe('\u{1F3B5} Fest');
+    expect(href).toBe('/events/e/register');
   });
 });

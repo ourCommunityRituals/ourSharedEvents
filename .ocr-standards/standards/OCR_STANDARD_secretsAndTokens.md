@@ -100,7 +100,8 @@ The manifest names, per secret, everything that holds it, so the blast radius is
 
 | Doppler project | Configs | Holds |
 |---|---|---|
-| `oursharedevents`, `ourwkrp` (one per deployed product) | Runtime: `dev`, `stg`, `prd`. CI and deploy: **separate root environments** (`stg_ci`, `stg_deploy`, `prd_deploy`), not branch configs. A branch config may inherit its root's secrets and would carry runtime data keys into CI; verify with a throwaway secret before use | Runtime configs hold **only** Worker runtime secrets. `stg_ci` holds staging test credentials (→ environment `staging`); `stg_deploy` / `prd_deploy` hold deploy credentials and production smoke credentials (→ `staging-deploy` / `production`). Kept apart so `wrangler secret bulk` from a runtime config can never ship a CI or deploy credential into a Worker |
+| `oursharedevents`, `ourwkrp` (one per deployed product: the **runtime** project) | `dev`, `stg`, `prd` | **Only** Worker runtime secrets |
+| `oursharedevents-deploy`, `ourwkrp-deploy` (one per deployed product: the **CI and deploy** project) | `stg`, `prd`, and `ci` when the product has staging test credentials. Root environments, never branch configs: a branch config may inherit its root's secrets | `ci` holds staging test credentials (→ environment `staging`); `stg` / `prd` hold deploy credentials and production smoke credentials (→ `staging-deploy` / `production`). A separate project, so `wrangler secret bulk` from a runtime config can never ship a CI or deploy credential into a Worker, and a runtime service token cannot read a deploy credential. (One project per product was the first layout; Doppler's free plan allows 4 environments per project, which it exceeded. Amended 2026-10-09, ADR-012 §3) |
 | `ocr-platform` | `ci`, `automation` | Org-level: GitHub App IDs and private keys (`ci` = reader App, `automation` = writer App), fleet Linear key |
 | `dev_personal` (per person) | `dev` | Local-only conveniences. **Never a value that also exists in `stg` or `prd`** |
 
@@ -109,7 +110,7 @@ The manifest names, per secret, everything that holds it, so the blast radius is
 ### 3.2 How values leave Doppler
 
 - **To GitHub:** Doppler's GitHub Actions sync.
-  - `stg_ci` goes to **environment `staging`**, `stg_deploy` to `staging-deploy`, `prd_deploy` to `production`, and the `ocr-platform` App keys to `ci-read` / `automation`.
+  - `<product>-deploy/ci` goes to **environment `staging`**, `<product>-deploy/stg` to `staging-deploy`, `<product>-deploy/prd` to `production`, and the `ocr-platform` App keys to `ci-read` / `automation`.
   - **Never** sync a product config to repository secrets. That is what makes today's production jobs read staging values.
 - **To Workers:** the environment-gated deploy job writes Worker secrets from its own config, e.g.
   `doppler secrets download --no-file --format json | npx wrangler secret bulk --env <env>`.

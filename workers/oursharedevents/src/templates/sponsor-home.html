@@ -50,7 +50,6 @@
     <main id="main-content" data-testid="sponsor-home" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
       <div class="sh-head">
         <h2 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h2>
-        <p data-testid="sponsor-home-sub">Everything you're backing, in one place. Nothing here identifies an attendee.</p>
       </div>
 
       <div class="sh-summary" data-testid="sponsor-home-summary">
@@ -62,8 +61,7 @@
       <!--OCR_SPONSOR_PLACEMENTS-->
 
       <p class="sh-foot" data-testid="sponsor-home-foot">
-        This link is yours alone and expires <!--OCR_EXPIRES-->. If it stops working, ask the organizer for a fresh one.
-        Reports show counts within time windows, never who.
+        Your private link, good until <!--OCR_EXPIRES-->. Reports show counts, never who.
       </p>
     </main>
     <!--OCR_LEGAL_FOOTER-->
@@ -112,7 +110,7 @@
             if (res.ok && data && data.ok) {
               btn.hidden = true;
               card.setAttribute('data-requested', '1');
-              setMsg(card, 'Asked. The organizer will see your request; your name appears only if they say yes.', 'ok');
+              setMsg(card, 'Asked. Your name shows only if they say yes.', 'ok');
             } else {
               btn.disabled = false;
               setMsg(card, (data && (data.error || data.code)) || 'Could not send (server said ' + res.status + ').', 'error');

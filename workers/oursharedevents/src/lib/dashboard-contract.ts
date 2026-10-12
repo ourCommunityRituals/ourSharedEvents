@@ -8,23 +8,25 @@
 //   • its privacy class — how the number is allowed to leave the Worker:
 //       entity          a count of things, not people (events, posters, places,
 //                       sponsor placements, admin actions). Exact.
-//       anonymous_exact anonymous scan events: no session, no device, no person
-//                       (scan_placement_events). Exact, the same rule as
-//                       /stats and the pre-event card, so a first scan shows 1.
-//       floored         identity-derived or digital counts (registrations,
-//                       check-ins, email signups, short-link taps, scans per
-//                       cell). K=5 through lib/count-floor.ts, applied PER
+//       floored         every count of people or of their actions:
+//                       registrations, check-ins, email signups, short-link
+//                       taps, poster scans, SharedReport opens. K=5 through
+//                       lib/count-floor.ts, applied PER
 //                       CONTRIBUTING BUCKET before any sum (Invariant #7, the
 //                       OSE-669 rule), so a total never exposes a sub-K bucket
 //                       by differencing. For taps the bucket is a poster code,
 //                       not an event: the event's own card lists taps per
 //                       code, so a total built from anything coarser could be
-//                       subtracted against that list. For corridor scans the
-//                       bucket is brand × data class × source cell ×
-//                       destination, and a cell's figure is the sum of the
-//                       buckets listed beside it, never a count of its own.
+//                       subtracted against that list. For scans the bucket is
+//                       one poster in one hour (lib/scan-cells.ts), on every
+//                       dashboard, card and report alike; a corridor cell's
+//                       figure is the sum of the buckets listed beside it,
+//                       never a count of its own. For report opens it is one
+//                       event on one day.
 //                       Owner ruling, 2026-10-08: the floor has no exceptions.
 //                       It holds against a brand's own admin, at every tier.
+//                       (Until 2.0.0 scans were an `anonymous_exact` class,
+//                       exact for the organizer; OSE-1656 removed it.)
 //   • its path       — where the value sits in the response, so the class can
 //                       be checked against what is actually returned;
 //   • its source      — the table(s) it is read from, so a reviewer can check it.
@@ -40,10 +42,13 @@ import { applyCountFloor, type FlooredCount } from './count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
 // 1.1.0 (2026-10-08): new metric corridor.source_cells.scans_no_destination.
-export const DASHBOARD_CONTRACT_VERSION = '1.1.0';
+// 2.0.0 (2026-10-08, OSE-1656): every scan metric and both report-view metrics
+// retyped to `floored`; the `anonymous_exact` class is gone. New metric
+// event.reach.scans_by_day.day (the label beside each floored day).
+export const DASHBOARD_CONTRACT_VERSION = '2.0.0';
 
 export type DashboardId = 'operations' | 'event' | 'corridor';
-export type PrivacyClass = 'entity' | 'anonymous_exact' | 'floored';
+export type PrivacyClass = 'entity' | 'floored';
 
 export interface MetricDef {
   dashboard: DashboardId;
@@ -102,10 +107,10 @@ export const DASHBOARD_METRICS = {
   },
   'reach.poster_scans': {
     dashboard: 'operations',
-    privacy: 'anonymous_exact',
+    privacy: 'floored',
     path: 'reach.poster_scans',
-    source: 'scan_placement_events',
-    description: 'Poster QR scans, all time.',
+    source: 'scan_placement_events (per poster-hour, floored, survivors summed)',
+    description: 'Poster QR scans, all time, from the poster-hours with 5 or more.',
   },
   'reach.link_taps': {
     dashboard: 'operations',
@@ -132,10 +137,11 @@ export const DASHBOARD_METRICS = {
   },
   'participation.anonymous_scans': {
     dashboard: 'operations',
-    privacy: 'anonymous_exact',
+    privacy: 'floored',
     path: 'participation.anonymous.scans',
-    source: 'scan_placement_events',
-    description: 'Anonymous participation: scans, which name no one.',
+    source: 'scan_placement_events (per poster-hour, floored, survivors summed)',
+    description:
+      'Anonymous participation: scans, which name no one. Same figure as reach.poster_scans.',
   },
   'participation.registrations': {
     dashboard: 'operations',
@@ -174,10 +180,11 @@ export const DASHBOARD_METRICS = {
   },
   'shared_report.views_30d': {
     dashboard: 'operations',
-    privacy: 'entity',
+    privacy: 'floored',
     path: 'shared_report.views_30d',
-    source: "report_access_log (outcome = 'granted')",
-    description: 'SharedReport opens through a signed link, last 30 days.',
+    source: "report_access_log (outcome = 'granted'; per event per day, floored, survivors summed)",
+    description:
+      'SharedReport opens through a signed link, last 30 days. Opens are actions by link holders.',
   },
 
   // ── event (organizer / partner report; one event) ─────────────────────────
@@ -204,17 +211,26 @@ export const DASHBOARD_METRICS = {
   },
   'event.reach.scans': {
     dashboard: 'event',
-    privacy: 'anonymous_exact',
+    privacy: 'floored',
     path: 'reach.scans',
-    source: 'scan_placement_events',
-    description: 'Poster QR scans, all time.',
+    source: 'scan_placement_events (per poster-hour, floored, survivors summed)',
+    description: 'Poster QR scans, all time, from the poster-hours with 5 or more.',
   },
   'event.reach.scans_by_day': {
     dashboard: 'event',
-    privacy: 'anonymous_exact',
-    path: 'reach.scansByDay',
-    source: 'scan_placement_events.scan_bucket (event-local days)',
-    description: 'Scans per day for the last 14 days.',
+    privacy: 'floored',
+    path: 'reach.scansByDay[].count',
+    source:
+      'scan_placement_events.scan_bucket (poster-hours by event-local day, floored, survivors summed)',
+    description:
+      'Scans per day for the last 14 days, each day the sum of its poster-hours with 5 or more.',
+  },
+  'event.reach.scans_by_day.day': {
+    dashboard: 'event',
+    privacy: 'entity',
+    path: 'reach.scansByDay[].day',
+    source: 'calendar (event-local days)',
+    description: 'The day each floored figure is for, oldest first.',
   },
   'event.reach.link_taps': {
     dashboard: 'event',
@@ -225,10 +241,10 @@ export const DASHBOARD_METRICS = {
   },
   'event.participation.anonymous_scans': {
     dashboard: 'event',
-    privacy: 'anonymous_exact',
+    privacy: 'floored',
     path: 'participation.anonymous.scans',
-    source: 'scan_placement_events',
-    description: 'Anonymous participation: scans.',
+    source: 'scan_placement_events (per poster-hour, floored, survivors summed)',
+    description: 'Anonymous participation: scans. Same figure as reach.scans.',
   },
   'event.participation.registrations': {
     dashboard: 'event',
@@ -274,9 +290,9 @@ export const DASHBOARD_METRICS = {
   },
   'event.shared_report_views_30d': {
     dashboard: 'event',
-    privacy: 'entity',
+    privacy: 'floored',
     path: 'shared_report.views_30d',
-    source: "report_access_log (outcome = 'granted')",
+    source: "report_access_log (outcome = 'granted'; per day, floored, survivors summed)",
     description: 'SharedReport opens for this event, last 30 days.',
   },
 

@@ -35,7 +35,7 @@ Most event platforms collect personal data first and worry about privacy later. 
 You can scan any QR code at any event knowing no personal data is captured. If you voluntarily fill out a form (registration, survey, email signup), that data enters a **separate, temporary** system with strict lifecycle rules:
 
 - Email → hashed immediately, never stored raw
-- Registration → auto-deleted 90 days after event
+- Registration → name and email cleared the day after the event; the rest auto-deleted 90 days after registering
 - Survey comments → PII-scrubbed by daily job
 - Email signup → encrypted, auto-deleted after 30 days
 
@@ -219,11 +219,11 @@ const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|
 
 ### Layer 6: TTL Deletion (scheduled lifecycle)
 
-A daily cron job runs three independent cleanup phases:
+A daily cron job runs independent cleanup phases (the main ones are below). A separate nightly step clears a registrant's name and email the day after the event's last date (`runRegistrationContactClear`, `src/index.ts`); the row stays until its own expiry.
 
 | Phase | Target        | TTL                       | SQL                                         |
 | ----- | ------------- | ------------------------- | ------------------------------------------- |
-| 1     | Registrations | 90 days after event       | `DELETE WHERE expires_at < now()`           |
+| 1     | Registrations | 90 days after registering | `DELETE WHERE expires_at < now()`           |
 | 2     | Survey PII    | Immediate (next cron run) | `UPDATE SET pii_scrubbed = 1`               |
 | 3     | Email signups | 30 days after signup      | `DELETE WHERE retention_expires_at < now()` |
 

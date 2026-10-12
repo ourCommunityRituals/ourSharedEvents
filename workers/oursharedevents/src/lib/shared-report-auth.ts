@@ -80,7 +80,7 @@ export interface SignedLinkClaim {
   /**
    * Sponsor ID scope claim — optional, backward compatible.
    * When present on a sponsor token, filterReportByDepth() restricts
-   * sponsor_impressions to this sponsor only (cross-contamination guard).
+   * sponsor_displays to this sponsor only (cross-contamination guard).
    */
   sponsor_id?: string;
 }

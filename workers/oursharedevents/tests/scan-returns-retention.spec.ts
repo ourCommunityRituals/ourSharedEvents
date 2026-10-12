@@ -5,7 +5,7 @@
  *   - off by default: unset SCAN_RETURNS_RETENTION_DAYS never deletes anything
  *   - 0 / negative / junk also turn the sweep off
  *   - once configured, scan_node_returns rows older than the window are deleted
- *     (keyed off created_at)
+ *     (keyed off scan_bucket, OSE-923)
  *   - once configured, anon_id_returns rows older than the window are deleted
  *     (keyed off last_seen_at, NOT first_seen_at — a still-returning pseudonym
  *     never ages out)
@@ -73,9 +73,10 @@ async function seedScanNodeReturn(id: string, createdAt: string): Promise<void> 
   await db()
     .prepare(
       `INSERT INTO scan_node_returns (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
-       VALUES (?, ?, 'anon-test', 'ua-hash-test', 'US', 'bucket-1', ?)`
+       VALUES (?, ?, 'anon-test', 'ua-hash-test', 'US', ?, ?)`
     )
-    .bind(id, EVENT_ID, createdAt)
+    // Retention is keyed on the hour bucket (OSE-923); created_at follows it.
+    .bind(id, EVENT_ID, `${createdAt.slice(0, 13)}:00`, createdAt)
     .run();
 }
 

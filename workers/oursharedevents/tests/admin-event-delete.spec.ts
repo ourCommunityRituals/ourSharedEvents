@@ -84,7 +84,7 @@ const EVENT_CHILD_TABLES = [
   'scan_node_returns',
   'scan_aggregates',
   'scan_cell_aggregates',
-  'sponsor_impressions',
+  'sponsor_displays',
   'sponsor_placement',
   'poster_deployments',
   'shortlinks',

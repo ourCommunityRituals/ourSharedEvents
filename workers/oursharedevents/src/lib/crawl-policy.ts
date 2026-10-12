@@ -27,7 +27,7 @@
 
 import { HARDENING_HEADERS } from './security-headers.js';
 import { listedSql } from './publish-grace';
-import { canonicalOrigin } from './canonical';
+import { canonicalOrigin, eventPagePath } from './canonical';
 
 export interface CrawlPolicyEnv {
   DB?: D1Database;
@@ -46,6 +46,12 @@ export const SITEMAP_STATIC_PATHS: readonly string[] = ['/', '/events', '/privac
 export const CRAWL_DISALLOW: readonly string[] = [
   '/q/', // scan ingestion — a fetch IS a write (Invariant #4)
   '/s/', // shortlink resolver — a fetch bumps the click counter
+  // Event codes (OSE-1684): lookups, never pages to index; /e/ also counts a share.
+  '/e/',
+  '/p/',
+  '/tv/',
+  '/r/',
+  '/c/',
   '/api/',
   '/admin',
   '/manage',
@@ -61,6 +67,17 @@ export const CRAWL_DISALLOW: readonly string[] = [
   '/sponsor?',
   '/sponsor$',
   '/forms/',
+  // An event's form screens (OSE-1684), the same pages as /forms/. Exact names:
+  // `$` ends the path and `?` takes the ?deployment= form, so an event whose
+  // readable name starts with one (/events/<id>/register-night) stays fetchable.
+  '/events/*/register$',
+  '/events/*/register?',
+  '/events/*/checkin$',
+  '/events/*/checkin?',
+  '/events/*/survey$',
+  '/events/*/survey?',
+  '/events/*/updates$',
+  '/events/*/updates?',
   '/sharedReport',
   '/report',
   '/analytics',
@@ -163,17 +180,17 @@ export function buildSitemapXml(entries: readonly SitemapEntry[]): string {
 /** Published, active, root-brand events — the `/events` predicate, ids only. */
 async function listSitemapEvents(
   db: D1Database
-): Promise<{ id: string; updated_at: string | null }[]> {
+): Promise<{ id: string; slug: string | null; updated_at: string | null }[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, updated_at FROM events
+      `SELECT id, slug, updated_at FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
        ORDER BY updated_at DESC
        LIMIT ${SITEMAP_MAX_EVENTS}`
     )
     // Bound, not inlined: the tenant-isolation gate (INV9) requires brand_id = ?.
     .bind(SITEMAP_BRAND)
-    .all<{ id: string; updated_at: string | null }>();
+    .all<{ id: string; slug: string | null; updated_at: string | null }>();
   return results ?? [];
 }
 
@@ -206,7 +223,7 @@ export async function handleSitemapXml(request: Request, env: CrawlPolicyEnv): P
       for (const e of await listSitemapEvents(env.DB)) {
         const lastmod = e.updated_at?.slice(0, 10);
         entries.push({
-          loc: `${origin}/events/${encodeURIComponent(e.id)}`,
+          loc: `${origin}${eventPagePath(encodeURIComponent(e.id), e.slug)}`,
           lastmod: lastmod && /^\d{4}-\d{2}-\d{2}$/.test(lastmod) ? lastmod : undefined,
         });
       }

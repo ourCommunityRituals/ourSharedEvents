@@ -5,7 +5,7 @@
 -- sponsors accumulate on the shared fixture. The sponsor-journey E2E did the same
 -- (its Step 10 DELETE was a no-op until OSE-985 fixed the adminFetch arg). Left
 -- unchecked this drowns the 4 fresh covenant ids in the public read (observed
--- 2026-08-24: 234 orphan sponsors + ~60k sponsor_impressions on ocr-db-staging →
+-- 2026-08-24: 234 orphan sponsors + ~60k sponsor_displays on ocr-db-staging →
 -- covenant read returned "0/4 fixtures present" and T2 Contract failed).
 --
 -- This step resets the SYNTHETIC test sponsors to a clean slate before every
@@ -13,7 +13,7 @@
 -- Scoped by the fixed test-sponsor NAME patterns so a real sponsor is never touched.
 -- Child -> parent FK order (impressions/asset/placement reference sponsor_business).
 
-DELETE FROM sponsor_impressions WHERE sponsor_id IN (
+DELETE FROM sponsor_displays WHERE sponsor_id IN (
   SELECT id FROM sponsor_business
   WHERE name LIKE 'Covenant %' OR name LIKE 'Journey Sponsor %'
      OR name LIKE 'Tier Upgrade %' OR name LIKE 'Cross Surface %'

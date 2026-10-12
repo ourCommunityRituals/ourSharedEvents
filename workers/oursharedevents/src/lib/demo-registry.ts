@@ -33,7 +33,7 @@ export const DEMO_LINKS: readonly DemoLink[] = [
     key: 'demo-free',
     path: '/demo/free',
     title: 'Free · Local',
-    description: 'Smoke test — headcount + your own logo impressions.',
+    description: 'Smoke test — distinct scanners + your own logo displays.',
     tier: 'free',
   },
   {

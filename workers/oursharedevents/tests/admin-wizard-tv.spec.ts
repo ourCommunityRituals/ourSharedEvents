@@ -300,9 +300,9 @@ describe('wizard step 4 controls are finger-sized', () => {
 
 describe('wizard step 4 links point at the new event', () => {
   const loadLinks = scriptWith(ADMIN_HTML, 'async function loadLinks()');
-  test('the poster and TV links carry ?event=', () => {
-    expect(loadLinks).toContain("origin + '/poster?event=' + id");
-    expect(loadLinks).toContain("origin + '/display?event=' + id");
+  test("the poster and TV links are the event's own addresses (OSE-1684)", () => {
+    expect(loadLinks).toContain("origin + '/events/' + id + '/poster'");
+    expect(loadLinks).toContain("origin + '/events/' + id + '/tv'");
     expect(loadLinks).not.toMatch(/origin \+ '\/(poster|display)'\)/);
   });
   test('the wizard tells the TV section which event was made', () => {

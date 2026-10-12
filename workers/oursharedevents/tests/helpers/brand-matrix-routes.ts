@@ -180,6 +180,8 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   eventRoute('/api/v2/admin/events/:id/poster-preview', 'GET', '/poster-preview'),
   eventRoute('/api/v2/admin/events/:id/poster-bundle', 'GET', '/poster-bundle'),
   eventRoute('/api/v2/admin/events/:id/display-config', 'GET', '/display-config'),
+  // OSE-1684: the event's short code; a cross-brand POST must not mint or read it.
+  eventRoute('/api/v2/admin/events/:id/short-links', 'POST', '/short-links', { body: () => ({}) }),
   eventRoute('/api/v2/admin/events/:id/poster-codes', 'GET', '/poster-codes'),
   eventRoute('/api/v2/admin/events/:id/poster-codes', 'PUT', '/poster-codes', {
     body: () => ({ codes: [] }),
@@ -190,9 +192,15 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   }),
   eventRoute('/api/v2/admin/events/:id/forms/export', 'GET', '/forms/export'),
   eventRoute(
-    '/api/v2/admin/events/:id/forms/(registrations|checkin-count|surveys|email-signups)',
+    '/api/v2/admin/events/:id/forms/(registrations|contacts|checkin-count|surveys|email-signups)',
     'GET',
     '/forms/registrations'
+  ),
+  // Owner 2026-10-11: registrants' names and emails; a cross-brand read must not see them.
+  eventRoute(
+    '/api/v2/admin/events/:id/forms/(registrations|contacts|checkin-count|surveys|email-signups)',
+    'GET',
+    '/forms/contacts'
   ),
   // OSE-1531: the copy lands in the SOURCE's brand, so a cross-brand call must 404 and make nothing.
   eventRoute('/api/v2/admin/events/:id/repeat', 'POST', '/repeat'),

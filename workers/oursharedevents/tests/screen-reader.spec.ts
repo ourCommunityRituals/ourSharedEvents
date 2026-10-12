@@ -31,7 +31,9 @@ describe('A11Y-8: aria-describedby links inputs to error message', () => {
 
   test('register email input has aria-describedby="error-msg"', async () => {
     const html = await formHtml('register');
-    expect(html).toMatch(/id="email"[^>]*aria-describedby="error-msg"/);
+    // The optional email also points at its one-line note (owner 2026-10-11);
+    // the error message must still be one of the ids it names.
+    expect(html).toMatch(/id="email"[^>]*aria-describedby="(?:[^"]* )?error-msg(?: [^"]*)?"/);
   });
 
   test('survey textarea has aria-describedby="error-msg"', async () => {

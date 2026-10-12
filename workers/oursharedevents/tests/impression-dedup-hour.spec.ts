@@ -1,7 +1,7 @@
 /**
  * Part of OSE-1421 — sponsor impression writes are deduplicated for an hour.
  *
- * `sponsor_impressions` is the proof layer: its rows feed `sponsor_impressions[]`
+ * `sponsor_displays` is the proof layer: its rows feed `sponsor_displays[]`
  * and the campaign / class rollups in the SharedReport. The CCR finding (D7,
  * write-side) was that an unauthenticated public POST could write rows without
  * dedup. Since the CCR, OSE-1310 added the beacon token, the bot filter, a
@@ -93,9 +93,7 @@ async function post(
 
 async function rows(eventId: string, sponsorId: string): Promise<number> {
   const r = await tenv()
-    .DB.prepare(
-      'SELECT COUNT(*) AS c FROM sponsor_impressions WHERE event_id = ? AND sponsor_id = ?'
-    )
+    .DB.prepare('SELECT COUNT(*) AS c FROM sponsor_displays WHERE event_id = ? AND sponsor_id = ?')
     .bind(eventId, sponsorId)
     .first<{ c: number }>();
   return r?.c ?? 0;
@@ -192,7 +190,7 @@ describe('never who: the write keeps nothing person-shaped, and nothing finer th
     expect(Object.keys(body).filter((k) => BANNED_KEY.test(k))).toEqual([]);
 
     const cols = (
-      (await tenv().DB.prepare(`PRAGMA table_info(sponsor_impressions)`).all()).results as Array<{
+      (await tenv().DB.prepare(`PRAGMA table_info(sponsor_displays)`).all()).results as Array<{
         name: string;
       }>
     ).map((c) => c.name);

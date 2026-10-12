@@ -15,6 +15,9 @@
 | 1 | Anonymous ID | live | `tests/e2e/0-architecture/anonymous-id.invariant.spec.ts` |
 | 7 | Aggregate-Only Reporting | partial | `tests/e2e/0-architecture/aggregate-only.invariant.spec.ts` |
 | 8 | Bounded PII Retention | live | `tests/e2e/0-architecture/pii-retention.invariant.spec.ts` |
+| 26 | Explicit Identity | partial | `tests/security/explicit-identity.invariant.test.ts` (ourWKRP) |
+| 27 | No Biometric Identifiers | partial | `tests/security/no-biometrics.invariant.test.ts` (ourWKRP; OSE pending) |
+| 29 | Declined Regulatory Regimes | live | `tests/security/declined-regimes.invariant.test.ts` (ourWKRP); `tests/e2e/0-architecture/declined-regimes.invariant.test.ts` (OSE meta-gate over its routing + `scripts/guard-declined-regimes.js`) |
 
 ---
 
@@ -56,6 +59,8 @@
 | 15 | CORS Allowlist Immutability | live | `tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts` |
 | 17 | OER Emission Boundary | live | `tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts` |
 | 22 | Cross-Repo Import Isolation | live | `scripts/check-cross-repo-imports.sh (OSE repo)` |
+| 23 | Red Team Coverage | partial | `tests/red-team/` (OSE, in construction: OSE-564) |
+| 28 | CI Approval-Gate Secret Surface | partial | `tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts` |
 
 ---
 
@@ -80,6 +85,7 @@
 |---|------|--------|-----------|
 | 13 | Brain Enforcement Co-location | live | `ocr-docs-brain/tests/level2_schema.py` (inv13_* checks) |
 | 20 | Standards Propagation Completeness | partial | `ocr-docs-brain/tests/level2_schema.py` (inv20_* checks) |
+| 24 | Auditability | partial | `tests/audit-layer.spec.ts` (OSE, in construction: OSE-560 / OSE-557) |
 
 ---
 
@@ -91,4 +97,4 @@
 | `partial` | Enforcement mechanism exists and wired, but not all criteria for `live` are met (e.g. T3/T4 staging test pending, or multi-product rollout incomplete). |
 | `planned` | Invariant authored in brain but spec not yet wired to CI. |
 
-*Last updated: 2026-07-27 — reflects state after OSE PR #275 (invariant specs) and OCR-docs brain enrichment session.*
+*Last updated: 2026-10-08. Every invariant in `architectural-invariants.yaml` now has a row (#23, #24, #26, #27, #28 were missing; #29 is new). Check: every `id` in the registry appears as a row here.*

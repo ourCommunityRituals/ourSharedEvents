@@ -56,7 +56,8 @@ describe('QA-F1: Forms migration idempotency', () => {
       .all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(6);
+    // 6 + subscribers (forms migration 0017, moved from the main DB, OSE-1661) = 7.
+    expect(names).toHaveLength(7);
   });
 
   test('indexes remain at exactly 12 after idempotent re-run', async () => {

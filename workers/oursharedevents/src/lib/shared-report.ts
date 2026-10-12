@@ -2,7 +2,7 @@
  * OSE-272 — SharedReport materialization library
  *
  * Pure aggregation functions that compute the 6 SharedReport data primitives
- * from the upstream signal in `scans`, `sponsor_impressions`, and `events`.
+ * from the upstream signal in `scans`, `sponsor_displays`, and `events`.
  *
  * Architectural commitments (CI-enforced via Gates 1, 2, 4 in
  * tests/shared-report-pipeline-invariants.spec.ts):

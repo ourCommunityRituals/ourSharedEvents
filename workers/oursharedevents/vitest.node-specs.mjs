@@ -21,6 +21,8 @@ export const NODE_SPECS = [
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
   // name + placement fields). Imports the render module, no runtime.
   'tests/sponsor-home-xss.spec.ts',
+  // Owner 2026-10-11: less text on the sponsor page (pure render + template).
+  'tests/sponsor-home-less-text.spec.ts',
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',
@@ -160,7 +162,15 @@ export const NODE_SPECS = [
   'tests/log-never-who.spec.ts',
   // Admin TV display card — its script run in jsdom with a stubbed fetch.
   'tests/admin-tv-display-card.spec.ts',
+  'tests/admin-card-order.spec.ts',
+  // A stale status panel: Undo returns to where the server says the event was
+  // (the events script run in jsdom against an in-memory status endpoint).
+  'tests/admin-stale-panel-undo.spec.ts',
+  'tests/event-screen-route-read.spec.ts',
   'tests/admin-wizard-step1.spec.ts',
+  // Landing "where are you?" (2026-10-10): zip table, rough box, the location script's limits.
+  'tests/landing-where-unit.spec.ts',
+  'tests/admin-surface-links-not-live.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',
   'tests/admin-create-core-values.spec.ts',
@@ -199,6 +209,9 @@ export const NODE_SPECS = [
   'tests/admin-events-upcoming-cursor.spec.ts',
   'tests/public-projection-routing.spec.ts',
   'tests/admin-forms-single-row.spec.ts',
+  'tests/event-form-link-writers.spec.ts',
+  // OSE-1684 last rule: the route table keeps every event screen under /events/<id>/.
+  'tests/event-address-route-table.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
@@ -207,9 +220,14 @@ export const NODE_SPECS = [
   // OSE-1347 deploy D1 canonical-shape verifier. Pure parser/diff/query-builder
   // tests over the migration SQL + fake D1 query runner; no cloudflare:test.
   'tests/d1-canonical-shape.spec.ts',
+  // Owner 2026-10-11: nothing in FORMS_DB outlives 90 days (reads migration SQL + wrangler.toml).
+  'tests/forms-retention-ceiling.spec.ts',
   // OSE-1313 event date+time+timezone → UTC. Pure Intl/Date math over
   // lib/event-datetime.ts (zone/DST/round-trip matrix); no cloudflare:test / DOM.
   'tests/event-datetime.spec.ts',
+  // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
+  // browser tick run in jsdom with fake timers. No cloudflare:test.
+  'tests/event-countdown.spec.ts',
   // OSE-1363 date-only off-by-one on the public listing. renderEventList over
   // lib/event-list.ts (imports only html-escape + inject-marker); node-clean.
   'tests/event-list.spec.ts',
@@ -257,6 +275,8 @@ export const NODE_SPECS = [
   // The admin Shared Report Links panel: the page's own scripts run in jsdom as
   // classic scripts, with a stubbed fetch that answers the way the mint route does.
   'tests/admin-mint-report-link.spec.ts',
+  // Owner 2026-10-11: copy registrants' emails (jsdom, the page's own scripts).
+  'tests/admin-registrant-contacts.spec.ts',
   // Every name a template's inline script uses is declared where that script
   // can see it: the TypeScript checker over each template's scripts (node:fs).
   'tests/template-script-names.spec.ts',
@@ -267,4 +287,12 @@ export const NODE_SPECS = [
   // digital, with and without artwork, picker and draft preview), plus the same
   // parse of its attribute writes (tests/helpers/markup-attribute-check.ts).
   'tests/poster-attribute-escaping.spec.ts',
+  // OSE-1441 - the /poster picker drops a late bundle answer for the event it
+  // left: the page script in jsdom with one answer held back.
+  'tests/poster-picker-stale-response.spec.ts',
+  // F5.3 — the form page's confirmation: handleFormPage called directly with a
+  // stub DB, its scripts run in jsdom with a stubbed fetch; no cloudflare:test.
+  'tests/form-next-step-dom.spec.ts',
+  // Form pages, less text (owner 2026-10-11): the same jsdom render as above.
+  'tests/form-pages-less-text.spec.ts',
 ];

@@ -254,7 +254,10 @@ export async function handleFormRegistration(
   // attendee_name_encrypted; the legacy cleartext attendee_name column is left
   // NULL on the write path. encryptText (NOT encryptEmail) preserves the name's
   // exact case/whitespace.
-  if (name && !env.FORMS_ENCRYPTION_KEY) {
+  // Owner 2026-10-11: an email, when given, is kept encrypted too, so the
+  // organizer can reach the person if the event moves or is cancelled. Same
+  // guard: never keep it without the key.
+  if ((name || email) && !env.FORMS_ENCRYPTION_KEY) {
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
   }
   // DE-06 / OSE-1343: the write path hashes the email with a REQUIRED pepper
@@ -266,6 +269,7 @@ export async function handleFormRegistration(
   if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
   let emailHash: string | undefined;
+  let emailEncrypted: string | undefined;
   let nameEncrypted: string | undefined;
   let anonKey: string;
   try {
@@ -280,6 +284,10 @@ export async function handleFormRegistration(
       name && env.FORMS_ENCRYPTION_KEY
         ? await encryptText(name, env.FORMS_ENCRYPTION_KEY)
         : undefined;
+    emailEncrypted =
+      email && env.FORMS_ENCRYPTION_KEY
+        ? await encryptText(email, env.FORMS_ENCRYPTION_KEY)
+        : undefined;
   } catch (err) {
     return handleDbError('register', eventId, err, request);
   }
@@ -290,8 +298,8 @@ export async function handleFormRegistration(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
+      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, attendee_email_encrypted, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
     )
       .bind(
         id,
@@ -300,6 +308,7 @@ export async function handleFormRegistration(
         null, // legacy cleartext column — never populated on the write path (DE-01)
         nameEncrypted ?? null,
         emailHash ?? null,
+        emailEncrypted ?? null,
         bucket,
         expiresAt,
         anonKey, // per-event keyed id, never the cookie value
@@ -653,6 +662,60 @@ export async function handleAdminRegistrations(
       },
       request
     );
+  } catch (err) {
+    return handleDbError('register', eventId, err, request);
+  }
+}
+
+// ─── Admin: Registrant contacts (owner 2026-10-11) ─────────────────────────────
+//
+// The organizer's way to reach the people who chose to leave an email when
+// they registered, if the event moves or is cancelled. Name and email for this
+// event only (the router's object guard keeps it to the caller's own brand),
+// decrypted here and never cached. The router writes the read to the admin
+// audit log as READ_REGISTRANT_CONTACTS. Nothing is shown once the nightly job
+// has cleared them, the day after the event.
+
+/** Upper bound on one answer; far above any one event's sign-ups today. */
+export const MAX_REGISTRANT_CONTACTS = 2000;
+
+export async function handleAdminRegistrantContacts(
+  request: Request,
+  env: FormsEnv,
+  eventId: string
+): Promise<Response> {
+  const key = env.FORMS_ENCRYPTION_KEY;
+  if (!key)
+    return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
+  try {
+    const result = await env.FORMS_DB.prepare(
+      `SELECT attendee_name_encrypted, attendee_email_encrypted FROM form_registrations
+        WHERE event_id = ? AND attendee_email_encrypted IS NOT NULL
+        ORDER BY created_at ASC, id ASC LIMIT ?`
+    )
+      .bind(eventId, MAX_REGISTRANT_CONTACTS)
+      .all<{ attendee_name_encrypted: string | null; attendee_email_encrypted: string }>();
+    const items: { name: string | null; email: string }[] = [];
+    let failed = 0;
+    for (const r of result.results ?? []) {
+      try {
+        items.push({
+          email: await decryptText(r.attendee_email_encrypted, key),
+          name: r.attendee_name_encrypted
+            ? await decryptText(r.attendee_name_encrypted, key)
+            : null,
+        });
+      } catch {
+        failed++;
+      }
+    }
+    logFormEvent('register', eventId, 'admin_read', {
+      contacts: items.length,
+      decrypt_failed: failed,
+    });
+    const res = jsonResponse({ ok: true, items, decrypt_failed: failed }, request);
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
   } catch (err) {
     return handleDbError('register', eventId, err, request);
   }

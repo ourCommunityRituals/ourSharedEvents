@@ -96,27 +96,27 @@ Every Phase 2 and Phase 3 story depends on P1-10 completing first. P1-6 (infra p
 
 ## Team Role Coverage (Reconciled)
 
-| Role | Knowledge File | Key Concern |
-|------|---------------|-------------|
-| Lead Backend Architect | `backend-architect.knowledge.md` | Dual Worker resolution, d1.ts creation |
-| Lead Frontend Integration | `frontend-integration.knowledge.md` | Only 2 of 5 surfaces in canonical Worker |
-| QA / Playwright | `qa-playwright.knowledge.md` | Test target mismatch (80+ tests hit wrong Worker) |
-| Lead SDET/SRE | `sdet-sre.knowledge.md` | Postman collections stale, Datadog not set up |
-| Director of Product Owners | `product-director.knowledge.md` | Ecosystem products are concepts only |
-| DevOps | `devops.knowledge.md` | No infra provisioned, legacy workflows active |
-| Scrum Master | `scrum-master.knowledge.md` | This file |
+| Role                       | Knowledge File                      | Key Concern                                       |
+| -------------------------- | ----------------------------------- | ------------------------------------------------- |
+| Lead Backend Architect     | `backend-architect.knowledge.md`    | Dual Worker resolution, d1.ts creation            |
+| Lead Frontend Integration  | `frontend-integration.knowledge.md` | Only 2 of 5 surfaces in canonical Worker          |
+| QA / Playwright            | `qa-playwright.knowledge.md`        | Test target mismatch (80+ tests hit wrong Worker) |
+| Lead SDET/SRE              | `sdet-sre.knowledge.md`             | Postman collections stale, Datadog not set up     |
+| Director of Product Owners | `product-director.knowledge.md`     | Ecosystem products are concepts only              |
+| DevOps                     | `devops.knowledge.md`               | No infra provisioned, legacy workflows active     |
+| Scrum Master               | `scrum-master.knowledge.md`         | This file                                         |
 
 ---
 
 ## Ceremony Schedule (Recommended)
 
-| Ceremony | Frequency | Duration | Purpose |
-|----------|-----------|----------|---------|
-| Daily Standup | Daily | 15 min | Done/doing/blocked (use `daily-scrum.md` skill) |
-| Sprint Planning | Bi-weekly | 1 hour | Pick stories, estimate, assign |
-| Sprint Review | Bi-weekly | 30 min | Demo completed work |
-| Retrospective | Bi-weekly | 30 min | Process improvement |
-| Backlog Grooming | Weekly | 30 min | Refine upcoming stories |
+| Ceremony         | Frequency | Duration | Purpose                                         |
+| ---------------- | --------- | -------- | ----------------------------------------------- |
+| Daily Standup    | Daily     | 15 min   | Done/doing/blocked (use `daily-scrum.md` skill) |
+| Sprint Planning  | Bi-weekly | 1 hour   | Pick stories, estimate, assign                  |
+| Sprint Review    | Bi-weekly | 30 min   | Demo completed work                             |
+| Retrospective    | Bi-weekly | 30 min   | Process improvement                             |
+| Backlog Grooming | Weekly    | 30 min   | Refine upcoming stories                         |
 
 ---
 
@@ -143,7 +143,7 @@ New idea → .claude/inputs/YYYY-MM-DD-idea.md
 
 ## Definition of Done (per story)
 
-From CLAUDE.md §5 — all 6 role POVs must be satisfied:
+From `AGENTS.md`, Definition of Done — all role POVs must be satisfied:
 
 - [ ] Worker route code implemented
 - [ ] Tests written (Jest/Vitest + Playwright)
@@ -151,19 +151,19 @@ From CLAUDE.md §5 — all 6 role POVs must be satisfied:
 - [ ] All acceptance criteria met
 - [ ] PR created, CI passes
 - [ ] STORIES.md updated
-- [ ] CLAUDE.md §3 role states updated
+- [ ] `docs/brain/ROLE-STATE.md` role states updated
 
 ---
 
 ## Action Items (This Sprint)
 
-| Priority | Action | Owner | Status |
-|----------|--------|-------|--------|
-| P0 | Resolve dual Worker architecture | Product + Backend | ❌ |
-| P0 | Update P2-1 story status | Scrum Master | ❌ |
-| P1 | Archive legacy workflows | DevOps | ❌ |
-| P1 | Decide Trello vs Linear | Product | ❌ |
-| P1 | Begin P1-6 infra provisioning | DevOps + Product | ❌ |
-| P2 | Write tests for canonical Worker | QA | ❌ |
-| P2 | Update Postman collections | SDET | ❌ |
-| P3 | Plan Datadog Synthetics | SDET + DevOps | ❌ |
+| Priority | Action                           | Owner             | Status |
+| -------- | -------------------------------- | ----------------- | ------ |
+| P0       | Resolve dual Worker architecture | Product + Backend | ❌     |
+| P0       | Update P2-1 story status         | Scrum Master      | ❌     |
+| P1       | Archive legacy workflows         | DevOps            | ❌     |
+| P1       | Decide Trello vs Linear          | Product           | ❌     |
+| P1       | Begin P1-6 infra provisioning    | DevOps + Product  | ❌     |
+| P2       | Write tests for canonical Worker | QA                | ❌     |
+| P2       | Update Postman collections       | SDET              | ❌     |
+| P3       | Plan Datadog Synthetics          | SDET + DevOps     | ❌     |

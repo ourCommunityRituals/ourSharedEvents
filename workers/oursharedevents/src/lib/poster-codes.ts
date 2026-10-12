@@ -33,6 +33,7 @@ import {
 } from './shortlinks';
 import type { Tier } from './feature-flags';
 import { getCode } from './uec';
+import { eventFormPath } from './canonical';
 
 /** How a code's target is produced. */
 export type PosterCodeTarget = 'event' | 'checkin' | 'register' | 'https';
@@ -163,7 +164,7 @@ export function posterCodeLimit(tier: Tier): number {
 export function internalTarget(origin: string, eventId: string, kind: string): string {
   const id = encodeURIComponent(eventId);
   const target = posterCodeKind(kind).target;
-  if (target === 'checkin' || target === 'register') return `${origin}/forms/${id}?type=${target}`;
+  if (target === 'checkin' || target === 'register') return `${origin}${eventFormPath(eventId, target)}`;
   return `${origin}/events/${id}`;
 }
 

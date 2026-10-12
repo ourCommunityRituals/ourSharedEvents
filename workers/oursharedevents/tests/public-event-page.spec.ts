@@ -151,7 +151,7 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
 
     // RSVP CTA points at the existing register form route
     expect(html).toContain('data-testid="event-rsvp"');
-    expect(html).toContain(`/forms/${eventId}?type=register`);
+    expect(html).toContain(`/events/${eventId}/register`);
   });
 
   test('OSE-1318: poster scan context lands on event page and CTA preserves form/deployment attribution', async () => {
@@ -170,7 +170,7 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('data-testid="event-rsvp"');
-    expect(html).toContain(`/forms/${eventId}?type=survey&amp;deployment=pd_poster_1318`);
+    expect(html).toContain(`/events/${eventId}/survey?deployment=pd_poster_1318`);
     expect(html).toContain('Share feedback');
   });
 
@@ -189,7 +189,7 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     );
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain(`/forms/${eventId}?type=register`);
+    expect(html).toContain(`/events/${eventId}/register`);
     expect(html).not.toContain('javascript:alert');
     expect(html).not.toContain('../bad');
   });
@@ -275,9 +275,9 @@ describe('OSE-243a: phase dispatch', () => {
     expect(html).toContain('data-testid="event-title-live"');
     expect(html).toContain('data-testid="event-live-badge"');
     expect(html).toContain('Live now');
-    // Check-in CTA points at forms surface with type=checkin
+    // Check-in CTA points at the event's check-in form (OSE-1684)
     expect(html).toContain('data-testid="event-checkin"');
-    expect(html).toContain(`href="/forms/${eventId}?type=checkin"`);
+    expect(html).toContain(`href="/events/${eventId}/checkin"`);
     // 5W sections rendered with -live suffixed testids (distinct from pre_event)
     expect(html).toContain('data-testid="event-what-live"');
     expect(html).toContain('data-testid="event-where-live"');
@@ -323,7 +323,7 @@ describe('OSE-243a: phase dispatch', () => {
     expect(html).toContain('data-testid="event-phase-chip"');
   });
 
-  test('post-event: email CTA present — stay-connected card routes to /forms/:id?type=email', async () => {
+  test('post-event: email CTA present — stay-connected card routes to /events/:id/updates', async () => {
     // OSE-454: email CTA harness test. The stay-connected card must always
     // appear in the post-event render with the correct forms route.
     const eventId = 'evt_ose454_email_cta';
@@ -339,7 +339,7 @@ describe('OSE-243a: phase dispatch', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="stay-connected-card"');
     expect(html).toContain('data-testid="email-signup-link"');
-    expect(html).toContain(`href="/forms/${eventId}?type=email"`);
+    expect(html).toContain(`href="/events/${eventId}/updates"`);
   });
 
   test('post-event: return loop — next-event-card appears when future event at same location', async () => {

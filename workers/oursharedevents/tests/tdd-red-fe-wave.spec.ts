@@ -267,12 +267,13 @@ describe('OSE-1520 one events surface', () => {
 });
 
 describe('OSE-1518 event page: trust header and plain choices', () => {
+  // Owner 2026-10-11 (less text on every screen): the header keeps the host and
+  // drops "No account needed to view · Verified event link".
   it('a live event page carries the trust header, with the host', async () => {
     await seedEvent('evt_1518_live', 'active', 'Trusted Night');
     const { html } = await pageText('/events/evt_1518_live');
-    expect(html, '[OSE-1518] says no account is needed').toContain('No account needed to view');
-    expect(html, '[OSE-1518] says the link is verified').toContain('Verified event link');
     expect(html, '[OSE-1518] names the host').toContain('Hosted by The Host');
+    expect(html, 'less text: no explanation after the host').not.toContain('No account needed');
   });
 
   it('the trust header is on the page while the event is on now, too', async () => {
@@ -282,7 +283,8 @@ describe('OSE-1518 event page: trust header and plain choices', () => {
       .run();
     const { html } = await pageText('/events/evt_1518_now');
     expect(html, 'the live render is the one under test').toContain('event-title-live');
-    expect(html, '[OSE-1518] live render carries it').toContain('Verified event link');
+    expect(html, '[OSE-1518] live render carries it').toContain('Hosted by The Host');
+    expect(html, 'less text: no explanation after the host').not.toContain('Verified event link');
   });
 });
 

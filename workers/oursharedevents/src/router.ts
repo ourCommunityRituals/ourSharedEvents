@@ -3,7 +3,8 @@
  *
  * Route table:
  *
- *   GET /                        → landing page
+ *   GET /                        → landing page (?zip= lists events near a zip)
+ *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
@@ -38,9 +39,13 @@
  *   GET  /api/v2/admin/events/:id/forms/checkin-count  → check-in count (admin)
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
- *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page
+ *   GET  /events/:id/register|checkin|survey|updates  → public form page (OSE-1684)
+ *   GET  /forms/:eventId?type=register|checkin|survey|email  → the same page at its older address
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
+ *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
+ *   GET /r/:code /c/:code         → 302 to that event's register / check-in form; a share open
+ *   GET /tv/:code                 → 302 to that event's TV; typed on the TV, not counted
  *   GET /poster                   → printable poster with QR codes
  *   GET /sharedReport             → shareable analytics dashboard
  *   GET /api/v2/uec/resolve?code=<id|label>  → UEC code resolution (OSE-320)
@@ -66,6 +71,7 @@
  *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
+ *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
@@ -81,6 +87,7 @@
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
  *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league/donate links, any status (admin)
+ *   POST   /api/v2/admin/events/:id/short-links         → the event's code + its five short addresses, minted on first ask (admin, OSE-1684)
  *   PUT    /api/v2/admin/events/:id/poster-codes        → save codes + targets (tier-limited)
  *   GET    /api/v2/admin/events/:id/pre-event-activity  → poster link + QR, scans/taps/
  *                                                         posters/places + scans per day
@@ -145,6 +152,7 @@ import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
+import { handleNear } from './lib/landing-where.js';
 import {
   isPublicReadLimited,
   publicReadLimitResponse,
@@ -152,6 +160,7 @@ import {
   publicReadLimited,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
   handleListEvents,
@@ -237,6 +246,7 @@ import {
   handleFormSurvey,
   handleFormEmailSignup,
   handleAdminRegistrations,
+  handleAdminRegistrantContacts,
   handleAdminCheckinCount,
   handleAdminSurveys,
   handleAdminEmailSignupCount,
@@ -244,6 +254,7 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
+import type { EventFormScreen } from './lib/canonical';
 import { handlePrivacyPage } from './handlers/privacy';
 import {
   isFeatureEnabled,
@@ -291,6 +302,8 @@ import { type MapsEnv } from './lib/maps';
 import { handleVenueImage } from './handlers/venue-image';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
+import { handleAdminEventCode, handleEventCodeResolve } from './handlers/event-code';
+import { EVENT_CODE_SCREENS, type EventCodeScreen } from './lib/event-code';
 import {
   handleAdminCreatePosterDeployment,
   handleAdminListPosterDeployments,
@@ -397,13 +410,12 @@ export type RouterEnv = PagesEnv &
     FORMS_KEY_ROTATED_AT?: string;
     /**
      * OSE-1351 — scan_node_returns / anon_id_returns TTL retention window in
-     * days. Optional; unset → uncapped (no windowing at the table level,
-     * per the Q3-ratified decision in migrations/0031_create_anon_id_returns.sql).
-     * Read by the scheduled `runScanReturnsRetention` job in
-     * `lib/scan-returns-retention.ts`. Setting this is the documented way to
-     * layer a bounded retention window on top of Q3 once that ruling is made
-     * — it is independent of the OSE-1350 data-subject erasure path, which
-     * purges by email on demand regardless of this window.
+     * days, read by the scheduled `runScanReturnsRetention` job in
+     * `lib/scan-returns-retention.ts`. Unset → uncapped. Since OSE-1659
+     * wrangler.toml sets "365" in every env (the ose_anon cookie lifetime, the
+     * Q3 bound in migrations/0031_create_anon_id_returns.sql); a test keeps it
+     * set and at least 180. It is independent of the OSE-1350 data-subject
+     * erasure path.
      */
     SCAN_RETURNS_RETENTION_DAYS?: string;
   };
@@ -577,6 +589,29 @@ export async function route(
     )(request, env);
   }
 
+  // ── Event codes (OSE-1684) — `/e|p|tv|r|c/<code>` ────────────────────────
+  // PUBLIC: a TV and a passer-by cannot sign in. One code per event, a prefix
+  // per screen. An open of a shared link (/e/ /p/ /r/ /c/) is counted in
+  // share_opens_daily (what + when, never who) inside the same per-caller count
+  // limit as /s/; the handler counts only a GET by a person, of a public event.
+  // /tv/ is typed on the TV, not shared, so it only takes the public read limit.
+  // `/tv` alone is still the display alias.
+  const eventCodeMatch = pathname.match(/^\/(e|p|tv|r|c)\/([^/]{1,40})$/);
+  if (eventCodeMatch && (method === 'GET' || method === 'HEAD')) {
+    const screen = (Object.keys(EVENT_CODE_SCREENS) as EventCodeScreen[]).find(
+      (k) => EVENT_CODE_SCREENS[k] === eventCodeMatch[1]
+    )!;
+    const raw = eventCodeMatch[2];
+    if (screen === 'tv') {
+      return publicReadLimited('event-code', (req, e: typeof env) =>
+        handleEventCodeResolve(req, e, screen, raw)
+      )(request, env);
+    }
+    return publicCountLimited('event-code-share', (req, e: typeof env, countable) =>
+      handleEventCodeResolve(req, e, screen, raw, countable)
+    )(request, env);
+  }
+
   // ── Shortlink resolver (OSE-240) — `/s/<code>` ────────────────────────────
   // PUBLIC route. NO auth. Anonymity-principle compliant: counter +
   // last_clicked_at increments only; no IP, no anon_id, no session.
@@ -590,6 +625,10 @@ export async function route(
     )(request, env);
   }
 
+  // OSE default event card image — static, same-origin, locked down.
+  if (pathname === EVENT_DEFAULT_THUMB_PATH && method === 'GET') {
+    return eventDefaultThumbResponse();
+  }
   // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();
@@ -1268,6 +1307,17 @@ export async function route(
     return handleAdminDisplayConfig(request, env, adminDisplayConfigMatch[1]);
   }
 
+  // POST /api/v2/admin/events/:id/short-links — the event's one short code and
+  // its five short addresses (OSE-1684). Minted on first ask; the object-scope
+  // guard above keeps it inside the caller's brands.
+  const adminShortLinksMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/short-links$/);
+  if (adminShortLinksMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminEventCode(request, env, adminShortLinksMatch[1]);
+  }
+
   // GET/PUT /api/v2/admin/events/:id/poster-codes — the poster's codes (OSE-1357 p2)
   const adminPosterCodesMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/poster-codes$/);
   if (adminPosterCodesMatch && (method === 'GET' || method === 'PUT')) {
@@ -1372,7 +1422,7 @@ export async function route(
 
   // ── Admin form endpoints (auth-gated) ──────────────────────────────────────
   const adminFormsMatch = pathname.match(
-    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|checkin-count|surveys|email-signups)$/
+    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|contacts|checkin-count|surveys|email-signups)$/
   );
   if (adminFormsMatch && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
@@ -1384,6 +1434,7 @@ export async function route(
     const [, eventId, formType] = adminFormsMatch;
     const formsActionMap: Record<string, string> = {
       registrations: 'READ_REGISTRATIONS',
+      contacts: 'READ_REGISTRANT_CONTACTS',
       'checkin-count': 'READ_CHECKIN_COUNT',
       surveys: 'READ_SURVEYS',
       'email-signups': 'READ_EMAIL_SIGNUPS',
@@ -1392,6 +1443,9 @@ export async function route(
     switch (formType) {
       case 'registrations':
         formsRes = await handleAdminRegistrations(request, env, eventId);
+        break;
+      case 'contacts':
+        formsRes = await handleAdminRegistrantContacts(request, env, eventId);
         break;
       case 'checkin-count':
         formsRes = await handleAdminCheckinCount(request, env, eventId);
@@ -1981,10 +2035,34 @@ export async function route(
     return handleLandingPage(env, ctx, request);
   }
 
+  // ── Landing "Use my location": a rough box in, the nearest zip out ────────
+  // Owner 2026-10-10. POST only (the box travels in the body, never the
+  // address); anything else is sent to the landing page. lib/landing-where.ts.
+  if (pathname === '/near') {
+    return publicReadLimited('near', handleNear)(request, env);
+  }
+
   // ── Public event calendar download (OSE-1358) ─────────────────────────────
   const eventCalendarMatch = pathname.match(/^\/events\/([^/]+)\/calendar\.ics$/);
   if (eventCalendarMatch && method === 'GET') {
     return handleEventCalendar(request, env, eventCalendarMatch[1]);
+  }
+
+  // ── One event's screens under its own address (OSE-1684) ─────────────────
+  // /events/<id>/tv and /events/<id>/poster are the addresses the platform
+  // writes for an event's TV and poster; the pages read the id from the path.
+  // /display?event= and /poster?event= keep working (printed and saved links).
+  const eventScreenMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/(tv|poster)$/);
+  if (eventScreenMatch && (method === 'GET' || method === 'HEAD')) {
+    return eventScreenMatch[2] === 'tv' ? handleDisplayPage(env) : handlePosterPage(env, request);
+  }
+  // Its forms too: /events/<id>/register, /checkin, /survey and /updates (the
+  // email signup). /forms/<id>?type= keeps answering for printed and saved links.
+  const eventFormMatch = pathname.match(
+    /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|updates)$/
+  );
+  if (eventFormMatch && (method === 'GET' || method === 'HEAD')) {
+    return handleFormPage(request, env, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
@@ -1993,6 +2071,12 @@ export async function route(
   // dispatch: pre_event = full render, event/post_event = minimal stub.
   // MUST appear before the generic /events match below or the more-specific
   // path is shadowed.
+  // /events/<id>/<readable-name> (OSE-1684): the same page; the handler
+  // forwards a name that is not the event's own to the right one.
+  const eventNamedMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/);
+  if (eventNamedMatch && method === 'GET') {
+    return handlePublicEventPage(request, env, eventNamedMatch[1], eventNamedMatch[2]);
+  }
   if (pathname.startsWith('/events/') && method === 'GET') {
     const eventId = pathname.slice('/events/'.length);
     // Reject sub-paths like /events/:id/whatever — those don't exist yet.
@@ -2028,6 +2112,17 @@ export async function route(
   ) {
     const target = new URL(request.url);
     target.pathname = '/events';
+    return Response.redirect(target.toString(), 301);
+  }
+  // /event and /event/<rest> are the singular people type; they forward to the
+  // plural, rest of the path and query string kept (/event/:id → /events/:id,
+  // /event/:id/calendar.ics → its .ics). `/event/` alone is an unknown path.
+  if (
+    (pathname === '/event' || (pathname.startsWith('/event/') && pathname.length > 7)) &&
+    (method === 'GET' || method === 'HEAD')
+  ) {
+    const target = new URL(request.url);
+    target.pathname = '/events' + pathname.slice('/event'.length);
     return Response.redirect(target.toString(), 301);
   }
   if (pathname === '/events') {

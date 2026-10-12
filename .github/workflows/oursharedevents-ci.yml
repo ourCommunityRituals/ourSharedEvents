@@ -83,7 +83,7 @@
 #
 # Functional (Tier 4) runs on every push to main (and tag), after T1 Deploy and the
 # T2 → T3 chain are green, so every merge shows the full test scope on staging.
-# That is the "Done" bar in CLAUDE.md §5 (T1–T4 green for the merge SHA). It costs
+# That is the "Done" bar in AGENTS.md (T1–T4 green for the merge SHA). It costs
 # more runner minutes than the old dispatch-only setup; that is accepted. Nightly
 # skips it (no deploy). On dispatch, tick run_functional to run it without deploying.
 #
@@ -731,6 +731,29 @@ jobs:
           fi
           node ../packages/ui/scripts/check-spoke-styles.mjs --root . "${ARGS[@]}"
 
+      # CI integrity ratchets (OSE-1606, wired by OSE-1691). continue-on-error
+      # steps, test skips and orphan specs may only shrink; the counts live in
+      # .ci-integrity-baseline.json. Until OSE-1691 nothing in CI ran this
+      # script: a test only compared against origin/main when a shallow checkout
+      # happened to have it, so a raised baseline passed. On a PR the baseline is
+      # compared with the base branch's copy, so a PR may lower it, never raise
+      # it. A deliberate raise (owner decision) is an admin merge over this red
+      # step, with the reason recorded on the baseline entry.
+      - name: 'Lint: CI integrity ratchets (skips, continue-on-error, orphan specs)'
+        if: matrix.shard == 'lint'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          ARGS=()
+          if [ -n "$BASE_REF" ]; then
+            git fetch -q --depth=1 origin "$BASE_REF"
+            if git cat-file -e FETCH_HEAD:.ci-integrity-baseline.json 2>/dev/null; then
+              git show FETCH_HEAD:.ci-integrity-baseline.json > "$RUNNER_TEMP/base-ci-integrity.json"
+              ARGS=(--base-config "$RUNNER_TEMP/base-ci-integrity.json")
+            fi
+          fi
+          node scripts/ci/ci-integrity-ratchets.mjs --root . "${ARGS[@]}"
+
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
@@ -815,6 +838,7 @@ jobs:
             tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts \
             tests/e2e/0-architecture/csp-connect-src.invariant.spec.ts \
             tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts \
+            tests/e2e/0-architecture/declined-regimes.invariant.test.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
             tests/e2e/0-architecture/log-redaction.invariant.spec.ts \
             tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
@@ -1215,6 +1239,13 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
+          # hashes anon_id_returns. Without it scans are stored with no id and
+          # returns are not counted, but nothing breaks and nothing leaks, so a
+          # missing value is a warning until it has been provisioned once.
+          if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
+            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
+          fi
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -1443,19 +1474,13 @@ jobs:
       # Upsert keyed on the id: an existing row only gets data_class='synthetic';
       # any other conflict (e.g. a slug clash) fails the step.
       - name: 'Seed test-event-001 (OSE-1419 fixture)'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # Two legs (platform, forms) run this upsert at once; one bounded retry covers a transient D1 error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../tests/ui/smoke/fixtures/test-event-001.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/test-event-001.sql
 
       # OSE-891: geo-tag test-event-001 so the OSE-INV5 covenant can seed
       # genuinely-local sponsors. is_local is GEO-DERIVED server-side (sponsor
@@ -1466,36 +1491,24 @@ jobs:
       - name: Seed covenant event geo (OSE-891 fixture)
         if: matrix.section == 'api'
         id: seed-covenant-geo
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../bruno/fixtures/covenant-event-geo.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/covenant-event-geo.sql
 
       - name: Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)
         if: matrix.section == 'api'
         id: reset-covenant-sponsors
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../bruno/fixtures/covenant-sponsors-reset.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/covenant-sponsors-reset.sql
 
       # CCR-PR567 Stage-2: seed the 4 canonical covenant sponsors ALREADY ACCEPTED
       # (sponsor_accepted=1) so the covenant Bruno block is a pure ASSERT. Under ADR-019
@@ -1507,19 +1520,13 @@ jobs:
       - name: Seed covenant sponsors accepted (CCR-PR567 fixture)
         if: matrix.section == 'api'
         id: seed-covenant-sponsors
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../bruno/fixtures/covenant-sponsors-seed.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/covenant-sponsors-seed.sql
 
       # OSE-1432: one fixed-id sponsor per case for the Bruno folder "14. Public
       # Sponsor Card & Logo" (on show / no logo / dead logo host / pool / draft-only),
@@ -1529,14 +1536,13 @@ jobs:
       # the contract run.
       - name: 'Seed public sponsor card fixtures (OSE-1432)'
         if: matrix.section == 'api'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/sponsor-public-card-seed.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/sponsor-public-card-seed.sql
 
       # OSE-1644: a draft with no start time and no event type, for the Bruno
       # request that asserts the 409 CORE_VALUES_MISSING contract (folder 12).
@@ -1544,14 +1550,13 @@ jobs:
       # a missing fixture fails here by name, not as a 404 in the contract run.
       - name: 'Seed core-values draft fixture (OSE-1644)'
         if: matrix.section == 'api'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../bruno/fixtures/core-values-draft-seed.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/core-values-draft-seed.sql
 
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
@@ -1951,19 +1956,13 @@ jobs:
       # any other conflict (e.g. a slug clash) fails the step.
       - name: 'Seed test-event-001 for T4 (OSE-1419 fixture)'
         if: matrix.section == 'platform' || matrix.section == 'forms'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # Two legs (platform, forms) run this upsert at once; one bounded retry covers a transient D1 error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../tests/ui/smoke/fixtures/test-event-001.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/test-event-001.sql
 
       # OSE-616 (QR Path rung 5): scan the Eagles Hall test poster on staging and
       # confirm the scan lands at the poster's res9 node / res7 corridor. The
@@ -1973,14 +1972,13 @@ jobs:
       # NOT continue-on-error: a scan that does not land is a real failure.
       - name: 'Seed Eagles Hall trace poster (OSE-616 fixture)'
         if: matrix.section == 'surfaces'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/trace-eagles-poster.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/trace-eagles-poster.sql
 
       - name: 'Trace one scan on staging (OSE-616)'
         if: matrix.section == 'surfaces'
@@ -2000,19 +1998,13 @@ jobs:
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)
         if: matrix.section == 'platform'
         id: reset-journey-sponsors
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          # One bounded retry: this step blocks the tier now, and D1 can throw a transient error.
-          for attempt in 1 2; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --file ../../bruno/fixtures/covenant-sponsors-reset.sql && break
-            [ "$attempt" = 2 ] && exit 1
-            echo "::warning::fixture step failed once; retrying"; sleep 5
-          done
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/covenant-sponsors-reset.sql
 
       # OSE-551: durable "a real sponsor exists here" fixture. Gives the write-path
       # invariants (anonymous-id + ncr-accumulation impression/click) a real,
@@ -2022,14 +2014,13 @@ jobs:
       # is set but exposes no sponsor, so green != true holds end-to-end).
       - name: Seed sponsored-event fixture (OSE-551)
         if: matrix.section == 'platform'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/sponsored-event.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/sponsored-event.sql
 
       # OSE-1436: one public, upcoming event with three sponsors (logos + website;
       # no logo but a public card; a logo that cannot load), so the sponsor
@@ -2038,14 +2029,13 @@ jobs:
       # not hide a red test; it is still not continue-on-error, so it is seen.
       - name: Seed sponsor logo check fixture (OSE-1436)
         if: matrix.section == 'surfaces'
-        timeout-minutes: 2
+        timeout-minutes: 5
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/sponsor-logo-check.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/sponsor-logo-check.sql
 
       # OSE-1004: synthetic Phase-2 event fixture so the survey/email SUBMISSION
       # E2E exercises the legal-clearance gate instead of 403-ing on a Phase-1
@@ -2054,19 +2044,17 @@ jobs:
       # surface (specs would 403 and, once blocking, fail — green != true holds).
       - name: Seed forms Phase-2 fixture (OSE-1004)
         if: matrix.section == 'forms'
-        timeout-minutes: 2
+        timeout-minutes: 8
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/forms-phase2-event.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/forms-phase2-event.sql
           # Per-event flag overrides live in FORMS_DB (two-DB isolation). Enables
           # forms.survey/email-signup for the synthetic events ONLY (scope='event'
           # beats global) so submission clears FORM_DISABLED. No global flag changed.
-          npx wrangler d1 execute FORMS_DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/forms-phase2-flags.sql
+          node ../../scripts/ci/d1-seed-staging.mjs FORMS_DB ../../tests/ui/smoke/fixtures/forms-phase2-flags.sql
 
       - name: 'T4a: Architecture Invariants'
         if: matrix.section == 'platform'
@@ -2186,21 +2174,18 @@ jobs:
         # instead of letting downstream skip green on absent fixtures. Requires the
         # staging CF creds (present on the main pipeline) to succeed; a fork without
         # them fails here, which is correct: an unseeded run has verified nothing.
-        timeout-minutes: 2
+        timeout-minutes: 11
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           # Main DB (anonymous surface): bare smoke events + multi-tier sponsors.
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/smoke-events.sql
-          npx wrangler d1 execute DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/sponsors-tiers-smoke.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/smoke-events.sql
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/sponsors-tiers-smoke.sql
           # FORMS_DB (identified-user surface, ADR-001 two-DB isolation): one
           # registration / check-in / survey on the dedicated evt_smoke_tiers event.
-          npx wrangler d1 execute FORMS_DB --env staging --remote \
-            --file ../../tests/ui/smoke/fixtures/forms-smoke.sql
+          node ../../scripts/ci/d1-seed-staging.mjs FORMS_DB ../../tests/ui/smoke/fixtures/forms-smoke.sql
 
       - name: 'T4d: UI Smoke — Tier-1 page smoke'
         if: matrix.section == 'surfaces'
@@ -2262,7 +2247,8 @@ jobs:
         run: |
           PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
-            tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
+            tests/ui/smoke/journey-attendee-arc.smoke.spec.ts \
+            tests/ui/smoke/journey-short-codes.smoke.spec.ts
         timeout-minutes: 5
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
@@ -2516,6 +2502,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           clean: true
+          # Full history, so the next step can see whether this commit is on main.
+          fetch-depth: 0
+
+      # OSE-1662: a `v*.*.*` tag or a dispatch can name any commit, from any
+      # branch. Only a commit that is on main ships. First step after checkout,
+      # so nothing else in this job runs for a commit off main. NOT
+      # continue-on-error and no `if:` — held by
+      # tests/integration/assert-on-main-wired.test.js.
+      - name: 'Gate: the commit is on main (OSE-1662)'
+        run: bash scripts/ci/assert-on-main.sh
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -2572,14 +2568,19 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           OUT="$(npx wrangler secret list --env production 2>&1 || true)"
-          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER; do
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER ANON_ID_HASH_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
-              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447). Provision it: bash scripts/set-secrets.sh production"
+              echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447; for ANON_ID_HASH_PEPPER, scans with no id and no return counts per OSE-1659). Provision it: bash scripts/set-secrets.sh production"
               echo "$OUT"
               exit 1
             fi
           done
-          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER, ANON_ID_HASH_PEPPER present on production (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
+          # OSE-1659 / TL-078 (2026-10-10): ANON_ID_HASH_PEPPER is required on
+          # production. Without it a scan has no keyed id, so the browser-name hash
+          # is the only thing the visitor count can use, and returns are not counted.
+          # Staging still only warns (its step above) until it is provisioned there.
+
           # ADR-012 gate R2 (OSE-1467): static admin credentials must be ABSENT on
           # production. Their presence is a standing admin path that bypasses Access.
           for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do

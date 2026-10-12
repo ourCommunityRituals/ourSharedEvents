@@ -142,7 +142,11 @@ const MUST_BE_CRAWLABLE = [
   ...SITEMAP_STATIC_PATHS,
   '/events?when=week',
   '/events/abc',
+  '/events/abc/trivia-night', // the readable address (OSE-1684)
+  '/events/abc/register-night', // a readable name that starts like a form screen
+  '/events/abc/survey-says',
   '/events/abc/calendar.ics',
+  '/tv', // the TV display alias stays fetchable (it answers noindex)
   '/sponsors/abc', // the public sponsor card, not the token page
   '/sponsor-default-logo.svg',
 ];
@@ -151,6 +155,11 @@ const MUST_BE_CRAWLABLE = [
 const MUST_BE_BLOCKED = [
   '/q/abc',
   '/s/abc',
+  '/e/K7Q2PX', // event code lookups (OSE-1684)
+  '/p/K7Q2PX',
+  '/tv/K7Q2PX',
+  '/r/K7Q2PX',
+  '/c/K7Q2PX',
   '/api/v2/events',
   '/admin',
   '/admin/events',
@@ -163,6 +172,15 @@ const MUST_BE_BLOCKED = [
   '/sponsor', // sponsor home, bare
   '/sponsor?t=signed-token', // sponsor home, signed link
   '/forms/abc',
+  // An event's form screens (OSE-1684), plain and with a poster deployment.
+  '/events/abc/register',
+  '/events/abc/register?deployment=d1',
+  '/events/abc/checkin',
+  '/events/abc/checkin?deployment=d1',
+  '/events/abc/survey',
+  '/events/abc/survey?deployment=d1',
+  '/events/abc/updates',
+  '/events/abc/updates?deployment=d1',
   '/sharedReport',
   '/sharedReport?t=signed-token',
   '/report',
@@ -226,7 +244,8 @@ describe('robots.txt and sitemap.xml | one host, the canonical one', () => {
       await handleSitemapXml(via('www.oursharedevents.com', '/sitemap.xml'), prodEnv())
     ).text();
     for (const p of SITEMAP_STATIC_PATHS) expect(xml).toContain(`<loc>${ORIGIN}${p}</loc>`);
-    expect(xml).toContain(`<loc>${ORIGIN}/events/crawl-www</loc>`);
+    // The readable address (OSE-1684); these fixtures use the id as the slug.
+    expect(xml).toContain(`<loc>${ORIGIN}/events/crawl-www/crawl-www</loc>`);
     expect(xml).not.toContain('www.oursharedevents.com');
   });
 
@@ -271,7 +290,9 @@ describe('sitemap.xml', () => {
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>/);
     expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
     for (const p of SITEMAP_STATIC_PATHS) expect(xml).toContain(`<loc>${ORIGIN}${p}</loc>`);
-    expect(xml).toContain(`<loc>${ORIGIN}/events/crawl-live</loc><lastmod>2026-09-20</lastmod>`);
+    expect(xml).toContain(
+      `<loc>${ORIGIN}/events/crawl-live/crawl-live</loc><lastmod>2026-09-20</lastmod>`
+    );
     for (const hidden of [
       'crawl-unpublished',
       'crawl-draft',

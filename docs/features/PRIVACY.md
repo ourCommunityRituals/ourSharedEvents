@@ -37,12 +37,12 @@ Check-in counts (aggregate only)    Sponsors (click/impression tokens)
 
 The scan system stores **presence signal only**. By schema design, no PII can enter:
 
-| What's Stored                 | How                         | Purpose                       |
-| ----------------------------- | --------------------------- | ----------------------------- |
-| `scan_bucket`                 | Hourly time window          | When (approximate)            |
-| `user_agent_hash`             | SHA-256 of user agent       | Device class (not individual) |
-| _no location_                 | Never read (OSE-1460)       | Place comes only from the poster's corridor; the visitor's IP country is not recorded |
-| `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
+| What's Stored          | How                         | Purpose                                                                               |
+| ---------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
+| `scan_bucket`          | Hourly time window          | When (approximate)                                                                    |
+| `user_agent_hash`      | SHA-256 of user agent       | Device class (not individual)                                                         |
+| _no location_          | Never read (OSE-1460)       | Place comes only from the poster's corridor; the visitor's IP country is not recorded |
+| `poster_deployment_id` | FK to physical QR placement | Which placement was scanned                                                           |
 
 **What's explicitly excluded:** email, name, IP address, any request-derived location (country, region, city; `CF-IPCountry` is never read since OSE-1460, and migration 0089 cleared what was recorded), device fingerprint.
 
@@ -60,12 +60,12 @@ When a customer **voluntarily** fills out a form, that data enters a separate sy
 
 ### Registration
 
-| Data       | Treatment                                                     |
-| ---------- | ------------------------------------------------------------- |
-| Name       | Stored as plain text (needed for check-in lists)              |
-| Email      | SHA-256 hashed immediately — raw email never stored           |
-| Timestamp  | Bucketed to the hour (e.g., "2026-03-27T14") — no exact times |
-| All fields | Auto-deleted 90 days after event (`expires_at`)               |
+| Data       | Treatment                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name       | Encrypted at rest; cleared the day after the event                                                                                                                        |
+| Email      | Optional. Hashed (keyed) for dedup and erasure; if given, also kept encrypted so the organizer can reach the person about this event, and cleared the day after the event |
+| Timestamp  | Bucketed to the hour (e.g., "2026-03-27T14") — no exact times                                                                                                             |
+| All fields | Auto-deleted 90 days after registering (`expires_at`)                                                                                                                     |
 
 ### Check-In
 

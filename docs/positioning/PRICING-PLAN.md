@@ -136,7 +136,7 @@ _Auto-disqualify:_ monthly cadence, scattered dow/hour, no poster reaching 5 sca
 
 - **3 comp event-manager anchors** (density≥3 spine; comp = `free_tier`/`comp` boolean, never touches `allocateShares()`).
 - **1 weekly slot** among them (the live-map factory).
-- **2–3 comp sponsors** seeded so `sponsor_impressions` render and the frequency SKU demonstrably works — **these are the ones you can honestly bill at day 90.**
+- **2–3 comp sponsors** seeded so `sponsor_displays` render and the frequency SKU demonstrably works — **these are the ones you can honestly bill at day 90.**
 - **Poster/QR subsidy** so participant cost-to-close ≈ $0.
 - **Hard provenance requirement:** set a server-side `comp`/seeded flag on these records **before** the window, or synthetic density contaminates the WTP read.
 

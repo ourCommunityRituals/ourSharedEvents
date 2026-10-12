@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-10-04 — 604 ids.
+ * Generated 2026-10-11 — 616 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 410 ids
+    // admin.html — 419 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -54,6 +54,7 @@
       'admin-main',
       'admin-nav-logs',
       'admin-nav-settings',
+      'admin-nav-your-events',
       'admin-path-advanced',
       'admin-path-chooser',
       'admin-path-events',
@@ -87,13 +88,16 @@
       'copy-display',
       'copy-poster',
       'copy-public',
+      'copy-registrant-emails',
       'copy-report',
       'count-retry',
       'count-suppressed',
       'create-category',
       'create-date',
       'create-event-card',
+      'create-event-collapsed-note',
       'create-event-form',
+      'create-event-toggle',
       'create-event-type',
       'create-how-details',
       'create-msg',
@@ -128,6 +132,7 @@
       'ecb-nav-sponsors',
       'ecb-nav-surfaces',
       'ecb-nav-tv',
+      'ecb-nav-your-events',
       'event-context-bar',
       'event-date',
       'event-id',
@@ -298,10 +303,8 @@
       'pre-event-scans',
       'pre-event-spark',
       'pre-event-stats',
-      'qr-hint-display',
-      'qr-hint-poster',
-      'qr-hint-public',
-      'qr-hint-report',
+      'registrant-contacts',
+      'registrant-contacts-msg',
       'report-links-section',
       'rollup-checkins',
       'rollup-checkins-num',
@@ -352,6 +355,8 @@
       'sponsor-home-link-url',
       'sponsor-submit',
       'sponsors-card',
+      'sponsors-card-body',
+      'sponsors-card-toggle',
       'sponsors-col-actions',
       'sponsors-col-event',
       'sponsors-col-name',
@@ -363,14 +368,17 @@
       'sponsors-list',
       'sponsors-loading-initial',
       'sponsors-retry',
+      'sponsors-summary',
       'sponsors-table',
       'sponsors-tbody',
       'surface-cards',
+      'surface-cards-not-live',
       'tier-badge',
+      'tv-code',
+      'tv-code-address',
       'tv-display-card',
       'tv-donate',
       'tv-dwell',
-      'tv-intro',
       'tv-league-bracket',
       'tv-league-hint',
       'tv-league-schedule',
@@ -379,6 +387,7 @@
       'tv-open',
       'tv-open-hint',
       'tv-save',
+      'tv-screen-row',
       'tv-screens',
       'wizard-back-btn',
       'wizard-cancel-edit-btn',
@@ -529,7 +538,7 @@
       'display-wall-sponsor-logo',
       'display-wall-sponsor-name',
     ]),
-    // poster.html — 39 ids
+    // poster.html — 42 ids
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
@@ -539,6 +548,8 @@
       'poster-card',
       'poster-card-header',
       'poster-container',
+      'poster-directions',
+      'poster-directions-summary',
       'poster-empty',
       'poster-error',
       'poster-event-nav',
@@ -555,6 +566,7 @@
       'poster-meta-venue',
       'poster-nav-events',
       'poster-open-map',
+      'poster-open-map-apple',
       'poster-org',
       'poster-page-title',
       'poster-print',
@@ -636,7 +648,7 @@
       'shared-report-skip-link',
       'signed-link-content',
       'signed-link-corridor-density',
-      'signed-link-distinct-gatherings',
+      'signed-link-distinct-scanners',
       'signed-link-error',
       'signed-link-event-date',
       'signed-link-event-title',

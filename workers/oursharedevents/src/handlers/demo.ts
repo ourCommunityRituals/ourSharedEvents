@@ -108,8 +108,8 @@ const FLAG_LABELS: Record<string, string> = {
 
 // Friendly section names for the depth exhibit.
 const SECTION_LABELS: Record<string, string> = {
-  unique_gatherings: 'Headcount (unique gatherings)',
-  sponsor_impressions: 'Sponsor logo impressions',
+  distinct_scanners: 'Distinct scanners',
+  sponsor_displays: 'Sponsor logo displays',
   campaign_summary: 'Campaign comparison',
   poster_attribution: 'Poster placement breakdown',
   return_rate: 'Return rate',
@@ -310,7 +310,7 @@ function tierLadder(): string {
           <th scope="row">Free · Local</th>
           <td>Smoke test — honest &amp; complete</td>
           <td>&ldquo;Did it work?&rdquo;</td>
-          <td>Headcount + your own logo impressions &rarr; establish local presence</td>
+          <td>Distinct scanners + your own logo displays &rarr; establish local presence</td>
         </tr>
         <tr class="paid">
           <th scope="row">Mid <span class="map-badge">+ the map</span></th>
@@ -410,7 +410,7 @@ function depthExhibit(depth: ReportDepth): string {
   const posters = getPosterDeployments();
   const event = getEventFixture();
 
-  const uniqueScanners = new Set(scans.map((s) => s.anon_id)).size;
+  const distinctScanners = new Set(scans.map((s) => s.anon_id)).size;
   const avgRating = surveys.reduce((a, s) => a + s.rating, 0) / Math.max(1, surveys.length);
   const returnRate = Math.round((checkins.length / Math.max(1, registrations.length)) * 100);
 
@@ -422,10 +422,16 @@ function depthExhibit(depth: ReportDepth): string {
   const cards: string[] = [];
 
   // local depth (always present)
-  cards.push(statCard('Headcount', String(uniqueScanners), 'unique gatherings', true, 'free'));
   cards.push(
-    statCard('Your logo impressions', String(scans.length), 'rotation counts', true, 'free')
+    statCard(
+      'Distinct scanners',
+      String(distinctScanners),
+      'anonymous, counted once each',
+      true,
+      'free'
+    )
   );
+  cards.push(statCard('Your logo displays', String(scans.length), 'rotation counts', true, 'free'));
 
   // mid depth
   cards.push(

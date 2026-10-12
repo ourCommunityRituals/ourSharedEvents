@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:400':
+  'handlers/events.ts:415':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -120,7 +120,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'then →394 by OSE-1522, whose sponsor-titles import and the `sponsor_titles` block in the ' +
     'public list handler land above it; 394→399 by OSE-1644, whose ' +
     'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
-    'by OSE-1500, whose one-line content-type import lands above it. Scope ' +
+    'by OSE-1500, whose one-line content-type import lands above it; 400→401 by ' +
+    'OSE-1684, whose one-line event-code import lands above it; 401→403 by the ' +
+    'event place lookup, whose event-place and maps imports land above it. Scope ' +
     'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':
@@ -128,6 +130,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
     '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
     'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
+  'lib/event-place.ts:163':
+    'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11). ' +
+    'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
+    'saves looked places up, for every brand, at most 25 a night. It writes each ' +
+    'row back by id and returns nothing to any caller; not reachable from any ' +
+    'request path.',
   'handlers/bigquery.ts:83':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
@@ -252,10 +260,22 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
   // 341→354 by the report-floor change (the return rate goes through
   // flooredRatePct and records why it is withheld; the query is unchanged).
-  'lib/shared-report-builder.ts:354':
-    'Corridor-neighbour COUNT keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
-    '(a geography) with `venue_id = ?` held ids. Cross-brand geographic aggregate ' +
-    'by design; never-who (COUNT DISTINCT anon_id_hash).',
+  // 354→399 by OSE-1652 (the venue rate reads the confirmed series through the
+  // shared `confirmedSeriesOf` helper above; this query is unchanged).
+  // 399→436 by OSE-1649 (with :430, the same statement's correlated read of
+  // the other corridor events): the query now reads, for every event in the corridor,
+  // its distinct people and how many of them were seen at another corridor
+  // event, so a corridor's rates are published together or not at all. Still
+  // keyed by the geography only, cross-brand by design as before. What leaves
+  // the builder is this event's own rate and one yes/no ("another event here
+  // must withhold"); no other event's count, id or brand is published.
+  'lib/shared-report-builder.ts:436':
+    'Corridor-wide per-event COUNTs keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
+    '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
+    "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
+  'lib/shared-report-builder.ts:430':
+    "Same corridor statement, the correlated EXISTS over the corridor's other events " +
+    '(same geography key). Same rationale.',
   // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).

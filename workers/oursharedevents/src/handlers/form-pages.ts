@@ -4,13 +4,18 @@
  * Sr Design FE: 10-second comprehension test — customer sees event name,
  * one clear action, and completes the form in under 10 seconds.
  *
- * QR→form routing: ?type= param selects form type.
+ * Each event's forms live under its own address (OSE-1684), and that is what
+ * the platform writes (eventFormPath, lib/canonical.ts):
+ *   GET /events/:eventId/register | checkin | survey | updates (email signup)
+ *
+ * The older /forms/ address keeps answering for printed and saved links;
+ * there the ?type= param selects the form:
  *   GET /forms/:eventId                → registration (default)
  *   GET /forms/:eventId?type=register  → registration
  *   GET /forms/:eventId?type=checkin   → check-in
  *   GET /forms/:eventId?type=survey    → survey
  *   GET /forms/:eventId?type=email        → email signup
- *   GET /forms/:eventId?type=email-signup → email signup (canonical; poster-bundle.ts emits this)
+ *   GET /forms/:eventId?type=email-signup → email signup
  *
  * Lead FE: Forms post to /api/v2/events/:id/forms/:type via fetch().
  * No page reload. Success state shown inline.
@@ -21,6 +26,17 @@
 
 import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
 import { HARDENING_HEADERS } from '../lib/security-headers';
+import { escapeHtml } from '../lib/html-escape';
+import { fetchNextEventsAtVenue, type NextEventRow } from '../lib/next-at-venue';
+import { buildGoogleCalendarUrl } from '../lib/calendar-links';
+import { formatHumanDate } from '../lib/event-datetime';
+import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
+import {
+  canonicalOrigin,
+  eventPagePath,
+  EVENT_FORM_SCREENS,
+  type EventFormScreen,
+} from '../lib/canonical';
 import {
   turnstileScriptTag,
   turnstileWidgetHtml,
@@ -68,6 +84,24 @@ function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string,
 
 // ── GDPR Art. 13 privacy notice (BE-9 / BE-10) ───────────────────────────────
 
+/**
+ * The one line under each form: what that form keeps, and for how long. Each
+ * line matches the retention in the details below it (owner 2026-10-11).
+ */
+function privacySummary(formType: string): string {
+  switch (formType) {
+    case 'checkin':
+      return 'Counted, never named.';
+    case 'survey':
+      return 'Comments are cleaned of personal details within 24 hours.';
+    case 'email':
+    case 'email-signup':
+      return 'Your email is deleted after 30 days.';
+    default:
+      return 'Your name and email are cleared the day after the event.';
+  }
+}
+
 function privacyNotice(formType: string, legalTier = 1): string {
   let purpose: string;
   let legalBasis: string;
@@ -94,11 +128,13 @@ function privacyNotice(formType: string, legalTier = 1): string {
         'Your email is encrypted at rest and automatically deleted after <strong>30</strong> days.';
       break;
     default: // register
+      // Owner 2026-10-11: the email is optional and only lets the organizer
+      // reach you about this event (a new date, a cancellation).
       purpose =
-        'We collect your name (required) and email (optional) to register you for this event.';
-      legalBasis =
-        'GDPR Art. 6(1)(a) — your <strong>consent</strong>. Your data is <strong>deleted when the event ends</strong>.';
-      retention = 'Registration data is deleted automatically when the event ends.';
+        'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.';
+      legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
+      retention =
+        'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted after 90 days.';
   }
 
   let addenda = '';
@@ -113,7 +149,7 @@ function privacyNotice(formType: string, legalTier = 1): string {
   }
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    <p class="privacy-summary" data-testid="privacy-summary">We never store your name once the event ends.</p>
+    <p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType)}</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Privacy details</summary>
       <p>
@@ -125,17 +161,6 @@ function privacyNotice(formType: string, legalTier = 1): string {
       </p>
     </details>
   </div>`;
-}
-
-// ── XSS Prevention ───────────────────────────────────────────────────────────
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 // ── Shared CSS: mobile-first, system fonts, 10-second comprehension ──────────
@@ -152,6 +177,7 @@ const FORM_CSS = `
   .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
   .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
   .form-intro { color: var(--text-muted); font-size: .9rem; margin-bottom: 1rem; }
+  .field-note { color: var(--text-muted); font-size: .85rem; margin: -.25rem 0 .4rem; }
   label { display: block; font-size: .85rem; font-weight: 500; color: var(--text); margin-bottom: .25rem; }
   /* Walkthrough 2026-09-03: inputs measured 42px at 390px — under the 44px floor
      (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics.
@@ -211,6 +237,13 @@ const FORM_CSS = `
   .form-sponsor-thanks .sponsor-item { display: inline-flex; align-items: center; gap: 0.4rem; }
   .form-sponsor-thanks img { height: 32px; width: auto; max-width: 120px; object-fit: contain; }
   .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: var(--text); font-weight: 500; }
+  /* F5.3: the next step under a confirmation (register: calendar, event page,
+     check-in line; email signup: next at this venue). 44px rows, tokens only. */
+  .next-step { margin-top: 1.25rem; text-align: left; }
+  .next-step h3 { font-size: .85rem; font-weight: 600; color: var(--text-muted); }
+  .next-step ul { list-style: none; margin: 0; padding: 0; }
+  .next-step-link { display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-height: 44px; padding: .4rem 0; color: var(--accent); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--border); }
+  .next-step-when { font-size: .8rem; font-weight: 400; color: var(--text-muted); white-space: nowrap; }
 `;
 
 // ── Form JS: shared submit logic ─────────────────────────────────────────────
@@ -362,8 +395,16 @@ const FORM_JS_SUBMIT = `
       }).join('');
       thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">Event supported by</span><div class="sponsor-row">' + items + '</div></div>';
     }
+    // F5.3: the next step the server put in the #form-next-step template
+    // (outside #form-area, so the swap below keeps it) joins the confirmation
+    // only now, after the submit succeeded. A clone of inert server markup.
+    var next = document.getElementById('form-next-step');
     document.getElementById('form-area').innerHTML =
-      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p>' + thanks + '</div>';
+      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2>' + thanks + '</div>';
+    var done = document.querySelector('[data-testid="form-success"]');
+    if (next && next.content && done) {
+      done.insertBefore(next.content.cloneNode(true), done.querySelector('.form-sponsor-thanks'));
+    }
   }
 `;
 
@@ -439,7 +480,8 @@ function registrationForm(
         <label for="name">Your name</label>
         <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
         <label for="email">Email (optional)</label>
-        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="error-msg" />
+        <p class="field-note" id="register-email-note" data-testid="register-email-note">Only to tell you if plans change.</p>
+        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="register-email-note error-msg" />
         <button type="submit" data-testid="register-submit">Register</button>
         ${privacyNotice('register', legalTier)}
       </form>
@@ -448,11 +490,17 @@ function registrationForm(
       ${FORM_JS_SUBMIT}
       async function handleRegister(e) {
         e.preventDefault();
-        await submitForm('${eventId}', 'register', {
-          name: document.getElementById('name').value,
-          email: document.getElementById('email').value || undefined,
-          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
-        });
+        // submitForm has already shown the friendly error on a refusal, so a
+        // refusal ends here: no confirmation, no next step, no unhandled rejection.
+        try {
+          await submitForm('${eventId}', 'register', {
+            name: document.getElementById('name').value,
+            email: document.getElementById('email').value || undefined,
+            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          });
+        } catch (_) {
+          return;
+        }
         showSuccess('You\\'re registered!');
       }
       document.querySelector('[data-testid="register-form"]').addEventListener('submit', handleRegister);
@@ -580,7 +628,7 @@ function emailSignupForm(
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
-      <p class="form-intro">Get notified about future events. We'll never share your email.</p>
+      <p class="form-intro">One email when something's coming up. Never shared.</p>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="email-form">
         ${hiddenDeployment}
@@ -594,14 +642,97 @@ function emailSignupForm(
       ${FORM_JS_SUBMIT}
       async function handleEmail(e) {
         e.preventDefault();
-        const body = await submitForm('${eventId}', 'email-signup', {
-          email: document.getElementById('email').value,
-          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
-        });
+        let body;
+        try {
+          body = await submitForm('${eventId}', 'email-signup', {
+            email: document.getElementById('email').value,
+            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          });
+        } catch (_) {
+          return; // the friendly error is already on screen
+        }
         showSuccess(body.duplicate ? 'You\\'re already signed up!' : 'You\\'re on the list!');
       }
       document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
     </script>`;
+}
+
+// ── Next step after a confirmation (F5.3) ────────────────────────────────────
+//
+// The confirmation is drawn in the browser once the POST succeeds (showSuccess),
+// so the server renders the next step into an inert <template> and the success
+// script moves a clone in. Nothing here is a count or an echo of what the person
+// typed: counts are post-event only (#885), and the card reads only public
+// event fields from DB.
+
+/** The event fields the form page reads (all public, all from DB). */
+interface FormEventRow {
+  id: string;
+  brand_id: string | null;
+  title: string | null;
+  slug: string | null;
+  status: string | null;
+  description: string | null;
+  location: string | null;
+  where_address: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  starts_at: string | null;
+  timezone: string | null;
+}
+
+function nextStepTemplate(inner: string): string {
+  return `<template id="form-next-step" data-testid="form-next-step">${inner}</template>`;
+}
+
+/**
+ * S-5.3.1 (OSE-479): after registering, add it to a calendar (the event's
+ * existing server .ics, plus the Google Calendar link the event page offers for
+ * Android), go back to the event page, and know how check-in works.
+ */
+function registerNextStep(row: FormEventRow, shareUrl: string): string {
+  const id = encodeURIComponent(row.id);
+  const google = buildGoogleCalendarUrl(row, shareUrl);
+  const calendar = row.start_date
+    ? `<a class="next-step-link" data-testid="register-next-calendar" href="/events/${escapeHtml(id)}/calendar.ics" download>Add to calendar</a>${
+        google
+          ? `<a class="next-step-link" data-testid="register-next-calendar-google" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>`
+          : ''
+      }`
+    : '';
+  return nextStepTemplate(`<div class="next-step" data-testid="register-next-step">
+      ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id, row.slug))}">Back to the event page</a>
+      <p data-testid="register-next-checkin">On the day, check in with one tap.</p>
+    </div>`);
+}
+
+/**
+ * S-5.3.2 (OSE-480): after an email signup, what is on next at this venue,
+ * straight away (the same list as the event page and its recap,
+ * lib/next-at-venue.ts). None listed: a link to everything coming up.
+ */
+function emailNextStep(row: FormEventRow, next: NextEventRow[]): string {
+  if (!next.length) {
+    return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
+      <a class="next-step-link" data-testid="email-next-browse" href="/events">See what else is coming up</a>
+    </div>`);
+  }
+  const items = next
+    .map(
+      (
+        ev,
+        i
+      ) => `<li><a class="next-step-link" data-testid="email-next-venue-link-${i}" href="/events/${escapeHtml(encodeURIComponent(ev.id))}">
+          <span>${escapeHtml(ev.title)}</span><span class="next-step-when">${escapeHtml(formatHumanDate(ev.start_date))}</span>
+        </a></li>`
+    )
+    .join('');
+  return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
+      <aside data-testid="email-next-venue" aria-labelledby="email-next-heading">
+        <h3 id="email-next-heading">Next at ${escapeHtml(row.location) || 'this venue'}</h3>
+        <ul>${items}</ul>
+      </aside>
+    </div>`);
 }
 
 // ── Page shell ───────────────────────────────────────────────────────────────
@@ -613,7 +744,8 @@ function formPage(
   legalTier = 1,
   deploymentId?: string,
   nonce = '',
-  env?: FormPagesEnv
+  env?: FormPagesEnv,
+  nextStep = ''
 ): string {
   let formHtml: string;
   switch (formType) {
@@ -665,7 +797,7 @@ function formPage(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
   <link rel="stylesheet" href="/ui.css" />
-  <style>${FORM_CSS}</style>
+  <style>${FORM_CSS}${BACK_BUTTON_CSS}</style>
   ${turnstileScript}
 </head>
 <body>
@@ -679,7 +811,8 @@ function formPage(
        Renders as a thin row under the dark header. Non-critical;
        silently absent if no sponsors are configured for this event. -->
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
-  <main id="main-content" data-testid="form-main">${formHtml}</main>
+  <main id="main-content" data-testid="form-main">${formHtml}${nextStep}
+  ${renderBackButton({ fallbackHref: `/events/${encodeURIComponent(eventId)}`, nonce, testid: 'form-back' })}</main>
   <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;
@@ -691,10 +824,15 @@ export async function handleFormPage(
   request: Request,
   env: FormPagesEnv,
   eventId: string,
-  legalTier = 1
+  legalTier = 1,
+  // /events/<id>/<screen> (OSE-1684): the screen names the form, so the
+  // `?type=` of the old /forms/ address is not read.
+  screen?: EventFormScreen
 ): Promise<Response> {
   const url = new URL(request.url);
-  const formType = url.searchParams.get('type') ?? 'register';
+  const formType = screen
+    ? EVENT_FORM_SCREENS[screen]
+    : (url.searchParams.get('type') ?? 'register');
   // OSE-627: deployment ID for poster attribution (written to source_placement_id
   // on form submission so SharedReport can link scans to form registrations).
   const deploymentId = url.searchParams.get('deployment') ?? null;
@@ -713,11 +851,16 @@ export async function handleFormPage(
   // QR for an event we can't resolve still sees a renderable form; the
   // attacker-controlled string never reaches the DOM.
   let canonicalTitle: string | null = null;
+  let row: FormEventRow | null = null;
   if (env.DB) {
     try {
-      const row = await env.DB.prepare('SELECT title, status FROM events WHERE id = ?')
+      row = await env.DB.prepare(
+        `SELECT id, brand_id, title, slug, status, description, location, where_address,
+                start_date, end_date, starts_at, timezone
+           FROM events WHERE id = ?`
+      )
         .bind(eventId)
-        .first<{ title: string | null; status: string | null }>();
+        .first<FormEventRow>();
       if (row) {
         // OSE-291 (EPIC OSE-284) — "a poster must never rot." The event this QR
         // points at may have been archived (or wound back to draft/ready) since
@@ -737,11 +880,25 @@ export async function handleFormPage(
       // DB throw → keep the safe fallback. The form should still render so
       // a customer who scanned a QR isn't stuck on a 503 mid-conversion.
       canonicalTitle = null;
+      row = null;
     }
   }
   // Defense in depth: even though the DB column is admin-controlled and
   // shouldn't contain HTML, escape the value and cap length before render.
   const eventName = escapeHtml((canonicalTitle ?? 'Event').slice(0, 200));
+
+  // F5.3: the next step under the confirmation, for a known live event only
+  // (an unknown id has no event page to link back to).
+  let nextStep = '';
+  if (row) {
+    if (formType === 'email' || formType === 'email-signup') {
+      nextStep = emailNextStep(row, await fetchNextEventsAtVenue(env.DB, row));
+    } else if (formType !== 'checkin' && formType !== 'survey') {
+      // Any other ?type= renders the registration form (formPage's default).
+      const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
+      nextStep = registerNextStep(row, shareUrl);
+    }
+  }
 
   const nonce = generateNonce();
   const html = formPage(
@@ -751,7 +908,8 @@ export async function handleFormPage(
     legalTier,
     deploymentId ?? undefined,
     nonce,
-    env
+    env,
+    nextStep
   );
   return new Response(html, {
     status: 200,

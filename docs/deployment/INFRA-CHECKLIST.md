@@ -195,7 +195,7 @@ Verify migrations applied:
 wrangler d1 execute DB --env staging --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 # Should list: events, sponsors, poster_deployments, scans, checkins, registrations,
 #              scan_aggregates, subscribers, corridors, rings, event_templates,
-#              event_type_registry, corridor_regulatory_status, sponsor_impressions,
+#              event_type_registry, corridor_regulatory_status, sponsor_displays,
 #              admin_audit_log + indexes
 ```
 

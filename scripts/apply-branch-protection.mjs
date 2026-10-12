@@ -68,6 +68,16 @@ export function normalize(body) {
         ? body.allow_deletions?.enabled
         : body.allow_deletions
     ),
+    // null when no review rule exists. The 2026-10-12 review found the drift check blind to
+    // this field: removing required reviews would have gone unnoticed.
+    reviews: body.required_pull_request_reviews
+      ? {
+          count: body.required_pull_request_reviews.required_approving_review_count ?? 0,
+          codeOwners: Boolean(body.required_pull_request_reviews.require_code_owner_reviews),
+          dismissStale: Boolean(body.required_pull_request_reviews.dismiss_stale_reviews),
+          lastPush: Boolean(body.required_pull_request_reviews.require_last_push_approval),
+        }
+      : null,
   };
 }
 
@@ -96,6 +106,11 @@ export function diff(expected, actual) {
     out.push(`allow_force_pushes: want ${expected.allow_force_pushes}, got ${actual.allow_force_pushes}`);
   if (expected.allow_deletions !== actual.allow_deletions)
     out.push(`allow_deletions: want ${expected.allow_deletions}, got ${actual.allow_deletions}`);
+  if (JSON.stringify(expected.reviews ?? null) !== JSON.stringify(actual.reviews ?? null)) {
+    out.push(
+      `required reviews: want ${JSON.stringify(expected.reviews ?? null)}, got ${JSON.stringify(actual.reviews ?? null)}`
+    );
+  }
   const ec = expected.checks.join('|');
   const ac = actual.checks.join('|');
   if (ec !== ac) out.push(`required checks:\n    want: [${expected.checks.join(', ')}]\n    got:  [${actual.checks.join(', ')}]`);
@@ -167,6 +182,79 @@ function runSelfTest() {
       0,
     ],
     ['summary: checks keep their app_id', diffChecks(['A'], checksFromBranchSummary(summary([real('A')]))), 0],
+    [
+      'reviews: none wanted, none live -> no drift',
+      diff(normalize({ required_pull_request_reviews: null }), normalize({})),
+      0,
+    ],
+    [
+      'reviews: wanted but missing live -> drift',
+      diff(
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: true,
+          },
+        }),
+        normalize({ required_pull_request_reviews: null })
+      ),
+      1,
+    ],
+    [
+      'reviews: live count lower than wanted -> drift',
+      diff(
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 2,
+            require_code_owner_reviews: true,
+          },
+        }),
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: true,
+          },
+        })
+      ),
+      1,
+    ],
+    [
+      'reviews: code-owner requirement dropped live -> drift',
+      diff(
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: true,
+          },
+        }),
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: false,
+          },
+        })
+      ),
+      1,
+    ],
+    [
+      'reviews: identical -> no drift',
+      diff(
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: true,
+          },
+        }),
+        normalize({
+          required_pull_request_reviews: {
+            required_approving_review_count: 1,
+            require_code_owner_reviews: true,
+            dismiss_stale_reviews: false,
+          },
+        })
+      ),
+      0,
+    ],
     [
       'summary: contexts-only response -> every context counts as a phantom',
       diffChecks(['A'], checksFromBranchSummary(contextsOnly)),

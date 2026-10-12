@@ -127,6 +127,18 @@ test('the report link opens the report for this event', async ({ page }) => {
   await openReport(page);
 });
 
+// OSE-818 (owner 2026-10-11): the scan count is "Distinct scanners", read from
+// `distinct_scanners`. The old banned wording must not come back on the page.
+test('the scan card says "Distinct Scanners", in the lexicon', async ({ page }) => {
+  await openReport(page);
+  const card = page.getByTestId('signed-link-distinct-scanners');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Distinct Scanners');
+  const text = (await page.getByTestId('signed-link-report-article').innerText()).toLowerCase();
+  expect(text).not.toContain('unique');
+  expect(text).not.toContain('distinct gatherings');
+});
+
 test('before any screen has shown the sponsor, the report counts nothing', async ({ page }) => {
   await openReport(page);
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');

@@ -9,15 +9,15 @@
 // Every number on the page comes from the governed event dashboard
 // (GET /api/v2/admin/events/:id/dashboard, lib/dashboard-contract.ts), which the
 // page fetches and re-fetches every REFRESH_SECONDS. So the privacy classes are
-// the contract's, not this page's: poster scans are exact (they resolve to the
-// organizer's own posters), link taps and check-ins are floored at K=5 and read
-// "held" below it. The note under the tiles names the tiles that came floored,
+// the contract's, not this page's: poster scans, link taps and check-ins are
+// all floored at K=5 (OSE-1656: scans too, as sums of poster-hours) and read
+// "held" below it; posters, places and sponsors are counts of things, exact. The note under the tiles names the tiles that came floored,
 // read from the data on each refresh, so it never claims a floor a number does
 // not have (OSE-1657). A failed refresh keeps the last numbers and says so — never
 // zeros. No scan, click, shortlink or audit row is written by looking.
 //
-// Sponsors do not use this page: their view is the signed sponsor link, whose
-// counts are floored differently (lib/pre-event-activity.ts floorPreEventActivity).
+// Sponsors do not use this page: their view is the signed sponsor link, which
+// reads the same floored numbers (lib/pre-event-activity.ts floorPreEventActivity).
 
 import { html, renderErrorPage } from './pages';
 import { escapeHtml } from '../lib/html-escape.js';
@@ -161,8 +161,12 @@ function page(id: string, title: string, status: string): string {
     (Array.isArray(reach.scansByDay) ? reach.scansByDay : []).slice(-14).forEach(function (day) {
       var li = document.createElement('li');
       var b = document.createElement('b');
-      // A floored day reads Held, never 0 (OSE-1657).
-      b.textContent = isHeld(day) ? 'Held' : String(Number(day.count) || 0);
+      // A floored day reads Held, never 0 (OSE-1657). The day's count is a
+      // floored count itself (OSE-1656), so its own flag is the one to read.
+      var c = day ? day.count : null;
+      b.textContent = isHeld(day) || isHeld(c)
+        ? 'Held'
+        : String(Number(c && typeof c === 'object' ? c.count : c) || 0);
       li.appendChild(b);
       li.appendChild(document.createTextNode(String(day.day || '')));
       list.appendChild(li);

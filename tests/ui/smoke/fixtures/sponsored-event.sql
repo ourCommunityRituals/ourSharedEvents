@@ -9,7 +9,7 @@
 -- click against a sponsor resolved from GET /api/v2/events/:id/sponsors and assert
 -- 201. The read path (data-provider.ts: live -> CF cache -> mock) can surface a
 -- sponsor that has NO backing sponsor_business row (mock fixture, or a stale cache
--- entry). sponsor_impressions carries FOREIGN KEY (sponsor_id) REFERENCES
+-- entry). sponsor_displays carries FOREIGN KEY (sponsor_id) REFERENCES
 -- sponsor_business(id), so logging against such a sponsor 503s (DB_ERROR) — the
 -- read looked populated but the write had no FK-valid target (green != true).
 --

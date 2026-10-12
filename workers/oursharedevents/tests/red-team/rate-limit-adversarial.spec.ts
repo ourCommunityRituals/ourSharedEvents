@@ -46,9 +46,7 @@ const tenv = () => env as unknown as TestEnv;
 /** Rows actually written into the sponsor proof layer for one (event, sponsor). */
 async function impressionRowCount(eventId: string, sponsorId: string): Promise<number> {
   const row = await tenv()
-    .DB.prepare(
-      'SELECT COUNT(*) AS c FROM sponsor_impressions WHERE event_id = ? AND sponsor_id = ?'
-    )
+    .DB.prepare('SELECT COUNT(*) AS c FROM sponsor_displays WHERE event_id = ? AND sponsor_id = ?')
     .bind(eventId, sponsorId)
     .first<{ c: number }>();
   return row?.c ?? 0;

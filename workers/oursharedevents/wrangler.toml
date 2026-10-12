@@ -112,13 +112,21 @@ WORKER_BUILD_VERSION = "dev-local"
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
 DRAFT_EXPIRY_DAYS = "30"
+# Scan return-signal retention (lib/scan-returns-retention.ts, OSE-1351/OSE-1659):
+# the nightly sweep deletes scan_node_returns rows older than N days and
+# anon_id_returns rows not seen for N days. 365 = the ose_anon cookie lifetime,
+# which already bounds one pseudonym (migration 0031, Q3). Must stay >= 180
+# (tests/scan-returns-retention-config.spec.ts): scan aggregation re-reads events
+# that started in the last 90 days, and their scans can come months earlier.
+SCAN_RETURNS_RETENTION_DAYS = "365"
 # Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
 # event is live by link but off the list, map, sitemap and sponsor discovery,
 # so Undo leaves no public trace. 0 turns it off; capped at 60.
 PUBLISH_GRACE_MINUTES = "10"
-# Subscriber retention defaults to a 365-day bounded window so the email list does
+# Subscriber retention: 90 days, like registrations (owner 2026-10-11; was 365).
+# The email list (FORMS_DB since OSE-1661) never outlives the forms ceiling, and does
 # not retain PII forever when no explicit override is configured.
-SUBSCRIBERS_RETENTION_DAYS = "365"
+SUBSCRIBERS_RETENTION_DAYS = "90"
 # Path-2 template+geo sponsor auto-match: OFF at launch (ADR-019 dark-at-launch, CCR-PR567).
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # L4 scale-readiness lever (OSE-1378): Turnstile bot-check on mutation endpoints.
@@ -228,6 +236,13 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 # Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
 # (CCR-PR567 re-run item 9 / L2). Otherwise staging runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
+# Scan return-signal retention (lib/scan-returns-retention.ts, OSE-1351/OSE-1659):
+# the nightly sweep deletes scan_node_returns rows older than N days and
+# anon_id_returns rows not seen for N days. 365 = the ose_anon cookie lifetime,
+# which already bounds one pseudonym (migration 0031, Q3). Must stay >= 180
+# (tests/scan-returns-retention-config.spec.ts): scan aggregation re-reads events
+# that started in the last 90 days, and their scans can come months earlier.
+SCAN_RETURNS_RETENTION_DAYS = "365"
 # Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
 # event is live by link but off the list, map, sitemap and sponsor discovery,
 # so Undo leaves no public trace. 0 turns it off; capped at 60.
@@ -374,6 +389,13 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 # Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
 # (CCR-PR567 re-run item 9 / L2). Otherwise production runs the invisible code defaults.
 DRAFT_EXPIRY_DAYS = "30"
+# Scan return-signal retention (lib/scan-returns-retention.ts, OSE-1351/OSE-1659):
+# the nightly sweep deletes scan_node_returns rows older than N days and
+# anon_id_returns rows not seen for N days. 365 = the ose_anon cookie lifetime,
+# which already bounds one pseudonym (migration 0031, Q3). Must stay >= 180
+# (tests/scan-returns-retention-config.spec.ts): scan aggregation re-reads events
+# that started in the last 90 days, and their scans can come months earlier.
+SCAN_RETURNS_RETENTION_DAYS = "365"
 # Publish grace window (src/lib/publish-grace.ts): minutes after Publish that an
 # event is live by link but off the list, map, sitemap and sponsor discovery,
 # so Undo leaves no public trace. 0 turns it off; capped at 60.

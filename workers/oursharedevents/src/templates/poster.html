@@ -61,8 +61,7 @@ body {
 .page-header .print-btn:not(:disabled):hover {
   color: var(--text);
 }
-/* OSE-286: the Print control became a <button>; reset native chrome so
-   it reads as the header link it replaced, and dim it while disabled. */
+/* OSE-286: Print is a <button> styled as a link; dim while disabled. */
 .print-controls {
   display: inline-flex;
   align-items: center;
@@ -158,9 +157,7 @@ body {
   font-size: 1rem;
   color: var(--text-muted);
 }
-/* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
-   --border, --text-muted), not hardcoded hex — so the poster art viewport
-   can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+/* Colours are @ocr/ui tokens, never hex. */
 .poster-art {
   margin: 1rem 0 1.25rem;
   border-radius: 10px;
@@ -298,7 +295,16 @@ body {
   max-width: none;
   font-size: 0.85rem;
 }
+.poster-directions,
+.poster-directions summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  cursor: pointer;
+}
 .meta-text a,
+.poster-directions summary,
 .poster--digital .qr-slot-code {
   display: inline-flex;
   align-items: center;
@@ -935,6 +941,13 @@ body {
         }));
       }
 
+      // The event this poster is for: /events/<id>/poster (the address the
+      // platform writes, OSE-1684) or the older /poster?event=<id>, which still works.
+      const ROUTE_EVENT = (function () {
+        const m = location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/poster$/);
+        return m ? m[1] : '';
+      })();
+
       // Print (default) or Digital, from ?kind= — the URL is the state.
       const KIND = new URLSearchParams(location.search).get('kind') === 'digital' ? 'digital' : 'print';
 
@@ -942,7 +955,8 @@ body {
       // controls in step with the event on show.
       function syncChrome(event) {
         const params = new URLSearchParams(location.search);
-        if (event && event.id) params.set('event', event.id);
+        // On /events/<id>/poster the path already names the event.
+        if (event && event.id && !ROUTE_EVENT) params.set('event', event.id);
         params.set('kind', KIND);
         try { history.replaceState(null, '', '?' + params.toString()); } catch (e) { /* sandboxed */ }
         document.querySelectorAll('[data-kind]').forEach(function (a) {
@@ -952,13 +966,13 @@ body {
           if (a.getAttribute('data-kind') === KIND) a.setAttribute('aria-current', 'page');
           else a.removeAttribute('aria-current');
         });
-        // The event's other screens, one tap away (the same links as the event
-        // page's nav, lib/event-nav.ts). A draft preview has no public page or
-        // TV yet, so it keeps only "All events".
+        // The event's page, one tap away (the same public links as the event
+        // page's nav, lib/event-nav.ts; the TV is an organizer link, OSE-1684).
+        // A draft preview has no public page yet, so it keeps only "All events".
         const eventNav = document.querySelector('[data-testid="poster-event-nav"]');
         if (eventNav && event && event.id && !PREVIEW_EVENT) {
           const eid = encodeURIComponent(event.id);
-          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/display?event=' + eid, 'TV display']].forEach(function (l) {
+          [['poster-nav-event', '/events/' + eid, 'Event page']].forEach(function (l) {
             let a = eventNav.querySelector('[data-testid="' + l[0] + '"]');
             if (!a) { a = document.createElement('a'); a.setAttribute('data-testid', l[0]); a.textContent = l[2]; eventNav.appendChild(a); }
             a.setAttribute('href', l[1]);
@@ -1154,8 +1168,12 @@ body {
         const whenHtml = digital && event.id
           ? '<a href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
           : whenText;
+        // Owner 2026-10-11: one Directions button, two choices (Google Maps,
+        // Apple Maps), as on the event page.
         const venueHtml = digital
-          ? '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">' + esc(venue) + ' &middot; Map</a>'
+          ? '<details class="poster-directions" data-testid="poster-directions"><summary data-testid="poster-directions-summary">' + esc(venue) + ' &middot; Directions</summary>' +
+            '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a> ' +
+            '<a href="https://maps.apple.com/?q=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a></details>'
           : esc(venue);
 
         // OSE-1516: the layout starts from the artwork alone (the codes are not
@@ -1197,8 +1215,8 @@ body {
         '</div>';
       }
 
-      // OSE-1081: `event` is the CANONICAL surface deep-link param —
-      // admin.html's scopedSurfaceUrl() emits /poster?event=<id>.
+      // OSE-1081 / OSE-1684: admin.html's scopedSurfaceUrl() emits
+      // /events/<id>/poster; /poster?event=<id> still works.
       // OSE-867: a scoped poster is ONE network call. poster-bundle carries the
       // event (title / start / venue under the public projection's names), the
       // sponsor strip and the QR slots, so nothing else is fetched: no events
@@ -1211,7 +1229,7 @@ body {
         const picker = document.getElementById('event-picker');
         const area = document.getElementById('poster-area');
         // Admin preview (a draft): the server names the event on <body>.
-        const wanted = PREVIEW_EVENT || new URLSearchParams(location.search).get('event');
+        const wanted = PREVIEW_EVENT || ROUTE_EVENT || new URLSearchParams(location.search).get('event');
         if (wanted) {
           document.getElementById('poster-event-select').hidden = true;
           const shown = await loadPosterBundle(wanted, true);
@@ -1554,8 +1572,17 @@ body {
       // itself is drawn from data.event (the scoped path); otherwise the card
       // is already on screen from the picker list and only the sponsors and
       // codes are filled. Resolves true when the bundle was usable.
+      // OSE-1441: the picker can switch events while a bundle is still out.
+      // Each call takes the next number; an answer whose number is no longer
+      // the latest is dropped, so a late answer for the event just left never
+      // paints its codes or sponsors (or opens Print) on the one now chosen.
+      // The switch itself clears them: show() redraws the card with an empty
+      // strip and the .qr-loading placeholder before this call goes out.
+      let posterBundleSeq = 0;
       async function loadPosterBundle(eventId, renderEvent) {
         if (!eventId) return false;
+        const seq = ++posterBundleSeq;
+        const current = function () { return seq === posterBundleSeq; };
         // Gate Print for this render cycle until the codes below settle.
         setPrintReady(false);
         const strip = document.getElementById('poster-sponsor-strip');
@@ -1571,7 +1598,7 @@ body {
               '/poster-bundle'
           );
           const data = await res.json();
-          if (!data.ok) return false;
+          if (!current() || !data.ok) return false;
           if (renderEvent) {
             if (!data.event || !data.event.id) return false;
             document.getElementById('poster-area').innerHTML = renderPoster(data.event);
@@ -1593,15 +1620,18 @@ body {
           shown = true;
         } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {
-          const s = document.getElementById('poster-sponsor-strip');
-          if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
-          // AC (OSE-286): re-enable Print only after all QR images finish
-          // loading OR error-out. If any code failed, its .qr-loading
-          // placeholder stays and the @media print rule hides the whole
-          // section — so an incomplete poster still never prints empty boxes.
-          await awaitQrImages();
-          // A scoped poster that never rendered has nothing to print.
-          setPrintReady(shown || !renderEvent);
+          // A dropped answer leaves the strip and Print to the newer call.
+          if (current()) {
+            const s = document.getElementById('poster-sponsor-strip');
+            if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
+            // AC (OSE-286): re-enable Print only after all QR images finish
+            // loading OR error-out. If any code failed, its .qr-loading
+            // placeholder stays and the @media print rule hides the whole
+            // section — so an incomplete poster still never prints empty boxes.
+            await awaitQrImages();
+            // A scoped poster that never rendered has nothing to print.
+            if (current()) setPrintReady(shown || !renderEvent);
+          }
         }
         return shown;
       }

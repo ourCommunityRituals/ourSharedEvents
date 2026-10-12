@@ -1,6 +1,6 @@
 // ─── GET /api/v2/events/:id/display-config ─────────────────────────────────────
 //
-// What the TV (/display?event=<id>) should show and for how long, as the
+// What the TV (/events/<id>/tv) should show and for how long, as the
 // organiser saved it in /admin (settings.displayPanes / displayDwellSeconds,
 // lib/event-settings.ts), plus the league's own links (settings.leagueLinks),
 // each with a scan-to-open QR. PO (2026-10-01): leagues keep whatever tools
@@ -22,6 +22,12 @@
 // 200, exactly like the league QRs, and both are covered by the ETag. No amount,
 // goal or progress is carried: the display shows no counts.
 //
+// OSE-475: `phase` (pre_event / event / post_event) is the featured event's
+// phase from the one resolver the public event page uses (eventPhaseOf), read
+// at request time. It is inside the hashed body, so when the event starts or
+// ends the ETag changes and the TV's next minute check gets a 200 with the new
+// phase instead of a 304 that would hide the crossing. No count is carried.
+//
 // Same visibility as the poster bundle: an event that is not live is 404/403.
 // Public read: rate-limited at the route (publicReadLimited), like every other.
 //
@@ -41,6 +47,8 @@ import {
 import { generateQrCode } from '../lib/qr';
 import { getCode } from '../lib/uec';
 import { internalTarget, posterCodeUec } from '../lib/poster-codes';
+import { eventPhaseOf } from '../lib/event-enrich';
+import type { EventPhase } from '../domain/event-phase';
 
 export interface DisplayConfigEnv {
   DB: D1Database;
@@ -105,9 +113,20 @@ export async function handleDisplayConfig(
   eventId: string
 ): Promise<Response> {
   const headers = { ...corsHeaders(request) };
-  const row = await env.DB.prepare('SELECT id, status, settings_json FROM events WHERE id = ?')
+  const row = await env.DB.prepare(
+    `SELECT id, status, settings_json, start_date, end_date, starts_at, timezone
+       FROM events WHERE id = ?`
+  )
     .bind(eventId)
-    .first<{ id: string; status: string; settings_json: string | null }>();
+    .first<{
+      id: string;
+      status: string;
+      settings_json: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      starts_at: string | null;
+      timezone: string | null;
+    }>();
   if (!row) {
     return Response.json(
       { ok: false, status: 404, error: 'Event not found' },
@@ -122,7 +141,7 @@ export async function handleDisplayConfig(
     );
   }
 
-  return withEtag(request, headers, row, { withQr: true });
+  return withEtag(request, headers, row, { withQr: true, phase: eventPhaseOf(row) });
 }
 
 /** The colours the QR images are drawn in, read from the registry now. */
@@ -144,7 +163,11 @@ function qrColours() {
  * are only drawn on a 200.
  */
 const QR_VERSION = 'qr-L-6';
-function configShape(row: { id: string; settings_json: string | null }, origin: string) {
+function configShape(
+  row: { id: string; settings_json: string | null },
+  origin: string,
+  phase?: EventPhase
+) {
   const display = resolveDisplaySettings(parseEventSettings(row.settings_json));
   const league = LEAGUE_LINK_KINDS.filter((kind) => display.leagueLinks[kind]).map((kind) => ({
     kind,
@@ -154,6 +177,9 @@ function configShape(row: { id: string; settings_json: string | null }, origin: 
   return {
     ok: true as const,
     event_id: row.id,
+    // The TV only; the admin card's read has no phase (its ETag must not move
+    // with the clock).
+    ...(phase ? { phase } : {}),
     panes: display.panes,
     dwell_seconds: display.dwellSeconds,
     league,
@@ -168,9 +194,9 @@ async function withEtag(
   request: Request,
   headers: Record<string, string>,
   row: { id: string; settings_json: string | null },
-  { withQr }: { withQr: boolean }
+  { withQr, phase }: { withQr: boolean; phase?: EventPhase }
 ): Promise<Response> {
-  const shape = configShape(row, new URL(request.url).origin);
+  const shape = configShape(row, new URL(request.url).origin, phase);
   const colours = qrColours();
   const etag = await strongEtag(
     `${QR_VERSION}|${colours.league}|${colours.donate}|${colours.event}|${JSON.stringify(shape)}`

@@ -106,21 +106,31 @@ interface SharedReport {
   event_end_date: string | null; // ISO
 
   // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
-  unique_gatherings: number | null;
+  distinct_scanners: number | null;
 
-  // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor.
+  // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
+  //    of its confirmed series (`venue_pct`, OSE-1652) or in its corridor (`corridor_pct`).
+  //    Both count distinct events, never `visit_count` (that column counts runs of the
+  //    nightly job). An event in no confirmed series gets `venue_pct: null` with
+  //    `no_series`.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
   //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
   //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
   //    a rate beside `sample_size` is a head count (20% of 5 is one person), so it is
-  //    published only when the people it counts are at least K and the people it does
-  //    not count are none or at least K. Otherwise that rate is null, `sample_size`
-  //    stays, and `_meta.suppression_reasons` carries `return_rate.venue_pct` or
-  //    `return_rate.corridor_pct` with `below_min_sample_size`. So 0% is never
-  //    published, and 100% is. Most single-day events have fewer than K people who
-  //    came more than once, so `venue_pct` is usually null for them.
+  //    published only when the people it counts and the people it does not count are
+  //    each at least K (OSE-1649). Otherwise that rate is null, `sample_size` stays, and
+  //    `_meta.suppression_reasons` carries `return_rate.venue_pct` or
+  //    `return_rate.corridor_pct` with `below_min_sample_size`. So neither 0% nor 100%
+  //    is published: 100% would turn into a dash the day one more person came, and say
+  //    that person did not return. (The returns export keeps the shared nested rule,
+  //    which allows "all": its weekly snapshots are rounded down to multiples of 5.)
+  //    A corridor's rates are published together or not at all: if any event in the
+  //    corridor with a published sample size must withhold its corridor rate, every
+  //    event's is withheld, because with two events "seen at both" is one number and
+  //    the other report's rate gives it back. The `return_rate`, head-count and map
+  //    notes are given at 0 as at 1 to 4, so a note never tells "none" from "a few".
   return_rate: {
-    venue_pct: number | null; // returners seen at THIS venue before
+    venue_pct: number | null; // also seen at another event of this event's confirmed series
     corridor_pct: number | null; // returners seen at corridor before
     sample_size: number | null; // total distinct anons used as denominator
   };
@@ -148,7 +158,7 @@ interface SharedReport {
   // 4. Sponsor impressions — per sponsor × surface. A row whose count is below K = 5 is
   //    omitted, not nulled: the same per-bucket floor the campaign and class rollups apply,
   //    so rows and rollups always agree (OSE-1421).
-  sponsor_impressions: Array<{
+  sponsor_displays: Array<{
     sponsor_id: string;
     sponsor_name: string;
     surface: 'public' | 'display' | 'poster' | 'form';
@@ -177,7 +187,7 @@ interface SharedReport {
     instances: Array<{
       event_id: string;
       start_date: string;
-      unique_gatherings: number | null;
+      distinct_scanners: number | null;
     }>;
   };
 

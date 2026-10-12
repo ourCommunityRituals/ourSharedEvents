@@ -122,7 +122,7 @@ async function seedPoster(
   }
 }
 
-/** Hour buckets on scan_aggregates (unique_gatherings source), distinct counts given. */
+/** Hour buckets on scan_aggregates (distinct_scanners source), distinct counts given. */
 async function seedAggregates(
   eventId: string,
   buckets: Array<[string, number, number]>
@@ -216,8 +216,8 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
     expect(pb.first_scan_at).toBe(pc.first_scan_at);
     expect(pb.last_scan_at).toBe(pc.last_scan_at);
     // 7 + 9 survive; the 3-bucket is dropped exactly as before, in both zones.
-    expect(chi.unique_gatherings).toBe(16);
-    expect(ber.unique_gatherings).toBe(16);
+    expect(chi.distinct_scanners).toBe(16);
+    expect(ber.distinct_scanners).toBe(16);
   });
 });
 
@@ -352,7 +352,7 @@ describe('OSE-1376 — floors and never-who are unchanged by the zone', () => {
       for (const p of rep.poster_attribution) {
         expect(p.scan_count).toBeGreaterThanOrEqual(CORRIDOR_MAP_MIN_COUNT);
       }
-      totals.push(rep.unique_gatherings);
+      totals.push(rep.distinct_scanners);
     }
     expect(totals).toEqual([5, 5, 5, 5]);
   });
