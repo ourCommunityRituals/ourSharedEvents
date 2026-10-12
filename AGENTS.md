@@ -56,7 +56,7 @@ On Windows, Git Bash mangles `git show <ref>:<path>`; use PowerShell for it.
 
 ## Human approval (an agent never does these)
 
-- **Production:** deploys only through CI (tag or `deploy_production=PRODUCTION` dispatch). No workstation `wrangler deploy`, remote D1 writes or production changes.
+- **Production:** deploys only through CI (tag or `deploy_production=PRODUCTION` dispatch). No workstation `wrangler deploy`, remote D1 writes or production changes. Once production is active, every production change (deploy, migration, setting) has a Linear ticket named in its PR, with the post-deploy evidence recorded on it.
 - **Secrets:** never in chat or logs, never read from credential files; the owner sets them in their own terminal. A secret that reaches a transcript is rotated.
 - **Repository controls:** branch protection, rulesets, runners, repo secrets and variables, `--admin` merges, force pushes.
 - **Destructive data steps:** D1 Time Travel restores; deleting databases, buckets or namespaces (break-glass runbooks only).
@@ -69,9 +69,9 @@ Staging and production stay in sync and ready for each other. The only differenc
 
 - **In sync:** the same code (a SHA that passed the staging chain), the same migration level on both databases, the same binding shapes, and only listed intentional differences (`node scripts/ci/env-parity.mjs`; `--strict` is the pre-announce check). Updating production when the owner asks keeps it ready; it does not make it live.
 - **Closed:** no `PRODUCTION_LIVE`, no announcing, no clients. An agent never sets `PRODUCTION_LIVE`, plans a go-live sequence, or treats a deploy as a launch.
-- **Held, not closed, today:** no code switch closes the host, and the Worker answers on `oursharedevents.com`. Closing it is an edge setting the owner makes (an Access policy over the whole host, OSE-1353 / OSE-1377). Do not call production dark until then.
+- **Held, not closed, today:** no code switch closes the host; the Worker answers on `oursharedevents.com`. Closing it is an owner edge setting (an Access policy over the whole host, OSE-1353 / OSE-1377). Do not call production dark until then.
 - **Not yet enforced:** the migration level of the two databases is not compared in CI. Until it is, in sync holds only on a day both were read.
-- **This hold ends when the owner activates production** (owner, 2026-10-12). Until the owner says production is active, it binds. After that the restraints in this section lapse and the owner removes the section. Activation does not change who sets repository variables: `PRODUCTION_LIVE` stays an owner step (Human approval, above).
+- **This hold ends when the owner activates production** (owner, 2026-10-12). Until then it binds; after, this section lapses and the owner removes it. Activation does not change who sets repository variables, and from then production changes need a ticket (Human approval, above).
 - **Done bar** while closed: the staging chain.
 
 ## Definition of Done: two stages (OSE-1443)
