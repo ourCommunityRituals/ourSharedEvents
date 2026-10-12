@@ -15,7 +15,7 @@
  * Vitest (SELF.fetch) instead of only against staging.
  *
  * CONTRACT (ADR-017 / REPORT-DEPTH.md / DEPTH_SECTIONS in lib/report-depth.ts):
- *   • local  (free): event meta + distinct_scanners + sponsor_impressions (own) +
+ *   • local  (free): event meta + distinct_scanners + sponsor_displays (own) +
  *     sponsor_class_breakdown. The paid sections are ABSENT.
  *   • mid    (paid): adds campaign_summary, poster_attribution, return_rate,
  *     corridor_density, corridor_map (the map = the paid value line, OSE-682).
@@ -39,7 +39,7 @@
  *   it is WIRED into the single read path and survives serialization.
  *
  * HARNESS NOTE: migrations apply EXACTLY ONCE per isolate (0018 rename dangles the
- * sponsor_impressions FK on a second apply — see shared-report-kanon-floor.spec.ts).
+ * sponsor_displays FK on a second apply — see shared-report-kanon-floor.spec.ts).
  *
  * PLATFORM NOTE: workerd-pool spec; the pool SEGFAULTS on native Windows (OSE-696),
  * so the authoritative green is Linux CI (T0 workers `tests` shard). Local = review
@@ -90,7 +90,7 @@ async function applyMigrations(): Promise<void> {
 async function clearTables(): Promise<void> {
   const db = tenv().DB;
   await db.prepare(`DELETE FROM scan_aggregates`).run();
-  await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-dm-%'`).run();
+  await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-dm-%'`).run();
   await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-dm-%'`).run();
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-dm-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-dm-%'`).run();
@@ -123,7 +123,7 @@ async function seedScan(eventId: string, uniqueAgents: number): Promise<void> {
 async function seedImpression(sponsorId: string, eventId: string, surface: string): Promise<void> {
   await tenv()
     .DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+      `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
        VALUES (?, ?, ?, ?, 'p1', 'impression', datetime('now'))`
     )
     .bind(`si-dm-${sponsorId}-${surface}`, sponsorId, eventId, surface)
@@ -173,7 +173,7 @@ const PROFILES: DepthProfile[] = [
     name: 'LOCAL sponsor → base sections only; paid sections omitted; mid locked',
     role: 'sponsor',
     depth: 'local',
-    present: ['distinct_scanners', 'sponsor_impressions', 'sponsor_class_breakdown'],
+    present: ['distinct_scanners', 'sponsor_displays', 'sponsor_class_breakdown'],
     absent: [
       'campaign_summary',
       'poster_attribution',
@@ -190,7 +190,7 @@ const PROFILES: DepthProfile[] = [
     depth: 'mid',
     present: [
       'distinct_scanners',
-      'sponsor_impressions',
+      'sponsor_displays',
       'sponsor_class_breakdown',
       'campaign_summary',
       'poster_attribution',
@@ -206,7 +206,7 @@ const PROFILES: DepthProfile[] = [
     role: 'admin',
     present: [
       'distinct_scanners',
-      'sponsor_impressions',
+      'sponsor_displays',
       'sponsor_class_breakdown',
       'campaign_summary',
       'corridor_map',

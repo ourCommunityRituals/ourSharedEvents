@@ -31,7 +31,7 @@
 -- (COALESCE would default it permissive, but being explicit documents two-sided intent).
 
 -- ── idempotency: clear any prior fixed-id rows (child -> parent) ──
-DELETE FROM sponsor_impressions WHERE sponsor_id IN
+DELETE FROM sponsor_displays WHERE sponsor_id IN
   ('sb_cov_local_bronze','sb_cov_local_platinum','sb_cov_nonlocal_bronze','sb_cov_nonlocal_title');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN
   ('sb_cov_local_bronze','sb_cov_local_platinum','sb_cov_nonlocal_bronze','sb_cov_nonlocal_title');

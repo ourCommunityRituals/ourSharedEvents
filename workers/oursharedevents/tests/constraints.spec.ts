@@ -62,7 +62,7 @@ describe('QA-1: Migration idempotency', () => {
     // (scans dropped by migration 0062 / OSE-798, replaced by
     // scan_placement_events + scan_node_returns — see the net +1 below),
     // shortlinks (OSE-240, migration 0030), sponsors, sponsor_areas,
-    // sponsor_event_types, sponsor_impressions, subscribers,
+    // sponsor_event_types, sponsor_displays, subscribers,
     // event_type_registry, corridor_regulatory_status
     // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
@@ -105,7 +105,7 @@ describe('QA-1: Migration idempotency', () => {
     // + 4 (idx_security_metrics_*, idx_security_alerts_* — migration 0042)
     // + 6 (idx_report_access_log_*, idx_export_manifest_* — migration 0043) = 52
     // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
-    // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
+    // + 1 (idx_sponsor_displays_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
     // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053,

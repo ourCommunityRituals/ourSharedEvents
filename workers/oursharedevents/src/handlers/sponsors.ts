@@ -1491,7 +1491,7 @@ export async function handleGetSponsorBundle(
  * event's h3_res7 when the (event, sponsor) pair is a resolved active placement,
  * or `{ ok:false }` when it is not — the caller then rejects with 404 and writes
  * nothing, so a fabricated (event, sponsor) pair can't pollute the proof layer
- * (sponsor_impressions feeds the SharedReport). res7 (~5km²) only; res9 stays out
+ * (sponsor_displays feeds the SharedReport). res7 (~5km²) only; res9 stays out
  * (a digital click is not a physical poster location). Shared by both handlers so
  * the placement gate can't drift between impression and click.
  */
@@ -1602,8 +1602,8 @@ export async function handleLogImpression(
   try {
     const id = generateId('si');
     await env.DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
-       VALUES (?, ?, ?, ?, ?, 'impression', ?)`
+      `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
+       VALUES (?, ?, ?, ?, ?, 'display', ?)`
     )
       .bind(id, sponsorId, eventId, surface, placement, h3Res7)
       .run();
@@ -1860,7 +1860,7 @@ export async function handleLogClick(
   try {
     const id = generateId('sc');
     await env.DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
+      `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
        VALUES (?, ?, ?, ?, ?, 'click', ?)`
     )
       .bind(id, sponsorId, eventId, surface, placement, h3Res7)

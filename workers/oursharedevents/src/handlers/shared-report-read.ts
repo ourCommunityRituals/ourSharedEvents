@@ -121,7 +121,7 @@ export async function handleGetSharedReport(
   // SR-25: report is a straight readout — no field-stripping by depth.
   // resolveDepth is still called to determine sponsor scope (TL-040 isolation).
   const resolved = resolveDepth(claim);
-  let scopedImpressions = result.report.sponsor_impressions;
+  let scopedImpressions = result.report.sponsor_displays;
   if (resolved.sponsorScope) {
     // Scoped sponsor token: filter to own rows only
     scopedImpressions = scopedImpressions.filter((r) => r.sponsor_id === resolved.sponsorScope);
@@ -141,9 +141,9 @@ export async function handleGetSharedReport(
       {
         campaign_id: string;
         campaign_title: string;
-        total_impressions: number;
+        total_displays: number;
         sponsor_count: number;
-        impressions_by_surface: Record<string, number>;
+        displays_by_surface: Record<string, number>;
       }
     >();
     for (const row of scopedImpressions) {
@@ -157,29 +157,29 @@ export async function handleGetSharedReport(
       const contribution = floored.count;
       const ex = campaignMap.get(row.campaign_id);
       if (ex) {
-        ex.total_impressions += contribution;
+        ex.total_displays += contribution;
         ex.sponsor_count += 1;
-        ex.impressions_by_surface[row.surface] =
-          (ex.impressions_by_surface[row.surface] ?? 0) + contribution;
+        ex.displays_by_surface[row.surface] =
+          (ex.displays_by_surface[row.surface] ?? 0) + contribution;
       } else {
         campaignMap.set(row.campaign_id, {
           campaign_id: row.campaign_id,
           campaign_title: row.campaign_title ?? 'unknown',
-          total_impressions: contribution,
+          total_displays: contribution,
           sponsor_count: 1,
-          impressions_by_surface: { [row.surface]: contribution },
+          displays_by_surface: { [row.surface]: contribution },
         });
       }
     }
     scopedCampaignSummary =
       campaignMap.size > 0
-        ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+        ? [...campaignMap.values()].sort((a, b) => b.total_displays - a.total_displays)
         : null;
   }
 
   const builtReport = {
     ...result.report,
-    sponsor_impressions: scopedImpressions,
+    sponsor_displays: scopedImpressions,
     campaign_summary: scopedCampaignSummary,
   };
 
@@ -191,7 +191,7 @@ export async function handleGetSharedReport(
   // drift silently. The filter strips any section above the sponsor's entitled
   // depth and names the withheld-but-present sections in upgrade.locked_sections
   // — a wire contract, not a browser-hidden paywall (doctrine rule 12: a refusal
-  // must be printed, not promised). sponsor_impressions scoping (TL-040) is
+  // must be printed, not promised). sponsor_displays scoping (TL-040) is
   // already applied above; the filter's own scoping pass is idempotent over it.
   // sponsor_class_breakdown is present at every depth (OSE-719) — class-level
   // aggregate, the tier-neutral competitive-intel delivery, never stripped.

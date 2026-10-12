@@ -69,8 +69,8 @@ async function clearReadTables(): Promise<void> {
   // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
   await db.prepare(`DELETE FROM scan_placement_events`).run();
   await db.prepare(`DELETE FROM scan_node_returns`).run();
-  // NOTE: sponsor_impressions has a trigger referencing sponsors_old; we
-  // don't seed sponsor_impressions in this spec so skip clearing it.
+  // NOTE: sponsor_displays has a trigger referencing sponsors_old; we
+  // don't seed sponsor_displays in this spec so skip clearing it.
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
   // Sponsors and campaigns FK on events — must be deleted before events.
   // OSE-799 A2: the event FK is on sponsor_placement now (sponsor_business has none).
@@ -710,13 +710,13 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
       reports: Record<string, { sponsor_class_breakdown: unknown }>;
     };
     const breakdown = body.reports['test-evt-sr25-breakdown']?.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');
     expect(breakdown).toHaveProperty('premium');
     expect(typeof breakdown!.local.sponsor_count).toBe('number');
-    expect(typeof breakdown!.local.total_impressions).toBe('number');
+    expect(typeof breakdown!.local.total_displays).toBe('number');
     expect(typeof breakdown!.mid.sponsor_count).toBe('number');
     expect(typeof breakdown!.premium.sponsor_count).toBe('number');
   });
@@ -737,7 +737,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     };
     expect(body.ok).toBe(true);
     const breakdown = body.report.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');
@@ -1195,7 +1195,7 @@ describe('H3 corridor map + open-question resolutions', () => {
   // Q6 — campaign_summary re-scoped for sponsor tokens (static + logic verification)
   test('Q6 static: handler re-derives campaign_summary after applying sponsor scope', () => {
     // Verify the handler code contains the campaign re-derivation logic.
-    // sponsor_impressions has a trigger referencing sponsors_old which prevents
+    // sponsor_displays has a trigger referencing sponsors_old which prevents
     // direct DB seeding in this test environment, so we verify via static analysis.
     const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
     const files = JSON.parse(src) as Record<string, string>;
@@ -1242,7 +1242,7 @@ describe('H3 corridor map + open-question resolutions', () => {
       {
         campaign_id: string;
         campaign_title: string;
-        total_impressions: number;
+        total_displays: number;
         sponsor_count: number;
       }
     >();
@@ -1250,19 +1250,19 @@ describe('H3 corridor map + open-question resolutions', () => {
       if (!row.campaign_id) continue;
       const ex = campaignMap.get(row.campaign_id);
       if (ex) {
-        ex.total_impressions += row.count;
+        ex.total_displays += row.count;
         ex.sponsor_count += 1;
       } else
         campaignMap.set(row.campaign_id, {
           campaign_id: row.campaign_id,
           campaign_title: row.campaign_title ?? 'unknown',
-          total_impressions: row.count,
+          total_displays: row.count,
           sponsor_count: 1,
         });
     }
     const derived = campaignMap.size > 0 ? [...campaignMap.values()] : null;
     expect(derived).not.toBeNull();
-    expect(derived![0]!.total_impressions).toBe(5);
+    expect(derived![0]!.total_displays).toBe(5);
     expect(derived![0]!.sponsor_count).toBe(1); // not 2 — only sp-q6-a's row is in scope
   });
 
@@ -1518,7 +1518,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     );
     expect(report).not.toHaveProperty('headcount_trend'); // premium-only, withheld
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: tier-neutral
-    expect(report).toHaveProperty('sponsor_impressions');
+    expect(report).toHaveProperty('sponsor_displays');
     expect(report).toHaveProperty('upgrade');
     const upgrade = report.upgrade as { locked_sections: string[]; next_depth: string | null };
     expect(upgrade.next_depth).toBe('premium');
@@ -1536,7 +1536,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     expect(report).not.toHaveProperty('corridor_map'); // mid section, withheld at local
     expect(report).not.toHaveProperty('poster_attribution');
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: survives even at local
-    expect(report).toHaveProperty('sponsor_impressions');
+    expect(report).toHaveProperty('sponsor_displays');
     const upgrade = report.upgrade as { next_depth: string | null };
     expect(upgrade.next_depth).toBe('mid');
   });

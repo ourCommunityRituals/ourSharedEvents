@@ -18,7 +18,7 @@ const SAMPLE_REPORT = {
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
   distinct_scanners: 99,
-  sponsor_impressions: [
+  sponsor_displays: [
     { sponsor_id: 'sp_A', impressions: 200 },
     { sponsor_id: 'sp_B', impressions: 75 },
   ],
@@ -111,7 +111,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(DEPTH_SECTIONS.premium, 'Premium (paid) gets the map').toContain('corridor_map');
     // Free stays honest-essential, not crippled: it keeps the smoke-test basics.
     expect(DEPTH_SECTIONS.local).toContain('distinct_scanners');
-    expect(DEPTH_SECTIONS.local).toContain('sponsor_impressions');
+    expect(DEPTH_SECTIONS.local).toContain('sponsor_displays');
   });
 
   it('equity-by-construction: premium tier passes all numeric values identically', () => {
@@ -131,7 +131,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
   // else branch and returned all rows to any bearer of a scopeless sponsor token.
 
   // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
-  it('sponsor token without sponsor_id receives empty sponsor_impressions (no cross-competitor leak)', () => {
+  it('sponsor token without sponsor_id receives empty sponsor_displays (no cross-competitor leak)', () => {
     // Resolve as sponsor role with no sponsor_id — simulates a legacy or
     // carelessly-minted sponsor token that omitted the sponsor_id claim.
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local' });
@@ -140,7 +140,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
 
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     // Must be empty — not [sp_A, sp_B]
-    expect(report.sponsor_impressions).toEqual([]);
+    expect(report.sponsor_displays).toEqual([]);
   });
 
   // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
@@ -151,8 +151,8 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(resolved.sponsorScopeRequired).toBe(false);
 
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
-    expect(Array.isArray(report.sponsor_impressions)).toBe(true);
-    expect((report.sponsor_impressions as unknown[]).length).toBe(2);
+    expect(Array.isArray(report.sponsor_displays)).toBe(true);
+    expect((report.sponsor_displays as unknown[]).length).toBe(2);
   });
 
   // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
@@ -161,7 +161,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(resolved.sponsorScope).toBe('sp_A');
 
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
-    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]!.sponsor_id).toBe('sp_A');
   });
@@ -176,7 +176,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const adversarial = {
       ...SAMPLE_REPORT,
-      sponsor_impressions: [
+      sponsor_displays: [
         { sponsor_id: 'sp_A', impressions: 200 },
         { sponsor_id: 'sp_B', impressions: 75 }, // competitor — must be stripped
         null, // malformed — must be stripped (the `r !== null` limb)
@@ -184,13 +184,13 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
       ],
     };
     const { report } = filterReportByDepth({ ...adversarial }, resolved);
-    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]!.sponsor_id).toBe('sp_A');
   });
 
   // OSE-1186 mutation kill: the sponsor-scope filter must apply to
-  // sponsor_impressions ONLY (`if (key === 'sponsor_impressions')`). A class-level
+  // sponsor_displays ONLY (`if (key === 'sponsor_displays')`). A class-level
   // aggregate like sponsor_class_breakdown (present at every depth, OSE-719) is
   // NOT per-competitor and must pass through WHOLE for a scoped sponsor. Without
   // the key check, every array section would be sponsor-filtered and emptied.
@@ -207,8 +207,8 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     const { report } = filterReportByDepth({ ...withClassBreakdown }, resolved);
     const breakdown = report.sponsor_class_breakdown as Array<{ sponsor_class: string }>;
     expect(breakdown).toHaveLength(2); // delivered whole — NOT filtered to zero by sponsor scope
-    // …while sponsor_impressions IS still scoped in the same call (both behaviours hold together).
-    expect((report.sponsor_impressions as unknown[]).length).toBe(1);
+    // …while sponsor_displays IS still scoped in the same call (both behaviours hold together).
+    expect((report.sponsor_displays as unknown[]).length).toBe(1);
   });
 });
 

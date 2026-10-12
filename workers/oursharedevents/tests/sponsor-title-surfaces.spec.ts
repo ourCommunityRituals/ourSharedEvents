@@ -5,7 +5,7 @@
  * business name when that is blank (`sponsorTitle`, lib/sponsor-card.ts). This
  * spec holds the two surfaces that still showed the business name:
  *   - the sponsor's own home page (`/sponsor?t=`)
- *   - the SharedReport sponsor lines (`sponsor_impressions[].sponsor_title`)
+ *   - the SharedReport sponsor lines (`sponsor_displays[].sponsor_title`)
  *
  * Identity stays with the business name: the report keeps `sponsor_name`
  * unchanged, and the admin sponsors list keeps `name`.
@@ -61,7 +61,7 @@ async function seedSponsor(id: string, name: string, displayName: string | null)
   // so seed exactly K impressions: the report must carry this sponsor's line.
   for (let i = 0; i < 5; i++) {
     await tenv.DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+      `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
        VALUES (?, ?, ?, 'public', 'p1', 'impression', datetime('now'))`
     )
       .bind(`si-${id}-${i}`, id, EVENT)
@@ -78,7 +78,7 @@ async function homeFor(sponsorId: string): Promise<string> {
 
 beforeAll(async () => {
   await applyMigrations();
-  await tenv.DB.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-st1431-%'`).run();
+  await tenv.DB.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-st1431-%'`).run();
   await tenv.DB.prepare(`DELETE FROM sponsor_placement WHERE id LIKE 'pl-st1431-%'`).run();
   await tenv.DB.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'st1431-%'`).run();
   await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(EVENT).run();
@@ -116,7 +116,7 @@ describe('OSE-1431: SharedReport sponsor lines carry the sponsor title', () => {
     const built = await buildSharedReport(tenv.DB, EVENT);
     expect(built.ok).toBe(true);
     if (!built.ok) return;
-    const rows = built.report.sponsor_impressions as Array<{
+    const rows = built.report.sponsor_displays as Array<{
       sponsor_id: string;
       sponsor_name: string;
       sponsor_title?: string;

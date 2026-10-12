@@ -110,7 +110,7 @@ Described above under [Decision](#decision). Accepted.
 
 - **Cross-linking is physically impossible to land.** The static invariant gate fails CI on any PR that references the wrong database from the wrong handler class. A bug, a misconfigured handler, or an SQL JOIN cannot be introduced; the code that would do it cannot pass code review.
 - **Regulatory tier compliance becomes a routing concern, not a data-correlation concern.** Adding a fifth regulatory pool (e.g., GDPR-strict) is a `pool-contract.ts` edit + a new BigQuery dataset; it does NOT require any changes to the handler topology.
-- **Sponsors see the location-graph; never the people-graph.** Sponsor-matching code paths only ever touch `DB` (events, corridors, sponsor_areas, sponsor_event_types, sponsor_impressions). They have no API surface that exposes per-attendee data.
+- **Sponsors see the location-graph; never the people-graph.** Sponsor-matching code paths only ever touch `DB` (events, corridors, sponsor_areas, sponsor_event_types, sponsor_displays). They have no API surface that exposes per-attendee data.
 - **The user-facing anonymity claim is truthful.** Attendees can read the anonymity affordance on the public event page and verify it by inspecting the platform's behavior (no Set-Cookie set on the page load pre-RSVP; no anon_id present in event metadata responses).
 - **Solo-developer maintenance is feasible.** The static gate is the primary review burden; once CI is green on a PR, the cross-link risk is eliminated. The human reviewer can focus on intent, not on auditing every query.
 - **Brain invariant 1 (`anonymous_id`) self-extends.** When sibling OCR products (OW, OSM, OA, OER) come online, they inherit the contract; the brain pyramid validates conformance.

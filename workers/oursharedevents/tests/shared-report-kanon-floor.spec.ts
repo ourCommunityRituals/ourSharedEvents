@@ -9,15 +9,15 @@
  * Four aggregates in the builder were previously unfloored and could publish
  * sub-K contributions:
  *   1. distinct_scanners        — SUM(scan_aggregates.distinct_agent_hashes) across buckets
- *   2. campaign_summary         — per-campaign SUM over sponsor_impressions rows
- *   3. sponsor_class_breakdown  — per-class SUM over sponsor_impressions rows
+ *   2. campaign_summary         — per-campaign SUM over sponsor_displays rows
+ *   3. sponsor_class_breakdown  — per-class SUM over sponsor_displays rows
  *   4. headcount_trend[]        — per-instance SUM(distinct_agent_hashes) across buckets
  *
- * HARNESS NOTE (OSE-683 completion): earlier iterations claimed sponsor_impressions
+ * HARNESS NOTE (OSE-683 completion): earlier iterations claimed sponsor_displays
  * "carries a trigger referencing sponsors_old" and fell back to static analysis for
  * the two sponsor aggregates. That was a MISDIAGNOSIS. There is no such trigger in
  * any migration (grep sponsors_old → only the 0018 table-recreate pattern). The real
- * reason a bare INSERT fails is the sponsor_impressions FOREIGN KEYs
+ * reason a bare INSERT fails is the sponsor_displays FOREIGN KEYs
  * (sponsor_id → sponsors(id), event_id → events(id)): miniflare/D1 enforces them, so
  * the parent events + sponsors rows must be seeded FIRST. Once parented, the INSERT
  * succeeds and campaign_summary / sponsor_class_breakdown get REAL runtime coverage
@@ -42,12 +42,12 @@ const tenv = () => env as unknown as TestEnv;
 // Re-applying is NOT idempotent because migration 0018 does
 // `ALTER TABLE sponsors RENAME TO sponsors_old` — and SQLite (>=3.25) rewrites
 // foreign-key references in OTHER tables when a table is renamed, so on a second
-// apply the FK in sponsor_impressions (REFERENCES sponsors(id)) is silently
+// apply the FK in sponsor_displays (REFERENCES sponsors(id)) is silently
 // rewritten to REFERENCES sponsors_old(id). 0018 then drops sponsors_old, leaving
-// sponsor_impressions with a dangling FK → any later INSERT/DELETE raises
+// sponsor_displays with a dangling FK → any later INSERT/DELETE raises
 // "no such table: main.sponsors_old". This is the actual cause of the historical
 // "trigger references sponsors_old" seed failure (there is no such trigger — see
-// file header). Guarding to a single apply lets sponsor_impressions be seeded for
+// file header). Guarding to a single apply lets sponsor_displays be seeded for
 // real. No migration change: this is a test-harness idempotency fix, so the
 // forward-migration-only constitution is untouched. In production, migrations
 // apply once, so 0018 is correct as written.
@@ -81,7 +81,7 @@ async function clearTables(): Promise<void> {
   // sponsor_asset (both children of sponsor_business; placement also references
   // campaigns). Delete them BEFORE sponsor_business/campaigns or the campaign
   // delete trips the placement→campaign FK.
-  await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-kanon-%'`).run();
+  await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-kanon-%'`).run();
   await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-kanon-%'`).run();
   await db
     .prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-kanon-%'`)
@@ -105,7 +105,7 @@ async function seedCampaign(id: string, title: string): Promise<void> {
     .run();
 }
 
-/** Seed a sponsor (FK parent of sponsor_impressions). */
+/** Seed a sponsor (FK parent of sponsor_displays). */
 async function seedSponsor(opts: {
   id: string;
   event_id: string;
@@ -127,7 +127,7 @@ async function seedSponsor(opts: {
 }
 
 /**
- * Seed N sponsor_impressions rows for one (sponsor × surface) bucket — the grain
+ * Seed N sponsor_displays rows for one (sponsor × surface) bucket — the grain
  * the builder GROUP BYs on. `n` distinct rows => COUNT(*)=n for that bucket, so
  * `n` is exactly the per-bucket count the per-bucket K-anon floor sees.
  */
@@ -141,7 +141,7 @@ async function seedImpressions(opts: {
   for (let i = 0; i < opts.n; i++) {
     await db
       .prepare(
-        `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
          VALUES (?, ?, ?, ?, 'p1', 'impression', datetime('now'))`
       )
       .bind(
@@ -364,11 +364,11 @@ describe('OSE-683 — campaign_summary floors each sponsor bucket before summati
     const row = cs!.find((c) => c.campaign_id === 'camp-kanon-1');
     expect(row).toBeDefined();
     // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket → 7.
-    expect(row!.total_impressions).toBe(7);
-    expect(row!.total_impressions).not.toBe(10);
+    expect(row!.total_displays).toBe(7);
+    expect(row!.total_displays).not.toBe(10);
     // The sub-K surface must not appear in the per-surface breakdown at all.
-    expect(row!.impressions_by_surface.poster).toBe(7);
-    expect(row!.impressions_by_surface.qr).toBeUndefined();
+    expect(row!.displays_by_surface.poster).toBe(7);
+    expect(row!.displays_by_surface.qr).toBeUndefined();
   });
 
   test('a campaign whose only bucket is sub-K never publishes (campaign is fully suppressed)', async () => {
@@ -413,7 +413,7 @@ describe('OSE-683 — campaign_summary floors each sponsor bucket before summati
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const row = r.report.campaign_summary!.find((c) => c.campaign_id === 'camp-kanon-3');
-    expect(row!.total_impressions).toBe(6);
+    expect(row!.total_displays).toBe(6);
   });
 });
 
@@ -436,8 +436,8 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     if (!r.ok) return;
     const b = r.report.sponsor_class_breakdown;
     // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket → 8.
-    expect(b.premium.total_impressions).toBe(8);
-    expect(b.premium.total_impressions).not.toBe(10);
+    expect(b.premium.total_displays).toBe(8);
+    expect(b.premium.total_displays).not.toBe(10);
     expect(b.premium.sponsor_count).toBe(1);
   });
 
@@ -453,11 +453,11 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     if (!r.ok) return;
     const b = r.report.sponsor_class_breakdown;
     expect(b.local.sponsor_count).toBe(0);
-    expect(b.local.total_impressions).toBe(0);
+    expect(b.local.total_displays).toBe(0);
     // And it certainly must not have leaked the raw 3 into any class total.
-    expect(b.local.total_impressions).not.toBe(3);
-    expect(b.mid.total_impressions).toBe(0);
-    expect(b.premium.total_impressions).toBe(0);
+    expect(b.local.total_displays).not.toBe(3);
+    expect(b.mid.total_displays).toBe(0);
+    expect(b.premium.total_displays).toBe(0);
   });
 
   test('classes with surviving buckets sum exactly (mid=5, premium=6)', async () => {
@@ -472,9 +472,9 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const b = r.report.sponsor_class_breakdown;
-    expect(b.mid.total_impressions).toBe(5);
+    expect(b.mid.total_displays).toBe(5);
     expect(b.mid.sponsor_count).toBe(1);
-    expect(b.premium.total_impressions).toBe(6);
+    expect(b.premium.total_displays).toBe(6);
     expect(b.premium.sponsor_count).toBe(1);
   });
 });

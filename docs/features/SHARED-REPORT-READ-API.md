@@ -158,7 +158,7 @@ interface SharedReport {
   // 4. Sponsor impressions — per sponsor × surface. A row whose count is below K = 5 is
   //    omitted, not nulled: the same per-bucket floor the campaign and class rollups apply,
   //    so rows and rollups always agree (OSE-1421).
-  sponsor_impressions: Array<{
+  sponsor_displays: Array<{
     sponsor_id: string;
     sponsor_name: string;
     surface: 'public' | 'display' | 'poster' | 'form';

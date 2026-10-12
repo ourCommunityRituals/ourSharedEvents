@@ -6,7 +6,7 @@
  *
  *   - poster_deployments carry lat/lng for geo-spatial mapping
  *   - scan_aggregates provide pre-computed rollups
- *   - sponsor_impressions track placement attribution
+ *   - sponsor_displays track placement attribution
  *   - Data flows from scan → aggregate → cross-event pattern
  *   - No TTL on scan data (permanent — the compound asset)
  *   - Sponsor data includes event_id, surface, placement for attribution

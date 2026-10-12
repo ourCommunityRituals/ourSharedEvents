@@ -13,12 +13,12 @@
 
 ## Summary
 
-| Status | Count | Invariants |
-|--------|-------|------------|
-| ✅ Enforced | 16 | #1, #2, #3, #4, #6, #8, #10, #13, #15, #16, #17, #18, #19, #21, #22, #25 |
-| ⚠️ Partial | 6 | #7, #9, #14, #20, #23, #24 |
-| ❌ Gap | 4 | #5, #26, #27, #28 |
-| 🗄️ Retired | 2 | #11, #12 |
+| Status      | Count | Invariants                                                               |
+| ----------- | ----- | ------------------------------------------------------------------------ |
+| ✅ Enforced | 16    | #1, #2, #3, #4, #6, #8, #10, #13, #15, #16, #17, #18, #19, #21, #22, #25 |
+| ⚠️ Partial  | 6     | #7, #9, #14, #20, #23, #24                                               |
+| ❌ Gap      | 4     | #5, #26, #27, #28                                                        |
+| 🗄️ Retired  | 2     | #11, #12                                                                 |
 
 **Total invariants:** 28 | **Threat ledger entries:** 71 (2 open)
 
@@ -28,7 +28,7 @@
 
 ### #1 — Anonymous ID — `anonymous_id`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** The brand promise "you're part of the group, anonymously" is load-bearing across every public surface. Drift — any code path that links anonymous_id to identifiable PII, any handler that crosses DB/FORMS_DB boundaries, any net-new raw-PII column — breaks the promise that lets attendees trust the platform. Privacy is not a feature; it is the architecture. This invariant is the deepest architectural commitment OSE makes; everything else (UEC, sponsor placement, reporting, retention) inherits its constraint that identifiable-attendee data cannot be correlated back from any output.
 
@@ -46,17 +46,18 @@
 
 ### #2 — Hyperlocal Geo-Resolution — `hyperlocal_geo_resolution`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** The local-sponsor covenant — "the bar around the corner gets the same reach as a national brand" — depends on the geo-resolution engine correctly scoping sponsor visibility to the corridor where the sponsor actually operates. Without this invariant, a geo bug could surface a national sponsor in place of the local one (silent covenant breach), or surface no sponsors at all (empty placement slots). Either failure erodes the Triangle premise: sponsors see value only when their local footprint maps to real events in their geography.
 
 **Enforcement:**
 
 - 🟠 **TL-045** [✅]: Geo coordinate stored at wrong H3 resolution: latLngToCell called with resolutio… → `tests/geo-invariant.spec.ts > H3 resolution constants are node=9 corridor=7` _(annotated at: geo-invariant.spec.ts:42, geo-invariant.spec.ts:47, geo-invariant.spec.ts:58, geo-invariant.spec.ts:67, geo-invariant.spec.ts:96)_
-- 🟠 **TL-068** [✅]: Channel-cap on impressions: read in-event device impressions at a finer geo grai… → `tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_impressions carries h3_res7 but NO finer h3_res8/res9 grain` _(annotated at: red-team/impression-privacy.spec.ts:65)_
+- 🟠 **TL-068** [✅]: Channel-cap on impressions: read in-event device impressions at a finer geo grai… → `tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_displays carries h3_res7 but NO finer h3_res8/res9 grain` _(annotated at: red-team/impression-privacy.spec.ts:65)_
 - 🟡 **TL-069** [✅]: Maps link H3 leak: the human maps link carries an H3 cell instead of real coordi… → `tests/geo-link-maps-not-h3.spec.ts > OSE-660 | maps != H3 — coordinates only, never an H3 cell > the produced link NEVER contains an H3 cell / precision token` _(annotated at: geo-link-maps-not-h3.spec.ts:22)_
 
 **Brain-conformance** _(signal-integrity — code matches the OCR-docs brain, OSE-997)_:
+
 - 🧠 `riph-brain-conformance.spec.ts:19`
 
 **Last green:** 2026-08-22 | **Last attacked:** 2026-08-22
@@ -65,7 +66,7 @@
 
 ### #3 — Universal Event Code Standard — `uec_encoding`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** The choice architecture's visual layer depends on every OCR-affiliated event presenting the same color-coded scan surfaces with the same semantic meanings. Drift breaks the attendee's mental model — they learn "blue means sponsor" at one event and that meaning must hold at every event forever. Without this invariant, every sponsor placement, every check-in scan, every poster QR loses the pre-attentive scannability that makes the platform feel cohesive. The dual-palette design (scan_hex for QR module fill; display_hex for UI/marketing showcase) recognizes that QR scannability and brand-warm display are two distinct functional jobs that need two values; collapsing them risks reintroducing the v1.0 contrast bugs the v1.1 transition specifically fixed.
 
@@ -79,7 +80,7 @@
 
 ### #4 — NCR Data Accumulation — `ncr_data_accumulation`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** NCR data is the platform's long-horizon intelligence. Scan counts are permanently retained because they contain no PII — the anonymous ID never appears in scan_aggregates, only in the anon_id_returns intermediary. If someone adds a PII-bearing column to scan_aggregates (e.g., a raw anon_id_hash stored per row rather than per aggregate bucket), the no-TTL promise becomes a liability: unbounded retention of pseudonymous data under GDPR is an exposure. The invariant protects both sides: permanent retention requires zero PII in the accumulation schema; any PII addition must trigger a retention policy and a brain invariant update.
 
@@ -98,6 +99,7 @@
 **Claim:** Pricing tiers govern display priority within events ONLY — never platform access. Local sponsors are guaranteed a place at every event, at every flag level, regardless of how much a premium buyer pays. This commitment is what makes OSE non-substitutable: a sponsor matching platform that pushes the highest bidder to the top is a standard ad network; OSE's covenant — that the local stays in — is the differentiating brand promise that creates the local-economy flywheel. Without this invariant, OSE collapses into a commodity ad auction; with it, OSE is the only platform in the market that takes local-economy commerce as architectural commitment.
 
 **Enforcement:** ❌ _No threats mapped in the ledger for this invariant._
+
 > **To add coverage:** Create a threat entry in `tests/fixtures/threat-ledger.ts` with `target_invariant: { number: 5, name: 'tier_equity' }`, write a test, and add a `// @born-red TL-XXX` annotation.
 
 **Last green:** — | **Last attacked:** —
@@ -106,7 +108,7 @@
 
 ### #6 — Inert Monetization Hooks — `inert_monetization_hooks`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** A monetization hook that inadvertently executes billing logic before the revenue decision is made would convert collected research data into unauthorized billable activity. The X-Monetization-Inert header is the machine-readable assertion — on every response, not just logged at startup — that no such execution happened during the request.
 
@@ -127,7 +129,7 @@
 **Enforcement:**
 
 - 🟠 **TL-022** [✅]: Sub-floor export: attacker crafts a query or export request that returns a row r… → `tests/anti-logging-proof.spec.ts > P7: Suppression floor constant is safe` _(annotated at: anti-logging-proof.spec.ts:553)_
-- 🟠 **TL-066** [✅]: Impression de-anonymization: recover WHO from device-minute impressions via sess… → `tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_impressions schema carries zero attendee-identifying columns` _(annotated at: red-team/impression-privacy.spec.ts:93)_
+- 🟠 **TL-066** [✅]: Impression de-anonymization: recover WHO from device-minute impressions via sess… → `tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_displays schema carries zero attendee-identifying columns` _(annotated at: red-team/impression-privacy.spec.ts:93)_
 - 🟠 **TL-067** [✅]: Floor probe on impression metrics: request sponsor impression metrics for a tiny… → `tests/red-team/impression-privacy.spec.ts > OSE-662 attack 3 — floor probe on impression metrics (sub-K suppressed) > impression-derived aggregates route through applyCountFloor (OSE-683)` _(annotated at: red-team/impression-privacy.spec.ts:130)_
 
 **Last green:** 2026-08-22 | **Last attacked:** 2026-08-22
@@ -136,7 +138,7 @@
 
 ### #8 — Bounded PII Retention — `bounded_pii_retention`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** Without an automated retention lock, opt-in PII (event registrations, survey freeform fields, email signups) accumulates indefinitely. That looks like a tech-debt problem; it is actually a brand-promise problem and a compliance liability. OSE collects identity-bearing data on a covenant: you give it to participate in your community event; we honor it briefly; we delete it. A 90-day registration retention silently growing to 18 months because someone refactors the cron and nobody notices is not a small bug — it converts the platform from "ephemeral participation infrastructure" to "passive surveillance archive", and it does so without any visible product change. The retention floor is a load-bearing brand commitment; the cron is the load-bearing mechanism. The invariant test is the mechanism that makes the mechanism mechanically un-deletable.
 
@@ -164,7 +166,7 @@
 - 🟠 **TL-038** [✅]: Cross-sponsor report access: sponsor A forwards their signed-link token (or URL)… → `tests/sponsor-audit.spec.ts > sponsor_id claim is always validated before data is served` _(annotated at: sponsor-audit.spec.ts:138)_
 - 🟠 **TL-043** [✅]: Cross-venue privilege escalation: organizer of venue A sends admin mutations tar… → `tests/event-manager-audit.spec.ts > cross-venue event mutation: non-owner event returns 403` _(annotated at: event-manager-audit.spec.ts:207)_
 - 🟠 **TL-053** [✅]: Rate limit buckets never fill: admin and mint rate limit keys used CF-Ray (a per… → `tests/rate-limit.spec.ts > isRateLimited > allows the first request for a new IP` _(annotated at: rate-limit.spec.ts:49)_
-- 🔴 **TL-056** [✅]: Sponsor token without sponsor_id leaks all competitors' impression data: filterR… → `tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_impressions` _(annotated at: report-depth.spec.ts:133, report-depth.spec.ts:146, report-depth.spec.ts:158)_
+- 🔴 **TL-056** [✅]: Sponsor token without sponsor_id leaks all competitors' impression data: filterR… → `tests/report-depth.spec.ts > sponsor token without sponsor_id receives empty sponsor_displays` _(annotated at: report-depth.spec.ts:133, report-depth.spec.ts:146, report-depth.spec.ts:158)_
 - 🟠 **TL-058** [✅]: CF Access JWT forgery: attacker crafts a JWT with a valid-looking payload (email… → `tests/admin-allowlist.spec.ts > forged CF Access JWT with invalid RSA signature is rejected` _(annotated at: admin-allowlist.spec.ts:203, admin-allowlist.spec.ts:228)_
 - 🟠 **TL-063** [✅]: Cross-brand comp token: a signed sponsor-invite/comp token minted for brand X is… → `tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — comp invite token is brand-bound > cross-brand comp token is rejected` _(annotated at: red-team/sponsor-eligibility-gate.spec.ts:160)_
 
@@ -174,7 +176,7 @@
 
 ### #10 — Deprecation Lock — `deprecation_lock`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** Without an automated lock, a future "small change" can silently bring back the deprecated dependency — usually because someone copied a snippet from old docs or imported a package that pulls it in transitively. The entire migration to remove it becomes useless overnight. The deprecation lock is the mechanism that makes a one-way architectural decision actually one-way: once OSE moved off Google Apps Script to Cloudflare Workers + D1, the brain promises attendees a worker-only backend; a re-introduction violates that promise. The pattern generalizes — when Phase 3 Firebase lands and embedded HTML is deprecated, the same scaffolding catches its re-entry; when GAS becomes Sheets, when Sheets becomes BigQuery, each transition inherits the same lock shape.
 
@@ -216,7 +218,7 @@
 
 ### #13 — Brain Enforcement Co-location — `brain_enforcement_location`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** Protects against architectural invariant enforcement code drifting out of the brain into application repos or workspace roots. When enforcement code is co-located with the brain artifacts it governs, every contract change stays in one PR, one review, one diff — there is no way to silently update an invariant without updating its enforcer (and vice versa). When enforcement code scatters, a change to the brain schema may not update the check that validates it, leaving the invariant enforced only on paper. This is the meta-invariant: it protects the integrity of all 13 other invariants' enforcement mechanisms.
 
@@ -232,7 +234,7 @@
 
 **Status:** ⚠️ Partial _(invariant status: partial)_
 
-**Claim:** Every OCR product is a mobile product first. The customer surface — the page someone is looking at on their phone at 7am at the bus stop — must be usable on the smallest modern iPhone viewport (375×812). Drift — surfaces that require horizontal scroll, tap targets smaller than 44 pt, input fonts that trigger iOS zoom, primary CTAs below the fold, text that fails contrast at common phone brightness — turns the brand promise into a lie surface-by-surface. The customer doesn't experience the *intended* layout; they experience the *broken* layout. The audit is the mechanism that keeps the intent honest at scale across every product, every release.
+**Claim:** Every OCR product is a mobile product first. The customer surface — the page someone is looking at on their phone at 7am at the bus stop — must be usable on the smallest modern iPhone viewport (375×812). Drift — surfaces that require horizontal scroll, tap targets smaller than 44 pt, input fonts that trigger iOS zoom, primary CTAs below the fold, text that fails contrast at common phone brightness — turns the brand promise into a lie surface-by-surface. The customer doesn't experience the _intended_ layout; they experience the _broken_ layout. The audit is the mechanism that keeps the intent honest at scale across every product, every release.
 
 **Enforcement:**
 
@@ -244,7 +246,7 @@
 
 ### #15 — CORS Allowlist Immutability — `cors_allowlist_immutability`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** A wildcard CORS policy (`Access-Control-Allow-Origin: *`) on the OSE Worker would allow any origin — including adversarial scripts on arbitrary domains — to make credentialed cross-origin requests to the admin API and read/write event data without user interaction. This is a one-character change (`'*'` instead of an explicit domain) that silently opens the admin surface to every origin on the internet. The invariant ensures the allowlist stays explicit, Set-based, and OCR-domain-scoped so no future "just allow all origins during development" shortcut can persist into a merge. The same reasoning applies between environments: staging runs looser admin fallbacks, so a production Worker that trusted the staging origin would widen production's attack surface for no benefit (OSE-1417).
 
@@ -258,7 +260,7 @@
 
 ### #16 — API Response Schema Stability — `api_response_schema_stability`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** The public API is consumed by mobile clients, the five MVP surfaces, and external integrations. A column removed from the SELECT without a conscious schema version bump causes silent breakage: the consumer receives a 200 with a response that is structurally valid JSON but missing a field it renders — no error, no alert, just broken UI. Mobile Workability (Invariant #14) guarantees the layout works at 375×812; API Response Schema Stability guarantees the data that populates that layout is actually present. Both must hold simultaneously: a perfect mobile layout fed empty data is still a broken user experience.
 
@@ -272,7 +274,7 @@
 
 ### #17 — OER Emission Boundary — `oer_emission_boundary`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** OurEventRings (OER) is the intelligence and analytics layer — products emit events, OER ingests and answers. The architecture explicitly prohibits products from querying each other's databases directly. The Cloudflare Worker runtime enforces this at the binding layer: a D1 database is only accessible inside a Worker if it is declared as a binding in wrangler.toml. The attack vector is a developer adding a cross-product D1 binding to wrangler.toml — for example, binding OW's named-identity database from the OSE anonymous-identity surface. OSE is anonymous-by-construction; OW is named-by-design. A cross-binding would allow the OSE Worker to join anonymous scan records against OW's named user table, silently destroying the privacy guarantee that is the product's core founding commitment. The same risk applies to Worker service bindings (`[[services]]`): a service-bound Worker gains a direct RPC channel and can proxy raw D1 rows to the caller, bypassing both the public API contract and the privacy isolation layer. The invariant ensures the wrangler.toml binding list stays narrow and explicit so no accidental or incremental coupling can accumulate undetected across refactoring sessions.
 
@@ -287,7 +289,7 @@
 
 ### #18 — QR Code URL / Slug Permanence — `slug_permanence`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** QR codes printed on physical posters are permanent — the URL they encode cannot be changed without silently breaking every scanned or memorised link. An event slug that changes post-deployment causes: live poster URLs to return 404 on the next event lookup; check-in scans at the door to fail silently (attendees can't check in); ShortCodes linked to the old slug to break; and the NCR scan pipeline to lose its accumulation anchor. The slug is the physical-to-digital bridge that makes the Ring flywheel work. Without this invariant, a single admin update could sever every deployed poster from its event permanently.
 
@@ -301,7 +303,7 @@
 
 ### #19 — Migration Monotonicity — `migration_monotonicity`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** Duplicate or non-monotonic migration numbers cause non-deterministic apply order in `wrangler d1 migrations apply`: a duplicate prefix means two files sort to the same position (one is silently skipped or applied twice depending on wrangler version); a lower-numbered file added after a higher-numbered one is never applied on databases that have already passed that number. Either failure corrupts schema state for any environment that has already applied past the gap — including production. A DROP TABLE on a load-bearing table would wipe all production data for that entity with no schema-level protection. The invariant catches both failure classes at PR time (structural read of the migrations/ directory), before wrangler ever sees the file.
 
@@ -329,9 +331,9 @@
 
 ### #21 — SharedReport Schema Stability — `shared_report_schema_stability`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
-**Claim:** The SharedReport surface is the enterprise monetization layer — the proof artifact that sponsors use to evaluate campaign performance across events. The campaign fields added in 2026-07 (campaign_id, campaign_title on each sponsor_impressions row; campaign_summary with impressions_by_surface) are the data backbone of the cross-event comparison feature that enterprise clients depend on. Without a schema lock, any of these fields can be silently removed from the SharedReport interface — the field disappears from every SharedReport response with no compilation error, no API 500, no visible signal. A sponsor pulling 30 days of batch SharedReports to compare campaign performance finds empty campaign_summary arrays with no indication the feature was removed. The invariant is the output-side complement to Invariant #16 (API Response Schema Stability): #16 locks the public events API; #21 locks the enterprise reporting surface.
+**Claim:** The SharedReport surface is the enterprise monetization layer — the proof artifact that sponsors use to evaluate campaign performance across events. The campaign fields added in 2026-07 (campaign_id, campaign_title on each sponsor_displays row; campaign_summary with displays_by_surface) are the data backbone of the cross-event comparison feature that enterprise clients depend on. Without a schema lock, any of these fields can be silently removed from the SharedReport interface — the field disappears from every SharedReport response with no compilation error, no API 500, no visible signal. A sponsor pulling 30 days of batch SharedReports to compare campaign performance finds empty campaign_summary arrays with no indication the feature was removed. The invariant is the output-side complement to Invariant #16 (API Response Schema Stability): #16 locks the public events API; #21 locks the enterprise reporting surface.
 
 **Enforcement:**
 
@@ -345,7 +347,7 @@
 
 ### #22 — Cross-Repo Import Isolation — `cross_repo_import_isolation`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** OSE and WKRP carry opposite identity invariants — OSE is anonymous by construction; WKRP is named with voluntary attribution. A module-level import across this boundary would silently couple the two identity models at the code level, making it trivially easy to introduce an inadvertent identity leakage path that bypasses the HTTP API boundary and its CORS controls. The HTTP API seam (GET /api/events/:id/music) is the one documented boundary; it is covered by Pact contract testing (OSE-423) and CORS origin controls in WKRP's privacy.ts. Module imports would bypass both.
 
@@ -395,7 +397,7 @@
 
 ### #25 — Sponsor Share Covenant — `sponsor_share_covenant`
 
-**Status:** ✅ Enforced 
+**Status:** ✅ Enforced
 
 **Claim:** Invariant #5 (Local Sponsor Covenant) guarantees a local sponsor a PLACE — "the local stays in." #25 makes that guarantee QUANTITATIVE on every rotation surface: a floored share of voice rather than a locals-first sort (the locals-first tierSort is retired). #25 is the covenant made computable. On any surface, "the local stays in" is no longer enough — a system could keep the local technically present while starving its share of voice to near-zero and letting the highest bidder consume the rest of the rotation. The Sponsor Share Covenant makes the guarantee quantitative: money buys frequency-share and report depth, and nothing else. It cannot buy a bigger logo, a better slot, a fixed position, a share above the premium cap, or a manual is_local flag; and it cannot push a local below its guaranteed floor. Without this invariant the public rotation silently degrades into the commodity ad auction that #1-#5 exist to prevent — a national brand buys visual dominance, is_local becomes a sales lever, and the local-economy flywheel that makes OSE non-substitutable collapses.
 
@@ -417,6 +419,7 @@
 **Claim:** #1 anonymous_id governs the BASE LAYER — the substrate every OCR app ships, protecting the person who plants no flag. #26 governs the layer stacked ON TOP of it: the authorization/identity capability that lets a person say "this is me" and be credited for it. The relationship is COMPOSITION, not opposition — #26 is not the other side of a coin, it is a layer that must leave the base intact beneath it. That is precisely why wall (b) exists: if adding the identity layer degrades the anonymous rung, the layering has failed and the base has stopped being universal. Without both, "choice infrastructure" is a slogan — a platform with only the base offers anonymity but no way to be credited, and a platform whose layer has eaten the base offers credit but no way to opt out. The specific failures #26 prevents are the ones that quietly convert a choice into a default: a surface that registers a visitor as a side effect of looking (breaking (a)), a public page that starts demanding a login (breaking (b)), an export that carries listener names across the boundary into the anonymous product (breaking (c), and silently coupling the two identity models #22 exists to keep apart), or an identity that cannot be withdrawn once given (breaking (d)). Each of these is individually small and individually plausible as a "small change". Together they are how a community platform turns into a surveillance platform without anyone deciding to.
 
 **Enforcement:** ❌ _No threats mapped in the ledger for this invariant._
+
 > **To add coverage:** Create a threat entry in `tests/fixtures/threat-ledger.ts` with `target_invariant: { number: 26, name: 'explicit_identity' }`, write a test, and add a `// @born-red TL-XXX` annotation.
 
 **Last green:** — | **Last attacked:** —
@@ -430,6 +433,7 @@
 **Claim:** This invariant protects a structural market position, not merely a compliance posture. Every camera-based hyperlocal measurement product operating in Illinois is collecting face geometry, which BIPA attaches a private right of action and statutory damages to — $1,000 for a negligent violation and $5,000 for an intentional or reckless one, with no proof of actual harm required. OCR has no BIPA surface at all: not because the exposure was mitigated, but because it was never built. A QR scan is not a biometric identifier; an anonymous cookie is not a biometric identifier; a k-floored aggregate contains none. The danger is not that someone decides to collect biometrics. It is that an obvious-looking feature does it as a side effect. A camera on the venue Display for "audience measurement", a microphone for ambient analytics, a vendor SDK that ships face detection inside a people-counter — any one of these converts a clean product into a defendant, and does so through a change that reads like an improvement in a sprint review. There is a second, methodological reason. Surveillance-based measurement changes the behaviour it measures: identity-disclosure research finds participation falls and becomes more guarded once people are observably identified. An instrument that alters its subject produces worse data, not just less ethical data. Refusing biometrics is what lets OCR claim its aggregates are honest — the sponsor-facing argument is not "we are the ethical option" but "nobody modified their behaviour for our sensor."
 
 **Enforcement:** ❌ _No threats mapped in the ledger for this invariant._
+
 > **To add coverage:** Create a threat entry in `tests/fixtures/threat-ledger.ts` with `target_invariant: { number: 27, name: 'no_biometric_identifiers' }`, write a test, and add a `// @born-red TL-XXX` annotation.
 
 **Last green:** — | **Last attacked:** —
@@ -443,6 +447,7 @@
 **Claim:** On a same-repo pull_request, GitHub runs the PR-HEAD's workflow content with secrets available, and .github/ is protected only at MERGE time (CODEOWNERS), not at RUN time. An auto-run, agent-authored PR that edited a workflow could therefore exfiltrate any PR-reachable secret before a human ever sees it — the exact agentic-swarm threat the platform is built to resist (the prize is secret theft; doctrine feedback_agentic_swarm_threat_model). Two agent authors already open PRs into OSE and are gated OPPOSITELY: GitHub Copilot (app/copilot-swe-agent) is held for human "Approve and run" (ADR-020's tamper-proof backstop), while Claude / Claude Code commits as the human operator and its PRs AUTO-RUN CI with no approval gate. So on the Copilot path this guard is defense-in-depth behind the approval break; on the ungated Claude path it is the SOLE defense — and, running from PR-head content with no human in the loop, it is best-effort, not tamper-proof. Bounding the PR-reachable secret surface to a reviewed minimum, and forbidding pull_request_target, is what makes agent-authored CI safe on BOTH paths; the robust close on the ungated path is to drive that surface to zero (ADR-020 Alternative B). The property generalizes to every OCR site that runs CI with secrets — a niche vertical forked from the OA (ourAirwaves) client-fork template must inherit it rather than re-derive (and re-forget) it.
 
 **Enforcement:** ❌ _No threats mapped in the ledger for this invariant._
+
 > **To add coverage:** Create a threat entry in `tests/fixtures/threat-ledger.ts` with `target_invariant: { number: 28, name: 'ci_approval_gate_secret_surface' }`, write a test, and add a `// @born-red TL-XXX` annotation.
 
 **Last green:** — | **Last attacked:** —

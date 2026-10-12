@@ -8,7 +8,7 @@
  * This file authors the three impression-specific attacks that had no coverage:
  *   Attack 2 — Impression de-anonymization: recover WHO from device-minute
  *              impressions (session/timing/cross-state joins). Refused: the
- *              sponsor_impressions table carries zero attendee-identifying
+ *              sponsor_displays table carries zero attendee-identifying
  *              columns — nothing to correlate to an individual.
  *   Attack 3 — Floor probe on impressions: request impression metrics for a
  *              tiny cohort. Suppressed: impression-derived aggregates route
@@ -55,7 +55,7 @@ function loadSource(relPath: string): string {
 }
 
 async function impressionColumns(): Promise<string[]> {
-  const res = await tenv().DB.prepare(`PRAGMA table_info(sponsor_impressions)`).all();
+  const res = await tenv().DB.prepare(`PRAGMA table_info(sponsor_displays)`).all();
   return (res.results as Array<{ name: string }>).map((r) => r.name.toLowerCase());
 }
 
@@ -63,7 +63,7 @@ async function impressionColumns(): Promise<string[]> {
 
 describe('OSE-662 attack 9 — channel-cap on impressions (finest grain = res7)', () => {
   // @born-red TL-068 | method: design-time-negative-assertion | date: 2026-08-22
-  test('sponsor_impressions carries h3_res7 but NO finer h3_res8/res9 grain', async () => {
+  test('sponsor_displays carries h3_res7 but NO finer h3_res8/res9 grain', async () => {
     const cols = await impressionColumns();
     expect(cols, 'impressions must carry the res7 corridor cell').toContain('h3_res7');
     // The attack: a finer cell would let a sponsor localize a device below the
@@ -74,9 +74,9 @@ describe('OSE-662 attack 9 — channel-cap on impressions (finest grain = res7)'
 
   test('impression write binds ONLY h3_res7 — no finer cell is written (OSE-635)', () => {
     const src = loadSource('handlers/sponsors.ts');
-    // Isolate the INSERT INTO sponsor_impressions column list(s).
-    const inserts = src.match(/INSERT INTO sponsor_impressions[\s\S]*?\)/g) ?? [];
-    expect(inserts.length, 'expected an INSERT INTO sponsor_impressions').toBeGreaterThan(0);
+    // Isolate the INSERT INTO sponsor_displays column list(s).
+    const inserts = src.match(/INSERT INTO sponsor_displays[\s\S]*?\)/g) ?? [];
+    expect(inserts.length, 'expected an INSERT INTO sponsor_displays').toBeGreaterThan(0);
     for (const ins of inserts) {
       expect(/h3_res7/.test(ins), 'impression INSERT must carry h3_res7').toBe(true);
       expect(
@@ -91,7 +91,7 @@ describe('OSE-662 attack 9 — channel-cap on impressions (finest grain = res7)'
 
 describe('OSE-662 attack 2 — impression de-anonymization (no identity columns)', () => {
   // @born-red TL-066 | method: design-time-negative-assertion | date: 2026-08-22
-  test('sponsor_impressions schema carries zero attendee-identifying columns', async () => {
+  test('sponsor_displays schema carries zero attendee-identifying columns', async () => {
     const cols = await impressionColumns();
     // Anything here would let device-minute impressions resolve to a person via
     // session/timing/cross-state joins. None may be present.
@@ -119,7 +119,7 @@ describe('OSE-662 attack 2 — impression de-anonymization (no identity columns)
     const leaked = forbidden.filter((f) => cols.includes(f));
     expect(
       leaked,
-      `sponsor_impressions must carry no identity columns; found: ${leaked.join(', ')}`
+      `sponsor_displays must carry no identity columns; found: ${leaked.join(', ')}`
     ).toEqual([]);
   });
 });
@@ -151,7 +151,7 @@ describe('OSE-662 — impression-path red-team evidence', () => {
       surface: 'public-url:sponsor-impression',
       last_attacked: '2026-08-22',
       attacks: {
-        A2_deanonymization: 'no identity columns on sponsor_impressions',
+        A2_deanonymization: 'no identity columns on sponsor_displays',
         A3_floor_probe: 'impression aggregates floored via applyCountFloor (OSE-683)',
         A9_channel_cap: 'impressions captured at h3_res7 only; no finer cell (OSE-635)',
       },

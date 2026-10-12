@@ -1,6 +1,6 @@
 // ─── Invalid-traffic (IVT) filtration for the sponsor proof layer ─────────────
 //
-// OSE-1310. `sponsor_impressions` is not a metrics table — it is the PROOF
+// OSE-1310. `sponsor_displays` is not a metrics table — it is the PROOF
 // LAYER. Its rows are what a sponsor is shown (and, eventually, billed) against
 // via the SharedReport. D3 (CCR 2026-09-14) closed the first hole: a write is
 // now refused unless the (event, sponsor) pair is a resolved, brand-matched,
@@ -28,7 +28,7 @@
 //
 // ── The hard constraint: this must not become a tracker ──────────────────────
 //
-// OSE-662 attack 2 fixed the shape of this table: `sponsor_impressions` carries
+// OSE-662 attack 2 fixed the shape of this table: `sponsor_displays` carries
 // ZERO attendee-identifying columns (no ip, ip_hash, ua, anon_id, session,
 // device, fingerprint) and `impression-privacy.spec.ts` enforces that against
 // the live schema. Bot-and-duplicate detection is exactly the kind of well-meant

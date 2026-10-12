@@ -76,8 +76,8 @@ const DB_TABLES = [
   'sponsor_asset_draft', // 0054 (OSE-725 Sponsor Onboarding — per-format render inputs)
   'sponsor_business', // 0065 (OSE-799 A2 — durable sponsor identity)
   'sponsor_business_draft', // 0053 (OSE-724 Sponsor Onboarding — resolver-invisible draft)
+  'sponsor_displays', // 0022 as sponsor_impressions, renamed by 0102 (OSE-931)
   'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
-  'sponsor_impressions', // 0022 (0067: FK repointed to sponsor_business)
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;
@@ -257,6 +257,23 @@ function removalStatement(): string {
   return stmt;
 }
 
+/**
+ * 0086 runs before 0102, so its "is this event referenced" check names the table
+ * as it was then (sponsor_impressions). These tests re-run that statement against
+ * the finished schema, so the old name is stood in for by an empty table.
+ */
+async function withLegacyDisplaysTable<T>(run: () => Promise<T>): Promise<T> {
+  const db = tenv().DB;
+  await db
+    .prepare('CREATE TABLE IF NOT EXISTS sponsor_impressions (id TEXT PRIMARY KEY, event_id TEXT)')
+    .run();
+  try {
+    return await run();
+  } finally {
+    await db.prepare('DROP TABLE IF EXISTS sponsor_impressions').run();
+  }
+}
+
 async function seedTestEvent(): Promise<void> {
   await tenv()
     .DB.prepare(
@@ -289,7 +306,7 @@ describe('OSE-1419 | migrations leave a fresh database with zero events', () => 
       .bind(SEED_ID)
       .run();
     try {
-      await db.prepare(removalStatement()).run();
+      await withLegacyDisplaysTable(() => db.prepare(removalStatement()).run());
       const kept = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
       expect(kept).not.toBeNull();
     } finally {
@@ -301,8 +318,10 @@ describe('OSE-1419 | migrations leave a fresh database with zero events', () => 
   test('0086 removes an unreferenced test-event-001 and is idempotent', async () => {
     const db = tenv().DB;
     await seedTestEvent();
-    await db.prepare(removalStatement()).run();
-    await db.prepare(removalStatement()).run(); // a second run finds nothing to delete
+    await withLegacyDisplaysTable(async () => {
+      await db.prepare(removalStatement()).run();
+      await db.prepare(removalStatement()).run(); // a second run finds nothing to delete
+    });
     const gone = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
     expect(gone).toBeNull();
     expect(await eventCount()).toBe(0);

@@ -49,7 +49,7 @@
  *
  * HARNESS NOTE: migrations apply EXACTLY ONCE per isolate — re-applying migration
  * 0018 (ALTER TABLE sponsors RENAME TO sponsors_old) dangles the
- * sponsor_impressions FK. Same guard proven in shared-report-kanon-floor.spec.ts.
+ * sponsor_displays FK. Same guard proven in shared-report-kanon-floor.spec.ts.
  *
  * PLATFORM NOTE: this is a workerd-pool spec; the pool SEGFAULTS on native Windows
  * (OSE-696), so the authoritative green is Linux CI (see

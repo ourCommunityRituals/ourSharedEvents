@@ -10,8 +10,8 @@
  * endpoint /api/v2/events/shared-reports/batch) is consumed by enterprise
  * sponsors and organizers. It carries the campaign comparison data that
  * enterprise clients use to evaluate cross-event performance: campaign_summary,
- * campaign_id/title on each sponsor_impressions row, sponsor_tier, is_local,
- * and impressions_by_surface.
+ * campaign_id/title on each sponsor_displays row, sponsor_tier, is_local,
+ * and displays_by_surface.
  *
  * Without a schema lock, any of these fields could be silently removed from
  * the SharedReport interface in shared-report-builder.ts — the field disappears
@@ -32,8 +32,8 @@
  *   (b) The snapshot has a version field
  *   (c) Every top_level_field in the snapshot appears in the SharedReport
  *       TypeScript interface definition in shared-report-builder.ts
- *   (d) Every sponsor_impressions_field in the snapshot appears in the
- *       sponsor_impressions array type definition
+ *   (d) Every sponsor_displays_field in the snapshot appears in the
+ *       sponsor_displays array type definition
  *   (e) Every campaign_summary_field in the snapshot appears in the
  *       campaign_summary array type definition
  *   (f) report-depth.ts includes campaign_summary in the mid and premium
@@ -94,7 +94,7 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
   let snapshot: {
     version: string;
     top_level_fields: string[];
-    sponsor_impressions_fields: string[];
+    sponsor_displays_fields: string[];
     campaign_summary_fields: string[];
   };
 
@@ -142,22 +142,22 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
     }
   });
 
-  test('OSE-INV21 | shared-report | interface | every sponsor_impressions_field appears in the sponsor_impressions type', () => {
-    // Extract the sponsor_impressions array type block — starts after
-    // `sponsor_impressions: Array<{` and ends at the matching `}>`
-    const marker = 'sponsor_impressions: Array<{';
+  test('OSE-INV21 | shared-report | interface | every sponsor_displays_field appears in the sponsor_displays type', () => {
+    // Extract the sponsor_displays array type block — starts after
+    // `sponsor_displays: Array<{` and ends at the matching `}>`
+    const marker = 'sponsor_displays: Array<{';
     const start = builderSrc.indexOf(marker);
     expect(
       start,
-      'sponsor_impressions: Array<{ must appear in shared-report-builder.ts'
+      'sponsor_displays: Array<{ must appear in shared-report-builder.ts'
     ).toBeGreaterThan(-1);
 
     const block = builderSrc.slice(start, builderSrc.indexOf('}>;', start) + 3);
 
-    for (const field of snapshot.sponsor_impressions_fields) {
+    for (const field of snapshot.sponsor_displays_fields) {
       expect(
         block,
-        `sponsor_impressions type is missing field '${field}' — ` +
+        `sponsor_displays type is missing field '${field}' — ` +
           `this field is in the snapshot contract (v${snapshot.version}); ` +
           'removing it breaks enterprise consumers that read sponsor tier, locality, or campaign data from each impression row'
       ).toMatch(new RegExp(`\\b${field}\\b`));

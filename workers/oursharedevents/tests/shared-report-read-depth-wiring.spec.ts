@@ -57,7 +57,7 @@ const ctx = {
 } as unknown as ExecutionContext;
 
 // A full-premium report: every depth's sections present, so stripping is
-// observable. sponsor_impressions carries two sponsors to prove scoping too.
+// observable. sponsor_displays carries two sponsors to prove scoping too.
 function fullReport(): Record<string, unknown> {
   return {
     event_id: EVENT_ID,
@@ -65,7 +65,7 @@ function fullReport(): Record<string, unknown> {
     event_start_date: '2026-06-01T18:00:00Z',
     event_end_date: '2026-06-01T22:00:00Z',
     distinct_scanners: 99,
-    sponsor_impressions: [
+    sponsor_displays: [
       { sponsor_id: 'sp_A', count: 10, surface: 'poster' },
       { sponsor_id: 'sp_B', count: 5, surface: 'poster' },
     ],
@@ -117,7 +117,7 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     // The refusal is printed on the wire (doctrine rule 12), not browser-hidden:
     expect((report.upgrade as { next_depth?: string } | undefined)?.next_depth).toBe('mid');
     // Scoped to own rows only (TL-040 / OSE-595):
-    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(rows.map((x) => x.sponsor_id)).toEqual(['sp_A']);
   });
 
@@ -134,7 +134,7 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     // The "sponsor role ONLY" half of the wiring: admin is NOT filtered.
     expect('headcount_trend' in report).toBe(true);
     expect('corridor_map' in report).toBe(true);
-    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(rows.map((x) => x.sponsor_id).sort()).toEqual(['sp_A', 'sp_B']);
     // No filter ran → no upgrade hint injected.
     expect('upgrade' in report).toBe(false);

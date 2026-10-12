@@ -62,8 +62,9 @@ class TestDataManager {
 
       // Match exact hostname or subdomain
       if (hostname === 'qa.oursharedevents.com') return 'qa';
-      if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com')
+      if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') {
         return 'production';
+      }
       if (hostname === 'script.google.com') return 'googleAppsScript';
       if (hostname === 'localhost' || hostname === '127.0.0.1') return 'local';
 
@@ -344,7 +345,7 @@ class TestDataManager {
       checkins: Math.floor(Math.random() * 120) + 25,
       walkins: Math.floor(Math.random() * 30) + 5,
       surveyResponses: Math.floor(Math.random() * 80) + 15,
-      sponsorImpressions: Math.floor(Math.random() * 500) + 100,
+      sponsorDisplays: Math.floor(Math.random() * 500) + 100,
       sponsorClicks: Math.floor(Math.random() * 50) + 10,
       averageEngagement: (Math.random() * 5 + 3).toFixed(2), // 3-8 minutes
     };

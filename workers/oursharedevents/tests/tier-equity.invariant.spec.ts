@@ -70,7 +70,7 @@ const FULL_REPORT = {
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
   distinct_scanners: 42,
-  sponsor_impressions: [
+  sponsor_displays: [
     { sponsor_id: 'sp_A', impressions: 100 },
     { sponsor_id: 'sp_B', impressions: 50 },
   ],
@@ -117,7 +117,7 @@ describe('B. read-side depth is omission-only', () => {
   it('sponsor scope: local sponsor sees only their own impressions — no cross-contamination', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...FULL_REPORT }, resolved);
-    const impressions = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    const impressions = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(impressions.every((r) => r.sponsor_id === 'sp_A')).toBe(true);
     expect(impressions.some((r) => r.sponsor_id === 'sp_B')).toBe(false);
   });

@@ -127,7 +127,7 @@ const WRITE_TABLES = [
   'scan_aggregates',
   'anon_id_returns',
   'shortlinks',
-  'sponsor_impressions',
+  'sponsor_displays',
 ];
 
 async function snapshot(): Promise<Record<string, string>> {

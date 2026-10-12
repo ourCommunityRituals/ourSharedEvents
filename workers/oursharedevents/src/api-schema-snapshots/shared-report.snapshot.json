@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
-  "description": "Minimum required fields for the OSE SharedReport interface. Removing any field from top_level_fields, sponsor_impressions_fields, or campaign_summary_fields MUST be accompanied by removing it here and bumping the version — that makes the break visible in a diff rather than silent. Adding new fields is always safe (additive). This snapshot is the output-side complement to public-events.snapshot.json: the public API snapshot protects what consumers GET from /api/v2/events; this snapshot protects what enterprise sponsors and organizers see in /api/v2/events/:id/shared-report.",
+  "version": "3.0.0",
+  "description": "Minimum required fields for the OSE SharedReport interface. Removing any field from top_level_fields, sponsor_displays_fields, or campaign_summary_fields MUST be accompanied by removing it here and bumping the version — that makes the break visible in a diff rather than silent. Adding new fields is always safe (additive). This snapshot is the output-side complement to public-events.snapshot.json: the public API snapshot protects what consumers GET from /api/v2/events; this snapshot protects what enterprise sponsors and organizers see in /api/v2/events/:id/shared-report.",
   "interface": "SharedReport",
   "source": "workers/oursharedevents/src/lib/shared-report-builder.ts",
   "top_level_fields": [
@@ -11,14 +11,14 @@
     "distinct_scanners",
     "return_rate",
     "corridor_density",
-    "sponsor_impressions",
+    "sponsor_displays",
     "campaign_summary",
     "poster_attribution",
     "headcount_trend",
     "corridor_map",
     "_meta"
   ],
-  "sponsor_impressions_fields": [
+  "sponsor_displays_fields": [
     "sponsor_id",
     "sponsor_name",
     "campaign_id",
@@ -31,8 +31,8 @@
   "campaign_summary_fields": [
     "campaign_id",
     "campaign_title",
-    "total_impressions",
+    "total_displays",
     "sponsor_count",
-    "impressions_by_surface"
+    "displays_by_surface"
   ]
 }
