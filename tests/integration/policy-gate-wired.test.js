@@ -25,8 +25,13 @@ const LOCK = JSON.parse(readFileSync(join(HOOKS, 'policy-gate.cases.lock.json'),
 function mustBlockCounts(src) {
   const start = src.indexOf('const MUST_BLOCK = [');
   const end = src.indexOf('const MUST_ALLOW = [');
+  // comments do not count: a case wrapped in /* */ or // is not a case
+  const section = src
+    .slice(start, end)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
   const counts = {};
-  for (const m of src.slice(start, end).matchAll(/^\s*\[\s*['"]([a-z0-9-]+)['"],/gm)) {
+  for (const m of section.matchAll(/^\s*\[\s*['"]([a-z0-9-]+)['"],/gm)) {
     counts[m[1]] = (counts[m[1]] ?? 0) + 1;
   }
   return counts;
@@ -37,6 +42,7 @@ describe('policy gate suite is wired into CI', () => {
   beforeAll(() => {
     out = spawnSync(process.execPath, ['--test', '--test-reporter=spec', SUITE], {
       encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
     });
   }, 180000);
 

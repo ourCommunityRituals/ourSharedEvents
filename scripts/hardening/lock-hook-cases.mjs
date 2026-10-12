@@ -21,7 +21,11 @@ const LOCK = join(ROOT, '.claude', 'hooks', 'policy-gate.cases.lock.json');
 export function mustBlockCounts(src) {
   const start = src.indexOf('const MUST_BLOCK = [');
   const end = src.indexOf('const MUST_ALLOW = [');
-  const section = src.slice(start, end);
+  // comments do not count: a case wrapped in /* */ or // is not a case
+  const section = src
+    .slice(start, end)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
   const counts = {};
   for (const m of section.matchAll(/^\s*\[\s*['"]([a-z0-9-]+)['"],/gm)) {
     counts[m[1]] = (counts[m[1]] ?? 0) + 1;
@@ -32,6 +36,7 @@ export function mustBlockCounts(src) {
 function suiteTestCount() {
   const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', SUITE], {
     encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
   });
   return Number((r.stdout.match(/ℹ tests (\d+)/) ?? [])[1] ?? NaN);
 }

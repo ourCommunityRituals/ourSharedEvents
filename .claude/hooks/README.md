@@ -13,7 +13,7 @@ Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 | File                          | What it is                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                                 |
-| `policy-gate.test.mjs`        | 399 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
+| `policy-gate.test.mjs`        | 487 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
 | `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning)           |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
@@ -64,6 +64,10 @@ is given to an interpreter, and a heredoc body is kept whenever anything on its 
 at the program and its arguments, so `git commit -m "git push --tags"` is fine and `bash -c "git push --tags"`
 is not. `cd` is followed, so `cd ~/.claude && cat config.json` is the same file as `cat ~/.claude/config.json`.
 
+The analysis **fails closed**: past 1.5 M characters, 6 levels of nesting, 2,500 commands or 3 seconds, or on any
+exception, the call is refused with `[analysis-failed]`. (Unparseable hook input still fails open, because a
+harness change must not lock every session.) A UNC or network path is never opened while analysing it.
+
 | Rule                                          | Blocks                                                                                                                                                 | Why                                                                                    |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `git-tag-push`                                | `git push` of `--tags`, `--follow-tags`, `--mirror`, `refs/tags/…`, or any ref matching the workflow glob `v*.*.*`                                     | A pushed tag starts the production deploy chain                                        |
@@ -88,6 +92,11 @@ is not. `cd` is followed, so `cd ~/.claude && cat config.json` is the same file 
 | `gh-review-approve`                           | `gh pr review --approve`                                                                                                                               | an agent does not approve pull requests                                                |
 | `gh-config`                                   | `gh alias set`, `gh extension install`, `gh config set`                                                                                                | changes what later gh commands do                                                      |
 | `encoded-command`                             | `powershell -EncodedCommand`                                                                                                                           | cannot be read, so cannot be checked                                                   |
+| `git-env`                                     | `GIT_CONFIG_*`, `GIT_SSH*`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_EXEC_PATH`… set inline or exported                                               | changes how git runs later commands                                                    |
+| `pipe-to-shell`                               | anything but `echo`/`printf` piped into `bash`, `sh`, `iex`, `pwsh`, `cmd` (a download included)                                                       | code that cannot be read first; `echo "…"                                              | bash` is read as the command it carries |
+| `gh-foreign-repo`                             | `gh -R other/repo`, `--hostname`, `GH_HOST`, `GH_REPO`                                                                                                 | gh pointed outside the organisation                                                    |
+| `mcp-code-execution`                          | the Cloudflare connector's `d1_database_query`, `browser_run_code_unsafe`, Chrome `javascript_tool`, `firebase_deploy`                                 | arbitrary SQL, script or deploy on a connected service                                 |
+| `analysis-failed`                             | a call that is too large, nested too deeply, has too many commands, or cannot be analysed within 3 s                                                   | a gate that gives up quietly can be made to give up                                    |
 | `mcp-cloudflare-write`, `mcp-session-control` | Cloudflare write tools; permission mode, remote control, connector toggles, session messaging                                                          | the same actions without a shell                                                       |
 
 `mcp__terminal__run_in_terminal` is checked as a shell. The matcher in `settings.user.proposed.json`

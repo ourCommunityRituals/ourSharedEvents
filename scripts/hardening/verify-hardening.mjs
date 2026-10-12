@@ -18,9 +18,11 @@
 // log, which a process with file access could write; it is evidence the hook ran, not proof.
 // OCR_GH_FIXTURE answers gh calls from a file (tests); the output says so when it is set.
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { homedir, tmpdir, userInfo } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   HOOK_SOURCE,
@@ -422,7 +424,25 @@ function github() {
   return checks;
 }
 
-export function grade(checks) {
+export // The account database says where the home folder is; an environment variable can say otherwise.
+function homeDiffersFromAccount() {
+  try {
+    return resolve(homedir()).toLowerCase() !== resolve(userInfo().homedir).toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+// A gh that lives under the temp folder is a stand-in, not the installed CLI.
+function ghFromTempFolder() {
+  const where = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['gh'], {
+    encoding: 'utf8',
+  });
+  const first = (where.stdout || '').split(/\r?\n/)[0].trim().toLowerCase();
+  return Boolean(first) && first.startsWith(resolve(tmpdir()).toLowerCase());
+}
+
+function grade(checks) {
   const fail = checks.filter((c) => c.status === 'FAIL').length;
   const warn = checks.filter((c) => c.status === 'WARN').length;
   if (fail === 0) return warn === 0 ? 'A+' : 'A';
@@ -505,6 +525,8 @@ if (isMain) {
   const overrides = [
     fixtureMode() && 'OCR_GH_FIXTURE',
     process.env.CLAUDE_HOME && 'CLAUDE_HOME',
+    homeDiffersFromAccount() && 'USERPROFILE/HOME',
+    ghFromTempFolder() && 'gh on PATH from a temp folder',
   ].filter(Boolean);
   if (process.argv.includes('--json')) {
     console.log(
