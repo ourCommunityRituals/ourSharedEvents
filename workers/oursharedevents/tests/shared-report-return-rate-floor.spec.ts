@@ -125,7 +125,7 @@ async function seedEvent(id: string, h3Res7: string | null = null): Promise<void
 
 /**
  * `n` people at the event; the first `cameTwice` of them were also at the
- * earlier event of its series. `visit_count` is left at 1: it counts runs of
+ * earlier event of its series. `return_count` is left at 1: it counts runs of
  * the nightly job, not visits, and the report no longer reads it.
  */
 async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<void> {
@@ -134,7 +134,7 @@ async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<voi
     tenv()
       .DB.prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind(hash, venue, now, now, now)
@@ -319,7 +319,7 @@ describe('a published return rate never multiplies back to a group under the flo
         await tenv()
           .DB.prepare(
             `INSERT INTO anon_id_returns
-               (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+               (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
              VALUES (?, ?, datetime('now'), datetime('now'), 1, datetime('now'))`
           )
           .bind(`o${i}`.padStart(32, 'e'), other)

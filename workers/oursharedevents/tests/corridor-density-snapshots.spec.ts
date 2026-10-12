@@ -121,7 +121,7 @@ async function seedAnonIdReturn(eventId: string, hashSuffix: string): Promise<vo
   await tenv()
     .DB.prepare(
       `INSERT OR IGNORE INTO anon_id_returns
-         (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
        VALUES (?, ?, ?, ?, 1, ?)`
     )
     .bind(hash, eventId, nowIso, nowIso, nowIso)
@@ -270,9 +270,7 @@ describe('corridor_density_snapshots: written by refreshCorridorBaselines', () =
     await refreshCorridorBaselines(sharedEnv);
 
     const snapshotCount = await tenv()
-      .DB.prepare(
-        `SELECT COUNT(*) AS c FROM corridor_density_snapshots WHERE corridor_id = ?`
-      )
+      .DB.prepare(`SELECT COUNT(*) AS c FROM corridor_density_snapshots WHERE corridor_id = ?`)
       .bind('test-cds-corr-C')
       .first<{ c: number }>();
     expect(snapshotCount!.c).toBe(1);
@@ -309,9 +307,7 @@ describe('corridor_density_snapshots: written by refreshCorridorBaselines', () =
     await refreshCorridorBaselines({ DB: tenv().DB });
 
     const snapshotCount = await tenv()
-      .DB.prepare(
-        `SELECT COUNT(*) AS c FROM corridor_density_snapshots WHERE corridor_id = ?`
-      )
+      .DB.prepare(`SELECT COUNT(*) AS c FROM corridor_density_snapshots WHERE corridor_id = ?`)
       .bind('test-cds-corr-E')
       .first<{ c: number }>();
     expect(snapshotCount!.c).toBe(0);

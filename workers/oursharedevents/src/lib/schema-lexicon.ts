@@ -50,12 +50,9 @@ export const BANNED_SCHEMA_TERMS: ReadonlySet<string> = new Set([
 export const EXEMPT_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
   // OSE-931 (2026-10-12): `sponsor_impressions` and its 3 indexes became
   // `sponsor_displays` (migration 0102), so their exemptions are gone.
-  // `anon_id_returns.visit_count` + its index carry "visit" and reach the
-  // SharedReport export (shared-report-export.ts) — renaming the export field
-  // changes the BigQuery-bound contract, so it is a deliberate, separate
-  // reconciliation. Tracked by OSE-932 (rename visit_count → return_count).
-  ['visit_count', 'OSE-932'],
-  ['idx_anon_id_returns_venue_visit', 'OSE-932'],
+  // OSE-932 (2026-10-12): `anon_id_returns.visit_count` and its index became
+  // `return_count` / `idx_anon_id_returns_venue_return` (migration 0103), so
+  // their exemptions are gone. The map is empty.
 ]);
 
 export interface SchemaIdentifier {

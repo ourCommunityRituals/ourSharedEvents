@@ -319,7 +319,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 
 describe('Gate 5: Index verification', () => {
   test('all 80 custom indexes exist', async () => {
-    // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
+    // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_return,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
     // — Local Sponsor Covenant enforcement, migration 0036) + 2

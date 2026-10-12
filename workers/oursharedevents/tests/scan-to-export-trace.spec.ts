@@ -356,11 +356,11 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
 
     // anon_id_returns: the scanner's return row for this event (hashed, never raw).
     const ret = await tenv()
-      .DB.prepare('SELECT anon_id_hash, visit_count FROM anon_id_returns WHERE venue_id = ?')
+      .DB.prepare('SELECT anon_id_hash, return_count FROM anon_id_returns WHERE venue_id = ?')
       .bind(eventId)
-      .all<{ anon_id_hash: string; visit_count: number }>();
+      .all<{ anon_id_hash: string; return_count: number }>();
     expect(ret.results).toHaveLength(1);
-    expect(ret.results![0].visit_count).toBe(1);
+    expect(ret.results![0].return_count).toBe(1);
 
     // Corridor baseline: keyed by the res7 corridor node, never the res9 node.
     const base = await tenv()

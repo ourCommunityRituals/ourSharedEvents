@@ -208,7 +208,7 @@ async function seedAnonIdReturn(opts: {
   await tenv()
     .DB.prepare(
       `INSERT INTO anon_id_returns
-         (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
        VALUES (?, ?, ?, ?, 1, ?)`
     )
     .bind(opts.hash, opts.venueId, opts.computedAt, opts.computedAt, opts.computedAt)
@@ -360,7 +360,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       await tenv()
         .DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
               pepper_epoch)
            VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
@@ -433,9 +433,9 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(wire).not.toMatch(/m\d\d0{20,}/); // no seeded hash value
   });
 
-  test('visit_count is not a return: repeat materialization at one event counts zero returns', async () => {
-    // materializeAnonIdReturns bumps visit_count on every re-run over the same
-    // scans, so a high visit_count at ONE event must not make anyone a returner.
+  test('return_count is not a return: repeat materialization at one event counts zero returns', async () => {
+    // materializeAnonIdReturns bumps return_count on every re-run over the same
+    // scans, so a high return_count at ONE event must not make anyone a returner.
     await seedCorridorEvent('test-evt-exp-vc');
     await seedPeople('test-evt-exp-vc', [9, 9, 9, 9, 9]);
     await exportAnonIdReturns(makeEnv());
@@ -470,7 +470,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
       .prepare(
         `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 500),
                        p(j) AS (SELECT 0 UNION ALL SELECT j + 1 FROM p WHERE j < 4)
-         INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at, pepper_epoch)
+         INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at, pepper_epoch)
          SELECT printf('%032d', i * 10 + j), 'test-evt-exp-chunk-' || i, ?, ?, 1, ?, ? FROM n, p`
       )
       .bind(seen, seen, seen, await pepperEpoch(TEST_PEPPER))

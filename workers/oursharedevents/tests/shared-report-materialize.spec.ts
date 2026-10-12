@@ -284,7 +284,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     expect(row!.anon_id_hash).not.toContain('uniquemarker123');
   });
 
-  test('idempotent — re-running on same scans bumps visit_count, not row count', async () => {
+  test('idempotent — re-running on same scans bumps return_count, not row count', async () => {
     await seedEvent({ id: 'test-evt-mat-idem', end_offset_hours: -4 });
     await seedScan('test-evt-mat-idem', 'anon_idem');
     const env1: SharedReportMaterializeEnv = {
@@ -295,12 +295,12 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     await materializeAnonIdReturns(env1);
     await materializeAnonIdReturns(env1);
     const row = await tenv()
-      .DB.prepare(`SELECT visit_count FROM anon_id_returns WHERE venue_id = ?`)
+      .DB.prepare(`SELECT return_count FROM anon_id_returns WHERE venue_id = ?`)
       .bind('test-evt-mat-idem')
-      .first<{ visit_count: number }>();
+      .first<{ return_count: number }>();
     expect(row).not.toBeNull();
-    // 3 re-runs on the SAME scan event → visit_count bumps each time
-    expect(row!.visit_count).toBe(3);
+    // 3 re-runs on the SAME scan event → return_count bumps each time
+    expect(row!.return_count).toBe(3);
     // Still exactly one row (PK protects)
     const count = await tenv()
       .DB.prepare(`SELECT COUNT(*) AS c FROM anon_id_returns WHERE venue_id = ?`)
@@ -309,9 +309,9 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     expect(count!.c).toBe(1);
   });
 
-  // OSE-1652. `visit_count` counts runs of this job, as the test above pins, so
+  // OSE-1652. `return_count` counts runs of this job, as the test above pins, so
   // the report's venue return rate must not read it. It used to ("people whose
-  // visit_count is over 1"): the job reads an event once on a normal night, and
+  // return_count is over 1"): the job reads an event once on a normal night, and
   // a second run (a delivery repeated, a run by hand) made six people who each
   // scanned once read as a 100% venue return rate. The rate now counts people
   // seen at another event of the same confirmed series.
@@ -373,7 +373,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     // A pre-0091 row: its pepper is unknown.
     await tenv()
       .DB.prepare(
-        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES ('legacy-hash-000000000000000000000', 'test-evt-mat-rot', datetime('now'), datetime('now'), 1, datetime('now'))`
       )
       .run();
@@ -402,7 +402,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       await tenv()
         .DB.prepare(
           `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < ?)
-           INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at, pepper_epoch)
+           INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at, pepper_epoch)
            SELECT printf('%032d', i), 'test-evt-mat-cap', datetime('now'), datetime('now'), 1, datetime('now'), 'retired-epoch' FROM k`
         )
         .bind(n)
@@ -527,7 +527,7 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(`${i}`.padStart(32, 'a'), 'test-evt-mat-corr-A', nowIso, nowIso, nowIso)
@@ -676,7 +676,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('a'.repeat(32), 'test-evt-mat-h3-only', nowIso, nowIso, nowIso)
@@ -713,7 +713,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
@@ -790,7 +790,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('b'.repeat(32), 'test-evt-mat-coalesce', nowIso, nowIso, nowIso)
@@ -845,7 +845,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('c'.repeat(32), 'test-evt-mat-legacy-compat', nowIso, nowIso, nowIso)
@@ -883,7 +883,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(h, 'test-evt-mat-window-split', nowIso, nowIso, nowIso)

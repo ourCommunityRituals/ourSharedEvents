@@ -195,7 +195,7 @@ Markers are not counted as exported rows. Runs are also recorded in the D1
 `export_manifest`, but OER cannot see that table, so the marker is what OER uses.
 
 **Grouping:** a person is counted once per (corridor, event type, pool). A return
-means they were seen at 2 or more distinct events there. `visit_count` is not
+means they were seen at 2 or more distinct events there. `return_count` is not
 used, because the materializer bumps it on every re-run. Tiers that share a pool
 (NULL and 1–3 are `general`) are one group before the floor applies
 (`RETURNS_POOL_KEY_SQL`). A declined regime is withheld (OSE-1220).

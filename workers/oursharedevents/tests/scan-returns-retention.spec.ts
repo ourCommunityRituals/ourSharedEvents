@@ -87,7 +87,7 @@ async function seedAnonIdReturn(
 ): Promise<void> {
   await db()
     .prepare(
-      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count)
+      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count)
        VALUES (?, ?, ?, ?, 2)`
     )
     .bind(hash, EVENT_ID, firstSeenAt, lastSeenAt)
