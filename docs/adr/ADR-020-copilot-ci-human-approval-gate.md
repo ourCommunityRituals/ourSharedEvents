@@ -32,7 +32,7 @@ The forces in tension:
   claude-review, `LINEAR_API_KEY` in brain-contract/premature-close — representative, not
   exhaustive). Because `pull_request` runs the **PR-head's**
   workflow content with secrets available for same-repo PRs, and `.github/` is protected only at
-  **merge** time (CODEOWNERS `* @mzdano`) not at **run** time, an auto-run PR could edit a workflow
+  **merge** time (CODEOWNERS `* @bereasonable13`) not at **run** time, an auto-run PR could edit a workflow
   to exfiltrate those tokens before any human sees it. No in-workflow guard is tamper-proof against
   this (the guard itself is PR-head content). The approval gate is currently the only robust
   control. This is squarely the agentic-swarm threat model the platform is built to resist
@@ -169,7 +169,7 @@ Editing a correct workflow to chase a non-existent mapping bug would risk breaki
     `CF_ACCESS_*` on every plain PR; its job is now gated to non-PR events + `full-pipeline/*`
     (matching `deploy-staging`).
 - **Merge-time protection:** `.github/CODEOWNERS` locks `/.github/workflows/`, the guard scanner,
-  the allowlist, and this ADR to the security owner (`@mzdano`).
+  the allowlist, and this ADR to the security owner (`@bereasonable13`).
 - **Constitution (cross-repo):** brain invariant **#28** `ci_approval_gate_secret_surface`
   (`ocr-docs-brain/architectural-invariants.yaml`, branch `feat/invariant-28-ci-approval-gate`,
   status `partial` — live in OSE, fleet-live when the OA template carries it). Numbers 26/27 were

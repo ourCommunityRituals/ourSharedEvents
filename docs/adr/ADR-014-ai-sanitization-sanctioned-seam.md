@@ -160,7 +160,7 @@ enforcement that survives contributor turnover and agent-authored PRs.
 
 - The seam is a single small file (2 pure functions, no dependencies). Its
   presence has no runtime cost and no bundle impact until it is wired.
-- Today's security owner for the seam is the solo founder (`@mzdano`); the
+- Today's security owner for the seam is the solo founder (`@bereasonable13`); the
   CODEOWNERS lock is written against that handle. When a dedicated security
   team handle exists, the lock's owner is updated in a one-line CODEOWNERS
   edit — itself security-owner-reviewed under the same rule.

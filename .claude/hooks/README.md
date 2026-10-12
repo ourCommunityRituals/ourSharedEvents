@@ -10,11 +10,11 @@ with secrets redacted.
 Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 (finding S2, and S1, where an agent printed `~/.claude/config.json`).
 
-| File                          | What it is                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                       |
+| File                          | What it is                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                                 |
 | `policy-gate.test.mjs`        | 277 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
-| `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning) |
+| `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning)           |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
 
@@ -60,27 +60,27 @@ Rules read the command word and subcommand (`git push`, `gh release create`), af
 and backticks are stripped, so a commit message that mentions `git push --tags` is not blocked and
 `gh.exe` or `"git"` are not a way round.
 
-| Rule | Blocks | Why |
-| --- | --- | --- |
-| `git-tag-push` | `git push` of `--tags`, `--follow-tags`, `--mirror`, `refs/tags/…`, or any ref matching the workflow glob `v*.*.*` | A pushed tag starts the production deploy chain |
-| `git-push-dynamic` | a push whose target is a variable, `$(…)` or `xargs` | cannot be checked |
-| `git-config-escape` | setting aliases, remote URLs, `insteadOf`, `hooksPath`, credential helpers | redirects later commands past these rules |
-| `git-remote-redirect` | `git remote add/set-url`, pushing to a path or URL | sends the repository somewhere unchosen (the organisation's own GitHub URL is allowed) |
-| `gh-release-create` | `gh release create/upload/edit` | creates a tag |
-| `gh-graphql-mutation` | GraphQL `createRef`, `deleteRef`, merge, branch-protection and ruleset mutations, or `--input` | REST rules cannot see it |
-| `prod-dispatch` | `gh workflow run` with `PRODUCTION` or the main CI workflow | the owner dispatches production |
-| `npm-deploy` | npm, pnpm or yarn scripts named deploy or publish | a workstation deploy by another name |
-| `gh-auth-token` | `gh auth token/login/refresh/…`, `gh auth status -t` | hands over the owner identity |
-| `credential-store` | `git credential*`, `git config --list`, `cmdkey`, `vaultcmd` | OS and git credential stores |
-| `env-dump` | `env`, `printenv`, `Get-ChildItem Env:`, token-named variables | the environment holds tokens |
-| `net-upload` | `curl`, `wget`, `iwr`, `irm` to any host except localhost, `*.oursharedevents.com`, `api.github.com`, `github.com` | the way data leaves the machine (GET included) |
-| `net-tool` | `nc`, `scp`, `ssh`, `rsync`, `certutil`, `gh gist/repo create`, inline network code, `/dev/tcp` | other egress |
-| `bypass-permissions` | nested `claude` with permission, settings or allowed-tools flags, `CLAUDE_CONFIG_DIR`, `IS_SANDBOX` | outside every rule here |
-| `self-config` | writes to `~/.claude` settings, hooks, audit, skills, commands, `.mcp.json`, project `settings*.json`, the repo hook through a shell; `claude mcp add` | an agent does not change its own guard |
-| `persistence` | git hooks, scheduled tasks, shell profile, registry run keys, `npm config set registry` | runs or installs later |
-| `owner-script` | `scripts/hardening/apply-*.mjs --apply` | owner terminal only |
-| `credential-glob` | a wildcard under `.claude` | reaches `.credentials.json` |
-| `mcp-cloudflare-write`, `mcp-session-control` | Cloudflare write tools; permission mode, remote control, connector toggles, session messaging | the same actions without a shell |
+| Rule                                          | Blocks                                                                                                                                                 | Why                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `git-tag-push`                                | `git push` of `--tags`, `--follow-tags`, `--mirror`, `refs/tags/…`, or any ref matching the workflow glob `v*.*.*`                                     | A pushed tag starts the production deploy chain                                        |
+| `git-push-dynamic`                            | a push whose target is a variable, `$(…)` or `xargs`                                                                                                   | cannot be checked                                                                      |
+| `git-config-escape`                           | setting aliases, remote URLs, `insteadOf`, `hooksPath`, credential helpers                                                                             | redirects later commands past these rules                                              |
+| `git-remote-redirect`                         | `git remote add/set-url`, pushing to a path or URL                                                                                                     | sends the repository somewhere unchosen (the organisation's own GitHub URL is allowed) |
+| `gh-release-create`                           | `gh release create/upload/edit`                                                                                                                        | creates a tag                                                                          |
+| `gh-graphql-mutation`                         | GraphQL `createRef`, `deleteRef`, merge, branch-protection and ruleset mutations, or `--input`                                                         | REST rules cannot see it                                                               |
+| `prod-dispatch`                               | `gh workflow run` with `PRODUCTION` or the main CI workflow                                                                                            | the owner dispatches production                                                        |
+| `npm-deploy`                                  | npm, pnpm or yarn scripts named deploy or publish                                                                                                      | a workstation deploy by another name                                                   |
+| `gh-auth-token`                               | `gh auth token/login/refresh/…`, `gh auth status -t`                                                                                                   | hands over the owner identity                                                          |
+| `credential-store`                            | `git credential*`, `git config --list`, `cmdkey`, `vaultcmd`                                                                                           | OS and git credential stores                                                           |
+| `env-dump`                                    | `env`, `printenv`, `Get-ChildItem Env:`, token-named variables                                                                                         | the environment holds tokens                                                           |
+| `net-upload`                                  | `curl`, `wget`, `iwr`, `irm` to any host except localhost, `*.oursharedevents.com`, `api.github.com`, `github.com`                                     | the way data leaves the machine (GET included)                                         |
+| `net-tool`                                    | `nc`, `scp`, `ssh`, `rsync`, `certutil`, `gh gist/repo create`, inline network code, `/dev/tcp`                                                        | other egress                                                                           |
+| `bypass-permissions`                          | nested `claude` with permission, settings or allowed-tools flags, `CLAUDE_CONFIG_DIR`, `IS_SANDBOX`                                                    | outside every rule here                                                                |
+| `self-config`                                 | writes to `~/.claude` settings, hooks, audit, skills, commands, `.mcp.json`, project `settings*.json`, the repo hook through a shell; `claude mcp add` | an agent does not change its own guard                                                 |
+| `persistence`                                 | git hooks, scheduled tasks, shell profile, registry run keys, `npm config set registry`                                                                | runs or installs later                                                                 |
+| `owner-script`                                | `scripts/hardening/apply-*.mjs --apply`                                                                                                                | owner terminal only                                                                    |
+| `credential-glob`                             | a wildcard under `.claude`                                                                                                                             | reaches `.credentials.json`                                                            |
+| `mcp-cloudflare-write`, `mcp-session-control` | Cloudflare write tools; permission mode, remote control, connector toggles, session messaging                                                          | the same actions without a shell                                                       |
 
 `mcp__terminal__run_in_terminal` is checked as a shell. The matcher in `settings.user.proposed.json`
 includes `mcp__.*`; without it these MCP rules do not run.
