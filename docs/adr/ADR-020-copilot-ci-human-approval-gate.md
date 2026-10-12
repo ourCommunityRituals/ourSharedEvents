@@ -201,3 +201,12 @@ Re-open this decision **only if both** hold:
 
 At that point, enabling skip-approval becomes safe and this ADR should be superseded. Until **both**
 are true, the gate stays. (No revisit is triggered by friction alone.)
+
+## Reconciliation note (2026-10-12)
+
+This ADR and invariant #28 describe `.github/` as protected "at merge time" by CODEOWNERS. That
+was not true when written: every CODEOWNERS line named `@mzdano`, an account that does not exist,
+so GitHub reported an unknown owner and applied no lock. The file now names `@bereasonable13`.
+The lock still takes effect only when `main` requires code-owner review, which needs an agent
+identity separate from the admin account (`docs/security/AGENT-WORKSTATION-HARDENING.md`). Until
+then the human approval gate on Copilot PRs is the control that works, as this ADR intended.

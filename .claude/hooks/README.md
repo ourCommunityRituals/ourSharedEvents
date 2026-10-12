@@ -13,7 +13,7 @@ Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 | File                          | What it is                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                       |
-| `policy-gate.test.mjs`        | 120 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-11, see below) |
+| `policy-gate.test.mjs`        | 120 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
 | `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning) |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
@@ -53,3 +53,21 @@ what it runs (paths built from variables, encoded commands). It works alongside
 the deny rules and auto mode; it does not replace them. To run a blocked command
 on purpose, run it yourself in your own terminal. There is no override flag an
 agent could add to a command.
+
+## Rules added 2026-10-12 (agent workstation review)
+
+| Rule | Blocks | Why |
+| --- | --- | --- |
+| `git-tag-push` | `git push` of `--tags`, `--follow-tags`, `refs/tags/…` or a `vX.Y.Z` ref | A pushed `v*.*.*` tag starts the production deploy chain |
+| `gh-release-create` | `gh release create` | Creates a tag |
+| `prod-dispatch` | `deploy_production` in a `gh`, `curl` or PowerShell web call | Production deploys are dispatched by the owner |
+| `gh-auth-token` | `gh auth token`, `refresh`, `login`, `logout`, `status --show-token` | Hands an agent the owner identity |
+| `credential-store` | `git credential fill`, `cmdkey`, `vaultcmd` | OS credential store |
+| `git-remote-redirect` | `git remote add` / `set-url`, `git push` to a raw URL | Sends the repository to a host the owner did not choose |
+| `net-upload` | `curl`/`wget`/`Invoke-RestMethod` with a body or file to a host other than localhost, `*.oursharedevents.com`, `api.github.com` | The way data leaves the machine |
+| `bypass-permissions` | `--dangerously-skip-permissions` | A nested agent outside every rule |
+| `self-config` | `claude mcp add`, writes to `~/.claude/settings.json`, `~/.claude/hooks/`, project `settings*.json`, `.mcp.json` | An agent does not change its own guard |
+
+`gh api` calls that write to `/git/refs`, `/git/tags` or `/releases` are also blocked by `gh-api-protected`.
+Measure the result with `node scripts/hardening/verify-hardening.mjs`; the install steps for the
+owner are in `docs/security/AGENT-WORKSTATION-HARDENING.md`.
