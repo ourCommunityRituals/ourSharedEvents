@@ -1,4 +1,0 @@
-5 90365cb71c2ff2ea  # pragma: allowlist secret
-7 0a5bd2c766c7e30c  # pragma: allowlist secret
-8 c43610bcf0f63e6c  # pragma: allowlist secret
-preamble b2c49585919bf005  # pragma: allowlist secret

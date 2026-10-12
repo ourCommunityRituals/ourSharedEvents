@@ -61,8 +61,34 @@ jobs:
           # Block on high/critical vulnerabilities (matches Stage-1 npm audit threshold)
           fail-on-severity: high
           comment-summary-in-pr: always
-          # Deny licenses incompatible with the project
-          deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+          # Licence policy: an allowlist. A new or bumped dependency whose
+          # licence is not satisfied by this list is flagged. `deny-licenses`
+          # is deprecated in v5 of the action and may be removed in the next
+          # major, so the policy no longer depends on it.
+          #
+          # The list covers every licence GitHub's dependency graph reports
+          # for this repository (2026-10-11), plus Unlicense and CC-BY-3.0,
+          # which the weekly licence job in advanced-security-scan.yml already
+          # accepts. GPL, AGPL, SSPL and EUPL ids must never be added;
+          # tests/integration/dependency-review-license-policy.test.js checks it.
+          #
+          # Weak copyleft, in the tree as dev tooling only, not in the Worker:
+          #   MPL-2.0            axe-core, lightningcss
+          #   LGPL-3.0-or-later  sharp's prebuilt libvips (@img/sharp-libvips-*)
+          # Ids the graph reports for one package each:
+          #   MITNFA (bowser), BSD-2-Clause-Views (uri-js),
+          #   LicenseRef-scancode-public-domain (jsonify),
+          #   LicenseRef-scancode-unicode (xmlbuilder)
+          #
+          # To accept a new licence, add its SPDX id here in the same PR. To
+          # accept one package without accepting its licence, use
+          # `allow-dependencies-licenses` with the package's purl.
+          allow-licenses: >-
+            MIT, MIT-0, MITNFA, ISC, 0BSD, Apache-2.0,
+            BSD-2-Clause, BSD-2-Clause-Views, BSD-3-Clause, BlueOak-1.0.0,
+            CC0-1.0, CC-BY-3.0, CC-BY-4.0, Python-2.0, Unlicense,
+            MPL-2.0, LGPL-3.0-or-later,
+            LicenseRef-scancode-public-domain, LicenseRef-scancode-unicode
 
       - name: Dependency review summary
         if: always()

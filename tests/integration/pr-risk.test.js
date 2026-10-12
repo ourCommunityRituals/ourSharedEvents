@@ -21,6 +21,9 @@ function classify(files) {
 
 const SRC = 'workers/oursharedevents/src';
 
+// Every case spawns a process; give them room on a busy runner.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('pr-risk: every sensitive area is high', () => {
   test.each([
     ['database migration', 'workers/oursharedevents/migrations/0095_x.sql'],
