@@ -85,6 +85,29 @@ conformance-report.ts`, `tests/unit/conformance-generator.test.ts`), so the chan
 regeneration in the same PR and the generator's own gate run. It is a text change to one
 string and should not alter counts.
 
+### 6. `AGENTS.md` line 19 (Architecture)
+
+> Before: `- **Brand scoping is list-level only:** get and update by id are not brand-checked yet
+(OSE-1080). Do not assume object-level isolation in a new handler.`
+>
+> After: `- **Brand scoping is enforced at list and object level:** one router guard
+(`lib/admin-object-scope.ts`) covers every by-id admin route under `/api/v2/admin/events/:id/`
+and poster deployments, fails closed and answers 404 on a miss. A by-id admin route elsewhere
+must be added to the guard.`
+
+Why: the "before" line is false. `guardAdminObjectScope` runs in
+`workers/oursharedevents/src/router.ts` ahead of the admin routes, proves the object's `brand_id`
+is in the caller's set with a bound SQL predicate, and has its own gate
+(`workers/oursharedevents/tests/admin-object-scope.invariant.spec.ts`, 22 tests). OSE-1080 was
+closed on 2026-08-29. The sentence was stale in the old CLAUDE.md §4 and was copied into AGENTS.md
+during the split (PR 939) on a reviewer's suggestion, without a check against the code. It errs
+on the cautious side, but it tells every agent something untrue about tenant isolation.
+`docs/brain/CONSTRAINTS.md` and `docs/brain/ROLE-STATE.md` were corrected in PR 960; they are not
+governance files.
+
+Size: `AGENTS.md` is 11,720 bytes against a 12,288-byte budget. The "after" line is about 120
+bytes longer, which fits.
+
 ## Not proposed
 
 - No change to the status of TL-014 / TL-015 (`accepted`). They are accepted risks and remain so;
@@ -93,7 +116,7 @@ string and should not alter counts.
 
 ## How to accept
 
-Tell me which items (1 to 5) to apply, or edit this file. I would apply them in one pull
+Tell me which items (1 to 6) to apply, or edit this file. I would apply them in one pull
 request, regenerate the conformance outputs, run the architecture gates (`0-architecture`,
 line-keyed INV9 exemptions) and the conformance generator test locally, and then put it through
 the protocol's review loops before it is merged.
