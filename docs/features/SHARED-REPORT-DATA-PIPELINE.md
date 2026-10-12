@@ -213,7 +213,7 @@ A single read-time view `v_shared_report` (or a query function) that the SharedR
 -- Pseudocode — actual implementation likely a function in src/lib/
 SELECT
   sa.event_id,
-  sa.distinct_agent_hashes              AS unique_gatherings,
+  sa.distinct_agent_hashes              AS distinct_scanners,
   rr.return_rate                AS return_rate_pct,
   (sa.distinct_agent_hashes * 1.0 / cdb.window_30d_count) AS corridor_density_ratio,
   si.impression_count,
@@ -238,7 +238,7 @@ Export contract (one row per event):
 | event_id               | string     | events.id                                               |
 | corridor_id            | string     | events.corridor_id                                      |
 | event_date             | date       | events.start_date                                       |
-| unique_gatherings      | int        | scan_aggregates.distinct_agent_hashes                   |
+| distinct_scanners      | int        | scan_aggregates.distinct_agent_hashes                   |
 | return_rate_pct        | float      | anon_id_returns aggregate                               |
 | corridor_density_ratio | float      | scan_aggregates ÷ corridor_density_baseline.window_30d  |
 | sponsor_impressions    | int        | sponsor_impressions count where event_type='impression' |
@@ -412,7 +412,7 @@ Cron computes SharedReport aggregates for every event regardless of tier. Tier-g
 
 - `materializeSharedReport(eventId)` runs unconditionally on every post-event cron tick
 - `GET /api/v2/events/:id/shared-report` reads the materialized data, applies tier-gating at response-shape time
-- Free tier response: `{ ok: true, tier: 'free', unique_gatherings: <int>, full_data_locked: true, upgrade_hint: { ... } }`
+- Free tier response: `{ ok: true, tier: 'free', distinct_scanners: <int>, full_data_locked: true, upgrade_hint: { ... } }`
 - Paid tier response: full 6-field payload
 
 ---

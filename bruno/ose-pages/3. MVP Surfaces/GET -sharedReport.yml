@@ -49,6 +49,18 @@ runtime:
 
         \    });
 
+        \    test('Reads the scan count as distinct_scanners, never unique_gatherings (OSE-818)', function() {
+
+        \        const html = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
+
+        \        expect(html).to.include('report.distinct_scanners');
+
+        \        expect(html).to.include('Distinct Scanners');
+
+        \        expect(html).to.not.include('unique_gatherings');
+
+        \    });
+
         } else if (res.getStatus() === 403) {
 
         \    test('Has REPORT_DISABLED code', function() {

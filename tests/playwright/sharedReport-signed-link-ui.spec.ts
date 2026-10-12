@@ -31,7 +31,7 @@ interface SharedReportFixture {
   event_title: string;
   event_start_date: string;
   event_end_date: string | null;
-  unique_gatherings: number | null;
+  distinct_scanners: number | null;
   return_rate: {
     venue_pct: number | null;
     corridor_pct: number | null;
@@ -63,7 +63,7 @@ interface SharedReportFixture {
     instances: Array<{
       event_id: string;
       start_date: string;
-      unique_gatherings: number | null;
+      distinct_scanners: number | null;
     }>;
   };
   _meta: {
@@ -78,7 +78,7 @@ function makeReportFixture(overrides: Partial<SharedReportFixture> = {}): Shared
     event_title: 'Empty Bottle — Thursday Jazz',
     event_start_date: '2026-05-14T20:00:00Z',
     event_end_date: '2026-05-14T23:30:00Z',
-    unique_gatherings: 84,
+    distinct_scanners: 84,
     return_rate: { venue_pct: 31.4, corridor_pct: 19.2, sample_size: 84 },
     corridor_density: {
       this_event_count: 84,
@@ -114,9 +114,9 @@ function makeReportFixture(overrides: Partial<SharedReportFixture> = {}): Shared
       series_id: 'srs_1',
       series_name: 'Thursday Jazz',
       instances: [
-        { event_id: 'evt_test_2024', start_date: '2026-05-07T20:00:00Z', unique_gatherings: 64 },
-        { event_id: 'evt_test_2025', start_date: '2026-04-30T20:00:00Z', unique_gatherings: 71 },
-        { event_id: TEST_EVENT_ID, start_date: '2026-05-14T20:00:00Z', unique_gatherings: 84 },
+        { event_id: 'evt_test_2024', start_date: '2026-05-07T20:00:00Z', distinct_scanners: 64 },
+        { event_id: 'evt_test_2025', start_date: '2026-04-30T20:00:00Z', distinct_scanners: 71 },
+        { event_id: TEST_EVENT_ID, start_date: '2026-05-14T20:00:00Z', distinct_scanners: 84 },
       ],
     },
     _meta: {
@@ -148,7 +148,7 @@ async function loadSharedReportWithMockedResponse(
 }
 
 test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
-  test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | renders the event title, unique gatherings, and return rate', async ({
+  test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | renders the event title, distinct scanners, and return rate', async ({
     page,
   }) => {
     await loadSharedReportWithMockedResponse(page, {
@@ -160,9 +160,7 @@ test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
     await expect(page.locator('[data-testid="signed-link-event-title"]')).toHaveText(
       /Empty Bottle/
     );
-    await expect(page.locator('[data-testid="signed-link-distinct-gatherings"]')).toContainText(
-      '84'
-    );
+    await expect(page.locator('[data-testid="signed-link-distinct-scanners"]')).toContainText('84');
     await expect(page.locator('[data-testid="signed-link-return-rate"]')).toContainText('31.4%');
   });
 

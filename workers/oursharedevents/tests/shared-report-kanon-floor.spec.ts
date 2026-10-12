@@ -8,7 +8,7 @@
  *
  * Four aggregates in the builder were previously unfloored and could publish
  * sub-K contributions:
- *   1. unique_gatherings        — SUM(scan_aggregates.distinct_agent_hashes) across buckets
+ *   1. distinct_scanners        — SUM(scan_aggregates.distinct_agent_hashes) across buckets
  *   2. campaign_summary         — per-campaign SUM over sponsor_impressions rows
  *   3. sponsor_class_breakdown  — per-class SUM over sponsor_impressions rows
  *   4. headcount_trend[]        — per-instance SUM(distinct_agent_hashes) across buckets
@@ -184,7 +184,7 @@ async function seedEvent(id: string): Promise<void> {
     .run();
 }
 
-/** Seed one scan_aggregates bucket (one contributing bucket to unique_gatherings). */
+/** Seed one scan_aggregates bucket (one contributing bucket to distinct_scanners). */
 async function seedBucket(eventId: string, suffix: string, uniqueAgents: number): Promise<void> {
   await tenv()
     .DB.prepare(
@@ -200,7 +200,7 @@ beforeAll(async () => {
   await applyMigrations();
 });
 
-describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor before summation', () => {
+describe('OSE-683 — distinct_scanners applies the per-bucket K-anon floor before summation', () => {
   beforeEach(async () => {
     await applyMigrations();
     await clearTables();
@@ -219,12 +219,12 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // Raw sum would be 13; floored-per-bucket keeps only the >=5 bucket → 10.
-    expect(r.report.unique_gatherings).toBe(10);
-    expect(r.report.unique_gatherings).not.toBe(13);
+    expect(r.report.distinct_scanners).toBe(10);
+    expect(r.report.distinct_scanners).not.toBe(13);
   });
 
   // Rc — click_outs (the /s/ digital signal, finally counted on the SharedReport).
-  // Same per-kind K-anon floor as unique_gatherings, and the same drop-before-sum:
+  // Same per-kind K-anon floor as distinct_scanners, and the same drop-before-sum:
   // the total is the sum of the kinds that are published. (This test used to pin
   // total = 9, which hands back the withheld kind: 9 − 6 = 3.)
   test('click_outs: public 6 shows, donate 3 suppressed, total is the published 6 (not 9)', async () => {
@@ -310,8 +310,8 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     if (!r.ok) return;
     // All contributing buckets are sub-K → nothing clears the floor. The result
     // must NOT be the raw sum (9). It is suppressed (null) or a floored 0.
-    expect(r.report.unique_gatherings).not.toBe(9);
-    expect(r.report.unique_gatherings === null || r.report.unique_gatherings === 0).toBe(true);
+    expect(r.report.distinct_scanners).not.toBe(9);
+    expect(r.report.distinct_scanners === null || r.report.distinct_scanners === 0).toBe(true);
   });
 
   test('buckets that individually clear K are preserved and summed exactly (5 + 7 => 12)', async () => {
@@ -322,7 +322,7 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-keep');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.unique_gatherings).toBe(12);
+    expect(r.report.distinct_scanners).toBe(12);
   });
 
   test('a single >=K bucket is unchanged (behavior preserved for compliant buckets)', async () => {
@@ -332,7 +332,7 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-single');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.unique_gatherings).toBe(42);
+    expect(r.report.distinct_scanners).toBe(42);
   });
 });
 
@@ -508,9 +508,9 @@ describe('OSE-683 — headcount_trend applies the per-bucket K-anon floor per in
     const b = trend.instances.find((i) => i.event_id === other);
     expect(a).toBeDefined();
     // Raw SUM would be 13; per-bucket floored keeps only the >=5 bucket → 10.
-    expect(a!.unique_gatherings).toBe(10);
-    expect(a!.unique_gatherings).not.toBe(13);
-    expect(b!.unique_gatherings).toBe(7);
+    expect(a!.distinct_scanners).toBe(10);
+    expect(a!.distinct_scanners).not.toBe(13);
+    expect(b!.distinct_scanners).toBe(7);
   });
 
   test('a trend instance whose buckets are all sub-K is suppressed (not the raw sum 3+4)', async () => {
@@ -531,8 +531,8 @@ describe('OSE-683 — headcount_trend applies the per-bucket K-anon floor per in
     const subInst = r.report.headcount_trend.instances.find((i) => i.event_id === sub);
     expect(subInst).toBeDefined();
     // Raw sum would be 7; all buckets sub-K → suppressed (null), never 7.
-    expect(subInst!.unique_gatherings).not.toBe(7);
-    expect(subInst!.unique_gatherings).toBeNull();
+    expect(subInst!.distinct_scanners).not.toBe(7);
+    expect(subInst!.distinct_scanners).toBeNull();
   });
 });
 

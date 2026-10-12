@@ -110,7 +110,7 @@ describe('OSE-295 shared-report mobile workability — API layer', () => {
     expect(html).toContain('data-label="Scans"');
     expect(html).toContain('data-label="First"');
     expect(html).toContain('data-label="Last"');
-    expect(html).toContain('data-label="Distinct gatherings"');
+    expect(html).toContain('data-label="Distinct scanners"');
   });
 
   test('OSE-295 | API | GET /sharedReport (mobile media query) | main padding tightens for narrow viewports', async () => {

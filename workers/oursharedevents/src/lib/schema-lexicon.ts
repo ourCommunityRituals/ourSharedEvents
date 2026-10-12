@@ -81,6 +81,56 @@ export interface LexiconViolation {
   term: string;
 }
 
+/**
+ * Payload keys explicitly accepted despite a banned token (OSE-818). Same rule as
+ * EXEMPT_IDENTIFIERS: each names the ticket that removes it.
+ */
+export const EXEMPT_PAYLOAD_KEYS: ReadonlyMap<string, string> = new Map([
+  // The SharedReport impressions family moves with the table's rename to
+  // "displays": the top-level field and depth section, the campaign_summary
+  // fields, and sponsor_class_breakdown.<class>.total_impressions.
+  ['sponsor_impressions', 'OSE-931'],
+  ['total_impressions', 'OSE-931'],
+  ['impressions_by_surface', 'OSE-931'],
+]);
+
+/** A banned token in a key of a JSON payload, with the dotted path to it. */
+export interface PayloadKeyViolation {
+  path: string;
+  key: string;
+  term: string;
+}
+
+/**
+ * Walk every object key of a payload (arrays included) and return each key that
+ * carries a banned token and is not exempt. Values are not read: a record keyed
+ * by data (a destination kind, a cell id) is still a key and is checked.
+ */
+export function findBannedPayloadKeys(
+  payload: unknown,
+  banned: ReadonlySet<string> = BANNED_SCHEMA_TERMS,
+  exempt: ReadonlyMap<string, string> = EXEMPT_PAYLOAD_KEYS
+): PayloadKeyViolation[] {
+  const out: PayloadKeyViolation[] = [];
+  const walk = (v: unknown, path: string): void => {
+    if (Array.isArray(v)) {
+      v.forEach((x, i) => walk(x, `${path}[${i}]`));
+      return;
+    }
+    if (v === null || typeof v !== 'object') return;
+    for (const [key, child] of Object.entries(v)) {
+      const here = path ? `${path}.${key}` : key;
+      if (!exempt.has(key)) {
+        const term = tokenizeIdentifier(key).find((t) => banned.has(t));
+        if (term) out.push({ path: here, key, term });
+      }
+      walk(child, here);
+    }
+  };
+  walk(payload, '');
+  return out;
+}
+
 /** Split an identifier into lowercase alphanumeric tokens (snake_case + camelCase). */
 export function tokenizeIdentifier(name: string): string[] {
   return name

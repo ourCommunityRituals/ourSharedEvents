@@ -17,7 +17,7 @@ const SAMPLE_REPORT = {
   event_title: 'Test Event',
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
-  unique_gatherings: 99,
+  distinct_scanners: 99,
   sponsor_impressions: [
     { sponsor_id: 'sp_A', impressions: 200 },
     { sponsor_id: 'sp_B', impressions: 75 },
@@ -110,7 +110,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(DEPTH_SECTIONS.mid, 'Mid (paid) gets the map').toContain('corridor_map');
     expect(DEPTH_SECTIONS.premium, 'Premium (paid) gets the map').toContain('corridor_map');
     // Free stays honest-essential, not crippled: it keeps the smoke-test basics.
-    expect(DEPTH_SECTIONS.local).toContain('unique_gatherings');
+    expect(DEPTH_SECTIONS.local).toContain('distinct_scanners');
     expect(DEPTH_SECTIONS.local).toContain('sponsor_impressions');
   });
 
@@ -118,7 +118,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     const resolved = resolveDepth({ role: 'admin' });
     const { report, upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     // Omission-only: no values are transformed
-    expect(report.unique_gatherings).toBe(99);
+    expect(report.distinct_scanners).toBe(99);
     expect(report.return_rate).toBe(0.42);
     expect(report.headcount_trend).toEqual(SAMPLE_REPORT.headcount_trend);
     expect(report.corridor_density).toEqual(SAMPLE_REPORT.corridor_density);
@@ -247,12 +247,12 @@ describe('TL-010 | Depth escalation guard — resolveDepth caps + filterReportBy
     expect(report.headcount_trend).toBeUndefined();
   });
 
-  it('local depth still allows base fields (event_id, event_title, unique_gatherings, _meta)', () => {
+  it('local depth still allows base fields (event_id, event_title, distinct_scanners, _meta)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     expect(report.event_id).toBe('evt_test');
     expect(report.event_title).toBe('Test Event');
-    expect(report.unique_gatherings).toBe(99);
+    expect(report.distinct_scanners).toBe(99);
     expect(report._meta).toBeDefined();
   });
 

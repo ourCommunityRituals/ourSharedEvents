@@ -46,7 +46,7 @@ async function card(
               event_id: 'evt_1',
               event_title: 'Bocce Night',
               event_start_date: '2026-09-26T23:00:00Z',
-              unique_gatherings: 84,
+              distinct_scanners: 84,
               return_rate: returnRate,
               _meta: { materialized_at: null, suppression_reasons: reasons },
             },

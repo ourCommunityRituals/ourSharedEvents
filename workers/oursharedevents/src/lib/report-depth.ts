@@ -38,7 +38,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
+    'distinct_scanners',
     'sponsor_impressions',
     // sponsor_class_breakdown is CLASS-level aggregate (never per-competitor) —
     // the tier-neutral competitive-intel delivery SR-25 chose over field-stripping.
@@ -56,7 +56,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
+    'distinct_scanners',
     'sponsor_impressions',
     'campaign_summary',
     'poster_attribution',
@@ -73,7 +73,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_title',
     'event_start_date',
     'event_end_date',
-    'unique_gatherings',
+    'distinct_scanners',
     'sponsor_impressions',
     'campaign_summary',
     'poster_attribution',

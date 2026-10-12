@@ -604,7 +604,7 @@ describe('the harness can see: a full report, and each lever above the floor', (
     const numeric = [...admin].filter(([, v]) => typeof v === 'number').map(([p]) => p);
     // Every top-level section of the report has at least one number in it.
     for (const section of [
-      'unique_gatherings',
+      'distinct_scanners',
       'click_outs',
       'return_rate',
       'corridor_density',
@@ -736,7 +736,7 @@ const SUM: How = { how: 'sum of floored parts', floor: K };
 const NOT_PEOPLE: How = { how: 'not people' };
 
 const REGISTRY: Record<string, How> = {
-  unique_gatherings: SUM, // people per hour bucket, each bucket floored
+  distinct_scanners: SUM, // people per hour bucket, each bucket floored
   'click_outs.by_kind.*': FLOORED,
   'click_outs.total': SUM, // the published kinds
   'return_rate.sample_size': FLOORED,
@@ -764,7 +764,7 @@ const REGISTRY: Record<string, How> = {
   'sponsor_class_breakdown.*.total_impressions': { ...SUM, orZero: true },
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
-  'headcount_trend.instances[].unique_gatherings': SUM,
+  'headcount_trend.instances[].distinct_scanners': SUM,
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
   'sponsor_impressions.length': NOT_PEOPLE,

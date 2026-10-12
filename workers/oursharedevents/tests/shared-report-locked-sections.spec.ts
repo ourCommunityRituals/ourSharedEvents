@@ -92,7 +92,7 @@ function fullReport(): SharedReport {
     event_title: 'Bocce Night',
     event_start_date: '2026-09-26T23:00:00Z',
     event_end_date: '2026-09-27T03:00:00Z',
-    unique_gatherings: 84,
+    distinct_scanners: 84,
     click_outs: { by_kind: { public: 20 }, total: 20 },
     return_rate: { venue_pct: 31.4, corridor_pct: 50, sample_size: 84 },
     corridor_density: {
@@ -147,8 +147,8 @@ function fullReport(): SharedReport {
       series_id: 'srs_1',
       series_name: 'Saturday League',
       instances: [
-        { event_id: 'evt_prev', start_date: '2026-09-19T23:00:00Z', unique_gatherings: 61 },
-        { event_id: EVENT_ID, start_date: '2026-09-26T23:00:00Z', unique_gatherings: 84 },
+        { event_id: 'evt_prev', start_date: '2026-09-19T23:00:00Z', distinct_scanners: 61 },
+        { event_id: EVENT_ID, start_date: '2026-09-26T23:00:00Z', distinct_scanners: 84 },
       ],
     },
     corridor_map: {

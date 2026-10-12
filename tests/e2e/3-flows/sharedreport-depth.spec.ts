@@ -45,6 +45,18 @@ async function fetchReport(
   });
 }
 
+/**
+ * OSE-818 (owner 2026-10-11): the scan count is `distinct_scanners` at every
+ * depth, on the deployed Worker; the old key is gone. Called from the tests that
+ * already read a report, so it adds no conditional skip (CI integrity ratchet).
+ */
+function expectScannerCount(report: Record<string, unknown>): void {
+  expect('distinct_scanners' in report).toBe(true);
+  const v = report.distinct_scanners;
+  expect(v === null || (typeof v === 'number' && Number.isInteger(v) && v >= 5)).toBe(true);
+  expect('unique_gatherings' in report).toBe(false);
+}
+
 test.describe('SharedReport depth gate', () => {
   test('no token → 401', async ({ request }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
@@ -77,7 +89,7 @@ test.describe('SharedReport depth gate', () => {
     // section present, including the two above Mid.
     const report = body.report as Record<string, unknown>;
     expect('event_id' in report).toBe(true);
-    expect('unique_gatherings' in report).toBe(true);
+    expectScannerCount(report);
     // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
     // headcount_trend is the genuinely premium-only section — present here.
@@ -94,6 +106,7 @@ test.describe('SharedReport depth gate', () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     const report = body.report as Record<string, unknown>;
+    expectScannerCount(report);
     // Local depth = the Mid+ sections are omitted (depth by omission, not a label).
     expect('campaign_summary' in report).toBe(false);
     expect('poster_attribution' in report).toBe(false);
@@ -134,6 +147,7 @@ test.describe('SharedReport depth gate', () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     const report = body.report as Record<string, unknown>;
+    expectScannerCount(report);
     // Mid depth = the Mid sections are present (corridor_map is a MID section —
     // the paid value line, OSE-682 — NOT premium-only), and the single
     // premium-only section (headcount_trend) is omitted.

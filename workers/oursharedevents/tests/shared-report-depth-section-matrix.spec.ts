@@ -15,7 +15,7 @@
  * Vitest (SELF.fetch) instead of only against staging.
  *
  * CONTRACT (ADR-017 / REPORT-DEPTH.md / DEPTH_SECTIONS in lib/report-depth.ts):
- *   • local  (free): event meta + unique_gatherings + sponsor_impressions (own) +
+ *   • local  (free): event meta + distinct_scanners + sponsor_impressions (own) +
  *     sponsor_class_breakdown. The paid sections are ABSENT.
  *   • mid    (paid): adds campaign_summary, poster_attribution, return_rate,
  *     corridor_density, corridor_map (the map = the paid value line, OSE-682).
@@ -135,7 +135,13 @@ async function readAs(
   role: 'sponsor' | 'admin',
   opts: { depth?: string; sponsor_id?: string } = {}
 ): Promise<{ status: number; report: Record<string, unknown> }> {
-  const token = await mintSignedLinkToken({ SHARED_REPORT_SIGNING_SECRET: SIGNING_SECRET }, EVENT, role, undefined, opts);
+  const token = await mintSignedLinkToken(
+    { SHARED_REPORT_SIGNING_SECRET: SIGNING_SECRET },
+    EVENT,
+    role,
+    undefined,
+    opts
+  );
   if (!token) throw new Error('mint returned null');
   const res = await SELF.fetch(`https://test.local/api/v2/events/${EVENT}/shared-report`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -167,22 +173,45 @@ const PROFILES: DepthProfile[] = [
     name: 'LOCAL sponsor → base sections only; paid sections omitted; mid locked',
     role: 'sponsor',
     depth: 'local',
-    present: ['unique_gatherings', 'sponsor_impressions', 'sponsor_class_breakdown'],
-    absent: ['campaign_summary', 'poster_attribution', 'return_rate', 'corridor_density', 'corridor_map', 'headcount_trend'],
+    present: ['distinct_scanners', 'sponsor_impressions', 'sponsor_class_breakdown'],
+    absent: [
+      'campaign_summary',
+      'poster_attribution',
+      'return_rate',
+      'corridor_density',
+      'corridor_map',
+      'headcount_trend',
+    ],
     upgrade: { next_depth: 'mid', lockedIncludes: ['corridor_map', 'campaign_summary'] },
   },
   {
     name: 'MID sponsor → map + optimization present; headcount_trend (premium) omitted; premium locked',
     role: 'sponsor',
     depth: 'mid',
-    present: ['unique_gatherings', 'sponsor_impressions', 'sponsor_class_breakdown', 'campaign_summary', 'poster_attribution', 'return_rate', 'corridor_density', 'corridor_map'],
+    present: [
+      'distinct_scanners',
+      'sponsor_impressions',
+      'sponsor_class_breakdown',
+      'campaign_summary',
+      'poster_attribution',
+      'return_rate',
+      'corridor_density',
+      'corridor_map',
+    ],
     absent: ['headcount_trend'],
     upgrade: { next_depth: 'premium', lockedIncludes: ['headcount_trend'] },
   },
   {
     name: 'ADMIN → full premium depth; no upgrade hint',
     role: 'admin',
-    present: ['unique_gatherings', 'sponsor_impressions', 'sponsor_class_breakdown', 'campaign_summary', 'corridor_map', 'headcount_trend'],
+    present: [
+      'distinct_scanners',
+      'sponsor_impressions',
+      'sponsor_class_breakdown',
+      'campaign_summary',
+      'corridor_map',
+      'headcount_trend',
+    ],
     absent: [],
     upgrade: null,
   },
@@ -196,7 +225,12 @@ describe('OSE-1172 — SharedReport depth × section gating on the read path (AD
     // regardless (fixed shape), so an absent paid key below is the FILTER at work.
     await seedEvent(EVENT);
     await seedScan(EVENT, 5);
-    await seedSplitSponsor(tenv().DB, { id: SPONSOR, eventId: EVENT, name: 'DM Sponsor', tier: 'primary' });
+    await seedSplitSponsor(tenv().DB, {
+      id: SPONSOR,
+      eventId: EVENT,
+      name: 'DM Sponsor',
+      tier: 'primary',
+    });
     await seedImpression(SPONSOR, EVENT, 'poster');
   });
 

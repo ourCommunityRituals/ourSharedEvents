@@ -108,7 +108,7 @@ const FLAG_LABELS: Record<string, string> = {
 
 // Friendly section names for the depth exhibit.
 const SECTION_LABELS: Record<string, string> = {
-  unique_gatherings: 'Headcount (unique gatherings)',
+  distinct_scanners: 'Distinct scanners',
   sponsor_impressions: 'Sponsor logo impressions',
   campaign_summary: 'Campaign comparison',
   poster_attribution: 'Poster placement breakdown',
@@ -410,7 +410,7 @@ function depthExhibit(depth: ReportDepth): string {
   const posters = getPosterDeployments();
   const event = getEventFixture();
 
-  const uniqueScanners = new Set(scans.map((s) => s.anon_id)).size;
+  const distinctScanners = new Set(scans.map((s) => s.anon_id)).size;
   const avgRating = surveys.reduce((a, s) => a + s.rating, 0) / Math.max(1, surveys.length);
   const returnRate = Math.round((checkins.length / Math.max(1, registrations.length)) * 100);
 
@@ -422,7 +422,15 @@ function depthExhibit(depth: ReportDepth): string {
   const cards: string[] = [];
 
   // local depth (always present)
-  cards.push(statCard('Headcount', String(uniqueScanners), 'unique gatherings', true, 'free'));
+  cards.push(
+    statCard(
+      'Distinct scanners',
+      String(distinctScanners),
+      'anonymous, counted once each',
+      true,
+      'free'
+    )
+  );
   cards.push(
     statCard('Your logo impressions', String(scans.length), 'rotation counts', true, 'free')
   );

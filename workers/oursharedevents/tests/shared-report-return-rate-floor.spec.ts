@@ -450,7 +450,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
       if (!r.ok) return;
 
       expect(r.report.corridor_map?.source).toBe('fallback');
-      expect(r.report.unique_gatherings).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
+      expect(r.report.distinct_scanners).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
       const lines = r.report._meta.suppression_reasons.filter((s) => s.field === 'corridor_map');
       expect(lines, 'one line, not one per hidden area').toHaveLength(1);
       expect(lines[0]!.reason).toBe('below_min_sample_size');

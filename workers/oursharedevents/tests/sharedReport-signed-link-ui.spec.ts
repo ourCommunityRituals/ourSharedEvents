@@ -193,7 +193,7 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     }
   });
 
-  test('OSE-R-003 | API | GET /sharedReport (signed-link payload) | rendered article carries event_title, unique_gatherings, return_rate, corridor_density data-testids', async () => {
+  test('OSE-R-003 | API | GET /sharedReport (signed-link payload) | rendered article carries event_title, distinct_scanners, return_rate, corridor_density data-testids', async () => {
     const html = await fetchSharedReportPage();
     // These data-testids are the contract the Playwright FE spec relies on
     // to find rendered fields. If a future refactor renames them, the
@@ -202,7 +202,7 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     for (const testid of [
       'signed-link-event-title',
       'signed-link-event-date',
-      'signed-link-distinct-gatherings',
+      'signed-link-distinct-scanners',
       'signed-link-return-rate',
       'signed-link-corridor-density',
     ]) {

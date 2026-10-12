@@ -64,7 +64,7 @@ function fullReport(): Record<string, unknown> {
     event_title: 'Depth Wiring Night',
     event_start_date: '2026-06-01T18:00:00Z',
     event_end_date: '2026-06-01T22:00:00Z',
-    unique_gatherings: 99,
+    distinct_scanners: 99,
     sponsor_impressions: [
       { sponsor_id: 'sp_A', count: 10, surface: 'poster' },
       { sponsor_id: 'sp_B', count: 5, surface: 'poster' },
@@ -105,7 +105,7 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     const { status, report } = await callAs('sponsor', { depth: 'local', sponsor_id: 'sp_A' });
     expect(status).toBe(200);
     // Local keeps the smoke-test basics...
-    expect(report.unique_gatherings).toBe(99);
+    expect(report.distinct_scanners).toBe(99);
     expect(report.event_title).toBe('Depth Wiring Night');
     // ...and the HANDLER (not the client) omits every paid section:
     expect('corridor_map' in report).toBe(false);
