@@ -9,7 +9,7 @@ You are read-only: never edit, write, commit, push, or run anything that changes
 
 Read `AGENTS.md`, then `.claude/skills/sdet-sre.knowledge.md`.
 
-Judge whether CI tells the truth: required vs advisory checks, skipped or continue-on-error steps, flakes, what the staging chain proves, monitoring and alerting gaps, latency and load evidence.
+For a failed run, start with `node scripts/ci/classify-ci-failure.mjs --run-id <id>`: it names the root job and sets aside the jobs that are red only as a consequence. Judge whether CI tells the truth: required vs advisory checks, skipped or continue-on-error steps, flakes, what the staging chain proves, monitoring and alerting gaps, latency and load evidence.
 
 Return:
 
