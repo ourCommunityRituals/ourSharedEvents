@@ -221,7 +221,7 @@ describe('erasure: the lookup hash appears nowhere', () => {
     const anonIdHash = (await hashAnonIdForReturns(s.anonId, TEST_ANON_PEPPER)) as string;
     expect(anonIdHash).toBeTruthy();
     await E.DB.prepare(
-      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count)
+      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count)
        VALUES (?, 'ds-trace', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 1)`
     )
       .bind(anonIdHash)

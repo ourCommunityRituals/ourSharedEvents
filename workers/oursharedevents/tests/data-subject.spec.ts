@@ -419,7 +419,7 @@ describe('POST /api/v2/admin/data-subject/erase — OSE-1350 anon-ID purge', () 
 
     await mainDb()
       .prepare(
-        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count)
+        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count)
          VALUES (?, 'ds-test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 1)`
       )
       .bind(anonIdHash)

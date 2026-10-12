@@ -467,7 +467,7 @@ describe('OSE-272 Session 2: pipeline tables created with correct shape', () => 
     expect(colNames).toContain('venue_id');
     expect(colNames).toContain('first_seen_at');
     expect(colNames).toContain('last_seen_at');
-    expect(colNames).toContain('visit_count');
+    expect(colNames).toContain('return_count');
     expect(colNames).toContain('computed_at');
     // CRITICAL: must NOT contain raw anon_id
     expect(colNames).not.toContain('anon_id');

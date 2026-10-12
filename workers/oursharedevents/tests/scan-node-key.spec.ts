@@ -409,7 +409,7 @@ describe('erasure reaches the keyed rows', () => {
     const returnsHash = await hashAnonIdForReturns(key!, tenv().ANON_ID_HASH_PEPPER);
     await mainDb()
       .prepare(
-        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count)
+        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count)
          VALUES (?, ?, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z', 1)`
       )
       .bind(returnsHash, eventId)

@@ -431,7 +431,7 @@ export async function exportAnonIdReturns(
     // The last_seen_at bound stays because it can only be later than the event
     // day, so it is a safe, indexed pre-filter (0090) and never drops a row.
     // A return is a person seen at 2+ distinct events in the corridor. This
-    // counts events, not visit_count: the materializer bumps visit_count on
+    // counts events, not return_count: the materializer bumps return_count on
     // every re-run over the same scans, so it is not a return signal.
     // Each run is its own snapshot, identified by its full timestamp: the
     // window moves continuously, so two runs never describe the same data.

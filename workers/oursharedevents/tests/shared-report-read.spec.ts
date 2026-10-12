@@ -147,16 +147,16 @@ async function seedScanAggregate(eventId: string, uniqueAgents: number): Promise
 async function seedAnonReturn(opts: {
   hash: string;
   venueId: string;
-  visit_count?: number;
+  return_count?: number;
 }): Promise<void> {
   const now = new Date().toISOString();
   await tenv()
     .DB.prepare(
       `INSERT INTO anon_id_returns
-         (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
        VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .bind(opts.hash, opts.venueId, now, now, opts.visit_count ?? 1, now)
+    .bind(opts.hash, opts.venueId, now, now, opts.return_count ?? 1, now)
     .run();
 }
 
@@ -213,7 +213,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     // was a private 3), so the sample size is published. The venue rate counts
     // people seen at another event of a confirmed series (OSE-1652); this event
     // is in none, so there is nothing to compare with. (This test used to pin
-    // venue_pct = 20 from a visit_count of 2, which counts job runs.)
+    // venue_pct = 20 from a return_count of 2, which counts job runs.)
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
     expect(r.report.return_rate.venue_pct).toBeNull();
     expect(r.report._meta.suppression_reasons).toContainEqual(

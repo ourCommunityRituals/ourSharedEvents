@@ -367,7 +367,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // not a row of its own; a confirmed series is how the schema says "this
     // gathering recurs here" (0033/0034), and it is the grouping the headcount
     // trend reads. Counted as distinct events, like corridor_pct and the
-    // returns export. Never `visit_count`: the nightly job adds one to it on
+    // returns export. Never `return_count`: the nightly job adds one to it on
     // every run over the same scans, so it counts runs, not returns, and read
     // as a return it made six one-time visitors a 100% rate.
     const series = await confirmedSeriesOf(db, event);

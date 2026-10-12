@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 102, forms 14 to 18
+# Production migration plan: main 77 to 103, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0102, forms 0015–0018.
+Covers: main 0078–0103, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 102              | 25       |
+| Main (`ocr-db-production`)        | 77               | 103              | 26       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0102
+## Main database, 0078 to 0103
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -119,6 +119,7 @@ a line in this document.
 | `0100_scan_split_tables_hour_precision.sql`               | Truncates `created_at` on `scan_placement_events` and `scan_node_returns` to the scan's hour. Counts stay.               | Yes  |
 | `0101_scan_node_returns_one_row_per_browser_hour.sql`     | Keeps one `scan_node_returns` row per browser, event and hour, and adds the UNIQUE index that enforces it.               | Yes  |
 | `0102_rename_sponsor_impressions_to_sponsor_displays.sql` | Rebuilds `sponsor_impressions` as `sponsor_displays`, with its indexes; the stored value `impression` becomes `display`. | Yes  |
+| `0103_rename_visit_count_to_return_count.sql`             | Renames `anon_id_returns.visit_count` to `return_count` and its index. No row changes.                                   | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -295,7 +296,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0102_rename_sponsor_impressions_to_sponsor_displays.sql` and `102`;
+2. **The level.** Expected: `0103_rename_visit_count_to_return_count.sql` and `103`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

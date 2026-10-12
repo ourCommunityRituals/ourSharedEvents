@@ -110,7 +110,7 @@ interface SharedReport {
 
   // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
   //    of its confirmed series (`venue_pct`, OSE-1652) or in its corridor (`corridor_pct`).
-  //    Both count distinct events, never `visit_count` (that column counts runs of the
+  //    Both count distinct events, never `return_count` (that column counts runs of the
   //    nightly job). An event in no confirmed series gets `venue_pct: null` with
   //    `no_series`.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform

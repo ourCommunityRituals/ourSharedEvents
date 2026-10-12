@@ -109,10 +109,10 @@ const MATERIALIZATION_CEILING_HOURS = 26;
  *   2. Hash each with ANON_ID_HASH_PEPPER (skip if pepper missing → null hash)
  *   3. Upsert `anon_id_returns(anon_id_hash, venue_id=event_id, ...)`:
  *      - INSERT a new row on first sight
- *      - UPDATE last_seen_at + visit_count on repeat
+ *      - UPDATE last_seen_at + return_count on repeat
  *
  * The (anon_id_hash, venue_id) PK ensures one row per (anon, event). Each run
- * re-reads the event's distinct ids, so visit_count counts runs, not scans:
+ * re-reads the event's distinct ids, so return_count counts runs, not scans:
  * nothing may read it as a visit count (the export counts distinct events).
  */
 /** Old-pepper rows deleted per statement, and the most statements per run. */
@@ -268,19 +268,19 @@ export async function materializeAnonIdReturns(
           result.rowsSkipped++;
           continue;
         }
-        // UPSERT — bump visit_count + last_seen_at on conflict.
+        // UPSERT — bump return_count + last_seen_at on conflict.
         // Note: venue_id is set to the event_id where this scan happened.
         // The "return rate" read-API query in Session 5 will aggregate
         // these per-event rows back up to (venue or corridor) scope.
         const nowIso = new Date().toISOString();
         await env.DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
               pepper_epoch)
            VALUES (?, ?, ?, ?, 1, ?, ?)
            ON CONFLICT(anon_id_hash, venue_id) DO UPDATE SET
              last_seen_at = excluded.last_seen_at,
-             visit_count  = visit_count + 1,
+             return_count  = return_count + 1,
              computed_at  = excluded.computed_at,
              pepper_epoch = excluded.pepper_epoch`
         )

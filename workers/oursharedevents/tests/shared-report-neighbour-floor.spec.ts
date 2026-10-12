@@ -226,13 +226,13 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
 
   // People seen at the event. The first `cameTwice` were also at the earlier
   // event of the series; the LAST `seenElsewhere` were also at the corridor
-  // sibling. `visit_count` stays 1: it counts job runs, and nothing reads it.
+  // sibling. `return_count` stays 1: it counts job runs, and nothing reads it.
   // The sibling's own row count is held constant, so only the overlap moves.
   const anon = (h: string, venue: string, visits: number) =>
     db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .bind(h, venue, STAMP, STAMP, visits, STAMP);
