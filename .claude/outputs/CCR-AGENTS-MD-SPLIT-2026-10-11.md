@@ -122,3 +122,13 @@ Score: S1 is closed. G2's answer is written but not confirmed. **Still 84% until
 2. **G1:** keep the routing table as written?
 3. **G2:** after T1–T4 green, should the agent move the story to **Done**, or to **In Review** for your acceptance?
 4. **Timing:** merge before Oct 20, or after Oct 24?
+
+## Outcome (recorded 2026-10-12)
+
+- **Merged by the owner** as #939 (`abff09b8`) on 2026-10-11, taken out of draft and merged before the Oct 20 freeze. The four gate questions were not answered in writing. The merge is the record of the decision. G1 (model routing table) and G2 (Linear end state) therefore stand as merged, and the owner can edit either line in AGENTS.md / CLAUDE.md.
+- **Done, not only merged.** The post-merge staging chain is green for `db0103ac`, a later `main` SHA that contains the merge (run 38186573387): `T1 Deploy → Staging`, `T2 Contract → Staging (Bruno)`, `T3 E2E Smoke → Staging (Playwright)` and `T4 Functional → Staging` all `success`.
+- **G4 closed:** the hub `drift-auditor` reads AGENTS.md and `docs/brain/` (ourCommunityRituals/ourCommunityRituals#55, merged).
+- **G5 stays an accepted risk:** the org-wide standard changes when the other products adopt AGENTS.md.
+- **G3 cannot be observed yet, and an earlier statement was wrong.** The follow-up PR (#944) was the first chance to see the reviewer load `main`'s AGENTS.md. Its review run (38189773742) shows the reviewer did not run at all: neither `CLAUDE_CODE_OAUTH_TOKEN` nor `ANTHROPIC_API_KEY` is set as a repo secret, so "Pick reviewer and check auth" succeeds, every later step is skipped, and the job reports success with a warning. The same was true on #939, where this assessment said the reviewer "ran"; it had only read the green check, not the log. G3 stays open until the owner provisions a token.
+- **Cleanup done in the follow-up PR:** the transitional `scripts/brain/split-claude-md.mjs`, its fingerprint file and its four test cases are deleted; the `docs/brain/` headers now say to edit those files directly.
+- **During CI on #939, one more fix:** S0's secret scan read the fingerprint hashes as secrets (4 detections). They were moved to a text file with allowlist markers, and checked with the same detect-secrets version before pushing.

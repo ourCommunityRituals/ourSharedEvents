@@ -5,23 +5,18 @@
  *    the Copilot pointer exists, every skill and agent is well formed.
  * 2. Hermetic born-red cases: a minimal valid tree passes, then each injected
  *    fault turns the script red with its own message.
- * 3. split-claude-md.mjs (transitional, for rebasing the AGENTS.md branch):
- *    writes the generated files, notices hand-ported parts changing, and
- *    refuses a CLAUDE.md whose section set changed.
  */
 
 const { spawnSync } = require('child_process');
-const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } = require('fs');
+const { mkdtempSync, mkdirSync, writeFileSync } = require('fs');
 const { tmpdir } = require('os');
 const { join, dirname } = require('path');
 
 const ROOT = join(__dirname, '..', '..');
 const BUDGET = join(ROOT, 'scripts', 'ci', 'agent-instructions-budget.mjs');
-const SPLIT = join(ROOT, 'scripts', 'brain', 'split-claude-md.mjs');
 
 const runBudget = (root) =>
   spawnSync(process.execPath, [BUDGET, '--root', root], { encoding: 'utf-8' });
-const runSplit = (...a) => spawnSync(process.execPath, [SPLIT, ...a], { encoding: 'utf-8' });
 
 function put(root, rel, body) {
   const p = join(root, rel);
@@ -43,6 +38,9 @@ function validTree() {
   );
   return root;
 }
+
+// Every case spawns a process; give them room on a busy runner.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('agent instruction budget: the real tree', () => {
   test('passes', () => {
@@ -128,71 +126,5 @@ describe('agent instruction budget: born red', () => {
     const root = validTree();
     put(root, 'CLAUDE.md', '@AGENTS.md\r\n' + 'x\r\n'.repeat(3000));
     expect(runBudget(root).status).toBe(0);
-  });
-});
-
-describe('split-claude-md (transitional)', () => {
-  const sections = (overrides = {}) =>
-    ['# CLAUDE.md\n\npreamble\n\n---\n\n']
-      .concat(
-        ['1', '2', '3', '4', '5', '6', '7', '8'].map(
-          (n) => overrides[n] ?? `## ${n}. Section ${n}\n\nbody ${n}\n\n---\n\n`
-        )
-      )
-      .join('');
-
-  function setup(text) {
-    const root = mkdtempSync(join(tmpdir(), 'split-'));
-    const from = join(root, 'monolith.md');
-    writeFileSync(from, text);
-    return { root, from };
-  }
-
-  test('writes the generated files and records a fingerprint', () => {
-    const { root, from } = setup(sections());
-    const r = runSplit('--from', from, '--root', root);
-    expect(r.status).toBe(0);
-    expect(readFileSync(join(root, 'docs/brain/ROLE-STATE.md'), 'utf-8')).toContain(
-      '## 3. Section 3'
-    );
-    expect(readFileSync(join(root, 'docs/brain/PRODUCT.md'), 'utf-8')).toMatch(
-      /## 1\. Section 1[\s\S]*## 2\. Section 2/
-    );
-    expect(readFileSync(join(root, 'docs/brain/STORY-FORMAT.md'), 'utf-8')).toContain(
-      '## 6. Section 6'
-    );
-    expect(readFileSync(join(root, 'docs/brain/CONSTRAINTS.md'), 'utf-8')).toContain(
-      '## 4. Section 4'
-    );
-    expect(existsSync(join(root, 'docs/brain/.split-fingerprint.txt'))).toBe(true);
-  });
-
-  test('a change to a generated section (§3) is carried over silently', () => {
-    const { root, from } = setup(sections());
-    runSplit('--from', from, '--root', root);
-    writeFileSync(from, sections({ 3: '## 3. Section 3\n\nnew role state\n\n---\n\n' }));
-    const r = runSplit('--from', from, '--root', root);
-    expect(r.status).toBe(0);
-    expect(readFileSync(join(root, 'docs/brain/ROLE-STATE.md'), 'utf-8')).toContain(
-      'new role state'
-    );
-  });
-
-  test('a change to a hand-ported section (§5) exits 3 until accepted', () => {
-    const { root, from } = setup(sections());
-    runSplit('--from', from, '--root', root);
-    writeFileSync(from, sections({ 5: '## 5. Section 5\n\nnew rule\n\n---\n\n' }));
-    const r = runSplit('--from', from, '--root', root);
-    expect(r.status).toBe(3);
-    expect(r.stdout).toContain('§5');
-    expect(runSplit('--from', from, '--root', root, '--accept').status).toBe(0);
-    expect(runSplit('--from', from, '--root', root).status).toBe(0);
-  });
-
-  test('a changed section set is refused', () => {
-    const { root, from } = setup(sections({ 8: '' }));
-    const r = runSplit('--from', from, '--root', root);
-    expect(r.status).toBe(2);
-    expect(r.stderr).toContain('missing: 8');
   });
 });
