@@ -135,6 +135,9 @@ on:
       deploy_production:
         description: 'Deploy to production (type PRODUCTION)'
         type: string
+      ticket:
+        description: 'Linear ticket for this production change (OSE-####); a tag deploy names it in the tag message'
+        type: string
       run_functional:
         description: 'Run full functional suite (Tier 4 — expensive)'
         type: boolean
@@ -2525,6 +2528,20 @@ jobs:
       # tests/integration/assert-on-main-wired.test.js.
       - name: 'Gate: the commit is on main (OSE-1662)'
         run: bash scripts/ci/assert-on-main.sh
+
+      # Every production change has a ticket (AGENTS.md; CCR 2026-10-12, B5). The id
+      # comes from the dispatch input or the annotated tag message, and is written to
+      # the job summary. NOT continue-on-error and no `if:` — held by
+      # tests/unit/ci/require-ticket.test.js.
+      - name: 'Gate: the change names its ticket (CCR B5)'
+        env:
+          TICKET_INPUT: ${{ github.event.inputs.ticket }}
+        run: |
+          TAG_MESSAGE=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG_MESSAGE="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)')"
+          fi
+          node scripts/ci/require-ticket.mjs --input "$TICKET_INPUT" --tag-message "$TAG_MESSAGE"
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
