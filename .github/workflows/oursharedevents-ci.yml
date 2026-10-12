@@ -2604,6 +2604,22 @@ jobs:
           done
           echo "ADMIN_KEY, X_OCR_INTERNAL, ADMIN_TOKEN absent on production."
 
+      # CCR 2026-10-12 (A1): a rollback puts the previous Worker on the new database.
+      # List the migrations this release is about to apply that remove or rename
+      # something, so the operator knows before the deploy whether a no-go can be a
+      # rollback or has to be a fix forward. Information only: it never fails the job.
+      - name: 'Report: is this release roll-back-able?'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          for PAIR in DB:migrations FORMS_DB:migrations-forms; do
+            BINDING="${PAIR%%:*}"; DIR="${PAIR##*:}"
+            npx wrangler d1 migrations list "$BINDING" --env production --remote 2>&1 \
+              | node ../../scripts/ci/release-rollbackability.mjs --dir "$DIR" --label "$BINDING (production)" || true
+          done
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
