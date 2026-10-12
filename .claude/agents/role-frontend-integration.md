@@ -1,6 +1,6 @@
 ---
 name: role-frontend-integration
-description: Lead FE Integration lens: the surfaces (admin, public, /events, display, poster, SharedReport, sponsor, forms), cross-surface flows and integration tests. Use inside a CCR loop or for a surface question.
+description: Lead FE Integration lens. The surfaces (admin, public, /events, display, poster, SharedReport, sponsor, forms), cross-surface flows and integration tests. Use inside a CCR loop or for a surface question.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

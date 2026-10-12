@@ -1,6 +1,6 @@
 ---
 name: role-qa-automation
-description: Sr Automation QA lens: test pyramid, Playwright and Bruno coverage, born-red evidence. Use inside a CCR loop or for test-gating decisions.
+description: Sr Automation QA lens. Test pyramid, Playwright and Bruno coverage, born-red evidence. Use inside a CCR loop or for test-gating decisions.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

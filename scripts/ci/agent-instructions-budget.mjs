@@ -10,6 +10,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import yaml from 'js-yaml';
 
 export const BUDGET = {
   'AGENTS.md': 12 * 1024,
@@ -27,17 +28,23 @@ function args(argv) {
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const bytes = (s) => Buffer.byteLength(s, 'utf8');
 
+// Parsed as real YAML. Claude Code drops a skill or agent whose frontmatter does
+// not parse, and says nothing: an unquoted ": " inside a description is enough.
+// Nine role agents shipped that way in the AGENTS.md split, because an earlier
+// version of this check read the lines with a regex and never parsed them.
 function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---\n/);
-  if (!m) return null;
-  return Object.fromEntries(
-    m[1]
-      .split('\n')
-      .map((l) => l.match(/^([\w-]+):\s*(.*)$/))
-      .filter(Boolean)
-      .map((x) => [x[1], x[2].trim()])
-  );
+  if (!m) return {};
+  try {
+    const data = yaml.load(m[1]);
+    return data && typeof data === 'object' ? { data } : {};
+  } catch (e) {
+    return { invalid: e.reason || 'parse error' };
+  }
 }
+
+const notYaml = (rel, why) =>
+  `${rel} frontmatter is not valid YAML (${why}), so Claude Code will not load it`;
 
 function check(root) {
   const problems = [];
@@ -71,7 +78,8 @@ function check(root) {
       }
       const text = read(file(rel));
       const fm = frontmatter(text);
-      if (!fm || fm.name !== d || !fm.description)
+      if (fm.invalid) problems.push(notYaml(rel, fm.invalid));
+      else if (!fm.data || fm.data.name !== d || !fm.data.description)
         problems.push(`${rel} needs frontmatter with name: ${d} and a description`);
       if (bytes(text) > BUDGET.skill)
         problems.push(`${rel} is ${bytes(text)} bytes; the budget is ${BUDGET.skill}`);
@@ -83,9 +91,10 @@ function check(root) {
     for (const f of readdirSync(agents).filter((x) => x.endsWith('.md'))) {
       const fm = frontmatter(read(join(agents, f)));
       const name = f.replace(/\.md$/, '');
-      if (!fm || fm.name !== name || !fm.description)
+      if (fm.invalid) problems.push(notYaml(`.claude/agents/${f}`, fm.invalid));
+      else if (!fm.data || fm.data.name !== name || !fm.data.description)
         problems.push(`.claude/agents/${f} needs frontmatter with name: ${name} and a description`);
-      else if (!MODELS.has(fm.model))
+      else if (!MODELS.has(String(fm.data.model)))
         problems.push(`.claude/agents/${f} model must be one of ${[...MODELS].join(', ')}`);
     }
   }
