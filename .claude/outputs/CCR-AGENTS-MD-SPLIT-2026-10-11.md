@@ -122,3 +122,13 @@ Score: S1 is closed. G2's answer is written but not confirmed. **Still 84% until
 2. **G1:** keep the routing table as written?
 3. **G2:** after T1–T4 green, should the agent move the story to **Done**, or to **In Review** for your acceptance?
 4. **Timing:** merge before Oct 20, or after Oct 24?
+
+## Outcome (recorded 2026-10-12)
+
+- **Merged by the owner** as #939 (`abff09b8`) on 2026-10-11, taken out of draft and merged before the Oct 20 freeze. The four gate questions were not answered in writing. The merge is the record of the decision. G1 (model routing table) and G2 (Linear end state) therefore stand as merged, and the owner can edit either line in AGENTS.md / CLAUDE.md.
+- **Done, not only merged.** The post-merge staging chain is green for `db0103ac`, a later `main` SHA that contains the merge (run 38186573387): `T1 Deploy → Staging`, `T2 Contract → Staging (Bruno)`, `T3 E2E Smoke → Staging (Playwright)` and `T4 Functional → Staging` all `success`.
+- **G4 closed:** the hub `drift-auditor` reads AGENTS.md and `docs/brain/` (ourCommunityRituals/ourCommunityRituals#55, merged).
+- **G5 stays an accepted risk:** the org-wide standard changes when the other products adopt AGENTS.md.
+- **G3 still open:** the reviewer loading the imported AGENTS.md has to be seen on a PR opened after the merge. The follow-up PR that wires risk routing is the first chance. Its "Reviewer instructions from base branch" step logs what it restored.
+- **Cleanup done in the follow-up PR:** the transitional `scripts/brain/split-claude-md.mjs`, its fingerprint file and its four test cases are deleted; the `docs/brain/` headers now say to edit those files directly.
+- **During CI on #939, one more fix:** S0's secret scan read the fingerprint hashes as secrets (4 detections). They were moved to a text file with allowlist markers, and checked with the same detect-secrets version before pushing.
