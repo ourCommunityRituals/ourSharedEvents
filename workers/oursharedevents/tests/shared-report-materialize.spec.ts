@@ -138,14 +138,18 @@ async function seedEvent(opts: {
 // (scan_node_returns: anonymous_id / user_agent_hash / country_code, keyed by
 // event_id + scan_bucket). No poster_deployment_id lives on this side, so we
 // seed scan_node_returns only — the placement table is irrelevant here.
-async function seedScan(eventId: string, anonId: string | null): Promise<void> {
+async function seedScan(
+  eventId: string,
+  anonId: string | null,
+  bucket = '2026-W20'
+): Promise<void> {
   await tenv()
     .DB.prepare(
       `INSERT INTO scan_node_returns
          (id, event_id, anonymous_id, scan_bucket, created_at)
-       VALUES (?, ?, ?, '2026-W20', datetime('now'))`
+       VALUES (?, ?, ?, ?, datetime('now'))`
     )
-    .bind(`snr-${crypto.randomUUID()}`, eventId, anonId)
+    .bind(`snr-${crypto.randomUUID()}`, eventId, anonId, bucket)
     .run();
 }
 
@@ -200,7 +204,9 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     await seedEvent({ id: 'test-evt-mat-1', end_offset_hours: -4 });
     await seedScan('test-evt-mat-1', 'anon_aaa');
     await seedScan('test-evt-mat-1', 'anon_bbb');
-    await seedScan('test-evt-mat-1', 'anon_aaa'); // duplicate — same event, same anon
+    // Same event, same anon, another hour. Within one hour a repeat is refused by
+    // the UNIQUE index (migration 0101, OSE-923), so the duplicate is across hours.
+    await seedScan('test-evt-mat-1', 'anon_aaa', '2026-W21');
     const r = await materializeAnonIdReturns({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
@@ -1013,7 +1019,7 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
     expect(row!.distinct_agent_hashes).toBe(2);
   });
 
-  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | distinct_agent_hashes counts 1', async () => {
+  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | one row, distinct_agent_hashes counts 1', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
     const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
@@ -1030,7 +1036,10 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
        VALUES (?, ?, ?, ?, datetime('now'))`
       )
       .bind('snr-dedup-2', 'test-evt-mat-agg-dedup', bucket, 'anon_same')
-      .run();
+      .run()
+      // OSE-923 (migration 0101): the second scan in the browser's hour is refused
+      // by the UNIQUE index. The writer is INSERT OR IGNORE; this seeds it the same way.
+      .catch(() => undefined);
 
     await aggregateScanBuckets({ DB: db });
 
@@ -1038,7 +1047,8 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
       .prepare(`SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?`)
       .bind('test-evt-mat-agg-dedup')
       .first<{ total_scans: number; distinct_agent_hashes: number }>();
-    expect(row!.total_scans).toBe(2);
+    // One row per browser-hour: total_scans was 2 before 0101.
+    expect(row!.total_scans).toBe(1);
     expect(row!.distinct_agent_hashes).toBe(1);
   });
 
