@@ -451,7 +451,12 @@ const MUST_BLOCK = [
   ['git-tag-push', { tool_name: 'Monitor', tool_input: { command: 'git push origin v1.0.0' } }],
   [
     'credential-search',
-    { tool_name: 'Grep', tool_input: { pattern: 'x', path: '../../../../../../.claude' } },
+    // an explicit cwd, so the case does not depend on how deep the checkout sits under the home
+    {
+      tool_name: 'Grep',
+      cwd: join(homedir(), 'a', 'b', 'c', 'd'),
+      tool_input: { pattern: 'x', path: '../../../../.claude' },
+    },
   ],
   // the filter on an environment dump must not name a secret, and a bare dump is refused
   ['env-dump', bash('printenv | grep TOKEN')],
