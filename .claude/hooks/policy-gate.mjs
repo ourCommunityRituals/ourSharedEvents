@@ -30,7 +30,7 @@
 
 import { appendFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join, posix } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix } from 'node:path';
 
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Grep']);
@@ -601,6 +601,9 @@ function checkMcp(tool, input) {
 // trailing dots or spaces, NTFS alternate data streams, and ~.
 function resolveExisting(p) {
   // Follows junctions, symlinks and 8.3 short names when the file (or its folder) exists.
+  // A path that is not absolute on this platform (a Windows path on Linux) is left alone:
+  // resolving it would prepend the working directory and hide it from the home-folder match.
+  if (!isAbsolute(p)) return p;
   try {
     return realpathSync.native(p);
   } catch {
