@@ -198,3 +198,20 @@ describe('the real wrangler.toml', () => {
     ]);
   });
 });
+
+describe('the CI step', () => {
+  const wf = () =>
+    fs.readFileSync(
+      path.join(__dirname, '../../../.github/workflows/oursharedevents-ci.yml'),
+      'utf8'
+    );
+
+  test('runs the parity check, and runs it strict once PRODUCTION_LIVE is true', () => {
+    const text = wf();
+    const i = text.indexOf("name: 'Lint: staging and production config parity'");
+    expect(i, 'the parity step exists').toBeGreaterThan(-1);
+    const step = text.slice(i, i + 600);
+    expect(step).toContain('scripts/ci/env-parity.mjs');
+    expect(step).toMatch(/vars\.PRODUCTION_LIVE == 'true' && '--strict'/);
+  });
+});
