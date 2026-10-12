@@ -13,7 +13,7 @@ Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 | File                          | What it is                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `policy-gate.mjs`             | The hook (Node, no dependencies)                                                                                 |
-| `policy-gate.test.mjs`        | 277 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
+| `policy-gate.test.mjs`        | 399 cases: must-block, must-allow near-misses, fail-open, audit redaction (rules added 2026-10-12, listed below) |
 | `settings.user.proposed.json` | Keys to **merge** into `~/.claude/settings.json` (effort, fast mode, deny rules, hook, plugin pruning)           |
 
 ## Install (the owner does this; agents are not allowed to edit their own settings)
@@ -56,9 +56,13 @@ agent could add to a command.
 
 ## Rules added 2026-10-12 (agent workstation review)
 
-Rules read the command word and subcommand (`git push`, `gh release create`), after quotes, `.exe`
-and backticks are stripped, so a commit message that mentions `git push --tags` is not blocked and
-`gh.exe` or `"git"` are not a way round.
+A shell call is tokenised like a shell would read it (quotes, escapes, `;` `&` `|` `&&` `||`, newlines,
+redirects, `$(…)` and backticks, heredocs). Each simple command becomes a unit; a unit that hands text to an
+interpreter or wrapper (`bash -c`, `powershell -Command`, `cmd /c`, `eval`, `iex`, `env`, `sudo`, `timeout`,
+`xargs`, `find -exec`) is unwrapped and read again. Quoted text is data (a commit message, an `echo`) unless it
+is given to an interpreter, and a heredoc body is kept whenever anything on its line can execute it. Rules look
+at the program and its arguments, so `git commit -m "git push --tags"` is fine and `bash -c "git push --tags"`
+is not. `cd` is followed, so `cd ~/.claude && cat config.json` is the same file as `cat ~/.claude/config.json`.
 
 | Rule                                          | Blocks                                                                                                                                                 | Why                                                                                    |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -80,6 +84,10 @@ and backticks are stripped, so a commit message that mentions `git push --tags` 
 | `persistence`                                 | git hooks, scheduled tasks, shell profile, registry run keys, `npm config set registry`                                                                | runs or installs later                                                                 |
 | `owner-script`                                | `scripts/hardening/apply-*.mjs --apply`                                                                                                                | owner terminal only                                                                    |
 | `credential-glob`                             | a wildcard under `.claude`                                                                                                                             | reaches `.credentials.json`                                                            |
+| `git-config-list`                             | `git config --list`, `--get-regexp`, `--show-origin` (not `--local`)                                                                                   | prints remote URLs and helpers that can carry tokens                                   |
+| `gh-review-approve`                           | `gh pr review --approve`                                                                                                                               | an agent does not approve pull requests                                                |
+| `gh-config`                                   | `gh alias set`, `gh extension install`, `gh config set`                                                                                                | changes what later gh commands do                                                      |
+| `encoded-command`                             | `powershell -EncodedCommand`                                                                                                                           | cannot be read, so cannot be checked                                                   |
 | `mcp-cloudflare-write`, `mcp-session-control` | Cloudflare write tools; permission mode, remote control, connector toggles, session messaging                                                          | the same actions without a shell                                                       |
 
 `mcp__terminal__run_in_terminal` is checked as a shell. The matcher in `settings.user.proposed.json`

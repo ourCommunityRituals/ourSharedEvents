@@ -22,7 +22,8 @@
 
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRiskyAllowRule } from './verify-hardening.mjs';
 import {
@@ -119,7 +120,12 @@ export function plan(current, proposed, hookCommand) {
  * Writes the hook and the merged settings under `home`. The CLI calls this after the terminal
  * check; tests call it directly with a scratch folder.
  */
-export function applyTo(home, hookText, proposed) {
+export function applyTo(home, hookText, proposed, opts = {}) {
+  // The CLI sets ownerConfirmed after the terminal prompt. Any other caller (a script that
+  // imports this module) can write a scratch folder, never the real home.
+  if (resolve(home).toLowerCase() === resolve(homedir()).toLowerCase() && !opts.ownerConfirmed) {
+    throw new Error('applyTo refuses the real home folder without the owner terminal confirmation');
+  }
   const file = settingsPath(home);
   const hookFile = hookInstallPath(home);
   const hookCommand = `node "${hookFile.replace(/\\/g, '/')}"`;
@@ -172,7 +178,7 @@ async function main() {
     return;
   }
   await requireOwnerTerminal(`write ${settingsPath(home)}`);
-  const done = applyTo(home, hookText, readJson(PROPOSED));
+  const done = applyTo(home, hookText, readJson(PROPOSED), { ownerConfirmed: true });
   console.log(`\nApplied ${done.length} change(s). Start a NEW session, then run:`);
   console.log('  node scripts/hardening/verify-hardening.mjs');
   console.log(
