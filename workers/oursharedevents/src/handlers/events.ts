@@ -60,6 +60,7 @@ import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
+import { errorLabel } from '../lib/error-label';
 
 // OSE-1658: the one answer for an artwork address that is not an upload.
 const INVALID_COVER = 'INVALID_COVER_IMAGE_URL';
@@ -192,7 +193,7 @@ export async function handleListEvents(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleListEvents',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -255,7 +256,7 @@ export async function handleGetEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -462,7 +463,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEvents',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -854,7 +855,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         JSON.stringify({
           type: 'DB_ERROR',
           handler: 'handleCreateEvent',
-          error: msg,
+          error: errorLabel(err),
           timestamp: now,
         })
       );
@@ -882,12 +883,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     const sl = await createShortlink(env, id);
     shortcode = sl.code;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     console.warn(
       JSON.stringify({
         type: 'SHORTLINK_CREATE_FAILED',
         eventId: id,
-        error: message,
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -910,7 +910,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       JSON.stringify({
         type: 'EVENT_CODE_CREATE_FAILED',
         eventId: id,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -934,7 +934,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         JSON.stringify({
           type: 'EVENT_PLACE_LOOKUP_FAILED',
           eventId: id,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
           timestamp: new Date().toISOString(),
         })
       );
@@ -1509,7 +1509,7 @@ export async function handleUpdateEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleUpdateEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -1530,7 +1530,7 @@ export async function handleUpdateEvent(
         JSON.stringify({
           type: 'EVENT_PLACE_LOOKUP_FAILED',
           eventId,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
           timestamp: new Date().toISOString(),
         })
       );
@@ -1669,7 +1669,7 @@ export async function handleDeleteEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleDeleteEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -1745,7 +1745,7 @@ export async function handleAdminListEventTemplates(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEventTemplates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to list event templates', 503, rid);
@@ -1797,7 +1797,7 @@ export async function handleAdminListEventTypes(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEventTypes',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to list event types', 503, rid);

@@ -38,6 +38,7 @@ import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
 
+import { errorLabel } from '../lib/error-label';
 // One warning per isolate, not one per scan: the missing secret is a config
 // fact, and the line names no visitor.
 let scanPepperWarned = false;
@@ -226,7 +227,7 @@ export async function handleQrScan(
           type: 'SCAN_WRITE_ERROR',
           deployment_id: deploymentId,
           event_id: eventId,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
         })
       );
       // Nothing was stored, so release this hour's dedup marker: a retry in the

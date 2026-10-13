@@ -53,6 +53,7 @@ import { scanHourSql } from '../lib/scan-cells';
 import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
 import { perEventCounts } from './portfolio-rollup';
 
+import { errorLabel } from '../lib/error-label';
 export interface DashboardsEnv extends AdminEnv, AdminBrandScopeEnv {
   DB: D1Database;
   FORMS_DB?: D1Database;
@@ -112,7 +113,7 @@ async function guarded(
         type: 'DASHBOARD_DB_ERROR',
         dashboard,
         requestId: reqId,
-        error: e instanceof Error ? e.message : String(e),
+        error: errorLabel(e),
       })
     );
     return fail(request, reqId, 503, 'DB_UNAVAILABLE', 'Dashboard data could not be read');

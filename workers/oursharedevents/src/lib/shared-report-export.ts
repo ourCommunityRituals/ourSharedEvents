@@ -65,6 +65,7 @@ import {
   isCorridorId,
   UNKNOWN_CORRIDOR,
 } from './export-geography';
+import { errorLabel } from './error-label';
 
 export type SharedReportExportEnv = BigQueryEnv & {
   DB: D1Database;
@@ -173,7 +174,7 @@ function resolvePoolFailClosed(
         product_id: PRODUCT_ID,
         row_locator: rowLocator,
         legal_clearance_tier: legalClearanceTier ?? null,
-        reason: e.message,
+        reason: errorLabel(e),
       })
     );
     return null;
@@ -652,7 +653,7 @@ export async function exportAnonIdReturns(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_ERROR',
         phase: 'anon_id_returns',
-        error: msg,
+        error: errorLabel(err),
       })
     );
     try {
@@ -836,7 +837,7 @@ export async function exportCorridorDensityBaseline(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_ERROR',
         phase: 'corridor_density_baseline',
-        error: msg,
+        error: errorLabel(err),
       })
     );
     try {
@@ -972,7 +973,7 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_ERROR',
         phase: 'event_series',
-        error: msg,
+        error: errorLabel(err),
       })
     );
     try {

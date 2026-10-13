@@ -33,6 +33,7 @@ import {
   type MaterializationResult,
 } from '../lib/shared-report';
 
+import { errorLabel } from '../lib/error-label';
 export interface SharedReportMaterializeRunResult {
   ok: boolean;
   phases: MaterializationResult[];
@@ -55,7 +56,7 @@ export async function runSharedReportMaterialization(
     totalErrors += r.errors;
   } catch (err) {
     totalErrors++;
-    phases.push(makeErrorResult('scan_aggregation', err));
+    phases.push(makeErrorResult('scan_aggregation', errorLabel(err)));
   }
 
   // Phase 0 — H3 cell backfill (must run before read-side corridor-map queries)
@@ -65,7 +66,7 @@ export async function runSharedReportMaterialization(
     totalErrors += r.errors;
   } catch (err) {
     totalErrors++;
-    phases.push(makeErrorResult('h3_cell_backfill', err));
+    phases.push(makeErrorResult('h3_cell_backfill', errorLabel(err)));
   }
 
   // Phase 1 — per-event return-rate materialization
@@ -75,7 +76,7 @@ export async function runSharedReportMaterialization(
     totalErrors += r.errors;
   } catch (err) {
     totalErrors++;
-    phases.push(makeErrorResult('anon_id_returns', err));
+    phases.push(makeErrorResult('anon_id_returns', errorLabel(err)));
   }
 
   // Phase 2 — corridor baseline refresh
@@ -85,7 +86,7 @@ export async function runSharedReportMaterialization(
     totalErrors += r.errors;
   } catch (err) {
     totalErrors++;
-    phases.push(makeErrorResult('corridor_density_baseline', err));
+    phases.push(makeErrorResult('corridor_density_baseline', errorLabel(err)));
   }
 
   // Phase 3 — event-series auto-detector
@@ -95,7 +96,7 @@ export async function runSharedReportMaterialization(
     totalErrors += r.errors;
   } catch (err) {
     totalErrors++;
-    phases.push(makeErrorResult('event_series_detector', err));
+    phases.push(makeErrorResult('event_series_detector', errorLabel(err)));
   }
 
   const totalDurationMs = Date.now() - start;
@@ -127,12 +128,12 @@ export async function runSharedReportMaterialization(
   };
 }
 
-function makeErrorResult(phase: string, err: unknown): MaterializationResult {
+function makeErrorResult(phase: string, error: string): MaterializationResult {
   console.error(
     JSON.stringify({
       type: 'SHARED_REPORT_MATERIALIZE_PHASE_FATAL',
       phase,
-      error: err instanceof Error ? err.message : String(err),
+      error,
     })
   );
   return {

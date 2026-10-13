@@ -50,6 +50,7 @@ import {
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import { parsePagingParams, encodeRegistrationsCursor } from '../lib/registrations-paging';
 import { REGISTRATION_TTL_DAYS, EMAIL_RETENTION_DAYS } from '../lib/retention-windows';
+import { errorLabel } from '../lib/error-label';
 
 export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -289,7 +290,7 @@ export async function handleFormRegistration(
         ? await encryptText(email, env.FORMS_ENCRYPTION_KEY)
         : undefined;
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 
   const bucket = bucketTimestamp();
@@ -316,7 +317,7 @@ export async function handleFormRegistration(
       )
       .run();
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 
   logFormEvent('register', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
@@ -387,7 +388,7 @@ export async function handleSelfDeleteRegistration(
     });
     return jsonResponse({ ok: true }, request);
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 }
 
@@ -466,7 +467,7 @@ export async function handleFormCheckin(
     const res = jsonResponse({ ok: true }, request);
     return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
-    return handleDbError('checkin', eventId, err, request);
+    return handleDbError('checkin', eventId, errorLabel(err), request);
   }
 }
 
@@ -509,7 +510,7 @@ export async function handleFormSurvey(
       .bind(id, eventId, JSON.stringify(responses), bucket, anonKey, new Date().toISOString())
       .run();
   } catch (err) {
-    return handleDbError('survey', eventId, err, request);
+    return handleDbError('survey', eventId, errorLabel(err), request);
   }
 
   logFormEvent('survey', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
@@ -601,7 +602,7 @@ export async function handleFormEmailSignup(
     const res = jsonResponse({ ok: true, id }, request);
     return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
-    return handleDbError('email-signup', eventId, err, request);
+    return handleDbError('email-signup', eventId, errorLabel(err), request);
   }
 }
 
@@ -663,7 +664,7 @@ export async function handleAdminRegistrations(
       request
     );
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 }
 
@@ -717,7 +718,7 @@ export async function handleAdminRegistrantContacts(
     res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 }
 
@@ -744,7 +745,7 @@ export async function handleAdminCheckinCount(
       request
     );
   } catch (err) {
-    return handleDbError('checkin', eventId, err, request);
+    return handleDbError('checkin', eventId, errorLabel(err), request);
   }
 }
 
@@ -777,7 +778,7 @@ export async function handleAdminSurveys(
       request
     );
   } catch (err) {
-    return handleDbError('survey', eventId, err, request);
+    return handleDbError('survey', eventId, errorLabel(err), request);
   }
 }
 
@@ -804,7 +805,7 @@ export async function handleAdminEmailSignupCount(
       request
     );
   } catch (err) {
-    return handleDbError('email-signup', eventId, err, request);
+    return handleDbError('email-signup', eventId, errorLabel(err), request);
   }
 }
 
@@ -917,6 +918,6 @@ export async function handleAdminExport(
 
     return jsonResponse({ ok: true, items: rows, count: rows.length }, request);
   } catch (err) {
-    return handleDbError(dataType as FormType, eventId, err, request);
+    return handleDbError(dataType as FormType, eventId, errorLabel(err), request);
   }
 }

@@ -41,6 +41,7 @@ import { renderErrorPage } from './pages';
 import { corsHeaders } from '../lib/cors';
 import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 
+import { errorLabel } from '../lib/error-label';
 export type EventCodeEnv = PublicReadLimitEnv & {
   DB?: D1Database;
 };
@@ -195,7 +196,7 @@ export async function handleEventCodeResolve(
       console.warn(
         JSON.stringify({
           type: 'SHARE_OPEN_COUNT_ERROR',
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
           timestamp: new Date().toISOString(),
         })
       );

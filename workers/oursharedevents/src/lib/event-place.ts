@@ -25,6 +25,7 @@
 import { geocodeVenue } from './geo';
 import { type MapsEnv } from './maps';
 import { maybeTag } from './h3-tagging';
+import { errorLabel } from './error-label';
 
 /**
  * Google result types that name a spot. Anything else (locality, postal_code,
@@ -177,7 +178,7 @@ export async function runEventPlaceBackfill(
     console.error(
       JSON.stringify({
         type: 'EVENT_PLACE_BACKFILL_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );

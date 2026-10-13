@@ -33,6 +33,7 @@
  */
 
 import { corsHeaders } from './cors';
+import { errorLabel } from './error-label';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -238,17 +239,16 @@ export type FormType = 'register' | 'checkin' | 'survey' | 'email-signup';
 export function handleDbError(
   formType: FormType,
   eventId: string,
-  err: unknown,
+  error: string,
   request: Request
 ): Response {
-  const message = err instanceof Error ? err.message : String(err);
   console.log(
     JSON.stringify({
       type: 'FORM_EVENT',
       formType,
       eventId,
       action: 'error',
-      error: message,
+      error,
       timestamp: new Date().toISOString(),
     })
   );
