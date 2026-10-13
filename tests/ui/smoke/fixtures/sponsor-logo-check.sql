@@ -37,7 +37,8 @@ VALUES
    'A staging fixture for checking sponsor logos. Not a real event.', 'synthetic')
 ON CONFLICT(id) DO UPDATE SET
   status = 'active', is_published = 1, data_class = 'synthetic',
-  start_date = date('now', '+21 days'), end_date = date('now', '+21 days');
+  start_date = date('now', '+21 days'), end_date = date('now', '+21 days'),
+  venue_canonical_id = NULL, event_correlation_id = NULL;
 
 INSERT INTO sponsor_business
   (id, brand_id, name, display_name, website_url, address_line, contact_phone, contact_email, tier, is_active)

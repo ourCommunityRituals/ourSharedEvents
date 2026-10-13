@@ -172,7 +172,8 @@ npx playwright test --config=playwright.e2e-smoke.config.ts sponsor-journey.spec
 
 Requires the sponsored-event fixture too:
 `npx wrangler d1 execute ocr-db-local --local --file tests/ui/smoke/fixtures/sponsored-event.sql`
-(run from `workers/oursharedevents`).
+(run from `workers/oursharedevents`). Apply the local migrations first: since
+migration 0104 the fixture writes two columns an older local database does not have.
 
 ### T4g — launch story smoke (public card → calendar; admin preview → go-live)
 

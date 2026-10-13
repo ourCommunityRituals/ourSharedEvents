@@ -1,0 +1,602 @@
+{
+  "$comment": "Spine key fixtures, version v1 (OSE-1615). Names in, ids out. Any repository that computes these keys must reproduce every row. Rule: .telemetry/tracking-plan.md, Decisions 1 and 2. Hashes here were computed with node:crypto, independently of src/lib/spine-keys.ts.",
+  "version": "v1",
+  "hash": "first 32 lower-case hex characters of SHA-256 over the UTF-8 bytes; fields joined with |",
+  "venue_input": "v1|<normalised name>|<res-7 cell, trimmed, lower case>",
+  "event_input": "v1|<venue_canonical_id>|<uec_code, trimmed>|<bucket>",
+  "normalise": "in order: (1) remove apostrophes (' U+2019 U+2018 U+02BC ` U+00B4); (2) Unicode NFKC; (3) lower-case with the Unicode lower-case mapping, locale-independent (JavaScript toLowerCase, Python str.lower), NOT case folding, then put the result in Unicode NFC; (4) remove apostrophes again; (5) remove variation selectors (U+FE00 to U+FE0F, U+E0100 to U+E01EF), enclosing marks (general category Me) and format characters (general category Cf: the soft hyphen, zero-width spaces and joiners); (6) & becomes ' and ' (with a space each side); (7) every run of characters whose general category is not a letter (L*), a mark (M*) or a number (N*: Nd, Nl and No) becomes one space (U+0020); (8) remove any run of marks that stands at the start or directly after a space; (9) collapse runs of spaces to one and remove a space at either end; (10) if the name now begins with 'the ' (the word and one space), drop those four characters, once; (11) remove a space at either end. An empty result gives no key.",
+  "bucket": "the local calendar date of starts_at in the event's zone, minus one day when the local wall-clock time is before 04:00. The zone is the one stored on the event; when it is missing, or the implementation's time-zone database does not know it, America/Chicago is used (OSE only stores a zone its own runtime accepted, so an implementation with an older or stricter database can disagree for such a zone). starts_at counts only when it is an instant: YYYY-MM-DDTHH:MM, optionally :SS and a fraction, then Z or an offset written +HH:MM or -HH:MM. Anything else (no zone, a date alone, a year alone, text) is not an instant. When there is no starts_at, or it is not an instant, the bucket is the first ten characters of start_date, which must be a real calendar date written YYYY-MM-DD; otherwise there is no bucket.",
+  "type_code": "uec_code trimmed, case kept; empty or 'unknown' (any case) gives no key",
+  "unicode": "Generated with Unicode 17.0 (Node 24.14.1). NFKC is stable for assigned characters. A general category can differ between Unicode versions for newly assigned characters, so an implementation on an older Unicode version that disagrees with a row should look at that row's newest character first (the emoji rows are the likeliest). In review on 2026-10-12 two implementations written only from the words in this file, one in Node and one in Python 3.11 (Unicode 14.0), reproduced the 84 rows the file then had; the rows and steps added after that (format characters, NFC, the instant rule) have been checked against this repository's function only.",
+  "venues": [
+    {
+      "name": "Joe's Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Joes Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "JOE’S   TAVERN",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "The Eagles Hall",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "  the   Eagles   Hall  ",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "Tom & Jerry's",
+      "h3_res7": "872664c1affffff",
+      "normalised": "tom and jerrys",
+      "venue_canonical_id": "c47b2d4af60aece9b290680d932299e0"
+    },
+    {
+      "name": "Tom and Jerrys",
+      "h3_res7": "872664c1affffff",
+      "normalised": "tom and jerrys",
+      "venue_canonical_id": "c47b2d4af60aece9b290680d932299e0"
+    },
+    {
+      "name": "Tom&Jerrys",
+      "h3_res7": "872664c1affffff",
+      "normalised": "tom and jerrys",
+      "venue_canonical_id": "c47b2d4af60aece9b290680d932299e0"
+    },
+    {
+      "name": "St. Mary's Church",
+      "h3_res7": "872664c1affffff",
+      "normalised": "st marys church",
+      "venue_canonical_id": "159af9c8a220fef876c609125c308aaa"
+    },
+    {
+      "name": "Saint Mary's Church",
+      "h3_res7": "872664c1affffff",
+      "normalised": "saint marys church",
+      "venue_canonical_id": "e7b82f4b921c96dc9c2b7994ce12844f"
+    },
+    {
+      "name": "Harbor-Country Bocce (Sawyer)",
+      "h3_res7": "872664c1affffff",
+      "normalised": "harbor country bocce sawyer",
+      "venue_canonical_id": "8bc84df9c17412729b7adb407875d55e"
+    },
+    {
+      "name": "Café Olé",
+      "h3_res7": "872664c1affffff",
+      "normalised": "café olé",
+      "venue_canonical_id": "5752ada333e37784f0b7c5af66fc6022"
+    },
+    {
+      "name": "ＦＵＬＬＷＩＤＴＨ Bar",
+      "h3_res7": "872664c1affffff",
+      "normalised": "fullwidth bar",
+      "venue_canonical_id": "67eb7ed9710d9c17c83a094586127493"
+    },
+    {
+      "name": "Theatre Royal",
+      "h3_res7": "872664c1affffff",
+      "normalised": "theatre royal",
+      "venue_canonical_id": "9cc2903aa97374427731518c0fe21254"
+    },
+    {
+      "name": "Studio 54",
+      "h3_res7": "872664c1affffff",
+      "normalised": "studio 54",
+      "venue_canonical_id": "e4bb59fbc148f6af9b1619b2a5f0d6bc"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "872664c1bffffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "fe4ac5902ce2e8446aec6cf82bb1fc79"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "872664C1AFFFFFF",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "Joe´s Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Joe`s Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Joe‘s Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Joeʼs Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Joe＇s Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Cafe Ole",
+      "h3_res7": "872664c1affffff",
+      "normalised": "cafe ole",
+      "venue_canonical_id": "e109dee67cd9885e574cada52bc7b2f9"
+    },
+    {
+      "name": "İstanbul Cafe",
+      "h3_res7": "872664c1affffff",
+      "normalised": "i̇stanbul cafe",
+      "venue_canonical_id": "aa77c7b444ea92466ba2b95e6f0bb37f"
+    },
+    {
+      "name": "ร้านน้ำ",
+      "h3_res7": "872664c1affffff",
+      "normalised": "ร้านน้ํา",
+      "venue_canonical_id": "c8d36647cd5e53fc6b74133b7d8064e7"
+    },
+    {
+      "name": "कैफ़े",
+      "h3_res7": "872664c1affffff",
+      "normalised": "कैफ़े",
+      "venue_canonical_id": "a3caa3f36a5aa4fc2381970cf4f50242"
+    },
+    {
+      "name": "काफ़ी",
+      "h3_res7": "872664c1affffff",
+      "normalised": "काफ़ी",
+      "venue_canonical_id": "13c9e81ba033bd3721057d8f0fe735cb"
+    },
+    {
+      "name": "Eagles Hall, Blue Island",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall blue island",
+      "venue_canonical_id": "882b27beca524373ec6bf87ea4b4bfae"
+    },
+    {
+      "name": "🏟️ Eagles Hall",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "1️⃣ Bar",
+      "h3_res7": "872664c1affffff",
+      "normalised": "1 bar",
+      "venue_canonical_id": "7019c3f3079853df13646adbf54e44f6"
+    },
+    {
+      "name": "Straße Haus",
+      "h3_res7": "872664c1affffff",
+      "normalised": "straße haus",
+      "venue_canonical_id": "a915401d4a19dc72e5b4596dd1475d60"
+    },
+    {
+      "name": "ΟΔΟΣ",
+      "h3_res7": "872664c1affffff",
+      "normalised": "οδος",
+      "venue_canonical_id": "ec528f1497eb361aa8fc50a59931e20a"
+    },
+    {
+      "name": "Joe‍s Tavern",
+      "h3_res7": "872664c1affffff",
+      "normalised": "joes tavern",
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186"
+    },
+    {
+      "name": "Com­munity Center",
+      "h3_res7": "872664c1affffff",
+      "normalised": "community center",
+      "venue_canonical_id": "4ebbd268a2a471a2f4145858066f1d14"
+    },
+    {
+      "name": "Eagles​ Hall",
+      "h3_res7": "872664c1affffff",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    },
+    {
+      "name": "The The Bar",
+      "h3_res7": "872664c1affffff",
+      "normalised": "the bar",
+      "venue_canonical_id": "582d4f3b291f311d557dabb18a946e1f"
+    },
+    {
+      "name": "The",
+      "h3_res7": "872664c1affffff",
+      "normalised": "the",
+      "venue_canonical_id": "210c1447fd5fe0ff9d4b388cd9378398"
+    },
+    {
+      "name": "́Bar",
+      "h3_res7": "872664c1affffff",
+      "normalised": "bar",
+      "venue_canonical_id": "d1793ad70c0a96a5c770789619a684c8"
+    },
+    {
+      "name": "Bar ́Grill",
+      "h3_res7": "872664c1affffff",
+      "normalised": "bar grill",
+      "venue_canonical_id": "35e4b0b7ee6fe4e577b7849b1ff15cd1"
+    },
+    {
+      "name": "T̈ Bar",
+      "h3_res7": "872664c1affffff",
+      "normalised": "ẗ bar",
+      "venue_canonical_id": "592ae61a51a16bccdc5ba837d6431f79"
+    },
+    {
+      "name": "Bar_9",
+      "h3_res7": "872664c1affffff",
+      "normalised": "bar 9",
+      "venue_canonical_id": "87d1a5f789999f2f13b73ee9462215c0"
+    },
+    {
+      "name": "½ Acre",
+      "h3_res7": "872664c1affffff",
+      "normalised": "1 2 acre",
+      "venue_canonical_id": "c2372fee2490f62ed4049f89e611e037"
+    },
+    {
+      "name": "Pier ⑦",
+      "h3_res7": "872664c1affffff",
+      "normalised": "pier 7",
+      "venue_canonical_id": "cb78d5d716c0d602624c63dfd8af640d"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "  872664c1affffff  ",
+      "normalised": "eagles hall",
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94"
+    }
+  ],
+  "no_venue_key": [
+    {
+      "name": null,
+      "h3_res7": "872664c1affffff",
+      "why": "no venue name"
+    },
+    {
+      "name": "",
+      "h3_res7": "872664c1affffff",
+      "why": "empty venue name"
+    },
+    {
+      "name": "   ",
+      "h3_res7": "872664c1affffff",
+      "why": "blank venue name"
+    },
+    {
+      "name": "!!! ...",
+      "h3_res7": "872664c1affffff",
+      "why": "nothing left after normalising"
+    },
+    {
+      "name": "???",
+      "h3_res7": "872664c1affffff",
+      "why": "punctuation only"
+    },
+    {
+      "name": "—",
+      "h3_res7": "872664c1affffff",
+      "why": "a dash only"
+    },
+    {
+      "name": "📍",
+      "h3_res7": "872664c1affffff",
+      "why": "an emoji only"
+    },
+    {
+      "name": "❤️",
+      "h3_res7": "872664c1affffff",
+      "why": "an emoji with its variation selector"
+    },
+    {
+      "name": "́",
+      "h3_res7": "872664c1affffff",
+      "why": "a combining mark on its own"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "   ",
+      "why": "blank res-7 cell"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": null,
+      "why": "no res-7 cell"
+    },
+    {
+      "name": "Eagles Hall",
+      "h3_res7": "",
+      "why": "empty res-7 cell"
+    }
+  ],
+  "buckets": [
+    {
+      "starts_at": "2026-10-22T23:30:00Z",
+      "start_date": "2026-10-22",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "Oct 22, 18:30 local"
+    },
+    {
+      "starts_at": "2026-10-23T06:30:00Z",
+      "start_date": "2026-10-23",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "Oct 23, 01:30 local: a late night belongs to the 22nd"
+    },
+    {
+      "starts_at": "2026-10-23T09:00:00Z",
+      "start_date": "2026-10-23",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-23",
+      "note": "Oct 23, 04:00 local: exactly the edge"
+    },
+    {
+      "starts_at": "2026-11-01T09:30:00Z",
+      "start_date": "2026-11-01",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-31",
+      "note": "Nov 1, 03:30 local on the fall-back day"
+    },
+    {
+      "starts_at": "2026-11-01T10:30:00Z",
+      "start_date": "2026-11-01",
+      "timezone": "America/Chicago",
+      "bucket": "2026-11-01",
+      "note": "Nov 1, 04:30 local on the fall-back day"
+    },
+    {
+      "starts_at": "2026-03-08T09:30:00Z",
+      "start_date": "2026-03-08",
+      "timezone": "America/Chicago",
+      "bucket": "2026-03-08",
+      "note": "Mar 8, 04:30 local on the spring-forward day"
+    },
+    {
+      "starts_at": "2027-01-01T08:00:00Z",
+      "start_date": "2027-01-01",
+      "timezone": "America/Chicago",
+      "bucket": "2026-12-31",
+      "note": "Jan 1, 02:00 local: rolls back across the year"
+    },
+    {
+      "starts_at": "2026-03-01T07:00:00Z",
+      "start_date": "2026-03-01",
+      "timezone": "America/Chicago",
+      "bucket": "2026-02-28",
+      "note": "Mar 1, 01:00 local: rolls back across the month"
+    },
+    {
+      "starts_at": "2026-10-23T02:30:00Z",
+      "start_date": "2026-10-22",
+      "timezone": "America/New_York",
+      "bucket": "2026-10-22",
+      "note": "Oct 22, 22:30 in New York: the event zone decides, not UTC"
+    },
+    {
+      "starts_at": null,
+      "start_date": "2026-10-24",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-24",
+      "note": "date-only event uses start_date"
+    },
+    {
+      "starts_at": null,
+      "start_date": "2026-10-24",
+      "timezone": null,
+      "bucket": "2026-10-24",
+      "note": "date-only event with no zone"
+    },
+    {
+      "starts_at": "2026-10-23T06:30:00Z",
+      "start_date": "2026-10-23",
+      "timezone": null,
+      "bucket": "2026-10-22",
+      "note": "timed event with no zone: read in America/Chicago, the platform home zone (01:30 local)"
+    },
+    {
+      "starts_at": "2026-10-23T06:30:00Z",
+      "start_date": "2026-10-23",
+      "timezone": "Not/AZone",
+      "bucket": "2026-10-22",
+      "note": "timed event with an unknown zone: read in America/Chicago"
+    },
+    {
+      "starts_at": "2026-10-23T06:30:00Z",
+      "start_date": "2026-10-23",
+      "timezone": "Europe/London",
+      "bucket": "2026-10-23",
+      "note": "the same instant in London is 07:30: the event zone decides"
+    },
+    {
+      "starts_at": "not-a-time",
+      "start_date": "2026-10-24",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-24",
+      "note": "a starts_at that cannot be read: start_date is used"
+    },
+    {
+      "starts_at": null,
+      "start_date": "2026-10-24T00:00:00.000Z",
+      "timezone": null,
+      "bucket": "2026-10-24",
+      "note": "a start_date longer than a date: its first ten characters"
+    },
+    {
+      "starts_at": "2026-10-23T01:30:00-05:00",
+      "start_date": "2026-10-23",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "an instant written with an offset: 01:30 in Chicago, the night of the 22nd"
+    },
+    {
+      "starts_at": "2026-10-22T05:00:00",
+      "start_date": "2026-10-22",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "a starts_at with no zone is not an instant: start_date is used (read as UTC it would be the 21st)"
+    },
+    {
+      "starts_at": "2026-10-22",
+      "start_date": "2026-10-22",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "a starts_at that is only a date is not an instant: start_date is used"
+    },
+    {
+      "starts_at": "2026",
+      "start_date": "2026-10-22",
+      "timezone": "America/Chicago",
+      "bucket": "2026-10-22",
+      "note": "a starts_at that is only a year is not an instant: start_date is used"
+    }
+  ],
+  "no_bucket": [
+    {
+      "starts_at": null,
+      "start_date": null,
+      "timezone": "America/Chicago",
+      "why": "no start at all"
+    },
+    {
+      "starts_at": null,
+      "start_date": "not-a-date",
+      "timezone": "America/Chicago",
+      "why": "malformed start_date"
+    },
+    {
+      "starts_at": null,
+      "start_date": "2026-02-30",
+      "timezone": "America/Chicago",
+      "why": "a date that is not on the calendar"
+    }
+  ],
+  "events": [
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "ART-MUSIC-001",
+      "bucket": "2026-10-22",
+      "event_correlation_id": "a39d830a77a417ea6bebd2a5605a32c7"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "CIV-MEETING-001",
+      "bucket": "2026-10-22",
+      "event_correlation_id": "d4b6f51af922892a7ac6daaed9a8831b"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "ART-MUSIC-001",
+      "bucket": "2026-10-23",
+      "event_correlation_id": "581f303c7640e96c323aa3b1aca4fdb4"
+    },
+    {
+      "venue_canonical_id": "3f272b0123ddde2c9d5d7a631c925186",
+      "uec_code": "ART-MUSIC-001",
+      "bucket": "2026-10-22",
+      "event_correlation_id": "d0204cf2d64757a98aa6699aa7de857f"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "  ART-MUSIC-001  ",
+      "hashed_code": "ART-MUSIC-001",
+      "bucket": "2026-10-22",
+      "event_correlation_id": "a39d830a77a417ea6bebd2a5605a32c7"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "art-music-001",
+      "bucket": "2026-10-22",
+      "event_correlation_id": "2991cff5a5368849206273ae147108e7"
+    }
+  ],
+  "no_event_key": [
+    {
+      "venue_canonical_id": null,
+      "uec_code": "ART-MUSIC-001",
+      "bucket": "2026-10-22",
+      "why": "no venue key"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": null,
+      "bucket": "2026-10-22",
+      "why": "event has no type"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "",
+      "bucket": "2026-10-22",
+      "why": "empty type code"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "unknown",
+      "bucket": "2026-10-22",
+      "why": "the export placeholder 'unknown' is not a type"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "UNKNOWN",
+      "bucket": "2026-10-22",
+      "why": "'unknown' in any case is not a type"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": " Unknown ",
+      "bucket": "2026-10-22",
+      "why": "'unknown' with spaces round it is not a type"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "   ",
+      "bucket": "2026-10-22",
+      "why": "blank type code"
+    },
+    {
+      "venue_canonical_id": "",
+      "uec_code": "ART-MUSIC-001",
+      "bucket": "2026-10-22",
+      "why": "empty venue key"
+    },
+    {
+      "venue_canonical_id": "ef010534560153ee5b1df82a7235eb94",
+      "uec_code": "ART-MUSIC-001",
+      "bucket": null,
+      "why": "no start"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import { runDraftExpiry } from './lib/draft-expiry';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
 import { runEventPlaceBackfill } from './lib/event-place';
+import { afterAllSettle, runSpineKeyCheck } from './lib/spine-keys-store';
 import {
   FORMS_RETENTION_CEILING_DAYS,
   REGISTRATION_TTL_DAYS,
@@ -130,19 +131,29 @@ export default {
     //   saved before saves looked places up: not archived, not over, no
     //   coordinates, never looked up. DB.events only; a no-op without the Maps
     //   key. At most 25 billed Geocoding requests a night.
-    ctx.waitUntil(
-      Promise.all([
-        runFormDataLifecycle(env),
-        runRegistrationContactClear(env),
-        runBigQueryBackup(env),
-        runSharedReportPipeline(env),
-        runSecurityMetricsCron(env),
-        runDraftExpiry(env),
-        runCorridorLatch(env),
-        runScanReturnsRetention(env),
-        runEventPlaceBackfill(env),
-      ])
-    );
+    // runSpineKeyCheck (lib/spine-keys-store.ts, OSE-1615) reads every event,
+    //   computes its two spine keys again and writes them where they differ from
+    //   what is stored: rows saved before migration 0104, rows whose keys could
+    //   not be stored at save time, and rows some other writer left stale. One
+    //   read per 500 events, at most 5,000 events, 200 writes and 10 seconds a
+    //   night, from a start that moves each day. DB.events only; it calls no
+    //   other service. It runs AFTER every job above has settled, failed ones
+    //   included: computing keys costs CPU, and it must not compete with the
+    //   retention jobs for the invocation's allowance. If one of them never
+    //   settles the check does not run that night, and logs nothing.
+    const jobs = [
+      runFormDataLifecycle(env),
+      runRegistrationContactClear(env),
+      runBigQueryBackup(env),
+      runSharedReportPipeline(env),
+      runSecurityMetricsCron(env),
+      runDraftExpiry(env),
+      runCorridorLatch(env),
+      runScanReturnsRetention(env),
+      runEventPlaceBackfill(env),
+    ];
+    ctx.waitUntil(Promise.all(jobs));
+    ctx.waitUntil(afterAllSettle(jobs, () => runSpineKeyCheck(env)));
   },
 
   // Scan write-buffer consumer (OSE — engine-hardening #1). Drains SCAN_QUEUE
