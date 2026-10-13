@@ -1,0 +1,39 @@
+info:
+  name: OSE-1564 | placement respond | a refusal carries a code and a request reference
+  type: http
+  seq: 19
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/placements/spl_does_not_exist/respond"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"token":"not.a.valid.token","accepted":true}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: what a failure toast shows is read from here and nowhere else:
+        // the body's `code` and the `X-Request-Id` header (ocrToast.detailsFrom).
+        // Both must be short ids, and the header must be the body's requestId.
+        const toastRef = String(res.getHeader('x-request-id') || '');
+        const toastBody = res.getBody() || {};
+        test('401 for a link that is not valid', function () { expect(res.getStatus()).to.eql(401); });
+        test('the code is UNAUTHORIZED', function () { expect(toastBody.code).to.eql('UNAUTHORIZED'); });
+        test('X-Request-Id is a short id the toast can show', function () { expect(toastRef).to.match(/^[A-Za-z0-9_.:-]{8,64}$/); });
+        test('the header and the body carry the same reference', function () { expect(toastBody.requestId).to.eql(toastRef); });
+        test('no stack trace or SQL in the body', function () { expect(JSON.stringify(toastBody)).to.not.match(/\bat .+:\d+:\d+|SELECT |sqlite/i); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

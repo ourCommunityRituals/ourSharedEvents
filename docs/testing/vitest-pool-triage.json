@@ -3026,6 +3026,13 @@
       "testCount": 7
     },
     {
+      "file": "workers/oursharedevents/tests/toast-adoption.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 30
+    },
+    {
       "file": "workers/oursharedevents/tests/token-contract.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -3080,6 +3087,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/ui-toast-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/unhandled-error-log.spec.ts",

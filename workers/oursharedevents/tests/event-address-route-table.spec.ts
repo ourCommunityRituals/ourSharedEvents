@@ -115,6 +115,7 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/robots.txt': { why: 'site', reason: 'Crawl policy.' },
   '/sitemap.xml': { why: 'site', reason: 'Sitemap.' },
   '/ui.css': { why: 'site', reason: 'Shared stylesheet.' },
+  '/ui-toast.js': { why: 'site', reason: 'Shared toast script.' },
   '/ui-preview': { why: 'site', reason: 'Component showcase.' },
   '/demo': { why: 'site', reason: 'Demo index.' },
   '/demo/:param': { why: 'site', reason: 'A demo site, not an event.' },

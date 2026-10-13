@@ -7,6 +7,7 @@
  *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
+ *   GET /ui-toast.js             → shared OCR toast script (@ocr/ui), loaded by admin and sponsor home
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
  *   GET /health                  → health check
  *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
@@ -137,7 +138,7 @@
  *   *                            → 404
  */
 
-import { serveCss } from '@ocr/ui';
+import { serveCss, serveToastJs } from '@ocr/ui';
 
 let uiCssEtagMemo: { css: string; etag: string } | undefined;
 /** Strong ETag for the shared stylesheet, memoised per isolate. */
@@ -657,6 +658,19 @@ export async function route(
       return new Response(null, { status: 304, headers: cssHeaders });
     }
     return new Response(css, { status: cssRes.status, headers: cssHeaders });
+  }
+
+  // The toast script (OSE-1564): how admin and sponsor home say an action
+  // worked or failed. Same-origin and external, so the pages' CSP
+  // (script-src 'self' plus a nonce) allows it unchanged. serveToastJs() sets
+  // the type, nosniff, no-cache and the ETag, and answers 304 itself; the
+  // isolation headers are added here, as for /ui.css, so the script loads
+  // under the pages' COEP require-corp.
+  if (pathname === '/ui-toast.js' && (method === 'GET' || method === 'HEAD')) {
+    const jsRes = serveToastJs(request);
+    const jsHeaders = new Headers(jsRes.headers);
+    for (const [k, v] of Object.entries(HARDENING_HEADERS)) jsHeaders.set(k, v);
+    return new Response(jsRes.body, { status: jsRes.status, headers: jsHeaders });
   }
 
   if (pathname === '/ui-preview') {

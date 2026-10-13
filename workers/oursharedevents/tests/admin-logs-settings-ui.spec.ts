@@ -30,8 +30,14 @@ type Reply =
 
 function scriptOf(html: string): string {
   const dom = new JSDOM(html);
-  const scripts = Array.from(dom.window.document.querySelectorAll('script'));
+  // The page's own script. The only other one is the shared toast script,
+  // loaded by src (tests/toast-adoption.spec.ts).
+  const all = Array.from(dom.window.document.querySelectorAll('script'));
+  const scripts = all.filter((s) => !s.hasAttribute('src'));
   expect(scripts.length).toBe(1);
+  expect(all.filter((s) => s.hasAttribute('src')).map((s) => s.getAttribute('src'))).toEqual([
+    '/ui-toast.js',
+  ]);
   return scripts[0].textContent || '';
 }
 
