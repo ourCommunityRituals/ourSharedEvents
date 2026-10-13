@@ -24,7 +24,10 @@ runtime:
         test('Cross-Origin-Resource-Policy: same-origin', function () { expect(String(res.getHeader('cross-origin-resource-policy') || '')).to.eql('same-origin'); });
         test('revalidates: no-cache and an ETag for this script', function () {
           expect(String(res.getHeader('cache-control') || '')).to.eql('no-cache');
-          expect(String(res.getHeader('etag') || '')).to.match(/^"ocr-toast-[0-9a-f]{8}"$/);
+          // The Worker emits a strong ETag (pinned in ui-toast-route.spec.ts). On staging
+          // the Cloudflare edge compresses the script and downgrades it to W/"...", which
+          // is correct HTTP, so this layer accepts either form of the same validator.
+          expect(String(res.getHeader('etag') || '')).to.match(/^(W\/)?"ocr-toast-[0-9a-f]{8}"$/);
         });
         test('sets no cookie', function () { expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null, '']); });
         test('the body is the toast runtime', function () { expect(toastJs).to.contain('root.ocrToast = {'); });
