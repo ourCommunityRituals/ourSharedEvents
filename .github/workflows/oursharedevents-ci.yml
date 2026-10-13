@@ -204,7 +204,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
@@ -465,7 +465,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
@@ -1014,7 +1014,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
@@ -1055,7 +1055,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           ref: main
           path: ocr-docs-brain-checkout
-          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
           # ADR-012 0.1: the next step runs PR code (npm ci + tests); never leave
           # the token where it can be read.
           persist-credentials: false
@@ -1133,7 +1133,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
       - name: Install root dependencies
         run: npm ci --prefer-offline || npm ci
@@ -1211,7 +1211,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
@@ -1448,7 +1448,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
@@ -1730,7 +1730,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
@@ -1903,7 +1903,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
@@ -2559,7 +2559,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
@@ -2768,7 +2768,7 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies

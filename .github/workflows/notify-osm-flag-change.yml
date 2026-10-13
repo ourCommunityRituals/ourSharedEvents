@@ -42,7 +42,7 @@ jobs:
 
       - name: Open issue in OSM
         env:
-          GH_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.OCR_AUTOMATION_WRITE || secrets.OCR_PROPAGATE_TOKEN }}
           # Branch and author arrive through env, never interpolated into the
           # shell (OSE-1499). The quoted heredoc keeps the body literal; the
           # placeholders are filled by bash string replacement afterwards.

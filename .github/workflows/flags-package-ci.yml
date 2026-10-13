@@ -86,7 +86,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: OCR-docs
           ref: main
-          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
           persist-credentials: false
 
       # OSE-1466 0.1, run time: the steps below run PR code, so prove the
