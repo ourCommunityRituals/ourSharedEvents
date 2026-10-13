@@ -12,14 +12,21 @@
  *
  * Auth: enforced by the router via requireAdmin before this handler is
  * called. extractAdminActor is used here to attribute the audit entry.
+ *
+ * The list is read from FORMS_DB, where the identified-person tables live
+ * (OSE-1661, forms migration 0017). The audit entry still goes to the main
+ * DB's admin_audit_log; it carries counts and the cursor, never an email.
  */
 
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
 import { decryptText } from '../lib/pii';
 
+import { errorLabel } from '../lib/error-label';
 export type SubscribersAdminEnv = AdminEnv &
   AuditLogEnv & {
+    /** Forms database: host of `subscribers` (OSE-1661). */
+    FORMS_DB: D1Database;
     /**
      * Data-at-rest doctrine (A-5) — AES-GCM key used to decrypt
      * subscribers.email_encrypted for this admin read-back. Same secret the
@@ -69,7 +76,7 @@ export async function handleListSubscribers(
   let rows: SubscriberRow[] = [];
   let outcome: 'success' | 'denied' = 'success';
   try {
-    const result = await env.DB.prepare(sql)
+    const result = await env.FORMS_DB.prepare(sql)
       .bind(...bindings)
       .all<SubscriberRow>();
     rows = result.results ?? [];
@@ -79,7 +86,7 @@ export async function handleListSubscribers(
       JSON.stringify({
         type: 'LIST_SUBSCRIBERS_DB_ERROR',
         requestId,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     // Fire-and-forget audit for the failure path
@@ -119,7 +126,7 @@ export async function handleListSubscribers(
             JSON.stringify({
               type: 'LIST_SUBSCRIBERS_DECRYPT_ERROR',
               requestId,
-              error: err instanceof Error ? err.message : String(err),
+              error: errorLabel(err),
             })
           );
         }

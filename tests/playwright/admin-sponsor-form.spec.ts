@@ -61,9 +61,11 @@ async function openSponsorForm(page: Page, opts: { selectEvent?: boolean } = {})
       timeout: 15000,
     });
     await row.click();
-    await expect(
-      page.getByTestId('sponsors-empty').or(page.locator('[data-testid^="sponsor-row-"]').first())
-    ).toBeVisible({ timeout: 15000 });
+    // The Sponsors card is folded to its summary line (owner 2026-10-10); the
+    // summary changes once this event's sponsors have loaded.
+    await expect(page.getByTestId('sponsors-summary')).not.toHaveText(/Select an event/, {
+      timeout: 15000,
+    });
   }
   await page.getByTestId('add-sponsor-toggle').click();
   await expect(page.locator(FORM)).toBeVisible();

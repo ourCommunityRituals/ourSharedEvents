@@ -36,10 +36,12 @@ describe('demo site — front door', () => {
 });
 
 describe('demo site — three depths, same data', () => {
-  it('free depth shows headcount but locks premium sections', async () => {
+  it('free depth shows the device count but locks premium sections', async () => {
     const html = await text(handleDemoSite('free'));
     expect(html).toContain('Free · Local');
-    expect(html).toContain('Headcount');
+    // OSE-818: the count is distinct scanners, in the lexicon ("unique" is banned).
+    expect(html).toContain('Distinct scanners');
+    expect(html.toLowerCase()).not.toContain('unique gatherings');
     // premium-only sections rendered but dimmed (upgrade hint visible)
     expect(html).toContain('depth-locked');
     expect(html).toContain('Corridor map');

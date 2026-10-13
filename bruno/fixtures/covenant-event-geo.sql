@@ -25,9 +25,13 @@
 --   res9 (NODE) = 89266457533ffff    res7 (CORRIDOR) = 872664575ffffff
 --
 -- Idempotent: a plain UPDATE keyed by the primary id; safe to re-run.
+-- OSE-1615: the cell is an input of the spine keys, so the statement that sets
+-- it clears them; the nightly check computes them again.
 UPDATE events
 SET lat = 41.6903,
     lon = -87.6768,
     h3_res9 = '89266457533ffff',
-    h3_res7 = '872664575ffffff'
+    h3_res7 = '872664575ffffff',
+    venue_canonical_id = NULL,
+    event_correlation_id = NULL
 WHERE id = 'test-event-001';

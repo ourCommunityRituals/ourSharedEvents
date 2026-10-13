@@ -1122,7 +1122,7 @@ export interface RiphDataset {
   campaigns: MockCampaign[];
   sponsors: MockSeasonSponsor[];
   events: MockSeasonEvent[];
-  sponsorImpressions: MockSponsorImpression[];
+  sponsorDisplays: MockSponsorImpression[];
   ladderBuckets: MockLadderBucket[];
   corridorCells: string[];
 }
@@ -1141,7 +1141,7 @@ export function getRiphDataset(): RiphDataset {
     campaigns: getRiphCampaigns(),
     sponsors: getRiphSponsors(),
     events: getRiphSeasonEvents(),
-    sponsorImpressions: getRiphSponsorImpressions(),
+    sponsorDisplays: getRiphSponsorImpressions(),
     ladderBuckets: getRiphLadderBuckets(),
     corridorCells: [RIPH_H3_RES9, RIPH_H3_RES9_B],
   };

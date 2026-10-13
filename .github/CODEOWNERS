@@ -1,5 +1,5 @@
 # All changes require review from Matt
-* @mzdano
+* @bereasonable13
 
 # ── AI seam review-lock (COST-102 / ADR-014) ─────────────────────────────────
 # The single sanctioned AI entry point and the guardrails that keep the OSE
@@ -7,11 +7,11 @@
 # (free-forever thesis) and its prompt-injection posture, so it MUST get an
 # explicit security-owner review before merge — it can never ride through under
 # the broad default-owner rule above. Today the security owner is the founder
-# (@mzdano); update the handle here when a dedicated security team exists.
+# (@bereasonable13); update the handle here when a dedicated security team exists.
 # See docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md.
-/workers/oursharedevents/src/lib/ai-sanitization.ts            @mzdano
-/tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts   @mzdano
-/docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md           @mzdano
+/workers/oursharedevents/src/lib/ai-sanitization.ts            @bereasonable13
+/tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts   @bereasonable13
+/docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md           @bereasonable13
 
 # ── CI approval-gate safety review-lock (ADR-020) ─────────────────────────────
 # Workflow files run the PR-HEAD's content with secrets available on a
@@ -21,8 +21,8 @@
 # scanner, allowlist, and invariant spec) must not be quietly weakened.
 # See docs/adr/ADR-020-copilot-ci-human-approval-gate.md and
 # docs/security/PR_SECRET_EXPOSURE_GUARD.md.
-/.github/workflows/                                             @mzdano
-/scripts/check-pr-secret-exposure.mjs                           @mzdano
-/scripts/check-pr-secret-exposure.allowlist.json               @mzdano
-/tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts  @mzdano
-/docs/adr/ADR-020-copilot-ci-human-approval-gate.md            @mzdano
+/.github/workflows/                                             @bereasonable13
+/scripts/check-pr-secret-exposure.mjs                           @bereasonable13
+/scripts/check-pr-secret-exposure.allowlist.json               @bereasonable13
+/tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts  @bereasonable13
+/docs/adr/ADR-020-copilot-ci-human-approval-gate.md            @bereasonable13

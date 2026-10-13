@@ -38,9 +38,83 @@ export function canonicalOrigin(
   return request ? new URL(request.url).origin : null;
 }
 
-/** The canonical event page address. */
-export function eventPagePath(eventId: string): string {
-  return `/events/${eventId}`;
+/**
+ * Names that already mean a screen under /events/<id>/ (OSE-1684), so an
+ * event whose slug is one of them keeps the plain /events/<id> address. The
+ * form screens are listed now so a later move under /events/<id>/ cannot
+ * collide with an event called "Register".
+ */
+export const EVENT_SCREEN_SEGMENTS: readonly string[] = [
+  'tv',
+  'poster',
+  'register',
+  'checkin',
+  'survey',
+  'updates',
+  'calendar',
+];
+
+const READABLE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The slug if it can stand in an address, else null. */
+export function readableSlug(slug: unknown): string | null {
+  if (typeof slug !== 'string' || slug.length === 0 || slug.length > 100) return null;
+  if (!READABLE_SLUG.test(slug) || EVENT_SCREEN_SEGMENTS.includes(slug)) return null;
+  return slug;
+}
+
+/**
+ * The canonical event page address (owner decision 2026-10-09, OSE-1684):
+ * /events/<id>/<readable-name>. The id decides the event; the name is
+ * decoration, so a wrong or old one forwards here and a guessed one finds
+ * nothing. Without a usable slug it is /events/<id>, which always works too.
+ */
+export function eventPagePath(eventId: string, slug?: string | null): string {
+  const readable = readableSlug(slug);
+  return readable ? `/events/${eventId}/${readable}` : `/events/${eventId}`;
+}
+
+/**
+ * An event's form screens under its own address (OSE-1684): sign up, check in,
+ * feedback and "keep me posted". `updates` is the email signup.
+ */
+export const EVENT_FORM_SCREENS = {
+  register: 'register',
+  checkin: 'checkin',
+  survey: 'survey',
+  updates: 'email-signup',
+} as const;
+export type EventFormScreen = keyof typeof EVENT_FORM_SCREENS;
+
+/** The form screen for a `?type=` value (the /forms/ vocabulary), or null. */
+export function formScreenFor(type: string | null | undefined): EventFormScreen | null {
+  switch (type) {
+    case 'register':
+    case 'checkin':
+    case 'survey':
+      return type;
+    case 'email':
+    case 'email-signup':
+      return 'updates';
+    default:
+      return null;
+  }
+}
+
+/**
+ * The address the platform writes for an event's form: /events/<id>/<screen>,
+ * with `?deployment=` when a poster deployment is known. `/forms/<id>?type=`
+ * keeps answering for printed and saved links. An unknown type is the
+ * registration form, as on /forms/.
+ */
+export function eventFormPath(
+  eventId: string,
+  type: string | null | undefined,
+  deploymentId?: string | null
+): string {
+  const screen = formScreenFor(type) ?? 'register';
+  const base = `/events/${encodeURIComponent(eventId)}/${screen}`;
+  return deploymentId ? `${base}?deployment=${encodeURIComponent(deploymentId)}` : base;
 }
 
 /** The one place the tag is spelled; `href` is a complete absolute URL. */

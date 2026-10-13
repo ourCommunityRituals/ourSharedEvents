@@ -267,8 +267,33 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   test('set-secrets.sh provisions FORMS_HASH_PEPPER alongside the other required secrets (OSE-1343)', () => {
     const script = readFile('scripts/set-secrets.sh');
     expect(script).toMatch(
-      /SECRETS=\(\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*"RATE_LIMIT_KEY_PEPPER"\s*\n\s*\)/
+      /SECRETS=\(\s*\n\s*"FORMS_ENCRYPTION_KEY"\s*\n\s*"FORMS_HASH_PEPPER"\s*\n\s*"SHARED_REPORT_SIGNING_SECRET"\s*\n\s*"RATE_LIMIT_KEY_PEPPER"\s*\n\s*"ANON_ID_HASH_PEPPER"\s*\n\s*\)/
     );
+  });
+
+  // OSE-1659: the scan id is keyed with ANON_ID_HASH_PEPPER. It was never in the
+  // provisioning list, so nothing prompted for it. Staging warns when it is
+  // missing (scans keep counting, with no id). Production refuses to deploy
+  // without it (TL-078, 2026-10-10): with no keyed id the visitor count falls
+  // back to the browser-name hash, which production must not keep.
+  test('staging warns and production refuses when ANON_ID_HASH_PEPPER is missing (OSE-1659, TL-078)', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+    const gate = (job) =>
+      workflow.jobs[job].steps.find(
+        (step) =>
+          step.name ===
+          'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
+      );
+    const staging = gate('deploy-staging')?.run;
+    expect(staging).toMatch(/grep -q "ANON_ID_HASH_PEPPER"/);
+    expect(staging).toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
+
+    const production = gate('deploy-production')?.run;
+    expect(production).toMatch(
+      /for SECRET in [A-Z_ ]*\bANON_ID_HASH_PEPPER\b[A-Z_ ]*; do\s*\n\s*if ! echo "\$OUT" \| grep -q "\$SECRET"; then[\s\S]*?exit 1/
+    );
+    expect(production).not.toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
   });
 
   // ADR-012 gate R2 (OSE-1467): production admin is Cloudflare Access only.
@@ -320,6 +345,10 @@ describe('Postman is gone: tests and infra live under bruno/', () => {
     const seeds = [];
     for (const w of workflows()) {
       for (const m of w.text.matchAll(/--file\s+(?:\.\.\/)+(\S+\.sql)/g)) seeds.push(m[1]);
+      // scripts/ci/d1-seed-staging.mjs <DB> <file.sql> [file.sql ...]
+      for (const m of w.text.matchAll(/d1-seed-staging\.mjs\s+\w+((?:[ \t]+\S+\.sql)+)/g)) {
+        for (const f of m[1].trim().split(/\s+/)) seeds.push(f.replace(/^(?:\.\.\/)+/, ''));
+      }
     }
     expect(seeds.length).toBeGreaterThan(0);
     const misplaced = seeds.filter(
@@ -478,7 +507,6 @@ describe('D1 staging database health', () => {
     'poster_deployments',
     'scans',
     'scan_aggregates',
-    'subscribers',
     'event_templates',
   ];
 
@@ -489,6 +517,7 @@ describe('D1 staging database health', () => {
     'email_signups',
     'feature_flags',
     'pii_audit_log',
+    'subscribers', // moved from the main DB, OSE-1661
   ];
 
   test.skipIf(!canQueryD1)('ocr-db-staging has core tables', async () => {
@@ -931,7 +960,11 @@ describe('invariant enforcement continuity — structural specs gate T0 (OSE-350
   const { readdirSync } = require('fs');
 
   const ARCH_REL = 'tests/e2e/0-architecture';
-  const specs = readdirSync(join(ROOT, ARCH_REL)).filter((f) => f.endsWith('.invariant.spec.ts'));
+  // `.invariant.test.ts` too: a brain invariant that lives in two repos names one
+  // test_file for both, and ourWKRP's convention is `.test.ts` (#29).
+  const specs = readdirSync(join(ROOT, ARCH_REL)).filter((f) =>
+    /\.invariant\.(spec|test)\.ts$/.test(f)
+  );
 
   // Classify each spec by content. Runtime = needs a deployed worker
   // (page fixture / request fixture / baseURL). Structural = reads source

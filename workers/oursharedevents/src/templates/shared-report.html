@@ -1119,7 +1119,7 @@
             .replace(/\b\w/g, (c) => c.toUpperCase());
         const titleDepth = (d) => (d ? String(d).charAt(0).toUpperCase() + String(d).slice(1) : '');
 
-        const sponsorRows = (report.sponsor_impressions || [])
+        const sponsorRows = (report.sponsor_displays || [])
           .map(
             (s) =>
               '<tr data-testid="signed-link-sponsor-row">' +
@@ -1186,8 +1186,8 @@
               '<td data-label="Date">' +
               esc(fmtDate(t.start_date)) +
               '</td>' +
-              '<td data-label="Distinct gatherings">' +
-              fmtInt(t.unique_gatherings) +
+              '<td data-label="Distinct scanners">' +
+              fmtInt(t.distinct_scanners) +
               '</td>' +
               '</tr>'
           )
@@ -1204,14 +1204,14 @@
           '</p>' +
           '</header>' +
           '<section class="stats-row" data-testid="signed-link-stats">' +
-          '<div class="stat-card" data-testid="signed-link-distinct-gatherings">' +
-          '<dl class="stat-dl"><dt>Distinct Gatherings</dt><dd>' +
-          fmtInt(report.unique_gatherings) +
+          '<div class="stat-card" data-testid="signed-link-distinct-scanners">' +
+          '<dl class="stat-dl"><dt>Distinct Scanners</dt><dd>' +
+          fmtInt(report.distinct_scanners) +
           '</dd></dl>' +
-          suppressionNote('unique_gatherings') +
+          suppressionNote('distinct_scanners') +
           '</div>' +
           '<div class="stat-card" data-testid="signed-link-return-rate">' +
-          '<dl class="stat-dl"><dt>Return Rate (venue)</dt><dd>' +
+          '<dl class="stat-dl"><dt>Return Rate (this series)</dt><dd>' +
           fmtPct(report.return_rate && report.return_rate.venue_pct) +
           '</dd></dl>' +
           // The whole section can be withheld (too few people), or the rate
@@ -1291,8 +1291,8 @@
           (report.sponsor_class_breakdown
             ? (function() {
                 const scb = report.sponsor_class_breakdown;
-                const localImpr = scb.local ? scb.local.total_impressions : 0;
-                const paidImpr = (scb.mid ? scb.mid.total_impressions : 0) + (scb.premium ? scb.premium.total_impressions : 0);
+                const localImpr = scb.local ? scb.local.total_displays : 0;
+                const paidImpr = (scb.mid ? scb.mid.total_displays : 0) + (scb.premium ? scb.premium.total_displays : 0);
                 const localSponsors = scb.local ? scb.local.sponsor_count : 0;
                 const midSponsors = scb.mid ? scb.mid.sponsor_count : 0;
                 const premiumSponsors = scb.premium ? scb.premium.sponsor_count : 0;
@@ -1307,8 +1307,8 @@
                   '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Displays</th></tr></thead>' +
                   '<tbody>' +
                   '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_displays : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_displays : 0) + '</td></tr>' +
                   '</tbody></table>' +
                   '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
                   '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
@@ -1335,7 +1335,7 @@
             ? '<section class="funnel-card" data-testid="signed-link-trend-section">' +
               '<h3>Headcount Trend</h3>' +
               '<table class="funnel-table" aria-label="Headcount trend across the series">' +
-              '<thead><tr><th scope="col">Date</th><th scope="col">Distinct Gatherings</th></tr></thead>' +
+              '<thead><tr><th scope="col">Date</th><th scope="col">Distinct Scanners</th></tr></thead>' +
               '<tbody>' +
               trendRows +
               '</tbody>' +
@@ -1612,8 +1612,18 @@
         const esc = window.escapeReportHtml;
         const rows = await Promise.all(
           events.slice(0, 10).map(async (ev) => {
-            let reg = 0,
-              checkin = 0;
+            // OSE-1657: each count is a number, 'held' (the route floors it under
+            // 5) or 'failed'. Never 0 for either: 0 would read as "none".
+            let reg = 'failed',
+              checkin = 'failed';
+            const countOf = (res) =>
+              !res || !res.ok
+                ? 'failed'
+                : res.suppressed === true
+                  ? 'held'
+                  : typeof res.count === 'number' && isFinite(res.count)
+                    ? res.count
+                    : 'failed';
             try {
               const [rRes, cRes] = await Promise.all([
                 fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations')
@@ -1623,15 +1633,18 @@
                   .then((r) => r.json())
                   .catch(() => null),
               ]);
-              reg = rRes && rRes.ok ? Number(rRes.count) || 0 : 0;
-              checkin = cRes && cRes.ok ? Number(cRes.count) || 0 : 0;
+              reg = countOf(rRes);
+              checkin = countOf(cRes);
             } catch {
-              /* zero */
+              /* stays 'failed' */
             }
             return { name: ev.name || 'Untitled', reg, checkin };
           })
         );
-        const maxReg = Math.max(...rows.map((r) => r.reg), 1);
+        const num = (v) => (typeof v === 'number' ? v : null);
+        const word = (v) =>
+          typeof v === 'number' ? String(v) : v === 'held' ? 'Fewer than 5' : 'Not available';
+        const maxReg = Math.max(...rows.map((r) => num(r.reg) || 0), 1);
         content.innerHTML =
           '<h3>Registration → Check-in Funnel</h3>' +
           '<table class="funnel-table" data-testid="funnel-table" aria-label="Conversion funnel per event">' +
@@ -1644,25 +1657,31 @@
           '</tr></thead><tbody>' +
           rows
             .map((r) => {
-              const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
-              const barW = Math.round((r.reg / maxReg) * 100);
+              // A rate is drawn only over two published counts; otherwise it is held.
+              const both = num(r.reg) !== null && num(r.checkin) !== null && r.reg > 0;
+              const rate = both
+                ? Math.round((r.checkin / r.reg) * 100) + '%'
+                : r.reg === 'failed' || r.checkin === 'failed'
+                  ? 'Not available'
+                  : 'Held';
+              const barW = Math.round(((num(r.reg) || 0) / maxReg) * 100);
               return (
                 '<tr data-testid="funnel-row">' +
                 '<td data-label="Event" data-testid="funnel-event-name">' +
                 esc(r.name) +
                 '</td>' +
                 '<td data-label="Registrations" data-testid="funnel-reg-count">' +
-                r.reg +
+                word(r.reg) +
                 '</td>' +
                 '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' +
                 barW +
                 '%" aria-hidden="true"></div></div></td>' +
                 '<td data-label="Check-ins" data-testid="funnel-checkin-count">' +
-                r.checkin +
+                word(r.checkin) +
                 '</td>' +
                 '<td data-label="Showed up" class="rate-val" data-testid="funnel-rate">' +
-                pct +
-                '%</td>' +
+                rate +
+                '</td>' +
                 '</tr>'
               );
             })

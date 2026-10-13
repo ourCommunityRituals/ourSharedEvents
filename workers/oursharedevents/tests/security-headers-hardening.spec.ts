@@ -15,7 +15,7 @@
 
 import { SELF } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
-import { HARDENING_HEADERS } from '../src/lib/security-headers';
+import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../src/lib/security-headers';
 
 // Public GET surfaces the DAST scans; each must carry the cross-cutting headers.
 const HTML_SURFACES = ['/', '/events', '/display', '/poster', '/sharedReport', '/demo', '/privacy'];
@@ -27,10 +27,21 @@ describe('OSE-1186 G2: cross-cutting hardening headers on every public surface',
       // Not asserting status — some surfaces redirect/vary — only that whatever
       // response ships carries the hardening headers.
       for (const [name, value] of Object.entries(HARDENING_HEADERS)) {
-        expect(res.headers.get(name), `${path} missing ${name}`).toBe(value);
+        // The landing alone may ask for location, for itself (owner 2026-10-10);
+        // every other power stays denied there too.
+        const expected =
+          path === '/' && name === 'Permissions-Policy' ? LANDING_PERMISSIONS_POLICY : value;
+        expect(res.headers.get(name), `${path} missing ${name}`).toBe(expected);
       }
     });
   }
+
+  test('the landing policy differs from the shared one only by geolocation=(self)', () => {
+    expect(LANDING_PERMISSIONS_POLICY).toBe(
+      HARDENING_HEADERS['Permissions-Policy'].replace('geolocation=()', 'geolocation=(self)')
+    );
+    expect(LANDING_PERMISSIONS_POLICY).not.toBe(HARDENING_HEADERS['Permissions-Policy']);
+  });
 
   test('/health (JSON) carries nosniff and the hardening headers', async () => {
     // The DAST scans /health; ZAP 10021 (nosniff) + 90004 (CORP) fire on JSON

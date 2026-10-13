@@ -152,7 +152,7 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(handler).toContain('listShortlinksForEvent');
     expect(handler).toContain('posterSlotLabel');
     expect(handler).toContain('/s/${slot.code}');
-    expect(handler).toContain('slots }');
+    expect(handler).toMatch(/\bslots,?\s*\}/);
     expect(handler).not.toContain('ensureSlotShortlinks');
   });
 
@@ -301,11 +301,11 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
       // QR is a PNG data URI
       expect(qr[type], `qr.${type} must be a PNG data URI`).toMatch(/^data:image\/png;base64,/);
 
-      // Link contains the event ID and correct type param
-      expect(links[type], `links.${type} must contain /forms/<eventId>`).toContain(
-        `/forms/${eventId}`
+      // Link is the event's own form address (OSE-1684); the email signup is /updates
+      const screen = type === 'email-signup' ? 'updates' : type;
+      expect(links[type], `links.${type} must be /events/<eventId>/${screen}`).toContain(
+        `/events/${eventId}/${screen}`
       );
-      expect(links[type], `links.${type} must contain type=${type}`).toContain(`type=${type}`);
 
       // Label is a non-empty string
       expect(typeof labels[type]).toBe('string');
@@ -339,7 +339,7 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     expect(labels['email-signup']).toBe('Email Signup');
   });
 
-  test('links are absolute URLs pointing to /forms/ route', async () => {
+  test("links are absolute URLs pointing to the event's form addresses", async () => {
     const eventId = await createEvent('Link Format Check');
 
     const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
@@ -347,7 +347,9 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     const links = bundle.links as Record<string, string>;
 
     for (const type of ['register', 'checkin', 'survey', 'email-signup']) {
-      expect(links[type]).toMatch(/^https?:\/\/.+\/forms\/.+\?type=/);
+      expect(links[type]).toMatch(
+        /^https?:\/\/.+\/events\/[^/]+\/(register|checkin|survey|updates)$/
+      );
     }
   });
 

@@ -127,6 +127,7 @@ const SECRETS_OK = JSON.stringify(
     'FORMS_HASH_PEPPER',
     'SHARED_REPORT_SIGNING_SECRET',
     'RATE_LIMIT_KEY_PEPPER',
+    'ANON_ID_HASH_PEPPER',
     'GOOGLE_MAPS_API_KEY',
   ].map((name) => ({ name, type: 'secret_text' })),
   null,
@@ -379,9 +380,29 @@ describe('production settings', () => {
 
   test('it notes when the Access audience is not pinned, without failing', () => {
     expect(pf.checkProductionVars(TOML).detail).toContain('CF_ACCESS_AUD is empty');
-    expect(pf.checkProductionVars(`${TOML}CF_ACCESS_AUD = "abc123"\n`).detail).not.toContain(
-      'CF_ACCESS_AUD'
+    expect(
+      pf.checkProductionVars(`${TOML}CF_ACCESS_AUD = "abc123"
+`).detail
+    ).not.toContain('CF_ACCESS_AUD');
+  });
+
+  test('for activation, an empty audience fails; a pinned one passes (CCR A5)', () => {
+    const empty = pf.checkProductionVars(TOML, { activation: true });
+    expect(empty.status).toBe('fail');
+    expect(empty.detail).toContain('CF_ACCESS_AUD is empty');
+    const pinned = pf.checkProductionVars(
+      `${TOML}CF_ACCESS_AUD = "abc123"
+`,
+      {
+        activation: true,
+      }
     );
+    expect(pinned.status).toBe('pass');
+  });
+
+  test('updating production is not blocked by an empty audience', () => {
+    expect(pf.checkProductionVars(TOML).status).toBe('pass');
+    expect(pf.checkProductionVars(TOML, { activation: false }).status).toBe('pass');
   });
 
   test('fault: staging has a setting production does not (named environments inherit nothing)', () => {
@@ -492,7 +513,7 @@ describe('production secrets (names only)', () => {
     expect(r.fix).toContain('wrangler secret list --env production');
   });
 
-  test('passes when the four required names are there and no static admin credential is', () => {
+  test('passes when the five required names are there and no static admin credential is', () => {
     expect(pf.checkSecrets(SECRETS_OK).status).toBe('pass');
   });
 
@@ -501,6 +522,7 @@ describe('production secrets (names only)', () => {
     'FORMS_HASH_PEPPER',
     'SHARED_REPORT_SIGNING_SECRET',
     'RATE_LIMIT_KEY_PEPPER',
+    'ANON_ID_HASH_PEPPER',
   ])('fault: %s is missing', (name) => {
     const r = pf.checkSecrets(SECRETS_OK.replace(`"${name}"`, '"SOMETHING_ELSE"'));
     expect(r.status).toBe('fail');

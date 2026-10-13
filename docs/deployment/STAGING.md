@@ -1,6 +1,6 @@
 # Staging: stg.oursharedevents.com
 
-Staging is the live, deployed copy of the Worker that every story is judged on. Local runs and mocks only vet a change before it gets here. A story is Done only when the staging chain is green for its merge SHA (root `CLAUDE.md` §5, "Two stages: Merged, then Done").
+Staging is the live, deployed copy of the Worker that every story is judged on. Local runs and mocks only vet a change before it gets here. A story is Done only when the staging chain is green for its merge SHA (`AGENTS.md`, "Definition of Done: two stages").
 
 Read on 2026-10-04 from the live site, `workers/oursharedevents/wrangler.toml` and the CI workflow. For the full environment table, see [ENVIRONMENT_MATRIX.md](ENVIRONMENT_MATRIX.md). For deploy steps, see [DEPLOYMENT.md](DEPLOYMENT.md) and `docs/runbooks/RUNBOOK-DEPLOYMENT.md`.
 

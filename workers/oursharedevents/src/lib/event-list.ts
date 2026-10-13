@@ -22,18 +22,24 @@
 // they meant.
 
 import { escapeHtml } from './html-escape.js';
+import { eventFormPath, eventPagePath } from './canonical.js';
 import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
 import { orderUpcomingFirst } from './event-discovery.js';
+import { EVENT_DEFAULT_THUMB_PATH, eventThumbSrc } from './event-thumb.js';
 
 export interface EventListItem {
   id?: unknown;
+  /** Readable name for the address (OSE-1684); in the public projection. */
+  slug?: unknown;
   name?: unknown;
   startDateISO?: unknown;
   venue?: unknown;
   phase?: unknown;
   timezone?: unknown;
+  /** The event's poster art (an R2 upload path), shown as the card's picture. */
+  cover_image_url?: unknown;
 }
 
 export interface RenderedEventList {
@@ -132,7 +138,6 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   // name/startDateISO/venue; no `|| e.title` dual-reads here.
   const rawName = str(e.name);
   const safeName = escapeHtml(rawName) || (landing ? 'Untitled event' : '');
-  const encodedName = encodeURIComponent(rawName);
   const isoRaw = str(e.startDateISO);
   const dateStr = isoRaw ? escapeHtml(formatEventDate(isoRaw, str(e.timezone) || null)) : '';
   const venueStr = e.venue ? escapeHtml(str(e.venue)) : escapeHtml(opts.venueFallback ?? '');
@@ -142,11 +147,12 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
     : '';
   const phase = escapeHtml(str(e.phase));
   const wrapped = e.phase === 'post_event';
-  const eventHref = `/events/${safeId}`;
+  // The readable address (OSE-1684); the slug is [a-z0-9-] or left out.
+  const eventHref = eventPagePath(safeId, str(e.slug));
   // A wrapped event links to its recap, never to a registration form.
   const cta = wrapped
     ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`
-    : `<a class="cta" href="/forms/${safeId}?type=register&amp;event=${encodedName}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
+    : `<a class="cta" href="${escapeHtml(eventFormPath(str(e.id), 'register'))}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
   const wrappedTag = wrapped
     ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>'
     : '';
@@ -154,9 +160,15 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
     ? `<p class="meta" data-testid="public-event-sponsor">Supported by ${escapeHtml(opts.sponsorTitle)}</p>`
     : '';
   const classes = ['event-card', ...(opts.extraClasses ?? [])].join(' ');
+  // Owner 2026-10-11: every card shows a picture, the poster art or the
+  // default (lib/event-thumb.ts). Decorative: the name sits beside it.
+  // The box shows the default behind the picture, so one that fails to load
+  // leaves the default in view (no script).
+  const thumb = `<span class="event-thumb-box"><img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}"></span>`;
   return `
           <article class="${classes}" data-testid="${landing ? 'area-card' : 'public-event-card'}" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
+            ${thumb}
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="${landing ? 'area-card-name' : 'public-event-name'}">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="${landing ? 'area-card-meta' : 'public-event-meta'}">${datePart}${venuePart}</p>
@@ -234,6 +246,9 @@ export const EVENT_CARD_CSS = `
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      .event-card .event-thumb-box { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-hover) url('${EVENT_DEFAULT_THUMB_PATH}') center / cover no-repeat; }
+      .event-card .event-thumb { display: block; position: relative; width: 64px; height: 64px; object-fit: cover; }
+      .event-card .event-thumb::before { content: ''; position: absolute; inset: 0; background: var(--surface-hover) url('${EVENT_DEFAULT_THUMB_PATH}') center / cover no-repeat; }
       .event-card .event-info { position: relative; z-index: 2; pointer-events: none; flex: 1 1 12rem; min-width: 0; }
       .event-card h3 { overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
       .event-card .meta { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
@@ -242,7 +257,7 @@ export const EVENT_CARD_CSS = `
       .event-card .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       .event-card .cta-secondary { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
       @media (max-width: 480px) {
-        .event-card .event-info { flex-basis: 100%; }
+        .event-card .event-info { flex: 1 1 0; }
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

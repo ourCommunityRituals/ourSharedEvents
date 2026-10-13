@@ -44,12 +44,34 @@ import {
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
+import { ensureEventCode } from '../lib/event-code';
 import { maybeTag } from '../lib/h3-tagging';
+import {
+  eventPlaceText,
+  lookUpEventPlace,
+  placeState,
+  savePlaceLookup,
+  type PlaceState,
+} from '../lib/event-place';
+import { type MapsEnv } from '../lib/maps';
+import {
+  refreshSpineKeys,
+  SPINE_KEYS_CLEAR_SQL,
+  suppliedSpineKeyField,
+  touchesSpineKeyInputs,
+} from '../lib/spine-keys-store';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
+import { isUploadedArtworkPath } from '../lib/event-thumb';
+import { errorLabel } from '../lib/error-label';
+
+// OSE-1658: the one answer for an artwork address that is not an upload.
+const INVALID_COVER = 'INVALID_COVER_IMAGE_URL';
+const INVALID_COVER_MESSAGE =
+  'cover_image_url must be an uploaded file under /api/v2/uploads/ (upload it in Poster art), or null to clear';
 import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
 import {
   buildEventTypeCatalog,
@@ -69,7 +91,7 @@ import { explicitMapChoice, mapState } from '../lib/map-default';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
+export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv, MapsEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
   PUBLISH_GRACE_MINUTES?: string;
@@ -103,6 +125,19 @@ async function resolveEventType(
   return { ok: true, id: row.id };
 }
 
+/**
+ * OSE-1615: the spine keys are computed by the server (lib/spine-keys.ts). A
+ * body that names one is refused whole, whatever the value, null included.
+ */
+function spineKeyRefused(field: string, rid: string): Response {
+  return errorResponse(
+    'SERVER_COMPUTED_FIELD',
+    `${field} is computed by the server and cannot be sent`,
+    400,
+    rid
+  );
+}
+
 function requestId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
 }
@@ -117,7 +152,7 @@ function errorResponse(code: string, message: string, status: number, rid: strin
       requestId: rid,
       timestamp: new Date().toISOString(),
     },
-    { status }
+    { status, headers: { 'X-Request-Id': rid } }
   );
 }
 
@@ -177,7 +212,7 @@ export async function handleListEvents(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleListEvents',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -240,7 +275,7 @@ export async function handleGetEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -447,7 +482,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEvents',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -481,6 +516,9 @@ function isValidIsoDate(date: string): boolean {
 function isValidContentType(request: Request): boolean {
   return isJsonContentType(request.headers.get('content-type'));
 }
+
+/** Tries a derived slug gets before create answers 409 SLUG_TAKEN. */
+const SLUG_ATTEMPTS = 5;
 
 function slugify(text: string): string {
   return text
@@ -518,6 +556,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   } catch {
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
   }
+
+  const suppliedKey = suppliedSpineKeyField(body);
+  if (suppliedKey) return spineKeyRefused(suppliedKey, rid);
 
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : '';
   if (!title) {
@@ -564,7 +605,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const brandId = requestedBrand || (scope.mode === 'scoped' ? scope.brandIds[0] : 'root');
 
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
-  const slug = typeof body.slug === 'string' ? body.slug.slice(0, 100) : slugify(title);
+  // A slug the caller chose is kept as is (and still answers 409 when taken).
+  // A derived one starts from the title; a title with no letters or digits
+  // ("!!!") would derive '' and collide with the next such title, so it is
+  // 'event'.
+  const slugDerived = typeof body.slug !== 'string';
+  const slugBase = slugDerived ? slugify(title) || 'event' : (body.slug as string).slice(0, 100);
+  let slug = slugBase;
   const status =
     typeof body.status === 'string' &&
     (VALID_EVENT_STATES as readonly string[]).includes(body.status)
@@ -698,8 +745,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       );
     }
   }
+  // OSE-1658 (owner decision A, 2026-10-11): artwork is an uploaded file under
+  // /api/v2/uploads/, or nothing. Refused, never cut to fit.
+  const coverRaw = body.cover_image_url;
   const coverImageUrl =
-    typeof body.cover_image_url === 'string' ? body.cover_image_url.slice(0, 500) : null;
+    coverRaw === undefined || coverRaw === null || coverRaw === '' ? null : coverRaw;
+  if (coverImageUrl !== null && !isUploadedArtworkPath(coverImageUrl)) {
+    return errorResponse(INVALID_COVER, INVALID_COVER_MESSAGE, 400, rid);
+  }
   const templateId = typeof body.template_id === 'string' ? body.template_id.slice(0, 64) : null;
 
   // OSE-1344 — the Category → Type picker posts `event_type_id`. Optional (an
@@ -755,66 +808,81 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
 
   const now = new Date().toISOString();
 
-  try {
-    await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
-                           what_short, who_host, why_purpose, how_details, where_address,
-                           who_story, who_image_url, what_video_url, what_url,
-                           what_url_enabled, what_url_type,
-                           lat, lon, h3_res9, h3_res7, is_published, created_by,
-                           event_type_id, settings_json, listed_from,
-                           created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        brandId,
-        title,
-        slug,
-        status,
-        description,
-        location,
-        startDate,
-        endDate,
-        timezone,
-        startsAt,
-        coverImageUrl,
-        templateId,
-        whatShort,
-        whoHost,
-        whyPurpose,
-        howDetails,
-        whereAddress,
-        whoStory,
-        whoImageUrl,
-        whatVideoUrl,
-        whatUrl,
-        whatUrlEnabled,
-        whatUrlType,
-        lat,
-        lon,
-        h3Tags?.h3_res9 ?? null,
-        h3Tags?.h3_res7 ?? null,
-        isPublished,
-        createdBy,
-        eventType.id,
-        settingsJson,
-        // Created live (automation): listed at once, but the listing start is
-        // recorded so the corridor latch's settling rule still applies.
-        status === 'active' ? now : null,
-        now,
-        now
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
+                             what_short, who_host, why_purpose, how_details, where_address,
+                             who_story, who_image_url, what_video_url, what_url,
+                             what_url_enabled, what_url_type,
+                             lat, lon, h3_res9, h3_res7, is_published, created_by,
+                             event_type_id, settings_json, listed_from,
+                             created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('UNIQUE constraint')) {
-      return errorResponse('SLUG_TAKEN', `Slug "${slug}" is already in use`, 409, rid);
+        .bind(
+          id,
+          brandId,
+          title,
+          slug,
+          status,
+          description,
+          location,
+          startDate,
+          endDate,
+          timezone,
+          startsAt,
+          coverImageUrl,
+          templateId,
+          whatShort,
+          whoHost,
+          whyPurpose,
+          howDetails,
+          whereAddress,
+          whoStory,
+          whoImageUrl,
+          whatVideoUrl,
+          whatUrl,
+          whatUrlEnabled,
+          whatUrlType,
+          lat,
+          lon,
+          h3Tags?.h3_res9 ?? null,
+          h3Tags?.h3_res7 ?? null,
+          isPublished,
+          createdBy,
+          eventType.id,
+          settingsJson,
+          // Created live (automation): listed at once, but the listing start is
+          // recorded so the corridor latch's settling rule still applies.
+          status === 'active' ? now : null,
+          now,
+          now
+        )
+        .run();
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('UNIQUE constraint')) {
+        // Slugs are unique across the whole platform and write-once (Invariant
+        // 18), so a second "Trivia Night" anywhere used to fail here. A derived
+        // slug gets a short random suffix and the insert runs again.
+        if (slugDerived && attempt < SLUG_ATTEMPTS - 1) {
+          slug = `${slugBase.slice(0, 93)}-${crypto.randomUUID().slice(0, 6)}`;
+          continue;
+        }
+        return errorResponse('SLUG_TAKEN', `Slug "${slug}" is already in use`, 409, rid);
+      }
+      console.error(
+        JSON.stringify({
+          type: 'DB_ERROR',
+          handler: 'handleCreateEvent',
+          error: errorLabel(err),
+          timestamp: now,
+        })
+      );
+      return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
     }
-    console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleCreateEvent', error: msg, timestamp: now })
-    );
-    return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
   }
 
   // OSE-240: generate a shortlink for every newly-created event. The
@@ -837,12 +905,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     const sl = await createShortlink(env, id);
     shortcode = sl.code;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     console.warn(
       JSON.stringify({
         type: 'SHORTLINK_CREATE_FAILED',
         eventId: id,
-        error: message,
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -853,6 +920,53 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     });
   }
 
+  // OSE-1684: the event's one short code (/e/ share link, /p/, /tv/, /r/, /c/),
+  // minted now so the event page's Share button hands out /e/<code> from the
+  // start. A failure is a warning, not a failed create: admin mints it on
+  // first ask.
+  let eventCode: string | null = null;
+  try {
+    eventCode = await ensureEventCode(env.DB, id);
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        type: 'EVENT_CODE_CREATE_FAILED',
+        eventId: id,
+        error: errorLabel(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    warnings.push({
+      code: 'EVENT_CODE_CREATE_FAILED',
+      message: 'The short code was not made; the event page shares its full address until it is.',
+    });
+  }
+
+  // Owner report 2026-10-11: the zip search lists an event only by its map
+  // cell, and no create form sent coordinates. With none given, the place is
+  // looked up once (lib/event-place.ts); a failed lookup never fails the create.
+  let place: PlaceState = h3Tags ? 'on_map' : 'not_looked_up';
+  if (!h3Tags) {
+    try {
+      const r = await lookUpEventPlace(env, whereAddress, location);
+      await savePlaceLookup(env.DB, id, r, now);
+      place = placeState(r);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          type: 'EVENT_PLACE_LOOKUP_FAILED',
+          eventId: id,
+          error: errorLabel(err),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }
+
+  // OSE-1615: both spine keys, from the row as it now stands (the place lookup
+  // above may just have given it its cell).
+  await refreshSpineKeys(env.DB, id);
+
   return Response.json(
     {
       ok: true,
@@ -860,8 +974,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       id,
       slug,
       shortcode,
+      event_code: eventCode,
       starts_at: startsAt,
       timezone,
+      place,
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
       map: mapState(isPublished === 1, mapChoice === null),
@@ -905,6 +1021,9 @@ export async function handleUpdateEvent(
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
   }
 
+  const suppliedKey = suppliedSpineKeyField(body);
+  if (suppliedKey) return spineKeyRefused(suppliedKey, rid);
+
   // Status validation (if provided)
   if ('status' in body && body.status !== null) {
     const s = typeof body.status === 'string' ? body.status : '';
@@ -939,7 +1058,7 @@ export async function handleUpdateEvent(
     start_date: { max: 30 },
     end_date: { max: 30 },
     timezone: { max: 50 },
-    cover_image_url: { max: 500 },
+    // cover_image_url is checked below (OSE-1658), not cut to fit.
     status: { max: 20 },
     template_id: { max: 64 },
     // OSE-239a: 5W content fields (added by OSE-236 migration 0029). All
@@ -967,6 +1086,21 @@ export async function handleUpdateEvent(
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
       }
+    }
+  }
+
+  // OSE-1658 — artwork: an uploaded file under /api/v2/uploads/; null or ''
+  // clears it; anything else is refused and nothing is written.
+  if ('cover_image_url' in body) {
+    const cover = body.cover_image_url;
+    if (cover === null || cover === '') {
+      sets.push('cover_image_url = ?');
+      values.push(null);
+    } else if (isUploadedArtworkPath(cover)) {
+      sets.push('cover_image_url = ?');
+      values.push(cover);
+    } else {
+      return errorResponse(INVALID_COVER, INVALID_COVER_MESSAGE, 400, rid);
     }
   }
 
@@ -1038,6 +1172,19 @@ export async function handleUpdateEvent(
 
   // OSE-489: lat/lon are REAL columns — handle separately from string allowedFields.
   let geoUpdated = false;
+  // OSE-1615: a latitude or longitude that is not on the globe is refused here,
+  // before anything is written. It used to be stored and then fail when its
+  // cell was computed, and that failure would now leave the event with no cell.
+  const offTheGlobe = (v: unknown, limit: number): boolean =>
+    typeof v === 'number' && Number.isFinite(v) && Math.abs(v) > limit;
+  if (offTheGlobe(body.lat, 90) || offTheGlobe(body.lon, 180)) {
+    return errorResponse(
+      'INVALID_COORDINATES',
+      'lat must be between -90 and 90, and lon between -180 and 180',
+      400,
+      rid
+    );
+  }
   if ('lat' in body) {
     const v = body.lat;
     if (v === null || (typeof v === 'number' && Number.isFinite(v))) {
@@ -1052,6 +1199,45 @@ export async function handleUpdateEvent(
       sets.push('lon = ?');
       values.push(v === null ? null : (v as number));
       geoUpdated = true;
+    }
+  }
+  // OSE-1615: the old cell described the old coordinates, so it goes in this
+  // same statement; the cell statement after the save writes the new one. If
+  // that statement fails the row has no cell (and so no spine key), never the
+  // old cell on the new coordinates.
+  if (geoUpdated) sets.push('h3_res9 = NULL', 'h3_res7 = NULL');
+
+  // Owner report 2026-10-11: a changed place (street address or place name)
+  // with no coordinates in the same request is looked up again after the save
+  // (lib/event-place.ts). The old point described the old place, so it goes
+  // first, in this same UPDATE: a lookup that then fails leaves no point, never
+  // a wrong one. Text that did not change does not cost a lookup.
+  let placeChanged = false;
+  let newPlace: { where_address: unknown; location: unknown } | null = null;
+  if (('location' in body || 'where_address' in body) && !geoUpdated) {
+    const stored = await env.DB.prepare('SELECT location, where_address FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ location: string | null; where_address: string | null }>();
+    if (stored) {
+      const pick = (field: 'location' | 'where_address'): unknown =>
+        field in body
+          ? typeof body[field] === 'string'
+            ? (body[field] as string).slice(0, 500)
+            : null
+          : stored[field];
+      newPlace = { where_address: pick('where_address'), location: pick('location') };
+      placeChanged =
+        eventPlaceText(newPlace.where_address, newPlace.location) !==
+        eventPlaceText(stored.where_address, stored.location);
+      if (placeChanged) {
+        sets.push(
+          'lat = NULL',
+          'lon = NULL',
+          'h3_res9 = NULL',
+          'h3_res7 = NULL',
+          'place_checked_at = NULL'
+        );
+      }
     }
   }
 
@@ -1218,6 +1404,10 @@ export async function handleUpdateEvent(
   values.push(new Date().toISOString());
   values.push(eventId);
 
+  // OSE-1615: whether this PUT changes anything a spine key is computed from.
+  // New coordinates count: they drop the cell above.
+  const spineKeysStale = touchesSpineKeyInputs(sets);
+
   // Set only when this PUT moves the event into or out of active.
   let listedFrom: string | null | undefined;
   // The status this PUT read before deciding; the UPDATE only lands if the row
@@ -1306,6 +1496,10 @@ export async function handleUpdateEvent(
       values.splice(values.length - 1, 0, listedFromForPublish(env.PUBLISH_GRACE_MINUTES));
     }
 
+    // OSE-1615: an edit to anything a spine key is computed from clears both
+    // keys in this same statement; they are computed again once it has landed.
+    if (spineKeysStale) sets.push(SPINE_KEYS_CLEAR_SQL);
+
     let where = ' WHERE id = ?';
     if (observedStatus !== undefined) {
       where += ' AND status = ?';
@@ -1361,7 +1555,9 @@ export async function handleUpdateEvent(
         .bind(eventId)
         .first<{ lat: number | null; lon: number | null }>();
       const tags = maybeTag(geo?.lat ?? null, geo?.lon ?? null);
-      await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+      await env.DB.prepare(
+        'UPDATE events SET h3_res9 = ?, h3_res7 = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+      )
         .bind(tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, eventId)
         .run();
     }
@@ -1370,18 +1566,46 @@ export async function handleUpdateEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleUpdateEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to update event', 503, rid);
   }
 
+  // The place changed: look it up now that the save has landed. A failure
+  // here is not a failed save; the nightly job tries again.
+  let place: PlaceState | undefined;
+  if (placeChanged && newPlace) {
+    place = 'not_looked_up';
+    try {
+      const r = await lookUpEventPlace(env, newPlace.where_address, newPlace.location);
+      await savePlaceLookup(env.DB, eventId, r);
+      place = placeState(r);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          type: 'EVENT_PLACE_LOOKUP_FAILED',
+          eventId,
+          error: errorLabel(err),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }
+
+  if (spineKeysStale) await refreshSpineKeys(env.DB, eventId);
+
   return Response.json(
     {
       ok: true,
       status: 200,
       id: eventId,
+      ...(place !== undefined ? { place } : {}),
+      // A status write says the status it moved FROM (the one the guarded
+      // UPDATE matched), so the admin's Undo returns there even when its own
+      // panel was showing an older status.
+      ...(observedStatus !== undefined ? { from: observedStatus } : {}),
       ...(listedFrom !== undefined ? { listedFrom } : {}),
       ...(mapChosenNow !== null ? { map: mapState(mapChosenNow, false) } : {}),
     },
@@ -1453,14 +1677,14 @@ export async function handleDeleteEvent(
 
     // Guard: never hard-delete an event that has already met reality. `scans`
     // was split (OSE-798) into a placement side and a session/return side;
-    // `sponsor_impressions` is the sponsor-visibility ledger. Any of them being
+    // `sponsor_displays` is the sponsor-visibility ledger. Any of them being
     // non-empty means real, value-bearing rows hang off this event — refuse and
     // let the operator archive (PUT status=archived) instead of destroying data.
     const dep = await env.DB.prepare(
       `SELECT
          (SELECT COUNT(*) FROM scan_node_returns     WHERE event_id = ?) +
          (SELECT COUNT(*) FROM scan_placement_events WHERE event_id = ?) +
-         (SELECT COUNT(*) FROM sponsor_impressions   WHERE event_id = ?) AS n`
+         (SELECT COUNT(*) FROM sponsor_displays   WHERE event_id = ?) AS n`
     )
       .bind(eventId, eventId, eventId)
       .first<{ n: number }>();
@@ -1476,12 +1700,12 @@ export async function handleDeleteEvent(
     // FK-safe cascade. D1 enforces the foreign keys on the child tables, so the
     // event row cannot be removed while any child references it. Delete the
     // event's owned rows children-first, in one atomic batch, then the row. The
-    // guard above guarantees scan_*/sponsor_impressions are empty, so in
+    // guard above guarantees scan_*/sponsor_displays are empty, so in
     // practice this clears only derived/config rows (the OSE-240 shortlink, and
     // any poster deployments / sponsor placements an admin attached).
     // The current child tables carrying an event_id FK into events(id), ordered
     // children-first so each delete satisfies the FK on the next. (The scan_* and
-    // sponsor_impressions rows are already empty per the guard above; they stay
+    // sponsor_displays rows are already empty per the guard above; they stay
     // in the list so the cascade is FK-complete on its own terms and survives a
     // future guard change. scan_placement_events precedes poster_deployments
     // because it also FKs poster_deployments.)
@@ -1491,10 +1715,12 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM scan_node_returns     WHERE event_id = ?'),
       delChild('DELETE FROM scan_aggregates       WHERE event_id = ?'),
       delChild('DELETE FROM scan_cell_aggregates  WHERE event_id = ?'),
-      delChild('DELETE FROM sponsor_impressions   WHERE event_id = ?'),
+      delChild('DELETE FROM sponsor_displays   WHERE event_id = ?'),
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
+      delChild('DELETE FROM event_codes           WHERE event_id = ?'),
+      delChild('DELETE FROM share_opens_daily     WHERE event_id = ?'),
       env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
     ]);
   } catch (err) {
@@ -1502,7 +1728,7 @@ export async function handleDeleteEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleDeleteEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -1578,7 +1804,7 @@ export async function handleAdminListEventTemplates(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEventTemplates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to list event templates', 503, rid);
@@ -1630,7 +1856,7 @@ export async function handleAdminListEventTypes(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListEventTypes',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to list event types', 503, rid);
@@ -1662,9 +1888,12 @@ export async function handleBackfillH3Cells(request: Request, env: EventsEnv): P
     try {
       const tags = maybeTag(row.lat, row.lon);
       if (tags) {
-        await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+        await env.DB.prepare(
+          'UPDATE events SET h3_res9 = ?, h3_res7 = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+        )
           .bind(tags.h3_res9, tags.h3_res7, row.id)
           .run();
+        await refreshSpineKeys(env.DB, row.id);
         updated++;
       }
     } catch (err) {

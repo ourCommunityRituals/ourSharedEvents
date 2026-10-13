@@ -8,6 +8,7 @@
  *
  *   node scripts/prod-preflight.mjs              every check
  *   node scripts/prod-preflight.mjs --repo-only  only the checks that read this checkout
+ *   node scripts/prod-preflight.mjs --activation  also fails on an empty CF_ACCESS_AUD (before going live)
  *   node scripts/prod-preflight.mjs --inputs <dir> --sha <commit>
  *
  * It is read-only. It makes no network request, runs no wrangler command and
@@ -35,11 +36,16 @@ export const REQUIRED_SECRETS = [
   'FORMS_ENCRYPTION_KEY',
   'FORMS_HASH_PEPPER',
   'RATE_LIMIT_KEY_PEPPER',
+  'ANON_ID_HASH_PEPPER',
 ];
 export const FORBIDDEN_SECRETS = ['ADMIN_KEY', 'X_OCR_INTERNAL', 'ADMIN_TOKEN'];
 
 /** Settings staging has on purpose and production must never have. */
-export const STAGING_ONLY_VARS = ['ADMIN_SCOPE_ALL', 'ALLOW_ADMIN_KEY_FALLBACK', 'ALLOW_OCR_INTERNAL'];
+export const STAGING_ONLY_VARS = [
+  'ADMIN_SCOPE_ALL',
+  'ALLOW_ADMIN_KEY_FALLBACK',
+  'ALLOW_OCR_INTERNAL',
+];
 
 /** Job names of the staging chain, as the CI workflow prints them. */
 export const STAGING_JOBS = [
@@ -82,7 +88,14 @@ const CONSTANT = {
 };
 
 const pass = (id, title, detail, extra = {}) => ({ id, title, status: 'pass', detail, ...extra });
-const fail = (id, title, detail, fix, extra = {}) => ({ id, title, status: 'fail', detail, fix, ...extra });
+const fail = (id, title, detail, fix, extra = {}) => ({
+  id,
+  title,
+  status: 'fail',
+  detail,
+  fix,
+  ...extra,
+});
 const todo = (id, title, fix) => ({ id, title, status: 'todo', detail: 'no input file yet', fix });
 
 // ── reading text ────────────────────────────────────────────────────────────
@@ -94,7 +107,8 @@ const todo = (id, title, fix) => ({ id, title, status: 'todo', detail: 'no input
 export function decodeText(bytes) {
   const b = Buffer.from(bytes);
   if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) return b.subarray(2).toString('utf16le');
-  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return b.subarray(3).toString('utf8');
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf)
+    return b.subarray(3).toString('utf8');
   return b.toString('utf8');
 }
 
@@ -143,7 +157,9 @@ const section = (sections, header) => sections.find((s) => s.header === header);
 function bindingsOf(sections, envName) {
   const prefix = envName ? `env.${envName}.` : '';
   return sections
-    .filter((s) => s.array && (envName ? s.header.startsWith(prefix) : !s.header.startsWith('env.')))
+    .filter(
+      (s) => s.array && (envName ? s.header.startsWith(prefix) : !s.header.startsWith('env.'))
+    )
     .map((s) => ({
       kind: s.header.slice(prefix.length),
       name: s.values.binding ?? s.values.name ?? s.values.queue ?? '(unnamed)',
@@ -187,15 +203,19 @@ export function checkSchemaConstants({ db, forms, guardSource }) {
     const want = parseInt(found[1], 10);
     const numbers = files.map(numberOf);
     const highest = Math.max(...numbers);
-    if (want !== highest) problems.push(`${constant} is ${want} but the highest file is ${highest}`);
+    if (want !== highest)
+      problems.push(`${constant} is ${want} but the highest file is ${highest}`);
     const repeats = [...new Set(numbers.filter((n, i) => numbers.indexOf(n) !== i))];
-    if (repeats.length) problems.push(`${label}: more than one file is numbered ${repeats.map(pad).join(', ')}`);
+    if (repeats.length)
+      problems.push(`${label}: more than one file is numbered ${repeats.map(pad).join(', ')}`);
     const holes = [];
     for (let n = 1; n <= highest; n++) if (!numbers.includes(n)) holes.push(pad(n));
     if (holes.length) problems.push(`${label}: no file is numbered ${holes.join(', ')}`);
     levels.push(`${label} ${want}`);
   }
-  return problems.length ? fail(id, title, problems.join('; '), fix) : pass(id, title, levels.join(', '));
+  return problems.length
+    ? fail(id, title, problems.join('; '), fix)
+    : pass(id, title, levels.join(', '));
 }
 
 /** Production has every binding staging has, each with its own real id. */
@@ -216,16 +236,19 @@ export function checkProductionBindings(toml) {
   const problems = [];
   for (const b of prod) {
     for (const [key, value] of b.ids) {
-      if (PLACEHOLDER.test(value)) problems.push(`${b.name}: ${key} is still a placeholder ("${value}")`);
+      if (PLACEHOLDER.test(value))
+        problems.push(`${b.name}: ${key} is still a placeholder ("${value}")`);
       else if (stagingValues.has(value)) problems.push(`${b.name}: ${key} "${value}" is staging's`);
-      else if (localValues.has(value)) problems.push(`${b.name}: ${key} "${value}" is the local development value`);
+      else if (localValues.has(value))
+        problems.push(`${b.name}: ${key} "${value}" is the local development value`);
     }
   }
   const have = new Set(prod.map((b) => `${b.kind}/${b.name}`));
   for (const b of staging) {
     // The scan queue is dark on production until it has queues of its own.
     if (b.kind.startsWith('queues.')) continue;
-    if (!have.has(`${b.kind}/${b.name}`)) problems.push(`${b.name} (${b.kind}) is on staging but not on production`);
+    if (!have.has(`${b.kind}/${b.name}`))
+      problems.push(`${b.name} (${b.kind}) is on staging but not on production`);
   }
   return problems.length
     ? fail(id, title, problems.join('; '), fix)
@@ -233,7 +256,7 @@ export function checkProductionBindings(toml) {
 }
 
 /** What [env.production.vars] must have, and what it must never have. */
-export function checkProductionVars(toml) {
+export function checkProductionVars(toml, { activation = false } = {}) {
   const id = 'vars';
   const title = 'Production settings are complete and carry no staging switch';
   const fix = `Edit [env.production.vars] in ${WORKER}/wrangler.toml. A setting only staging should have goes in STAGING_ONLY_VARS in scripts/prod-preflight.mjs.`;
@@ -248,12 +271,20 @@ export function checkProductionVars(toml) {
   if (vars.WORKER_ENV !== 'production') {
     problems.push(`WORKER_ENV is "${vars.WORKER_ENV ?? ''}", not exactly "production"`);
   }
-  if (!vars.CF_ACCESS_TEAM_DOMAIN) problems.push('CF_ACCESS_TEAM_DOMAIN is empty, so no admin sign-in can be verified');
+  if (!vars.CF_ACCESS_TEAM_DOMAIN)
+    problems.push('CF_ACCESS_TEAM_DOMAIN is empty, so no admin sign-in can be verified');
   if (!vars.ALLOWED_ADMIN_EMAILS && !vars.ALLOWED_ADMIN_DOMAINS) {
-    problems.push('ALLOWED_ADMIN_EMAILS and ALLOWED_ADMIN_DOMAINS are both empty, so nobody is an admin');
+    problems.push(
+      'ALLOWED_ADMIN_EMAILS and ALLOWED_ADMIN_DOMAINS are both empty, so nobody is an admin'
+    );
   }
-  if (vars.BIGQUERY_DATASET_ID !== undefined && vars.BIGQUERY_DATASET_ID !== PRODUCTION_BACKUP_DATASET) {
-    problems.push(`BIGQUERY_DATASET_ID is "${vars.BIGQUERY_DATASET_ID}", not "${PRODUCTION_BACKUP_DATASET}"`);
+  if (
+    vars.BIGQUERY_DATASET_ID !== undefined &&
+    vars.BIGQUERY_DATASET_ID !== PRODUCTION_BACKUP_DATASET
+  ) {
+    problems.push(
+      `BIGQUERY_DATASET_ID is "${vars.BIGQUERY_DATASET_ID}", not "${PRODUCTION_BACKUP_DATASET}"`
+    );
   }
   for (const [name, value] of Object.entries(vars)) {
     if (/(^|[^a-z])(stg|staging)([^a-z]|$)/i.test(value) && name !== 'BIGQUERY_DATASET_ID') {
@@ -262,8 +293,18 @@ export function checkProductionVars(toml) {
   }
   for (const name of Object.keys(stagingVars)) {
     if (!(name in vars) && !STAGING_ONLY_VARS.includes(name)) {
-      problems.push(`${name} is set on staging but not on production (a named environment inherits nothing)`);
+      problems.push(
+        `${name} is set on staging but not on production (a named environment inherits nothing)`
+      );
     }
+  }
+  // Updating production keeps it ready and does not make it live, so an empty audience is a
+  // note there. Activation is the act that exposes the admin to the outside, and the audience
+  // pin is dark when empty (admin.ts), so for activation it is a failure (CCR 2026-10-12, A5).
+  if (activation && !vars.CF_ACCESS_AUD) {
+    problems.push(
+      'CF_ACCESS_AUD is empty, so the Access audience is not pinned and any Access app in the team can sign an admin token (OSE-1377)'
+    );
   }
   if (problems.length) return fail(id, title, problems.join('; '), fix);
   const note = vars.CF_ACCESS_AUD
@@ -284,8 +325,11 @@ export function checkProductionRoutes(toml) {
   if (prod.name !== PRODUCTION_WORKER_NAME) {
     problems.push(`the Worker name is "${prod.name ?? ''}", not "${PRODUCTION_WORKER_NAME}"`);
   }
-  const patterns = [...String(prod.routes ?? '').matchAll(/pattern\s*=\s*"([^"]+)"/g)].map((m) => m[1]);
-  if (!patterns.includes(`${PRODUCTION_HOST}/*`)) problems.push(`no route for ${PRODUCTION_HOST}/*`);
+  const patterns = [...String(prod.routes ?? '').matchAll(/pattern\s*=\s*"([^"]+)"/g)].map(
+    (m) => m[1]
+  );
+  if (!patterns.includes(`${PRODUCTION_HOST}/*`))
+    problems.push(`no route for ${PRODUCTION_HOST}/*`);
   for (const p of patterns) {
     const host = p.split('/')[0];
     if (host !== PRODUCTION_HOST && host !== `www.${PRODUCTION_HOST}`) {
@@ -294,11 +338,17 @@ export function checkProductionRoutes(toml) {
   }
   const crons = section(sections, 'env.production.triggers')?.values.crons ?? '';
   if (!/"[^"]+"/.test(crons)) {
-    problems.push('production has no nightly job ([env.production.triggers] crons); retention and exports would never run');
+    problems.push(
+      'production has no nightly job ([env.production.triggers] crons); retention and exports would never run'
+    );
   }
   return problems.length
     ? fail(id, title, problems.join('; '), fix)
-    : pass(id, title, `${PRODUCTION_WORKER_NAME} on ${patterns.join(' and ')}, nightly job ${crons}`);
+    : pass(
+        id,
+        title,
+        `${PRODUCTION_WORKER_NAME} on ${patterns.join(' and ')}, nightly job ${crons}`
+      );
 }
 
 /**
@@ -314,7 +364,12 @@ export function checkBuildStamp(toml) {
   const matching = lines(toml).filter((l) => /WORKER_BUILD_VERSION = "prod-.*"/.test(l));
   const inProd = section(parseToml(toml), 'env.production.vars')?.values.WORKER_BUILD_VERSION ?? '';
   if (matching.length !== 1) {
-    return fail(id, title, `${matching.length} lines match what the deploy step rewrites; it must be exactly 1`, fix);
+    return fail(
+      id,
+      title,
+      `${matching.length} lines match what the deploy step rewrites; it must be exactly 1`,
+      fix
+    );
   }
   if (!inProd.startsWith('prod-')) {
     return fail(id, title, 'the matching line is not the one in [env.production.vars]', fix);
@@ -349,7 +404,12 @@ export function checkSecrets(text) {
     if (found.length) names = new Set(found);
   }
   if (!names) {
-    return fail(id, title, 'the file is not a secret list (wrangler may have printed an error instead)', `Run it again: ${command}`);
+    return fail(
+      id,
+      title,
+      'the file is not a secret list (wrangler may have printed an error instead)',
+      `Run it again: ${command}`
+    );
   }
   const missing = REQUIRED_SECRETS.filter((n) => !names.has(n));
   const present = FORBIDDEN_SECRETS.filter((n) => names.has(n));
@@ -366,7 +426,11 @@ export function checkSecrets(text) {
     ].filter(Boolean);
     return fail(id, title, detail, fixes.join(' ; '));
   }
-  return pass(id, title, `${REQUIRED_SECRETS.length} required names present, no static admin credential`);
+  return pass(
+    id,
+    title,
+    `${REQUIRED_SECRETS.length} required names present, no static admin credential`
+  );
 }
 
 /**
@@ -384,10 +448,20 @@ export function checkPendingMigrations({ binding, text, files, required }) {
   const named = [...new Set(text.match(/\b\d{4}_[A-Za-z0-9_.-]*\.sql\b/g) || [])].sort();
   const none = /no migrations to apply/i.test(text);
   if (named.length === 0 && !none) {
-    return fail(id, title, `the list for ${binding} could not be read (empty, or wrangler printed an error)`, `Run it again: ${command}`);
+    return fail(
+      id,
+      title,
+      `the list for ${binding} could not be read (empty, or wrangler printed an error)`,
+      `Run it again: ${command}`
+    );
   }
   if (named.length > 0 && none) {
-    return fail(id, title, `the list for ${binding} could not be read (it says both "nothing to apply" and names files)`, `Run it again: ${command}`);
+    return fail(
+      id,
+      title,
+      `the list for ${binding} could not be read (it says both "nothing to apply" and names files)`,
+      `Run it again: ${command}`
+    );
   }
   const repo = migrationFiles(files);
   const unknown = named.filter((n) => !repo.includes(n));
@@ -433,11 +507,15 @@ export function dataChanges(sql) {
   for (const statement of code.split(';')) {
     // One space between words, so the pattern below needs no repeats inside repeats.
     const flat = statement.trim().split(/\s+/).join(' ');
-    const m = /^(DELETE FROM|UPDATE|DROP TABLE IF EXISTS|DROP TABLE|INSERT OR [A-Za-z]+ INTO|INSERT INTO) ["`]?([A-Za-z_]\w*)/i.exec(
-      flat
-    );
+    const m =
+      /^(DELETE FROM|UPDATE|DROP TABLE IF EXISTS|DROP TABLE|INSERT OR [A-Za-z]+ INTO|INSERT INTO) ["`]?([A-Za-z_]\w*)/i.exec(
+        flat
+      );
     if (!m) continue;
-    const verb = m[1].toUpperCase().replace(' IF EXISTS', '').replace(/^INSERT OR [A-Z]+ INTO$/, 'INSERT INTO');
+    const verb = m[1]
+      .toUpperCase()
+      .replace(' IF EXISTS', '')
+      .replace(/^INSERT OR [A-Z]+ INTO$/, 'INSERT INTO');
     out.push(`${verb} ${m[2]}`);
   }
   return out;
@@ -505,10 +583,24 @@ export function checkStagingChain({ text, sha }) {
   const command = `find the run: gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push --limit 5 ; then save it: gh run view <id> --json headSha,headBranch,event,conclusion,jobs > ${INPUT_DIR}/${INPUT_FILES.stagingRun}`;
   if (text === undefined) return todo(id, title, command);
   const run = parseRun(text);
-  if (!run) return fail(id, title, 'the file is not a CI run (gh may have printed an error instead)', `Run it again: ${command}`);
-  const want = String(sha || '').trim().toLowerCase();
+  if (!run)
+    return fail(
+      id,
+      title,
+      'the file is not a CI run (gh may have printed an error instead)',
+      `Run it again: ${command}`
+    );
+  const want = String(sha || '')
+    .trim()
+    .toLowerCase();
   const got = String(run.headSha || '').toLowerCase();
-  if (!want) return fail(id, title, 'no commit id to compare with', 'Pass --sha <commit>, or run this inside the git checkout.');
+  if (!want)
+    return fail(
+      id,
+      title,
+      'no commit id to compare with',
+      'Pass --sha <commit>, or run this inside the git checkout.'
+    );
   if (!got || !(got.startsWith(want) || want.startsWith(got))) {
     return fail(
       id,
@@ -518,16 +610,27 @@ export function checkStagingChain({ text, sha }) {
     );
   }
   if (run.headBranch !== 'main') {
-    return fail(id, title, `the run is from branch "${run.headBranch ?? ''}", not main`, 'Save a run of main.');
+    return fail(
+      id,
+      title,
+      `the run is from branch "${run.headBranch ?? ''}", not main`,
+      'Save a run of main.'
+    );
   }
   const problems = [];
   for (const name of STAGING_JOBS) {
     const job = jobNamed(run, name);
     if (!job) problems.push(`${name}: not in the run`);
-    else if (job.conclusion !== 'success') problems.push(`${name}: ${job.conclusion || 'still running'}`);
+    else if (job.conclusion !== 'success')
+      problems.push(`${name}: ${job.conclusion || 'still running'}`);
   }
   if (problems.length) {
-    return fail(id, title, problems.join('; '), 'Wait for the run to finish, or mend what failed on main first. The deploy job needs the same four stages green in its own run.');
+    return fail(
+      id,
+      title,
+      problems.join('; '),
+      'Wait for the run to finish, or mend what failed on main first. The deploy job needs the same four stages green in its own run.'
+    );
   }
   return pass(id, title, `T1 to T4 passed on main for ${short(got)}`);
 }
@@ -544,7 +647,13 @@ export function checkAccessApp({ text }) {
   const command = `find the run: gh run list --workflow "CF Access Canary" --limit 1 ; then save it: gh run view <id> --json conclusion,jobs > ${INPUT_DIR}/${INPUT_FILES.accessCanary}`;
   if (text === undefined) return todo(id, title, command);
   const run = parseRun(text);
-  if (!run) return fail(id, title, 'the file is not a CI run (gh may have printed an error instead)', `Run it again: ${command}`);
+  if (!run)
+    return fail(
+      id,
+      title,
+      'the file is not a CI run (gh may have printed an error instead)',
+      `Run it again: ${command}`
+    );
   const job = jobNamed(run, ACCESS_CANARY_JOB);
   if (!job || job.conclusion !== 'success') {
     return fail(
@@ -598,7 +707,7 @@ function main(argv) {
   };
   if (argv.includes('--help') || argv.includes('-h')) {
     console.log(
-      'Usage: node scripts/prod-preflight.mjs [--repo-only] [--inputs <dir>] [--sha <commit>]\n' +
+      'Usage: node scripts/prod-preflight.mjs [--repo-only] [--activation] [--inputs <dir>] [--sha <commit>]\n' +
         `Reads this checkout and, unless --repo-only, the files you saved in ${INPUT_DIR}/. Makes no network request.`
     );
     return 0;
@@ -624,7 +733,7 @@ function main(argv) {
   const results = [
     checkSchemaConstants({ db: dbFiles, forms: formsFiles, guardSource }),
     checkProductionBindings(toml),
-    checkProductionVars(toml),
+    checkProductionVars(toml, { activation: argv.includes('--activation') }),
     checkProductionRoutes(toml),
     checkBuildStamp(toml),
   ];
@@ -648,7 +757,11 @@ function main(argv) {
       db.pending && forms.pending
         ? [
             ...db.pending.map((file) => ({ binding: 'DB', file, sql: sqlOf('migrations', file) })),
-            ...forms.pending.map((file) => ({ binding: 'FORMS_DB', file, sql: sqlOf('migrations-forms', file) })),
+            ...forms.pending.map((file) => ({
+              binding: 'FORMS_DB',
+              file,
+              sql: sqlOf('migrations-forms', file),
+            })),
           ]
         : undefined;
     results.push(
@@ -658,22 +771,34 @@ function main(argv) {
       forms,
       // A list that failed to read is already a FAIL above; the plan check then has nothing to judge.
       db.status === 'fail' || forms.status === 'fail'
-        ? fail('migration-plan', 'The written migration plan covers what will be applied', 'not judged: a migration list above could not be used', 'Mend the migration list first.')
+        ? fail(
+            'migration-plan',
+            'The written migration plan covers what will be applied',
+            'not judged: a migration list above could not be used',
+            'Mend the migration list first.'
+          )
         : checkPlanCoverage({ pending, planText: readIfThere(join(root, PLAN_PATH)) }),
       checkAccessApp({ text: input('accessCanary') })
     );
   }
 
   const report = render(results);
-  console.log(`Production preflight for commit ${short(sha) || '(unknown)'}${repoOnly ? ' (repo checks only)' : ''}\n`);
+  console.log(
+    `Production preflight for commit ${short(sha) || '(unknown)'}${repoOnly ? ' (repo checks only)' : ''}\n`
+  );
   console.log(report.text);
   if (!repoOnly && !existsSync(inputs)) {
-    console.log(`\nFirst make the folder for the files you save: mkdir ${INPUT_DIR}   (git ignores it)`);
+    console.log(
+      `\nFirst make the folder for the files you save: mkdir ${INPUT_DIR}   (git ignores it)`
+    );
   }
   console.log('\nThis script cannot check:');
   for (const line of NOT_CHECKED) console.log(`  - ${line}`);
   return report.exitCode;
 }
 
-const isMain = process.argv[1]?.split(String.fromCharCode(92)).join('/').endsWith('scripts/prod-preflight.mjs');
+const isMain = process.argv[1]
+  ?.split(String.fromCharCode(92))
+  .join('/')
+  .endsWith('scripts/prod-preflight.mjs');
 if (isMain) process.exit(main(process.argv.slice(2)));

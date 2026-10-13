@@ -22,6 +22,17 @@ export const PERMISSIONS_POLICY =
   'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
 
 /**
+ * The landing page alone may ask for location, and only for itself
+ * (owner 2026-10-10): a phone's "Use my location", pressed by the person. The
+ * page sends a rough box and gets back a zip (lib/landing-where.ts). Every other
+ * surface keeps PERMISSIONS_POLICY.
+ */
+export const LANDING_PERMISSIONS_POLICY = PERMISSIONS_POLICY.replace(
+  'geolocation=()',
+  'geolocation=(self)'
+);
+
+/**
  * Cross-origin isolation. The Worker is entirely same-origin (CSP
  * `default-src 'self'`; images are `'self'` + `data:`) with no cross-origin
  * embeds, so `require-corp` is safe: same-origin subresources load without a

@@ -24,13 +24,21 @@
  *     no data loss; replaced by scan_placement_events + scan_node_returns.
  *   0067_split_sponsor_placement.sql — OSE-799 A2: DROP TABLE sponsors (doctrine rule 7 — a sponsor
  *     was a child of one night, no durable identity) + recreate sponsor_event_types/sponsor_areas/
- *     sponsor_impressions to repoint their sponsor_id FK from sponsors → sponsor_business (SQLite
+ *     sponsor_displays to repoint their sponsor_id FK from sponsors → sponsor_business (SQLite
  *     cannot ALTER a FK). All tables = 0 rows in every environment, so no data loss; identity moves
  *     to sponsor_business, creative to sponsor_asset, per-event attachment to sponsor_placement.
  *   0071_subscribers_encrypt_email.sql — A-5 data-at-rest doctrine: DROP TABLE subscribers to
  *     recreate it without the plaintext `email` column (SQLite cannot drop a UNIQUE column in
  *     place), replacing it with email_encrypted (AES-GCM) + email_hash (peppered, UNIQUE/dedup).
  *     0 rows in every environment (pre-deploy), so no data loss.
+ *   0102_rename_sponsor_impressions_to_sponsor_displays.sql — OSE-931 (PO 2026-08-20): DROP TABLE
+ *     sponsor_impressions as the last step of a table REBUILD under its honest name, sponsor_displays
+ *     (SQLite cannot change a column default). Every row is copied first, with the stored value
+ *     'impression' mapped to 'display'; the three indexes are recreated under the new name.
+ *   0098_drop_subscribers_from_anonymous_db.sql — OSE-1661 (owner 2026-10-11): DROP TABLE
+ *     subscribers from the anonymous DB. Forms migration 0017 creates the same table in FORMS_DB and
+ *     every reader and writer moved with it. Production held 0 rows and staging 1 test row
+ *     (2026-10-11); a migration cannot copy rows between databases.
  *   0081_sponsor_tier_and_compact_logo.sql — OSE-1316/1317: DROP TABLE sponsor_asset as the last
  *     step of a table REBUILD that widens its format CHECK with 'logo_compact' (the sidebar logo —
  *     SQLite cannot alter a CHECK in place). Every row is copied into sponsor_asset_new first, then
@@ -61,6 +69,8 @@ const APPROVED_DROP_MIGRATIONS = [
   '0067_split_sponsor_placement', // OSE-799 A2: DROP TABLE sponsors + recreate sponsor_event_types/areas/impressions (FK repoint to sponsor_business); all 0 rows — doctrine rule 7
   '0071_subscribers_encrypt_email', // A-5: DROP TABLE subscribers to drop plaintext email (0 rows) — encrypt+hash rebuild
   '0081_sponsor_tier_and_compact_logo', // OSE-1316/1317: sponsor_asset rebuild (rows copied first) to widen the format CHECK with logo_compact
+  '0102_rename_sponsor_impressions_to_sponsor_displays', // OSE-931: table rebuild under its honest name; rows copied first
+  '0098_drop_subscribers_from_anonymous_db', // OSE-1661: DROP TABLE subscribers from DB (prod 0 rows); forms 0017 recreates it in FORMS_DB
 ] as const;
 
 function normalizePath(p: string): string {
@@ -152,7 +162,7 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       date: '2026-08-03',
     };
     console.log(`[OSE-584-EVIDENCE] ${JSON.stringify(report)}`);
-    expect(report.approved_drops).toBe(8);
+    expect(report.approved_drops).toBe(10); // +0098 (OSE-1661) +0102 (OSE-931)
   });
 });
 

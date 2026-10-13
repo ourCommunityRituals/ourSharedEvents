@@ -160,7 +160,7 @@ enforcement that survives contributor turnover and agent-authored PRs.
 
 - The seam is a single small file (2 pure functions, no dependencies). Its
   presence has no runtime cost and no bundle impact until it is wired.
-- Today's security owner for the seam is the solo founder (`@mzdano`); the
+- Today's security owner for the seam is the solo founder (`@bereasonable13`); the
   CODEOWNERS lock is written against that handle. When a dedicated security
   team handle exists, the lock's owner is updated in a one-line CODEOWNERS
   edit — itself security-owner-reviewed under the same rule.
@@ -204,3 +204,10 @@ enforcement that survives contributor turnover and agent-authored PRs.
 - **When a dedicated security-owner handle replaces the solo founder** — the
   CODEOWNERS lock's owner is updated; no change to this decision, only to who
   holds the review.
+
+## Reconciliation note (2026-10-12)
+
+The CODEOWNERS lock this ADR relies on named `@mzdano`, which GitHub reported as an unknown owner
+on every line, so it applied no review. The handle is corrected to `@bereasonable13`. The lock
+becomes effective when `main` requires code-owner review (see
+`docs/security/AGENT-WORKSTATION-HARDENING.md`). The mechanical gate (COST-101) was unaffected.

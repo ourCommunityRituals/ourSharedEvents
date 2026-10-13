@@ -138,14 +138,18 @@ async function seedEvent(opts: {
 // (scan_node_returns: anonymous_id / user_agent_hash / country_code, keyed by
 // event_id + scan_bucket). No poster_deployment_id lives on this side, so we
 // seed scan_node_returns only — the placement table is irrelevant here.
-async function seedScan(eventId: string, anonId: string | null): Promise<void> {
+async function seedScan(
+  eventId: string,
+  anonId: string | null,
+  bucket = '2026-W20'
+): Promise<void> {
   await tenv()
     .DB.prepare(
       `INSERT INTO scan_node_returns
          (id, event_id, anonymous_id, scan_bucket, created_at)
-       VALUES (?, ?, ?, '2026-W20', datetime('now'))`
+       VALUES (?, ?, ?, ?, datetime('now'))`
     )
-    .bind(`snr-${crypto.randomUUID()}`, eventId, anonId)
+    .bind(`snr-${crypto.randomUUID()}`, eventId, anonId, bucket)
     .run();
 }
 
@@ -200,7 +204,9 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     await seedEvent({ id: 'test-evt-mat-1', end_offset_hours: -4 });
     await seedScan('test-evt-mat-1', 'anon_aaa');
     await seedScan('test-evt-mat-1', 'anon_bbb');
-    await seedScan('test-evt-mat-1', 'anon_aaa'); // duplicate — same event, same anon
+    // Same event, same anon, another hour. Within one hour a repeat is refused by
+    // the UNIQUE index (migration 0101, OSE-923), so the duplicate is across hours.
+    await seedScan('test-evt-mat-1', 'anon_aaa', '2026-W21');
     const r = await materializeAnonIdReturns({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
@@ -278,7 +284,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     expect(row!.anon_id_hash).not.toContain('uniquemarker123');
   });
 
-  test('idempotent — re-running on same scans bumps visit_count, not row count', async () => {
+  test('idempotent — re-running on same scans bumps return_count, not row count', async () => {
     await seedEvent({ id: 'test-evt-mat-idem', end_offset_hours: -4 });
     await seedScan('test-evt-mat-idem', 'anon_idem');
     const env1: SharedReportMaterializeEnv = {
@@ -289,12 +295,12 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     await materializeAnonIdReturns(env1);
     await materializeAnonIdReturns(env1);
     const row = await tenv()
-      .DB.prepare(`SELECT visit_count FROM anon_id_returns WHERE venue_id = ?`)
+      .DB.prepare(`SELECT return_count FROM anon_id_returns WHERE venue_id = ?`)
       .bind('test-evt-mat-idem')
-      .first<{ visit_count: number }>();
+      .first<{ return_count: number }>();
     expect(row).not.toBeNull();
-    // 3 re-runs on the SAME scan event → visit_count bumps each time
-    expect(row!.visit_count).toBe(3);
+    // 3 re-runs on the SAME scan event → return_count bumps each time
+    expect(row!.return_count).toBe(3);
     // Still exactly one row (PK protects)
     const count = await tenv()
       .DB.prepare(`SELECT COUNT(*) AS c FROM anon_id_returns WHERE venue_id = ?`)
@@ -303,37 +309,49 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     expect(count!.c).toBe(1);
   });
 
-  // OPEN, not accepted. Noted on the SharedReport privacy-basis ticket on
-  // 2026-10-01 and still so. The report's venue return rate is "people whose
-  // visit_count is over 1" (shared-report-builder.ts), and visit_count counts
-  // runs of this job, as the test above pins. So the rate says nothing about
-  // anyone returning. The job is nightly and its window is a day wide, so it
-  // normally reads an event once: nobody is over 1, and the rate is withheld
-  // for every event. If the job reads an event a second time (a scheduled run
-  // delivered twice, a run by hand), the same people read as 100%. Pinned
-  // exactly, so it cannot change without this test being rewritten.
+  // OSE-1652. `return_count` counts runs of this job, as the test above pins, so
+  // the report's venue return rate must not read it. It used to ("people whose
+  // return_count is over 1"): the job reads an event once on a normal night, and
+  // a second run (a delivery repeated, a run by hand) made six people who each
+  // scanned once read as a 100% venue return rate. The rate now counts people
+  // seen at another event of the same confirmed series.
   //
-  // Seen red: with the upsert no longer adding to visit_count on a repeat run.
-  test('OPEN: six people who each scanned once read as a 100% venue return rate once the job has run twice', async () => {
+  // Seen red on main at 5da1d61: the second report read 100.
+  test('six people who each scanned once never read as returning, however often the job runs', async () => {
     const id = 'test-evt-mat-rate';
     await seedEvent({ id, start_offset_hours: -8, end_offset_hours: -4 });
+    // A confirmed series with an earlier event that none of the six went to.
+    await seedEvent({
+      id: 'test-evt-mat-rate-prev',
+      start_offset_hours: -200,
+      end_offset_hours: -196,
+    });
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO event_series (id, venue_id, series_name, state) VALUES ('ser-mat-rate', ?, 'Weekly', 'confirmed')`
+      )
+      .bind('test-evt-mat-rate-prev')
+      .run();
+    await tenv()
+      .DB.prepare(`UPDATE events SET series_id = 'ser-mat-rate' WHERE id IN (?, ?)`)
+      .bind(id, 'test-evt-mat-rate-prev')
+      .run();
     for (let i = 0; i < 6; i++) await seedScan(id, `anon_once_${i}`);
     const jobEnv: SharedReportMaterializeEnv = { DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER };
 
-    await materializeAnonIdReturns(jobEnv);
-    const first = await buildSharedReport(tenv().DB, id);
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
-    expect(first.report.return_rate.sample_size).toBe(6);
-    // Nobody "came twice" yet: none is under the floor, so the rate is withheld.
-    expect(first.report.return_rate.venue_pct).toBeNull();
-
-    await materializeAnonIdReturns(jobEnv);
-    const second = await buildSharedReport(tenv().DB, id);
-    expect(second.ok).toBe(true);
-    if (!second.ok) return;
-    expect(second.report.return_rate.sample_size).toBe(6);
-    expect(second.report.return_rate.venue_pct).toBe(100);
+    for (let run = 1; run <= 3; run++) {
+      await materializeAnonIdReturns(jobEnv);
+      const r = await buildSharedReport(tenv().DB, id);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.return_rate.sample_size, `run ${run}`).toBe(6);
+      // Nobody came back: 0 of 6 is withheld like 1 to 4, never 100%.
+      expect(r.report.return_rate.venue_pct, `run ${run}`).toBeNull();
+      expect(
+        r.report._meta.suppression_reasons.find((x) => x.field === 'return_rate.venue_pct')?.reason,
+        `run ${run}`
+      ).toBe('below_min_sample_size');
+    }
   });
 
   test('skips events with NULL anonymous_id scans (no row written)', async () => {
@@ -355,7 +373,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
     // A pre-0091 row: its pepper is unknown.
     await tenv()
       .DB.prepare(
-        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES ('legacy-hash-000000000000000000000', 'test-evt-mat-rot', datetime('now'), datetime('now'), 1, datetime('now'))`
       )
       .run();
@@ -384,7 +402,7 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       await tenv()
         .DB.prepare(
           `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < ?)
-           INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at, pepper_epoch)
+           INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at, pepper_epoch)
            SELECT printf('%032d', i), 'test-evt-mat-cap', datetime('now'), datetime('now'), 1, datetime('now'), 'retired-epoch' FROM k`
         )
         .bind(n)
@@ -509,7 +527,7 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(`${i}`.padStart(32, 'a'), 'test-evt-mat-corr-A', nowIso, nowIso, nowIso)
@@ -658,7 +676,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('a'.repeat(32), 'test-evt-mat-h3-only', nowIso, nowIso, nowIso)
@@ -695,7 +713,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
@@ -772,7 +790,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('b'.repeat(32), 'test-evt-mat-coalesce', nowIso, nowIso, nowIso)
@@ -827,7 +845,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     await db
       .prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
          VALUES (?, ?, ?, ?, 1, ?)`
       )
       .bind('c'.repeat(32), 'test-evt-mat-legacy-compat', nowIso, nowIso, nowIso)
@@ -865,7 +883,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
            VALUES (?, ?, ?, ?, 1, ?)`
         )
         .bind(h, 'test-evt-mat-window-split', nowIso, nowIso, nowIso)
@@ -1001,7 +1019,7 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
     expect(row!.distinct_agent_hashes).toBe(2);
   });
 
-  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | distinct_agent_hashes counts 1', async () => {
+  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | one row, distinct_agent_hashes counts 1', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
     const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
@@ -1018,7 +1036,10 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
        VALUES (?, ?, ?, ?, datetime('now'))`
       )
       .bind('snr-dedup-2', 'test-evt-mat-agg-dedup', bucket, 'anon_same')
-      .run();
+      .run()
+      // OSE-923 (migration 0101): the second scan in the browser's hour is refused
+      // by the UNIQUE index. The writer is INSERT OR IGNORE; this seeds it the same way.
+      .catch(() => undefined);
 
     await aggregateScanBuckets({ DB: db });
 
@@ -1026,7 +1047,8 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
       .prepare(`SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?`)
       .bind('test-evt-mat-agg-dedup')
       .first<{ total_scans: number; distinct_agent_hashes: number }>();
-    expect(row!.total_scans).toBe(2);
+    // One row per browser-hour: total_scans was 2 before 0101.
+    expect(row!.total_scans).toBe(1);
     expect(row!.distinct_agent_hashes).toBe(1);
   });
 

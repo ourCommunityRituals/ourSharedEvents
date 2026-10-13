@@ -16,6 +16,7 @@
 
 import { parseEventSettings } from './event-settings';
 import { zonedTimePart } from './event-datetime';
+import { isUploadedArtworkPath } from './event-thumb';
 
 /** The columns of the source event the handler reads. Nothing else is selected. */
 export const REPEAT_SOURCE_COLUMNS = [
@@ -126,6 +127,10 @@ export function buildRepeatBody(
     'timezone',
   ] as const) {
     const v = str(src[k]);
+    // OSE-1658: artwork saved before the upload-only rule may be an outside
+    // address. No page ever drew one, and create now refuses it, so the copy
+    // goes without rather than the repeat failing.
+    if (k === 'cover_image_url' && !isUploadedArtworkPath(v)) continue;
     if (v !== undefined) body[k] = v;
   }
   if (src.what_url_enabled === 1 || src.what_url_enabled === true) body.what_url_enabled = true;

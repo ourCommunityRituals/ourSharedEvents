@@ -6,8 +6,9 @@
 // posters out, places covered, scans per day. Counts only (lib/pre-event-activity).
 // Poster tiers (OSE-1357): + `reach` — scans per placement (venue areas vs
 // community places, most-scanned first) and taps per code (lib/poster-reach).
-// Organizer-only: physical scans exact, digital taps floored (K=5) at every
-// grain shown; the sponsor surface never reads it. The tap totals
+// Organizer-only: scans and taps are both floored (K=5) at every grain shown
+// (scans per poster-hour, OSE-1656; taps per code); the sponsor surface never
+// reads it. The tap totals
 // (`activity.clicks`, `reach.taps.total`, `reach.totals.taps`) are one number:
 // the taps on the codes that clear the floor on their own (floorTotalOfParts),
 // so none of them can be subtracted against the listed codes.
@@ -101,6 +102,6 @@ export async function handleAdminPreEventActivity(
     activity: organizerPreEventActivity(activity),
     reach,
     link,
-    poster_url: `/poster?event=${encodeURIComponent(eventId)}`,
+    poster_url: `/events/${encodeURIComponent(eventId)}/poster`,
   });
 }

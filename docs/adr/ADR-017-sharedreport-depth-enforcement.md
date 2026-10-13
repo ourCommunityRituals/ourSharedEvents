@@ -14,7 +14,7 @@ A SharedReport is assembled once and then read by several token classes — the
 organizer (`bar_owner`), platform `admin`, an in-fleet `internal` batch consumer,
 and the `sponsor` who received a signed share-link. Not every class is entitled
 to every section: the corridor map and cross-event trend are the paid depth a
-sponsor's tier buys (Invariant #5, tier equity — pricing governs *display depth*,
+sponsor's tier buys (Invariant #5, tier equity — pricing governs _display depth_,
 never data collection).
 
 `lib/report-depth.ts` (OSE-459) implemented the depth filter `filterReportByDepth()`
@@ -38,7 +38,7 @@ isolation, rank-6).
 the `sponsor` role only.**
 
 1. **One gate.** `filterReportByDepth()` is called in `handlers/shared-report-read.ts`
-   after the report is built. It is the *only* place a section is withheld for
+   after the report is built. It is the _only_ place a section is withheld for
    depth. The corridor-map renderer never gates (it renders when H3 cells exist),
    and **the client never re-strips** — an under-entitled caller simply never
    receives the section in the payload.
@@ -54,7 +54,7 @@ the `sponsor` role only.**
 4. **The withheld sections are named, not hidden.** The response carries
    `upgrade: { locked_sections: string[], next_depth }` — a **descriptive,
    load-bearing** wire field stating exactly which next-rung sections exist but
-   were withheld. A refusal is *printed, not promised*: the client renders the
+   were withheld. A refusal is _printed, not promised_: the client renders the
    locked state solely from this field (OSE-817). `sponsor_class_breakdown` is
    class-level aggregate and is present at **every** depth (OSE-719) — the
    tier-neutral competitive-intel delivery chosen over field-stripping it.
@@ -78,8 +78,8 @@ dead-looking-but-not-dead code is the worst category.
 Treat depth as best-effort presentation and lean on the honest-numbers covenant
 for everything that matters.
 
-**Rejected because:** it leaves `upgrade.locked_sections` *advisory* and makes a
-too-generous payload err *unsafe for revenue*. The PO chose to bind gating
+**Rejected because:** it leaves `upgrade.locked_sections` _advisory_ and makes a
+too-generous payload err _unsafe for revenue_. The PO chose to bind gating
 server-side and clean it up at the API so the contract is provable, not trusted.
 
 ### Alternative C: Filter at materialization / storage time
@@ -87,7 +87,7 @@ server-side and clean it up at the API so the contract is provable, not trusted.
 Store per-tier report variants.
 
 **Rejected because:** it forks the pipeline and re-introduces the risk that a
-lower tier gets a *different number*, not merely fewer sections — the exact
+lower tier gets a _different number_, not merely fewer sections — the exact
 Invariant #5 violation omission-only avoids. Read-time filtering keeps one
 materialization and guarantees identical values.
 
@@ -107,7 +107,7 @@ materialization and guarantees identical values.
 - Ongoing discipline: nobody may add a second depth check — not in the renderer,
   not in the client. The rule has to be restated at each tempting site (and is,
   in `corridor-map.ts` and the signed-link template).
-- A depth-capped sponsor calling the API directly still learns *which* sections
+- A depth-capped sponsor calling the API directly still learns _which_ sections
   exist (their names appear in `locked_sections`). This is accepted: it is
   commercial disclosure (a map exists at Mid), never per-competitor or attendee
   data (§5 still binds).
@@ -126,8 +126,8 @@ Back-reference added per OSE-1291 / CCR finding F3 (ADR↔invariant traceability
 recorded in the OCR-docs brain `architectural-invariants.yaml`:
 
 - **Invariant #5 — tier_equity.** This ADR enforces SharedReport depth
-  server-side by tier; #5 is the invariant it names ("pricing governs *display
-  depth*, never data collection"). A depth change that varied a *value* per tier
+  server-side by tier; #5 is the invariant it names ("pricing governs _display
+  depth_, never data collection"). A depth change that varied a _value_ per tier
   would be an Invariant #5 change (see Revisit Criteria below).
 
 ## Implementation Notes
@@ -158,8 +158,8 @@ recorded in the OCR-docs brain `architectural-invariants.yaml`:
 
 - If a second non-browser consumer needs a per-tier variant that omission can't
   express, the read-time model needs revisiting.
-- If depth ever needs to vary a *value* (not merely presence) for a tier, that is
+- If depth ever needs to vary a _value_ (not merely presence) for a tier, that is
   an Invariant #5 change and must reopen this decision, not patch around it.
-- If `unique_gatherings` / `sponsor_impressions` are renamed off the banned
+- If `distinct_scanners` / `sponsor_displays` are renamed off the banned
   lexicon (OSE-815 §9 decision 2), the wire keys change and the contract table
   here and in the feature spec must move together.

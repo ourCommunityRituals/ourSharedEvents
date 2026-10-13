@@ -6,6 +6,9 @@
     <meta name="robots" content="noindex, nofollow" />
     <title>Your sponsorships</title>
     <link rel="stylesheet" href="/ui.css" />
+    <!-- Toasts (OSE-1564): how this page says an action worked or failed.
+         Same-origin and deferred; the page still works if it does not load. -->
+    <script src="/ui-toast.js" defer></script>
     <!-- Sponsor home: server-rendered, phone-first, token-driven. -->
     <style>
       .header a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--accent); font-weight: 600; }
@@ -50,7 +53,6 @@
     <main id="main-content" data-testid="sponsor-home" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
       <div class="sh-head">
         <h2 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h2>
-        <p data-testid="sponsor-home-sub">Everything you're backing, in one place. Nothing here identifies an attendee.</p>
       </div>
 
       <div class="sh-summary" data-testid="sponsor-home-summary">
@@ -62,8 +64,7 @@
       <!--OCR_SPONSOR_PLACEMENTS-->
 
       <p class="sh-foot" data-testid="sponsor-home-foot">
-        This link is yours alone and expires <!--OCR_EXPIRES-->. If it stops working, ask the organizer for a fresh one.
-        Reports show counts within time windows, never who.
+        Your private link, good until <!--OCR_EXPIRES-->. Reports show counts, never who.
       </p>
     </main>
     <!--OCR_LEGAL_FOOTER-->
@@ -71,7 +72,7 @@
       // Accept / decline a placement, and ask to back an event. The token
       // arrives in the URL (?t=) and is re-sent in the body; the server
       // re-verifies it and scopes every write to the token's sponsor + brand.
-      // No other JS on the page.
+      // The only other script is the shared toast (/ui-toast.js, in the head).
       (function () {
         // The token is read once and kept in this variable only: never a
         // cookie, never browser storage. It is then dropped from the address
@@ -96,6 +97,34 @@
           m.textContent = text;
           m.className = 'sh-msg ' + (cls || '');
         }
+        // What an action did is said in a toast (/ui-toast.js, OSE-1564). If
+        // that script did not load, the line under the card says it instead.
+        function worked(card, text) {
+          var toast = window.ocrToast;
+          if (toast) toast.success(text);
+          else setMsg(card, text, 'ok');
+        }
+        // Reasons this page words itself, by error code. The server's own
+        // sentence is never shown: it can name an id or a person.
+        var REASONS = {
+          UNAUTHORIZED: 'This link no longer works. Open the link the organizer sent you again.',
+          NOT_DISCOVERABLE: 'That event is not open for sponsor requests.',
+          ALREADY_LINKED: 'You are already linked to this event.',
+          TOO_MANY_OPEN: 'You have several requests waiting. Once an organizer answers one, you can ask again.',
+        };
+        // A request that failed. The toast says the plain sentence, and its
+        // details are the error code and the request reference (X-Request-Id)
+        // only, read by detailsFrom. No other part of the response, and no
+        // browser error text, reaches the page. `res` is null when nothing
+        // came back.
+        function failed(card, sentence, res, body, action) {
+          var code = body && typeof body.code === 'string' ? body.code : '';
+          var reason = Object.prototype.hasOwnProperty.call(REASONS, code) ? ' ' + REASONS[code] : '';
+          var text = sentence + (res ? reason : ' Check your connection and try again.');
+          var toast = window.ocrToast;
+          if (toast) toast.failure(text, { details: toast.detailsFrom(res, body, action) });
+          else setMsg(card, text, 'error');
+        }
         // Sponsor discovery: ask to back an event. Stored switched off until the
         // organizer says yes, so the card only ever says "asked", never "on".
         async function askToJoin(btn) {
@@ -112,14 +141,14 @@
             if (res.ok && data && data.ok) {
               btn.hidden = true;
               card.setAttribute('data-requested', '1');
-              setMsg(card, 'Asked. The organizer will see your request; your name appears only if they say yes.', 'ok');
+              worked(card, 'Asked. Your name shows only if they say yes.');
             } else {
               btn.disabled = false;
-              setMsg(card, (data && (data.error || data.code)) || 'Could not send (server said ' + res.status + ').', 'error');
+              failed(card, 'Could not send your request.', res, data, 'Asking to back an event');
             }
           } catch (e) {
             btn.disabled = false;
-            setMsg(card, 'No connection. Try again.', 'error');
+            failed(card, 'Could not send your request.', null, null, 'Asking to back an event');
           }
         }
         document.addEventListener('click', async function (ev) {
@@ -156,17 +185,17 @@
               var declineBtn = card.querySelector('[data-testid="placement-decline"]');
               if (acceptBtn) acceptBtn.hidden = accepted;
               if (declineBtn) declineBtn.hidden = !accepted;
-              setMsg(card, accepted ? 'Thanks. Your placement is on.' : 'Declined. You can change your mind below.', 'ok');
+              worked(card, accepted ? 'Thanks. Your placement is on.' : 'Declined. You can change your mind below.');
               var pending = document.querySelector('[data-testid="sponsor-home-count-pending"]');
               if (pending && card.getAttribute('data-was-pending') === '1') {
                 pending.textContent = String(Math.max(0, Number(pending.textContent) - 1));
                 card.setAttribute('data-was-pending', '0');
               }
             } else {
-              setMsg(card, (data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ').', 'error');
+              failed(card, 'Could not save your answer.', res, data, 'Answering a placement');
             }
           } catch (e) {
-            setMsg(card, 'No connection. Try again.', 'error');
+            failed(card, 'Could not save your answer.', null, null, 'Answering a placement');
           } finally {
             all.forEach(function (b) { b.disabled = false; });
           }

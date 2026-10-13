@@ -33,12 +33,14 @@ on:
     branches: [main]
     paths:
       - 'tools/ci/main-branch-protection.json'
+      - '.github/CODEOWNERS'
       - 'scripts/apply-branch-protection.mjs'
       - '.github/workflows/branch-protection-drift.yml'
   pull_request:
     branches: [main]
     paths:
       - 'tools/ci/main-branch-protection.json'
+      - '.github/CODEOWNERS'
       - 'scripts/apply-branch-protection.mjs'
       - '.github/workflows/branch-protection-drift.yml'
 
@@ -69,6 +71,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/apply-branch-protection.mjs --check-checks
+      # A CODEOWNERS line naming an account that does not exist is ignored by GitHub, so
+      # every review lock in it silently does nothing (2026-10-12: all nine lines named
+      # @mzdano). Every owner must resolve, on the branch under review.
+      - name: CODEOWNERS owners all resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          errors="$(gh api "repos/${GITHUB_REPOSITORY}/codeowners/errors?ref=${REF}" --jq '.errors')"
+          n="$(printf '%s' "$errors" | jq 'length')"
+          if [ "$n" != "0" ]; then
+            printf '%s' "$errors" | jq -r '.[] | "line \(.line): \(.message)"'
+            echo "::error title=CODEOWNERS has unresolvable owners::${n} line(s) name an owner GitHub cannot resolve, so their review locks do nothing."
+            exit 1
+          fi
+          echo "CODEOWNERS: all owners resolve."
 
   full-settings:
     name: 'Branch protection: full settings match the JSON'

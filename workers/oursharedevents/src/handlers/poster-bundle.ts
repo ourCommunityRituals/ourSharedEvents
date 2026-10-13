@@ -40,7 +40,9 @@ import {
   type SponsorRow,
 } from '../lib/sponsor-resolver';
 import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
+import { eventFormPath } from '../lib/canonical';
 
+import { errorLabel } from '../lib/error-label';
 export interface PosterBundleEnv extends DataProviderEnv {
   DB: D1Database;
   FORMS_DB: D1Database;
@@ -142,8 +144,7 @@ export function posterUecFor(type: FormType): PosterUec {
 }
 
 function formUrl(origin: string, eventId: string, type: FormType, deploymentId?: string): string {
-  const base = `${origin}/forms/${encodeURIComponent(eventId)}?type=${type}`;
-  return deploymentId ? `${base}&deployment=${encodeURIComponent(deploymentId)}` : base;
+  return `${origin}${eventFormPath(eventId, type, deploymentId)}`;
 }
 
 // Scan URL for QR codes that record a physical scan before the event-page landing.
@@ -317,7 +318,7 @@ export async function handleGetPosterBundle(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetPosterBundle.sponsors',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

@@ -47,8 +47,8 @@ competitive view — never per-competitor, so it is never a paid section.
 | Section                                                         | Local | Mid | Premium |
 | --------------------------------------------------------------- | :---: | :-: | :-----: |
 | `event_id` / `event_title` / dates                              |   ●   |  ●  |    ●    |
-| `unique_gatherings`                                             |   ●   |  ●  |    ●    |
-| `sponsor_impressions` (own rows only)                           |   ●   |  ●  |    ●    |
+| `distinct_scanners`                                             |   ●   |  ●  |    ●    |
+| `sponsor_displays` (own rows only)                              |   ●   |  ●  |    ●    |
 | `sponsor_class_breakdown`                                       |   ●   |  ●  |    ●    |
 | `campaign_summary`                                              |       |  ●  |    ●    |
 | `poster_attribution`                                            |       |  ●  |    ●    |
@@ -65,7 +65,7 @@ competitive view — never per-competitor, so it is never a paid section.
 > above (Mid+, paid), and (2) the **h3 base-layer map** the whole report is
 > _built from_ (`shared-report-builder.ts`, built **unconditionally and
 > tier-blind** — it references every cell to derive `corridor_density`,
-> `unique_gatherings`, and the map itself). Depth gates only (1); (2) is never
+> `distinct_scanners`, and the map itself). Depth gates only (1); (2) is never
 > tier-gated (Invariant #5). Reading a delivery-layer omission (no `corridor_map`
 > _section_ at Local) as a statement about the base layer is a mistake — a dead
 > E2E test once did exactly that and asserted the wrong contract (OSE-834).
@@ -76,7 +76,7 @@ competitive view — never per-competitor, so it is never a paid section.
 
 ## Scope isolation (the critical path)
 
-A sponsor sees only **their own** `sponsor_impressions` rows. This is independent
+A sponsor sees only **their own** `sponsor_displays` rows. This is independent
 of depth and always binds server-side:
 
 - **`sponsor` + a `sponsor_id`** on the token → filtered to that sponsor's rows.
@@ -157,13 +157,16 @@ symmetry). Both run in the T0 Gate `tests`/`node` shards on every PR.
 
 1. ~~Does commercial gating bind server-side?~~ **Resolved 2026-08-16 (ADR-017):
    yes, server-side, sponsor role only.**
-2. Rename `unique_gatherings` / `sponsor_impressions` off the banned lexicon —
-   both are user-facing labels and the wire keys are contract, so it must be
-   coordinated across payload, clients, and demo. (OSE-815 §9.2.)
+2. Rename the two banned wire keys. **Half done, 2026-10-11 (OSE-818, owner
+   decision):** `unique_gatherings` is now `distinct_scanners`, a **breaking wire
+   change** (snapshot `shared-report.snapshot.json` 1.0.0 → 2.0.0). It counts
+   distinct anonymous scanners, each bucket floored at 5 before summing; label
+   "Distinct scanners". Payload, depth sections, report page, demo and docs
+   moved together. `sponsor_displays` → `sponsor_displays` follows (OSE-931).
 3. If depth gating is ever extended to the batch/service path, define the
    bypass explicitly rather than special-casing at the call site (OSE-577 settled
    the current class split).
 
 > **Lexicon note:** _impressions_, _unique_, _reach_, _attendance_, _turnout_,
 > _eyeballs_, _people_ are banned catalogue-wide. Report sections use _displays_,
-> _scan counts_, _distinct gatherings_. See [SPONSOR-PRICING.md](SPONSOR-PRICING.md).
+> _scan counts_, _distinct scanners_. See [SPONSOR-PRICING.md](SPONSOR-PRICING.md).

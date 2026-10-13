@@ -9,6 +9,11 @@
  *
  * Both endpoints require admin auth (enforced by caller in router.ts).
  * State transition validity is guarded by isValidTransition from the domain model.
+ *
+ * Every answer carries the request id as the `X-Request-Id` header, and a
+ * refusal carries it as `requestId` in the body too: with the body's `code`
+ * it is what a failure toast shows (OSE-1564). The router passes the id its
+ * audit row is written under, so the reference can be found later.
  */
 
 import {
@@ -25,15 +30,28 @@ export interface QrVerifyEnv {
   PUBLISH_GRACE_MINUTES?: string;
 }
 
+function requestId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
+}
+
+function answer(body: Record<string, unknown>, status: number, rid: string): Response {
+  return Response.json(body, { status, headers: { 'X-Request-Id': rid } });
+}
+
+function refusal(body: Record<string, unknown>, status: number, rid: string): Response {
+  return answer({ ...body, requestId: rid }, status, rid);
+}
+
 /** The row moved between our read and our write (e.g. Undo in another tab). */
-function statusConflict(): Response {
-  return Response.json(
+function statusConflict(rid: string): Response {
+  return refusal(
     {
       ok: false,
       code: 'STATUS_CONFLICT',
       error: 'This event changed while saving. Reload and try again.',
     },
-    { status: 409 }
+    409,
+    rid
   );
 }
 
@@ -45,7 +63,8 @@ interface EventRow {
 export async function handleV2AdminVerifyQr(
   _request: Request,
   env: QrVerifyEnv,
-  eventId: string
+  eventId: string,
+  rid: string = requestId()
 ): Promise<Response> {
   const row = await env.DB.prepare(
     'SELECT id, status, starts_at, event_type_id FROM events WHERE id = ?'
@@ -54,13 +73,14 @@ export async function handleV2AdminVerifyQr(
     .first<EventRow & { starts_at: string | null; event_type_id: string | null }>();
 
   if (!row) {
-    return Response.json({ ok: false, code: 'EVENT_NOT_FOUND' }, { status: 404 });
+    return refusal({ ok: false, code: 'EVENT_NOT_FOUND' }, 404, rid);
   }
 
   if (!isValidTransition(row.status as Parameters<typeof isValidTransition>[0], 'active')) {
-    return Response.json(
+    return refusal(
       { ok: false, code: 'INVALID_TRANSITION', from: row.status, to: 'active' },
-      { status: 409 }
+      409,
+      rid
     );
   }
 
@@ -69,7 +89,7 @@ export async function handleV2AdminVerifyQr(
     const missing = coreValuesMissing(row);
     if (missing.length > 0) {
       logCoreValuesRefused('verify_qr', row.status, 'active', missing);
-      return Response.json(coreValuesRefusal(missing), { status: 409 });
+      return answer(coreValuesRefusal(missing, rid), 409, rid);
     }
   }
 
@@ -81,31 +101,34 @@ export async function handleV2AdminVerifyQr(
     .bind(listedFrom, eventId, row.status)
     .run();
   // Guarded on the status read above: if another tab moved it meanwhile, say so.
-  if ((res.meta?.changes ?? 0) === 0) return statusConflict();
+  if ((res.meta?.changes ?? 0) === 0) return statusConflict(rid);
 
-  return Response.json(
+  return answer(
     { ok: true, event: { id: eventId, status: 'active', qrVerified: true, listedFrom } },
-    { status: 200 }
+    200,
+    rid
   );
 }
 
 export async function handleV2AdminUnverifyQr(
   _request: Request,
   env: QrVerifyEnv,
-  eventId: string
+  eventId: string,
+  rid: string = requestId()
 ): Promise<Response> {
   const row = await env.DB.prepare('SELECT id, status FROM events WHERE id = ?')
     .bind(eventId)
     .first<EventRow>();
 
   if (!row) {
-    return Response.json({ ok: false, code: 'EVENT_NOT_FOUND' }, { status: 404 });
+    return refusal({ ok: false, code: 'EVENT_NOT_FOUND' }, 404, rid);
   }
 
   if (!isValidTransition(row.status as Parameters<typeof isValidTransition>[0], 'ready')) {
-    return Response.json(
+    return refusal(
       { ok: false, code: 'INVALID_TRANSITION', from: row.status, to: 'ready' },
-      { status: 409 }
+      409,
+      rid
     );
   }
 
@@ -114,10 +137,7 @@ export async function handleV2AdminUnverifyQr(
   )
     .bind(eventId, row.status)
     .run();
-  if ((res.meta?.changes ?? 0) === 0) return statusConflict();
+  if ((res.meta?.changes ?? 0) === 0) return statusConflict(rid);
 
-  return Response.json(
-    { ok: true, event: { id: eventId, status: 'ready', qrVerified: false } },
-    { status: 200 }
-  );
+  return answer({ ok: true, event: { id: eventId, status: 'ready', qrVerified: false } }, 200, rid);
 }

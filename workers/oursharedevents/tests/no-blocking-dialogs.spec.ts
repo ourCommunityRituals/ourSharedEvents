@@ -48,8 +48,16 @@ describe('admin | no blocking browser dialogs', () => {
 
   test('INVARIANT #1: _adminAnnounce writes via textContent, never innerHTML', async () => {
     const html = await fetchAdmin();
-    // The helper assigns the message with textContent…
-    expect(html).toMatch(/_adminAnnounce[\s\S]{0,400}\.textContent\s*=\s*message/);
+    // The helper hands the message to the toast (text only) and, when the
+    // toast script is not there, assigns it to the status line with textContent…
+    const helper = html.slice(
+      html.indexOf('window._adminAnnounce = function'),
+      html.indexOf('window._adminRequestFailed = function')
+    );
+    expect(helper.length, 'the helper was found').toBeGreaterThan(100);
+    expect(helper).toMatch(/\.textContent\s*=\s*message/);
+    const code = helper.replace(/\/\/.*/g, ''); // the comments name innerHTML to forbid it
+    expect(code).not.toMatch(/innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
     // …and never routes the status region through innerHTML.
     expect(html).not.toMatch(/admin-status[\s\S]{0,120}\.innerHTML\s*=/);
   });

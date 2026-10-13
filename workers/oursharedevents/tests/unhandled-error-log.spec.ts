@@ -32,6 +32,10 @@
  * @born-red query-borne token | method: already held on main (pathname only),
  *   so it was proved by logging `request.url` again and watching the tests
  *   fail | date: 2026-10-07
+ * @born-red code and request reference on the 500 | method: ran against
+ *   index.ts before the change. The answer had no `code`, no `requestId` and no
+ *   X-Request-Id header, and the line had no `requestId` (11 cases failed) |
+ *   date: 2026-10-12
  */
 
 import { env, SELF } from 'cloudflare:test';
@@ -168,10 +172,21 @@ function expectAbsent(lines: string[], secrets: string[], what: string): void {
   }
 }
 
+// What a failure toast can show as a reference (ocrToast.detailsFrom).
+const REFERENCE = /^[A-Za-z0-9_.:-]{8,64}$/;
+
 async function expectPlain500(res: Response, secrets: string[]): Promise<void> {
   expect(res.status).toBe(500);
+  const reference = res.headers.get('X-Request-Id');
+  expect(reference, 'X-Request-Id header').toMatch(REFERENCE);
   const text = await res.text();
-  expect(JSON.parse(text)).toEqual({ ok: false, status: 500, error: 'Internal server error' });
+  expect(JSON.parse(text)).toEqual({
+    ok: false,
+    status: 500,
+    code: 'INTERNAL',
+    error: 'Internal server error',
+    requestId: reference,
+  });
   for (const s of secrets) expect(text).not.toContain(s);
 }
 
@@ -307,7 +322,35 @@ describe('the unhandled-error line stays useful', () => {
       errorClass: 'RangeError',
       error: 'offset 12 is out of bounds',
     });
-    expect(Object.keys(line).sort()).toEqual(['error', 'errorClass', 'op', 'timestamp', 'type']);
+    expect(Object.keys(line).sort()).toEqual([
+      'error',
+      'errorClass',
+      'op',
+      'requestId',
+      'timestamp',
+      'type',
+    ]);
+  });
+
+  test('it carries the reference the 500 answered with, a new one for each request', async () => {
+    const references: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      fault.atRouter = () => new Error('boom');
+      const { result: res, lines } = await captureLogs(() =>
+        SELF.fetch(`${ORIGIN}/api/v2/admin/events/evt_none/verify-qr`, { method: 'POST' })
+      );
+      expect(res.status).toBe(500);
+      const reference = res.headers.get('X-Request-Id');
+      expect(reference, 'X-Request-Id header').toMatch(REFERENCE);
+      const body = (await res.json()) as { code: string; requestId: string };
+      expect(body.code).toBe('INTERNAL');
+      expect(body.requestId).toBe(reference);
+      expect(unhandled(lines)).toHaveLength(1);
+      expect(unhandled(lines)[0].requestId).toBe(reference);
+      references.push(reference!);
+      vi.restoreAllMocks();
+    }
+    expect(references[0]).not.toBe(references[1]);
   });
 
   test('the same route pattern is on the cost line, so the two can be joined', async () => {

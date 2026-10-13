@@ -144,7 +144,7 @@ A secret is PR-reachable but not allowlisted, or a `pull_request_target` appeare
 **Allowlisting** is only for secrets that are genuinely, intentionally
 PR-reachable AND are not infra/deploy creds (the guard already refuses those).
 Add the secret name to `scripts/check-pr-secret-exposure.allowlist.json` under
-`approved` **with a reason**. The file is CODEOWNERS-locked (`@mzdano`), so the
+`approved` **with a reason**. The file is CODEOWNERS-locked (`@bereasonable13`), so the
 addition is reviewed as a security decision.
 
 ## Rules P and W (ADR-012 Phase 0.1 and 0.2, added 2026-10-01)

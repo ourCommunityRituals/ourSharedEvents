@@ -30,6 +30,7 @@ describe('OSE-1347 canonical D1 shape verifier', () => {
         'consent_given_at',
         'consent_type',
         'attendee_name_encrypted',
+        'attendee_email_encrypted',
       ])
     );
   });
@@ -41,7 +42,9 @@ describe('OSE-1347 canonical D1 shape verifier', () => {
     expect(schema.DB.has('sponsors')).toBe(false);
     expect(schema.DB.get('scan_aggregates')).toContain('distinct_agent_hashes');
     expect(schema.DB.get('scan_aggregates')).not.toContain('unique_agents');
-    expect(schema.DB.get('subscribers')).toEqual([
+    // OSE-1661: the email list left the anonymous DB (main 0098, forms 0017).
+    expect(schema.DB.has('subscribers')).toBe(false);
+    expect(schema.FORMS_DB.get('subscribers')).toEqual([
       'created_at',
       'email_encrypted',
       'email_hash',

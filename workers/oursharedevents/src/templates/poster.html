@@ -61,8 +61,7 @@ body {
 .page-header .print-btn:not(:disabled):hover {
   color: var(--text);
 }
-/* OSE-286: the Print control became a <button>; reset native chrome so
-   it reads as the header link it replaced, and dim it while disabled. */
+/* OSE-286: Print is a <button> styled as a link; dim while disabled. */
 .print-controls {
   display: inline-flex;
   align-items: center;
@@ -158,9 +157,7 @@ body {
   font-size: 1rem;
   color: var(--text-muted);
 }
-/* @ocr/ui-ready: colours come from the shared design tokens (--surface-hover,
-   --border, --text-muted), not hardcoded hex — so the poster art viewport
-   can be adopted by @ocr/ui / synced to Claude Design without a re-skin. */
+/* Colours are @ocr/ui tokens, never hex. */
 .poster-art {
   margin: 1rem 0 1.25rem;
   border-radius: 10px;
@@ -298,7 +295,16 @@ body {
   max-width: none;
   font-size: 0.85rem;
 }
+.poster-directions,
+.poster-directions summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  cursor: pointer;
+}
 .meta-text a,
+.poster-directions summary,
 .poster--digital .qr-slot-code {
   display: inline-flex;
   align-items: center;
@@ -870,7 +876,21 @@ body {
       </div>
     </main>
     <script>
-      const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+      // ONE escaper for every value this page writes into markup, safe as
+      // element text AND as the value of a quoted attribute: it escapes all five
+      // of & < > " '. The browser mirror of lib/html-escape.ts escapeHtml, which
+      // client code can't import. The helper it replaces was built on
+      // textContent/innerHTML, which leaves quote marks alone, so an event name
+      // holding a quote mark ended the attribute it was written into. Escape at
+      // the write, never ahead of it. Not for an unquoted attribute or a style.
+      // Not enough for an address by itself: an address is built here from a
+      // fixed start, or passes posterArtAddress / slotLink / slotPicture first.
+      window.escapePosterHtml = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      };
+      const esc = window.escapePosterHtml;
       // OSE-1313 — dates and times render in the EVENT's zone, never the
       // viewer's. A timed event carries its UTC instant in starts_at; a
       // date-only YYYY-MM-DD is a calendar date, pinned via UTC so no zone can
@@ -921,6 +941,13 @@ body {
         }));
       }
 
+      // The event this poster is for: /events/<id>/poster (the address the
+      // platform writes, OSE-1684) or the older /poster?event=<id>, which still works.
+      const ROUTE_EVENT = (function () {
+        const m = location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/poster$/);
+        return m ? m[1] : '';
+      })();
+
       // Print (default) or Digital, from ?kind= — the URL is the state.
       const KIND = new URLSearchParams(location.search).get('kind') === 'digital' ? 'digital' : 'print';
 
@@ -928,7 +955,8 @@ body {
       // controls in step with the event on show.
       function syncChrome(event) {
         const params = new URLSearchParams(location.search);
-        if (event && event.id) params.set('event', event.id);
+        // On /events/<id>/poster the path already names the event.
+        if (event && event.id && !ROUTE_EVENT) params.set('event', event.id);
         params.set('kind', KIND);
         try { history.replaceState(null, '', '?' + params.toString()); } catch (e) { /* sandboxed */ }
         document.querySelectorAll('[data-kind]').forEach(function (a) {
@@ -938,13 +966,13 @@ body {
           if (a.getAttribute('data-kind') === KIND) a.setAttribute('aria-current', 'page');
           else a.removeAttribute('aria-current');
         });
-        // The event's other screens, one tap away (the same links as the event
-        // page's nav, lib/event-nav.ts). A draft preview has no public page or
-        // TV yet, so it keeps only "All events".
+        // The event's page, one tap away (the same public links as the event
+        // page's nav, lib/event-nav.ts; the TV is an organizer link, OSE-1684).
+        // A draft preview has no public page yet, so it keeps only "All events".
         const eventNav = document.querySelector('[data-testid="poster-event-nav"]');
         if (eventNav && event && event.id && !PREVIEW_EVENT) {
           const eid = encodeURIComponent(event.id);
-          [['poster-nav-event', '/events/' + eid, 'Event page'], ['poster-nav-display', '/display?event=' + eid, 'TV display']].forEach(function (l) {
+          [['poster-nav-event', '/events/' + eid, 'Event page']].forEach(function (l) {
             let a = eventNav.querySelector('[data-testid="' + l[0] + '"]');
             if (!a) { a = document.createElement('a'); a.setAttribute('data-testid', l[0]); a.textContent = l[2]; eventNav.appendChild(a); }
             a.setAttribute('href', l[1]);
@@ -1102,6 +1130,19 @@ body {
       }
       window.addEventListener('resize', fitPosterTitle);
 
+      // The artwork address is typed: events.cover_image_url is free text, and
+      // nothing checks it when it is saved. It is drawn only when it is a path
+      // on this site (what the admin's artwork upload saves) or an https
+      // address, the rule slotLink() keeps for a code's link. Anything else
+      // (javascript:, data:, plain http, another host with no scheme) is the
+      // same as no artwork. Escaping keeps an address inside its attribute; it
+      // does not decide what the address is.
+      function posterArtAddress(raw) {
+        const u = String(raw == null ? '' : raw);
+        if (/^\/(?![\/\\])[^\s"'<>]*$/.test(u) || /^https:\/\/[^\s"'<>]+$/.test(u)) return u;
+        return '';
+      }
+
       function renderPoster(event) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
         // directly (mapped in enrichWithPhase). The old `const data = event.data
@@ -1115,26 +1156,31 @@ body {
         // R4 — poster art viewport. Source is the event's cover image (public
         // projection allowlist includes cover_image_url). Snake/camel tolerant
         // so it works whether or not enrichWithPhase renames the field.
-        const art = event.cover_image_url || event.coverImageUrl || '';
+        // Only an address posterArtAddress() lets through is drawn. (Its own
+        // name, not `art`: posterLayout() has a yes/no of that name.)
+        const artAddress = posterArtAddress(event.cover_image_url || event.coverImageUrl);
 
         // Digital: the date adds itself to a calendar, the venue opens a map.
-        // Print has nothing to tap, so it stays plain text.
+        // Print has nothing to tap, so it stays plain text. Both addresses are
+        // a fixed start with one encoded value after it.
         const digital = KIND === 'digital';
-        const id = encodeURIComponent(event.id || '');
         const whenText = esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '');
-        const whenHtml = digital && id
-          ? '<a href="/events/' + id + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
+        const whenHtml = digital && event.id
+          ? '<a href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
           : whenText;
-        const mapHref = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(venue);
+        // Owner 2026-10-11: one Directions button, two choices (Google Maps,
+        // Apple Maps), as on the event page.
         const venueHtml = digital
-          ? '<a href="' + esc(mapHref) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">' + esc(venue) + ' &middot; Map</a>'
+          ? '<details class="poster-directions" data-testid="poster-directions"><summary data-testid="poster-directions-summary">' + esc(venue) + ' &middot; Directions</summary>' +
+            '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a> ' +
+            '<a href="https://maps.apple.com/?q=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a></details>'
           : esc(venue);
 
         // OSE-1516: the layout starts from the artwork alone (the codes are not
         // here yet); relayoutPoster() redoes it once they and the sponsors are.
-        const first = posterLayout({ codes: 0, hasArt: !!art, hasSponsors: false });
+        const first = posterLayout({ codes: 0, hasArt: !!artAddress, hasSponsors: false });
 
-        return '<div class="poster' + (digital ? ' poster--digital' : '') + '" data-testid="poster-card" data-kind="' + KIND + '" data-layout="' + first.layout + '" data-codes="0" data-art="' + (art ? '1' : '0') + '" role="article" aria-label="' + esc(name) + ' event poster">' +
+        return '<div class="poster' + (digital ? ' poster--digital' : '') + '" data-testid="poster-card" data-kind="' + esc(KIND) + '" data-layout="' + esc(first.layout) + '" data-codes="0" data-art="' + (artAddress ? '1' : '0') + '" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
             '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
           '</div>' +
@@ -1150,9 +1196,9 @@ body {
             // The stage holds the artwork and the codes. No artwork: the art area
             // is not drawn at all (nothing dashed, nothing to hide in print).
             '<div class="poster-stage" data-testid="poster-stage">' +
-            (art
+            (artAddress
               ? '<div class="poster-art" data-testid="poster-art-viewport">' +
-                '<img class="poster-art-img" src="' + esc(art) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">' +
+                '<img class="poster-art-img" src="' + esc(artAddress) + '" alt="' + esc(name) + ' artwork" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="poster-art-img">' +
                 '</div>'
               : '') +
             '<div class="qr-section" data-testid="poster-qr-section">' +
@@ -1169,8 +1215,8 @@ body {
         '</div>';
       }
 
-      // OSE-1081: `event` is the CANONICAL surface deep-link param —
-      // admin.html's scopedSurfaceUrl() emits /poster?event=<id>.
+      // OSE-1081 / OSE-1684: admin.html's scopedSurfaceUrl() emits
+      // /events/<id>/poster; /poster?event=<id> still works.
       // OSE-867: a scoped poster is ONE network call. poster-bundle carries the
       // event (title / start / venue under the public projection's names), the
       // sponsor strip and the QR slots, so nothing else is fetched: no events
@@ -1183,7 +1229,7 @@ body {
         const picker = document.getElementById('event-picker');
         const area = document.getElementById('poster-area');
         // Admin preview (a draft): the server names the event on <body>.
-        const wanted = PREVIEW_EVENT || new URLSearchParams(location.search).get('event');
+        const wanted = PREVIEW_EVENT || ROUTE_EVENT || new URLSearchParams(location.search).get('event');
         if (wanted) {
           document.getElementById('poster-event-select').hidden = true;
           const shown = await loadPosterBundle(wanted, true);
@@ -1207,7 +1253,7 @@ body {
             // OSE-844: read the single canonical `name`; fall back to the event
             // id (always present) so options stay distinguishable without the
             // banned Untitled-Event literal that made every option identical.
-            '<option value="' + i + '">' + esc(e.name || e.id || '') + '</option>'
+            '<option value="' + esc(i) + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
           const show = (item) => {
             area.innerHTML = renderPoster(item);
@@ -1237,16 +1283,14 @@ body {
             // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
             // 0083: logo via the same-origin proxy (external URLs are CSP-
             // blocked here), or the OSE default; title = display_name → name.
-            // attr() also escapes quotes — these values sit in attributes.
-            const attr = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+            // The title is typed and sits in attributes: esc() escapes quotes.
             const title = s.title || s.name;
-            const src = s.logo_url ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg';
-            const logo = '<img src="' + attr(src) + '" alt="' + attr(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="poster-sponsor-logo">';
+            const logo = '<img src="' + (s.logo_url ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + esc(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="poster-sponsor-logo">';
             const validTiers = ['title','platinum','gold','silver','bronze','primary'];
             // data-tier retained for rotation/frequency-share identity only; NO
             // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + attr(title) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + attr(title) + '</span></div>';
+            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(title) + '</span></div>';
           }).join('');
         rotatePosterSponsors(strip);
       }
@@ -1465,7 +1509,7 @@ body {
         // text (never colour alone; docs/features/UEC-CODES.md). Kind and icon come from
         // allowlists here, the link is rebuilt from a validated code on this
         // origin, and a QR src must be a data:image — no response value
-        // reaches an href or src unchecked.
+        // reaches an href or src unchecked (slotLink, slotPicture).
         const ICON = Object.assign(Object.create(null), { public: '★', checkin: '✓', register: '✎', donation: '♥', sponsor: '◆', ow: '♪' });
         // A live poster links only through a validated short code. The admin
         // preview never mints one, so a slot with no code yet carries its
@@ -1477,6 +1521,11 @@ body {
           const u = String(s.url || '');
           if (u.indexOf(location.origin + '/') === 0 || /^https:\/\/[^\s"'<>]+$/.test(u)) return u;
           return '';
+        }
+        // A code's picture is drawn only from an inline PNG or GIF.
+        function slotPicture(s) {
+          const q = String(s.qr || '');
+          return /^data:image\/(png|gif);base64,/.test(q) ? q : '';
         }
         // The colour never enters the markup: it is checked here and set on the
         // card through the CSSOM after the cards exist.
@@ -1491,24 +1540,23 @@ body {
             // UEC id from the bundle, shown as text beside the word.
             const uecId = String((s.uec && s.uec.id) || '').replace(/[^A-Z-]/g, '');
             const uecName = uecId.replace(/-/g, ' ');
-            const word = esc(s.word || s.label || kind);
-            const label = esc(s.label || s.word || kind);
+            // Raw here, escaped where each is written (never ahead of it).
+            const word = s.word || s.label || kind;
+            const label = s.label || s.word || kind;
             const link = slotLink(s);
-            const url = esc(link);
+            const picture = slotPicture(s);
             // What scanning does ("Scan to register"), from the page's own list.
-            const action = '<span class="code-action" data-testid="poster-qr-slot-action-' + kind + '">' + esc(posterActionLabel(kind, KIND === 'digital')) + '</span>';
-            const shortText = esc(link);
-            const qr = /^data:image\/(png|gif);base64,/.test(String(s.qr || '')) ? esc(s.qr) : '';
+            const action = '<span class="code-action" data-testid="poster-qr-slot-action-' + esc(kind) + '">' + esc(posterActionLabel(kind, KIND === 'digital')) + '</span>';
             return (
-              '<div class="qr-card qr-item code-card" data-uec="' + uecId + '" data-testid="poster-qr-slot-' + kind + '">' +
-              '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + kind + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + word + (uecName && uecName !== String(s.word || '') ? ' <span class="code-uec meta-text" data-testid="poster-qr-slot-uec-' + kind + '">&middot; ' + uecName + '</span>' : '') + '</span></div>' +
+              '<div class="qr-card qr-item code-card" data-uec="' + esc(uecId) + '" data-testid="poster-qr-slot-' + esc(kind) + '">' +
+              '<div class="qr-card-header"><span class="qr-card-title qr-label code-word" data-testid="poster-qr-slot-label-' + esc(kind) + '"><span aria-hidden="true">' + (ICON[kind] || '→') + '</span> ' + esc(word) + (uecName && uecName !== String(s.word || '') ? ' <span class="code-uec meta-text" data-testid="poster-qr-slot-uec-' + esc(kind) + '">&middot; ' + esc(uecName) + '</span>' : '') + '</span></div>' +
               '<div class="qr-card-body">' +
               (KIND === 'digital'
-                ? '<a class="qr-slot-code" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + '" data-testid="qr-slot-code-' + kind + '">' + shortText + '</a>' + action
-                : '<a class="qr-link" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ' QR code — tap to open" data-testid="qr-link-' + kind + '">' +
-                  '<img src="' + qr + '" alt="' + label + ' QR code" class="qr-img" data-testid="qr-img-slot-' + kind + '" width="120" height="120" />' +
+                ? '<a class="qr-slot-code" href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + '" data-testid="qr-slot-code-' + esc(kind) + '">' + esc(link) + '</a>' + action
+                : '<a class="qr-link" href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + ' QR code — tap to open" data-testid="qr-link-' + esc(kind) + '">' +
+                  '<img src="' + esc(picture) + '" alt="' + esc(label) + ' QR code" class="qr-img" data-testid="qr-img-slot-' + esc(kind) + '" width="120" height="120" />' +
                   '</a>' + action +
-                  '<span class="qr-slot-code" data-testid="qr-slot-code-' + kind + '">' + shortText + '</span>') +
+                  '<span class="qr-slot-code" data-testid="qr-slot-code-' + esc(kind) + '">' + esc(link) + '</span>') +
               '</div>' +
               '</div>'
             );
@@ -1524,8 +1572,17 @@ body {
       // itself is drawn from data.event (the scoped path); otherwise the card
       // is already on screen from the picker list and only the sponsors and
       // codes are filled. Resolves true when the bundle was usable.
+      // OSE-1441: the picker can switch events while a bundle is still out.
+      // Each call takes the next number; an answer whose number is no longer
+      // the latest is dropped, so a late answer for the event just left never
+      // paints its codes or sponsors (or opens Print) on the one now chosen.
+      // The switch itself clears them: show() redraws the card with an empty
+      // strip and the .qr-loading placeholder before this call goes out.
+      let posterBundleSeq = 0;
       async function loadPosterBundle(eventId, renderEvent) {
         if (!eventId) return false;
+        const seq = ++posterBundleSeq;
+        const current = function () { return seq === posterBundleSeq; };
         // Gate Print for this render cycle until the codes below settle.
         setPrintReady(false);
         const strip = document.getElementById('poster-sponsor-strip');
@@ -1541,7 +1598,7 @@ body {
               '/poster-bundle'
           );
           const data = await res.json();
-          if (!data.ok) return false;
+          if (!current() || !data.ok) return false;
           if (renderEvent) {
             if (!data.event || !data.event.id) return false;
             document.getElementById('poster-area').innerHTML = renderPoster(data.event);
@@ -1563,15 +1620,18 @@ body {
           shown = true;
         } catch { /* the caller shows the error state (scoped) or keeps the card */ }
         finally {
-          const s = document.getElementById('poster-sponsor-strip');
-          if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
-          // AC (OSE-286): re-enable Print only after all QR images finish
-          // loading OR error-out. If any code failed, its .qr-loading
-          // placeholder stays and the @media print rule hides the whole
-          // section — so an incomplete poster still never prints empty boxes.
-          await awaitQrImages();
-          // A scoped poster that never rendered has nothing to print.
-          setPrintReady(shown || !renderEvent);
+          // A dropped answer leaves the strip and Print to the newer call.
+          if (current()) {
+            const s = document.getElementById('poster-sponsor-strip');
+            if (s && s.getAttribute('aria-busy') === 'true') { s.setAttribute('aria-busy', 'false'); s.innerHTML = ''; }
+            // AC (OSE-286): re-enable Print only after all QR images finish
+            // loading OR error-out. If any code failed, its .qr-loading
+            // placeholder stays and the @media print rule hides the whole
+            // section — so an incomplete poster still never prints empty boxes.
+            await awaitQrImages();
+            // A scoped poster that never rendered has nothing to print.
+            if (current()) setPrintReady(shown || !renderEvent);
+          }
         }
         return shown;
       }

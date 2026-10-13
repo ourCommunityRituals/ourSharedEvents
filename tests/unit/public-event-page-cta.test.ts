@@ -28,7 +28,7 @@ describe('OSE-R-008 — public event page registration CTA copy', () => {
       'eventFormHref(row.id, { type, deploymentId: ctx.deploymentId })'
     );
     expect(pagesSource).toContain("const formContext = opts?.formContext ?? { type: 'register' };");
-    expect(pagesSource).toContain("return 'Register for this event';");
+    expect(pagesSource).toContain("return 'Register';");
     expect(pagesSource).not.toContain('>RSVP for this event</a>');
   });
 });

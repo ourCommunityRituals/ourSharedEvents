@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { JSDOM } from 'jsdom';
 import DISPLAY_HTML from '../src/templates/display.html';
+import { EVENT_DEFAULT_THUMB_PATH, eventThumbSrc } from '../src/lib/event-thumb';
 
 // The TV display's pane rotation, ported from the GAS display's rotation
 // engine (MVP-EVENT-TOOLKIT, startRotationEngine). These tests RUN the engine
@@ -245,6 +246,8 @@ interface DisplayConfig {
   league: Array<{ kind: string; label: string; url: string; qr: string | null }>;
   event_page?: { url: string; qr: string | null };
   donate?: { label: string; url: string; qr: string | null } | null;
+  /** OSE-475: the featured event's phase, from the server's canonical resolver. */
+  phase?: string;
 }
 const DEFAULT_CONFIG: DisplayConfig = { ok: true, panes: ALL, dwell_seconds: 15, league: [] };
 const QR = 'data:image/png;base64,iVBORw0KGgo=';
@@ -301,9 +304,12 @@ async function bootPage(
     /** When set, GET /api/v2/events answers with this HTTP status and a JSON error. */
     eventsStatus: 0,
     impressions: [] as string[],
+    /** Every GET /api/v2/events and /api/v2/events/:id, with its fetch options. */
+    eventReads: [] as Array<{ url: string; init?: RequestInit }>,
   };
-  w.fetch = (async (url: string) => {
+  w.fetch = (async (url: string, init?: RequestInit) => {
     const u = String(url);
+    if (/\/api\/v2\/events(\/[^/?]+)?$/.test(u)) server.eventReads.push({ url: u, init });
     if (u.includes('/display-config')) {
       const id = /\/events\/([^/]+)\/display-config/.exec(u)![1];
       server.configFetches++;
@@ -1221,5 +1227,175 @@ describe('OSE-1522 | the TV shows the consented sponsor by an event title', () =
     expect(lineOf(doc, 'display-featured-sponsor')).toEqual([
       'Supported by Hall Bakery, Corner "Hardware"',
     ]);
+  });
+});
+
+describe('display page: a phase crossing shows on the minute check (OSE-475)', () => {
+  // The server's display-config carries the featured event's phase from the
+  // resolver the public event page uses, and its ETag changes at a crossing
+  // (tests/display-phase-parity.spec.ts). Here: the page acts on it.
+  const PRE = [
+    { ...EVENTS[0], phase: 'pre_event' },
+    { ...EVENTS[1], phase: 'pre_event' },
+  ];
+  const label = (doc: Document) =>
+    doc.querySelector('[data-testid="display-featured-label"]')?.textContent;
+
+  test('pre → live: the label turns to "Happening now" without waiting for the list', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: PRE,
+      config: { ...DEFAULT_CONFIG, phase: 'pre_event' },
+    });
+    expect(label(doc)).toBe('Coming up');
+    const reads = server.eventReads.length;
+    server.config = { ...DEFAULT_CONFIG, phase: 'event' };
+    server.etag = '"c-live"';
+    await recheckConfig();
+    expect(label(doc)).toBe('Happening now');
+    // The minute check alone did it: the list was not re-read.
+    expect(server.eventReads.length).toBe(reads);
+  });
+
+  test('live → post: the wrapped event leaves the board and the next one is featured', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: [{ ...EVENTS[0], phase: 'event' }, PRE[1]],
+      config: { ...DEFAULT_CONFIG, phase: 'event' },
+    });
+    expect(label(doc)).toBe('Happening now');
+    // What the server says one minute after the end: the list has it wrapped,
+    // and the featured event's config (a new ETag) says post_event.
+    server.events = [
+      { ...EVENTS[0], phase: 'post_event' },
+      { ...EVENTS[1], phase: 'pre_event' },
+    ];
+    server.configs['evt-1'] = { ...DEFAULT_CONFIG, phase: 'post_event' };
+    server.configs['evt-2'] = { ...DEFAULT_CONFIG, phase: 'pre_event' };
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-featured-title"]')?.textContent).toBe(
+      'Trivia <b>Tuesday</b>'
+    );
+    expect(label(doc)).toBe('Coming up');
+    expect(doc.body.textContent).not.toContain('Bocce Night');
+  });
+
+  test('the same phase with the same ETag changes nothing', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: PRE,
+      config: { ...DEFAULT_CONFIG, phase: 'pre_event' },
+    });
+    const panesEl = doc.querySelector('[data-testid="display-panes"]');
+    await recheckConfig();
+    expect(doc.querySelector('[data-testid="display-panes"]')).toBe(panesEl);
+    expect(label(doc)).toBe('Coming up');
+    expect(server.configBodiesRead).toBe(1);
+  });
+
+  test('an unknown phase value is ignored, never trusted', async () => {
+    const { doc, server, recheckConfig } = await bootPage('', {
+      events: [{ ...EVENTS[0], phase: 'event' }],
+      config: { ...DEFAULT_CONFIG, phase: 'event' },
+    });
+    server.config = { ...DEFAULT_CONFIG, phase: '<b>live</b>' };
+    server.etag = '"c-junk"';
+    await recheckConfig();
+    expect(label(doc)).toBe('Happening now');
+  });
+
+  test('the event list is always revalidated, so a refresh never shows the last refresh', async () => {
+    const { server, refreshEvents } = await bootPage('?event=evt-9', {
+      events: PRE,
+      seed: (s) => {
+        s.single['evt-9'] = { id: 'evt-9', name: 'Unlisted', phase: 'pre_event' };
+      },
+    });
+    await refreshEvents();
+    expect(server.eventReads.length).toBeGreaterThanOrEqual(4);
+    for (const r of server.eventReads) {
+      expect(r.init?.cache, r.url).toBe('no-cache');
+    }
+  });
+});
+
+describe('OSE-1678 | "Also coming up" shows each event\'s picture', () => {
+  const ART = '/api/v2/uploads/events/evt-2/poster.png';
+  const thumbs = (doc: Document) => [
+    ...doc.querySelectorAll<HTMLImageElement>('[data-testid="display-upcoming-thumb"]'),
+  ];
+
+  test('the card picture rule is the same one the /events cards use (lib/event-thumb.ts)', () => {
+    const begin = DISPLAY_HTML.indexOf('// @ose-event-thumb:begin');
+    const end = DISPLAY_HTML.indexOf('// @ose-event-thumb:end');
+    expect(begin, 'the rule is marked in the template').toBeGreaterThan(-1);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- template code under test
+    const tvRule = new Function(`${DISPLAY_HTML.slice(begin, end)}; return eventThumbSrc;`)() as (
+      v: unknown
+    ) => string;
+    for (const v of [
+      ART,
+      '/api/v2/uploads/a.png',
+      null,
+      undefined,
+      '',
+      42,
+      'https://example.com/a.png',
+      '//evil.test/a.png',
+      'javascript:alert(1)',
+      '/api/v2/uploads/../admin',
+      '/api/v2/uploads/./a.png',
+      '/api/v2/uploads/a"b',
+      '/api/v2/uploads/' + 'a'.repeat(490),
+    ]) {
+      expect(tvRule(v), String(v).slice(0, 40)).toBe(eventThumbSrc(v));
+    }
+  });
+
+  test('a card with poster art shows it; one without shows the Ring', async () => {
+    const { doc } = await bootPage('', {
+      events: [
+        EVENTS[0],
+        { ...EVENTS[1], cover_image_url: ART },
+        { id: 'evt-3', name: 'Quiz Night', venue: 'Hall', startDateISO: '2026-10-29' },
+      ] as typeof EVENTS,
+    });
+    expect(thumbs(doc).map((img) => img.getAttribute('src'))).toEqual([
+      ART,
+      EVENT_DEFAULT_THUMB_PATH,
+    ]);
+    for (const img of thumbs(doc)) {
+      expect(img.getAttribute('alt'), 'decorative: the name sits beside it').toBe('');
+      expect(img.closest('[data-testid="display-upcoming-card"]')).not.toBeNull();
+    }
+  });
+
+  test('an outside address in the column never reaches the TV', async () => {
+    const { doc } = await bootPage('', {
+      events: [
+        EVENTS[0],
+        { ...EVENTS[1], cover_image_url: 'https://x.test/a.png' },
+      ] as typeof EVENTS,
+    });
+    expect(thumbs(doc).map((img) => img.getAttribute('src'))).toEqual([EVENT_DEFAULT_THUMB_PATH]);
+    expect(doc.body.innerHTML).not.toContain('x.test');
+  });
+
+  test('a picture that fails to load turns into the Ring, never a sponsor logo or a broken icon', async () => {
+    const { doc } = await bootPage('', {
+      events: [EVENTS[0], { ...EVENTS[1], cover_image_url: ART }] as typeof EVENTS,
+    });
+    const [img] = thumbs(doc);
+    const w = doc.defaultView!;
+    img.dispatchEvent(new w.Event('error'));
+    expect(img.getAttribute('src')).toBe(EVENT_DEFAULT_THUMB_PATH);
+    expect(img.style.display).toBe('');
+    // Only if the Ring itself fails is the picture hidden.
+    img.dispatchEvent(new w.Event('error'));
+    expect(img.style.display).toBe('none');
+  });
+
+  test('a sponsor logo that fails still falls back to the sponsor default', async () => {
+    const { doc } = await bootPage();
+    const logo = doc.querySelector<HTMLImageElement>('[data-testid="display-sponsor-logo"]')!;
+    logo.dispatchEvent(new doc.defaultView!.Event('error'));
+    expect(logo.getAttribute('src')).toBe('/sponsor-default-logo.svg');
   });
 });

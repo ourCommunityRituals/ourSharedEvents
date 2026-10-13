@@ -96,7 +96,7 @@ async function seedSubject(tag: string): Promise<Subject> {
   )
     .bind(`reg-${crypto.randomUUID()}`, emailHash, anonId)
     .run();
-  await E.DB.prepare(
+  await E.FORMS_DB.prepare(
     `INSERT INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, 'enc-trace', 'iph', 'landing')`
   )
     .bind(emailHash)
@@ -221,7 +221,7 @@ describe('erasure: the lookup hash appears nowhere', () => {
     const anonIdHash = (await hashAnonIdForReturns(s.anonId, TEST_ANON_PEPPER)) as string;
     expect(anonIdHash).toBeTruthy();
     await E.DB.prepare(
-      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count)
+      `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count)
        VALUES (?, 'ds-trace', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 1)`
     )
       .bind(anonIdHash)

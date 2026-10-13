@@ -193,10 +193,13 @@ describe('OSE-272 Gate 5: SharedReport BigQuery export is cron-only', () => {
     // runSharedReportPipeline awaits materialization, then exports.
     const src = loadSource('src/index.ts');
     expect(src, 'index.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
-    const all = src!.slice(
-      src!.indexOf('Promise.all(['),
-      src!.indexOf('])', src!.indexOf('Promise.all(['))
-    );
+    // The jobs scheduled() starts side by side are one list, `jobs`, handed to
+    // Promise.all (OSE-1615 named the list so a later job can wait for all of
+    // them to settle). The list is what this test reads.
+    const listStart = src!.indexOf('const jobs = [');
+    expect(listStart, 'the list of jobs started side by side').toBeGreaterThan(-1);
+    expect(src!).toMatch(/ctx\.waitUntil\(Promise\.all\(jobs\)\);/);
+    const all = src!.slice(listStart, src!.indexOf('];', listStart));
     expect(all, 'export must not be a sibling of materialization in Promise.all').not.toMatch(
       /runSharedReportBigQueryExport\(env\)/
     );
@@ -467,7 +470,7 @@ describe('OSE-272 Session 2: pipeline tables created with correct shape', () => 
     expect(colNames).toContain('venue_id');
     expect(colNames).toContain('first_seen_at');
     expect(colNames).toContain('last_seen_at');
-    expect(colNames).toContain('visit_count');
+    expect(colNames).toContain('return_count');
     expect(colNames).toContain('computed_at');
     // CRITICAL: must NOT contain raw anon_id
     expect(colNames).not.toContain('anon_id');

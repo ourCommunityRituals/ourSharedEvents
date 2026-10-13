@@ -2,7 +2,7 @@
  * OSE-272 — SharedReport materialization library
  *
  * Pure aggregation functions that compute the 6 SharedReport data primitives
- * from the upstream signal in `scans`, `sponsor_impressions`, and `events`.
+ * from the upstream signal in `scans`, `sponsor_displays`, and `events`.
  *
  * Architectural commitments (CI-enforced via Gates 1, 2, 4 in
  * tests/shared-report-pipeline-invariants.spec.ts):
@@ -37,6 +37,7 @@
 import { hashAnonIdForReturns, pepperEpoch } from './anon-id-hash';
 import { phaseTimesFor } from './event-datetime';
 import { isH3Cell } from './export-geography';
+import { errorLabel } from './error-label';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
@@ -109,10 +110,10 @@ const MATERIALIZATION_CEILING_HOURS = 26;
  *   2. Hash each with ANON_ID_HASH_PEPPER (skip if pepper missing → null hash)
  *   3. Upsert `anon_id_returns(anon_id_hash, venue_id=event_id, ...)`:
  *      - INSERT a new row on first sight
- *      - UPDATE last_seen_at + visit_count on repeat
+ *      - UPDATE last_seen_at + return_count on repeat
  *
  * The (anon_id_hash, venue_id) PK ensures one row per (anon, event). Each run
- * re-reads the event's distinct ids, so visit_count counts runs, not scans:
+ * re-reads the event's distinct ids, so return_count counts runs, not scans:
  * nothing may read it as a visit count (the export counts distinct events).
  */
 /** Old-pepper rows deleted per statement, and the most statements per run. */
@@ -207,7 +208,7 @@ export async function materializeAnonIdReturns(
     console.error(
       JSON.stringify({
         type: 'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -268,19 +269,19 @@ export async function materializeAnonIdReturns(
           result.rowsSkipped++;
           continue;
         }
-        // UPSERT — bump visit_count + last_seen_at on conflict.
+        // UPSERT — bump return_count + last_seen_at on conflict.
         // Note: venue_id is set to the event_id where this scan happened.
         // The "return rate" read-API query in Session 5 will aggregate
         // these per-event rows back up to (venue or corridor) scope.
         const nowIso = new Date().toISOString();
         await env.DB.prepare(
           `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at,
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
               pepper_epoch)
            VALUES (?, ?, ?, ?, 1, ?, ?)
            ON CONFLICT(anon_id_hash, venue_id) DO UPDATE SET
              last_seen_at = excluded.last_seen_at,
-             visit_count  = visit_count + 1,
+             return_count  = return_count + 1,
              computed_at  = excluded.computed_at,
              pepper_epoch = excluded.pepper_epoch`
         )
@@ -295,7 +296,7 @@ export async function materializeAnonIdReturns(
           type: 'SHARED_REPORT_MATERIALIZE_ERROR',
           phase: 'anon_id_returns',
           event_id: row.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
         })
       );
     }
@@ -448,7 +449,7 @@ export async function refreshCorridorBaselines(
               type: 'SHARED_REPORT_MATERIALIZE_ERROR',
               phase: 'corridor_density_snapshot',
               cell: `${c.corridor_id}/${c.bucket_dow}/${c.bucket_hour}`,
-              error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+              error: errorLabel(snapErr),
             })
           );
         }
@@ -459,7 +460,7 @@ export async function refreshCorridorBaselines(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'corridor_density_baseline',
             cell: `${c.corridor_id}/${c.bucket_dow}/${c.bucket_hour}`,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -470,7 +471,7 @@ export async function refreshCorridorBaselines(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'corridor_density_baseline',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -661,7 +662,7 @@ export async function detectEventSeriesClusters(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'event_series_detector',
             cluster: `${c.venue_location}/${c.day_of_week}/${c.hour_of_day}`,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -672,7 +673,7 @@ export async function detectEventSeriesClusters(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'event_series_detector',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -790,7 +791,7 @@ export async function aggregateScanBuckets(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'scan_aggregation',
             agg_id: id,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -803,7 +804,7 @@ export async function aggregateScanBuckets(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'scan_aggregation',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -913,7 +914,7 @@ async function aggregateScanCells(
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'scan_aggregation',
         step: 'scan_cell_aggregates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -965,7 +966,7 @@ export async function backfillH3Cells(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'h3_cell_backfill',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

@@ -11,7 +11,7 @@
  *      (`"2 of 3 required distinct anons"`), as did the corridor baseline's
  *      (`"3 of 10 required"`) and the corridor map's hidden-area counts. A
  *      suppression string that prints the count is the count (D4).
- *   3. `sponsor_impressions[].count` shipped raw at every depth, beside campaign
+ *   3. `sponsor_displays[].count` shipped raw at every depth, beside campaign
  *      rollups computed from the same rows with the per-bucket floor (D2).
  *
  * Every test ends with the never-who assertion over the payload.
@@ -82,38 +82,67 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM anon_id_returns`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
-  await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-rrf-%'`).run();
+  await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-rrf-%'`).run();
   await db.prepare(`DELETE FROM scan_cell_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
+  await db.prepare(`UPDATE events SET series_id = NULL WHERE id LIKE 'test-evt-rrf-%'`).run();
+  await db.prepare(`DELETE FROM event_series WHERE id LIKE 'ser-rrf-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-rrf-%'`).run();
 }
 
+/**
+ * The event, and the earlier event of its confirmed series (OSE-1652): the
+ * venue return rate counts people seen at another event of the same series.
+ * The earlier event has no cell, so it never counts toward corridor_pct.
+ */
 async function seedEvent(id: string, h3Res7: string | null = null): Promise<void> {
-  await tenv()
-    .DB.prepare(
-      `INSERT INTO events
-         (id, brand_id, title, slug, status, location, h3_res7, start_date, created_at, updated_at)
-       VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, '2026-05-07T19:00:00Z',
-               datetime('now'), datetime('now'))`
+  const db = tenv().DB;
+  const insert = (eventId: string, cell: string | null) =>
+    db
+      .prepare(
+        `INSERT INTO events
+           (id, brand_id, title, slug, status, location, h3_res7, start_date, created_at, updated_at)
+         VALUES (?, 'test-brand', ?, ?, 'active', 'Test Venue', ?, '2026-05-07T19:00:00Z',
+                 datetime('now'), datetime('now'))`
+      )
+      .bind(eventId, `Test ${eventId}`, eventId, cell)
+      .run();
+  await insert(id, h3Res7);
+  await insert(`${id}-prev`, null);
+  await db
+    .prepare(
+      `INSERT INTO event_series (id, venue_id, series_name, state) VALUES (?, ?, 'Test series', 'confirmed')`
     )
-    .bind(id, `Test ${id}`, id, h3Res7)
+    .bind(`ser-rrf-${id}`, `${id}-prev`)
+    .run();
+  await db
+    .prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`)
+    .bind(`ser-rrf-${id}`, id, `${id}-prev`)
     .run();
 }
 
-/** `n` people at the event; the first `cameTwice` of them more than once. */
+/**
+ * `n` people at the event; the first `cameTwice` of them were also at the
+ * earlier event of its series. `return_count` is left at 1: it counts runs of
+ * the nightly job, not visits, and the report no longer reads it.
+ */
 async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<void> {
   const now = new Date().toISOString();
-  for (let i = 0; i < n; i++) {
-    await tenv()
+  const row = (hash: string, venue: string) =>
+    tenv()
       .DB.prepare(
         `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
       )
-      .bind(`${i}`.padStart(32, 'f'), eventId, now, now, i < cameTwice ? 2 : 1, now)
+      .bind(hash, venue, now, now, now)
       .run();
+  for (let i = 0; i < n; i++) {
+    const hash = `${i}`.padStart(32, 'f');
+    await row(hash, eventId);
+    if (i < cameTwice) await row(hash, `${eventId}-prev`);
   }
 }
 
@@ -126,7 +155,7 @@ async function seedImpressions(
   for (let i = 0; i < n; i++) {
     await tenv()
       .DB.prepare(
-        `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
          VALUES (?, ?, ?, ?, 'p1', 'impression', datetime('now'))`
       )
       .bind(`si-rrf-${sponsorId}-${surface}-${i}`, sponsorId, eventId, surface)
@@ -192,7 +221,9 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 
-  test('exactly K distinct attendees who all came twice: 100% over a sample of K', async () => {
+  // OSE-1649 item 3: 100% is withheld too. Published, it turns into a dash the
+  // day one more person comes, which says that person did not return.
+  test('exactly K distinct attendees who all came twice: 100% is withheld like "all but one"', async () => {
     const id = 'test-evt-rrf-all5';
     await seedEvent(id, CELL);
     await seedAnons(id, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT);
@@ -201,8 +232,8 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
-    expect(r.report.return_rate.venue_pct).toBe(100);
-    expect(r.report._meta.suppression_reasons.map((s) => s.field)).not.toContain(
+    expect(r.report.return_rate.venue_pct).toBeNull();
+    expect(r.report._meta.suppression_reasons.map((s) => s.field)).toContain(
       'return_rate.venue_pct'
     );
   });
@@ -210,8 +241,8 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
 
 /**
  * A rate published beside its sample size is a head count: rate x sample / 100.
- * So the rate itself passes the floor (`flooredRatePct`): the people it counts
- * must be at least K, and the people it does not count none or at least K.
+ * So the rate itself passes the floor: the people it counts and the people it
+ * does not count must each be at least K (OSE-1649: never 100% either).
  * Every (sample, returners) pair below is read through the real builder.
  */
 describe('a published return rate never multiplies back to a group under the floor', () => {
@@ -240,7 +271,9 @@ describe('a published return rate never multiplies back to a group under the flo
         if (!r.ok) return;
         const { venue_pct, sample_size } = r.report.return_rate;
         expect(sample_size).toBe(sample);
-        const safe = twice >= K && (sample - twice === 0 || sample - twice >= K);
+        // Both sides at least K; "everyone came twice" (the rest is 0) is
+        // withheld like 1 to 4 (OSE-1649 item 3).
+        const safe = twice >= K && sample - twice >= K;
         if (safe) {
           expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo((twice / sample) * 100, 6);
           publishedSomewhere = true;
@@ -250,7 +283,7 @@ describe('a published return rate never multiplies back to a group under the flo
         if (venue_pct !== null) {
           const g = groups(venue_pct, sample);
           expect(g.counted).toBeGreaterThanOrEqual(K);
-          expect(g.rest === 0 || g.rest >= K, `rest of ${g.rest}`).toBe(true);
+          expect(g.rest >= K, `rest of ${g.rest}`).toBe(true);
         }
         // Withheld with a reason that names the floor only; published without one.
         const reason = r.report._meta.suppression_reasons.find(
@@ -262,7 +295,10 @@ describe('a published return rate never multiplies back to a group under the flo
           expect(numbersIn(reason.detail)).toEqual([String(K)]);
         }
       }
-      expect(publishedSomewhere, 'the sweep never published a rate: it proves nothing').toBe(true);
+      // Both sides at least K means a rate needs 2K people: under that, every
+      // split is withheld; from there, the sweep must publish one, or it proves
+      // nothing.
+      expect(publishedSomewhere, `published over ${sample} people`).toBe(sample >= 2 * K);
     });
   }
 
@@ -277,11 +313,23 @@ describe('a published return rate never multiplies back to a group under the flo
       await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
       await seedAnons(id, sample);
       await seedAnons(other, elsewhere); // the same first `elsewhere` people
+      // Ten people of the other event's own, so its rate can pass: a corridor's
+      // rates are published together or not at all (OSE-1649 item 1).
+      for (let i = 0; i < 10; i++) {
+        await tenv()
+          .DB.prepare(
+            `INSERT INTO anon_id_returns
+               (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+             VALUES (?, ?, datetime('now'), datetime('now'), 1, datetime('now'))`
+          )
+          .bind(`o${i}`.padStart(32, 'e'), other)
+          .run();
+      }
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       const { corridor_pct } = r.report.return_rate;
-      const safe = elsewhere >= K && (sample - elsewhere === 0 || sample - elsewhere >= K);
+      const safe = elsewhere >= K && sample - elsewhere >= K;
       if (safe) {
         expect(corridor_pct, `${elsewhere} of ${sample}`).toBeCloseTo(
           (elsewhere / sample) * 100,
@@ -296,8 +344,8 @@ describe('a published return rate never multiplies back to a group under the flo
       );
       expect(reason !== undefined).toBe(corridor_pct === null);
     }
-    // 5, 6, 7 of 12 (both sides at least K) and 12 of 12.
-    expect(published).toBe(4);
+    // 5, 6, 7 of 12: both sides at least K. 12 of 12 is withheld (item 3).
+    expect(published).toBe(3);
   });
 });
 
@@ -402,7 +450,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
       if (!r.ok) return;
 
       expect(r.report.corridor_map?.source).toBe('fallback');
-      expect(r.report.unique_gatherings).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
+      expect(r.report.distinct_scanners).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
       const lines = r.report._meta.suppression_reasons.filter((s) => s.field === 'corridor_map');
       expect(lines, 'one line, not one per hidden area').toHaveLength(1);
       expect(lines[0]!.reason).toBe('below_min_sample_size');
@@ -417,7 +465,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
   });
 });
 
-describe('sponsor_impressions[].count passes the same floor as its rollups', () => {
+describe('sponsor_displays[].count passes the same floor as its rollups', () => {
   beforeEach(async () => {
     await applyMigrations();
     await clearTables();
@@ -444,7 +492,7 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const rows = r.report.sponsor_impressions;
+    const rows = r.report.sponsor_displays;
     expect(rows.map((x) => x.surface)).toEqual(['poster']);
     expect(rows[0]!.count).toBe(CORRIDOR_MAP_MIN_COUNT + 2);
     // Every published count clears the floor, the same rule the rollups apply.
@@ -464,8 +512,8 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     const r = await buildSharedReport(tenv().DB, ev);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.sponsor_impressions).toEqual([]);
-    expect(r.report.sponsor_class_breakdown.mid.total_impressions).toBe(0);
+    expect(r.report.sponsor_displays).toEqual([]);
+    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(0);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 
@@ -479,9 +527,9 @@ describe('sponsor_impressions[].count passes the same floor as its rollups', () 
     const r = await buildSharedReport(tenv().DB, ev);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const published = r.report.sponsor_impressions.reduce((n, x) => n + x.count, 0);
+    const published = r.report.sponsor_displays.reduce((n, x) => n + x.count, 0);
     expect(published).toBe(6);
-    expect(r.report.sponsor_class_breakdown.mid.total_impressions).toBe(published);
+    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(published);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 });

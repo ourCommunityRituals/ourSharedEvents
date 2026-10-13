@@ -14,7 +14,7 @@
  *
  * Public (no auth):
  *   POST /api/v2/events/:id/forms/register      → submit registration
- *   POST /api/v2/events/:id/forms/checkin        → increment check-in count
+ *   POST /api/v2/events/:id/forms/checkin        → increment check-in count (answer carries no count)
  *   POST /api/v2/events/:id/forms/survey         → submit survey response
  *   POST /api/v2/events/:id/forms/email-signup   → submit email signup
  *
@@ -50,6 +50,7 @@ import {
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import { parsePagingParams, encodeRegistrationsCursor } from '../lib/registrations-paging';
 import { REGISTRATION_TTL_DAYS, EMAIL_RETENTION_DAYS } from '../lib/retention-windows';
+import { errorLabel } from '../lib/error-label';
 
 export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -254,7 +255,10 @@ export async function handleFormRegistration(
   // attendee_name_encrypted; the legacy cleartext attendee_name column is left
   // NULL on the write path. encryptText (NOT encryptEmail) preserves the name's
   // exact case/whitespace.
-  if (name && !env.FORMS_ENCRYPTION_KEY) {
+  // Owner 2026-10-11: an email, when given, is kept encrypted too, so the
+  // organizer can reach the person if the event moves or is cancelled. Same
+  // guard: never keep it without the key.
+  if ((name || email) && !env.FORMS_ENCRYPTION_KEY) {
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
   }
   // DE-06 / OSE-1343: the write path hashes the email with a REQUIRED pepper
@@ -266,6 +270,7 @@ export async function handleFormRegistration(
   if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
   let emailHash: string | undefined;
+  let emailEncrypted: string | undefined;
   let nameEncrypted: string | undefined;
   let anonKey: string;
   try {
@@ -280,8 +285,12 @@ export async function handleFormRegistration(
       name && env.FORMS_ENCRYPTION_KEY
         ? await encryptText(name, env.FORMS_ENCRYPTION_KEY)
         : undefined;
+    emailEncrypted =
+      email && env.FORMS_ENCRYPTION_KEY
+        ? await encryptText(email, env.FORMS_ENCRYPTION_KEY)
+        : undefined;
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 
   const bucket = bucketTimestamp();
@@ -290,8 +299,8 @@ export async function handleFormRegistration(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
+      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, attendee_email_encrypted, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
     )
       .bind(
         id,
@@ -300,6 +309,7 @@ export async function handleFormRegistration(
         null, // legacy cleartext column — never populated on the write path (DE-01)
         nameEncrypted ?? null,
         emailHash ?? null,
+        emailEncrypted ?? null,
         bucket,
         expiresAt,
         anonKey, // per-event keyed id, never the cookie value
@@ -307,7 +317,7 @@ export async function handleFormRegistration(
       )
       .run();
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 
   logFormEvent('register', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
@@ -378,7 +388,7 @@ export async function handleSelfDeleteRegistration(
     });
     return jsonResponse({ ok: true }, request);
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 }
 
@@ -450,10 +460,14 @@ export async function handleFormCheckin(
       isNew,
       latencyMs: Date.now() - start,
     });
-    const res = jsonResponse({ ok: true, count }, request);
+    // OSE-1657: this route takes no login and answers an attendee during the
+    // event, so it carries no count at all. Counts are post-event only (founder
+    // decision 2026-09-04): the host reads them on the admin route, floored at
+    // K=5, and the recap shows them after. The exact total goes to the log above.
+    const res = jsonResponse({ ok: true }, request);
     return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
-    return handleDbError('checkin', eventId, err, request);
+    return handleDbError('checkin', eventId, errorLabel(err), request);
   }
 }
 
@@ -496,7 +510,7 @@ export async function handleFormSurvey(
       .bind(id, eventId, JSON.stringify(responses), bucket, anonKey, new Date().toISOString())
       .run();
   } catch (err) {
-    return handleDbError('survey', eventId, err, request);
+    return handleDbError('survey', eventId, errorLabel(err), request);
   }
 
   logFormEvent('survey', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
@@ -588,7 +602,7 @@ export async function handleFormEmailSignup(
     const res = jsonResponse({ ok: true, id }, request);
     return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
-    return handleDbError('email-signup', eventId, err, request);
+    return handleDbError('email-signup', eventId, errorLabel(err), request);
   }
 }
 
@@ -650,7 +664,61 @@ export async function handleAdminRegistrations(
       request
     );
   } catch (err) {
-    return handleDbError('register', eventId, err, request);
+    return handleDbError('register', eventId, errorLabel(err), request);
+  }
+}
+
+// ─── Admin: Registrant contacts (owner 2026-10-11) ─────────────────────────────
+//
+// The organizer's way to reach the people who chose to leave an email when
+// they registered, if the event moves or is cancelled. Name and email for this
+// event only (the router's object guard keeps it to the caller's own brand),
+// decrypted here and never cached. The router writes the read to the admin
+// audit log as READ_REGISTRANT_CONTACTS. Nothing is shown once the nightly job
+// has cleared them, the day after the event.
+
+/** Upper bound on one answer; far above any one event's sign-ups today. */
+export const MAX_REGISTRANT_CONTACTS = 2000;
+
+export async function handleAdminRegistrantContacts(
+  request: Request,
+  env: FormsEnv,
+  eventId: string
+): Promise<Response> {
+  const key = env.FORMS_ENCRYPTION_KEY;
+  if (!key)
+    return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
+  try {
+    const result = await env.FORMS_DB.prepare(
+      `SELECT attendee_name_encrypted, attendee_email_encrypted FROM form_registrations
+        WHERE event_id = ? AND attendee_email_encrypted IS NOT NULL
+        ORDER BY created_at ASC, id ASC LIMIT ?`
+    )
+      .bind(eventId, MAX_REGISTRANT_CONTACTS)
+      .all<{ attendee_name_encrypted: string | null; attendee_email_encrypted: string }>();
+    const items: { name: string | null; email: string }[] = [];
+    let failed = 0;
+    for (const r of result.results ?? []) {
+      try {
+        items.push({
+          email: await decryptText(r.attendee_email_encrypted, key),
+          name: r.attendee_name_encrypted
+            ? await decryptText(r.attendee_name_encrypted, key)
+            : null,
+        });
+      } catch {
+        failed++;
+      }
+    }
+    logFormEvent('register', eventId, 'admin_read', {
+      contacts: items.length,
+      decrypt_failed: failed,
+    });
+    const res = jsonResponse({ ok: true, items, decrypt_failed: failed }, request);
+    res.headers.set('Cache-Control', 'no-store');
+    return res;
+  } catch (err) {
+    return handleDbError('register', eventId, errorLabel(err), request);
   }
 }
 
@@ -677,7 +745,7 @@ export async function handleAdminCheckinCount(
       request
     );
   } catch (err) {
-    return handleDbError('checkin', eventId, err, request);
+    return handleDbError('checkin', eventId, errorLabel(err), request);
   }
 }
 
@@ -710,7 +778,7 @@ export async function handleAdminSurveys(
       request
     );
   } catch (err) {
-    return handleDbError('survey', eventId, err, request);
+    return handleDbError('survey', eventId, errorLabel(err), request);
   }
 }
 
@@ -737,7 +805,7 @@ export async function handleAdminEmailSignupCount(
       request
     );
   } catch (err) {
-    return handleDbError('email-signup', eventId, err, request);
+    return handleDbError('email-signup', eventId, errorLabel(err), request);
   }
 }
 
@@ -850,6 +918,6 @@ export async function handleAdminExport(
 
     return jsonResponse({ ok: true, items: rows, count: rows.length }, request);
   } catch (err) {
-    return handleDbError(dataType as FormType, eventId, err, request);
+    return handleDbError(dataType as FormType, eventId, errorLabel(err), request);
   }
 }

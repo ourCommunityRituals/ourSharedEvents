@@ -129,7 +129,11 @@ describe('OSE-1372 | never-who is one line + a native disclosure on every anonym
     const html = await (await SELF.fetch('https://t.test/')).text();
     const d = disclosure(html);
     expect(d).toContain('data-testid="landing-privacy"');
-    expect(d).toContain('This page sets no cookies,');
+    expect(d).toContain('This page sets no cookies and');
+    // Location is the person's choice, and only the zip area is used (2026-10-10).
+    expect(d).toContain('If you choose &ldquo;Use my location&rdquo;, it uses only your zip');
+    expect(d).toContain('area, never your exact spot.');
+    expect(d).not.toContain('never asks for your location');
     expect(d).toContain('data-testid="privacy-more"');
     expect(html).not.toContain('<!--OCR_NEVER_WHO-->');
     expect(html).not.toContain('/*OCR_NEVER_WHO_CSS*/');
@@ -197,8 +201,13 @@ describe('OSE-1373 | recap numbers, sponsor list, and no calendar after the fact
 
   test('the floor still holds for every line (<5 never prints exact)', () => {
     const html = renderPostEventHtml(row(), SHARE, [], social({ regCount: 3, checkinCount: 2 }));
-    expect(html).toContain('Fewer than');
+    // OSE-1657: every count under 5, so no card at all (0 and 1 to 4 look the same).
+    expect(html).not.toContain('data-testid="event-stats-card"');
     expect(html).not.toContain('data-testid="stat-showed-up-share"');
+    const one = renderPostEventHtml(row(), SHARE, [], social({ regCount: 12, checkinCount: 2 }));
+    expect(one).toContain('Fewer than 5 Checked in');
+    expect(one).not.toContain('<strong>2</strong>');
+    expect(one).not.toContain('data-testid="stat-showed-up-share"');
   });
 
   for (const [phase, render] of PAGES) {

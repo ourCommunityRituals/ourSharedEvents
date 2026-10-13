@@ -2,9 +2,49 @@
 
 - **For:** the Cloudflare Worker and its two D1 databases.
 - **Operator:** the founder, alone, at first launch.
-- **Last reviewed:** 2026-10-07 (rewritten for OSE-1503).
+- **Last reviewed:** 2026-10-12 (the rollback window added, owner rule; rewritten 2026-10-07 for OSE-1503).
 - **Not yet practised.** The steps were written from the CI workflow and Cloudflare's documentation, and were not run. Do the staging practice at the end of §6 before launch.
 - **This page is about code.** If data is wrong or missing, use [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md).
+
+## 0. The rollback window: a no-go is called early, and then the release stands
+
+Owner rule, 2026-10-12. A release can be called **no-go immediately**, inside a short window after it goes out, and rolled back without argument. Once the window has closed and the release is being monitored, **you live with it**: a problem is fixed forward with a new, ticketed change, not by taking the release back.
+
+|              | Inside the window                                                                               | After the window                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| The call     | no-go, at once, by the operator alone                                                           | the release stands                                                                          |
+| The action   | roll back: [§3](#3-roll-back-code-revert-through-ci) and [§4](#4-send-the-revert-to-production) | fix forward: a new change through CI, with its own ticket                                   |
+| The evidence | the signal that made it no-go, on the release ticket                                            | the ticket for the fix, with the post-deploy evidence                                       |
+| Data         | rolling back code does not undo a migration ([§2](#2-read-first-what-a-rollback-does-not-undo)) | a data problem is a [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md) matter, never a rollback |
+
+**Check this before calling a rollback (CCR 2026-10-12, finding A1).** A rollback puts the old code on the new database. If a migration in the release **removed or renamed** something the old code reads, that code cannot run, and the answer inside the window is the same as after it: **fix forward**. List the release's migrations and read them:
+
+```bash
+# No environment (git only)
+git diff --name-only <previous-release-sha> <this-release-sha> -- workers/oursharedevents/migrations workers/oursharedevents/migrations-forms
+```
+
+A table removal, a rename or a column removal in those files makes the release **not roll-back-able**. The first production deploy is one: `0098` drops `subscribers`, `0102` rebuilds `sponsor_impressions` as `sponsor_displays`, `0103` renames `visit_count`. For such a release, "no-go" means fix forward quickly (the revert PR in §3 restores the old code only when the schema it needs is still there). See [§2](#2-read-first-what-a-rollback-does-not-undo).
+
+**The window.** It opens when the deploy finishes. It closes at the first of these:
+
+- the **proposed length passes: 60 minutes** after the production smoke has passed (the owner sets the number; this one is a proposal); or
+- the site has taken its **first real visitor write** (a registration, a scan from a real person, a form), because from then a rollback can no longer return everything to how it was.
+
+**No-go signals inside the window.** Any one is enough. The operator does not need to be sure of the cause.
+
+- `scripts/ci/post-deploy-health.mjs` ends **ROLL BACK** or **WRONG BUILD** (it reads `/health` every 10 s and rolls nothing back itself).
+- Production smoke fails after the deploy.
+- Every page answers 503 "Schema drift" ([§5](#5-every-page-answers-503-schema-drift)).
+- A page that worked before the deploy does not work after it, and the diff is the only change.
+
+**After the window.**
+
+- Monitor. A defect is a ticket with the evidence, and the fix goes out as the next release.
+- **Not rolled back by this rule:** a defect, a regression, or a release someone now regrets.
+- **Exception to confirm with the owner:** a total outage for every visitor that §3 and §4 cannot fix may still use [§6 break-glass](#6-break-glass-switch-production-back-outside-ci). It restores service; it is not a verdict on the release.
+
+**Why a window.** A rollback is cheap while nothing has been written under the new code and expensive after. The window keeps the early call free and makes the later one a decision to repair, with a ticket, instead of a retreat.
 
 ## 1. What happened, and where to go
 
@@ -192,7 +232,7 @@ Cloudflare can make any of a Worker's last 100 versions live again, at once. Thi
    npx wrangler secret list --env production
    ```
 
-   `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` must not be in the list. `SHARED_REPORT_SIGNING_SECRET`, `FORMS_ENCRYPTION_KEY`, `FORMS_HASH_PEPPER` and `RATE_LIMIT_KEY_PEPPER` must be.
+   `ADMIN_KEY`, `X_OCR_INTERNAL` and `ADMIN_TOKEN` must not be in the list. `SHARED_REPORT_SIGNING_SECRET`, `FORMS_ENCRYPTION_KEY`, `FORMS_HASH_PEPPER`, `RATE_LIMIT_KEY_PEPPER` and `ANON_ID_HASH_PEPPER` must be.
 
 5. The same day: do §3, then §4, so `main` and production match again. Merge nothing else until then.
 

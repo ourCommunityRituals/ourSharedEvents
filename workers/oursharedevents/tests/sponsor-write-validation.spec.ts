@@ -2,7 +2,7 @@
  * D3 (CCR 2026-09-14) — impression/click write validation.
  *
  * The public impression/click endpoints inserted attacker-supplied
- * (event_id, sponsor_id) straight into sponsor_impressions — which feeds the
+ * (event_id, sponsor_id) straight into sponsor_displays — which feeds the
  * SharedReport proof layer — with no check that the sponsor is actually placed
  * on the event or brand-matched. A fabricated pair polluted a sponsor's numbers.
  *
@@ -10,7 +10,7 @@
  * brand-matched placement (404, no insert). These are born-red: against the
  * pre-fix handler every case below returned 201 and wrote a row.
  *
- * Workers pool (SELF.fetch + env.DB). sponsor_impressions lives in the main DB.
+ * Workers pool (SELF.fetch + env.DB). sponsor_displays lives in the main DB.
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -102,9 +102,7 @@ async function post(
 
 async function impressionRows(eventId: string, sponsorId: string): Promise<number> {
   const row = await tenv()
-    .DB.prepare(
-      'SELECT COUNT(*) AS c FROM sponsor_impressions WHERE event_id = ? AND sponsor_id = ?'
-    )
+    .DB.prepare('SELECT COUNT(*) AS c FROM sponsor_displays WHERE event_id = ? AND sponsor_id = ?')
     .bind(eventId, sponsorId)
     .first<{ c: number }>();
   return row?.c ?? 0;

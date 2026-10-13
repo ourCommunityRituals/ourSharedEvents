@@ -50,6 +50,43 @@ describe('events page aliases | 301 to /events', () => {
   });
 });
 
+describe('singular /event | 301 to the plural', () => {
+  test('GET /event -> 301 /events', async () => {
+    const res = await manual('/event', { headers: { Accept: 'text/html' } });
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/events`);
+  });
+
+  test('GET and HEAD /event/:id -> 301 /events/:id', async () => {
+    for (const method of ['GET', 'HEAD']) {
+      const res = await manual('/event/evt_smoke_sponsored', { method });
+      expect(res.status, method).toBe(301);
+      expect(res.headers.get('location'), method).toBe(`${ORIGIN}/events/evt_smoke_sponsored`);
+    }
+  });
+
+  test('the rest of the path and the query string ride along', async () => {
+    const ics = await manual('/event/evt-1/calendar.ics');
+    expect(ics.headers.get('location')).toBe(`${ORIGIN}/events/evt-1/calendar.ics`);
+    const q = await manual('/event?when=week&q=bocce');
+    expect(q.headers.get('location')).toBe(`${ORIGIN}/events?when=week&q=bocce`);
+  });
+
+  test('a doubled slash stays on this site', async () => {
+    const res = await manual('/event//evil.example/x');
+    expect(res.status).toBe(301);
+    expect(new URL(res.headers.get('location') ?? '').origin).toBe(ORIGIN);
+  });
+
+  test('/event/ alone, other methods and look-alike paths are not redirected', async () => {
+    expect((await manual('/event/')).status).toBe(404);
+    const post = await manual('/event/evt-1', { method: 'POST', body: '{}' });
+    expect(post.status).not.toBe(301);
+    expect((await manual('/eventsx')).status).not.toBe(301);
+    expect((await manual('/eventful/evt-1')).status).not.toBe(301);
+  });
+});
+
 describe('events page aliases | what must not change', () => {
   test('/events still answers 200 HTML', async () => {
     const res = await manual('/events', { headers: { Accept: 'text/html' } });

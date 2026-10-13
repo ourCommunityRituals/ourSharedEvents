@@ -53,9 +53,13 @@
 
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
-import ts from 'typescript';
 import REPORT_HTML from '../src/templates/shared-report.html';
 import { escapeHtml } from '../src/lib/html-escape';
+import {
+  checkMarkupCode,
+  checkMarkupPage,
+  type MarkupRules,
+} from './helpers/markup-attribute-check';
 
 /**
  * Appended to every typed value in the hostile run. Upper case and digits only,
@@ -274,10 +278,10 @@ function report(fill: Fill): Record<string, unknown> {
     event_id: 'evt_1',
     event_title: fill('EVENT'),
     event_start_date: '2026-09-26T23:00:00Z',
-    unique_gatherings: 84,
+    distinct_scanners: 84,
     return_rate: { venue_pct: 31.4, corridor_pct: 50, sample_size: 84 },
     corridor_density: { this_event_count: 84, density_ratio_30d: 2.1, density_ratio_90d: 1.05 },
-    sponsor_impressions: [
+    sponsor_displays: [
       {
         sponsor_id: 'sp_1',
         sponsor_name: fill('BUSINESS'),
@@ -289,9 +293,9 @@ function report(fill: Fill): Record<string, unknown> {
       { sponsor_id: 'sp_2', sponsor_name: fill('BUSINESS2'), surface: 'poster', count: 3 },
     ],
     sponsor_class_breakdown: {
-      local: { sponsor_count: 1, total_impressions: 3 },
-      mid: { sponsor_count: 0, total_impressions: 0 },
-      premium: { sponsor_count: 1, total_impressions: 12 },
+      local: { sponsor_count: 1, total_displays: 3 },
+      mid: { sponsor_count: 0, total_displays: 0 },
+      premium: { sponsor_count: 1, total_displays: 12 },
     },
     poster_attribution: [
       {
@@ -306,7 +310,7 @@ function report(fill: Fill): Record<string, unknown> {
       },
     ],
     headcount_trend: {
-      instances: [{ event_id: 'evt_1', start_date: '2026-09-26T23:00:00Z', unique_gatherings: 84 }],
+      instances: [{ event_id: 'evt_1', start_date: '2026-09-26T23:00:00Z', distinct_scanners: 84 }],
     },
     corridor_map: {
       svg: '<svg viewBox="0 0 10 10" role="img" aria-label="Corridor map"><polygon points="1,1 9,1 5,9" fill="#888"/></svg>',
@@ -317,7 +321,7 @@ function report(fill: Fill): Record<string, unknown> {
     upgrade: { locked_sections: [fill('SECTION'), fill('SECTION2')], next_depth: fill('DEPTH') },
     _meta: {
       materialized_at: '2026-09-27T04:00:00Z',
-      suppression_reasons: [{ field: 'unique_gatherings', reason: 'below_min_sample_size' }],
+      suppression_reasons: [{ field: 'distinct_scanners', reason: 'below_min_sample_size' }],
       timezone: { zone: fill('ZONE'), source: 'event' },
     },
   };
@@ -395,23 +399,23 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
     const t = hostile('NUM');
     Object.assign(wild, {
       event_start_date: t,
-      unique_gatherings: t,
+      distinct_scanners: t,
       return_rate: { venue_pct: t, corridor_pct: t, sample_size: t },
       corridor_density: { this_event_count: t, density_ratio_30d: t, density_ratio_90d: t },
-      sponsor_impressions: [{ sponsor_name: plain('BUSINESS'), surface: 'poster', count: t }],
+      sponsor_displays: [{ sponsor_name: plain('BUSINESS'), surface: 'poster', count: t }],
       sponsor_class_breakdown: {
-        local: { sponsor_count: t, total_impressions: t },
-        mid: { sponsor_count: t, total_impressions: t },
-        premium: { sponsor_count: t, total_impressions: t },
+        local: { sponsor_count: t, total_displays: t },
+        mid: { sponsor_count: t, total_displays: t },
+        premium: { sponsor_count: t, total_displays: t },
       },
       poster_attribution: [
         { location: plain('POSTERPLACE'), scan_count: t, first_scan_at: t, last_scan_at: t },
       ],
-      headcount_trend: { instances: [{ start_date: t, unique_gatherings: t }] },
+      headcount_trend: { instances: [{ start_date: t, distinct_scanners: t }] },
       corridor_map: { svg: '', suppressed: [], cell_count: t, source: t },
       _meta: {
         suppression_reasons: [
-          { field: 'unique_gatherings', reason: t },
+          { field: 'distinct_scanners', reason: t },
           { field: t, reason: t },
         ],
         timezone: { zone: plain('ZONE'), source: t },
@@ -524,385 +528,17 @@ describe('the page has one escaper, and it escapes quote marks', () => {
 // in a way that never puts the attribute's opening quote and its value in the
 // same expression AND still ends each piece in text. It is a check on this
 // page's way of writing markup, not a proof about every way there is.
-
-type Mode =
-  | 'text'
-  | 'lt'
-  | 'tag'
-  | 'close'
-  | 'comment'
-  | 'before-attr'
-  | 'attr'
-  | 'after-attr'
-  | 'before-value'
-  | 'dq'
-  | 'sq'
-  | 'bare';
-
-interface Cursor {
-  mode: Mode;
-  tag: string;
-  attr: string;
-  /** The literal text of the attribute value so far; a value met earlier is `￼`. */
-  value: string;
-}
-
-const START: Cursor = { mode: 'text', tag: '', attr: '', value: '' };
-const isSpace = (c: string): boolean =>
-  c === ' ' || c === '\n' || c === '\t' || c === '\r' || c === '\f';
-const isLetter = (c: string): boolean => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-
-/** Read `text` as HTML from `at`, and say where that leaves the reader. */
-function feed(at: Cursor, text: string): Cursor {
-  let { mode, tag, attr, value } = at;
-  for (const c of text) {
-    switch (mode) {
-      case 'text':
-        if (c === '<') mode = 'lt';
-        break;
-      case 'lt':
-        if (isLetter(c)) {
-          mode = 'tag';
-          tag = c.toLowerCase();
-          attr = '';
-          value = '';
-        } else if (c === '/') mode = 'close';
-        else if (c === '!' || c === '?') mode = 'comment';
-        else if (c !== '<') mode = 'text';
-        break;
-      case 'close':
-      case 'comment':
-        if (c === '>') mode = 'text';
-        break;
-      case 'tag':
-        if (isSpace(c) || c === '/') mode = 'before-attr';
-        else if (c === '>') mode = 'text';
-        else tag += c.toLowerCase();
-        break;
-      case 'before-attr':
-        if (isSpace(c) || c === '/') break;
-        if (c === '>') mode = 'text';
-        else {
-          mode = 'attr';
-          attr = c.toLowerCase();
-        }
-        break;
-      case 'attr':
-        if (c === '=') mode = 'before-value';
-        else if (isSpace(c)) mode = 'after-attr';
-        else if (c === '>') mode = 'text';
-        else if (c === '/') mode = 'before-attr';
-        else attr += c.toLowerCase();
-        break;
-      case 'after-attr':
-        if (isSpace(c)) break;
-        if (c === '=') mode = 'before-value';
-        else if (c === '>') mode = 'text';
-        else if (c === '/') mode = 'before-attr';
-        else {
-          mode = 'attr';
-          attr = c.toLowerCase();
-        }
-        break;
-      case 'before-value':
-        if (isSpace(c)) break;
-        value = '';
-        if (c === '"') mode = 'dq';
-        else if (c === "'") mode = 'sq';
-        else if (c === '>') mode = 'text';
-        else {
-          mode = 'bare';
-          value = c;
-        }
-        break;
-      case 'dq':
-        if (c === '"') mode = 'before-attr';
-        else value += c;
-        break;
-      case 'sq':
-        if (c === "'") mode = 'before-attr';
-        else value += c;
-        break;
-      case 'bare':
-        if (isSpace(c)) mode = 'before-attr';
-        else if (c === '>') mode = 'text';
-        else value += c;
-        break;
-    }
-  }
-  return { mode, tag, attr, value };
-}
-
-interface Hole extends Cursor {
-  line: number;
-  expr: string;
-  node: ts.Expression;
-}
-
-interface Decl {
-  line: number;
-  /** `const x = <init>`; anything else (let, var, a parameter, a function) has none. */
-  constInit: ts.Expression | null;
-}
-
-interface Checked {
-  /** Every value met while reading markup, with where it landed. */
-  holes: Hole[];
-  /** What is wrong, one line each. Empty means the page keeps the rule. */
-  findings: string[];
-  escDeclarations: number;
-}
+//
+// The reader and the judging live in tests/helpers/markup-attribute-check.ts,
+// moved there so the poster page (poster-attribute-escaping.spec.ts) is held to
+// the same rule by the same code. Nothing this file refuses changed in the move;
+// one refusal was added (an encoded value in a single-quoted address).
 
 const HELPER = 'escapeReportHtml';
-const URL_ATTRS = new Set([
-  'href',
-  'src',
-  'action',
-  'formaction',
-  'poster',
-  'data',
-  'ping',
-  'background',
-  'cite',
-  'manifest',
-  'xlink:href',
-]);
-const NEVER_ATTRS = new Set(['srcset', 'imagesrcset', 'srcdoc']);
-const NUMBER_MAKERS = new Set(['round', 'floor', 'ceil', 'trunc', 'abs', 'min', 'max']);
-const ARITHMETIC = new Set([
-  ts.SyntaxKind.MinusToken,
-  ts.SyntaxKind.AsteriskToken,
-  ts.SyntaxKind.SlashToken,
-  ts.SyntaxKind.PercentToken,
-  ts.SyntaxKind.AsteriskAsteriskToken,
-]);
-
-/** Text, between the attributes of a tag, or inside one attribute's value. */
-const place = (c: Cursor): string =>
-  c.mode === 'text' || c.mode === 'lt'
-    ? 'text'
-    : c.mode === 'dq' || c.mode === 'sq' || c.mode === 'bare'
-      ? `the value of ${c.attr}`
-      : c.mode === 'close' || c.mode === 'comment'
-        ? c.mode
-        : 'inside a tag';
-
-const isPlus = (n: ts.Node): n is ts.BinaryExpression =>
-  ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken;
-const isMarkupRoot = (n: ts.Node): boolean =>
-  isPlus(n) ||
-  ts.isStringLiteral(n) ||
-  ts.isNoSubstitutionTemplateLiteral(n) ||
-  ts.isTemplateExpression(n);
-const callTo = (n: ts.Node, name: string): boolean =>
-  ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === name;
-
-/** Check scripts (`code` is JavaScript; `line` is where it starts in its file). */
-function checkScripts(scripts: Array<{ code: string; line: number }>): Checked {
-  const holes: Hole[] = [];
-  const findings: string[] = [];
-  const decls = new Map<string, Decl[]>();
-  let helperAssignments = 0;
-
-  const files = scripts.map((s) => ({
-    sf: ts.createSourceFile('page.js', s.code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS),
-    line: s.line,
-  }));
-
-  for (const { sf, line } of files) {
-    const at = (n: ts.Node): number => line + sf.getLineAndCharacterOfPosition(n.getStart(sf)).line;
-    const declare = (name: ts.Node, constInit: ts.Expression | null): void => {
-      if (!ts.isIdentifier(name)) return;
-      const list = decls.get(name.text) ?? [];
-      list.push({ line: at(name), constInit });
-      decls.set(name.text, list);
-    };
-
-    // Pass 1: what every name is declared as, and who assigns the helper.
-    const collect = (n: ts.Node): void => {
-      if (ts.isVariableDeclaration(n)) {
-        const isConst =
-          ts.isVariableDeclarationList(n.parent) && (n.parent.flags & ts.NodeFlags.Const) !== 0;
-        declare(n.name, isConst && n.initializer ? n.initializer : null);
-      } else if (ts.isParameter(n) || ts.isBindingElement(n)) declare(n.name, null);
-      else if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name)
-        declare(n.name, null);
-      else if (
-        ts.isBinaryExpression(n) &&
-        n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-        n.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-      ) {
-        const left = n.left;
-        const named =
-          (ts.isPropertyAccessExpression(left) && left.name.text === HELPER) ||
-          (ts.isElementAccessExpression(left) &&
-            ts.isStringLiteralLike(left.argumentExpression) &&
-            left.argumentExpression.text === HELPER) ||
-          (ts.isIdentifier(left) && (left.text === HELPER || left.text === 'esc'));
-        if (named) {
-          if (
-            left.getText(sf) === `window.${HELPER}` &&
-            n.operatorToken.kind === ts.SyntaxKind.EqualsToken
-          )
-            helperAssignments++;
-          else
-            findings.push(
-              `line ${at(n)}: \`${left.getText(sf)}\` is assigned; the escaper is set once, as window.${HELPER}`
-            );
-        }
-      }
-      ts.forEachChild(n, collect);
-    };
-    collect(sf);
-
-    // Pass 2: read the markup.
-    const walk = (n: ts.Expression, from: Cursor): Cursor => {
-      if (ts.isParenthesizedExpression(n)) return walk(n.expression, from);
-      if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return feed(from, n.text);
-      if (isPlus(n)) return walk(n.right, walk(n.left, from));
-      if (ts.isTemplateExpression(n)) {
-        let cur = feed(from, n.head.text);
-        for (const span of n.templateSpans)
-          cur = feed(walk(span.expression, cur), span.literal.text);
-        return cur;
-      }
-      if (ts.isConditionalExpression(n)) {
-        scan(n.condition);
-        const yes = walk(n.whenTrue, from);
-        const no = walk(n.whenFalse, from);
-        if (place(yes) !== place(no))
-          findings.push(
-            `line ${at(n)}: the two sides of \`${n.condition.getText(sf)} ? … : …\` leave the markup in different places (${place(yes)} / ${place(no)}); the check cannot follow it`
-          );
-        return yes;
-      }
-      // A value.
-      holes.push({ ...from, line: at(n), expr: n.getText(sf), node: n });
-      ts.forEachChild(n, scan);
-      return from.mode === 'dq' || from.mode === 'sq' || from.mode === 'bare'
-        ? { ...from, value: from.value + '￼' }
-        : from;
-    };
-    const scan = (n: ts.Node): void => {
-      if (ts.isPropertyAssignment(n)) {
-        // A key such as '<' in a lookup table is not markup; its value may be.
-        if (ts.isComputedPropertyName(n.name)) scan(n.name.expression);
-        scan(n.initializer);
-        return;
-      }
-      if (isMarkupRoot(n)) {
-        const end = walk(n as ts.Expression, START);
-        if (end.mode !== 'text' && end.mode !== 'lt')
-          findings.push(
-            `line ${at(n)}: a string ends ${end.mode === 'dq' || end.mode === 'sq' || end.mode === 'bare' ? `inside the value of ${end.attr}="…"` : `inside a <${end.tag}> tag`}; markup split across pieces cannot be checked`
-          );
-        return;
-      }
-      ts.forEachChild(n, scan);
-    };
-    scan(sf);
-  }
-
-  // The helper, and every name the page calls `esc`.
-  if (helperAssignments !== 1)
-    findings.push(`window.${HELPER} is assigned ${helperAssignments} times; expected exactly once`);
-  const escDecls = decls.get('esc') ?? [];
-  for (const d of escDecls) {
-    const ok =
-      d.constInit !== null &&
-      ts.isPropertyAccessExpression(d.constInit) &&
-      ts.isIdentifier(d.constInit.expression) &&
-      d.constInit.expression.text === 'window' &&
-      d.constInit.name.text === HELPER;
-    if (!ok)
-      findings.push(
-        `line ${d.line}: \`esc\` is declared as something other than \`const esc = window.${HELPER}\``
-      );
-  }
-
-  const numeric = (n: ts.Expression, seen: Set<string>): boolean => {
-    if (ts.isParenthesizedExpression(n)) return numeric(n.expression, seen);
-    if (ts.isNumericLiteral(n)) return true;
-    if (ts.isPrefixUnaryExpression(n))
-      return n.operator === ts.SyntaxKind.MinusToken || n.operator === ts.SyntaxKind.PlusToken;
-    if (ts.isBinaryExpression(n)) return ARITHMETIC.has(n.operatorToken.kind);
-    if (ts.isConditionalExpression(n))
-      return numeric(n.whenTrue, seen) && numeric(n.whenFalse, seen);
-    if (ts.isCallExpression(n)) {
-      if (callTo(n, 'Number')) return true;
-      const f = n.expression;
-      return (
-        ts.isPropertyAccessExpression(f) &&
-        ts.isIdentifier(f.expression) &&
-        f.expression.text === 'Math' &&
-        NUMBER_MAKERS.has(f.name.text)
-      );
-    }
-    if (ts.isIdentifier(n)) {
-      if (seen.has(n.text)) return false;
-      const all = decls.get(n.text) ?? [];
-      const next = new Set(seen).add(n.text);
-      return all.length > 0 && all.every((d) => d.constInit !== null && numeric(d.constInit, next));
-    }
-    return false;
-  };
-
-  for (const h of holes) {
-    const where = `line ${h.line}: \`${h.expr.replace(/\s+/g, ' ')}\``;
-    const target = `<${h.tag} ${h.attr}="…">`;
-    if (h.mode === 'text') continue;
-    if (h.mode === 'lt' || h.mode === 'tag' || h.mode === 'close') {
-      findings.push(`${where} is written as (part of) a tag name`);
-    } else if (h.mode === 'bare' || h.mode === 'before-value') {
-      findings.push(`${where} is written into an unquoted attribute, ${target}`);
-    } else if (h.mode !== 'dq' && h.mode !== 'sq') {
-      findings.push(`${where} is written inside a <${h.tag}> tag, outside any attribute value`);
-    } else if (h.attr.startsWith('on')) {
-      findings.push(`${where} is written into an event-handler attribute, ${target}`);
-    } else if (NEVER_ATTRS.has(h.attr)) {
-      findings.push(`${where} is written into ${target}, which takes no value from data`);
-    } else if (URL_ATTRS.has(h.attr)) {
-      const fixedPath =
-        h.value.startsWith('/') && !h.value.startsWith('//') && !h.value.startsWith('/\\');
-      if (!fixedPath || !callTo(h.node, 'encodeURIComponent'))
-        findings.push(
-          `${where} is written into an address, ${target}: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed`
-        );
-    } else if (h.attr === 'style') {
-      if (!numeric(h.node, new Set()))
-        findings.push(
-          `${where} is written into ${target}: only a number made by Math.round or arithmetic is allowed in a style`
-        );
-    } else if (!callTo(h.node, 'esc')) {
-      findings.push(`${where} is written into ${target} without esc(...)`);
-    }
-  }
-  return { holes, findings, escDeclarations: escDecls.length };
-}
-
-/** Check a served page: every inline script, with line numbers of the page. */
-function checkPage(page: string): Checked & { scripts: number } {
-  const text = page.split('\r\n').join('\n');
-  // The HTML parser finds the scripts; no pattern is matched against the tags.
-  const doc = new JSDOM(text).window.document;
-  const scripts = [...doc.querySelectorAll('script')]
-    .filter((s) => !s.hasAttribute('src'))
-    .map((s) => {
-      const code = s.textContent ?? '';
-      const offset = text.indexOf(code);
-      expect(offset, 'the script text is found in the page').toBeGreaterThan(-1);
-      return { code, line: text.slice(0, offset).split('\n').length };
-    });
-  return { ...checkScripts(scripts), scripts: scripts.length };
-}
-
-const checkCode = (code: string): Checked =>
-  checkScripts([
-    {
-      code: `window.${HELPER} = function (s) { return s; };\nconst esc = window.${HELPER};\n${code}`,
-      line: 1,
-    },
-  ]);
+/** This page: one escaper, and no address but a fixed path with one encoded value. */
+const RULES: MarkupRules = { helper: HELPER };
+const checkPage = (page: string) => checkMarkupPage(page, RULES);
+const checkCode = (code: string) => checkMarkupCode(code, RULES);
 
 describe('the source: every value written into an attribute goes through the escaper', () => {
   test('the check reads the page: its scripts, its escaper and the attribute writes it is there for', () => {
@@ -974,7 +610,11 @@ describe('the source: every value written into an attribute goes through the esc
     ],
     [
       'the bar width taken from the payload instead of computed',
-      (p) => p.replace('const barW = Math.round((r.reg / maxReg) * 100);', 'const barW = r.width;'),
+      (p) =>
+        p.replace(
+          'const barW = Math.round(((num(r.reg) || 0) / maxReg) * 100);',
+          'const barW = r.width;'
+        ),
       /`barW` is written into <div style="…">/,
     ],
     [

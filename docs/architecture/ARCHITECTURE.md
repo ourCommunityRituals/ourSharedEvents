@@ -128,6 +128,11 @@ The Worker's scheduled handler runs nightly and:
 - Scrubs survey PII fields
 - Removes email signups past 30-day retention
 
+The same run also does work that is not about personal data (the list is the
+comment above `scheduled` in `src/index.ts`): backups and report rollups, draft
+expiry, place lookups for older events, and, last, the spine key check
+(`runSpineKeyCheck`; how to read its log line is in `docs/runbooks/RUNBOOK.md`).
+
 ---
 
 ## Route Table (30+ endpoints)

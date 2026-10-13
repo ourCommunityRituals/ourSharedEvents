@@ -79,7 +79,7 @@ describe('the kind catalog', () => {
 
   test('internal targets carry the event id and the form type — nothing else', () => {
     expect(internalTarget('https://o.test', 'evt 1', 'checkin')).toBe(
-      'https://o.test/forms/evt%201?type=checkin'
+      'https://o.test/events/evt%201/checkin'
     );
     expect(internalTarget('https://o.test', 'evt1', 'public')).toBe('https://o.test/events/evt1');
     // A stale / unknown kind never becomes the check-in form.

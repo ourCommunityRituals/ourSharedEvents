@@ -1,28 +1,38 @@
 /**
- * PII INVARIANT — cross-DB regression-class gate
+ * PII INVARIANT — the column gate for Invariant #1, derived from the schema
  *
- * OSE-207 fixed one instance of a raw network identifier column
- * (subscribers.ip_address). This file is the *class-level* invariant test
- * that catches the same regression on any future table in any binding.
+ * Rule: no table in DB or FORMS_DB may carry a column that identifies a person
+ * (an email, a phone number, a person's name, a raw network address, a browser
+ * identifier) unless it is stored hashed or encrypted, or is a reviewed
+ * exemption with its reason and where it was decided.
  *
- * Rule: no table in DB or FORMS_DB may carry a column whose name is a raw
- * network identifier. The only acceptable storage for that signal is a
- * hashed form (e.g. ip_hash from OSE-207's peppered SHA-256), and the
- * column name must reflect that (no `ip_address`, no `client_ip`, etc.).
+ * Until OSE-1660 this file checked ten exact network-identifier names, so a new
+ * column called `email`, `ip` or `attendee_name` passed it. It now reads the
+ * real schema after every migration (sqlite_master + PRAGMA table_info) and
+ * classifies every column by name pattern (tests/helpers/identity-columns.ts),
+ * the way schema-lexicon.spec.ts checks its banned words. A planted violation
+ * shows the gate bites, and an exemption that no longer matches a column fails.
  *
- * Why this lives here and not in forms-security.spec.ts:
- *   - forms-security S13 is FORMS_DB-only ("no raw email in FORMS_DB").
- *   - This invariant is cross-DB and concerns network identifiers, not
- *     emails, so it is its own architectural gate.
+ * If this fails on a new column: hash it (`*_hash`), encrypt it
+ * (`*_encrypted`), move it, or add a reviewed exemption. Do not loosen the
+ * patterns to make it pass.
  *
- * If a legitimate need arises to store one of the forbidden column names,
- * the right fix is NOT to weaken this gate — it is to use a hashed
- * variant (e.g. `*_hash`) or to extend the allowlist below with a
- * documented rationale on the row's PR.
+ * @born-red OSE-1660 | method: a throwaway migration adding events.email,
+ *   events.ip and form_surveys.guest_name turned both binding tests red, and a
+ *   planted exemption for a missing column turned the stale test red; each was
+ *   removed after | date: 2026-10-11
  */
 
 import { env } from 'cloudflare:test';
 import { beforeAll, describe, expect, test } from 'vitest';
+import {
+  IDENTITY_EXEMPTIONS,
+  classifyColumn,
+  piiColumnViolations,
+  readSchemaColumns,
+  staleExemptions,
+  type SchemaColumn,
+} from './helpers/identity-columns';
 
 interface TestEnv {
   DB: D1Database;
@@ -32,25 +42,6 @@ interface TestEnv {
 }
 
 const tenv = () => env as unknown as TestEnv;
-
-/**
- * Column-name patterns that indicate a raw network identifier is being
- * stored. The exact-match set comes from RFC terminology and the most
- * common Cloudflare / proxy header names. Hashed variants (`*_hash`)
- * are NOT in this list — they are the documented escape hatch.
- */
-const RAW_NETWORK_IDENTIFIER_NAMES = new Set([
-  'ip_address',
-  'ip_addr',
-  'client_ip',
-  'remote_ip',
-  'remote_addr',
-  'x_forwarded_for',
-  'cf_connecting_ip',
-  'user_ip',
-  'src_ip',
-  'source_ip',
-]);
 
 beforeAll(async () => {
   const main: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
@@ -76,50 +67,85 @@ beforeAll(async () => {
   }
 });
 
-async function tablesIn(db: D1Database): Promise<string[]> {
-  const rows = await db
-    .prepare(
-      `SELECT name FROM sqlite_master
-       WHERE type='table'
-         AND name NOT LIKE 'sqlite_%'
-         AND name NOT LIKE '_cf_%'
-         AND name NOT LIKE 'd1_%'
-       ORDER BY name`
-    )
-    .all<{ name: string }>();
-  return (rows.results ?? []).map((r) => r.name);
+async function allColumns(): Promise<SchemaColumn[]> {
+  return [
+    ...(await readSchemaColumns(tenv().DB, 'DB')),
+    ...(await readSchemaColumns(tenv().FORMS_DB, 'FORMS_DB')),
+  ];
 }
 
-async function columnsOf(db: D1Database, table: string): Promise<string[]> {
-  const rows = await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
-  return (rows.results ?? []).map((r) => r.name);
-}
-
-async function assertNoRawNetworkIdInBinding(db: D1Database, bindingLabel: string): Promise<void> {
-  const tables = await tablesIn(db);
-  const offenders: string[] = [];
-  for (const t of tables) {
-    const cols = await columnsOf(db, t);
-    for (const c of cols) {
-      if (RAW_NETWORK_IDENTIFIER_NAMES.has(c.toLowerCase())) {
-        offenders.push(`${bindingLabel}.${t}.${c}`);
-      }
-    }
-  }
-  expect(
-    offenders,
-    `Forbidden raw network identifier columns found. Use a hashed variant ` +
-      `(e.g. *_hash) per OSE-207 / hashIpForSubscribe. Offenders: ` +
-      `[${offenders.join(', ')}]`
-  ).toEqual([]);
-}
-
-describe('PII invariant: no raw network identifier columns anywhere', () => {
-  test('DB has no raw network identifier columns', async () => {
-    await assertNoRawNetworkIdInBinding(tenv().DB, 'DB');
+describe('PII invariant: a column that identifies a person is hashed, encrypted or exempt', () => {
+  test('DB: every identity-shaped column is hashed, encrypted or a reviewed exemption', async () => {
+    const offenders = piiColumnViolations(await readSchemaColumns(tenv().DB, 'DB'));
+    expect(
+      offenders,
+      `Identity columns stored in the clear: [${offenders.join(', ')}]. ` +
+        'Hash it (*_hash), encrypt it (*_encrypted), move it, or add a reviewed exemption.'
+    ).toEqual([]);
   });
 
-  test('FORMS_DB has no raw network identifier columns', async () => {
-    await assertNoRawNetworkIdInBinding(tenv().FORMS_DB, 'FORMS_DB');
+  test('FORMS_DB: every identity-shaped column is hashed, encrypted or a reviewed exemption', async () => {
+    const offenders = piiColumnViolations(await readSchemaColumns(tenv().FORMS_DB, 'FORMS_DB'));
+    expect(
+      offenders,
+      `Identity columns stored in the clear: [${offenders.join(', ')}]. ` +
+        'Hash it (*_hash), encrypt it (*_encrypted), move it, or add a reviewed exemption.'
+    ).toEqual([]);
+  });
+
+  test('the schema really is read: both databases have tables and identity columns', async () => {
+    const cols = await allColumns();
+    expect(cols.filter((c) => c.binding === 'DB').length).toBeGreaterThan(100);
+    expect(cols.filter((c) => c.binding === 'FORMS_DB').length).toBeGreaterThan(20);
+    // A gate that classifies nothing passes everything: the known columns are seen.
+    expect(cols.filter((c) => classifyColumn(c.column).length > 0).length).toBeGreaterThan(5);
+  });
+
+  test('every exemption still names a column in the schema (no stale exemptions)', async () => {
+    expect(staleExemptions(await allColumns())).toEqual([]);
+    for (const [key, e] of IDENTITY_EXEMPTIONS) {
+      expect(e.why.length, `${key} has no reason`).toBeGreaterThan(10);
+      expect(e.ref, `${key} names no decision or ticket`).toMatch(/OSE-\d+|PR #\d+|migration \d+/);
+    }
+  });
+
+  test('planted violations are caught (the gate bites)', () => {
+    const planted: SchemaColumn[] = [
+      { binding: 'DB', table: 'fixture', column: 'email' },
+      { binding: 'DB', table: 'fixture', column: 'ip' },
+      { binding: 'FORMS_DB', table: 'fixture', column: 'attendee_name' },
+      { binding: 'DB', table: 'fixture', column: 'user_agent' },
+      { binding: 'DB', table: 'fixture', column: 'anonymous_id' },
+      { binding: 'DB', table: 'fixture', column: 'contactPhone' },
+      { binding: 'DB', table: 'fixture', column: 'x_forwarded_for' },
+    ];
+    expect(piiColumnViolations(planted)).toEqual([
+      'DB.fixture.email (email)',
+      'DB.fixture.ip (network)',
+      'FORMS_DB.fixture.attendee_name (person-name)',
+      'DB.fixture.user_agent (browser)',
+      'DB.fixture.anonymous_id (browser)',
+      'DB.fixture.contactPhone (phone)',
+      'DB.fixture.x_forwarded_for (network)',
+    ]);
+  });
+
+  test('hashed and encrypted forms pass; near-misses are not identity columns', () => {
+    const ok: SchemaColumn[] = [
+      { binding: 'FORMS_DB', table: 'fixture', column: 'attendee_email_hash' },
+      { binding: 'FORMS_DB', table: 'fixture', column: 'email_encrypted' },
+      { binding: 'DB', table: 'fixture', column: 'ip_hash' },
+      { binding: 'DB', table: 'fixture', column: 'distinct_agent_hashes' },
+    ];
+    expect(piiColumnViolations(ok)).toEqual([]);
+    for (const near of [
+      'display_name',
+      'shipping_zone',
+      'skip_count',
+      'event_type_name',
+      'where_address',
+    ]) {
+      expect(classifyColumn(near), near).toEqual([]);
+    }
   });
 });

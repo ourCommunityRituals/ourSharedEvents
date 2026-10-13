@@ -75,14 +75,14 @@ describe('acceptance criterion — no orphaned types after 0076', () => {
     expect(row?.n).toBe(0);
   });
 
-  test('the backfill matched the UEC prefix for all 47 seeded types', async () => {
+  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097)', async () => {
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN category_code = substr(uec_code, 1, instr(uec_code, '-') - 1) THEN 1 ELSE 0 END) AS matched
          FROM event_type_registry`
     ).first<{ total: number; matched: number }>();
-    expect(row?.total).toBe(47);
-    expect(row?.matched).toBe(47);
+    expect(row?.total).toBe(48);
+    expect(row?.matched).toBe(48);
   });
 
   test('15 categories, and every one has at least one type', async () => {
@@ -189,7 +189,7 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(res.status).toBe(401);
   });
 
-  test('returns the grouped catalog: 15 categories, 47 types, 0 orphans, Sports > Bocce', async () => {
+  test('returns the grouped catalog: 15 categories, 48 types, 0 orphans, Sports > Bocce', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -198,11 +198,53 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(body.ok).toBe(true);
     expect(body.orphans).toBe(0);
     expect(body.categories).toHaveLength(15);
-    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(47);
+    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(48);
     const rec = body.categories.find((c) => c.code === 'REC');
     expect(rec?.name).toMatch(/Sports/);
     expect(rec?.types.some((t) => t.uec_code === 'REC-BOCCE-001')).toBe(true);
     expect(body.categories.some((c) => c.code === OTHER_CATEGORY_CODE)).toBe(false);
+  });
+});
+
+// Owner request 2026-10-10 (migration 0097): Watch Party is a type of its own,
+// under Social & Community Dining, and a sponsor can reach it.
+describe('Watch Party (0097)', () => {
+  test('the picker lists it under Social & Community Dining', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
+      headers: ADMIN_HEADERS,
+    });
+    const body = (await res.json()) as Catalog;
+    const soc = body.categories.find((c) => c.code === 'SOC');
+    expect(soc?.name).toBe('Social & Community Dining');
+    expect(soc?.types.find((t) => t.uec_code === 'SOC-WATCHPARTY-001')).toEqual(
+      expect.objectContaining({ id: 'etr-soc-watchparty', name: 'Watch Party' })
+    );
+  });
+
+  test('it is mapped to the bar night and community gathering templates', async () => {
+    const rows = await env.DB.prepare(
+      "SELECT template_id FROM template_event_types WHERE uec_code = 'SOC-WATCHPARTY-001' ORDER BY template_id"
+    ).all<{ template_id: string }>();
+    expect(rows.results.map((r) => r.template_id)).toEqual(['bar_night', 'community_gathering']);
+  });
+
+  test('an event can be saved as a Watch Party', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+      body: JSON.stringify({
+        title: 'Watch the Bears game',
+        brand_id: BRAND,
+        slug: `watch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        event_type_id: 'etr-soc-watchparty',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    const r = await env.DB.prepare('SELECT event_type_id FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ event_type_id: string | null }>();
+    expect(r?.event_type_id).toBe('etr-soc-watchparty');
   });
 });
 

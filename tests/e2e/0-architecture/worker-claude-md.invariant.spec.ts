@@ -66,43 +66,57 @@ test('worker CLAUDE.md documents the hot-path import ban + sanctioned seam', () 
 // OSE-1443 — one definition of Done. The two brains drifted: the worker file
 // said "Done = merged + a named CI job" while root §5 required all 7 pyramid
 // levels, and the worker pointed at a root "§7.2–7.3" that never existed.
+// Since the AGENTS.md split, the single definition lives in AGENTS.md; the root
+// CLAUDE.md imports AGENTS.md and must not carry a second one.
+const AGENTS_MD = join(REPO_ROOT, 'AGENTS.md');
 const ROOT_CLAUDE_MD = join(REPO_ROOT, 'CLAUDE.md');
-const DONE_HEADING = 'Two stages: Merged, then Done';
+const DONE_HEADING = 'Definition of Done: two stages';
 
-test('Done is defined once: root §5 holds it, the worker file only points to it', () => {
+test('Done is defined once: AGENTS.md holds it, the CLAUDE.md files only point to it', () => {
+  const agents = readFileSync(AGENTS_MD, 'utf8');
   const root = readFileSync(ROOT_CLAUDE_MD, 'utf8');
   const worker = readFileSync(WORKER_CLAUDE_MD, 'utf8');
 
   expect(
-    root.includes(`### ${DONE_HEADING}`),
-    `root CLAUDE.md must hold the definition of Done under "### ${DONE_HEADING}" (OSE-1443)`
+    agents.includes(`## ${DONE_HEADING}`),
+    `AGENTS.md must hold the definition of Done under "## ${DONE_HEADING}" (OSE-1443)`
   ).toBe(true);
   expect(
     worker.includes(DONE_HEADING),
-    `worker CLAUDE.md must point to root "${DONE_HEADING}" instead of defining Done itself`
+    `worker CLAUDE.md must point to AGENTS.md "${DONE_HEADING}" instead of defining Done itself`
   ).toBe(true);
-  expect(
-    /\bDone\s*=/.test(worker),
-    'worker CLAUDE.md must not restate a "Done = …" rule — that is how the two definitions drifted (OSE-1443)'
-  ).toBe(false);
+  for (const [name, body] of [
+    ['worker CLAUDE.md', worker],
+    ['root CLAUDE.md', root],
+  ]) {
+    expect(
+      /\bDone\s*=/.test(body),
+      `${name} must not restate a "Done = …" rule — that is how the two definitions drifted (OSE-1443)`
+    ).toBe(false);
+    expect(
+      /^#{2,3} .*\b(Two stages|Definition of Done)\b/m.test(body),
+      `${name} must not carry its own Definition of Done section; AGENTS.md holds the only one`
+    ).toBe(false);
+  }
 });
 
-test('every root CLAUDE.md §N the worker file cites actually exists', () => {
-  const root = readFileSync(ROOT_CLAUDE_MD, 'utf8');
+test('every repo file the worker CLAUDE.md cites actually exists', () => {
   const worker = readFileSync(WORKER_CLAUDE_MD, 'utf8');
-  const sections = new Set([...root.matchAll(/^## (\d+)\./gm)].map((m) => m[1]));
-  const cited = [...worker.matchAll(/root `CLAUDE\.md` §(\d+)(?:\.(\d+))?/g)];
+  const cited = [...worker.matchAll(/`\.\.\/\.\.\/([^`\s]+)`/g)].map((m) => m[1]);
 
-  expect(cited.length, 'worker CLAUDE.md should cite root sections by §N').toBeGreaterThan(0);
-  for (const [ref, major, minor] of cited) {
+  expect(
+    cited.length,
+    'worker CLAUDE.md should point to the repo-wide files it relies on'
+  ).toBeGreaterThan(0);
+  for (const rel of cited) {
     expect(
-      sections.has(major),
-      `worker cites "${ref}" but root has no "## ${major}." section`
+      existsSync(join(REPO_ROOT, rel)),
+      `worker cites "../../${rel}" but it does not exist`
     ).toBe(true);
-    // Root uses "### " subsections without numbers, so a §N.M citation can never resolve.
-    expect(
-      minor,
-      `worker cites "${ref}" — root has no numbered §${major}.${minor}`
-    ).toBeUndefined();
   }
+  // Root CLAUDE.md no longer has numbered sections, so a "root CLAUDE.md §N" citation can never resolve.
+  expect(
+    /root `CLAUDE\.md` §\d/.test(worker),
+    'worker CLAUDE.md cites a numbered root CLAUDE.md section; those moved to AGENTS.md and docs/brain/'
+  ).toBe(false);
 });

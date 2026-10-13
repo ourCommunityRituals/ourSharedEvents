@@ -36,7 +36,9 @@ describe('OSE-675 — memoized events fetch', () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('const data = await window.OSE_events();');
     // The old duplicate raw fetches for the events list are gone from those sites.
-    expect(html).not.toContain("const res = await fetch('/api/v2/admin/events');\n          const data = await res.json();");
+    expect(html).not.toContain(
+      "const res = await fetch('/api/v2/admin/events');\n          const data = await res.json();"
+    );
   });
 });
 
@@ -59,6 +61,8 @@ describe('OSE-675 — optimistic flag toggle (display-only, never a count)', () 
     const html = await fetchAdminHtml();
     expect(html).toContain("window._adminAnnounce((enabled ? 'Enabled' : 'Disabled')");
     expect(html).toContain('el.checked = !enabled; // revert on failure');
-    expect(html).toContain("window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error')");
+    expect(html).toContain(
+      "window._adminRequestFailed('Could not update ' + flagKey + '. It is back as it was.', res, data, 'Turning a form on or off')"
+    );
   });
 });

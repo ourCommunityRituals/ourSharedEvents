@@ -82,6 +82,9 @@ const LIFECYCLE_TEST_PATH = join(
 const PII_TABLES_DELETE = [
   { table: 'form_registrations', ttlColumn: 'expires_at' },
   { table: 'email_signups', ttlColumn: 'retention_expires_at' },
+  // The landing-page email list, in FORMS_DB since OSE-1661 (phase 4): kept
+  // 1 to 90 days from created_at (owner 2026-10-11).
+  { table: 'subscribers', ttlColumn: 'created_at' },
 ] as const;
 
 const PII_TABLES_SCRUB = [{ table: 'form_surveys', scrubFlag: 'pii_scrubbed' }] as const;

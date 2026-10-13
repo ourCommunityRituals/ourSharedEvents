@@ -8,10 +8,9 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
-import { listedSql } from '../lib/publish-grace';
+import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
 import { isGoogleMapsConfigured } from '../lib/maps';
-import { HARDENING_HEADERS } from '../lib/security-headers';
-import { computeEventPhase } from '../domain/event-phase';
+import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../lib/security-headers';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
@@ -39,6 +38,7 @@ import {
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
 import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
+import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import {
   parseDiscoveryFilters,
   applyDiscoveryFilters,
@@ -62,32 +62,40 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
+import { readWhere, injectWhere, renderNearEmpty, type WhereState } from '../lib/landing-where';
+import { nearCells } from '../lib/zip-areas';
 import {
   getDataProvider,
   type DataProviderEnv,
   type DataProviderCtx,
 } from '../lib/data-provider.js';
-import { enrichWithPhase } from '../lib/event-enrich.js';
-import { applyCountFloor } from '../lib/count-floor.js';
+import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
+import { archivedBeforeStart } from '../lib/archived-before-start.js';
+import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
 import {
   formatEventTime,
-  formatDateOnly,
+  formatHumanDate,
   phaseTimesFor,
   zonedDatePart,
   zoneDisplayName,
 } from '../lib/event-datetime.js';
+import { renderEventCountdown } from '../lib/event-countdown.js';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 import {
   CANONICAL_PATH,
   canonicalLinkTagFor,
   canonicalOrigin,
   eventPagePath,
+  eventFormPath,
   injectCanonical,
 } from '../lib/canonical.js';
+import { errorLabel } from '../lib/error-label';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  /** Forms database: identified-person tables, including `subscribers` (OSE-1661). */
+  FORMS_DB?: D1Database;
   GOOGLE_MAPS_API_KEY?: string;
   /**
    * OSE-207 — per-environment pepper for peppered SHA-256 IP hashing in
@@ -115,10 +123,10 @@ export interface PagesEnv extends TurnstileEnv {
   /**
    * OSE-207 — subscribers TTL retention window in days.
    *
-   * Read by the scheduled `runSubscribersRetentionLifecycle` job in
-   * `src/index.ts`. When unset, the worker falls back to a default 365-day
-   * bounded window so subscriber PII is not retained forever. When set to a
-   * non-positive integer, the cron explicitly disables retention for that run.
+   * Read by phase 4 of the scheduled `runFormDataLifecycle` job in
+   * `src/index.ts` (`subscriberRetentionDays`). A whole number from 1 to 90
+   * shortens the window; anything else, or unset, means 90 days (owner
+   * 2026-10-11). It cannot switch the sweep off.
    *
    * Independent of the data-subject right-to-erase Phase C handler in
    * `src/handlers/data-subject.ts`, which deletes by email on demand.
@@ -411,6 +419,8 @@ interface PublicEventEnv extends PagesEnv {
 }
 
 export interface PublicEventRow {
+  /** OSE-1684: the event's short code; the Share button hands out /e/<code>. */
+  share_code?: string | null;
   id: string;
   brand_id: string;
   title: string;
@@ -714,7 +724,7 @@ function renderEventActions(
   opts: { calendar?: boolean; inert?: boolean } = {}
 ): string {
   const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
-  const icsLabel = lang === 'es' ? 'Descargar .ics' : 'Download .ics';
+  const icsLabel = lang === 'es' ? 'Apple u Outlook' : 'Apple or Outlook';
   const calendarHref = `/events/${esc(row.id)}/calendar.ics`;
   // OSE-1358: one "Add to calendar" control offering the standard targets. A
   // CSP-safe <details> disclosure (no JS) — Google Calendar (Android + web) via a
@@ -737,8 +747,15 @@ function renderEventActions(
     </div>
   </details>`
       : '';
+  // OSE-1684: Share hands out the short /e/<code> link, so each open counts as
+  // a share of the event (owner 2026-10-09). The canonical address, og:url and
+  // the calendar entry keep the readable /events/<id>/<name>. No code yet
+  // (an older event admin has not opened): the readable address is shared.
+  const shareLink = row.share_code
+    ? `${new URL(shareUrl).origin}/e/${encodeURIComponent(row.share_code)}`
+    : shareUrl;
   return `<div class="ose-event-actions" data-testid="event-actions">
-  ${renderShareBlock(shareUrl, row.title, nonce, lang, opts.inert === true)}
+  ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
   ${menu}
 </div>`;
 }
@@ -767,9 +784,7 @@ function eventFormContextFromRequest(request: Request, fallback: EventFormType):
 }
 
 function eventFormHref(eventId: string, ctx: EventFormContext): string {
-  const params = new URLSearchParams({ type: ctx.type });
-  if (ctx.deploymentId) params.set('deployment', ctx.deploymentId);
-  return `/forms/${encodeURIComponent(eventId)}?${params.toString()}`;
+  return eventFormPath(eventId, ctx.type, ctx.deploymentId);
 }
 
 function eventFormCtaLabel(type: EventFormType): string {
@@ -782,7 +797,7 @@ function eventFormCtaLabel(type: EventFormType): string {
       return 'Get event updates';
     case 'register':
     default:
-      return 'Register for this event';
+      return 'Register';
   }
 }
 
@@ -846,7 +861,8 @@ const SPONSOR_LIST_CSS = `
  * Share + Add to calendar: one pair on a row. At phone width each takes half
  * (flex-basis 120px, so two fit even at 320px); a single control takes the row.
  */
-const EVENT_ACTIONS_CSS = `
+const EVENT_ACTIONS_CSS =
+  `
     .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
     .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
     .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
@@ -855,12 +871,13 @@ const EVENT_ACTIONS_CSS = `
     .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
     .ose-calendar-summary::-webkit-details-marker { display: none; }
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }`;
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
+  BACK_BUTTON_CSS;
 
 /**
- * OSE-1518: the three plain choices. Register (or check-in while the event is
- * on) is the one filled, full-width button; the other two are outlined and
- * full width as well, each with one line of what it asks.
+ * OSE-1518: the plain choices. Register (or check-in while the event is on)
+ * is the one filled, full-width button; the other is outlined and full width
+ * as well. Back, at the foot of the page, uses the same outlined button.
  */
 const EVENT_CHOICES_CSS = `
     .ose-choices { display: flex; flex-direction: column; gap: 0.75rem; margin: 1.25rem 0 0.5rem; }
@@ -911,32 +928,33 @@ function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): s
     </aside>`;
 }
 
+// Less text (owner 2026-10-11): a note says only what the choice asks of you.
+// Register names what it collects. Check-in keeps its promise only where its
+// label ("Check in at this event") does not already say "anon". Short labels
+// (owner 2026-10-11): "Register" and "Count me in, anon".
 const CHOICE_COPY = {
   en: {
-    registerNote: 'Save a spot. We ask for your name and an email.',
-    checkinLabel: 'Count me in, anonymously',
-    checkinNote: 'One tap. You are counted, never named.',
-    lookingLabel: 'Just looking',
-    lookingNote: 'Nothing to fill in. See what else is on.',
+    registerNote: 'Asks for your name and email.',
+    checkinLabel: 'Count me in, anon',
+    checkinNote: 'Counted, never named.',
     heading: 'How would you like to take part?',
   },
   es: {
-    registerNote: 'Guarda tu lugar. Pedimos tu nombre y un correo.',
+    registerNote: 'Pide tu nombre y correo.',
     checkinLabel: 'Cuenta conmigo, de forma anónima',
-    checkinNote: 'Un toque. Te contamos, nunca te nombramos.',
-    lookingLabel: 'Solo estoy mirando',
-    lookingNote: 'Nada que llenar. Mira qué más hay.',
+    checkinNote: 'Te contamos, nunca te nombramos.',
     heading: '¿Cómo quieres participar?',
   },
 } as const;
 
 /**
- * OSE-1518: three plain choices under the facts: register, count me in
- * anonymously (the check-in form), or just looking (asks for nothing). The first
- * button, filled and full width, is the one the page is for: Register before the
- * event, Check in while it is on, or the form a poster scan asked for
- * (?type=). Whichever of register / check-in is not first follows it, so the
- * three are always on offer. Links only: no field of ours, and "plant my flag"
+ * OSE-1518: plain choices under the facts: register, or count me in
+ * anonymously (the check-in form). The first button, filled and full width, is
+ * the one the page is for: Register before the event, Check in while it is on,
+ * or the form a poster scan asked for (?type=). Whichever of register /
+ * check-in is not first follows it, so both are always on offer. The third
+ * choice, "Just looking", became the Back button at the foot of the page
+ * (owner 2026-10-11, lib/back-button.ts). Links only: no field of ours, and "plant my flag"
  * stays a link out to ourWKRP, never a profile flow here. In an admin draft
  * preview every choice is shown but switched off (no href).
  */
@@ -957,11 +975,10 @@ function renderEventChoices(
     cls: string,
     link: string,
     label: string,
-    note: string,
+    note: string | null,
     noteId: string
   ) => `<div class="ose-choice">
-      <a class="ose-choice-btn${cls}" data-testid="${testid}"${link}${off} aria-describedby="${noteId}">${label}</a>
-      <p class="ose-choice-note" id="${noteId}">${note}</p>
+      <a class="ose-choice-btn${cls}" data-testid="${testid}"${link}${off}${note ? ` aria-describedby="${noteId}"` : ''}>${label}</a>${note ? `\n      <p class="ose-choice-note" id="${noteId}">${note}</p>` : ''}
     </div>`;
   const items: string[] = [
     choice(
@@ -992,21 +1009,11 @@ function renderEventChoices(
         '',
         href('checkin'),
         t.checkinLabel,
-        t.checkinNote,
+        null,
         'choice-note-checkin'
       )
     );
   }
-  items.push(
-    choice(
-      'event-choice-looking',
-      '',
-      inert ? '' : ' href="/events"',
-      t.lookingLabel,
-      t.lookingNote,
-      'choice-note-looking'
-    )
-  );
   return `<section class="ose-choices" data-testid="event-choices" aria-label="${esc(t.heading)}">
     ${items.join('\n    ')}
   </section>`;
@@ -1041,19 +1048,6 @@ function formatEventWhen(row: {
   // OSE-1518: the zone by its everyday name ("Central Time"), not the IANA id.
   const zone = zoneDisplayName(row.timezone);
   return zone ? `${date} · ${zone}` : date;
-}
-
-function formatHumanDate(iso: string | null): string {
-  if (!iso) return '';
-  // Callers pass `row.start_date` or `zonedDatePart(starts_at)`. Both are meant
-  // to be "YYYY-MM-DD", and formatDateOnly anchors that at UTC so the rendered
-  // day can't drift with the runtime zone (OSE-1363). A row written outside the
-  // API can hold a full timestamp ("2026-08-25 02:25:18"); read its leading
-  // calendar date. A value with no leading date renders nothing: the page never
-  // prints a stored string as is.
-  const day = /^\d{4}-\d{2}-\d{2}(?=$|[T ])/.exec(iso)?.[0];
-  if (!day) return '';
-  return formatDateOnly(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 /**
@@ -1132,6 +1126,8 @@ export function renderPreEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const startHuman = formatEventWhen(row);
+  // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
+  const countdown = renderEventCountdown(row, nonce);
   const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
   const geoLink = renderGeoLink(
     row.lat,
@@ -1189,7 +1185,7 @@ ${SPONSOR_LIST_CSS}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${renderEventTypeMeta(row)}
-      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}</p>` : ''}
+      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
       ${renderTrustLine(row, 'event-trust')}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
@@ -1270,6 +1266,8 @@ ${SPONSOR_LIST_CSS}
     }
 
     ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay)}
+
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, inert: preview, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1462,6 +1460,8 @@ ${SPONSOR_LIST_CSS}
 
     ${renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
+
     ${ANONYMITY_AFFORDANCE}
   </main>
 </body>
@@ -1511,16 +1511,10 @@ ${NEVER_WHO_CSS}
  * only renders for an event the organizer took live, which is what "verified
  * event link" means here (the QR check that moves it to active).
  */
+// Less text (owner 2026-10-11): the header names the host and nothing more.
 function renderTrustLine(row: PublicEventRow, testid: string): string {
   const host = esc(row.who_host);
-  return `<p class="ose-meta" data-testid="${testid}">${host ? `Hosted by ${host} &middot; ` : ''}No account needed to view &middot; Verified event link</p>`;
-}
-
-interface NextEventRow {
-  id: string;
-  title: string;
-  start_date: string | null;
-  location: string | null;
+  return host ? `<p class="ose-meta" data-testid="${testid}">Hosted by ${host}</p>` : '';
 }
 
 /**
@@ -1529,7 +1523,7 @@ interface NextEventRow {
  * bombardment" structural rather than a preference — the render slices to it and
  * the layout-invariant test asserts the rendered count never exceeds it.
  */
-const MAX_POST_EVENT_SUGGESTIONS = 3;
+const MAX_POST_EVENT_SUGGESTIONS = MAX_NEXT_AT_VENUE;
 
 /**
  * Post-event recap render (OSE-245 / ose-client-ready package).
@@ -1538,7 +1532,7 @@ const MAX_POST_EVENT_SUGGESTIONS = 3;
  * Design intent: closes the ritual loop at exactly the moment it matters.
  *   • Recap frame: same 5W surface, shifted to past tense.
  *   • Return loop: next upcoming event at the same venue, else public listing.
- *   • Opt-in email CTA: routes to existing /forms/:id?type=email (FORMS_DB).
+ *   • Opt-in email CTA: routes to /events/:id/updates, the email signup (FORMS_DB).
  *   • Anonymity affordance retained (Invariant #1 surface language).
  *   • No sponsor logos v1 — display priority is tier-governed (Invariant #5).
  */
@@ -1590,6 +1584,16 @@ export function renderPostEventHtml(
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row);
   const mapImg = venueMapImg(row, 'venue-map-post');
+  // Archived before its day: it never happened. Same page shape (nothing to
+  // join), but no "Happened", no "wrap" and no numbers that say it took place.
+  const calledOff = archivedBeforeStart(row);
+  const whenLine = calledOff
+    ? whenHuman
+      ? `No longer taking place. It was planned for ${whenHuman}`
+      : 'No longer taking place.'
+    : whenHuman
+      ? `Happened ${whenHuman}`
+      : 'This event has ended.';
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
@@ -1612,7 +1616,7 @@ export function renderPostEventHtml(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} — recap</title>
+  <title>${title} — ${calledOff ? 'no longer taking place' : 'recap'}</title>
 ${ogMeta}
 ${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
@@ -1652,10 +1656,10 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
-    <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    <span class="ose-phase-chip" data-testid="event-phase-chip">${calledOff ? 'Not happening' : "This one's a wrap"}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     ${renderEventTypeMeta(row, 'event-type-post')}
-    <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
+    <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
     ${
       // OSE-1513: sponsors sit by the title on every phase. Still spend-blind
       // here (names/links only, no tier/spend).
@@ -1679,7 +1683,7 @@ ${SPONSOR_LIST_CSS}
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
         <h2 id="recap-heading">What this was</h2>
         ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
-        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
+        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">${calledOff ? "The host didn't write this one up." : "The host hasn't written this one up yet. The numbers below are the story."}</p>` : ''}
         ${whatLink}
       </section>
 
@@ -1717,13 +1721,33 @@ ${SPONSOR_LIST_CSS}
       }
 
       ${(() => {
-        if (!social) return '';
+        // Called off: no "By the numbers". Counts would read as a turnout for
+        // an event that did not take place.
+        if (!social || calledOff) return '';
         // OSE-1201: "attendance" is a banned lexicon word (it claims people; the
         // platform counts signals). The ratio is labelled by what was measured —
         // check-ins over registrations — never by a word that implies bodies.
         const { checkinCount, regCount, surveyCount, emailCount } = social;
         const walkInCount = social.walkInCount ?? 0;
-        const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
+        // OSE-1657: nothing a reader sees may tell 0 from 1 to 4. So the card
+        // shows only when some count clears the floor (an event with 3
+        // check-ins and one with none both show no card), and when it shows,
+        // every line is drawn: a small count reads "Fewer than 5", whether it
+        // is 0 or 4.
+        const hasStats = [regCount, checkinCount, surveyCount, emailCount].some(clearsFloor);
+        // Walk-ins are a subset of check-ins. Floored one by one, 8 check-ins
+        // and 6 walk-ins would both print and give back the 2 who came through
+        // registration. Floored as a nested pair, a walk-in count prints only
+        // when what is left is 0 or at least 5.
+        const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
+        const walkInLine = !clearsFloor(checkinCount)
+          ? ''
+          : walkInShown !== null
+            ? statLine(walkInShown, 'Walked in', 'stat-walk-ins')
+            : clearsFloor(walkInCount)
+              ? '<p data-testid="stat-walk-ins">Walked in: held, so a group under 5 cannot be worked out</p>'
+              : statLine(walkInCount, 'Walked in', 'stat-walk-ins');
+        const walkInPct = flooredRatePct(walkInCount, checkinCount);
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
@@ -1731,14 +1755,14 @@ ${SPONSOR_LIST_CSS}
                 // OSE-1373: the promise first (how many said they'd come), then
                 // the turnout, then how many walked in, then the ratio — the
                 // order a reader asks in.
-                regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''
+                statLine(regCount, 'Registered', 'stat-registrations')
               }
-              ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
-              ${walkInCount > 0 ? statLine(walkInCount, 'Walked in', 'stat-walk-ins') : ''}
+              ${statLine(checkinCount, 'Checked in', 'stat-checkins')}
+              ${walkInLine}
               ${
-                // The walk-in share needs BOTH operands over the floor, like the ratio.
-                clearsFloor(walkInCount) && clearsFloor(checkinCount)
-                  ? `<p data-testid="stat-walk-in-share">${Math.round((walkInCount / checkinCount) * 100)}% of check-ins were walk-ins</p>`
+                // The walk-in share uses the same nested rule as the walk-in line.
+                walkInPct !== null
+                  ? `<p data-testid="stat-walk-in-share">${Math.round(walkInPct)}% of check-ins were walk-ins</p>`
                   : ''
               }
               ${
@@ -1748,8 +1772,8 @@ ${SPONSOR_LIST_CSS}
                   ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
                   : ''
               }
-              ${surveyCount > 0 ? statLine(surveyCount, 'Surveys submitted', 'stat-surveys') : ''}
-              ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
+              ${statLine(surveyCount, 'Surveys submitted', 'stat-surveys')}
+              ${statLine(emailCount, 'Email signups', 'stat-email-signups')}
             </section>`
           : '';
         return statsCard;
@@ -1765,7 +1789,7 @@ ${SPONSOR_LIST_CSS}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
         <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(eventFormPath(row.id, 'email-signup'))}">Keep me posted</a>
       </section>
     </aside>
 
@@ -1778,6 +1802,8 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
+
+    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -1869,34 +1895,16 @@ async function fetchEventPageSocialData(
 }
 
 /**
- * A curated few upcoming events at the same venue. A public list, like /events:
- * brand-scoped (OSE-1242, Invariant #9), and listed events only (is_published +
- * publish grace window). Fails to [] so the page around it always renders.
+ * A curated few upcoming events at the same venue (lib/next-at-venue.ts: the
+ * one query, shared with the email-signup confirmation). Fails to [].
  */
-async function fetchNextEventsAtVenue(
-  env: PublicEventEnv,
-  row: PublicEventRow
-): Promise<NextEventRow[]> {
-  try {
-    if (!row.location || !env.DB) return [];
-    const rs = await env.DB.prepare(
-      `SELECT id, title, start_date, location FROM events
-       WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
-         AND is_published = 1 AND ${listedSql()}
-         AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-       ORDER BY datetime(start_date) ASC LIMIT ?4`
-    )
-      .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
-      .all<NextEventRow>();
-    return rs.results ?? [];
-  } catch {
-    return [];
-  }
+function nextEventsAtVenue(env: PublicEventEnv, row: PublicEventRow): Promise<NextEventRow[]> {
+  return fetchNextEventsAtVenue(env.DB, row);
 }
 
 /** OSE-1519: the named page for an event that was live and has been archived. */
 async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): Promise<Response> {
-  const next = await fetchNextEventsAtVenue(env, row);
+  const next = await nextEventsAtVenue(env, row);
   const list = next.length
     ? `<ul class="ose-suggestions" data-testid="ended-next-events">${next
         .map(
@@ -1918,6 +1926,16 @@ async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): P
 }
 
 /**
+ * The one message a closed event page shows: no such event, a draft, a ready
+ * event, or one taken down. It must stay the same for all of them, so a probe
+ * cannot tell a missing id from an unpublished one. It names "not published
+ * yet" because an organizer opening their own draft's link lands here; the old
+ * wording ("may have been archived") told them something untrue.
+ */
+export const EVENT_NOT_OPEN_COPY =
+  "This event isn't open to the public. It may not be published yet, or it may have been taken down. See what's coming up next.";
+
+/**
  * GET /events/:id — public event landing page. Phase-aware.
  *
  * Recipients land here from `/s/:code` shortlinks. The page renders the
@@ -1932,7 +1950,9 @@ async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): P
 export async function handlePublicEventPage(
   request: Request,
   env: PublicEventEnv,
-  eventId: string
+  eventId: string,
+  /** The name after the id in /events/<id>/<name> (OSE-1684); absent on /events/<id>. */
+  requestedSlug?: string
 ): Promise<Response> {
   if (!env.DB) {
     return renderErrorPage(
@@ -1950,7 +1970,7 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
@@ -1965,9 +1985,11 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
-              e.event_type_id, etr.name AS event_type_name, e.listed_from
+              e.event_type_id, etr.name AS event_type_name, e.listed_from,
+              ec.code AS share_code
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+       LEFT JOIN event_codes ec ON ec.event_id = e.id
        WHERE e.id = ?`
     )
       .bind(eventId)
@@ -1986,7 +2008,7 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
@@ -2015,17 +2037,30 @@ export async function handlePublicEventPage(
     return renderErrorPage(
       404,
       "We couldn't find that event",
-      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      EVENT_NOT_OPEN_COPY,
       '/events',
       'Browse upcoming events'
     );
   }
 
+  // /events/<id>/<name>: the id has decided the event; a name that is not this
+  // event's own forwards to the right one. Checked only after the gate above,
+  // so a draft answers the same 404 whatever name is asked and never reveals
+  // its real one.
+  if (requestedSlug !== undefined) {
+    const own = eventPagePath(encodeURIComponent(row.id), row.slug);
+    const asked = new URL(request.url);
+    if (asked.pathname !== own) {
+      return new Response(null, { status: 301, headers: { Location: own + asked.search } });
+    }
+  }
+
   // Phase-aware dispatch via the OSE-242 canonical resolver.
   // OSE-1313 — a timed event's phase pivots at its canonical start instant
   // (starts_at) and its date-only end closes at the end of that local day.
+  // OSE-475: the same call the TV's display-config makes (eventPhaseOf).
   const phaseTimes = phaseTimesFor(row);
-  const phase = computeEventPhase({ status: row.status, ...phaseTimes });
+  const phase = eventPhaseOf(row);
 
   // CSP nonce — generated for the response headers regardless of whether
   // the body uses it. `securityHeaders(nonce)` writes the nonce into the
@@ -2038,7 +2073,7 @@ export async function handlePublicEventPage(
   const url = new URL(request.url);
   // Production names one host (the zone also routes www.), so the share link,
   // og:url and the canonical (buildSearchMeta) always agree.
-  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id)}`;
+  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
@@ -2046,7 +2081,7 @@ export async function handlePublicEventPage(
   // (OSE-1518) in parallel; both fail open, so the page always renders.
   const [social, nextEvents] = await Promise.all([
     fetchEventPageSocialData(env, row.id),
-    fetchNextEventsAtVenue(env, row),
+    nextEventsAtVenue(env, row),
   ]);
 
   let body: string;
@@ -2258,7 +2293,7 @@ export async function handleAdminEventPreviewPage(
  * router, guardAdminObjectScope for the brand, no-store + noindex. draft/ready
  * render poster.html in preview mode (data-preview-event on <body>, so its one
  * data call goes to the admin poster-bundle instead of the public one); active
- * redirects to the real /poster?event=; archived or missing is a 404. The
+ * redirects to the real /events/<id>/poster; archived or missing is a 404. The
  * toolbar is hidden when printing, so a test print looks like the real one.
  */
 export async function handleAdminPosterPreviewPage(
@@ -2295,7 +2330,7 @@ export async function handleAdminPosterPreviewPage(
     );
   }
   const status = (row.status || 'draft').toLowerCase();
-  const posterUrl = `/poster?event=${encodeURIComponent(row.id)}`;
+  const posterUrl = `/events/${encodeURIComponent(row.id)}/poster`;
   if (status === 'active') {
     return new Response(null, {
       status: 303,
@@ -2479,7 +2514,9 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     );
     if (turnstileDeny) return turnstileDeny;
 
-    // Persist to D1 if available (graceful fallback if DB not provisioned).
+    // Persist to D1 if available (graceful fallback if FORMS_DB not provisioned).
+    // The list lives in FORMS_DB, with the other identified-person tables, not
+    // in the anonymous DB (OSE-1661, owner 2026-10-11; forms migration 0017).
     // Data-at-rest doctrine (A-5): subscribers.email is NEVER stored plaintext
     // (migration 0071). We store two derived columns, mirroring email_signups:
     //   - email_hash: peppered HMAC-SHA256 (dedup UNIQUE + erasure lookup key)
@@ -2490,7 +2527,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     //   - A structured warning is emitted when the pepper is missing so
     //     ops can detect the misconfiguration.
     let persisted = false;
-    if (env.DB) {
+    if (env.FORMS_DB) {
       // A-5: never fall back to plaintext. Without the encryption key we cannot
       // store the email at rest safely — refuse (mirror the email-signup 503).
       if (!env.FORMS_ENCRYPTION_KEY) {
@@ -2513,7 +2550,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
         // (requirePepper throws if FORMS_HASH_PEPPER is unset; caught below).
         const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true });
         const emailEncrypted = await encryptText(email, env.FORMS_ENCRYPTION_KEY);
-        await env.DB.prepare(
+        await env.FORMS_DB.prepare(
           'INSERT INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, ?, ?, ?) ON CONFLICT (email_hash) DO NOTHING'
         )
           .bind(emailHash, emailEncrypted, ipHash, 'landing')
@@ -2524,7 +2561,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
         console.error(
           JSON.stringify({
             type: 'SUBSCRIBE_DB_ERROR',
-            error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+            error: errorLabel(dbErr),
           })
         );
       }
@@ -2536,19 +2573,17 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
   }
 }
 
-// ─── Landing page (supply side) — OSE-1312 ────────────────────────────────────
+// ─── Landing page — OSE-1312, "where are you?" (owner 2026-10-10) ──────────────
 //
-// The landing page is the SUPPLY side: two doors + an area view of what's coming
-// together nearby + a never-who panel that is TRUE of this page (no cookies, no
-// analytics, no geolocation). The area view is server-rendered and filtered with
-// CSS-only radios (renderLandingArea), so nothing about the viewer is stored or
-// sent — the page keeps the promise it prints.
+// One question first: your zip (typed, or the nearest zip to a phone's rough
+// box, lib/landing-where.ts). With a zip, the area lists the events whose
+// res-7 cell is within NEAR_RING_STEPS rings of the zip's cell (about 10
+// miles); without one, every listed event, as before. No cookies, no
+// analytics; list/map and window toggles stay CSS-only (renderLandingArea).
 //
-// Data-driven as of slice 2: reads events through the SAME DataProvider seam +
-// enrichWithPhase as `GET /api/v2/events` and handlePublicPage, so the landing
-// area and the JSON API cannot describe different events. A read failure renders
-// the empty area (facilitation surface: nothing to show is a normal state, not a
-// 500), never a broken page.
+// Reads events through the SAME DataProvider seam + enrichWithPhase as
+// `GET /api/v2/events`, so the page and the JSON API cannot describe different
+// events. A read failure renders the empty area, never a broken page.
 type LandingEnv = PagesEnv & DataProviderEnv;
 
 export async function handleLandingPage(
@@ -2556,11 +2591,21 @@ export async function handleLandingPage(
   ctx?: DataProviderCtx | null,
   request?: Request
 ): Promise<Response> {
+  let where: WhereState;
+  try {
+    where = readWhere(request ? new URL(request.url) : null);
+  } catch {
+    where = { kind: 'none' };
+  }
   let area;
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
-    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    let items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    if (where.kind === 'zip') {
+      const near = nearCells(where.area);
+      items = items.filter((e) => typeof e.h3_res7 === 'string' && near.has(e.h3_res7));
+    }
     // §6.2b latch: corridors that have ever reached the threshold stay on the
     // map. Brand-bound read; a missing table (pre-0084) just means none yet.
     // The landing's own latch rides in the same table: once the area has held
@@ -2578,23 +2623,37 @@ export async function handleLandingPage(
     }
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
-    area = renderLandingArea(items as LandingAreaItem[], { latched, areaLatched, sponsorTitles });
+    area = renderLandingArea(items as LandingAreaItem[], {
+      latched,
+      areaLatched: where.kind === 'zip' ? false : areaLatched,
+      sponsorTitles,
+    });
   } catch {
     area = renderEmptyLandingArea();
   }
+  if (where.kind === 'zip' && area.windowCount === 0 && area.types.length === 0) {
+    area = { ...area, html: renderNearEmpty(where.area.zip) };
+  }
   // /home, /welcome, /landing, /about and /info serve this page too; they all
   // name `/` as the canonical.
-  return html(
+  const res = html(
     injectCanonical(
-      injectLandingArea(
-        injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
-        area
+      injectWhere(
+        injectLandingArea(
+          injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
+          area,
+          { areaFirst: where.kind === 'zip' }
+        ),
+        where
       ),
       request,
       env,
       CANONICAL_PATH.landing
     )
   );
+  // The one surface allowed to ask for location, for itself only.
+  res.headers.set('Permissions-Policy', LANDING_PERMISSIONS_POLICY);
+  return res;
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────
@@ -2604,7 +2663,11 @@ export async function handleLandingPage(
 // ─── Shared report page ─────────────────────────────────────────────────────────
 
 export async function handleDisplayPage(env: PagesEnv): Promise<Response> {
-  return html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  const res = html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
+  // A screen for the venue, not a page to find: it repeats the event page, and
+  // opening it logs sponsor showings (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handlePosterPage(env: PagesEnv, request?: Request): Promise<Response> {
@@ -2624,7 +2687,13 @@ export async function handlePosterPage(env: PagesEnv, request?: Request): Promis
     }
   }
   const content = POSTER_HTML.replace('<body>', `<body data-poster-format="${posterCode}">`);
-  return html(injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster')));
+  const res = html(
+    injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster'))
+  );
+  // The poster repeats the event page; the event page is the one to find
+  // (OSE-1684). Its links may still be followed.
+  res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
 }
 
 export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {

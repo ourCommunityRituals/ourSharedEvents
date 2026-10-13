@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 94, forms 14 to 16
+# Production migration plan: main 77 to 104, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0094, forms 0015–0016.
+Covers: main 0078–0104, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,8 +11,8 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 94               | 17       |
-| Forms (`ocr-forms-db-production`) | 14 (see note)    | 16               | 2        |
+| Main (`ocr-db-production`)        | 77               | 104              | 27       |
+| Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
 - The forms level of 14 is the last one written down (2026-09-21). It may be 15. The
@@ -88,40 +88,52 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0094
+## Main database, 0078 to 0104
 
 "Rows" answers: does it write or remove rows that already exist?
 
-| File                                             | What it does                                                                                           | Rows |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ---- |
-| `0078_events_add_starts_at.sql`                  | Adds `events.starts_at`, the start time in UTC. Old events keep none.                                  | No   |
-| `0079_poster_deployments_add_address.sql`        | Adds `poster_deployments.address`, the address the organizer typed for a poster.                       | No   |
-| `0080_shortlinks_add_poster_position.sql`        | Adds `shortlinks.poster_position`, the order of the codes on a poster.                                 | No   |
-| `0081_sponsor_tier_and_compact_logo.sql`         | Adds `sponsor_business.tier` and fills it. Rebuilds `sponsor_asset` to allow a second logo format.     | Yes  |
-| `0082_poster_deployments_add_placement_type.sql` | Adds `poster_deployments.placement_type` (venue or community) and marks venue posters.                 | Yes  |
-| `0083_sponsor_public_card.sql`                   | Adds four optional sponsor columns: display name, location, phone, email.                              | No   |
-| `0084_corridor_readiness_latch.sql`              | Creates `corridor_readiness_latch`, which records when an area's map opened.                           | No   |
-| `0085_events_settings_json.sql`                  | Adds `events.settings_json`, the per-event switches. Default `{}` means everything on.                 | No   |
-| `0086_remove_seed_test_event.sql`                | Deletes the test event `test-event-001` if nothing points at it.                                       | Yes  |
-| `0087_scan_cell_aggregates.sql`                  | Creates `scan_cell_aggregates`, scan counts by the poster's own map cell.                              | No   |
-| `0088_admin_audit_log_brand_id.sql`              | Adds `admin_audit_log.brand_id` and an index, then fills the new column for old rows.                  | Yes  |
-| `0089_clear_visitor_country.sql`                 | Clears the visitor country from `scan_node_returns` and `scan_aggregates`. Adds an index.              | Yes  |
-| `0090_anon_id_returns_last_seen_index.sql`       | Adds two indexes on `anon_id_returns`.                                                                 | No   |
-| `0091_anon_id_returns_pepper_epoch.sql`          | Adds `anon_id_returns.pepper_epoch`. Old rows keep none, and the nightly job later deletes those rows. | No   |
-| `0092_anon_id_returns_pepper_epoch_index.sql`    | Adds an index on `anon_id_returns.pepper_epoch`.                                                       | No   |
-| `0093_events_listed_from.sql`                    | Adds `events.listed_from`, the time a published event joins the list and map.                          | No   |
-| `0094_shortlink_click_daily.sql`                 | Creates `shortlink_click_daily`, one click count per link per day.                                     | No   |
+| File                                                      | What it does                                                                                                                      | Rows |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `0078_events_add_starts_at.sql`                           | Adds `events.starts_at`, the start time in UTC. Old events keep none.                                                             | No   |
+| `0079_poster_deployments_add_address.sql`                 | Adds `poster_deployments.address`, the address the organizer typed for a poster.                                                  | No   |
+| `0080_shortlinks_add_poster_position.sql`                 | Adds `shortlinks.poster_position`, the order of the codes on a poster.                                                            | No   |
+| `0081_sponsor_tier_and_compact_logo.sql`                  | Adds `sponsor_business.tier` and fills it. Rebuilds `sponsor_asset` to allow a second logo format.                                | Yes  |
+| `0082_poster_deployments_add_placement_type.sql`          | Adds `poster_deployments.placement_type` (venue or community) and marks venue posters.                                            | Yes  |
+| `0083_sponsor_public_card.sql`                            | Adds four optional sponsor columns: display name, location, phone, email.                                                         | No   |
+| `0084_corridor_readiness_latch.sql`                       | Creates `corridor_readiness_latch`, which records when an area's map opened.                                                      | No   |
+| `0085_events_settings_json.sql`                           | Adds `events.settings_json`, the per-event switches. Default `{}` means everything on.                                            | No   |
+| `0086_remove_seed_test_event.sql`                         | Deletes the test event `test-event-001` if nothing points at it.                                                                  | Yes  |
+| `0087_scan_cell_aggregates.sql`                           | Creates `scan_cell_aggregates`, scan counts by the poster's own map cell.                                                         | No   |
+| `0088_admin_audit_log_brand_id.sql`                       | Adds `admin_audit_log.brand_id` and an index, then fills the new column for old rows.                                             | Yes  |
+| `0089_clear_visitor_country.sql`                          | Clears the visitor country from `scan_node_returns` and `scan_aggregates`. Adds an index.                                         | Yes  |
+| `0090_anon_id_returns_last_seen_index.sql`                | Adds two indexes on `anon_id_returns`.                                                                                            | No   |
+| `0091_anon_id_returns_pepper_epoch.sql`                   | Adds `anon_id_returns.pepper_epoch`. Old rows keep none, and the nightly job later deletes those rows.                            | No   |
+| `0092_anon_id_returns_pepper_epoch_index.sql`             | Adds an index on `anon_id_returns.pepper_epoch`.                                                                                  | No   |
+| `0093_events_listed_from.sql`                             | Adds `events.listed_from`, the time a published event joins the list and map.                                                     | No   |
+| `0094_shortlink_click_daily.sql`                          | Creates `shortlink_click_daily`, one click count per link per day.                                                                | No   |
+| `0095_scan_node_returns_clear_raw_anon_id.sql`            | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                                                | Yes  |
+| `0096_event_codes.sql`                                    | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity).                      | No   |
+| `0097_event_type_watch_party.sql`                         | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.                       | Yes  |
+| `0098_drop_subscribers_from_anonymous_db.sql`             | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.                         | Yes  |
+| `0099_event_place_checked_at.sql`                         | Adds `events.place_checked_at`, when the event's place was last looked up on the map. Old events keep none.                       | No   |
+| `0100_scan_split_tables_hour_precision.sql`               | Truncates `created_at` on `scan_placement_events` and `scan_node_returns` to the scan's hour. Counts stay.                        | Yes  |
+| `0101_scan_node_returns_one_row_per_browser_hour.sql`     | Keeps one `scan_node_returns` row per browser, event and hour, and adds the UNIQUE index that enforces it.                        | Yes  |
+| `0102_rename_sponsor_impressions_to_sponsor_displays.sql` | Rebuilds `sponsor_impressions` as `sponsor_displays`, with its indexes; the stored value `impression` becomes `display`.          | Yes  |
+| `0103_rename_visit_count_to_return_count.sql`             | Renames `anon_id_returns.visit_count` to `return_count` and its index. No row changes.                                            | No   |
+| `0104_event_spine_keys.sql`                               | Adds `events.venue_canonical_id` and `events.event_correlation_id`, each with an index. Writes no row (a nightly job fills them). | No   |
 
-## Forms database, 0015 to 0016
+## Forms database, 0015 to 0018
 
-| File                              | What it does                                                                        | Rows |
-| --------------------------------- | ----------------------------------------------------------------------------------- | ---- |
-| `0015_checkin_walk_in_count.sql`  | Adds `checkin_counts.walk_in_count`, a count of walk-in check-ins. Default 0.       | No   |
-| `0016_scrub_raw_anonymous_id.sql` | Clears the raw anonymous id from the four form tables. Rows and other columns stay. | Yes  |
+| File                                    | What it does                                                                                                  | Rows |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---- |
+| `0015_checkin_walk_in_count.sql`        | Adds `checkin_counts.walk_in_count`, a count of walk-in check-ins. Default 0.                                 | No   |
+| `0016_scrub_raw_anonymous_id.sql`       | Clears the raw anonymous id from the four form tables. Rows and other columns stay.                           | Yes  |
+| `0017_subscribers.sql`                  | Creates `subscribers`, the landing-page email list, in the forms database.                                    | No   |
+| `0018_registration_email_encrypted.sql` | Adds `form_registrations.attendee_email_encrypted`, so an organizer can reach a registrant who left an email. | No   |
 
 ## The migrations that write or remove rows
 
-Six files. Each is listed with what it changes, why it is safe on production as it is
+Twelve files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -170,6 +182,88 @@ today, and what would be different if production held data.
 - **Safe because** production has no events, so it has no scans. Nothing to clear.
 - **If it did clear:** the cleared values are gone. That is the intent.
 
+### `0095_scan_node_returns_clear_raw_anon_id.sql`
+
+- **`UPDATE scan_node_returns`**: sets `anonymous_id` to empty unless it is already
+  the new keyed scan id (`snk1_…`). The scan path stored the raw `ose_anon` cookie
+  value there until OSE-1659 (2026-10-09). Rows and every other column stay, so scan
+  totals do not change.
+- **Safe because** production has no events, so it has no scans (0 rows, read
+  2026-10-09). Nothing to clear.
+- **If it did clear:** those rows lose their id. Distinct-browser counts for them fall
+  back to the user-agent hash, and those browsers cannot be matched as returning
+  visitors. That is the stated cost.
+- **After the deploy:** the scan write stores only a keyed id, whichever Worker queued
+  the scan, so no raw value can come back.
+
+### `0100_scan_split_tables_hour_precision.sql`
+
+- **Four `UPDATE`s**, two each on `scan_placement_events` and `scan_node_returns`: set `created_at` to the scan's hour bucket
+  (`scan_bucket`, in `YYYY-MM-DD HH:00:00` shape). A row whose bucket is not in the
+  expected shape keeps its stamp's hour. Nothing else changes.
+- **Why:** both tables were written in one batch with a second-precision stamp, so a
+  join on event and `created_at` linked who to where one scan at a time (OSE-923,
+  CCR N-DS-2).
+- **Safe because** no reader selects `created_at` from either table; only the
+  return-signal retention sweep read it, and it now reads `scan_bucket`. Scan totals
+  and reports do not change. Production has no scans (0 rows).
+- **If it did truncate:** the seconds are gone. That is the intent.
+
+### `0101_scan_node_returns_one_row_per_browser_hour.sql`
+
+- **`DELETE FROM scan_node_returns`**: removes a repeat row where the same keyed browser
+  id appears twice in one event and hour, keeping the earliest by id. Rows with no id are
+  never touched. Then `CREATE UNIQUE INDEX idx_snr_event_anon_bucket`.
+- **Why:** the table is the source of `scan_aggregates.total_scans`, so a browser that
+  scanned two posters in one hour counted twice (OSE-923).
+- **What changes on purpose:** `total_scans` counts browser-hours, not
+  browser-poster-hours, so it goes down for people who scanned more than one poster in
+  an hour. The distinct-scanner count and per-poster scan counts do not change.
+- **Safe because** production has no scans (0 rows). Nothing to collapse.
+- **If it did collapse:** the repeat rows are gone. That is the intent.
+
+### `0102_rename_sponsor_impressions_to_sponsor_displays.sql`
+
+- **`INSERT OR IGNORE INTO sponsor_displays`** copies every row of `sponsor_impressions`,
+  mapping the stored `event_type` value `impression` to `display` (a `click` stays a
+  `click`). Then the old table is removed and the three indexes are recreated
+  under the new name. The columns and foreign keys are 0067's exactly.
+- **Why:** "display" states a render fact; "impression" is the claimed-view word from ad
+  tech (PO, 2026-08-20, OSE-931). The report field, depth section and snapshot (3.0.0)
+  move in the same change set.
+- **Safe because** production has no events, so no sponsor display rows (0 rows).
+  Nothing to copy.
+- **If it did copy:** every row survives; only the label of the render value changes.
+
+### `0097_event_type_watch_party.sql`
+
+- **`INSERT INTO event_type_registry`**: adds one row, `SOC-WATCHPARTY-001` "Watch
+  Party", in Social & Community Dining. `INSERT OR IGNORE`, so a second run adds nothing.
+- **Two `INSERT INTO template_event_types`**: map it to `bar_night` and
+  `community_gathering`, so a sponsor can reach it.
+- **`UPDATE event_templates`**: recomputes `max_clearance_tier` for every template, the
+  same statement 0057 and 0063 ran. The new type is tier 1 like every other, so no
+  template's value changes.
+- **Safe because** it only adds catalog rows. It touches no event, scan or form row.
+- **Check:** `SELECT name, category_code FROM event_type_registry WHERE uec_code = 'SOC-WATCHPARTY-001';`
+  returns `Watch Party`, `SOC`.
+
+### `0098_drop_subscribers_from_anonymous_db.sql`
+
+- **Removes the table `subscribers`**: takes the landing-page email list out of the main
+  database, which is the anonymous side of the two-database wall. Owner decision
+  2026-10-11 (OSE-1661). Forms `0017` creates the same table in the forms database,
+  and the new Worker reads and writes it there.
+- **Safe because** production's `subscribers` held **0 rows** (read 2026-10-11).
+  Nothing is lost.
+- **If it held rows:** they would be gone. A migration cannot copy rows from one
+  database to the other. Staging held 1 test row, which is not carried over.
+- **Between the migration and the new Worker:** the old Worker's subscribe and admin
+  list would fail on the missing table. A failed subscribe is logged and the visitor
+  still sees success, as before. Production is not launched, so no one is subscribing.
+- **Check:** `SELECT COUNT(*) FROM sqlite_master WHERE name = 'subscribers';` returns
+  `0` on the main database and `1` on the forms database.
+
 ### `0016_scrub_raw_anonymous_id.sql` (forms)
 
 - **Four `UPDATE` statements**, one each on `form_registrations`, `checkin_counts`,
@@ -203,8 +297,8 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0094_shortlink_click_daily.sql` and `94`; then
-   `0016_scrub_raw_anonymous_id.sql` and `16`.
+2. **The level.** Expected: `0104_event_spine_keys.sql` and `104`;
+   then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash
    npx wrangler d1 execute DB --env production --remote --command "SELECT (SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1) AS latest, (SELECT COUNT(*) FROM d1_migrations) AS applied;"
@@ -246,6 +340,8 @@ The deploy job does the first three itself and goes red if any fails.
 - **Values cleared by `0089` and forms `0016`** are gone. On production today there are
   none to clear.
 - **The row deleted by `0086`**, if it existed. It was test data.
+- **The main database's `subscribers` rows, removed by `0098`.** On production there
+  were none.
 - **Rows the nightly job deletes after `0091`.** On production today there are none.
 - **The whole database can be rewound** to the restore point you noted. The command,
   its conditions and its stop line are in

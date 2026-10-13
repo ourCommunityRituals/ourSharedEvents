@@ -52,6 +52,7 @@ const DB_TABLES = [
   'corridor_readiness_latch', // 0082 (VISION §6.2b corridor readiness latch)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
+  'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker lookup)
@@ -67,6 +68,7 @@ const DB_TABLES = [
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side; no session-derived column)
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
+  'share_opens_daily', // 0096 (OSE-1684 — share opens per event × screen × phase × day, aggregate only)
   'shortlink_click_daily', // 0094 (OSE-1613 — clicks per link per UTC day, aggregate only)
   'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020 (0067: FK repointed to sponsor_business)
@@ -74,10 +76,9 @@ const DB_TABLES = [
   'sponsor_asset_draft', // 0054 (OSE-725 Sponsor Onboarding — per-format render inputs)
   'sponsor_business', // 0065 (OSE-799 A2 — durable sponsor identity)
   'sponsor_business_draft', // 0053 (OSE-724 Sponsor Onboarding — resolver-invisible draft)
+  'sponsor_displays', // 0022 as sponsor_impressions, renamed by 0102 (OSE-931)
   'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
-  'sponsor_impressions', // 0022 (0067: FK repointed to sponsor_business)
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
-  'subscribers', // 0008
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;
 
@@ -88,6 +89,7 @@ const FORMS_DB_TABLES = [
   'form_registrations', // 0001
   'form_surveys', // 0003
   'pii_audit_log', // 0009
+  'subscribers', // 0017 (OSE-1661 — the landing-page email list, moved from DB by main 0098)
 ] as const;
 
 // Migration 0025 documents (in its body) that triggers were removed from D1
@@ -255,6 +257,23 @@ function removalStatement(): string {
   return stmt;
 }
 
+/**
+ * 0086 runs before 0102, so its "is this event referenced" check names the table
+ * as it was then (sponsor_impressions). These tests re-run that statement against
+ * the finished schema, so the old name is stood in for by an empty table.
+ */
+async function withLegacyDisplaysTable<T>(run: () => Promise<T>): Promise<T> {
+  const db = tenv().DB;
+  await db
+    .prepare('CREATE TABLE IF NOT EXISTS sponsor_impressions (id TEXT PRIMARY KEY, event_id TEXT)')
+    .run();
+  try {
+    return await run();
+  } finally {
+    await db.prepare('DROP TABLE IF EXISTS sponsor_impressions').run();
+  }
+}
+
 async function seedTestEvent(): Promise<void> {
   await tenv()
     .DB.prepare(
@@ -287,7 +306,7 @@ describe('OSE-1419 | migrations leave a fresh database with zero events', () => 
       .bind(SEED_ID)
       .run();
     try {
-      await db.prepare(removalStatement()).run();
+      await withLegacyDisplaysTable(() => db.prepare(removalStatement()).run());
       const kept = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
       expect(kept).not.toBeNull();
     } finally {
@@ -299,8 +318,10 @@ describe('OSE-1419 | migrations leave a fresh database with zero events', () => 
   test('0086 removes an unreferenced test-event-001 and is idempotent', async () => {
     const db = tenv().DB;
     await seedTestEvent();
-    await db.prepare(removalStatement()).run();
-    await db.prepare(removalStatement()).run(); // a second run finds nothing to delete
+    await withLegacyDisplaysTable(async () => {
+      await db.prepare(removalStatement()).run();
+      await db.prepare(removalStatement()).run(); // a second run finds nothing to delete
+    });
     const gone = await db.prepare('SELECT id FROM events WHERE id = ?').bind(SEED_ID).first();
     expect(gone).toBeNull();
     expect(await eventCount()).toBe(0);

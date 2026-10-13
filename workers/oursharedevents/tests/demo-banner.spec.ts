@@ -14,6 +14,7 @@ import {
   demoBannerMarkup,
   degradedBannerMarkup,
   injectDemoBanner,
+  injectProvenanceBanner,
   isDemoModeActive,
   resolveSurfaceProvenance,
   emitProvenanceSignal,
@@ -261,5 +262,35 @@ describe('OSE-1012: served surfaces carry the banner iff serving demo data', () 
     const body = await (await handleDisplayPage({ WORKER_ENV: 'production' } as never)).text();
     expect(body).toContain(`data-testid="${DEGRADED_BANNER_TESTID}"`);
     expect(body).not.toContain(`data-testid="${DEMO_BANNER_TESTID}"`);
+  });
+});
+
+// CodeQL js/polynomial-redos (main, since 2026-10-10): the injector used
+// /(<body[^>]*>)/i, which rescans to the end from every "<body" with no ">"
+// after it. It now finds the first "<body" and the first ">" after it.
+describe('injectProvenanceBanner: same placement, linear time', () => {
+  const mark = (doc: string) => injectProvenanceBanner(doc, 'demo');
+  const banner = demoBannerMarkup();
+
+  it('goes straight after the opening body tag, attributes and case kept', () => {
+    expect(mark('<html><BODY class="a" data-x=1><main>x</main></BODY></html>')).toBe(
+      `<html><BODY class="a" data-x=1>${banner}<main>x</main></BODY></html>`
+    );
+  });
+
+  it('a document with no body tag, or one never closed, is returned unchanged', () => {
+    expect(mark('<p>no body here</p>')).toBe('<p>no body here</p>');
+    expect(mark('<html><body')).toBe('<html><body');
+  });
+
+  it('only the first body tag gets the banner', () => {
+    expect(mark('<body><body>')).toBe(`<body>${banner}<body>`);
+  });
+
+  it('many unclosed "<body" do not take quadratic time', () => {
+    const hostile = '<body'.repeat(20_000); // 100 KB; the old regex took ~0.8 s locally
+    const t0 = performance.now();
+    expect(mark(hostile)).toBe(hostile);
+    expect(performance.now() - t0).toBeLessThan(100);
   });
 });

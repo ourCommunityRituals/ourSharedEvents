@@ -15,6 +15,13 @@ import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import { runEventPlaceBackfill } from './lib/event-place';
+import { afterAllSettle, runSpineKeyCheck } from './lib/spine-keys-store';
+import {
+  FORMS_RETENTION_CEILING_DAYS,
+  REGISTRATION_TTL_DAYS,
+  SUBSCRIBER_RETENTION_DAYS,
+} from './lib/retention-windows';
 import { handleScanBatch, type ScanMessage } from './lib/scan-buffer';
 import {
   createCostAccumulator,
@@ -25,6 +32,7 @@ import {
 import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
+import { errorLabel } from './lib/error-label';
 export type { RouterEnv as Env };
 
 export default {
@@ -51,18 +59,22 @@ export default {
       // The route pattern, the error class and what the error said, never the
       // URL: a signed link is a credential (lib/unhandled-error-log.ts).
       const failure = summarizeUnhandledError(err, request);
+      // The same id on the line and on the answer (header and body): with the
+      // code it is what a failure toast shows, so the line can be found later.
+      const requestId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
       console.error(
         JSON.stringify({
           type: 'UNHANDLED_ERROR',
           errorClass: failure.errorClass,
           error: failure.error,
           op: failure.op,
+          requestId,
           timestamp: new Date().toISOString(),
         })
       );
       response = Response.json(
-        { ok: false, status: 500, error: 'Internal server error' },
-        { status: 500 }
+        { ok: false, status: 500, code: 'INTERNAL', error: 'Internal server error', requestId },
+        { status: 500, headers: { 'X-Request-Id': requestId } }
       );
     }
     // Emit exactly one aggregate-only cost line per request. Never throws.
@@ -82,10 +94,13 @@ export default {
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
+    // runRegistrationContactClear (owner 2026-10-11) clears a registrant's name
+    //   and email the day after the event's last date: it reads event dates
+    //   from DB and writes only FORMS_DB; only event ids pass between them.
     // runBigQueryBackup reads from the main DB and is kept separate for isolation.
-    // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
-    //   default bounded retention is 365 days when the env knob is unset, and a
-    //   non-positive explicit value disables the sweep. Audits to DB.admin_audit_log.
+    //   Its Phase 4 deletes email-list rows (subscribers, FORMS_DB since
+    //   OSE-1661) older than subscriberRetentionDays(): 1 to 90 days, default
+    //   90 (owner 2026-10-11). Audited to pii_audit_log like the other phases.
     // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
     //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
     //   structured warning). Phases 2 + 3 (corridor baseline + event-series
@@ -110,25 +125,40 @@ export default {
     //   corridor) the first night it holds ≥ 5 upcoming published events. A
     //   one-way door; carries no identity. Never throws.
     // runScanReturnsRetention (lib/scan-returns-retention.ts, OSE-1351) reads
-    //   DB.scan_node_returns + DB.anon_id_returns ONLY; off by default
-    //   (env.SCAN_RETURNS_RETENTION_DAYS unset → no-op — Q3-ratified "no
-    //   table-level windowing" stays the default until an explicit ruling
-    //   sets the knob). When set, deletes rows older than the window from
-    //   both tables independently. Does NOT touch the ose_anon cookie
+    //   DB.scan_node_returns + DB.anon_id_returns ONLY; on in every env since
+    //   OSE-1659 (wrangler.toml SCAN_RETURNS_RETENTION_DAYS = "365"; unset →
+    //   no-op). Deletes rows older than the window from both tables
+    //   independently. Does NOT touch the ose_anon cookie
     //   lifetime — that remains a separate open decision. Audits to
     //   admin_audit_log.
-    ctx.waitUntil(
-      Promise.all([
-        runFormDataLifecycle(env),
-        runBigQueryBackup(env),
-        runSubscribersRetentionLifecycle(env),
-        runSharedReportPipeline(env),
-        runSecurityMetricsCron(env),
-        runDraftExpiry(env),
-        runCorridorLatch(env),
-        runScanReturnsRetention(env),
-      ])
-    );
+    // runEventPlaceBackfill (lib/event-place.ts, owner report 2026-10-11) looks
+    //   up the place of at most PLACE_BACKFILL_MAX (25) events a night that were
+    //   saved before saves looked places up: not archived, not over, no
+    //   coordinates, never looked up. DB.events only; a no-op without the Maps
+    //   key. At most 25 billed Geocoding requests a night.
+    // runSpineKeyCheck (lib/spine-keys-store.ts, OSE-1615) reads every event,
+    //   computes its two spine keys again and writes them where they differ from
+    //   what is stored: rows saved before migration 0104, rows whose keys could
+    //   not be stored at save time, and rows some other writer left stale. One
+    //   read per 500 events, at most 5,000 events, 200 writes and 10 seconds a
+    //   night, from a start that moves each day. DB.events only; it calls no
+    //   other service. It runs AFTER every job above has settled, failed ones
+    //   included: computing keys costs CPU, and it must not compete with the
+    //   retention jobs for the invocation's allowance. If one of them never
+    //   settles the check does not run that night, and logs nothing.
+    const jobs = [
+      runFormDataLifecycle(env),
+      runRegistrationContactClear(env),
+      runBigQueryBackup(env),
+      runSharedReportPipeline(env),
+      runSecurityMetricsCron(env),
+      runDraftExpiry(env),
+      runCorridorLatch(env),
+      runScanReturnsRetention(env),
+      runEventPlaceBackfill(env),
+    ];
+    ctx.waitUntil(Promise.all(jobs));
+    ctx.waitUntil(afterAllSettle(jobs, () => runSpineKeyCheck(env)));
   },
 
   // Scan write-buffer consumer (OSE — engine-hardening #1). Drains SCAN_QUEUE
@@ -225,22 +255,122 @@ async function logPiiAudit(
   }
 }
 
+/**
+ * Registrant contact clearing (owner 2026-10-11).
+ *
+ * A registrant may leave a name and an email so the organizer can reach them
+ * if the event moves or is cancelled. Once the event is over there is nothing
+ * left to tell them, so the night after the day after its last date (end date,
+ * else start date), name and email are cleared. The row and its email hash
+ * stay until the row's own expiry, so counts and erasure by email still work.
+ *
+ * The event's date lives in DB and the contact in FORMS_DB, so this runs
+ * outside runFormDataLifecycle (forms-security S4 keeps that FORMS_DB-only).
+ * Only event ids pass between the two: FORMS_DB names which events still hold
+ * contacts, DB says which of those have ended, FORMS_DB clears those. A
+ * rescheduled event is read at its new date. An event id with no event row
+ * has nothing to tell anyone about, so it is cleared too. Bounded per night
+ * (CONTACT_CLEAR_MAX_PAGES pages of CONTACT_CLEAR_PAGE event ids); audited
+ * to pii_audit_log as 'registrations_contact_clear'.
+ */
+// D1 allows at most 100 bound values in one statement, so event ids go in
+// pages of 90. Pages walk event ids in order, so a night with many open events
+// still reaches the ended ones after them.
+const CONTACT_CLEAR_PAGE = 90;
+const CONTACT_CLEAR_MAX_PAGES = 50;
+
+const HOLDS_CONTACT_SQL = `(attendee_email_encrypted IS NOT NULL
+       OR attendee_name_encrypted IS NOT NULL
+       OR attendee_name IS NOT NULL)`;
+
+async function runRegistrationContactClear(env: RouterEnv): Promise<void> {
+  let cleared = 0;
+  let errors = 0;
+  try {
+    let after = '';
+    for (let page = 0; page < CONTACT_CLEAR_MAX_PAGES; page++) {
+      const held = await env.FORMS_DB.prepare(
+        `SELECT DISTINCT event_id FROM form_registrations
+          WHERE event_id > ? AND ${HOLDS_CONTACT_SQL}
+          ORDER BY event_id
+          LIMIT ?`
+      )
+        .bind(after, CONTACT_CLEAR_PAGE)
+        .all<{ event_id: string }>();
+      const ids = (held.results ?? []).map((r) => r.event_id).filter(Boolean);
+      if (!ids.length) break;
+      after = ids[ids.length - 1];
+      const marks = ids.map(() => '?').join(', ');
+      // An event still open, or that ended yesterday or later, keeps its contacts.
+      const open = await env.DB.prepare(
+        `SELECT id FROM events
+          WHERE id IN (${marks})
+            AND substr(COALESCE(end_date, start_date, ''), 1, 10) >= date('now', '-1 day')`
+      )
+        .bind(...ids)
+        .all<{ id: string }>();
+      const keep = new Set((open.results ?? []).map((r) => r.id));
+      const done = ids.filter((id) => !keep.has(id));
+      if (done.length) {
+        const res = await env.FORMS_DB.prepare(
+          `UPDATE form_registrations
+              SET attendee_name = NULL, attendee_name_encrypted = NULL, attendee_email_encrypted = NULL
+            WHERE event_id IN (${done.map(() => '?').join(', ')})
+              AND ${HOLDS_CONTACT_SQL}`
+        )
+          .bind(...done)
+          .run();
+        cleared += res.meta?.changes ?? 0;
+      }
+      if (ids.length < CONTACT_CLEAR_PAGE) break;
+    }
+  } catch (err) {
+    errors = 1;
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'registrations_contact_clear',
+        error: errorLabel(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  await logPiiAudit(env.FORMS_DB, 'registrations_contact_clear', cleared, errors);
+}
+
+/**
+ * How many days an email-list row is kept (OSE-207). SUBSCRIBERS_RETENTION_DAYS
+ * may shorten the window; anything that is not a whole number from 1 to the
+ * forms ceiling (90, owner 2026-10-11) falls back to SUBSCRIBER_RETENTION_DAYS,
+ * so a setting can neither switch the sweep off nor keep emails past 90 days.
+ */
+export function subscriberRetentionDays(raw: string | undefined): number {
+  const n = raw == null ? NaN : Number(String(raw).trim());
+  return Number.isInteger(n) && n >= 1 && n <= FORMS_RETENTION_CEILING_DAYS
+    ? n
+    : SUBSCRIBER_RETENTION_DAYS;
+}
+
 async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
   const results: Record<string, unknown> = { timestamp: now };
 
   // ── Phase 1: Delete expired registrations ──────────────────────────────
+  // A row with no expires_at ages out REGISTRATION_TTL_DAYS after it was made,
+  // so no registration is kept for ever (OSE-1685, owner 2026-10-11).
   try {
     const del = await env.FORMS_DB.prepare(
-      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?'
+      `DELETE FROM form_registrations
+        WHERE (expires_at IS NOT NULL AND expires_at < ?)
+           OR (expires_at IS NULL AND created_at < datetime('now', ?))`
     )
-      .bind(now)
+      .bind(now, `-${REGISTRATION_TTL_DAYS} days`)
       .run();
     const count = del.meta?.changes ?? 0;
     results.registrationsDeleted = count;
     await logPiiAudit(env.FORMS_DB, 'registrations_delete', count, 0);
   } catch (err) {
-    results.registrationsError = err instanceof Error ? err.message : String(err);
+    results.registrationsError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -279,7 +409,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.surveysScrubErrors = scrubErrors;
     await logPiiAudit(env.FORMS_DB, 'surveys_scrub', scrubbed, scrubErrors);
   } catch (err) {
-    results.surveysError = err instanceof Error ? err.message : String(err);
+    results.surveysError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -302,7 +432,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.emailSignupsDeleted = count;
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', count, 0);
   } catch (err) {
-    results.emailSignupsError = err instanceof Error ? err.message : String(err);
+    results.emailSignupsError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -312,6 +442,33 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
       })
     );
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', 0, 1);
+  }
+
+  // ── Phase 4: Delete email-list rows past their window (OSE-207, OSE-1661) ─
+  // The landing-page list (subscribers) moved to FORMS_DB in OSE-1661 and is
+  // swept here with the other forms tables, so it is audited the same way.
+  try {
+    const days = subscriberRetentionDays(env.SUBSCRIBERS_RETENTION_DAYS);
+    const del = await env.FORMS_DB.prepare(
+      "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
+    )
+      .bind(`-${days} days`)
+      .run();
+    const count = del.meta?.changes ?? 0;
+    results.subscribersDeleted = count;
+    results.subscriberRetentionDays = days;
+    await logPiiAudit(env.FORMS_DB, 'subscribers_delete', count, 0);
+  } catch (err) {
+    results.subscribersError = errorLabel(err);
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'subscribers',
+        error: results.subscribersError,
+        timestamp: now,
+      })
+    );
+    await logPiiAudit(env.FORMS_DB, 'subscribers_delete', 0, 1);
   }
 
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));
@@ -324,118 +481,6 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
  * FORMS_DB-only (required by the forms-security isolation gate).
  * This function reads from the main DB (events table) and writes to BigQuery.
  */
-
-/**
- * Subscribers retention lifecycle — OSE-207 / BE-17.
- *
- * Touches DB.subscribers ONLY. Lives outside runFormDataLifecycle so the
- * forms-security S4 isolation gate stays intact (that gate is now precisely
- * scoped to runFormDataLifecycle's function body, not the whole file).
- *
- * Default posture:
- *   - rolling subscriber list data is bounded by a finite retention window.
- *   - env.SUBSCRIBERS_RETENTION_DAYS is the override knob. If unset, we fall
- *     back to a default 365-day window so the system does not silently retain
- *     the email list forever.
- *   - If set to 0 or a non-positive value, the cron explicitly disables the
- *     retention sweep and logs a no-op rather than silently deleting an
- *     uncapped list.
- *
- * Every run writes an admin_audit_log row (action=SUBSCRIBERS_RETENTION,
- * actor=system:lifecycle) so ops can audit retention activity over time.
- */
-const DEFAULT_SUBSCRIBERS_RETENTION_DAYS = 365;
-
-async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
-  const now = new Date().toISOString();
-  const raw = env.SUBSCRIBERS_RETENTION_DAYS;
-  const configured = raw != null ? parseInt(String(raw), 10) : NaN;
-  const days =
-    Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUBSCRIBERS_RETENTION_DAYS;
-
-  if (raw != null && (!Number.isFinite(configured) || configured <= 0)) {
-    console.log(
-      JSON.stringify({
-        type: 'SUBSCRIBERS_RETENTION_NOOP',
-        reason: 'SUBSCRIBERS_RETENTION_DAYS is non-positive; retention is explicitly disabled',
-        timestamp: now,
-      })
-    );
-    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'disabled' });
-    return;
-  }
-
-  let deleted = 0;
-  let errors = 0;
-  try {
-    const res = await env.DB.prepare(
-      "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
-    )
-      .bind(`-${days} days`)
-      .run();
-    deleted = res.meta?.changes ?? 0;
-  } catch (err) {
-    errors = 1;
-    console.error(
-      JSON.stringify({
-        type: 'SUBSCRIBERS_RETENTION_ERROR',
-        error: err instanceof Error ? err.message : String(err),
-        days,
-        timestamp: now,
-      })
-    );
-  }
-
-  console.log(
-    JSON.stringify({
-      type: 'SUBSCRIBERS_RETENTION_COMPLETE',
-      days,
-      deleted,
-      errors,
-      timestamp: now,
-    })
-  );
-  await logSubscribersRetentionAudit(env, 'success', deleted, errors, { days });
-}
-
-/**
- * Write the retention run to admin_audit_log so retention activity has a
- * durable trail alongside admin reads (OSE-212 audit log pattern).
- */
-async function logSubscribersRetentionAudit(
-  env: RouterEnv,
-  outcomeRaw: 'success' | 'noop',
-  deleted: number,
-  errors: number,
-  details: Record<string, unknown>
-): Promise<void> {
-  const id = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
-  // Map our two non-failure outcomes to OSE-212's audit-outcome column:
-  // 'success' for an executed run (including 0-deleted), 'success' for noop
-  // (informational — not a failure). 'denied' is reserved for real failures.
-  const outcome = errors > 0 ? 'denied' : 'success';
-  try {
-    await env.DB.prepare(
-      `INSERT INTO admin_audit_log
-         (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        'SUBSCRIBERS_RETENTION',
-        'system:lifecycle',
-        'subscribers',
-        null,
-        id, // request_id = audit row id for scheduled jobs (no inbound request)
-        outcome,
-        null,
-        JSON.stringify({ ...details, deleted, errors, outcomeRaw })
-      )
-      .run();
-  } catch {
-    // Audit failures must never break the lifecycle job.
-  }
-}
 
 // ─── Security Metrics Cron ────────────────────────────────────────────────────
 //
@@ -507,7 +552,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'auth_failures',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -537,7 +582,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'rate_limit_kv',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -571,7 +616,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'error_rates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -752,7 +797,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'metrics_write',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );

@@ -20,6 +20,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { AS_PERSON } from './helpers/person-agent';
 
 const ADMIN_HEADERS = {
   Authorization: 'Bearer test-admin-key-e2e-2026',
@@ -97,7 +98,7 @@ async function putCodes(body: unknown, id = EVT): Promise<{ status: number; body
 }
 
 async function follow(code: string): Promise<string | null> {
-  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual' });
+  const res = await SELF.fetch(`${ORIGIN}/s/${code}`, { redirect: 'manual', headers: AS_PERSON });
   expect(res.status).toBe(302);
   return res.headers.get('Location');
 }
@@ -215,7 +216,7 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
   test('check-in is built server-side (the check-in form); a client-sent target is dropped', async () => {
     const checkin = saved.find((c) => c.kind === 'checkin')!;
     expect(checkin.target_url).toBeNull();
-    expect(checkin.points_to).toBe(`${ORIGIN}/forms/${EVT}?type=checkin`);
+    expect(checkin.points_to).toBe(`${ORIGIN}/events/${EVT}/checkin`);
     const row = await tenv()
       .DB.prepare('SELECT target_url FROM shortlinks WHERE code = ?')
       .bind(checkin.code)
@@ -241,7 +242,7 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
     for (const c of saved) {
       const loc = await follow(c.code);
       if (c.kind === 'public') expect(loc).toBe(`${ORIGIN}/events/${EVT}`);
-      if (c.kind === 'checkin') expect(loc).toBe(`${ORIGIN}/forms/${EVT}?type=checkin`);
+      if (c.kind === 'checkin') expect(loc).toBe(`${ORIGIN}/events/${EVT}/checkin`);
       if (c.kind === 'donation') expect(loc).toBe(DONATE);
       if (c.kind === 'ow') expect(loc).toBe(OW);
     }
@@ -250,8 +251,9 @@ describe('OSE-1357 p2 | save: N codes, in order, event page first', () => {
   test('the check-in redirect carries no identity — only the event id and the form type', async () => {
     const checkin = saved.find((c) => c.kind === 'checkin')!;
     const loc = new URL((await follow(checkin.code))!);
-    expect([...loc.searchParams.keys()]).toEqual(['type']);
-    expect(loc.pathname).toBe(`/forms/${EVT}`);
+    // The form is named by the path (OSE-1684); no query at all.
+    expect([...loc.searchParams.keys()]).toEqual([]);
+    expect(loc.pathname).toBe(`/events/${EVT}/checkin`);
   });
 
   test('never-who: a click is a counter; shortlinks has no location / person column', async () => {

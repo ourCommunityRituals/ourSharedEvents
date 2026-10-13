@@ -1,0 +1,38 @@
+info:
+  name: OSE-1615 | admin events | POST with a spine key is refused and creates nothing (400)
+  type: http
+  seq: 17
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"title":"OSE-1615 refused create","event_correlation_id":"00000000000000000000000000000000"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: create refuses a body that names a spine key before it reads
+        // anything else, so this request never makes an event.
+        test('400 SERVER_COMPUTED_FIELD', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('SERVER_COMPUTED_FIELD');
+        });
+        test('no event id comes back', function () {
+          expect(res.getBody().id).to.eql(undefined);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

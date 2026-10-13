@@ -32,6 +32,11 @@
 #                                  RATE_LIMIT_PEPPER_MISSING, so rate limiting never stops.
 #                                  Rotate freely: rate-limit buckets live 60 s, beacon
 #                                  dedup keys 300 s (old keys age out within 5 minutes).
+#   ANON_ID_HASH_PEPPER          — keys scan_node_returns.anonymous_id and hashes
+#                                  anon_id_returns (>=32 chars, own secret; OSE-272 Q1,
+#                                  OSE-1659). Unset -> scans are stored with no id and
+#                                  returning visitors are not counted; the deploy gate
+#                                  warns. Rotating it resets return counts (by design).
 #
 # Ref: E2E-LAUNCH.md Part 5
 
@@ -68,6 +73,7 @@ SECRETS=(
   "FORMS_HASH_PEPPER"
   "SHARED_REPORT_SIGNING_SECRET"
   "RATE_LIMIT_KEY_PEPPER"
+  "ANON_ID_HASH_PEPPER"
 )
 # ADMIN_KEY is a staging-only fallback. Production admin is Cloudflare Access
 # only (ADR-012 gate R2), and the production deploy gate refuses a production

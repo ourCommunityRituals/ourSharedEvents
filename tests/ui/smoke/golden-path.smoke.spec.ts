@@ -115,9 +115,8 @@ test.describe('Golden Path — First-Time Organizer', () => {
     await expect(regLink).toBeVisible();
 
     const href = await regLink.getAttribute('href');
-    expect(href).toContain('/forms/');
-    expect(href).toContain('type=register');
-    expect(href).toContain(createdEventId);
+    // The event's own sign-up form (OSE-1684).
+    expect(href).toBe(`/events/${createdEventId}/register`);
   });
 
   // ── Step 6: Registration form page loads ────────────────────────────────

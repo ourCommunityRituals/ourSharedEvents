@@ -107,53 +107,21 @@
         justify-content: center;
         gap: 0 1.2em;
       }
-      .sponsor-line {
-        font-size: max(26px, 2vw);
-        color: var(--text-muted);
-      }
+      .sponsor-line { font-size: max(26px, 2vw); color: var(--text-muted); }
       .label,
       .pane-paused,
       .empty,
       .next-card .date {
         color: var(--text-muted);
       }
-      .label {
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-      .empty {
-        font-size: max(30px, 2.4vw);
-        padding: 4vh 0;
-      }
-      .qr {
-        gap: 1vh;
-      }
-      .qr img,
-      .league-card img {
-        width: max(160px, min(26vh, 20vw));
-        height: max(160px, min(26vh, 20vw));
-        border-radius: 0.4em;
-        image-rendering: pixelated;
-      }
-      .link {
-        font-weight: 600;
-        color: var(--accent);
-        overflow-wrap: anywhere;
-      }
-      .next-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: min(100%, 70vw);
-        padding: 1.4vh 2vw;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 0.5em;
-      }
-      .next-card .name {
-        font-size: max(30px, 2.4vw);
-        font-weight: 700;
-      }
+      .label { text-transform: uppercase; letter-spacing: 0.08em; }
+      .empty { font-size: max(30px, 2.4vw); padding: 4vh 0; }
+      .qr { gap: 1vh; }
+      .qr img, .league-card img { width: max(160px, min(26vh, 20vw)); height: max(160px, min(26vh, 20vw)); border-radius: 0.4em; image-rendering: pixelated; }
+      .link { font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
+      .next-card { display: grid; grid-template-columns: auto 1fr; gap: 0 2vw; align-items: center; text-align: left; width: min(100%, 70vw); padding: 1.4vh 2vw; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5em; }
+      .next-card .name { font-size: max(30px, 2.4vw); font-weight: 700; }
+      .next-card .thumb { grid-row: 1 / span 3; width: max(56px, 7vh); height: max(56px, 7vh); object-fit: cover; border-radius: 0.4em; }
       .sponsor-wall,
       .display-sponsor-banner {
         display: flex;
@@ -161,16 +129,7 @@
         justify-content: center;
         gap: 2vh 2vw;
       }
-      .display-sponsor-item {
-        display: flex;
-        align-items: center;
-        gap: 0.6em;
-        padding: 0.4em 0.8em;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 0.5em;
-        transition: opacity 0.6s ease-in-out;
-      }
+      .display-sponsor-item { display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0.8em; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5em; transition: opacity 0.6s ease-in-out; }
       .display-sponsor-item.fade-out {
         opacity: 0;
       }
@@ -265,14 +224,21 @@
       We count the room, never the person. Nothing about you is collected to show this screen.
     </p>
     <script>
-      // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
-      // scopedSurfaceUrl() emits /display?event=<id>, but this page used to ignore
+      // The event this TV is for: /events/<id>/tv (the address the platform
+      // writes, OSE-1684) or the older /display?event=<id>, which still works.
+      function routeEventId() {
+        const m = location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/tv$/);
+        if (m) return m[1];
+        return new URLSearchParams(location.search).get('event') || '';
+      }
+      // OSE-1081: admin.html's scopedSurfaceUrl() emits a scoped TV address
+      // (now /events/<id>/tv, OSE-1684), but this page used to ignore
       // location.search entirely and always feature items[0] — so a kiosk pointed
       // at a scoped display link showed whichever event happened to sort first.
       // Returns the index of the requested event, or -1 when the param is absent
       // or names an event this page did not fetch (then items[0] still leads).
       function requestedEventIndex(items) {
-        const wanted = new URLSearchParams(location.search).get('event');
+        const wanted = routeEventId();
         if (!wanted) return -1;
         for (let i = 0; i < items.length; i++) {
           if (items[i] && items[i].id === wanted) return i;
@@ -375,6 +341,14 @@
       function isQrDataUri(v) {
         return typeof v === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v);
       }
+      // OSE-1678: the card picture, by the same rule as the /events cards
+      // (lib/event-thumb.ts): the event's uploaded poster art, else the Ring.
+      // @ose-event-thumb:begin
+      function eventThumbSrc(v) {
+        return typeof v === 'string' && v.length <= 500 && /^\/api\/v2\/uploads\/[A-Za-z0-9._/-]+$/.test(v) &&
+          !/(^|\/)\.{1,2}(\/|$)/.test(v) ? v : '/event-default-thumb.svg';
+      }
+      // @ose-event-thumb:end
       // "league.example/standings" — enough to recognise, short enough for a TV.
       function shortUrl(u, max) {
         max = max || 40;
@@ -395,6 +369,7 @@
           '<p class="label">' + escAttr(prompt) + '</p>' +
           '<p class="link" data-testid="display-' + kind + '-link">' + escAttr(shortUrl(link.url, 64)) + '</p></div>';
       }
+      var PHASES = ['pre_event', 'event', 'post_event'];
       // A wrapped (finished) event has no place on a board about what is coming up.
       function isShowable(e) {
         return !!e && e.phase !== 'post_event';
@@ -482,7 +457,9 @@
         if (rest.length) {
           paneHtml.upcoming = '<section data-pane="upcoming" data-testid="display-pane-upcoming" aria-label="Also coming up" hidden>' +
             '<div class="next-events" data-testid="display-upcoming"><h2 class="hd hd-m" data-testid="display-upcoming-heading">Also Coming Up</h2>' +
-            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' + sponsorLine(e.id, 'display-upcoming-sponsor') +
+            rest.slice(0, 6).map(e => '<div class="next-card" data-testid="display-upcoming-card">' +
+              '<img class="thumb" src="' + escAttr(eventThumbSrc(e.cover_image_url)) + '" alt="" loading="lazy" data-hide-on-error="1" data-default-src="/event-default-thumb.svg" data-testid="display-upcoming-thumb">' +
+              '<div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' + sponsorLine(e.id, 'display-upcoming-sponsor') +
               '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e)) + '</div></div>').join('') +
             '</div></section>';
         }
@@ -579,7 +556,9 @@
       async function loadEvents() {
         const main = document.getElementById('main-content');
         try {
-          const res = await fetch('/api/v2/events');
+          // no-cache: the list's own Cache-Control (max-age=60, swr=300) would
+          // otherwise let a 5-minute refresh show the previous refresh's phases.
+          const res = await fetch('/api/v2/events', { cache: 'no-cache' });
           // fetch() resolves on a 429/5xx; that is a failed refresh (the
           // catch keeps the last good board), not an empty list of events.
           if (!res.ok) throw new Error('events ' + res.status);
@@ -588,10 +567,10 @@
           // A ?event=<id> that is live but not in the public list (unlisted, or
           // another brand's) is fetched by id, so the TV shows THAT event and
           // loads its config. Drafts are not public: the list falls back as before.
-          const wanted = new URLSearchParams(location.search).get('event');
+          const wanted = routeEventId();
           if (wanted && requestedEventIndex(items) === -1) {
             try {
-              const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted));
+              const one = await fetch('/api/v2/events/' + encodeURIComponent(wanted), { cache: 'no-cache' });
               const oneData = one.ok ? await one.json() : null;
               if (oneData && oneData.ok && oneData.item && oneData.item.id === wanted) items = [oneData.item].concat(items);
             } catch { /* fall back to the list */ }
@@ -668,6 +647,15 @@
           board.config = data;
           board.configEtag = etag;
           board.configFor = id;
+          // OSE-475: the config carries the featured event's phase from the
+          // resolver the public page uses, and a start or end changes its ETag,
+          // so a crossing shows on this minute check, not the 5-minute refresh.
+          // A wrapped event leaves the board: re-read the list to feature the next.
+          const f = (board.items || []).find(e => e.id === id);
+          if (f && PHASES.indexOf(data.phase) !== -1 && f.phase !== data.phase) {
+            f.phase = data.phase;
+            if (!isShowable(f)) { loadEvents(); return; }
+          }
           renderBoard();
         } catch { /* keep the last config */ }
       }
@@ -846,7 +834,8 @@
             // vanishing; only if the default itself fails is the image hidden.
             // The fallback is a fixed same-origin path, never read back from
             // the DOM — data-default-src only marks which images may fall back.
-            var d = '/sponsor-default-logo.svg';
+            // An event card picture falls back to the Ring (OSE-1678).
+            var d = el.classList.contains('thumb') ? '/event-default-thumb.svg' : '/sponsor-default-logo.svg';
             if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
             else el.style.display = 'none';
           }

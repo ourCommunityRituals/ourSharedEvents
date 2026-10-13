@@ -70,8 +70,8 @@ test.describe('Form Endpoints — Public Submissions', () => {
     const json = await response.json();
     expectSuccessOrDisabled(response.status(), json);
     if (response.status() === 200) {
-      expect(typeof json.count).toBe('number');
-      expect(json.count).toBeGreaterThan(0);
+      // OSE-1657: counts are post-event only, so the public answer carries none.
+      expect(json).toEqual({ ok: true });
     }
   });
 

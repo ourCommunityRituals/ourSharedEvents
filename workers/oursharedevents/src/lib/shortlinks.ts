@@ -19,6 +19,8 @@
  * need; base62 encoding gives us the shape.
  */
 
+import { errorLabel } from './error-label';
+
 export interface ShortlinksEnv {
   DB?: D1Database;
 }
@@ -343,12 +345,12 @@ export async function resolveCode(
 export async function incrementClick(env: ShortlinksEnv, code: string): Promise<number> {
   if (!env.DB) return 0;
   const db = env.DB;
-  const logError = (err: unknown) =>
+  const logError = (error: string) =>
     console.warn(
       JSON.stringify({
         type: 'SHORTLINK_CLICK_LOG_ERROR',
         code,
-        error: err instanceof Error ? err.message : String(err),
+        error,
         timestamp: new Date().toISOString(),
       })
     );
@@ -367,7 +369,7 @@ export async function incrementClick(env: ShortlinksEnv, code: string): Promise<
     .first<{ clicks: number }>()
     .then((row) => row?.clicks ?? 0)
     .catch((err) => {
-      logError(err);
+      logError(errorLabel(err));
       return 0;
     });
 
@@ -379,7 +381,7 @@ export async function incrementClick(env: ShortlinksEnv, code: string): Promise<
     )
     .bind(code)
     .run()
-    .catch(logError);
+    .catch((err) => logError(errorLabel(err)));
 
   const [count] = await Promise.all([total, bucket]);
   return count;

@@ -9,7 +9,7 @@
 -- click against a sponsor resolved from GET /api/v2/events/:id/sponsors and assert
 -- 201. The read path (data-provider.ts: live -> CF cache -> mock) can surface a
 -- sponsor that has NO backing sponsor_business row (mock fixture, or a stale cache
--- entry). sponsor_impressions carries FOREIGN KEY (sponsor_id) REFERENCES
+-- entry). sponsor_displays carries FOREIGN KEY (sponsor_id) REFERENCES
 -- sponsor_business(id), so logging against such a sponsor 503s (DB_ERROR) — the
 -- read looked populated but the write had no FK-valid target (green != true).
 --
@@ -66,8 +66,11 @@ UPDATE sponsor_placement SET sponsor_accepted = 1 WHERE id = 'spl_smoke_local';
 -- the TV drops wrapped events (OSE-1521) and never loads its sponsors, and the never-who
 -- display test fires no impression (T4a red on main from 2026-10-04). Re-open the window
 -- on every pass so the fixture is always a live event.
+-- OSE-1615: the start is an input of the spine keys, so the statement clears them.
 UPDATE events
   SET start_date = datetime('now','-1 hour'),
       end_date   = datetime('now','+3 hours'),
-      status     = 'active'
+      status     = 'active',
+      venue_canonical_id = NULL,
+      event_correlation_id = NULL
   WHERE id = 'evt_smoke_sponsored';

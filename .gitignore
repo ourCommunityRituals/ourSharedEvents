@@ -102,9 +102,10 @@ id_rsa*
 *.pem
 *.pud.txt
 
-# Claude Code local config — machine-specific, not project state
+# Claude Code local config — machine-specific, not project state.
+# .claude/agents/ is project state (the extended scrum team, reviewed like code),
+# so it is tracked; personal agents belong in ~/.claude/agents/.
 .claude/settings.local.json
-.claude/agents/
 .claude/worktrees/
 
 # Generated audit/report files

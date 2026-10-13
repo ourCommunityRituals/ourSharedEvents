@@ -7,7 +7,8 @@
  *          optional `placement_type` 'venue' | 'community' (default), poster tiers —
  *          a venue AREA defaults its address + coordinates to the event's own)
  *   GET    /api/v2/admin/events/:id/poster-deployments   – list for event (+ per-row
- *          target_url/target_label, placement_type, exact `scans` for that poster,
+ *          target_url/target_label, placement_type, that poster's `scans` (floored:
+ *          the sum of its poster-hours with 5 or more, OSE-1656),
  *          and the event's own `event_address`, OSE-1357)
  *   GET    /api/v2/admin/poster-deployments/:id          – get single
  *   PUT    /api/v2/admin/poster-deployments/:id          – update (re-tags H3 when lat/lon provided)
@@ -25,6 +26,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
+import { posterScans, readEventScanCells, scansByPoster } from '../lib/scan-cells';
 import { maybeTag } from '../lib/h3-tagging';
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
@@ -32,6 +34,7 @@ import { listSavedPosterCodes } from '../lib/poster-codes';
 import { parsePlacementType } from '../lib/poster-reach';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
+import { errorLabel } from '../lib/error-label';
 
 /** Longest address kept (OSE-1357). A geocoder's formatted_address is well under. */
 const ADDRESS_MAX = 300;
@@ -78,7 +81,7 @@ function errorResponse(code: string, message: string, status: number, rid: strin
       requestId: rid,
       timestamp: new Date().toISOString(),
     },
-    { status }
+    { status, headers: { 'X-Request-Id': rid } }
   );
 }
 
@@ -228,9 +231,12 @@ export async function handleAdminCreatePosterDeployment(
       )
       .run();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreatePosterDeployment', error: msg })
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminCreatePosterDeployment',
+        error: errorLabel(err),
+      })
     );
     return errorResponse('DB_ERROR', 'Failed to create poster deployment', 503, rid);
   }
@@ -260,22 +266,19 @@ export async function handleAdminListPosterDeployments(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
-  // Poster tiers: each row carries its own exact scan count (organizer-only,
-  // same rule as /stats) — scans resolve to the poster they came from, nothing else.
+  // Poster tiers: each row carries its own scan count. Scans resolve to the
+  // poster they came from, nothing else. The count is the sum of the poster's
+  // poster-hours that clear the floor (OSE-1656, lib/scan-cells.ts): the same
+  // figure the reach card and the SharedReport's poster attribution read.
   const rows = await env.DB.prepare(
     `SELECT pd.id, pd.event_id, pd.qr_token, pd.placement_label, pd.location_desc, pd.address,
             pd.placement_type, pd.latitude, pd.longitude, pd.h3_res9, pd.h3_res7, pd.is_active,
-            pd.created_at, pd.updated_at, COALESCE(s.scans, 0) AS scans
+            pd.created_at, pd.updated_at
        FROM poster_deployments pd
-       LEFT JOIN (SELECT poster_deployment_id, COUNT(*) AS scans
-                    FROM scan_placement_events
-                   WHERE event_id = ?
-                   GROUP BY poster_deployment_id) s
-         ON s.poster_deployment_id = pd.id
       WHERE pd.event_id = ?
       ORDER BY pd.created_at DESC`
   )
-    .bind(eventId, eventId)
+    .bind(eventId)
     .all<{
       id: string;
       event_id: string;
@@ -291,8 +294,8 @@ export async function handleAdminListPosterDeployments(
       is_active: number;
       created_at: string;
       updated_at: string;
-      scans: number;
     }>();
+  const scansPerPoster = scansByPoster(await readEventScanCells(env.DB, eventId));
 
   // Enrich each row with the physical scan URL and an in-bundle QR data-URI
   // (OSE-895). QR generation stays deterministic/LLM-free — same native
@@ -325,7 +328,15 @@ export async function handleAdminListPosterDeployments(
     // OSE-1357: which target this poster's code points at, from the same
     // function /q/ redirects with — the card shows it, never re-derives it.
     const target_url = qrScanTarget(origin, eventId, row.id);
-    return { ...row, scan_url, qr_data_uri, target_url, target_label: 'Event page', slots };
+    return {
+      ...row,
+      scans: posterScans(scansPerPoster, row.id),
+      scan_url,
+      qr_data_uri,
+      target_url,
+      target_label: 'Event page',
+      slots,
+    };
   });
 
   // OSE-1357: the event's own venue/address seeds the card's address
@@ -455,9 +466,12 @@ export async function handleAdminUpdatePosterDeployment(
       return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminUpdatePosterDeployment', error: msg })
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminUpdatePosterDeployment',
+        error: errorLabel(err),
+      })
     );
     return errorResponse('DB_ERROR', 'Failed to update poster deployment', 503, rid);
   }

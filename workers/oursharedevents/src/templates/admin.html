@@ -399,12 +399,6 @@
         color: var(--text);
         font-size: 1.25rem;
       }
-      .admin-intro p,
-      .section-help {
-        color: var(--text-muted);
-        font-size: 0.92rem;
-        line-height: 1.5;
-      }
       .section-head {
         display: flex;
         align-items: flex-start;
@@ -416,14 +410,6 @@
         margin: 0.1rem 0 0.25rem;
         color: var(--text);
         font-size: 1.15rem;
-      }
-      .section-eyebrow {
-        margin: 0;
-        color: var(--text-muted);
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
       }
       #events-section {
         margin-top: 1rem;
@@ -456,7 +442,7 @@
         letter-spacing: 0.05em;
       }
       td {
-        padding: 0.75rem 1rem;
+        padding: 0.5rem 0.75rem;
         border-bottom: 1px solid var(--border);
         font-size: 0.9rem;
       }
@@ -484,9 +470,11 @@
         background: var(--bg);
         color: var(--text-muted);
       }
-      .loading {
+      main .loading {
+        display: block;
+        min-height: 0;
         text-align: center;
-        padding: 3rem;
+        padding: 1rem;
         color: var(--text-muted);
       }
       .error {
@@ -494,13 +482,9 @@
         padding: 2rem;
         color: var(--error);
       }
-      /* OSE-1328 uniform management-card anatomy (Decision 3): the card is the
-         token-driven .card from /ui.css (surface bg, 1px var(--border),
-         var(--radius-sm); no shadow, no left-border). padding:0 so the header
-         row + body own their spacing. .mcard-* are shared by every selected-
-         event management card (forms / sponsors / poster-deployments / dashboard). */
+      /* OSE-1328: /ui.css .card; .mcard-* head and body own the spacing. */
       .forms-card {
-        margin-top: 2rem;
+        margin-top: 1rem;
         padding: 0;
       }
       .mcard-head {
@@ -550,7 +534,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 1rem;
-        margin-top: 2rem;
+        margin-top: 1rem;
       }
       /* OSE-1328 uniform anatomy (Decision 3): surface-link cards adopt the
          shipped .card base from /ui.css (var(--surface) bg, 1px var(--border),
@@ -709,7 +693,7 @@
         border-radius: 8px;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
         border-left: 3px solid var(--success);
       }
       .create-card h2 {
@@ -1135,7 +1119,7 @@
       .poster-deployments-card,
       .tv-display-card,
       .poster-art-card {
-        margin-top: 2rem;
+        margin-top: 1rem;
         padding: 0;
       }
       .add-spon-btn {
@@ -1450,6 +1434,9 @@
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
+    <!-- Toasts (OSE-1564): how this page says an action worked or failed.
+         Same-origin and deferred; the page still works if it does not load. -->
+    <script src="/ui-toast.js" defer></script>
     <style>
       body {
         background: var(--bg);
@@ -2045,6 +2032,7 @@
       </h1>
       <span>Admin</span>
       <nav aria-label="More admin pages">
+        <button type="button" class="btn btn-link" data-action="go-your-events" data-testid="admin-nav-your-events" hidden>Your events</button>
         <a class="btn btn-link" href="/api/v2/admin/screens/logs" data-testid="admin-nav-logs">Logs</a>
         <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="admin-nav-settings">Settings</a>
       </nav>
@@ -2083,6 +2071,9 @@
         var ACTIONS = {
           'ecb-jump': function (el) {
             if (window.ecbJump) window.ecbJump(argOf(el, 'target'));
+          },
+          'go-your-events': function () {
+            if (window.oseGoYourEvents) window.oseGoYourEvents();
           },
           'copy-url': function (el) {
             var fn = window.copyUrl;
@@ -2127,6 +2118,9 @@
           },
           'mint-link': function (el) {
             if (window.mintReportLink) window.mintReportLink(argOf(el, 'event-id'), el);
+          },
+          'copy-registrant-emails': function (el) {
+            if (window.copyRegistrantEmails) window.copyRegistrantEmails(argOf(el, 'event-id'), el);
           },
           'mint-copy': function (el) {
             var value = argOf(el, 'url') || argOf(el, 'token') || '';
@@ -2237,10 +2231,20 @@
         hidden
       ></div>
       <script>
-        // window._adminAnnounce(message, kind) — the one place admin feedback
-        // is surfaced. INVARIANT #1 guard: identifiers/errors are written with
-        // textContent, NEVER innerHTML, so a sponsor/event id can't inject.
-        window._adminAnnounce = function (message, kind) {
+        // window._adminAnnounce(message, kind, details): the one place an admin
+        // action says what happened (OSE-1564). It shows an @ocr/ui toast from
+        // /ui-toast.js: 'ok' is a success, 'info' a note, 'error' a failure
+        // with its details. If that script did not load, the status line above
+        // says it instead. INVARIANT #1 guard: the line is written with
+        // textContent, NEVER innerHTML, and the toast inserts text only.
+        window._adminAnnounce = function (message, kind, details) {
+          var toast = window.ocrToast;
+          if (toast) {
+            if (kind === 'error') toast.failure(message, { details: details });
+            else if (kind === 'info') toast.neutral(message);
+            else toast.success(message);
+            return;
+          }
           var el = document.getElementById('admin-status');
           if (!el) return;
           el.textContent = message; // textContent — never innerHTML
@@ -2251,6 +2255,27 @@
             el.hidden = true;
             el.textContent = '';
           }, 6000);
+        };
+        // Reasons this page words itself, by error code. The server's own
+        // sentence is never shown: it can name an id or a person.
+        var FAILURE_REASONS = {
+          CORE_VALUES_MISSING: 'It needs a start time and an event type first.',
+          INVALID_TRANSITION: 'It moved since this page loaded. The panel shows where it is now.',
+        };
+        // window._adminRequestFailed(sentence, res, body, action): a request
+        // failed. The toast says the plain sentence, and its details are the
+        // error code and the request reference (X-Request-Id) only, read by
+        // detailsFrom. No other part of the response, and no browser error
+        // text, reaches the page. `res` is null when nothing came back.
+        window._adminRequestFailed = function (sentence, res, body, action) {
+          var code = body && typeof body.code === 'string' ? body.code : '';
+          var reason = Object.prototype.hasOwnProperty.call(FAILURE_REASONS, code) ? ' ' + FAILURE_REASONS[code] : '';
+          var toast = window.ocrToast;
+          window._adminAnnounce(
+            sentence + (res ? reason : ' Check your connection and try again.'),
+            'error',
+            toast ? toast.detailsFrom(res, body, action) : undefined
+          );
         };
       </script>
 
@@ -2264,19 +2289,26 @@
       >
         <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
         <nav class="ecb-nav" aria-label="Jump to management card">
+          <button type="button" data-testid="ecb-nav-your-events" data-action="go-your-events">Your events</button>
           <button type="button" data-testid="ecb-nav-dashboard" data-action="ecb-jump" data-target="dashboard-card">Dashboard</button>
-          <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Forms</button>
-          <button type="button" data-testid="ecb-nav-poster" data-action="ecb-jump" data-target="poster-deployments-card">Poster</button>
+          <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Links</button>
+          <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Reg &amp; Forms</button>
           <button type="button" data-testid="ecb-nav-sponsors" data-action="ecb-jump" data-target="sponsors-card">Sponsors</button>
+          <button type="button" data-testid="ecb-nav-poster" data-action="ecb-jump" data-target="poster-deployments-card">Posters</button>
           <button type="button" data-testid="ecb-nav-tv" data-action="ecb-jump" data-target="tv-display-card">TV</button>
-          <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Surfaces</button>
         </nav>
       </div>
       <script>
         // OSE-673: jump to a management card by its container class.
         window.ecbJump = function (cls) {
           const el = document.querySelector('.' + cls);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (!el) return;
+          if (cls === 'sponsors-card' && window.oseSponsorsCard) window.oseSponsorsCard.open();
+          // The bar is sticky, so land the card just under it rather than
+          // beneath it (its title was hidden on a phone, 2026-10-10).
+          const bar = document.getElementById('event-context-bar');
+          if (bar && !bar.hidden) el.style.scrollMarginTop = bar.offsetHeight + 16 + 'px';
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
         // Caption + reveal driven by the single selection event (OSE-667).
         window.addEventListener('ose:event-selected', function (ev) {
@@ -2416,7 +2448,6 @@
         <div class="wizard-main">
         <!-- Step 1 — the only must-answer questions. Date pre-fills to today. -->
         <div class="wizard-step active" id="wizard-step-1" data-testid="wizard-step-1">
-          <p class="wizard-step-help">Tell us about your event. You can change any of this later.</p>
           <div class="create-form">
             <div class="full-width">
               <label for="wizard-event-name">What's it called? <span class="required-star">*</span></label>
@@ -2471,7 +2502,7 @@
                 type="text"
                 id="wizard-event-venue"
                 data-testid="wizard-event-venue"
-                placeholder="Rock Island Public House"
+                placeholder="Rock Island Public House, Blue Island"
                 maxlength="500"
                 required
                 aria-required="true"
@@ -2525,9 +2556,7 @@
               </button>
             </div>
             <p class="wizard-publish-note" data-testid="wizard-publish-note">
-              If it's your home, this is the choice that matters. You can change it
-              later &mdash; but anything already public may have been copied, so it's
-              worth getting right now.
+              At home? Keep it off the map. Anything already public may have been copied.
             </p>
           </div>
         </div>
@@ -2597,7 +2626,7 @@
         </div>
 
         <!-- Step 3 — sign-ups. Honest options only: the built-in sign-up page
-             already exists for every event (served at /forms/:eventId), so
+             already exists for every event (served at /events/:eventId/register), so
              "yes" simply surfaces its link in step 4. No pretend-saved
              external URLs (provenance/honesty doctrine). -->
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
@@ -2620,7 +2649,7 @@
              the pages attendees reach by phone (mobile = the attendee surface).
              QR images come from the existing poster-bundle endpoint. -->
         <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Here are your event's links to share and print. They start working for guests when you publish in the next step. Until then, use Preview to see the page and poster exactly as guests will.</p>
+          <p class="wizard-step-help">Your links. They work once you publish. Use Preview to check them first.</p>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
@@ -2662,7 +2691,7 @@
                Saves on change through the same PUT { settings } as that card. -->
           <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
             <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
-            <p class="wizard-step-help">A TV at the venue shows these screens in turn. You can change it any time. Press Show me to watch it cycle.</p>
+            <p class="wizard-step-help">The TV at the venue shows these in turn.</p>
             <p><strong>Your TV will show:</strong> <span data-testid="wizard-tv-summary"></span></p>
             <!-- Optional: a demo plays only when asked; nothing moves on its own. -->
             <button type="button" class="wizard-copy-btn" data-testid="wizard-tv-demo-toggle">Show me</button>
@@ -2680,7 +2709,7 @@
               <label class="create-publish-label" for="wizard-tv-speed-30"><input type="radio" name="wizard-tv-speed" id="wizard-tv-speed-30" data-testid="wizard-tv-speed" value="30" /><span>Slow: 30 seconds</span></label>
             </div>
             <p class="create-msg" data-testid="wizard-tv-msg" role="status" aria-live="polite"></p>
-            <p class="wizard-step-help">Want a different order, or league schedule links? Use the event's TV display card after you press Done.</p>
+            <p class="wizard-step-help">More TV options are in the event's TV display card.</p>
           </section>
         </div>
 
@@ -2703,8 +2732,7 @@
                404'd; the state machine had no driver from the UI. -->
           <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
             <p class="wizard-step-help" id="wizard-go-live-help">
-              Right now this is a <strong>draft</strong>: your links won't work until you publish.
-              Publish when the details are right — you can take it back offline any time.
+              This is a <strong>draft</strong>. Links work once you publish. You can take it offline any time.
             </p>
             <button
               type="button"
@@ -2733,7 +2761,7 @@
             <li id="wizardCheckReport">📊 After the event, share the results report</li>
           </ul>
           <p class="wizard-step-help muted-sm">
-            Not ready yet? Press Done — it stays in <em>Your events</em> as a draft. Drafts nobody touches for 30 days are archived automatically so the list stays clean.
+            Not ready? Press Done. It stays a draft in <em>Your events</em>. Drafts nobody touches for 30 days are archived automatically.
           </p>
         </div>
 
@@ -2781,7 +2809,7 @@
             <span data-testid="wizard-preview-where"></span>
             <span class="muted-sm" data-testid="wizard-preview-map"></span>
           </div>
-          <p class="wizard-step-help muted-sm">The top of your event page. Drawn on this screen as you type; nothing is public until you publish.</p>
+          <p class="wizard-step-help muted-sm">Nothing is public until you publish.</p>
         </aside>
         </div>
       </section>
@@ -3106,8 +3134,8 @@
             setCardUrl('wizard-link-public', origin + '/events/' + id);
             // Scoped to this event: a bare /poster or /display shows whichever
             // event is featured, not necessarily the one just made.
-            setCardUrl('wizard-link-poster', origin + '/poster?event=' + id);
-            setCardUrl('wizard-link-display', origin + '/display?event=' + id);
+            setCardUrl('wizard-link-poster', origin + '/events/' + id + '/poster');
+            setCardUrl('wizard-link-display', origin + '/events/' + id + '/tv');
             // The TV section (its own script below) needs the new event's id.
             window.dispatchEvent(
               new CustomEvent('ose:wizard-created', {
@@ -3115,6 +3143,16 @@
               })
             );
             setCardUrl('wizard-link-report', origin + '/admin');
+            // OSE-1684: the short links, once they arrive, replace the long ones
+            // shown (and copied) for the event page, poster and TV.
+            fetch('/api/v2/admin/events/' + id + '/short-links', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+            }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+              if (!d || !d.ok || !d.links || encodeURIComponent(wiz.createdId) !== id) return;
+              if (typeof d.links.share === 'string') setCardUrl('wizard-link-public', origin + d.links.share);
+              if (typeof d.links.poster === 'string') setCardUrl('wizard-link-poster', origin + d.links.poster);
+              if (typeof d.links.tv === 'string') setCardUrl('wizard-link-display', origin + d.links.tv);
+            }).catch(function () { /* the long links stay */ });
             var signupCard = document.getElementById('wizard-link-signup');
             if (signupCard) signupCard.hidden = wiz.signup !== 'create';
             // Admin-only previews: the real page and poster, even as a draft.
@@ -3298,6 +3336,10 @@
                 var mapNoteEl = document.getElementById('wizard-map-note');
                 if (mapNoteEl) {
                   var mapNote = data.map && data.map.note ? String(data.map.note) : '';
+                  // The zip search finds an event by its place on the map.
+                  if (data.place === 'not_found') {
+                    mapNote = (mapNote ? mapNote + ' ' : '') + 'We couldn’t find that place on the map. Add the town or street so nearby searches show it.';
+                  }
                   mapNoteEl.textContent = mapNote;
                   mapNoteEl.hidden = !mapNote;
                 }
@@ -3398,7 +3440,53 @@
            * reaches. The chooser's job is to make the path VISIBLE from the
            * front door, not to build a second one.
            */
+          // Leaving the front door for the dashboard is one history entry, so
+          // the browser's Back brings the front door back instead of leaving
+          // admin (owner, 2026-10-11: "once in the full admin screen, you are
+          // stuck"). Only from the front door's own entry: moving around the
+          // dashboard adds nothing.
+          function leaveDoor() {
+            try {
+              if (history.state && history.state.oseAdmin === 'chooser') {
+                history.pushState({ oseAdmin: 'dashboard' }, '', location.pathname + location.search);
+              }
+            } catch (e) {
+              /* see pushWizardStep */
+            }
+          }
+          function showDoor() {
+            document.body.classList.remove('wizard-active');
+            document.body.classList.add('chooser-active');
+            document.getElementById('launch-wizard').hidden = true;
+            document.getElementById('admin-path-chooser').hidden = false;
+            window.scrollTo(0, 0);
+          }
+          function showDashboard() {
+            document.body.classList.remove('wizard-active');
+            document.body.classList.remove('chooser-active');
+            document.getElementById('launch-wizard').hidden = true;
+            document.getElementById('admin-path-chooser').hidden = true;
+          }
+
+          // The header's "Your events" is the way back to the list from
+          // anywhere past the front door. The front door already has that door,
+          // and the wizard has its own Back, so it shows on neither.
+          (function syncYourEventsLink() {
+            var link = document.querySelector('[data-testid="admin-nav-your-events"]');
+            if (!link || typeof MutationObserver !== 'function') return;
+            var sync = function () {
+              var cls = document.body.classList;
+              link.hidden = cls.contains('chooser-active') || cls.contains('wizard-active');
+            };
+            new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            sync();
+          })();
+          window.oseGoYourEvents = function () {
+            startMyEvents();
+          };
+
           function startSponsor() {
+            leaveDoor();
             document.body.classList.remove('wizard-active');
             // Reveal the dashboard (the sponsors card lives in it) — the front
             // door steps aside.
@@ -3427,22 +3515,31 @@
            * reason to come back), otherwise All.
            */
           function startMyEvents() {
+            leaveDoor();
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
-            var list = document.getElementById('events-section');
-            if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
             if (typeof window.focusEventsList === 'function') window.focusEventsList();
+            // After the focus (which does not scroll): the list's top lands
+            // just below the selected event's bar, which stays at the top of
+            // the screen and on a phone is three rows tall.
+            var list = document.getElementById('events-section');
+            if (list) {
+              var bar = document.getElementById('event-context-bar');
+              var under = bar && !bar.hidden ? bar.getBoundingClientRect().bottom + 8 : 0;
+              window.scrollTo({ top: list.getBoundingClientRect().top + window.scrollY - under, behavior: 'smooth' });
+            }
           }
 
           function chooseAdvanced() {
+            leaveDoor();
             // Reveal the full dashboard and clear the doorway.
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
-            var card = document.querySelector('[data-testid="create-event-card"]');
+            var card = document.querySelector('[data-testid="admin-intro"]');
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
 
@@ -3642,6 +3739,11 @@
               return;
             }
             closeWizard({ fromHistory: true });
+            // Back to the front door's own entry shows the front door; forward
+            // (or back out of the wizard) to a dashboard entry shows the
+            // dashboard. An entry with no state (an in-page anchor) moves nothing.
+            if (st && st.oseAdmin === 'chooser') showDoor();
+            else if (st && st.oseAdmin === 'dashboard') showDashboard();
           });
 
           // The front door owns the URL on load (OSE-1315): no stray
@@ -3681,7 +3783,7 @@
                 }, 1500);
               },
               function () {
-                window._adminAnnounce('Could not copy — long-press the link to copy it.', 'error');
+                window._adminAnnounce('Could not copy. Long-press the link to copy it.', 'error', { action: 'Copying a link' });
               }
             );
           }
@@ -4198,9 +4300,162 @@
         })();
       </script>
 
+      <section class="admin-intro" data-testid="admin-intro" aria-labelledby="admin-intro-heading">
+        <h2 id="admin-intro-heading">Manage events from one clear workspace</h2>
+      </section>
+
+      <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
+         K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
+      <section
+        id="portfolio-rollup"
+        class="portfolio-rollup stats-row"
+        data-testid="portfolio-rollup"
+        aria-label="Portfolio totals across your brand's events"
+        hidden
+      >
+        <div class="rollup-stat stat-card" data-testid="rollup-events">
+          <span class="rollup-num stat-value" data-testid="rollup-events-num">—</span>
+          <span class="rollup-label stat-label">Events</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-registrations">
+          <span class="rollup-num stat-value" data-testid="rollup-registrations-num">—</span>
+          <span class="rollup-label stat-label">Registered</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-checkins">
+          <span class="rollup-num stat-value" data-testid="rollup-checkins-num">—</span>
+          <span class="rollup-label stat-label">Checked in</span>
+        </div>
+        <div class="rollup-stat stat-card" data-testid="rollup-sponsors">
+          <span class="rollup-num stat-value" data-testid="rollup-sponsors-num">—</span>
+          <span class="rollup-label stat-label">Active sponsors</span>
+        </div>
+      </section>
+
+      <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
+      <div class="section-head">
+        <div>
+          <h2 id="events-heading">Your events</h2>
+        </div>
+      </div>
+      <!-- Status panel — hydrates from ose:event-selected like the four
+           management cards. This is the ONLY place in the admin an event moves
+           between draft / ready / live / archived: before it, the UI could
+           create drafts and nothing else, so every event stayed invisible. -->
+      <div class="card" id="event-status-card" data-testid="event-status-card" hidden>
+        <div class="event-status-panel">
+          <div class="event-status-current">
+            <strong id="event-status-name" data-testid="event-status-name"></strong>
+            <span class="badge" id="event-status-badge" data-testid="event-status-badge"></span>
+          </div>
+          <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
+          <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
+          <!-- OSE-1560 — the map setting, always visible, with its one control.
+               The toast that announces a change is OSE-1564; this is the part
+               that has to stay true after any toast is gone. -->
+          <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
+          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
+          <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <!-- Event timeline — the selected event's whole chain at a glance:
+           setup → live → poster out → people scanning → sponsors on → report.
+           Hydrates from the same ose:event-selected event as every other card.
+           It reads what the other cards already load (list row, stats, poster
+           deployments, sponsors) and adds nothing new to the wire. The one
+           thing it adds is the NEXT STEP: a single link into whichever card
+           is the thing to do now, so the organizer never has to work out where
+           in the flow they are. -->
+      <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Event checklist</h3>
+          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
+        </div>
+        <div class="mcard-body">
+          <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
+          <!-- Organizer inbox: sponsors still to answer, and ones who declined,
+               surfaced here instead of only as badges in the sponsors table. -->
+          <section id="event-inbox" data-testid="event-inbox" aria-labelledby="event-inbox-title" hidden>
+            <h4 class="tl-label" id="event-inbox-title">Needs your attention</h4>
+            <ul class="pc-list" id="event-inbox-list" data-testid="event-inbox-list"></ul>
+          </section>
+        </div>
+      </div>
+      <!-- Pre-event window: the poster is out and the event hasn't started. The
+           organizer sees the poster's link (and its QR, the same link as a
+           picture) and whether the poster is working — scans, link taps,
+           posters out, places covered, scans per day. Counts only, never who.
+           Hidden outside the pre-event phase. -->
+      <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
+        <div class="mcard-head">
+          <h3 class="mcard-title">Before the event</h3>
+          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
+        </div>
+        <div class="mcard-body">
+          <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
+          <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
+          <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
+            <span class="wizard-card-title">Your poster link</span>
+            <span class="wizard-card-url" id="pre-event-link" data-testid="pre-event-link"></span>
+            <img id="pre-event-qr" data-testid="pre-event-qr" alt="" hidden />
+          </div>
+          <!-- The admin's wrapping stat grid (2-up on a phone), not @ocr/ui's
+               .stats-row: that one scrolls sideways and hid "Places" at 375px. -->
+          <div class="dashboard-stats" role="group" aria-label="Poster activity" data-testid="pre-event-stats">
+            <div class="dash-stat scans"><span class="dash-stat__num" id="pre-event-clicks" data-testid="pre-event-clicks">—</span><span class="dash-stat__label">Link taps</span></div>
+            <div class="dash-stat registrations"><span class="dash-stat__num" id="pre-event-scans" data-testid="pre-event-scans">—</span><span class="dash-stat__label">Poster scans</span></div>
+            <div class="dash-stat appearances"><span class="dash-stat__num" id="pre-event-posters" data-testid="pre-event-posters">—</span><span class="dash-stat__label">Posters out</span></div>
+            <div class="dash-stat checkins"><span class="dash-stat__num" id="pre-event-places" data-testid="pre-event-places">—</span><span class="dash-stat__label">Places</span></div>
+          </div>
+          <div class="pre-spark" id="pre-event-spark" data-testid="pre-event-spark"></div>
+          <!-- Reach: link taps per code, then scans per venue area and community place. -->
+          <section id="pre-event-reach" data-testid="pre-event-reach" aria-labelledby="pre-event-reach-title" hidden>
+            <h4 class="pd-card-title" id="pre-event-reach-title">Taps and scans, by place</h4>
+            <p class="tl-detail" data-testid="pre-event-reach-taps"></p>
+            <p class="tl-detail" data-testid="pre-event-reach-venue"></p>
+            <p class="tl-detail" data-testid="pre-event-reach-community"></p>
+          </section>
+        </div>
+      </div>
+      <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
+        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
+        <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
+        <label class="events-filter-mine"><input type="checkbox" id="events-sort-upcoming" data-testid="events-sort-upcoming" /> Soonest first</label>
+      </div>
+      <div id="events" data-testid="events-container">
+        <div class="skeleton-table" data-testid="skeleton-events">
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+        </div>
+      </div>
+      </section>
+
       <!-- Create Event Card -->
       <div class="create-card" data-testid="create-event-card">
         <h2>Create Event</h2>
+        <!-- Returning with events (owner 2026-10-10): Your events comes first and
+             this form folds into one button, so a host back to finish a draft
+             or edit an event is not scrolled past a new-event form. A first
+             visit with no events keeps it open. See the script after this card. -->
+        <p class="muted-sm" data-testid="create-event-collapsed-note" hidden>
+          To edit an event, pick it above.
+        </p>
+        <button
+          type="button"
+          class="add-spon-btn"
+          id="create-event-toggle"
+          data-testid="create-event-toggle"
+          aria-expanded="true"
+          aria-controls="create-event-form"
+          hidden
+        >
+          + Start a new event
+        </button>
         <form
           id="create-event-form"
           data-testid="create-event-form"
@@ -4514,6 +4769,44 @@
           </div>
         </form>
       </div>
+      <script>
+        // Folds the Create Event form into its button once the event list shows
+        // this host already has events (or a saved selection says they are
+        // coming back to one). Decided once per page, so it never closes a form
+        // the host has opened.
+        (function () {
+          var form = document.getElementById('create-event-form');
+          var btn = document.getElementById('create-event-toggle');
+          var note = document.querySelector('[data-testid="create-event-collapsed-note"]');
+          if (!form || !btn) return;
+          var decided = false;
+          function setOpen(open) {
+            form.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.textContent = open ? 'Hide the new-event form' : '+ Start a new event';
+            if (note) note.hidden = open;
+          }
+          btn.addEventListener('click', function () {
+            var open = form.hidden;
+            setOpen(open);
+            if (open) {
+              var title = document.getElementById('create-title');
+              if (title) title.focus();
+            }
+          });
+          window.oseCreateCard = {
+            returning: function () {
+              if (decided) return;
+              decided = true;
+              btn.hidden = false;
+              setOpen(false);
+            },
+          };
+          try {
+            if (sessionStorage.getItem('ose_selected_event_id')) window.oseCreateCard.returning();
+          } catch (e) {}
+        })();
+      </script>
 
       <!-- ── Build sequence (OSE-1238) ──────────────────────────────────────
            Create the event, then the things that hang off it, in the order a
@@ -4527,23 +4820,701 @@
            with the dashboard / portfolio / All Events blocks in between. They
            are inside <main> now: the sequence reads top to bottom, and the
            wizard-isolation rule no longer needs a second selector for content
-           that escaped the landmark. -->
-    <!-- Sponsors — step 2, optional. (SPON-6) -->
-    <div class="card sponsors-card" id="sponsors-card" data-testid="sponsors-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">Sponsors</h2>
-        <button
-          class="add-spon-btn"
-          id="add-spon-toggle"
-          data-testid="add-sponsor-toggle"
-          aria-expanded="false"
-          aria-controls="spon-form-wrap"
-        >
-          + Add Sponsor
+           that escaped the landmark.
+
+           Whole-page order (owner, 2026-10-10): intro, totals, Your events,
+           Create Event (one button once the host has events), then the
+           selected event's cards as Dashboard, Links, Reg & Forms, Sponsors
+           (folded to one line until opened), Posters with Poster art, TV.
+           This replaces the build sequence above for the page order. The jump bar and the intro follow the
+           same order; tests/admin-card-order.spec.ts fails if any drifts. -->
+
+      <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
+           details. Hidden until an event is selected (ose:event-selected, OSE-667/673).
+           Stat values are placeholders (—); EventDashboard.init(data) is the seam
+           that wires real Scans / Sponsors / Registrations / Check-ins
+           (OSE-896). No fabricated metrics. -->
+      <section
+        id="dashboard-card"
+        class="card dashboard-card"
+        data-testid="admin-dashboard-card"
+        aria-label="Event dashboard for the selected event"
+        hidden
+      >
+        <div class="mcard-head">
+          <h2 class="mcard-title dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
+        </div>
+
+        <div class="mcard-body">
+        <div class="dashboard-stats" role="group" aria-label="Event statistics">
+          <div class="dash-stat scans" data-testid="admin-stat-scans">
+            <span class="dash-stat__num" data-testid="admin-stat-scans-num">—</span>
+            <span class="dash-stat__label">Scans</span>
+          </div>
+          <div class="dash-stat appearances" data-testid="admin-stat-appearances">
+            <span class="dash-stat__num" data-testid="admin-stat-appearances-num">—</span>
+            <span class="dash-stat__label">Sponsors</span>
+          </div>
+          <div class="dash-stat registrations" data-testid="admin-stat-registrations">
+            <span class="dash-stat__num" data-testid="admin-stat-registrations-num">—</span>
+            <span class="dash-stat__label">Registrations</span>
+          </div>
+          <div class="dash-stat checkins" data-testid="admin-stat-checkins">
+            <span class="dash-stat__num" data-testid="admin-stat-checkins-num">—</span>
+            <span class="dash-stat__label">Check-ins</span>
+          </div>
+        </div>
+
+        <h3 class="dash-lifecycle-title">Event Lifecycle</h3>
+
+        <div class="dash-phase" data-testid="admin-phase-pre" data-phase="pre-event">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Pre-Event</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-pre-badge">Preparation</span>
+          </div>
+          <p class="dash-phase__desc">Advertise with sponsors, print posters, set up displays, drive registration.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Pre-event progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-pre-fill"></div>
+          </div>
+        </div>
+
+        <div class="dash-phase" data-testid="admin-phase-day" data-phase="event-day">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Event Day</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-day-badge">Live now</span>
+          </div>
+          <p class="dash-phase__desc">Displays at the entrance, check-in at the door, sponsor rotation on screens.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Event day progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-day-fill"></div>
+          </div>
+        </div>
+
+        <div class="dash-phase" data-testid="admin-phase-post" data-phase="post-event">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Post-Event</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-post-badge">Analytics</span>
+          </div>
+          <p class="dash-phase__desc">Surveys, email sign-ups, and the SharedReport for the corridor.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Post-event progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-post-fill"></div>
+          </div>
+        </div>
+        </div>
+      </section>
+      <script>
+        // OSE-886: Event Dashboard controller. Reveals the card on event selection
+        // and derives the lifecycle phase honestly from the event date. Stat tiles
+        // stay "—" until EventDashboard.init(data) is wired to D1/forms counts.
+        (function () {
+          'use strict';
+          // OSE-1360: the lifecycle reads the same {status, phase} as the badge
+          // and checklist (window.oseEventView over the list row). The old
+          // date-only guess ignored status and was never even handed a date.
+          var PHASE_CARD = { pre_event: 'pre-event', event: 'event-day', post_event: 'post-event' };
+          function phaseFor(id) {
+            var e = window._oseList && window._oseList.byId[String(id)];
+            return e && window.oseEventView ? PHASE_CARD[window.oseEventView(e).phase] : 'pre-event';
+          }
+          function setProgress(testid, pct) {
+            var fill = document.querySelector('[data-testid="' + testid + '"]');
+            if (!fill) return;
+            fill.style.width = pct + '%';
+            var bar = fill.closest('.dash-progress');
+            if (bar) bar.setAttribute('aria-valuenow', String(pct));
+          }
+          // Render one stat value. Accepts a plain number (exact counts: scans,
+          // sponsors) OR the uniform floored shape { count, suppressed, floor }
+          // from the stats endpoint (registrations, check-ins). A suppressed
+          // value renders "<N" so the K-anon floor is communicated — never a raw
+          // sub-floor count. null/undefined → keep the "—" placeholder.
+          function formatStat(v) {
+            if (v == null) return null;
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'object') {
+              if (v.suppressed) return '<' + (v.floor || 5);
+              if (v.count != null) return String(v.count);
+            }
+            return null;
+          }
+          var Dashboard = {
+            render: function (detail) {
+              detail = detail || {};
+              var card = document.getElementById('dashboard-card');
+              if (!card) return;
+              var phase = phaseFor(detail.id);
+              [
+                ['pre', 'pre-event'],
+                ['day', 'event-day'],
+                ['post', 'post-event'],
+              ].forEach(function (pair) {
+                var badge = document.querySelector(
+                  '[data-testid="admin-phase-' + pair[0] + '-badge"]'
+                );
+                if (badge) badge.setAttribute('data-active', String(pair[1] === phase));
+              });
+              setProgress('admin-phase-pre-fill', phase === 'pre-event' ? 50 : 100);
+              setProgress(
+                'admin-phase-day-fill',
+                phase === 'event-day' ? 50 : phase === 'post-event' ? 100 : 0
+              );
+              setProgress('admin-phase-post-fill', phase === 'post-event' ? 50 : 0);
+              card.hidden = false;
+            },
+            // Functionality seam (OSE-886 follow-up): feed real aggregate counts as
+            // { scans, appearances, registrations, checkins }. Anything omitted
+            // keeps its "—" placeholder — never invents a value.
+            init: function (data) {
+              data = data || {};
+              var map = {
+                'admin-stat-scans-num': data.scans,
+                'admin-stat-appearances-num': data.appearances,
+                'admin-stat-registrations-num': data.registrations,
+                'admin-stat-checkins-num': data.checkins,
+              };
+              Object.keys(map).forEach(function (id) {
+                var el = document.querySelector('[data-testid="' + id + '"]');
+                if (!el) return;
+                var text = formatStat(map[id]);
+                if (text != null) el.textContent = text; // omitted → keep "—"
+              });
+            },
+          };
+          window.EventDashboard = Dashboard;
+
+          // OSE-896: fetch real aggregate counts for the selected event and feed
+          // them into Dashboard.init(). Same-origin admin fetch (auth rides the
+          // CF Access session, as the rest of admin.html does). Loading → "…";
+          // any error/unauth → restore "—" (never invent a number).
+          var STAT_NUM_IDS = [
+            'admin-stat-scans-num',
+            'admin-stat-appearances-num',
+            'admin-stat-registrations-num',
+            'admin-stat-checkins-num',
+          ];
+          function setStatNums(text) {
+            STAT_NUM_IDS.forEach(function (id) {
+              var el = document.querySelector('[data-testid="' + id + '"]');
+              if (el) el.textContent = text;
+            });
+          }
+          function fetchStats(eventId) {
+            if (!eventId) return;
+            setStatNums('…');
+            fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/stats')
+              .then(function (r) {
+                return r.ok ? r.json() : null;
+              })
+              .then(function (data) {
+                if (data && data.ok && data.stats) {
+                  Dashboard.init(data.stats);
+                } else {
+                  setStatNums('—');
+                }
+              })
+              .catch(function () {
+                setStatNums('—');
+              });
+          }
+          window.addEventListener('ose:event-selected', function (ev) {
+            var detail = ev.detail || {};
+            Dashboard.render(detail);
+            fetchStats(detail.id);
+          });
+        })();
+      </script>
+
+    <!-- Surface links — step 5, the payoff: every page this event now has. -->
+    <!-- Selecting an event row upgrades these cards to that event's scoped
+         surface (data-surface drives window.scopeSurfaceCards). Unscoped they
+         open the event-agnostic shell, so the cards are always functional. -->
+    <p class="create-msg" data-testid="surface-cards-not-live" role="status" hidden>This event is not live yet, so its links show guests a "not open" page. Open shows your preview for now. The links you copy start working when you publish.</p>
+    <div class="surface-cards" id="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
+      <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
+        <h3>Poster Page</h3>
+        <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
+        <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
+          Copy URL
         </button>
       </div>
+      <div class="card surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
+        <h3>TV Display</h3>
+        <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
+        <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
+          Copy URL
+        </button>
+      </div>
+      <div class="card surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
+        <h3>Public Page</h3>
+        <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
+        <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
+          Copy URL
+        </button>
+      </div>
+      <div class="card surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
+        <h3>Shared Report</h3>
+        <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
+        <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
+          Copy URL
+        </button>
+      </div>
+    </div>
 
+    <!-- Copy URL helper + event-scoped surface deep-links -->
+    <script>
+      // INVARIANT #1 guard: the ONLY dynamic segment in a scoped surface URL is
+      // the opaque, server-validated event id (^[A-Za-z0-9_-]{1,128}$). No
+      // anonymous_id, cookie, or PII is ever read when building these paths.
+      function scopedSurfaceUrl(surface, eventId) {
+        if (!eventId) return null;
+        const id = encodeURIComponent(eventId);
+        switch (surface) {
+          case 'poster':
+            return '/events/' + id + '/poster';
+          case 'display':
+            return '/events/' + id + '/tv';
+          case 'public':
+            return '/events/' + id; // existing public-event route
+          case 'report':
+            return '/sharedReport?event=' + id; // aggregate proof surface only
+          default:
+            return null;
+        }
+      }
+      // A draft or ready event's public pages answer the same 404 as a missing
+      // one, to everybody (pages.ts, EVENT_NOT_OPEN_COPY). So until it is live,
+      // the organizer's Open goes to the admin preview of the same page, and a
+      // note says why. Copy keeps the real links: they work once it is live.
+      // Read from the list row at call time; changeEventStatus calls this again.
+      const PREVIEW = { public: ['/preview', 'Preview Page'], poster: ['/poster-preview', 'Preview Poster'] };
+      window.refreshSurfaceLinks = function (eventId) {
+        const e = window._oseList && window._oseList.byId[String(eventId)];
+        const st = e && e.status;
+        const notLive = st === 'draft' || st === 'ready';
+        document.querySelectorAll('.surface-card[data-event-id]').forEach(function (card) {
+          if (card.getAttribute('data-event-id') !== String(eventId)) return;
+          const pv = PREVIEW[card.dataset.surface];
+          const a = card.querySelector('a');
+          if (!pv || !a) return;
+          if (!a.dataset.openLabel) a.dataset.openLabel = a.textContent.trim();
+          a.setAttribute('href', notLive ? '/api/v2/admin/events/' + encodeURIComponent(eventId) + pv[0] : scopedSurfaceUrl(card.dataset.surface, eventId));
+          a.textContent = notLive ? pv[1] : a.dataset.openLabel;
+        });
+        const note = document.querySelector('[data-testid="surface-cards-not-live"]');
+        if (note) note.hidden = !notLive;
+      };
+      // Upgrade all four surface cards to the selected event's scoped surface.
+      window.scopeSurfaceCards = function (eventId, eventName) {
+        document.querySelectorAll('.surface-card').forEach(function (card) {
+          const url = scopedSurfaceUrl(card.dataset.surface, eventId);
+          if (!url) return;
+          const a = card.querySelector('a');
+          const copyBtn = card.querySelector('.copy-btn');
+          const hint = card.querySelector('.qr-hint');
+          if (a) a.setAttribute('href', url);
+          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
+          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
+          card.setAttribute('data-scoped', '1');
+          card.setAttribute('data-event-id', eventId);
+        });
+        const wrap = document.querySelector('.surface-cards');
+        if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
+        window.refreshSurfaceLinks(eventId);
+        // OSE-1684: Copy hands out the event's short links (each open of a
+        // shared one counts as a share; the TV's is typed, not counted). The
+        // Open links keep the plain addresses, so the organizer looking at
+        // their own page is never counted as a share.
+        const SHORT = { public: 'share', poster: 'poster', display: 'tv' };
+        fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/short-links', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+          if (!d || !d.ok || !d.links) return;
+          document.querySelectorAll('.surface-card[data-event-id]').forEach(function (card) {
+            if (card.getAttribute('data-event-id') !== eventId) return;
+            const path = d.links[SHORT[card.dataset.surface]];
+            const copyBtn = card.querySelector('.copy-btn');
+            if (copyBtn && typeof path === 'string') copyBtn.dataset.copyPath = path;
+          });
+        }).catch(function () { /* Copy keeps the plain address */ });
+      };
+
+      // On window so the delegated dispatcher (OSE-1239) can resolve it; the
+      // four Copy URL buttons now carry data-action="copy-url" instead of an
+      // inline onclick the CSP refused.
+      window.copyUrl = function copyUrl(path, btn) {
+        // A scoped card stashes its event-scoped path in data-copy-path.
+        if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
+        const url = location.origin + path;
+        navigator.clipboard.writeText(url)
+          .then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+              btn.classList.remove('copied');
+            }, 2000);
+          })
+          .catch(() => {
+            btn.textContent = 'Failed';
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+            }, 2000);
+          });
+      };
+    </script>
+
+    <!-- Registration & Forms — step 3 of the build sequence.
+           The "(Card 2)" in the old heading contradicted both this position and
+           tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
+           and Forms 3. Two numbering schemes disagreeing is worse than none, so
+           the numbers are gone and the order carries the meaning (OSE-1238). -->
+    <div class="card forms-card" id="report-card" data-testid="forms-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">Reg &amp; Forms</h2>
+      </div>
       <div class="mcard-body">
+        <div id="forms-panel" data-testid="forms-panel">
+          <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Forms card — load counts and generate QR links for selected event
+      window.loadForms = async function(eventId, eventName, legalPhase) {
+        // Update phase badge to reflect selected event's regulatory clearance tier
+        const pb = document.getElementById('phaseBadge');
+        if (pb) {
+          const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+          // OSE-R-005: friendly label visible; raw phase number stays in a
+          // tooltip + data attribute for admins who actually need it.
+          pb.textContent = window.friendlyPhase(p);
+          pb.title = 'Internal phase ' + p;
+          pb.setAttribute('data-phase', String(p));
+          pb.className = 'phase-badge phase-' + p;
+          pb.dataset.testid = 'phase-badge';
+        }
+        const panel = document.getElementById('forms-panel');
+        panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+        try {
+        // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
+        const types = [
+          { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
+          { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
+          { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
+          { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
+        ];
+
+        // OSE-675: resolve flags + all four counts in ONE Promise.all so the
+        // card hydrates in a single round-trip generation instead of serial
+        // flag-then-counts.
+        // OSE-665 (2026-08-08): "0-5 consistency so everyone sees the same
+        // information". The server floors the aggregate count with the SAME K
+        // the SharedReport surface uses, so a sub-5 cohort is represented
+        // identically everywhere and no surface side-channels the exact number.
+        // Three states, all decided server-side: an exact count (>=5), a
+        // suppressed band (<5), or a failed fetch (retry — never a masked 0).
+        const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
+        const [eventFlagsRes, ...counts] = await Promise.all([
+          fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null),
+          ...adminPaths.map(p =>
+            fetch('/api/v2/admin/events/' + eventId + '/forms/' + p)
+              .then(r => r.json())
+              .then(d => {
+                if (!d || !d.ok) return 'error';
+                if (d.suppressed) return 'suppressed';
+                return (typeof d.count === 'number') ? d.count : 'error';
+              })
+              .catch(() => 'error')
+          ),
+        ]);
+        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
+        // Retry re-runs the whole load for the currently-selected event.
+        window._lastFormsArgs = [eventId, eventName, legalPhase];
+        window.reloadForms = function () {
+          if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
+        };
+        // OSE-1361: one row per form + ONE upsell line for the section, built
+        // by the pure oseFormsSection (defined after loadForms). Plan lock =
+        // the plan-level flag (window._resolvedFlags); an organizer turning a
+        // form off for this event is "off", not "locked".
+        const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+        const section = oseFormsSection({
+          types: types, counts: counts, eventFlags: flags, planFlags: window._resolvedFlags || {},
+          eventPhase: eventPhase, eventId: eventId, eventName: eventName,
+          tierLabel: window.friendlyTier, phaseLabel: window.friendlyPhase,
+        });
+        const formRowsHtml = section.rowsHtml;
+
+        window._mintEventId = eventId;
+
+        panel.innerHTML =
+          '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' + section.upsellHtml +
+          '<div class="registrant-contacts" data-testid="registrant-contacts">' +
+            '<button type="button" class="btn btn-secondary" data-action="copy-registrant-emails" data-event-id="' + esc(eventId) + '" data-testid="copy-registrant-emails">Copy registrants\u2019 emails</button>' +
+            '<p class="sub-line" role="status" aria-live="polite" data-testid="registrant-contacts-msg"></p>' +
+          '</div>' +
+          '<div class="report-links-section" data-testid="report-links-section">' +
+            '<h3>Shared Report Links</h3>' +
+            '<p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
+            '<div class="mint-form-grid" data-testid="mint-form-grid">' +
+              '<div class="mint-field">' +
+                '<label for="mint-role">Role</label>' +
+                '<select id="mint-role" data-testid="mint-role" data-change="mint-role">' +
+                  '<option value="bar_owner">Bar Owner</option>' +
+                  '<option value="sponsor">Sponsor</option>' +
+                  '<option value="admin">Admin</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-depth-row" style="display:none">' +
+                '<label for="mint-depth">Depth</label>' +
+                '<select id="mint-depth" data-testid="mint-depth">' +
+                  '<option value="mid" selected>Mid — campaign results and map</option>' +
+                  '<option value="local">Local — proof of presence</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-sponsor-id-row" style="display:none">' +
+                '<label for="mint-sponsor-id">Sponsor ID</label>' +
+                '<input type="text" id="mint-sponsor-id" data-testid="mint-sponsor-id" placeholder="sp_…" style="width:100%;box-sizing:border-box" />' +
+              '</div>' +
+              '<div class="mint-field">' +
+                '<label for="mint-ttl">Expires in</label>' +
+                '<select id="mint-ttl" data-testid="mint-ttl">' +
+                  '<option value="7">7 days</option>' +
+                  '<option value="30">30 days</option>' +
+                  '<option value="90">90 days</option>' +
+                '</select>' +
+              '</div>' +
+            '</div>' +
+            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
+            '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
+          '</div>';
+        } catch (err) {
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
+        }
+      };
+
+      // @ose-forms-section:begin
+      // OSE-1361: each form exactly once (name, one-line purpose, count, toggle
+      // carrying its own lock state) and ONE upsell line for the whole section
+      // in organizer language (plan names via tierLabel, never tier codes).
+      // Pure: admin-forms-single-row.spec.ts extracts and runs it.
+      //
+      // esc is this script's one escaper, for text and for attribute values
+      // alike (it escapes & < > " '). It is declared at the script's top level,
+      // not inside oseFormsSection, because mintReportLink below draws with it
+      // too. Inside either function, the other one throws "esc is not defined"
+      // the moment it draws: that is what Generate Link did. Kept inside the
+      // section markers so the extracted block still carries it.
+      // Gates: admin-mint-report-link.spec.ts, template-script-names.spec.ts.
+      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+      function oseFormsSection(o) {
+        var renderCount = function (c) {
+          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
+            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
+            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
+          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
+            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
+          // Counts come from the stats response: a finite number only, and
+          // escaped anyway so no response value reaches innerHTML raw (CodeQL
+          // js/xss-more-sources traced counts → rowsHtml → panel.innerHTML).
+          return typeof c === 'number' && isFinite(c) ? esc(String(Math.trunc(c))) : '—';
+        };
+        var planNeeds = {}, phaseNeeds = {};
+        var rowsHtml = o.types.map(function (t, i) {
+          var tierEnabled = o.eventFlags[t.flagKey] !== false;
+          var phaseEnabled = o.eventPhase >= (t.upgradePhase || 1);
+          var enabled = tierEnabled && phaseEnabled;
+          var planLocked = o.planFlags[t.flagKey] === false;
+          var locked = planLocked || !phaseEnabled;
+          var why = '';
+          if (planLocked) { why = o.tierLabel(t.upgradeTier || 'mid'); (planNeeds[why] = planNeeds[why] || []).push(t.label); }
+          else if (!phaseEnabled) { why = o.phaseLabel(t.upgradePhase || 2); (phaseNeeds[why] = phaseNeeds[why] || []).push(t.label); }
+          var aria = t.label + (planLocked ? ': locked, comes with the ' + why : !phaseEnabled ? ': available for ' + why : ' on for this event');
+          // Every value into markup goes through esc() — the href included, since
+          // encodeURIComponent leaves ' unescaped (CodeQL js/xss-more-sources).
+          var key = esc(t.key), flagKey = esc(t.flagKey);
+          var href = '/events/' + encodeURIComponent(o.eventId) + '/' + (t.key === 'email' ? 'updates' : encodeURIComponent(t.key));
+          return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + key + '" data-enabled="' + (enabled ? 'true' : 'false') + '">' +
+            '<div class="form-row-main">' +
+              '<a class="form-link" href="' + esc(href) + '" target="_blank" rel="noopener" data-testid="form-link-' + key + '">' +
+                '<div class="form-type">' + esc(t.label) + '</div>' +
+                '<div class="form-desc" data-testid="form-desc-' + key + '">' + esc(t.desc) + '</div>' +
+              '</a>' +
+            '</div>' +
+            '<div class="form-row-actions">' +
+              '<span class="form-row-count" data-testid="form-count-' + key + '">' + renderCount(o.counts[i]) + '</span>' +
+              '<label class="toggle" aria-label="' + esc(aria) + '">' +
+              '<input type="checkbox" data-testid="form-toggle-' + key + '" data-flag="' + flagKey + '" data-event="' + esc(o.eventId) + '"' +
+              (tierEnabled && !locked ? ' checked' : '') + (locked ? ' disabled' : '') + ' data-change="form-flag" />' +
+              '<span class="slider"></span>' +
+              '</label>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+        var list = function (names) { return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]; };
+        var lines = [];
+        Object.keys(planNeeds).forEach(function (plan) { lines.push(list(planNeeds[plan]) + ' come' + (planNeeds[plan].length > 1 ? '' : 's') + ' with the ' + plan + '. Upgrade to ' + plan + ' to unlock.'); });
+        Object.keys(phaseNeeds).forEach(function (ph) { lines.push(list(phaseNeeds[ph]) + (phaseNeeds[ph].length > 1 ? ' are' : ' is') + ' available for ' + ph + '.'); });
+        return {
+          rowsHtml: rowsHtml,
+          upsellHtml: lines.length ? '<p class="lock-overlay" data-testid="forms-upsell">' + esc(lines.join(' ')) + '</p>' : '',
+        };
+      }
+      // @ose-forms-section:end
+
+      // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
+      window._onMintRoleChange = function() {
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        document.getElementById('mint-depth-row').style.display = isSponsor ? '' : 'none';
+        document.getElementById('mint-sponsor-id-row').style.display = isSponsor ? '' : 'none';
+      };
+
+      // S-3.5.1 — generate a signed link token via the admin mint endpoint
+      // Owner 2026-10-11: the emails registrants chose to leave, for this event,
+      // so the organizer can write if it moves or is cancelled. The read is
+      // audited server-side; the list is copied, never kept on the page.
+      window.copyRegistrantEmails = async function(eventId, btn) {
+        var msg = document.querySelector('[data-testid="registrant-contacts-msg"]');
+        var say = function (t) { if (msg) msg.textContent = t; };
+        if (!eventId) return;
+        btn.disabled = true;
+        say('');
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/forms/contacts');
+          var data = await res.json();
+          if (!res.ok || !data || !data.ok) throw new Error('read');
+          var emails = (data.items || []).map(function (i) { return i.email; }).filter(Boolean);
+          if (!emails.length) { say('No one has left an email.'); return; }
+          if (!navigator.clipboard) throw new Error('clipboard');
+          await navigator.clipboard.writeText(emails.join(', '));
+          say('Copied ' + emails.length + (emails.length === 1 ? ' email.' : ' emails.'));
+        } catch (e) {
+          say('Could not load the emails. Try again.');
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      window.mintReportLink = async function(eventId, btn) {
+        if (!eventId) { window._adminAnnounce('Select an event first.', 'info'); return; }
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        const depthEl = document.getElementById('mint-depth');
+        const depth = isSponsor && depthEl ? depthEl.value : undefined;
+        const sponsorIdEl = document.getElementById('mint-sponsor-id');
+        const sponsorId = isSponsor && sponsorIdEl ? sponsorIdEl.value.trim() : undefined;
+        const ttlDays = parseInt(document.getElementById('mint-ttl').value, 10);
+        const result = document.getElementById('mint-result');
+
+        btn.disabled = true;
+        btn.textContent = 'Generating…';
+        result.textContent = '';
+        result.removeAttribute('class');
+
+        try {
+          const reqBody = { role, ttl_days: ttlDays };
+          if (depth !== undefined) reqBody.depth = depth;
+          if (sponsorId) reqBody.sponsor_id = sponsorId;
+
+          const res = await fetch('/api/v2/admin/events/' + eventId + '/shared-report/mint-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Mint failed');
+
+          const expires = new Date(data.expires_at).toLocaleDateString();
+          const reportUrl = location.origin + '/sharedReport?eventId=' +
+            encodeURIComponent(eventId) + '&token=' + encodeURIComponent(data.token);
+          result.innerHTML =
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
+            '</div>' +
+            '<a data-testid="mint-report-url" href="' + esc(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
+            '<div class="sub-line">Copy this now; it isn&#39;t stored and can&#39;t be shown again.</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--success);border-radius:6px';
+        } catch (err) {
+          result.textContent = err.message || 'Failed to generate link.';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--error);border-radius:6px;color:var(--error)';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Generate Link';
+        }
+      };
+
+      // Toggle a form flag for the selected event
+      window.toggleFormFlag = async function(el) {
+        const flagKey = el.dataset.flag;
+        const eventId = el.dataset.event;
+        // OSE-675: the checkbox flips instantly (native) — this is a UI INTENT
+        // on a boolean flag, display-only, NOT a count. The adjacent count span
+        // is never recomputed here (#7 — optimism must never reach an aggregate).
+        // Disable during the audited PUT, announce the outcome, revert on error.
+        const enabled = el.checked;
+        el.disabled = true;
+        let res = null;
+        let data = null;
+        try {
+          res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+          });
+          data = await res.json();
+          if (!data.ok) throw new Error('refused');
+          if (typeof window._adminAnnounce === 'function')
+            window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
+        } catch {
+          el.checked = !enabled; // revert on failure
+          if (typeof window._adminRequestFailed === 'function')
+            window._adminRequestFailed('Could not update ' + flagKey + '. It is back as it was.', res, data, 'Turning a form on or off');
+          // The error can carry server-supplied text, so it is not logged; the
+          // toast above already tells the organizer which flag failed.
+          console.error('Flag toggle failed.');
+        } finally {
+          el.disabled = false;
+        }
+      };
+    </script>
+
+    <!-- Sponsors — step 2, optional. (SPON-6) -->
+    <div class="card sponsors-card" id="sponsors-card" data-testid="sponsors-card">
+      <!-- Folded to one line until opened (owner 2026-10-10): the summary says
+           whether there are sponsors; Show opens the list, and + Add Sponsor,
+           the jump bar and the sponsor door open it too. -->
+      <div class="mcard-head">
+        <div>
+          <h2 class="mcard-title">Sponsors</h2>
+          <p class="sub-line" id="spon-summary" data-testid="sponsors-summary" aria-live="polite">Select an event to see its sponsors.</p>
+        </div>
+        <div class="flex-row">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            id="spon-card-toggle"
+            data-testid="sponsors-card-toggle"
+            aria-expanded="false"
+            aria-controls="spon-card-body"
+          >
+            Show
+          </button>
+          <button
+            class="add-spon-btn"
+            id="add-spon-toggle"
+            data-testid="add-sponsor-toggle"
+            aria-expanded="false"
+            aria-controls="spon-form-wrap"
+          >
+            + Add Sponsor
+          </button>
+        </div>
+      </div>
+
+      <div class="mcard-body" id="spon-card-body" data-testid="sponsors-card-body" hidden>
       <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
           <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
@@ -4761,9 +5732,8 @@
                 data-testid="spon-covenant-note"
                 aria-labelledby="spon-placement-label"
               >
-                Uniform placement — same size &amp; slot on every surface. Tier sets a
-                <strong>capped, locally-floored share of rotation frequency</strong>
-                (never a bigger logo, better slot, or fixed position).
+                Same size and slot for every sponsor. Tier sets only a
+                <strong>capped, locally-floored share of rotation</strong>.
               </p>
               <span
                 class="is-local-pill"
@@ -4876,6 +5846,34 @@
             });
           } catch (e) { /* fall back to raw id below */ }
         }
+        // The fold: one line (title + summary) until opened.
+        window.oseSponsorsCard = (function () {
+          var body = document.getElementById('spon-card-body');
+          var btn = document.getElementById('spon-card-toggle');
+          var sum = document.getElementById('spon-summary');
+          function set(open) {
+            body.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.textContent = open ? 'Hide' : 'Show';
+          }
+          btn.addEventListener('click', function () { set(body.hidden); });
+          return {
+            open: function () { set(true); },
+            summary: function (text) { if (sum) sum.textContent = text; },
+          };
+        })();
+        function sponsorSummary(items) {
+          if (!items.length) return 'None yet.';
+          var asked = items.filter(function (s) {
+            return s.placement_source === 'sponsor_request' && Number(s.placement_active) === 0 &&
+              (s.organizer_accepted === null || s.organizer_accepted === undefined) && s.is_active;
+          }).length;
+          var on = items.length - asked;
+          var parts = [];
+          if (on) parts.push(on + (on === 1 ? ' sponsor' : ' sponsors'));
+          if (asked) parts.push(asked + ' asked to join');
+          return parts.join(' · ') + '.';
+        }
         async function loadSponsors(eventId) {
           const wrap = document.getElementById('sponsors-list');
           if (eventId !== undefined && eventId !== null && eventId !== '') {
@@ -4884,6 +5882,7 @@
           const scopeId = _sponsorsEventId;
           if (!scopeId) {
             wrap.innerHTML = '<p class="loading" data-testid="sponsors-loading-initial">Select an event to manage its sponsors.</p>';
+            window.oseSponsorsCard.summary('Select an event to see its sponsors.');
             return;
           }
           wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
@@ -4892,6 +5891,9 @@
             const data = await fetch('/api/v2/admin/sponsors?eventId=' + encodeURIComponent(scopeId)).then(function(r) { return r.json(); });
             if (!data.ok) throw new Error(data.error || 'Load failed');
             const items = data.items || [];
+            window.oseSponsorsCard.summary(sponsorSummary(items));
+            // A sponsor waiting for an answer opens the card, so Approve is in view.
+            if (/asked to join/.test(sponsorSummary(items))) window.oseSponsorsCard.open();
             if (!items.length) {
               wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors for this event yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
               return;
@@ -4950,6 +5952,7 @@
               '<thead><tr><th scope="col" data-testid="sponsors-col-name">Name</th><th scope="col" data-testid="sponsors-col-tier">Tier</th><th scope="col" data-testid="sponsors-col-event">Event</th><th scope="col" data-testid="sponsors-col-placements">Placements</th><th scope="col" data-testid="sponsors-col-status">Status</th><th scope="col" data-testid="sponsors-col-actions">Actions</th></tr></thead>' +
               '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
           } catch (err) {
+            window.oseSponsorsCard.summary('Could not load sponsors.');
             wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" data-action="sponsors-reload">Retry</button></div>';
           }
         }
@@ -4990,6 +5993,7 @@
         }
 
         function openForm() {
+          if (window.oseSponsorsCard) window.oseSponsorsCard.open();
           const wrap = document.getElementById('spon-form-wrap');
           const btn = document.getElementById('add-spon-toggle');
           wrap.removeAttribute('hidden');
@@ -5102,10 +6106,12 @@
           const row = document.querySelector('[data-testid="sponsor-row-' + id + '"]');
           if (!row) return;
           if (btn) { btn.disabled = true; btn.textContent = 'Minting…'; }
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsors/' + encodeURIComponent(id) + '/home-link', { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || data.code || 'Could not create link (server said ' + res.status + ')');
+            res = await fetch('/api/v2/admin/sponsors/' + encodeURIComponent(id) + '/home-link', { method: 'POST' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             const cell = row.querySelector('td[data-label="Actions"]');
             let box = row.querySelector('[data-testid="sponsor-home-link-box"]');
             if (!box) {
@@ -5121,7 +6127,7 @@
               '<button type="button" class="copy-btn" data-action="mint-copy" data-token="' + esc(data.url) + '" data-testid="sponsor-home-link-copy" aria-label="Copy sponsor page link">Copy</button>';
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce('Sponsor page link ready. Send it to ' + (row.querySelector('[data-testid="spon-name-' + id + '"]') || {}).textContent + '.', 'ok');
           } catch (err) {
-            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not create sponsor link.', 'error');
+            if (typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not create the sponsor link.', res, data, 'Creating a sponsor page link');
           } finally {
             if (btn) { btn.disabled = false; btn.textContent = 'Sponsor link'; }
           }
@@ -5143,13 +6149,14 @@
             const target = next || table;
             if (target) { if (!next) target.setAttribute('tabindex', '-1'); target.focus(); }
           };
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
+            res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ approve: approve }),
             });
-            let data = null;
             try { data = await res.json(); } catch (e) { data = null; }
             if (res.status === 409) {
               // Already answered (another tab or organizer): show the real state.
@@ -5158,7 +6165,7 @@
               focusAfter();
               return;
             }
-            if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ')');
+            if (!res.ok || !data || !data.ok) throw new Error('refused');
             // OSE-1560: approving can turn the event's default map on; the note says so.
             const flipped = data.map && data.map.changed;
             if (flipped && window.oseMapFlipped && window.OSE_selection && window.OSE_selection.id) window.oseMapFlipped(window.OSE_selection.id);
@@ -5168,7 +6175,7 @@
             focusAfter();
           } catch (err) {
             rowButtons.forEach(function (b) { b.disabled = false; });
-            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not answer the request.', 'error');
+            if (typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not answer the request.', res, data, 'Answering a sponsor request');
           }
         };
 
@@ -5185,13 +6192,15 @@
         };
 
         window._confirmDeactivate = async function(id) {
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+            res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             loadSponsors();
           } catch (err) {
-            window._adminAnnounce('Could not deactivate: ' + (err.message || 'Unknown error'), 'error');
+            window._adminRequestFailed('Could not deactivate the sponsor.', res, data, 'Deactivating a sponsor');
             loadSponsors();
           }
         };
@@ -5289,293 +6298,7 @@
         loadSponsors();
       })();
     </script>
-    <!-- Registration & Forms — step 3 of the build sequence.
-           The "(Card 2)" in the old heading contradicted both this position and
-           tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
-           and Forms 3. Two numbering schemes disagreeing is worse than none, so
-           the numbers are gone and the order carries the meaning (OSE-1238). -->
-    <div class="card forms-card" id="report-card" data-testid="forms-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">Registration &amp; Forms</h2>
-      </div>
-      <div class="mcard-body">
-        <div id="forms-panel" data-testid="forms-panel">
-          <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
-        </div>
-      </div>
-    </div>
-    <script>
-      // Forms card — load counts and generate QR links for selected event
-      window.loadForms = async function(eventId, eventName, legalPhase) {
-        // Update phase badge to reflect selected event's regulatory clearance tier
-        const pb = document.getElementById('phaseBadge');
-        if (pb) {
-          const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-          // OSE-R-005: friendly label visible; raw phase number stays in a
-          // tooltip + data attribute for admins who actually need it.
-          pb.textContent = window.friendlyPhase(p);
-          pb.title = 'Internal phase ' + p;
-          pb.setAttribute('data-phase', String(p));
-          pb.className = 'phase-badge phase-' + p;
-          pb.dataset.testid = 'phase-badge';
-        }
-        const panel = document.getElementById('forms-panel');
-        panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
-        try {
-        // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
-        const types = [
-          { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
-          { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
-          { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
-          { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
-        ];
 
-        // OSE-675: resolve flags + all four counts in ONE Promise.all so the
-        // card hydrates in a single round-trip generation instead of serial
-        // flag-then-counts.
-        // OSE-665 (2026-08-08): "0-5 consistency so everyone sees the same
-        // information". The server floors the aggregate count with the SAME K
-        // the SharedReport surface uses, so a sub-5 cohort is represented
-        // identically everywhere and no surface side-channels the exact number.
-        // Three states, all decided server-side: an exact count (>=5), a
-        // suppressed band (<5), or a failed fetch (retry — never a masked 0).
-        const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
-        const [eventFlagsRes, ...counts] = await Promise.all([
-          fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null),
-          ...adminPaths.map(p =>
-            fetch('/api/v2/admin/events/' + eventId + '/forms/' + p)
-              .then(r => r.json())
-              .then(d => {
-                if (!d || !d.ok) return 'error';
-                if (d.suppressed) return 'suppressed';
-                return (typeof d.count === 'number') ? d.count : 'error';
-              })
-              .catch(() => 'error')
-          ),
-        ]);
-        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
-        // Retry re-runs the whole load for the currently-selected event.
-        window._lastFormsArgs = [eventId, eventName, legalPhase];
-        window.reloadForms = function () {
-          if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
-        };
-        // OSE-1361: one row per form + ONE upsell line for the section, built
-        // by the pure oseFormsSection (defined after loadForms). Plan lock =
-        // the plan-level flag (window._resolvedFlags); an organizer turning a
-        // form off for this event is "off", not "locked".
-        const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-        const section = oseFormsSection({
-          types: types, counts: counts, eventFlags: flags, planFlags: window._resolvedFlags || {},
-          eventPhase: eventPhase, eventId: eventId, eventName: eventName,
-          tierLabel: window.friendlyTier, phaseLabel: window.friendlyPhase,
-        });
-        const formRowsHtml = section.rowsHtml;
-
-        window._mintEventId = eventId;
-
-        panel.innerHTML =
-          '<div class="forms-list" data-testid="forms-list">' + formRowsHtml + '</div>' + section.upsellHtml +
-          '<div class="report-links-section" data-testid="report-links-section">' +
-            '<h3>Shared Report Links</h3>' +
-            '<p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
-            '<div class="mint-form-grid" data-testid="mint-form-grid">' +
-              '<div class="mint-field">' +
-                '<label for="mint-role">Role</label>' +
-                '<select id="mint-role" data-testid="mint-role" data-change="mint-role">' +
-                  '<option value="bar_owner">Bar Owner</option>' +
-                  '<option value="sponsor">Sponsor</option>' +
-                  '<option value="admin">Admin</option>' +
-                '</select>' +
-              '</div>' +
-              '<div class="mint-field" id="mint-depth-row" style="display:none">' +
-                '<label for="mint-depth">Depth</label>' +
-                '<select id="mint-depth" data-testid="mint-depth">' +
-                  '<option value="local">Local — proof of presence</option>' +
-                  '<option value="premium">Premium — full intelligence</option>' +
-                '</select>' +
-              '</div>' +
-              '<div class="mint-field" id="mint-sponsor-id-row" style="display:none">' +
-                '<label for="mint-sponsor-id">Sponsor ID</label>' +
-                '<input type="text" id="mint-sponsor-id" data-testid="mint-sponsor-id" placeholder="sp_…" style="width:100%;box-sizing:border-box" />' +
-              '</div>' +
-              '<div class="mint-field">' +
-                '<label for="mint-ttl">Expires in</label>' +
-                '<select id="mint-ttl" data-testid="mint-ttl">' +
-                  '<option value="7">7 days</option>' +
-                  '<option value="30">30 days</option>' +
-                  '<option value="90">90 days</option>' +
-                '</select>' +
-              '</div>' +
-            '</div>' +
-            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
-            '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
-          '</div>';
-        } catch (err) {
-          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
-        }
-      };
-
-      // @ose-forms-section:begin
-      // OSE-1361: each form exactly once (name, one-line purpose, count, toggle
-      // carrying its own lock state) and ONE upsell line for the whole section
-      // in organizer language (plan names via tierLabel, never tier codes).
-      // Pure: admin-forms-single-row.spec.ts extracts and runs it.
-      //
-      // esc is this script's one escaper, for text and for attribute values
-      // alike (it escapes & < > " '). It is declared at the script's top level,
-      // not inside oseFormsSection, because mintReportLink below draws with it
-      // too. Inside either function, the other one throws "esc is not defined"
-      // the moment it draws: that is what Generate Link did. Kept inside the
-      // section markers so the extracted block still carries it.
-      // Gates: admin-mint-report-link.spec.ts, template-script-names.spec.ts.
-      var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-      function oseFormsSection(o) {
-        var renderCount = function (c) {
-          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
-            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
-            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
-          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
-            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
-          // Counts come from the stats response: a finite number only, and
-          // escaped anyway so no response value reaches innerHTML raw (CodeQL
-          // js/xss-more-sources traced counts → rowsHtml → panel.innerHTML).
-          return typeof c === 'number' && isFinite(c) ? esc(String(Math.trunc(c))) : '—';
-        };
-        var planNeeds = {}, phaseNeeds = {};
-        var rowsHtml = o.types.map(function (t, i) {
-          var tierEnabled = o.eventFlags[t.flagKey] !== false;
-          var phaseEnabled = o.eventPhase >= (t.upgradePhase || 1);
-          var enabled = tierEnabled && phaseEnabled;
-          var planLocked = o.planFlags[t.flagKey] === false;
-          var locked = planLocked || !phaseEnabled;
-          var why = '';
-          if (planLocked) { why = o.tierLabel(t.upgradeTier || 'mid'); (planNeeds[why] = planNeeds[why] || []).push(t.label); }
-          else if (!phaseEnabled) { why = o.phaseLabel(t.upgradePhase || 2); (phaseNeeds[why] = phaseNeeds[why] || []).push(t.label); }
-          var aria = t.label + (planLocked ? ': locked, comes with the ' + why : !phaseEnabled ? ': available for ' + why : ' on for this event');
-          // Every value into markup goes through esc() — the href included, since
-          // encodeURIComponent leaves ' unescaped (CodeQL js/xss-more-sources).
-          var key = esc(t.key), flagKey = esc(t.flagKey);
-          var href = '/forms/' + encodeURIComponent(o.eventId) + '?type=' + encodeURIComponent(t.key) + '&event=' + encodeURIComponent(o.eventName == null ? '' : o.eventName);
-          return '<div class="form-row' + (locked ? ' feature-locked' : '') + '" data-testid="form-row-' + key + '" data-enabled="' + (enabled ? 'true' : 'false') + '">' +
-            '<div class="form-row-main">' +
-              '<a class="form-link" href="' + esc(href) + '" target="_blank" rel="noopener" data-testid="form-link-' + key + '">' +
-                '<div class="form-type">' + esc(t.label) + '</div>' +
-                '<div class="form-desc" data-testid="form-desc-' + key + '">' + esc(t.desc) + '</div>' +
-              '</a>' +
-            '</div>' +
-            '<div class="form-row-actions">' +
-              '<span class="form-row-count" data-testid="form-count-' + key + '">' + renderCount(o.counts[i]) + '</span>' +
-              '<label class="toggle" aria-label="' + esc(aria) + '">' +
-              '<input type="checkbox" data-testid="form-toggle-' + key + '" data-flag="' + flagKey + '" data-event="' + esc(o.eventId) + '"' +
-              (tierEnabled && !locked ? ' checked' : '') + (locked ? ' disabled' : '') + ' data-change="form-flag" />' +
-              '<span class="slider"></span>' +
-              '</label>' +
-            '</div>' +
-          '</div>';
-        }).join('');
-        var list = function (names) { return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]; };
-        var lines = [];
-        Object.keys(planNeeds).forEach(function (plan) { lines.push(list(planNeeds[plan]) + ' come' + (planNeeds[plan].length > 1 ? '' : 's') + ' with the ' + plan + '. Upgrade to ' + plan + ' to unlock.'); });
-        Object.keys(phaseNeeds).forEach(function (ph) { lines.push(list(phaseNeeds[ph]) + (phaseNeeds[ph].length > 1 ? ' are' : ' is') + ' available for ' + ph + '.'); });
-        return {
-          rowsHtml: rowsHtml,
-          upsellHtml: lines.length ? '<p class="lock-overlay" data-testid="forms-upsell">' + esc(lines.join(' ')) + '</p>' : '',
-        };
-      }
-      // @ose-forms-section:end
-
-      // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
-      window._onMintRoleChange = function() {
-        const role = document.getElementById('mint-role').value;
-        const isSponsor = role === 'sponsor';
-        document.getElementById('mint-depth-row').style.display = isSponsor ? '' : 'none';
-        document.getElementById('mint-sponsor-id-row').style.display = isSponsor ? '' : 'none';
-      };
-
-      // S-3.5.1 — generate a signed link token via the admin mint endpoint
-      window.mintReportLink = async function(eventId, btn) {
-        if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
-        const role = document.getElementById('mint-role').value;
-        const isSponsor = role === 'sponsor';
-        const depthEl = document.getElementById('mint-depth');
-        const depth = isSponsor && depthEl ? depthEl.value : undefined;
-        const sponsorIdEl = document.getElementById('mint-sponsor-id');
-        const sponsorId = isSponsor && sponsorIdEl ? sponsorIdEl.value.trim() : undefined;
-        const ttlDays = parseInt(document.getElementById('mint-ttl').value, 10);
-        const result = document.getElementById('mint-result');
-
-        btn.disabled = true;
-        btn.textContent = 'Generating…';
-        result.textContent = '';
-        result.removeAttribute('class');
-
-        try {
-          const reqBody = { role, ttl_days: ttlDays };
-          if (depth !== undefined) reqBody.depth = depth;
-          if (sponsorId) reqBody.sponsor_id = sponsorId;
-
-          const res = await fetch('/api/v2/admin/events/' + eventId + '/shared-report/mint-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reqBody),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || 'Mint failed');
-
-          const expires = new Date(data.expires_at).toLocaleDateString();
-          const reportUrl = location.origin + '/sharedReport?eventId=' +
-            encodeURIComponent(eventId) + '&token=' + encodeURIComponent(data.token);
-          result.innerHTML =
-            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
-            '</div>' +
-            '<a data-testid="mint-report-url" href="' + esc(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
-            '<div class="sub-line">Copy this now; it isn&#39;t stored and can&#39;t be shown again.</div>' +
-            '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--success);border-radius:6px';
-        } catch (err) {
-          result.textContent = err.message || 'Failed to generate link.';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:var(--surface);border:1px solid var(--error);border-radius:6px;color:var(--error)';
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Generate Link';
-        }
-      };
-
-      // Toggle a form flag for the selected event
-      window.toggleFormFlag = async function(el) {
-        const flagKey = el.dataset.flag;
-        const eventId = el.dataset.event;
-        // OSE-675: the checkbox flips instantly (native) — this is a UI INTENT
-        // on a boolean flag, display-only, NOT a count. The adjacent count span
-        // is never recomputed here (#7 — optimism must never reach an aggregate).
-        // Disable during the audited PUT, announce the outcome, revert on error.
-        const enabled = el.checked;
-        el.disabled = true;
-        try {
-          const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled }),
-          });
-          const data = await res.json();
-          if (!data.ok) throw new Error(data.error || 'Failed');
-          if (typeof window._adminAnnounce === 'function')
-            window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
-        } catch {
-          el.checked = !enabled; // revert on failure
-          if (typeof window._adminAnnounce === 'function')
-            window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
-          // The error can carry server-supplied text, so it is not logged; the
-          // announcement above already tells the organizer which flag failed.
-          console.error('Flag toggle failed.');
-        } finally {
-          el.disabled = false;
-        }
-      };
-    </script>
     <!-- Posters — step 4. Each deployment is one physical placement and mints its
            own unique qr_token (migrations/0003), so "how many posters" is "how
            many deployments", and the QR is complete once a deployment exists. -->
@@ -5691,228 +6414,6 @@
       </div>
       </div>
     </div>
-
-    <!-- TV display (2026-10-01). GAS kept a per-event display order in /admin
-         (AdminDisplay.html); this is that card, back. It saves into the event's
-         settings (displayPanes / displayDwellSeconds / leagueLinks,
-         lib/event-settings.ts) through PUT /api/v2/admin/events/:id, and a TV on
-         /display?event=<id> picks a change up within a minute (it re-checks
-         GET /api/v2/events/:id/display-config with that response's ETag).
-         League links point at wherever the league already keeps them — a Google
-         Sheet, an Excel link, any https page; the TV shows each as a QR. -->
-    <div class="card tv-display-card" id="tv-display-card" data-testid="tv-display-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">TV display</h2>
-      </div>
-      <div class="mcard-body">
-        <p class="pd-target" data-testid="tv-intro">
-          What the TV at the venue shows, in order, and for how long. Screens with nothing to show are skipped.
-        </p>
-        <h3 class="pd-card-title" id="tv-screens-title">Screens, in order</h3>
-        <ol class="pc-list" id="tv-screens" data-testid="tv-screens" aria-labelledby="tv-screens-title"></ol>
-        <div class="create-form">
-          <div class="full-width">
-            <label for="tv-dwell">Seconds per screen (5 to 120)</label>
-            <input type="number" id="tv-dwell" data-testid="tv-dwell" min="5" max="120" step="1" inputmode="numeric" value="15" />
-          </div>
-          <h3 class="pd-card-title full-width" id="tv-league-title">League links</h3>
-          <p class="pd-target full-width" data-testid="tv-league-hint">
-            Paste where the league already keeps it: a Google Sheet, an Excel link, any https page (up to 154 bytes once encoded, so
-            it fits in a QR code: plain letters and digits are 1 byte each, spaces and accented letters count for more). Leave blank to skip.
-          </p>
-          <div class="full-width">
-            <label for="tv-league-schedule">Schedule</label>
-            <input type="url" id="tv-league-schedule" data-testid="tv-league-schedule" placeholder="https://" inputmode="url" />
-          </div>
-          <div class="full-width">
-            <label for="tv-league-standings">Standings</label>
-            <input type="url" id="tv-league-standings" data-testid="tv-league-standings" placeholder="https://" inputmode="url" />
-          </div>
-          <div class="full-width">
-            <label for="tv-league-bracket">Bracket</label>
-            <input type="url" id="tv-league-bracket" data-testid="tv-league-bracket" placeholder="https://" inputmode="url" />
-          </div>
-          <h3 class="pd-card-title full-width" id="tv-donate-title">Donations</h3>
-          <div class="full-width">
-            <label for="tv-donate">Donation link (shown as a QR code on its own screen)</label>
-            <input type="url" id="tv-donate" data-testid="tv-donate" placeholder="https://" inputmode="url" />
-          </div>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
-          <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
-        </div>
-        <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
-        <p class="create-msg" id="tv-msg" data-testid="tv-msg" role="status"></p>
-      </div>
-    </div>
-    <script>
-      (function () {
-        var LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Sponsors', league: 'League links', donate: 'Donate', sponsor: 'One screen per sponsor' };
-        var ALL = ['event', 'upcoming', 'sponsors', 'league', 'donate', 'sponsor'];
-        // What a TV with nothing saved rotates: every screen but one per sponsor.
-        var DEFAULT_ON = ['event', 'upcoming', 'sponsors', 'league', 'donate'];
-        var KINDS = ['schedule', 'standings', 'bracket'];
-        // rows: every screen, in order, each on or off. Order of the ON rows is
-        // what is saved; OFF rows keep their place so turning one back on is easy.
-        var tv = { eventId: null, rows: ALL.map(function (p) { return { pane: p, on: DEFAULT_ON.indexOf(p) !== -1 }; }) };
-        function $(id) { return document.getElementById(id); }
-        function msg(text, kind) {
-          var m = $('tv-msg');
-          if (!m) return;
-          m.textContent = text;
-          m.className = 'create-msg' + (kind ? ' ' + kind : '');
-        }
-        function setDisabled(off) {
-          var card = $('tv-display-card');
-          if (!card) return;
-          card.querySelectorAll('input, button').forEach(function (el) { el.disabled = off; });
-        }
-        function render() {
-          var list = $('tv-screens');
-          if (!list) return;
-          list.textContent = '';
-          tv.rows.forEach(function (r, i) {
-            var li = document.createElement('li');
-            li.className = 'pc-row';
-            li.setAttribute('data-testid', 'tv-screen-row');
-            li.setAttribute('data-pane', r.pane);
-            var label = document.createElement('label');
-            label.className = 'create-publish-label';
-            var box = document.createElement('input');
-            box.type = 'checkbox';
-            box.checked = r.on;
-            box.setAttribute('data-act', 'toggle');
-            box.setAttribute('data-testid', 'tv-screen-on');
-            var name = document.createElement('span');
-            name.textContent = LABELS[r.pane];
-            label.appendChild(box);
-            label.appendChild(name);
-            var moves = document.createElement('div');
-            moves.className = 'form-actions';
-            [['up', 'Move up', i === 0], ['down', 'Move down', i === tv.rows.length - 1]].forEach(function (m) {
-              var b = document.createElement('button');
-              b.type = 'button';
-              b.className = 'copy-btn';
-              b.textContent = m[1];
-              b.setAttribute('aria-label', m[1] + ': ' + LABELS[r.pane]);
-              b.setAttribute('data-act', m[0]);
-              b.setAttribute('data-testid', 'tv-screen-' + m[0]);
-              b.disabled = m[2];
-              moves.appendChild(b);
-            });
-            li.appendChild(label);
-            li.appendChild(moves);
-            list.appendChild(li);
-          });
-        }
-        function fill(data) {
-          var saved = Array.isArray(data.panes) ? data.panes.filter(function (p) { return ALL.indexOf(p) !== -1; }) : DEFAULT_ON;
-          tv.rows = saved.map(function (p) { return { pane: p, on: true }; })
-            .concat(ALL.filter(function (p) { return saved.indexOf(p) === -1; }).map(function (p) { return { pane: p, on: false }; }));
-          var dwell = $('tv-dwell');
-          if (dwell) dwell.value = String(data.dwell_seconds || 15);
-          // Look each known kind up in the list; never write a property named by
-          // the response (CodeQL js/remote-property-injection).
-          var league = Array.isArray(data.league) ? data.league : [];
-          KINDS.forEach(function (k) {
-            var el = $('tv-league-' + k);
-            var hit = league.find(function (l) { return l && l.kind === k && typeof l.url === 'string'; });
-            if (el) el.value = hit ? hit.url : '';
-          });
-          var donate = $('tv-donate');
-          if (donate) donate.value = data.donate && typeof data.donate.url === 'string' ? data.donate.url : '';
-          render();
-        }
-        window.loadTvDisplay = async function (eventId) {
-          tv.eventId = eventId;
-          setDisabled(true);
-          msg('');
-          // Clear the previous event's values first, so a failed load never
-          // shows event A's configuration under event B.
-          fill({ panes: DEFAULT_ON, dwell_seconds: 15, league: [], donate: null });
-          setDisabled(true);
-          var open = $('tv-open');
-          if (open) open.setAttribute('href', '/display?event=' + encodeURIComponent(eventId));
-          try {
-            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/display-config');
-            var data = await res.json();
-            if (!res.ok || !data || !data.ok) throw new Error('load');
-            if (tv.eventId !== eventId) return; // a newer selection won
-            fill(data);
-            setDisabled(false);
-            render();
-          } catch (e) {
-            if (tv.eventId === eventId) msg('Could not load the TV settings.', 'error');
-          }
-        };
-        var list = $('tv-screens');
-        if (list) {
-          list.addEventListener('click', function (ev) {
-            var btn = ev.target.closest('button[data-act]');
-            if (!btn || btn.disabled) return;
-            var i = Array.prototype.indexOf.call(list.children, btn.closest('li'));
-            var j = btn.getAttribute('data-act') === 'up' ? i - 1 : i + 1;
-            if (i < 0 || j < 0 || j >= tv.rows.length) return;
-            var moved = tv.rows[i];
-            tv.rows[i] = tv.rows[j];
-            tv.rows[j] = moved;
-            render();
-            // Keep keyboard focus on the moved row: the same button, or the
-            // opposite one when the row reached the top or bottom.
-            var row = list.children[j];
-            var again = row && row.querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
-            var other = row && row.querySelector('[data-act="' + (btn.getAttribute('data-act') === 'up' ? 'down' : 'up') + '"]');
-            if (again && !again.disabled) again.focus();
-            else if (other && !other.disabled) other.focus();
-          });
-          list.addEventListener('change', function (ev) {
-            var box = ev.target.closest('input[data-act="toggle"]');
-            if (!box) return;
-            var i = Array.prototype.indexOf.call(list.children, box.closest('li'));
-            if (tv.rows[i]) tv.rows[i].on = box.checked;
-          });
-        }
-        render();
-        var save = $('tv-save');
-        if (save) save.addEventListener('click', async function () {
-          if (!tv.eventId) return;
-          var panes = tv.rows.filter(function (r) { return r.on; }).map(function (r) { return r.pane; });
-          if (!panes.length) { msg('Pick at least one screen.', 'error'); return; }
-          var dwell = Number(($('tv-dwell') || {}).value);
-          if (!Number.isInteger(dwell) || dwell < 5 || dwell > 120) { msg('Seconds per screen must be a whole number from 5 to 120.', 'error'); return; }
-          var leagueLinks = {};
-          KINDS.forEach(function (k) { var v = (($('tv-league-' + k) || {}).value || '').trim(); leagueLinks[k] = v || null; });
-          var donateLink = ((($('tv-donate') || {}).value) || '').trim() || null;
-          var eventId = tv.eventId;
-          setDisabled(true);
-          msg('Saving…');
-          try {
-            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks, donateLink: donateLink } }),
-            });
-            var data = await res.json().catch(function () { return null; });
-            // Another event was selected while this saved: its card is on
-            // screen now, so this event's result must not be written into it.
-            if (tv.eventId !== eventId) return;
-            if (!res.ok || !data || !data.ok) {
-              msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV is unchanged.', 'error');
-              return;
-            }
-            msg('Saved. A TV showing this event picks it up within a minute.', 'success');
-          } catch (e) {
-            if (tv.eventId === eventId) msg('Could not save. The TV is unchanged.', 'error');
-          } finally {
-            if (tv.eventId === eventId) {
-              setDisabled(false);
-              render();
-            }
-          }
-        });
-      })();
-    </script>
 
     <!-- R4 (OSE-1319) — Poster art. A selected-event management card. The poster
          art VIEWPORT (poster.html, #551) renders events.cover_image_url; this card
@@ -6110,6 +6611,8 @@
       .pd-advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
       .pc-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 12px; }
       .pc-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-left: 6px solid var(--border); border-radius: 8px; }
+      [data-testid="tv-screen-row"] { grid-template-columns: 1fr auto; align-items: center; padding: 4px 12px; }
+      #events { max-height: 36rem; overflow: auto; }
       .pc-uec { font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: var(--text-muted); }
       .pc-word { font-weight: 800; letter-spacing: 0.06em; font-size: 18px; }
       .pc-qr { image-rendering: pixelated; background: white; padding: 4px; }
@@ -6333,12 +6836,13 @@
           at('pd-address').textContent = text(pd.address) || 'No address';
           if (pd.location_desc) at('pd-location').textContent = text(pd.location_desc);
           else at('pd-location').remove();
-          // Where it hangs, and how many times THIS poster was scanned (exact,
-          // organizer-only — a scan resolves to its poster, never a person).
+          // Where it hangs, and how many times THIS poster was scanned. The
+          // count arrives floored (OSE-1656): the poster's hours with 5 or more
+          // scans, summed. Withheld reads in words, never as 0.
           at('pd-placement-kind').textContent =
             pd.placement_type === 'venue' ? 'At the venue' : 'In the community';
-          const scans = Number(pd.scans) || 0;
-          at('pd-scans').textContent = scans + (scans === 1 ? ' scan' : ' scans');
+          const scans = pd.scans && typeof pd.scans.count === 'number' ? pd.scans.count : null;
+          at('pd-scans').textContent = scans === null ? 'Fewer than 5 scans in any hour' : scans + ' scans';
 
           // 1. The short link + Copy lead the card.
           at('pd-short-link').textContent = scanUrl;
@@ -6482,14 +6986,16 @@
           if (yes) yes.focus();
         };
         window._confirmDeletePd = async function (pdId) {
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed.');
+            res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             window._adminAnnounce('Poster deployment deactivated.', 'ok');
             if (window._pdEventId) window.loadPosterDeployments(window._pdEventId);
           } catch (err) {
-            window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
+            window._adminRequestFailed('Could not deactivate the poster deployment.', res, data, 'Deactivating a poster deployment');
           }
         };
 
@@ -6499,7 +7005,7 @@
         window.downloadPosterQr = function (pdId) {
           const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available for download.', 'error');
+            window._adminAnnounce('QR not available for download.', 'error', { action: 'Downloading a poster code' });
             return;
           }
           const safeName =
@@ -6517,12 +7023,12 @@
         window.printPosterQr = function (pdId) {
           const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available to print.', 'error');
+            window._adminAnnounce('QR not available to print.', 'error', { action: 'Printing a poster code' });
             return;
           }
           const w = window.open('', '_blank');
           if (!w) {
-            window._adminAnnounce('Pop-up blocked — allow pop-ups to print the QR.', 'error');
+            window._adminAnnounce('Pop-up blocked. Allow pop-ups to print the QR.', 'error', { action: 'Printing a poster code' });
             return;
           }
           const label = esc(item.label || 'Poster deployment');
@@ -6971,449 +7477,240 @@
         render();
       })();
     </script>
-    <!-- Surface links — step 5, the payoff: every page this event now has. -->
-    <!-- Selecting an event row upgrades these cards to that event's scoped
-         surface (data-surface drives window.scopeSurfaceCards). Unscoped they
-         open the event-agnostic shell, so the cards are always functional. -->
-    <div class="surface-cards" id="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
-      <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
-        <h3>Poster Page</h3>
-        <p>Print-ready event poster with QR codes</p>
-        <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
-        <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
+
+    <!-- TV display (2026-10-01). GAS kept a per-event display order in /admin
+         (AdminDisplay.html); this is that card, back. It saves into the event's
+         settings (displayPanes / displayDwellSeconds / leagueLinks,
+         lib/event-settings.ts) through PUT /api/v2/admin/events/:id, and a TV on
+         /events/<id>/tv picks a change up within a minute (it re-checks
+         GET /api/v2/events/:id/display-config with that response's ETag).
+         League links point at wherever the league already keeps them — a Google
+         Sheet, an Excel link, any https page; the TV shows each as a QR. -->
+    <div class="card tv-display-card" id="tv-display-card" data-testid="tv-display-card">
+      <div class="mcard-head">
+        <h2 class="mcard-title">TV display</h2>
       </div>
-      <div class="card surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
-        <h3>TV Display</h3>
-        <p>Bar TV / kiosk live event display</p>
-        <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
-        <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
-      </div>
-      <div class="card surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
-        <h3>Public Page</h3>
-        <p>Customer-facing events listing</p>
-        <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
-        <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
-      </div>
-      <div class="card surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
-        <h3>Shared Report</h3>
-        <p>Post-event analytics dashboard</p>
-        <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
-        <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
+      <div class="mcard-body">
+        <h3 class="pd-card-title" id="tv-screens-title">Screens, in order</h3>
+        <ol class="pc-list" id="tv-screens" data-testid="tv-screens" aria-labelledby="tv-screens-title"></ol>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="tv-dwell">Seconds per screen (5 to 120)</label>
+            <input type="number" id="tv-dwell" data-testid="tv-dwell" min="5" max="120" step="1" inputmode="numeric" value="15" />
+          </div>
+          <h3 class="pd-card-title full-width" id="tv-league-title">League links</h3>
+          <p class="pd-target full-width" data-testid="tv-league-hint">
+            A Google Sheet, Excel or any https link. Leave blank to skip.
+          </p>
+          <div class="full-width">
+            <label for="tv-league-schedule">Schedule</label>
+            <input type="url" id="tv-league-schedule" data-testid="tv-league-schedule" placeholder="https://" inputmode="url" />
+          </div>
+          <div class="full-width">
+            <label for="tv-league-standings">Standings</label>
+            <input type="url" id="tv-league-standings" data-testid="tv-league-standings" placeholder="https://" inputmode="url" />
+          </div>
+          <div class="full-width">
+            <label for="tv-league-bracket">Bracket</label>
+            <input type="url" id="tv-league-bracket" data-testid="tv-league-bracket" placeholder="https://" inputmode="url" />
+          </div>
+          <h3 class="pd-card-title full-width" id="tv-donate-title">Donations</h3>
+          <div class="full-width">
+            <label for="tv-donate">Donation link (shown as a QR code on its own screen)</label>
+            <input type="url" id="tv-donate" data-testid="tv-donate" placeholder="https://" inputmode="url" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
+          <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
+        </div>
+        <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
+        <p class="pd-target" id="tv-code" data-testid="tv-code" hidden>On the TV's browser, type <strong id="tv-code-address" data-testid="tv-code-address"></strong></p>
+        <p class="create-msg" id="tv-msg" data-testid="tv-msg" role="status"></p>
       </div>
     </div>
-
-    <!-- Copy URL helper + event-scoped surface deep-links -->
     <script>
-      // INVARIANT #1 guard: the ONLY dynamic segment in a scoped surface URL is
-      // the opaque, server-validated event id (^[A-Za-z0-9_-]{1,128}$). No
-      // anonymous_id, cookie, or PII is ever read when building these paths.
-      function scopedSurfaceUrl(surface, eventId) {
-        if (!eventId) return null;
-        const id = encodeURIComponent(eventId);
-        switch (surface) {
-          case 'poster':
-            return '/poster?event=' + id;
-          case 'display':
-            return '/display?event=' + id;
-          case 'public':
-            return '/events/' + id; // existing public-event route
-          case 'report':
-            return '/sharedReport?event=' + id; // aggregate proof surface only
-          default:
-            return null;
+      (function () {
+        var LABELS = { event: 'Featured event', upcoming: 'Also coming up', sponsors: 'Sponsors', league: 'League links', donate: 'Donate', sponsor: 'One screen per sponsor' };
+        var ALL = ['event', 'upcoming', 'sponsors', 'league', 'donate', 'sponsor'];
+        // What a TV with nothing saved rotates: every screen but one per sponsor.
+        var DEFAULT_ON = ['event', 'upcoming', 'sponsors', 'league', 'donate'];
+        var KINDS = ['schedule', 'standings', 'bracket'];
+        // rows: every screen, in order, each on or off. Order of the ON rows is
+        // what is saved; OFF rows keep their place so turning one back on is easy.
+        var tv = { eventId: null, rows: ALL.map(function (p) { return { pane: p, on: DEFAULT_ON.indexOf(p) !== -1 }; }) };
+        function $(id) { return document.getElementById(id); }
+        function msg(text, kind) {
+          var m = $('tv-msg');
+          if (!m) return;
+          m.textContent = text;
+          m.className = 'create-msg' + (kind ? ' ' + kind : '');
         }
-      }
-      // Upgrade all four surface cards to the selected event's scoped surface.
-      window.scopeSurfaceCards = function (eventId, eventName) {
-        document.querySelectorAll('.surface-card').forEach(function (card) {
-          const url = scopedSurfaceUrl(card.dataset.surface, eventId);
-          if (!url) return;
-          const a = card.querySelector('a');
-          const copyBtn = card.querySelector('.copy-btn');
-          const hint = card.querySelector('.qr-hint');
-          if (a) a.setAttribute('href', url);
-          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
-          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
-          card.setAttribute('data-scoped', '1');
-          card.setAttribute('data-event-id', eventId);
-        });
-        const wrap = document.querySelector('.surface-cards');
-        if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
-      };
-
-      // On window so the delegated dispatcher (OSE-1239) can resolve it; the
-      // four Copy URL buttons now carry data-action="copy-url" instead of an
-      // inline onclick the CSP refused.
-      window.copyUrl = function copyUrl(path, btn) {
-        // A scoped card stashes its event-scoped path in data-copy-path.
-        if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
-        const url = location.origin + path;
-        navigator.clipboard.writeText(url)
-          .then(() => {
-            btn.textContent = 'Copied!';
-            btn.classList.add('copied');
-            setTimeout(() => {
-              btn.textContent = 'Copy URL';
-              btn.classList.remove('copied');
-            }, 2000);
-          })
-          .catch(() => {
-            btn.textContent = 'Failed';
-            setTimeout(() => {
-              btn.textContent = 'Copy URL';
-            }, 2000);
-          });
-      };
-    </script>
-
-      <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
-           details. Hidden until an event is selected (ose:event-selected, OSE-667/673).
-           Stat values are placeholders (—); EventDashboard.init(data) is the seam
-           that wires real Scans / Sponsors / Registrations / Check-ins
-           (OSE-896). No fabricated metrics. -->
-      <section
-        id="dashboard-card"
-        class="card dashboard-card"
-        data-testid="admin-dashboard-card"
-        aria-label="Event dashboard for the selected event"
-        hidden
-      >
-        <div class="mcard-head">
-          <h2 class="mcard-title dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
-        </div>
-
-        <div class="mcard-body">
-        <div class="dashboard-stats" role="group" aria-label="Event statistics">
-          <div class="dash-stat scans" data-testid="admin-stat-scans">
-            <span class="dash-stat__num" data-testid="admin-stat-scans-num">—</span>
-            <span class="dash-stat__label">Scans</span>
-          </div>
-          <div class="dash-stat appearances" data-testid="admin-stat-appearances">
-            <span class="dash-stat__num" data-testid="admin-stat-appearances-num">—</span>
-            <span class="dash-stat__label">Sponsors</span>
-          </div>
-          <div class="dash-stat registrations" data-testid="admin-stat-registrations">
-            <span class="dash-stat__num" data-testid="admin-stat-registrations-num">—</span>
-            <span class="dash-stat__label">Registrations</span>
-          </div>
-          <div class="dash-stat checkins" data-testid="admin-stat-checkins">
-            <span class="dash-stat__num" data-testid="admin-stat-checkins-num">—</span>
-            <span class="dash-stat__label">Check-ins</span>
-          </div>
-        </div>
-
-        <h3 class="dash-lifecycle-title">Event Lifecycle</h3>
-
-        <div class="dash-phase" data-testid="admin-phase-pre" data-phase="pre-event">
-          <div class="dash-phase__header">
-            <span class="dash-phase__title">Pre-Event</span>
-            <span class="dash-phase__badge" data-testid="admin-phase-pre-badge">Preparation</span>
-          </div>
-          <p class="dash-phase__desc">Advertise with sponsors, print posters, set up displays, drive registration.</p>
-          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Pre-event progress">
-            <div class="dash-progress__fill" data-testid="admin-phase-pre-fill"></div>
-          </div>
-        </div>
-
-        <div class="dash-phase" data-testid="admin-phase-day" data-phase="event-day">
-          <div class="dash-phase__header">
-            <span class="dash-phase__title">Event Day</span>
-            <span class="dash-phase__badge" data-testid="admin-phase-day-badge">Live now</span>
-          </div>
-          <p class="dash-phase__desc">Displays at the entrance, check-in at the door, sponsor rotation on screens.</p>
-          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Event day progress">
-            <div class="dash-progress__fill" data-testid="admin-phase-day-fill"></div>
-          </div>
-        </div>
-
-        <div class="dash-phase" data-testid="admin-phase-post" data-phase="post-event">
-          <div class="dash-phase__header">
-            <span class="dash-phase__title">Post-Event</span>
-            <span class="dash-phase__badge" data-testid="admin-phase-post-badge">Analytics</span>
-          </div>
-          <p class="dash-phase__desc">Surveys, email sign-ups, and the SharedReport for the corridor.</p>
-          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Post-event progress">
-            <div class="dash-progress__fill" data-testid="admin-phase-post-fill"></div>
-          </div>
-        </div>
-        </div>
-      </section>
-      <script>
-        // OSE-886: Event Dashboard controller. Reveals the card on event selection
-        // and derives the lifecycle phase honestly from the event date. Stat tiles
-        // stay "—" until EventDashboard.init(data) is wired to D1/forms counts.
-        (function () {
-          'use strict';
-          // OSE-1360: the lifecycle reads the same {status, phase} as the badge
-          // and checklist (window.oseEventView over the list row). The old
-          // date-only guess ignored status and was never even handed a date.
-          var PHASE_CARD = { pre_event: 'pre-event', event: 'event-day', post_event: 'post-event' };
-          function phaseFor(id) {
-            var e = window._oseList && window._oseList.byId[String(id)];
-            return e && window.oseEventView ? PHASE_CARD[window.oseEventView(e).phase] : 'pre-event';
-          }
-          function setProgress(testid, pct) {
-            var fill = document.querySelector('[data-testid="' + testid + '"]');
-            if (!fill) return;
-            fill.style.width = pct + '%';
-            var bar = fill.closest('.dash-progress');
-            if (bar) bar.setAttribute('aria-valuenow', String(pct));
-          }
-          // Render one stat value. Accepts a plain number (exact counts: scans,
-          // sponsors) OR the uniform floored shape { count, suppressed, floor }
-          // from the stats endpoint (registrations, check-ins). A suppressed
-          // value renders "<N" so the K-anon floor is communicated — never a raw
-          // sub-floor count. null/undefined → keep the "—" placeholder.
-          function formatStat(v) {
-            if (v == null) return null;
-            if (typeof v === 'number') return String(v);
-            if (typeof v === 'object') {
-              if (v.suppressed) return '<' + (v.floor || 5);
-              if (v.count != null) return String(v.count);
-            }
-            return null;
-          }
-          var Dashboard = {
-            render: function (detail) {
-              detail = detail || {};
-              var card = document.getElementById('dashboard-card');
-              if (!card) return;
-              var phase = phaseFor(detail.id);
-              [
-                ['pre', 'pre-event'],
-                ['day', 'event-day'],
-                ['post', 'post-event'],
-              ].forEach(function (pair) {
-                var badge = document.querySelector(
-                  '[data-testid="admin-phase-' + pair[0] + '-badge"]'
-                );
-                if (badge) badge.setAttribute('data-active', String(pair[1] === phase));
-              });
-              setProgress('admin-phase-pre-fill', phase === 'pre-event' ? 50 : 100);
-              setProgress(
-                'admin-phase-day-fill',
-                phase === 'event-day' ? 50 : phase === 'post-event' ? 100 : 0
-              );
-              setProgress('admin-phase-post-fill', phase === 'post-event' ? 50 : 0);
-              card.hidden = false;
-            },
-            // Functionality seam (OSE-886 follow-up): feed real aggregate counts as
-            // { scans, appearances, registrations, checkins }. Anything omitted
-            // keeps its "—" placeholder — never invents a value.
-            init: function (data) {
-              data = data || {};
-              var map = {
-                'admin-stat-scans-num': data.scans,
-                'admin-stat-appearances-num': data.appearances,
-                'admin-stat-registrations-num': data.registrations,
-                'admin-stat-checkins-num': data.checkins,
-              };
-              Object.keys(map).forEach(function (id) {
-                var el = document.querySelector('[data-testid="' + id + '"]');
-                if (!el) return;
-                var text = formatStat(map[id]);
-                if (text != null) el.textContent = text; // omitted → keep "—"
-              });
-            },
-          };
-          window.EventDashboard = Dashboard;
-
-          // OSE-896: fetch real aggregate counts for the selected event and feed
-          // them into Dashboard.init(). Same-origin admin fetch (auth rides the
-          // CF Access session, as the rest of admin.html does). Loading → "…";
-          // any error/unauth → restore "—" (never invent a number).
-          var STAT_NUM_IDS = [
-            'admin-stat-scans-num',
-            'admin-stat-appearances-num',
-            'admin-stat-registrations-num',
-            'admin-stat-checkins-num',
-          ];
-          function setStatNums(text) {
-            STAT_NUM_IDS.forEach(function (id) {
-              var el = document.querySelector('[data-testid="' + id + '"]');
-              if (el) el.textContent = text;
+        function setDisabled(off) {
+          var card = $('tv-display-card');
+          if (!card) return;
+          card.querySelectorAll('input, button').forEach(function (el) { el.disabled = off; });
+        }
+        function render() {
+          var list = $('tv-screens');
+          if (!list) return;
+          list.textContent = '';
+          tv.rows.forEach(function (r, i) {
+            var li = document.createElement('li');
+            li.className = 'pc-row';
+            li.setAttribute('data-testid', 'tv-screen-row');
+            li.setAttribute('data-pane', r.pane);
+            var label = document.createElement('label');
+            label.className = 'create-publish-label';
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = r.on;
+            box.setAttribute('data-act', 'toggle');
+            box.setAttribute('data-testid', 'tv-screen-on');
+            var name = document.createElement('span');
+            name.textContent = LABELS[r.pane];
+            label.appendChild(box);
+            label.appendChild(name);
+            var moves = document.createElement('div');
+            moves.className = 'form-actions';
+            [['up', 'Move up', i === 0], ['down', 'Move down', i === tv.rows.length - 1]].forEach(function (m) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'copy-btn';
+              b.textContent = m[1];
+              b.setAttribute('aria-label', m[1] + ': ' + LABELS[r.pane]);
+              b.setAttribute('data-act', m[0]);
+              b.setAttribute('data-testid', 'tv-screen-' + m[0]);
+              b.disabled = m[2];
+              moves.appendChild(b);
             });
-          }
-          function fetchStats(eventId) {
-            if (!eventId) return;
-            setStatNums('…');
-            fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/stats')
-              .then(function (r) {
-                return r.ok ? r.json() : null;
-              })
-              .then(function (data) {
-                if (data && data.ok && data.stats) {
-                  Dashboard.init(data.stats);
-                } else {
-                  setStatNums('—');
-                }
-              })
-              .catch(function () {
-                setStatNums('—');
-              });
-          }
-          window.addEventListener('ose:event-selected', function (ev) {
-            var detail = ev.detail || {};
-            Dashboard.render(detail);
-            fetchStats(detail.id);
+            li.appendChild(label);
+            li.appendChild(moves);
+            list.appendChild(li);
           });
-        })();
-      </script>
-
-      <section class="admin-intro" data-testid="admin-intro" aria-labelledby="admin-intro-heading">
-        <h2 id="admin-intro-heading">Manage events from one clear workspace</h2>
-        <p>
-          Start with the event list, choose one event, then use the selected-event bar
-          to move through dashboard, forms, poster, sponsors, and surfaces in order.
-        </p>
-      </section>
-
-      <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
-         K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
-      <section
-        id="portfolio-rollup"
-        class="portfolio-rollup stats-row"
-        data-testid="portfolio-rollup"
-        aria-label="Portfolio totals across your brand's events"
-        hidden
-      >
-        <div class="rollup-stat stat-card" data-testid="rollup-events">
-          <span class="rollup-num stat-value" data-testid="rollup-events-num">—</span>
-          <span class="rollup-label stat-label">Events</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-registrations">
-          <span class="rollup-num stat-value" data-testid="rollup-registrations-num">—</span>
-          <span class="rollup-label stat-label">Registered</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-checkins">
-          <span class="rollup-num stat-value" data-testid="rollup-checkins-num">—</span>
-          <span class="rollup-label stat-label">Checked in</span>
-        </div>
-        <div class="rollup-stat stat-card" data-testid="rollup-sponsors">
-          <span class="rollup-num stat-value" data-testid="rollup-sponsors-num">—</span>
-          <span class="rollup-label stat-label">Active sponsors</span>
-        </div>
-      </section>
-
-      <section id="events-section" data-testid="events-section" aria-labelledby="events-heading">
-      <div class="section-head">
-        <div>
-          <p class="section-eyebrow">Event workspace</p>
-          <h2 id="events-heading">Your events</h2>
-          <p class="section-help">
-            Filter the list, select one event, then manage only that event in the cards below.
-          </p>
-        </div>
-      </div>
-      <!-- Status panel — hydrates from ose:event-selected like the four
-           management cards. This is the ONLY place in the admin an event moves
-           between draft / ready / live / archived: before it, the UI could
-           create drafts and nothing else, so every event stayed invisible. -->
-      <div class="card" id="event-status-card" data-testid="event-status-card" hidden>
-        <div class="event-status-panel">
-          <div class="event-status-current">
-            <strong id="event-status-name" data-testid="event-status-name"></strong>
-            <span class="badge" id="event-status-badge" data-testid="event-status-badge"></span>
-          </div>
-          <div class="event-status-actions" id="event-status-actions" data-testid="event-status-actions"></div>
-          <p class="event-status-explain" id="event-status-explain" data-testid="event-status-explain"></p>
-          <!-- OSE-1560 — the map setting, always visible, with its one control.
-               The toast that announces a change is OSE-1564; this is the part
-               that has to stay true after any toast is gone. -->
-          <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
-          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
-          <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
-        </div>
-      </div>
-      <!-- Event timeline — the selected event's whole chain at a glance:
-           setup → live → poster out → people scanning → sponsors on → report.
-           Hydrates from the same ose:event-selected event as every other card.
-           It reads what the other cards already load (list row, stats, poster
-           deployments, sponsors) and adds nothing new to the wire. The one
-           thing it adds is the NEXT STEP: a single link into whichever card
-           is the thing to do now, so the organizer never has to work out where
-           in the flow they are. -->
-      <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Event checklist</h3>
-          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
-        </div>
-        <div class="mcard-body">
-          <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
-          <!-- Organizer inbox: sponsors still to answer, and ones who declined,
-               surfaced here instead of only as badges in the sponsors table. -->
-          <section id="event-inbox" data-testid="event-inbox" aria-labelledby="event-inbox-title" hidden>
-            <h4 class="tl-label" id="event-inbox-title">Needs your attention</h4>
-            <ul class="pc-list" id="event-inbox-list" data-testid="event-inbox-list"></ul>
-          </section>
-        </div>
-      </div>
-      <!-- Pre-event window: the poster is out and the event hasn't started. The
-           organizer sees the poster's link (and its QR, the same link as a
-           picture) and whether the poster is working — scans, link taps,
-           posters out, places covered, scans per day. Counts only, never who.
-           Hidden outside the pre-event phase. -->
-      <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Before the event</h3>
-          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
-        </div>
-        <div class="mcard-body">
-          <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
-          <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
-          <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
-            <span class="wizard-card-title">Your poster link</span>
-            <span class="wizard-card-url" id="pre-event-link" data-testid="pre-event-link"></span>
-            <img id="pre-event-qr" data-testid="pre-event-qr" alt="" hidden />
-          </div>
-          <!-- The admin's wrapping stat grid (2-up on a phone), not @ocr/ui's
-               .stats-row: that one scrolls sideways and hid "Places" at 375px. -->
-          <div class="dashboard-stats" role="group" aria-label="Poster activity" data-testid="pre-event-stats">
-            <div class="dash-stat scans"><span class="dash-stat__num" id="pre-event-clicks" data-testid="pre-event-clicks">—</span><span class="dash-stat__label">Link taps</span></div>
-            <div class="dash-stat registrations"><span class="dash-stat__num" id="pre-event-scans" data-testid="pre-event-scans">—</span><span class="dash-stat__label">Poster scans</span></div>
-            <div class="dash-stat appearances"><span class="dash-stat__num" id="pre-event-posters" data-testid="pre-event-posters">—</span><span class="dash-stat__label">Posters out</span></div>
-            <div class="dash-stat checkins"><span class="dash-stat__num" id="pre-event-places" data-testid="pre-event-places">—</span><span class="dash-stat__label">Places</span></div>
-          </div>
-          <div class="pre-spark" id="pre-event-spark" data-testid="pre-event-spark"></div>
-          <!-- Reach: link taps per code, then scans per venue area and community place. -->
-          <section id="pre-event-reach" data-testid="pre-event-reach" aria-labelledby="pre-event-reach-title" hidden>
-            <h4 class="pd-card-title" id="pre-event-reach-title">Taps and scans, by place</h4>
-            <p class="tl-detail" data-testid="pre-event-reach-taps"></p>
-            <p class="tl-detail" data-testid="pre-event-reach-venue"></p>
-            <p class="tl-detail" data-testid="pre-event-reach-community"></p>
-          </section>
-        </div>
-      </div>
-      <div class="events-filters" role="group" aria-label="Filter events" data-testid="events-filters">
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="all" aria-pressed="true" data-testid="events-filter-all">All</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="draft" aria-pressed="false" data-testid="events-filter-draft">Drafts</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="ready" aria-pressed="false" data-testid="events-filter-ready">Ready</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="active" aria-pressed="false" data-testid="events-filter-active">Published</button>
-        <button type="button" class="events-filter-chip" data-action="events-filter" data-status="archived" aria-pressed="false" data-testid="events-filter-archived">Archived</button>
-        <label class="events-filter-mine"><input type="checkbox" id="events-filter-mine" data-testid="events-filter-mine" /> Only mine</label>
-        <label class="events-filter-mine"><input type="checkbox" id="events-sort-upcoming" data-testid="events-sort-upcoming" /> Soonest first</label>
-      </div>
-      <div id="events" data-testid="events-container">
-        <div class="skeleton-table" data-testid="skeleton-events">
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-        </div>
-      </div>
-      </section>
+        }
+        function fill(data) {
+          var saved = Array.isArray(data.panes) ? data.panes.filter(function (p) { return ALL.indexOf(p) !== -1; }) : DEFAULT_ON;
+          tv.rows = saved.map(function (p) { return { pane: p, on: true }; })
+            .concat(ALL.filter(function (p) { return saved.indexOf(p) === -1; }).map(function (p) { return { pane: p, on: false }; }));
+          var dwell = $('tv-dwell');
+          if (dwell) dwell.value = String(data.dwell_seconds || 15);
+          // Look each known kind up in the list; never write a property named by
+          // the response (CodeQL js/remote-property-injection).
+          var league = Array.isArray(data.league) ? data.league : [];
+          KINDS.forEach(function (k) {
+            var el = $('tv-league-' + k);
+            var hit = league.find(function (l) { return l && l.kind === k && typeof l.url === 'string'; });
+            if (el) el.value = hit ? hit.url : '';
+          });
+          var donate = $('tv-donate');
+          if (donate) donate.value = data.donate && typeof data.donate.url === 'string' ? data.donate.url : '';
+          render();
+        }
+        window.loadTvDisplay = async function (eventId) {
+          tv.eventId = eventId;
+          setDisabled(true);
+          msg('');
+          // Clear the previous event's values first, so a failed load never
+          // shows event A's configuration under event B.
+          fill({ panes: DEFAULT_ON, dwell_seconds: 15, league: [], donate: null });
+          setDisabled(true);
+          var open = $('tv-open');
+          if (open) open.setAttribute('href', '/events/' + encodeURIComponent(eventId) + '/tv');
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/display-config');
+            var data = await res.json();
+            if (!res.ok || !data || !data.ok) throw new Error('load');
+            if (tv.eventId !== eventId) return; // a newer selection won
+            fill(data);
+            setDisabled(false);
+            render();
+          } catch (e) {
+            if (tv.eventId === eventId) msg('Could not load the TV settings.', 'error');
+          }
+          // The short code to type on the TV (OSE-1684): the event id is too
+          // long for a remote. Minted on first ask; hidden until it arrives.
+          var codeLine = $('tv-code');
+          var codeAddr = $('tv-code-address');
+          if (codeLine) codeLine.hidden = true;
+          fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/short-links', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+          }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+          }).then(function (x) {
+            var tvPath = x.d && x.d.links && x.d.links.tv;
+            if (tv.eventId !== eventId || !x.ok || !x.d.ok || typeof tvPath !== 'string') return;
+            if (codeAddr) codeAddr.textContent = location.host + tvPath;
+            if (codeLine) codeLine.hidden = false;
+          }).catch(function () { /* the Open the TV link still works */ });
+        };
+        var list = $('tv-screens');
+        if (list) {
+          list.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('button[data-act]');
+            if (!btn || btn.disabled) return;
+            var i = Array.prototype.indexOf.call(list.children, btn.closest('li'));
+            var j = btn.getAttribute('data-act') === 'up' ? i - 1 : i + 1;
+            if (i < 0 || j < 0 || j >= tv.rows.length) return;
+            var moved = tv.rows[i];
+            tv.rows[i] = tv.rows[j];
+            tv.rows[j] = moved;
+            render();
+            // Keep keyboard focus on the moved row: the same button, or the
+            // opposite one when the row reached the top or bottom.
+            var row = list.children[j];
+            var again = row && row.querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
+            var other = row && row.querySelector('[data-act="' + (btn.getAttribute('data-act') === 'up' ? 'down' : 'up') + '"]');
+            if (again && !again.disabled) again.focus();
+            else if (other && !other.disabled) other.focus();
+          });
+          list.addEventListener('change', function (ev) {
+            var box = ev.target.closest('input[data-act="toggle"]');
+            if (!box) return;
+            var i = Array.prototype.indexOf.call(list.children, box.closest('li'));
+            if (tv.rows[i]) tv.rows[i].on = box.checked;
+          });
+        }
+        render();
+        var save = $('tv-save');
+        if (save) save.addEventListener('click', async function () {
+          if (!tv.eventId) return;
+          var panes = tv.rows.filter(function (r) { return r.on; }).map(function (r) { return r.pane; });
+          if (!panes.length) { msg('Pick at least one screen.', 'error'); return; }
+          var dwell = Number(($('tv-dwell') || {}).value);
+          if (!Number.isInteger(dwell) || dwell < 5 || dwell > 120) { msg('Seconds per screen must be a whole number from 5 to 120.', 'error'); return; }
+          var leagueLinks = {};
+          KINDS.forEach(function (k) { var v = (($('tv-league-' + k) || {}).value || '').trim(); leagueLinks[k] = v || null; });
+          var donateLink = ((($('tv-donate') || {}).value) || '').trim() || null;
+          var eventId = tv.eventId;
+          setDisabled(true);
+          msg('Saving…');
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: { displayPanes: panes, displayDwellSeconds: dwell, leagueLinks: leagueLinks, donateLink: donateLink } }),
+            });
+            var data = await res.json().catch(function () { return null; });
+            // Another event was selected while this saved: its card is on
+            // screen now, so this event's result must not be written into it.
+            if (tv.eventId !== eventId) return;
+            if (!res.ok || !data || !data.ok) {
+              msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The TV is unchanged.', 'error');
+              return;
+            }
+            msg('Saved. A TV showing this event picks it up within a minute.', 'success');
+          } catch (e) {
+            if (tv.eventId === eventId) msg('Could not save. The TV is unchanged.', 'error');
+          } finally {
+            if (tv.eventId === eventId) {
+              setDisabled(false);
+              render();
+            }
+          }
+        });
+      })();
+    </script>
     </main>
     <script>
       // ─── OSE-R-005 label maps ─────────────────────────────────────────────
@@ -7564,7 +7861,9 @@
         var hasDrafts = window._oseList.items.some(function (e) { return e.status === 'draft'; });
         if (window._oseList.status === 'all' && hasDrafts) window.setEventsFilter('draft');
         var first = document.querySelector('[data-action="events-filter"][aria-pressed="true"]');
-        if (first) first.focus();
+        // No scroll here: the caller places the list (a focus jump would land
+        // on the filter row and push the list's heading off the top).
+        if (first) first.focus({ preventScroll: true });
       };
       (function () {
         var mineEl = document.getElementById('events-filter-mine');
@@ -7641,6 +7940,8 @@
           });
           var hasMore = !!(data.pagination && data.pagination.hasMore);
           L.cursor = hasMore ? data.pagination.nextCursor : null;
+          // The host has events, so Your events leads and Create folds away.
+          if (L.items.length && window.oseCreateCard) window.oseCreateCard.returning();
 
           if (!L.items.length) {
             var empty =
@@ -7753,6 +8054,12 @@
                 document.body.classList.remove('chooser-active');
                 var chooser = document.getElementById('admin-path-chooser');
                 if (chooser) chooser.hidden = true;
+                // As a front-door door does: Back returns to the front door.
+                try {
+                  if (history.state && history.state.oseAdmin === 'chooser') {
+                    history.pushState({ oseAdmin: 'dashboard' }, '', location.pathname + location.search);
+                  }
+                } catch (e) {}
                 savedRow.classList.add('selected');
                 savedRow.scrollIntoView({ block: 'center' });
                 var ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
@@ -7832,8 +8139,8 @@
           if (f.suppressed) return 'fewer than ' + (f.floor || 5);
           return f.count != null ? String(f.count) : null;
         };
-        // Only exact scans prove people are scanning; a floored "fewer than 5"
-        // registration count may be zero, so it never ticks this step.
+        // Only a published scan count (5 or more, OSE-1656) proves people are
+        // scanning; "fewer than 5" may be zero, so it never ticks this step.
         var scanN = stats && stats.scans != null ? (typeof stats.scans === 'number' ? stats.scans : stats.scans.count) : null;
         var anyScans = typeof scanN === 'number' && scanN > 0;
         var counts = stats ? [['Scans', fmt(stats.scans)], ['registered', fmt(stats.registrations)], ['checked in', fmt(stats.checkins)]]
@@ -8032,10 +8339,13 @@
         // (three links with 4 taps each read null), so the words say "on any
         // one link". Early weeks are quiet, not broken: a normal state.
         var tapsN = a.clicks && typeof a.clicks.count === 'number' ? a.clicks.count : null;
+        // Poster scans arrive floored too (OSE-1656): the poster-hours with 5
+        // or more, summed, or null while none has.
+        var scansN = a.scans && typeof a.scans.count === 'number' ? a.scans.count : null;
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
-        else if (tapsN === null && !(a.scans > 0)) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + a.scans + ' poster scan' + (a.scans === 1 ? '' : 's') + ' so far.';
+        else if (tapsN === null && scansN === null) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
+        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + (scansN === null ? 'fewer than 5 poster scans in any one hour' : scansN + ' poster scans') + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -8068,7 +8378,7 @@
           // Built here from the id we already hold, never taken from the
           // response: a server-supplied href is an XSS sink (javascript:) the
           // client has no business trusting (CodeQL js/xss-more-sources).
-          btn.href = '/poster?event=' + encodeURIComponent(String(id));
+          btn.href = '/events/' + encodeURIComponent(String(id)) + '/poster';
           btn.target = '_blank';
           btn.rel = 'noopener';
           btn.setAttribute('data-testid', 'pre-event-poster');
@@ -8090,7 +8400,7 @@
           linkCard.hidden = false;
         } else linkCard.hidden = true;
 
-        set('pre-event-scans', String(a.scans || 0));
+        set('pre-event-scans', scansN === null ? 'Held' : String(scansN));
         set('pre-event-clicks', tapsN === null ? 'Held' : String(tapsN));
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
@@ -8098,7 +8408,12 @@
         // Scans per day, last 14 days — bars drawn as SVG (no chart library).
         var spark = document.getElementById('pre-event-spark');
         spark.textContent = '';
-        var days = Array.isArray(a.scansByDay) ? a.scansByDay : [];
+        // Each day arrives floored (the day's poster-hours with 5 or more,
+        // summed): a held day is drawn like an empty one and titled "held".
+        var days = (Array.isArray(a.scansByDay) ? a.scansByDay : []).map(function (x) {
+          var n = x && x.count && typeof x.count.count === 'number' ? x.count.count : null;
+          return { day: String((x && x.day) || ''), count: n || 0, held: n === null };
+        });
         if (days.length) {
           var NS = 'http://www.w3.org/2000/svg';
           var max = Math.max.apply(null, days.map(function (x) { return x.count || 0; }).concat([1]));
@@ -8109,7 +8424,8 @@
           svg.setAttribute('preserveAspectRatio', 'none');
           svg.setAttribute('role', 'img');
           var total = days.reduce(function (t, x) { return t + (x.count || 0); }, 0);
-          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' in total, ' + (days[days.length - 1].count || 0) + ' today.');
+          var last = days[days.length - 1];
+          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' on the days shown, ' + (last.held ? 'held' : last.count) + ' today. A day with fewer than 5 scans in every hour at every poster is held.');
           days.forEach(function (x, i) {
             var h = x.count > 0 ? Math.max(3, Math.round((x.count / max) * 38)) : 1;
             var r = document.createElementNS(NS, 'rect');
@@ -8121,7 +8437,7 @@
             r.setAttribute('fill', 'currentColor');
             r.setAttribute('opacity', x.count > 0 ? '1' : '0.3');
             var t = document.createElementNS(NS, 'title');
-            t.textContent = x.day + ': ' + (x.count || 0) + ' scan' + (x.count === 1 ? '' : 's');
+            t.textContent = x.day + ': ' + (x.held ? 'held' : x.count + ' scans');
             r.appendChild(t);
             svg.appendChild(r);
           });
@@ -8156,7 +8472,11 @@
         var num = function (v) { var n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
         var places = function (g) {
           var list = g && Array.isArray(g.placements) ? g.placements : [];
-          return list.map(function (x) { return { name: String((x && x.label) || 'Poster'), n: num(x && x.scans) }; });
+          // Each placement's scans arrive floored (OSE-1656): words, never 0.
+          return list.map(function (x) {
+            var n = x && x.scans && typeof x.scans.count === 'number' ? num(x.scans.count) : null;
+            return { name: String((x && x.label) || 'Poster'), n: n === null ? 'fewer than 5' : n };
+          });
         };
         // A floored count: its number when it cleared the floor, else null.
         var fl = function (f) { return f && typeof f.count === 'number' ? num(f.count) : null; };
@@ -8269,10 +8589,11 @@
             if (seen[next[i]]) continue;
             var p2 = path.concat(next[i]);
             if (next[i] === to) return p2.slice(1);
-            // Never pass THROUGH archived on the way somewhere else: it is a
-            // real state with its own meaning, not a shortcut (Live -> draft
-            // must go via Ready, not via Archived).
-            if (next[i] === 'archived') continue;
+            // Never pass THROUGH archived or Live on the way somewhere else:
+            // each is a real state with its own meaning, not a shortcut (Live
+            // -> draft goes via Ready, not via Archived; Archived -> Ready goes
+            // via draft, never public for a moment on the way).
+            if (next[i] === 'archived' || next[i] === 'active') continue;
             seen[next[i]] = true;
             queue.push(p2);
           }
@@ -8299,9 +8620,14 @@
         for (var i = 0; i < route.length; i++) {
           var r = await transition(id, at, route[i]);
           last = r.data;
+          // The server says where the event really was (another tab may have
+          // moved it); the first hop's answer is the true origin, so Undo
+          // goes back there, not to what this page last showed.
+          var seen = r.data && typeof r.data.from === 'string' && STATUS_EDGES[r.data.from] ? r.data.from : null;
+          if (i === 0 && seen) from = seen;
           if (!r.res.ok || !r.data.ok) {
-            if (current) current.status = at;
-            return { ok: false, from: from, code: r.data && r.data.code, missing: r.data && r.data.missing, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
+            if (current) current.status = seen || at;
+            return { ok: false, from: from, code: r.data && r.data.code, missing: r.data && r.data.missing, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')', res: r.res, body: r.data };
           }
           at = route[i];
         }
@@ -8329,6 +8655,13 @@
       window.goLiveFromDraft = function (id, knownFrom) {
         return window.moveEventTo(id, 'active', knownFrom);
       };
+      function paintRowStatus(id, st) {
+        var row = document.querySelector('[data-testid="event-row-' + id + '"]');
+        if (!row) return;
+        row.setAttribute('data-status', st);
+        var b = row.querySelector('[data-testid="event-status"]');
+        if (b) { b.className = 'badge ' + st; b.textContent = window.friendlyStatus(st); }
+      }
       window.changeEventStatus = async function (id, to, btn) {
         var e = window._oseList.byId[String(id)];
         if (!e) return;
@@ -8338,16 +8671,14 @@
         buttons.forEach(function (b) { b.disabled = true; });
         if (btn) btn.textContent = 'Saving…';
         var result = await window.moveEventTo(id, to);
+        // Undo goes back to where the server says the event was, which is not
+        // what this panel showed if another tab moved it meanwhile.
+        if (result.from) from = result.from;
         if (result.ok) {
           e.status = to;
           // Re-render the row badge in place (no refetch: status is the only
           // thing that changed and the server confirmed it).
-          var row = document.querySelector('[data-testid="event-row-' + id + '"]');
-          if (row) {
-            row.setAttribute('data-status', to);
-            var b = row.querySelector('[data-testid="event-status"]');
-            if (b) { b.className = 'badge ' + to; b.textContent = window.friendlyStatus(to); }
-          }
+          paintRowStatus(id, to);
           window.renderEventStatus(id);
           // OSE-1360: the checklist and dashboard re-derive from the NEW status
           // (a stale "ready" step on a published event was the bug), and the
@@ -8355,6 +8686,7 @@
           window.renderEventTimeline(id);
           if (window.EventDashboard) window.EventDashboard.render({ id: id });
           if (window.renderPreEventWindow) window.renderPreEventWindow(id);
+          if (window.refreshSurfaceLinks) window.refreshSurfaceLinks(id);
           var nice = { active: 'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0, Number(e.map_default) === 1), ready: 'Marked ready.', draft: 'Back to draft.', archived: 'Archived. Find it under the Archived filter.' }[to] || 'Saved.';
           if (typeof window._adminAnnounce === 'function') window._adminAnnounce(nice, 'ok');
           var m2 = document.getElementById('event-status-msg');
@@ -8379,9 +8711,14 @@
           if (window._oseList.status !== 'all' && window._oseList.status !== to) window.renderEventsList({ reset: true });
         } else {
           buttons.forEach(function (b) { b.disabled = false; });
+          // The server may have said where the event really is; row and panel catch up.
+          paintRowStatus(id, e.status || 'draft');
           window.renderEventStatus(id);
           if (msg) { msg.textContent = result.error; msg.className = 'create-msg error'; if (result.code === 'CORE_VALUES_MISSING' && result.missing) msg.setAttribute('data-missing', result.missing.join(',')); else msg.removeAttribute('data-missing'); }
-          if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error');
+          // A refused or failed request: the toast carries its code and reference.
+          // Otherwise no request was made, and the sentence is this page's own.
+          if (result.res && typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not change the status.', result.res, result.body, 'Changing the event status');
+          else if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error', { action: 'Changing the event status' });
         }
       };
 

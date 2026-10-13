@@ -195,11 +195,10 @@ describe('Scenario 2: Check-in lifecycle', () => {
     const EVENT = 'evt-checkin-e2e';
 
     // ── 5 check-in taps ───────────────────────────────────────────────────
+    // OSE-1657: the public answer carries no count (counts are post-event only).
     for (let i = 1; i <= 5; i++) {
       const res = await handleFormCheckin(postReq({}), formsEnv(), EVENT);
-      const body = await json(res);
-      expect(body.ok).toBe(true);
-      expect(body.count).toBe(i);
+      expect(await json(res)).toEqual({ ok: true });
     }
 
     // ── Admin reads count ─────────────────────────────────────────────────

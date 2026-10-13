@@ -9,13 +9,15 @@
 // Every number on the page comes from the governed event dashboard
 // (GET /api/v2/admin/events/:id/dashboard, lib/dashboard-contract.ts), which the
 // page fetches and re-fetches every REFRESH_SECONDS. So the privacy classes are
-// the contract's, not this page's: poster scans are exact (they resolve to the
-// organizer's own posters), link taps and check-ins are floored at K=5 and read
-// "held" below it. A failed refresh keeps the last numbers and says so — never
+// the contract's, not this page's: poster scans, link taps and check-ins are
+// all floored at K=5 (OSE-1656: scans too, as sums of poster-hours) and read
+// "held" below it; posters, places and sponsors are counts of things, exact. The note under the tiles names the tiles that came floored,
+// read from the data on each refresh, so it never claims a floor a number does
+// not have (OSE-1657). A failed refresh keeps the last numbers and says so — never
 // zeros. No scan, click, shortlink or audit row is written by looking.
 //
-// Sponsors do not use this page: their view is the signed sponsor link, whose
-// counts are floored differently (lib/pre-event-activity.ts floorPreEventActivity).
+// Sponsors do not use this page: their view is the signed sponsor link, which
+// reads the same floored numbers (lib/pre-event-activity.ts floorPreEventActivity).
 
 import { html, renderErrorPage } from './pages';
 import { escapeHtml } from '../lib/html-escape.js';
@@ -101,7 +103,7 @@ function page(id: string, title: string, status: string): string {
   <ol class="lv-days" aria-labelledby="lv-days-h" data-testid="live-days"></ol>
 
   <p class="lv-status" role="status" aria-live="polite" data-testid="live-status" data-state="loading">Loading the latest totals&hellip;</p>
-  <p class="lv-note" data-testid="live-note">Counts only. A total under 5 reads &ldquo;held&rdquo;. Nobody who scanned, tapped or checked in is named, and attendees never see this page.</p>
+  <p class="lv-note" data-testid="live-note">Counts only.<span data-testid="live-note-held"></span> Nobody who scanned, tapped or checked in is named, and attendees never see this page.</p>
 </main>
 <script>
 (function () {
@@ -123,20 +125,48 @@ function page(id: string, title: string, status: string): string {
     if (held) b.setAttribute('title', 'Fewer than ' + v.floor + ' so far'); else b.removeAttribute('title');
   }
 
+  // A floored count is an object; a day in the list may be one too.
+  function isHeld(v) {
+    return !!(v && typeof v === 'object' && (v.suppressed === true || v.count === null));
+  }
+
+  // The note names exactly the tiles whose number came floored this time.
+  var NAMES = { scans: 'poster scans', clicks: 'link taps', checkins: 'check-ins',
+    posters: 'posters out', places: 'neighbourhoods covered', sponsors: 'sponsors on show' };
+  function noteHeld(values) {
+    var held = Object.keys(NAMES).filter(function (k) { return isHeld(values[k]); })
+      .map(function (k) { return NAMES[k]; });
+    var el = document.querySelector('[data-testid="live-note-held"]');
+    if (!held.length) { el.textContent = ''; return; }
+    var list = held.length === 1 ? held[0]
+      : held.slice(0, -1).join(', ') + ' and ' + held[held.length - 1];
+    el.textContent = ' ' + list.charAt(0).toUpperCase() + list.slice(1) +
+      ' under 5 read \u201cHeld\u201d.';
+  }
+
   function render(d) {
     var reach = d.reach || {};
+    var checkins = d.participation && d.participation.explicit ? d.participation.explicit.checkins : null;
+    var sponsors = d.sponsors ? d.sponsors.on_show : null;
+    noteHeld({ scans: reach.scans, clicks: reach.clicks, checkins: checkins,
+      posters: reach.posters, places: reach.places, sponsors: sponsors });
     show('scans', reach.scans);
     show('clicks', reach.clicks);
     show('posters', reach.posters);
     show('places', reach.places);
-    show('checkins', d.participation && d.participation.explicit ? d.participation.explicit.checkins : null);
-    show('sponsors', d.sponsors ? d.sponsors.on_show : null);
+    show('checkins', checkins);
+    show('sponsors', sponsors);
     var list = document.querySelector('[data-testid="live-days"]');
     list.textContent = '';
     (Array.isArray(reach.scansByDay) ? reach.scansByDay : []).slice(-14).forEach(function (day) {
       var li = document.createElement('li');
       var b = document.createElement('b');
-      b.textContent = String(Number(day.count) || 0);
+      // A floored day reads Held, never 0 (OSE-1657). The day's count is a
+      // floored count itself (OSE-1656), so its own flag is the one to read.
+      var c = day ? day.count : null;
+      b.textContent = isHeld(day) || isHeld(c)
+        ? 'Held'
+        : String(Number(c && typeof c === 'object' ? c.count : c) || 0);
       li.appendChild(b);
       li.appendChild(document.createTextNode(String(day.day || '')));
       list.appendChild(li);

@@ -180,7 +180,7 @@ export async function handleAdminUploadFile(
         type: 'R2_UPLOAD_ERROR',
         requestId,
         eventId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorLabel(error),
         timestamp: new Date().toISOString(),
       })
     );
@@ -243,7 +243,7 @@ export async function handleGetUploadedFile(
         type: 'R2_GET_ERROR',
         requestId,
         key,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorLabel(error),
         timestamp: new Date().toISOString(),
       })
     );
@@ -255,6 +255,7 @@ export async function handleGetUploadedFile(
 
 import { ASSET_FORMATS, isAssetFormat, type AssetFormat } from '../lib/sponsor-asset';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
+import { errorLabel } from '../lib/error-label';
 
 export type SponsorAssetUploadEnv = UploadEnv & SponsorInviteEnv & { DB: D1Database };
 
@@ -398,7 +399,7 @@ export async function handleSponsorAssetUpload(
         type: 'R2_SPONSOR_ASSET_UPLOAD_ERROR',
         requestId, // correlates with the request; the draft token is a credential and is not logged
         format: fmt,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorLabel(error),
       })
     );
     return err('UPLOAD_FAILED', 'Something went wrong saving your file.', 500, requestId);

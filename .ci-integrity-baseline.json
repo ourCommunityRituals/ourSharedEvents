@@ -99,7 +99,7 @@
     }
   },
   "skipsConditional": {
-    "total": 364,
+    "total": 365,
     "byFile": {
       "tests/api/smoke/archive/bundles.spec.ts": {
         "count": 17,
@@ -398,8 +398,8 @@
         "reason": "Conditional skip (env, browser or secret gate); count may only fall."
       },
       "tests/ui/smoke/journey-attendee-arc.smoke.spec.ts": {
-        "count": 5,
-        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
+        "count": 6,
+        "reason": "Conditional skip (env, browser or secret gate); count may only fall. The 6th (2026-10-11, owner override): the updates form skips only when Cloudflare serves a Managed Challenge; it comes back out with the CI-scoped WAF skip (OSE-1162)."
       },
       "tests/ui/smoke/journey-cross-surface.smoke.spec.ts": {
         "count": 10,

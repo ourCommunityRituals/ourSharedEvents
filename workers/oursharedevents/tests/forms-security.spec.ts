@@ -199,7 +199,8 @@ describe('S4: Lifecycle job isolation', () => {
       expect(body).not.toMatch(/env\.DB\.prepare/);
       expect(body).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
       expect(body).not.toMatch(/UPDATE\s+(?!form_)/i);
-      expect(body).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
+      // subscribers: the landing-page email list, a FORMS_DB table since OSE-1661.
+      expect(body).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_|subscribers\b)/i);
     }
     // Existence guarantee — at least one source file must define the function.
     expect(

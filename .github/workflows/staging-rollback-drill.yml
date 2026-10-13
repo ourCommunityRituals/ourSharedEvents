@@ -1,0 +1,170 @@
+name: Staging rollback drill
+
+# CCR 2026-10-12, finding A2: nothing on ROLLBACK.md has been run. This is drill 1
+# of docs/runbooks/STAGING-DRILL.md, runnable from the Actions tab, on STAGING ONLY.
+#
+# Two modes, so nothing changes until the operator has read what it would do:
+#
+#   LOOK (default)   lists the staging deployments, reads /health, and reports which
+#                    migrations separate the version it would roll back to from this
+#                    commit (the release-rollbackability check). Changes nothing.
+#
+#   DRILL            needs both `rollback_to` (the version to go back to) and
+#                    `restore_to` (the version staging is on now), pasted from the LOOK
+#                    output. It rolls back, checks the site, then ALWAYS rolls forward
+#                    again to `restore_to`, and records the times in the job summary.
+#
+# It uses the staging environment name and the staging Cloudflare credential only.
+# It never targets production: `--env production` appears nowhere in this file
+# (held by tests/unit/ci/staging-rollback-drill.test.js).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type STAGING to confirm this runs against staging'
+        type: string
+        required: true
+      rollback_to:
+        description: 'DRILL only: the staging version id to roll back to (from the LOOK output)'
+        type: string
+        required: false
+      restore_to:
+        description: 'DRILL only: the version staging is on now, to restore afterwards (from the LOOK output)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-rollback-drill
+  cancel-in-progress: false
+
+env:
+  WORKER_DIR: workers/oursharedevents
+  STG_BASE_URL: https://stg.oursharedevents.com
+
+jobs:
+  drill:
+    name: 'Staging rollback drill (look, or drill)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - name: 'Refuse unless STAGING was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "STAGING" ]; then
+            echo "::error::Type STAGING in the confirm input. This workflow runs against staging only."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # ADR-008 Phase 0: this job installs the Worker, which bundles @ocr/ui from the
+        # hub commit pinned in .ocr-hub-ref. REQUIRED, never continue-on-error.
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install dependencies (worker)
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+
+      - name: 'LOOK: what staging runs, and what it could roll back to'
+        id: look
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          {
+            echo "### Staging rollback drill: look"
+            echo
+            echo "Staging /health now:"
+            echo '```'
+            curl -s --max-time 20 "$STG_BASE_URL/health" || true
+            echo
+            echo '```'
+            echo "Deployments (newest first as wrangler prints them):"
+            echo '```'
+            npx wrangler deployments list --env staging 2>&1 | tail -60 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: 'LOOK: which migrations would a rollback to the previous build leave behind?'
+        run: |
+          VERSION="$(curl -s --max-time 20 "$STG_BASE_URL/health" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})")"
+          echo "staging build stamp: ${VERSION:-unknown}"
+          SHA="$(printf '%s' "$VERSION" | sed -n 's/^stg-\([0-9a-f]\{7,\}\)-.*/\1/p')"
+          if [ -z "$SHA" ]; then
+            echo "The stamp is not stg-<sha>-<date>, so the migration comparison is skipped."
+            exit 0
+          fi
+          # Migrations added since the previous deploy's commit are what a rollback would leave behind.
+          # The commit before this one on the first-parent line stands in for the previous build.
+          PREV="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          [ -n "$PREV" ] || exit 0
+          for DIR in workers/oursharedevents/migrations workers/oursharedevents/migrations-forms; do
+            git diff --name-only "$PREV" HEAD -- "$DIR" \
+              | node scripts/ci/release-rollbackability.mjs --dir "$DIR" --label "$(basename "$DIR") since HEAD~1"
+          done
+
+      - name: 'DRILL: roll back, check the site, and always roll forward again'
+        if: ${{ github.event.inputs.rollback_to != '' && github.event.inputs.restore_to != '' }}
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ROLLBACK_TO: ${{ github.event.inputs.rollback_to }}
+          RESTORE_TO: ${{ github.event.inputs.restore_to }}
+        run: |
+          set -u
+          UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          for V in "$ROLLBACK_TO" "$RESTORE_TO"; do
+            if ! printf '%s' "$V" | grep -Eq "$UUID"; then
+              echo "::error::'$V' is not a version id (a UUID from the LOOK output)."
+              exit 1
+            fi
+          done
+          check() {
+            for P in /health /events /api/v2/events; do
+              printf '%s %s\n' "$P" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$STG_BASE_URL$P")"
+            done
+          }
+          T0=$(date +%s)
+          echo "before:"; curl -s --max-time 20 "$STG_BASE_URL/health"; echo; check
+          restore() {
+            echo "rolling forward to $RESTORE_TO"
+            npx wrangler rollback "$RESTORE_TO" --env staging --message "drill: restore" || echo "::error::RESTORE FAILED: set staging back by hand"
+          }
+          trap restore EXIT
+          npx wrangler rollback "$ROLLBACK_TO" --env staging --message "drill: rollback"
+          T1=$(date +%s)
+          sleep 15
+          echo "after rollback ($((T1 - T0))s):"; curl -s --max-time 20 "$STG_BASE_URL/health"; echo; check | tee /tmp/after.txt
+          {
+            echo "### Staging rollback drill: result"
+            echo
+            echo "- rolled back to \`$ROLLBACK_TO\` in $((T1 - T0)) s"
+            echo "- restored to \`$RESTORE_TO\` afterwards (the exit trap)"
+            echo
+            echo "Status codes while rolled back:"
+            echo '```'
+            cat /tmp/after.txt
+            echo '```'
+            echo "Copy these into the table in docs/runbooks/STAGING-DRILL.md, drill 1."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -29,19 +29,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     await expect(page.locator('[data-testid="event-main"], main').first()).toBeVisible();
     // 5W content present
     await expect(page.locator('[data-testid="venue-map"]')).toBeVisible();
-    // Wayfinding = OSE-660 universal geo-link: privacy-first, opens the visitor's
-    // OWN maps app via a geo: URI (coordinates) or maps.apple.com (address
-    // fallback), link-out only with rel="noopener noreferrer" — NEVER a Google-
-    // specific embed/tracker on the anonymous surface. (The old gmaps-link
-    // assertion was drift — a contract the app never shipped, OSE-1106.)
-    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
-      'href',
-      /^geo:|^https:\/\/maps\.apple\.com\//
-    );
-    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
-      'rel',
-      'noopener noreferrer'
-    );
+    // Wayfinding = OSE-660 directions: link-out only, rel="noopener noreferrer",
+    // never an embed or tracker on the anonymous surface. Owner 2026-10-11: one
+    // "Directions" button with two choices, Google Maps and Apple Maps (#925).
+    await expect(page.locator('[data-testid="geo-link"]')).toBeVisible();
+    for (const [which, host] of [
+      ['google', /^https:\/\/www\.google\.com\/maps\/search\//],
+      ['apple', /^https:\/\/maps\.apple\.com\//],
+    ] as const) {
+      const link = page.locator(`[data-testid="geo-link-${which}"]`);
+      await expect(link).toHaveAttribute('href', host);
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     // Share path: OG tags rendered server-side
     expect(await page.locator('meta[property="og:title"]').count()).toBe(1);
     // Anonymity affordance is part of the contract on every phase
@@ -52,16 +51,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     test.skip(!LIVE, 'SMOKE_EVENT_LIVE not seeded');
     await page.goto(`/events/${LIVE}`);
     await expect(page.locator('[data-testid="venue-map-live"]')).toBeVisible();
-    // LIVE variant of the OSE-660 geo-link (same privacy-first contract, distinct
-    // testid emitted by renderEventLiveHtml) — OSE-1106.
-    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
-      'href',
-      /^geo:|^https:\/\/maps\.apple\.com\//
-    );
-    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
-      'rel',
-      'noopener noreferrer'
-    );
+    // LIVE variant of the OSE-660 directions (same privacy-first contract,
+    // distinct testid emitted by renderEventLiveHtml) — OSE-1106. Owner
+    // 2026-10-11: one button, two choices, Google Maps and Apple Maps.
+    await expect(page.locator('[data-testid="geo-link-live"]')).toBeVisible();
+    for (const [which, host] of [
+      ['google', /^https:\/\/www\.google\.com\/maps\/search\//],
+      ['apple', /^https:\/\/maps\.apple\.com\//],
+    ] as const) {
+      const link = page.locator(`[data-testid="geo-link-live-${which}"]`);
+      await expect(link).toHaveAttribute('href', host);
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     await expect(page.locator('[data-testid="anonymity-affordance"]')).toBeVisible();
   });
 
@@ -79,7 +80,7 @@ test.describe('attendee arc — /events/:id across phases', () => {
     // Opt-in continuity CTA present and correctly targeted
     await expect(page.locator('[data-testid="email-signup-link"]')).toHaveAttribute(
       'href',
-      new RegExp(`/forms/${POST}\\?type=email`)
+      new RegExp(`/events/${POST}/updates$`)
     );
     await expect(page.locator('[data-testid="anonymity-affordance"]')).toBeVisible();
     // Regression guard: the old stub message must NOT be the whole page
@@ -115,9 +116,38 @@ test.describe('attendee arc — /events/:id across phases', () => {
   test('POST: email signup CTA lands on the working form', async ({ page }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
     await page.goto(`/events/${POST}`);
-    await page.locator('[data-testid="email-signup-link"]').click();
-    await expect(page).toHaveURL(new RegExp(`/forms/${POST}`));
+    // The link targets the event's own updates form (OSE-1684). It is not
+    // clicked: since the form moved under /events/*, an automated in-page
+    // click there meets Cloudflare's Managed Challenge, the same edge
+    // behaviour the NEXT test above describes (OSE-1162). The form is opened
+    // by its address instead, as the PRE/LIVE/POST tests open the event page.
+    const link = page.locator('[data-testid="email-signup-link"]');
+    await expect(link).toHaveAttribute('href', new RegExp(`/events/${POST}/updates$`));
+    const res = await page.goto(`/events/${POST}/updates`);
+    // Say what came back, so a red run tells the Worker's answer from the
+    // edge's: Cloudflare sets cf-mitigated on a challenge or block it serves
+    // instead of the Worker (as trace-scan-staging.sh reads it for /q/).
+    const mitigated = res?.headers()['cf-mitigated'];
+    const got =
+      `status ${res?.status() ?? 'none'}, ` +
+      `cf-mitigated ${mitigated ?? 'absent'}, ` +
+      `title "${await page.title()}", url ${page.url()}`;
+    // Even opened by its address, the form under /events/* can meet the edge's
+    // Managed Challenge from a CI runner (2026-10-11: every T4 attempt on main).
+    // The Worker never ran, so there is nothing of ours to assert. As with the
+    // next-event test (#440, owner decision 2026-09-01; owner again 2026-10-11),
+    // the link's target is asserted above, the form's render is proven by the
+    // worker's event-form-addresses.spec.ts (/updates shows form-email), and
+    // live Chrome coverage returns with the CI-scoped WAF skip (OSE-1162).
+    // Only a challenge skips; a block or any other answer still fails below.
+    if (mitigated === 'challenge') {
+      test.info().annotations.push({ type: 'edge challenge', description: got });
+      test.skip(true, `Cloudflare challenged the updates form (${got}); OSE-1162`);
+    }
     // The email form page renders an input — the loop is functionally closed
-    await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
+    await expect(
+      page.locator('input[type="email"], input[name="email"]').first(),
+      `the updates form shows an email box (${got})`
+    ).toBeVisible();
   });
 });

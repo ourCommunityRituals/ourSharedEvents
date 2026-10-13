@@ -36,11 +36,11 @@ beforeAll(async () => {
 // ─── REG-1: Core count and phase assertions ───────────────────────────────────
 
 describe('REG-1: Phase 1 event type seed', () => {
-  test('exactly 47 event types seeded', async () => {
+  test('exactly 48 event types seeded (47 from 0024 + Watch Party from 0097)', async () => {
     const result = await tenv()
       .DB.prepare('SELECT COUNT(*) as cnt FROM event_type_registry')
       .first<{ cnt: number }>();
-    expect(result?.cnt).toBe(47);
+    expect(result?.cnt).toBe(48);
   });
 
   test('all seeded types have phase=1', async () => {
@@ -112,6 +112,7 @@ describe('REG-1: Spot-check key Phase 1 UEC codes', () => {
   const spotChecks = [
     'REC-BOCCE-001',
     'SOC-BLOCK-001',
+    'SOC-WATCHPARTY-001',
     'MKT-CRAFT-001',
     'ART-MUSIC-001',
     'VOL-CLEANUP-001',
