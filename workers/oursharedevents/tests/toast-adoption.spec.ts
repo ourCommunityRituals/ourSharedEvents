@@ -47,7 +47,16 @@ import { handleSponsorPlacementRespond } from '../src/handlers/sponsor-home';
 
 const ADMIN_HTML = ADMIN_RAW.replace(/\r\n/g, '\n');
 const SPONSOR_HOME = SPONSOR_HOME_RAW.replace(/\r\n/g, '\n');
-const TAG = '<script src="/ui-toast.js" defer></script>';
+
+/**
+ * The elements that load the toast script, found by a parser. A page's markup
+ * is never cut up around a script tag here: a parser is the honest way to ask
+ * what a browser would load.
+ */
+function toastScripts(html: string) {
+  const doc = new JSDOM(html).window.document;
+  return { doc, tags: Array.from(doc.querySelectorAll('script[src="/ui-toast.js"]')) };
+}
 
 // Each admin test parses the whole page; on a busy machine that takes seconds.
 vi.setConfig({ testTimeout: 30_000 });
@@ -218,12 +227,17 @@ describe('which pages load /ui-toast.js', () => {
 
   for (const [name, html] of Object.entries(LOADS)) {
     test(`${name} loads it once, in the head, deferred, with nothing inline`, () => {
-      expect(html.match(/<script[^>]*src="\/ui-toast\.js"/g), 'one script element').toHaveLength(1);
-      const head = html.slice(0, html.indexOf('</head>'));
-      expect(head).toContain(TAG);
-      expect(head.indexOf('href="/ui.css"'), 'after the stylesheet it needs').toBeLessThan(
-        head.indexOf(TAG)
-      );
+      const { doc, tags } = toastScripts(html);
+      expect(tags, 'one script element').toHaveLength(1);
+      const tag = tags[0];
+      expect(tag.parentElement, 'in the head').toBe(doc.head);
+      // src and defer, and nothing else: no inline code, no inline handler.
+      expect(Array.from(tag.attributes, (a) => a.name).sort()).toEqual(['defer', 'src']);
+      expect(tag.textContent).toBe('');
+      const css = doc.head.querySelector('link[rel="stylesheet"][href="/ui.css"]');
+      expect(css, 'the stylesheet it needs').not.toBeNull();
+      const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
+      expect(css!.compareDocumentPosition(tag) & FOLLOWING, 'after the stylesheet').toBe(FOLLOWING);
     });
   }
 
@@ -235,7 +249,7 @@ describe('which pages load /ui-toast.js', () => {
   }
 
   test('the rendered sponsor page carries the tag', () => {
-    expect(sponsorPage()).toContain(TAG);
+    expect(toastScripts(sponsorPage()).tags).toHaveLength(1);
   });
 });
 
@@ -897,7 +911,10 @@ describe('the pages never hand the toast a raw error or a response', () => {
   });
 
   test('sponsor-home.html: no message is built from a caught error or a response field', () => {
-    const script = SPONSOR_HOME.slice(SPONSOR_HOME.lastIndexOf('<script'));
+    const doc = new JSDOM(SPONSOR_HOME).window.document;
+    const own = Array.from(doc.querySelectorAll('script')).filter((el) => !el.hasAttribute('src'));
+    expect(own, "the page's one script of its own").toHaveLength(1);
+    const script = own[0].textContent || '';
     expect(script).toContain('function failed(card, sentence, res, body, action)');
     expect(script).not.toMatch(/\.(?:error|message|stack)\b/);
     expect(script).not.toMatch(/data\.code\b/);
