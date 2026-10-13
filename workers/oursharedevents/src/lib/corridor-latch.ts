@@ -42,6 +42,7 @@
 import { CORRIDOR_READY_MIN_EVENTS, CORRIDOR_WINDOW_DAYS } from './corridor-readiness';
 import { LIST_MAX } from './landing-area';
 
+import { errorLabel } from './error-label';
 /** The row key that marks "this brand's landing area has latched". Not a cell. */
 export const LANDING_AREA_LATCH_KEY = 'landing-area';
 
@@ -137,7 +138,7 @@ export async function runCorridorLatch(env: CorridorLatchEnv): Promise<void> {
       JSON.stringify({
         type: 'LIFECYCLE',
         job: 'corridor_latch',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

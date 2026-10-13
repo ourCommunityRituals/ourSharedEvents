@@ -300,4 +300,6 @@ export const NODE_SPECS = [
   'tests/form-next-step-dom.spec.ts',
   // Form pages, less text (owner 2026-10-11): the same jsdom render as above.
   'tests/form-pages-less-text.spec.ts',
+  // The error label a log line may carry: a pure function, no runtime.
+  'tests/error-label.spec.ts',
 ];

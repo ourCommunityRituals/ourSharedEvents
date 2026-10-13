@@ -30,6 +30,7 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from '../lib/pool-contract';
+import { errorLabel } from '../lib/error-label';
 
 // Intersect AdminEnv so the on-demand handler can resolve the operator identity
 // (CF Access email / key fallback) the same way the rest of the admin surface
@@ -144,7 +145,7 @@ async function backupEventsPooled(
           source: 'events_backup',
           row_locator: r.id ?? null,
           legal_clearance_tier: r.legal_clearance_tier ?? null,
-          reason: e.message,
+          reason: errorLabel(e),
         })
       );
       continue;
@@ -339,7 +340,7 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
       },
     });
   } catch (err) {
-    bqBackupError = err instanceof Error ? err.message : String(err);
+    bqBackupError = errorLabel(err);
     console.error(
       JSON.stringify({ type: 'BQ_BACKUP_ERROR', error: bqBackupError, timestamp: now })
     );
@@ -352,7 +353,7 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
         request_id: cronReqId,
         rows_exported: 0,
         outcome: 'failed',
-        details: { error: bqBackupError },
+        details: { error: err instanceof Error ? err.message : String(err) },
       });
     } catch {
       // Manifest write failure is non-fatal — the backup error is already logged above.

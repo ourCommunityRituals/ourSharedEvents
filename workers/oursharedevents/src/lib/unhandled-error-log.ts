@@ -13,16 +13,23 @@
  *     the same label the OPERATION_COST line uses, so the two join;
  *   - `errorClass`: the error's constructor name (`TypeError`), or the type of a
  *     thrown value that is not an Error;
- *   - `error`: what the error said, with every piece of the request URL removed.
- *     An error is free text and can repeat the URL it failed on
- *     (`fetch failed: https://…?t=…`); those pieces are replaced, the rest stays.
+ *   - `error`: for an error from the database, its label and nothing else
+ *     (`Error D1_ERROR SQLITE_CONSTRAINT`, lib/error-label.ts): the D1 client
+ *     writes a response body and a bound value into its messages, so the
+ *     message can quote a row. For any other error, what it said, with every
+ *     piece of the request URL removed. An error is free text and can repeat
+ *     the URL it failed on (`fetch failed: https://…?t=…`); those pieces are
+ *     replaced, the rest stays.
  *
- * Limits: only the URL is removed. A message that repeats a request header or
+ * Limits: an error is taken to be from the database when its message carries a
+ * D1 or SQLite code, which every error the D1 client throws does. In any other
+ * message only the URL is removed. A message that repeats a request header or
  * body value is not rewritten, and a message that repeats only a fragment of a
  * URL piece (a JSON parse error quoting the first characters) keeps that fragment.
  */
 
 import { normalizeOperation } from './cost-metric';
+import { errorClassOf, errorCodes, errorLabel } from './error-label';
 
 export interface UnhandledErrorSummary {
   op: string;
@@ -79,12 +86,6 @@ function urlPieces(rawUrl: string): string[] {
     .sort((a, b) => b.length - a.length);
 }
 
-function errorClassOf(err: unknown): string {
-  if (!(err instanceof Error)) return typeof err;
-  // A name is set by code, but keep it to a plain identifier all the same.
-  return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(err.name) ? err.name : 'Error';
-}
-
 /** Never throws: it runs inside the catch that reports the failure. */
 export function summarizeUnhandledError(err: unknown, request: Request): UnhandledErrorSummary {
   let op = 'OTHER /:x';
@@ -93,11 +94,15 @@ export function summarizeUnhandledError(err: unknown, request: Request): Unhandl
   try {
     op = normalizeOperation(request.method, new URL(request.url).pathname);
     errorClass = errorClassOf(err);
-    let text = err instanceof Error ? err.message : String(err);
-    for (const piece of urlPieces(request.url)) {
-      text = text.split(piece).join(REDACTED);
+    if (errorCodes(err).length > 0) {
+      error = errorLabel(err);
+    } else {
+      let text = err instanceof Error ? err.message : String(err);
+      for (const piece of urlPieces(request.url)) {
+        text = text.split(piece).join(REDACTED);
+      }
+      error = text;
     }
-    error = text;
   } catch {
     // keep the defaults: the 500 must still be answered
   }

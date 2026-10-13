@@ -89,6 +89,7 @@ import {
   eventFormPath,
   injectCanonical,
 } from '../lib/canonical.js';
+import { errorLabel } from '../lib/error-label';
 
 export interface PagesEnv extends TurnstileEnv {
   WORKER_ENV?: string;
@@ -2560,7 +2561,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
         console.error(
           JSON.stringify({
             type: 'SUBSCRIBE_DB_ERROR',
-            error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+            error: errorLabel(dbErr),
           })
         );
       }

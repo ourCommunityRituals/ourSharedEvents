@@ -56,6 +56,7 @@ import { MAP_FLIP_NOTE, auditMapFlip, flipFired, mapFlipStatement } from '../lib
 import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
 import { mintBeaconToken, verifyBeaconToken, type BeaconTokenEnv } from '../lib/beacon-token';
 
+import { errorLabel } from '../lib/error-label';
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface SponsorsEnv
@@ -308,7 +309,7 @@ export async function handleAdminListSponsors(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminListSponsors',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to query sponsors', 503, rid);
@@ -435,7 +436,7 @@ export async function handleAdminGetSponsor(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminGetSponsor',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to query sponsor', 503, rid);
@@ -677,9 +678,12 @@ export async function handleAdminCreateSponsor(
   try {
     batchResults = await env.DB.batch(stmts);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreateSponsor', error: msg })
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminCreateSponsor',
+        error: errorLabel(err),
+      })
     );
     return errorResponse('DB_ERROR', 'Failed to create sponsor', 503, rid);
   }
@@ -1037,7 +1041,7 @@ export async function handleAdminUpdateSponsor(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminUpdateSponsor',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to update sponsor', 503, rid);
@@ -1141,7 +1145,7 @@ export async function handleAdminDeleteSponsor(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminDeleteSponsor',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to delete sponsor', 503, rid);
@@ -1203,7 +1207,7 @@ export async function handleSetSponsorEventTypes(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleSetSponsorEventTypes',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to set event types', 503, rid);
@@ -1253,7 +1257,7 @@ export async function handleGetSponsorEventTypes(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetSponsorEventTypes',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to query event types', 503, rid);
@@ -1313,7 +1317,7 @@ export async function handleSetSponsorAreas(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleSetSponsorAreas',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to set areas', 503, rid);
@@ -1363,7 +1367,7 @@ export async function handleGetSponsorAreas(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetSponsorAreas',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to query areas', 503, rid);
@@ -1405,7 +1409,7 @@ export async function handleGetSponsorsForEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetSponsorsForEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to resolve sponsors', 503, rid);
@@ -1478,7 +1482,7 @@ export async function handleGetSponsorBundle(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetSponsorBundle',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to build sponsor bundle', 503, rid);
@@ -1614,7 +1618,7 @@ export async function handleLogImpression(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleLogImpression',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to log impression', 503, rid);
@@ -1872,7 +1876,7 @@ export async function handleLogClick(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleLogClick',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     return errorResponse('DB_ERROR', 'Failed to log click', 503, rid);

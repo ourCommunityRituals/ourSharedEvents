@@ -356,6 +356,7 @@ import {
   sharedReportBucketKey,
   type SharedReportReadEnv,
 } from './handlers/shared-report-read';
+import { errorLabel } from './lib/error-label';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -448,7 +449,7 @@ async function formRouteLimit(
     console.warn(
       JSON.stringify({
         type: 'FORM_RATE_LIMIT_FAIL_OPEN',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

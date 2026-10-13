@@ -22,6 +22,7 @@ import { corsHeaders } from '../lib/cors';
 import { REPEAT_SOURCE_COLUMNS, buildRepeatBody, type RepeatSource } from '../lib/event-repeat';
 import { handleCreateEvent, type EventsEnv } from './events';
 
+import { errorLabel } from '../lib/error-label';
 const SLUG_ATTEMPTS = 3;
 
 function fail(code: string, message: string, status: number, rid: string): Response {
@@ -58,7 +59,7 @@ export async function handleAdminRepeatEvent(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleAdminRepeatEvent',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );

@@ -48,6 +48,8 @@
  * aggregate counts, mirroring OSE-207 / `draft-expiry.ts`.
  */
 
+import { errorLabel } from './error-label';
+
 export interface ScanReturnsRetentionEnv {
   DB: D1Database;
   SCAN_RETURNS_RETENTION_DAYS?: string;
@@ -115,7 +117,7 @@ export async function runScanReturnsRetention(
       JSON.stringify({
         type: 'SCAN_RETURNS_RETENTION_ERROR',
         table: 'scan_node_returns',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         days,
         timestamp: now,
       })
@@ -135,7 +137,7 @@ export async function runScanReturnsRetention(
       JSON.stringify({
         type: 'SCAN_RETURNS_RETENTION_ERROR',
         table: 'anon_id_returns',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         days,
         timestamp: now,
       })

@@ -2,6 +2,8 @@
 
 Date: 2026-10-12. Branch `be/event-spine-keys`. Three loops, extended scrum team, asked for by the owner.
 
+**After the review (2026-10-13).** The owner read the result, had the change merged with the gate not passed (PR #978, `f78d0fa8`, all PR checks green), and confirmed one of the builder's choices. What that changes is in "Risks accepted" in section C. The review below is as it was written before the merge.
+
 ## Verdict
 
 |                       |                                                                                                                                                                                                                          |
@@ -166,7 +168,7 @@ Each line is an unresolved finding or a risk nobody has accepted. By the protoco
 | R7  | Medium | A writer outside the Worker can leave a key wrong until the nightly check replaces it: a night at today's size, more as the table grows. A trigger would close it; the deploy gate refuses triggers | loop 1       | 5      | Owner: accept, or ask for the trigger as its own change     |
 | R8  | Medium | The four staging requests have not run on staging (they run after merge). They passed once against a local worker (section D)                                                                       | loop 1       | 5      | The staging chain after merge                               |
 | R9  | Medium | Nothing on staging checks that keys are written; no API shows them. On a local worker the nightly check wrote a key that matched (section D)                                                        | loop 2       | 6.25   | A read-only count on staging after the first night, by hand |
-| R10 | Medium | The apostrophe classification is the builder's reading of a conditional ruling                                                                                                                      | loop 2       | 6.25   | Owner: confirm                                              |
+| R10 | Medium | The apostrophe classification is the builder's reading of a conditional ruling                                                                                                                      | loop 2       | 6.25   | Closed 2026-10-13: the owner confirmed it                   |
 | R11 | Medium | Nothing alerts on the nightly line, or on its absence                                                                                                                                               | loop 2       | 6.25   | OSE-1603; until then someone has to look                    |
 | R12 | Medium | The check's CPU cost is measured in Node only, not on Workers                                                                                                                                       | loop 2       | 6.25   | The first staging nights                                    |
 | R13 | Medium | A stored key does not say which rule version made it                                                                                                                                                | loop 3       | 7.5    | OSE-1617's acceptance                                       |
@@ -206,7 +208,15 @@ One commit: the migration, the rule and fixtures, the store and nightly check, t
 
 ### Risks accepted
 
-None yet. Nobody has accepted any of R1 to R23. Listing a risk here is not accepting it.
+When the review was written: none. Nobody had accepted any of R1 to R23, and listing a risk here is not accepting it.
+
+**2026-10-13, the owner, after reading the result:**
+
+- **Merge now.** Asked what should happen to the green draft PR, the owner chose "Merge it now". The change was merged as `f78d0fa8` at 01:27 UTC, outside the hour before the 03:07 UTC nightly run (R15). This is a decision to merge with the gate not passed and with R1 open. It is not an acceptance of R1: the wizard change is written up as OSE-1717.
+- **R10 is closed.** Asked which of the builder's choices to confirm as built, the owner chose the apostrophe: comparing venues is the technical case, "Joe's" and "Joes" are one venue, and the name is shown as typed.
+- **Not confirmed.** The owner did not choose the other three offered: venue corrections keeping no history (R3), accents kept apart (R6), and the other defaults (R20). They stay open.
+
+The arithmetic after that: 113 less R10 (6.25) is 106.75. **The system score is still 0%.** R8, R9, R12 and R22 can now be checked on staging. R14 stands: the fixes made after loop 3 went through CI and no reviewer.
 
 ### Human gate
 
