@@ -80,7 +80,7 @@ function errorResponse(code: string, message: string, status: number, rid: strin
       requestId: rid,
       timestamp: new Date().toISOString(),
     },
-    { status }
+    { status, headers: { 'X-Request-Id': rid } }
   );
 }
 
