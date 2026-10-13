@@ -114,7 +114,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'of the UPDATE below it fell inside the 400-character window this scan ' +
     'reads. That UPDATE now also clears the spine keys and sits further down, ' +
     'so the read is named for what it is.',
-  'lib/spine-keys-store.ts:344':
+  'lib/spine-keys-store.ts:341':
     'Nightly spine key check (runSpineKeyCheck, OSE-1615). Cross-brand BY ' +
     'DESIGN: it reads events of every brand, a page at a time in id order ' +
     '(`WHERE e.id > ?1`, at most 5,000 a run), computes venue_canonical_id / ' +

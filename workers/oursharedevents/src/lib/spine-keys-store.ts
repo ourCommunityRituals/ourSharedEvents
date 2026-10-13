@@ -39,6 +39,7 @@
  * reads source text, so it is a second check, not the guarantee.
  */
 
+import { errorLabel } from './error-label';
 import { computeSpineKeys, type SpineKeyInputs, type SpineKeys } from './spine-keys';
 
 /** The event columns a key is computed from. `event_type_id` gives `uec_code`. */
@@ -126,14 +127,10 @@ const landed = (res: { meta?: { changes?: number } }): boolean => (res.meta?.cha
  * What a log line may say about an error: its class, and any database error
  * code in its message. Never the message itself. The database client's own
  * errors can quote what it was sent or what came back ("Failed to parse body as
- * JSON, got: ..."), and what comes back here is rows of every brand.
+ * JSON, got: ..."), and what comes back here is rows of every brand. The one
+ * helper for the whole Worker is lib/error-label.ts.
  */
-export function errorLabel(err: unknown): string {
-  const name = err instanceof Error ? err.name : typeof err;
-  const text = err instanceof Error ? err.message : String(err);
-  const codes = text.match(/\b(?:D1|SQLITE)_[A-Z_]+\b/g) ?? [];
-  return [name, ...new Set(codes)].join(' ');
-}
+export { errorLabel };
 
 export const REFRESH_ATTEMPTS = 3;
 
