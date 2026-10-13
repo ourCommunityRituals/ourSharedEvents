@@ -41,6 +41,8 @@ ON CONFLICT(id) DO UPDATE SET
   start_date = NULL,
   starts_at = NULL,
   event_type_id = NULL,
+  venue_canonical_id = NULL,
+  event_correlation_id = NULL,
   qr_verified = 0,
   is_published = 0,
   listed_from = NULL,

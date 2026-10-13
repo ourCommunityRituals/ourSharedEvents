@@ -25,6 +25,7 @@
 import { geocodeVenue } from './geo';
 import { type MapsEnv } from './maps';
 import { maybeTag } from './h3-tagging';
+import { refreshSpineKeys } from './spine-keys-store';
 
 /**
  * Google result types that name a spot. Anything else (locality, postal_code,
@@ -116,7 +117,7 @@ export async function savePlaceLookup(
     const tags = maybeTag(r.lat, r.lon);
     await db
       .prepare(
-        'UPDATE events SET lat = ?, lon = ?, h3_res9 = ?, h3_res7 = ?, place_checked_at = ? WHERE id = ?'
+        'UPDATE events SET lat = ?, lon = ?, h3_res9 = ?, h3_res7 = ?, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
       )
       .bind(r.lat, r.lon, tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, now, eventId)
       .run();
@@ -125,7 +126,7 @@ export async function savePlaceLookup(
   if (!lookupWasAnswered(r)) return;
   await db
     .prepare(
-      'UPDATE events SET lat = NULL, lon = NULL, h3_res9 = NULL, h3_res7 = NULL, place_checked_at = ? WHERE id = ?'
+      'UPDATE events SET lat = NULL, lon = NULL, h3_res9 = NULL, h3_res7 = NULL, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
     )
     .bind(now, eventId)
     .run();
@@ -187,6 +188,7 @@ export async function runEventPlaceBackfill(
     try {
       const r = await lookUpEventPlace(env, row.where_address, row.location, fetcher);
       await savePlaceLookup(env.DB, row.id, r);
+      if (lookupWasAnswered(r)) await refreshSpineKeys(env.DB, row.id);
       if (lookupWasAnswered(r)) result.checked++;
       if (r.found) result.found++;
     } catch {

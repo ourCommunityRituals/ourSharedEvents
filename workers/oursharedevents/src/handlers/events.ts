@@ -54,6 +54,12 @@ import {
   type PlaceState,
 } from '../lib/event-place';
 import { type MapsEnv } from '../lib/maps';
+import {
+  refreshSpineKeys,
+  SPINE_KEYS_CLEAR_SQL,
+  suppliedSpineKeyField,
+  touchesSpineKeyInputs,
+} from '../lib/spine-keys-store';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -116,6 +122,19 @@ async function resolveEventType(
     .first<{ id: string }>();
   if (!row) return { ok: false };
   return { ok: true, id: row.id };
+}
+
+/**
+ * OSE-1615: the spine keys are computed by the server (lib/spine-keys.ts). A
+ * body that names one is refused whole, whatever the value, null included.
+ */
+function spineKeyRefused(field: string, rid: string): Response {
+  return errorResponse(
+    'SERVER_COMPUTED_FIELD',
+    `${field} is computed by the server and cannot be sent`,
+    400,
+    rid
+  );
 }
 
 function requestId(): string {
@@ -537,6 +556,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
   }
 
+  const suppliedKey = suppliedSpineKeyField(body);
+  if (suppliedKey) return spineKeyRefused(suppliedKey, rid);
+
   const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : '';
   if (!title) {
     return errorResponse('MISSING_FIELD', 'Missing required field: title', 400, rid);
@@ -941,6 +963,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     }
   }
 
+  // OSE-1615: both spine keys, from the row as it now stands (the place lookup
+  // above may just have given it its cell).
+  await refreshSpineKeys(env.DB, id);
+
   return Response.json(
     {
       ok: true,
@@ -994,6 +1020,9 @@ export async function handleUpdateEvent(
   } catch {
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
   }
+
+  const suppliedKey = suppliedSpineKeyField(body);
+  if (suppliedKey) return spineKeyRefused(suppliedKey, rid);
 
   // Status validation (if provided)
   if ('status' in body && body.status !== null) {
@@ -1143,6 +1172,19 @@ export async function handleUpdateEvent(
 
   // OSE-489: lat/lon are REAL columns — handle separately from string allowedFields.
   let geoUpdated = false;
+  // OSE-1615: a latitude or longitude that is not on the globe is refused here,
+  // before anything is written. It used to be stored and then fail when its
+  // cell was computed, and that failure would now leave the event with no cell.
+  const offTheGlobe = (v: unknown, limit: number): boolean =>
+    typeof v === 'number' && Number.isFinite(v) && Math.abs(v) > limit;
+  if (offTheGlobe(body.lat, 90) || offTheGlobe(body.lon, 180)) {
+    return errorResponse(
+      'INVALID_COORDINATES',
+      'lat must be between -90 and 90, and lon between -180 and 180',
+      400,
+      rid
+    );
+  }
   if ('lat' in body) {
     const v = body.lat;
     if (v === null || (typeof v === 'number' && Number.isFinite(v))) {
@@ -1159,6 +1201,11 @@ export async function handleUpdateEvent(
       geoUpdated = true;
     }
   }
+  // OSE-1615: the old cell described the old coordinates, so it goes in this
+  // same statement; the cell statement after the save writes the new one. If
+  // that statement fails the row has no cell (and so no spine key), never the
+  // old cell on the new coordinates.
+  if (geoUpdated) sets.push('h3_res9 = NULL', 'h3_res7 = NULL');
 
   // Owner report 2026-10-11: a changed place (street address or place name)
   // with no coordinates in the same request is looked up again after the save
@@ -1357,6 +1404,10 @@ export async function handleUpdateEvent(
   values.push(new Date().toISOString());
   values.push(eventId);
 
+  // OSE-1615: whether this PUT changes anything a spine key is computed from.
+  // New coordinates count: they drop the cell above.
+  const spineKeysStale = touchesSpineKeyInputs(sets);
+
   // Set only when this PUT moves the event into or out of active.
   let listedFrom: string | null | undefined;
   // The status this PUT read before deciding; the UPDATE only lands if the row
@@ -1445,6 +1496,10 @@ export async function handleUpdateEvent(
       values.splice(values.length - 1, 0, listedFromForPublish(env.PUBLISH_GRACE_MINUTES));
     }
 
+    // OSE-1615: an edit to anything a spine key is computed from clears both
+    // keys in this same statement; they are computed again once it has landed.
+    if (spineKeysStale) sets.push(SPINE_KEYS_CLEAR_SQL);
+
     let where = ' WHERE id = ?';
     if (observedStatus !== undefined) {
       where += ' AND status = ?';
@@ -1500,7 +1555,9 @@ export async function handleUpdateEvent(
         .bind(eventId)
         .first<{ lat: number | null; lon: number | null }>();
       const tags = maybeTag(geo?.lat ?? null, geo?.lon ?? null);
-      await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+      await env.DB.prepare(
+        'UPDATE events SET h3_res9 = ?, h3_res7 = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+      )
         .bind(tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, eventId)
         .run();
     }
@@ -1536,6 +1593,8 @@ export async function handleUpdateEvent(
       );
     }
   }
+
+  if (spineKeysStale) await refreshSpineKeys(env.DB, eventId);
 
   return Response.json(
     {
@@ -1829,9 +1888,12 @@ export async function handleBackfillH3Cells(request: Request, env: EventsEnv): P
     try {
       const tags = maybeTag(row.lat, row.lon);
       if (tags) {
-        await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+        await env.DB.prepare(
+          'UPDATE events SET h3_res9 = ?, h3_res7 = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+        )
           .bind(tags.h3_res9, tags.h3_res7, row.id)
           .run();
+        await refreshSpineKeys(env.DB, row.id);
         updated++;
       }
     } catch (err) {

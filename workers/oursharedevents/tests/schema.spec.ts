@@ -117,6 +117,8 @@ const EXPECTED_INDEXES = [
   'idx_shortlinks_event_kind', // 0073 (Rb) — per-destination click-out reads
   'idx_events_status_updated', // 0075 — admin ?status= filter + stale-draft sweep
   'idx_events_created_by', // 0075 — admin ?mine=1 filter
+  'idx_events_venue_canonical', // 0104 (OSE-1615) — all the events at one venue
+  'idx_events_event_correlation', // 0104 (OSE-1615) — the rows of one event night
   // Campaigns (migrations 0039/0040) — idx_sponsors_is_local + idx_sponsors_campaign_id
   // retired by OSE-799 A2 (0067): locality/campaign moved to sponsor_placement.
   'idx_campaigns_brand_id',
@@ -139,7 +141,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 48, // 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0085 settings_json (OSE-869); 0093 listed_from (publish grace); 0099 place_checked_at (zip search)
+  events: 50, // 0104 venue_canonical_id + event_correlation_id (OSE-1615); 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0085 settings_json (OSE-869); 0093 listed_from (publish grace); 0099 place_checked_at (zip search)
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
@@ -318,7 +320,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 80 custom indexes exist', async () => {
+  test('all 82 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_return,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -351,7 +353,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(80); // +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(82); // +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

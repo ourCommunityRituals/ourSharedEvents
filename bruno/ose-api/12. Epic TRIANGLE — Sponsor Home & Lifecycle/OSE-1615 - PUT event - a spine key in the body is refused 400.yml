@@ -1,0 +1,39 @@
+info:
+  name: OSE-1615 | admin events | PUT with venue_canonical_id is refused (400)
+  type: http
+  seq: 15
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"title":"must not land","venue_canonical_id":"00000000000000000000000000000000"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: the two spine keys on an event are computed by the server from
+        // the stored row. A body that names one is refused whole, before any
+        // write, so the title in this body never lands either.
+        test('400 SERVER_COMPUTED_FIELD', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('SERVER_COMPUTED_FIELD');
+        });
+        test('the answer names the field that was refused', function () {
+          expect(String(res.getBody().error)).to.include('venue_canonical_id');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
