@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0083; append-only 0001–0083)
+- `DB` — main / anonymous public surface (highest migration: 0104; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,33 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0104: events.venue_canonical_id + events.event_correlation_id, each with an
+-- index (OSE-1615). Additive. THE ROLLBACK IS: revert the Worker and LEAVE THE
+-- COLUMNS. The older Worker reads neither column and runs unchanged.
+--
+-- One thing the older Worker does not do: clear the keys when it edits a venue,
+-- a type or a start. A row it edits in that window keeps the key of the row as
+-- it was. Nothing reads the keys yet, and the nightly check of the newer Worker
+-- (runSpineKeyCheck) computes rows again and replaces a key that no longer
+-- matches, at most 200 a night: one night when fewer than 200 rows are waiting
+-- (edited rows and rows with no key yet, together) and the table has at most
+-- 5,000 events; more nights otherwise. To have no wrong key
+-- at all in the meantime, the owner can clear every key before redeploying.
+-- The check then fills them back in at 200 a night, so for a while events
+-- have no key rather than a wrong one:
+--   UPDATE events SET venue_canonical_id = NULL, event_correlation_id = NULL;
+--
+-- Surgical reverse, only if the columns themselves must go:
+DROP INDEX IF EXISTS idx_events_event_correlation;
+DROP INDEX IF EXISTS idx_events_venue_canonical;
+ALTER TABLE events DROP COLUMN event_correlation_id;
+ALTER TABLE events DROP COLUMN venue_canonical_id;
+
+-- NOTE (2026-10-12): a search of this file finds no entry for migrations 0093 to
+-- 0103, nor for 0084, 0085 and 0087. They are not written here, because they
+-- were not read for this change. docs/runbooks/PRODUCTION-MIGRATION-PLAN.md
+-- says what each of 0078 to 0104 does and which of them change rows.
+
 -- 0092: index on anon_id_returns(pepper_epoch) (OSE-1460 review). Drop it before
 -- rolling back 0091.
 DROP INDEX IF EXISTS idx_anon_id_returns_pepper_epoch;

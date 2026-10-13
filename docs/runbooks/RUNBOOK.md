@@ -262,6 +262,70 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 ---
 
+### Reading the nightly spine key check (`SPINE_KEY_CHECK`)
+
+The same 03:00 UTC run ends with a check of the two spine keys on events
+(`venue_canonical_id`, `event_correlation_id`; `src/lib/spine-keys-store.ts`). It
+starts once every other nightly job has settled and logs one line, type
+`SPINE_KEY_CHECK`. The line is a warning when it corrected a key, met an error or
+left rows for another night, and an ordinary log line otherwise. Nothing alerts
+on it, and no alerting exists in the repo (OSE-1603): look for it in the cron
+window.
+
+**No `SPINE_KEY_CHECK` line in the window means the check did not run**: one of
+the other nightly jobs never finished, or the run was cut off.
+
+| Field                               | Meaning                                                                                                                       |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `checked`                           | Events read this run (at most 5,000). Not the size of the table when the table is larger.                                     |
+| `with_venue_key` / `with_event_key` | Of the events read, how many have what a venue key and an event key need. The rest have no key, by design.                    |
+| `filled`                            | Events given a key they did not have. Expected after a deploy and after seeds run.                                            |
+| `corrected`                         | Events whose stored key was wrong and was replaced. See below.                                                                |
+| `errors`, `first_error`             | Rows that could not be computed or written, and the first error's class and database code (never its message).                |
+| `incomplete`, `stopped`             | Rows were left for another night. `stopped` says why the run ended early; it is null when a write failed but the run went on. |
+
+**`corrected` above zero** means an input of a key changed without the keys being
+cleared. Causes: a type's `uec_code` was changed in the registry; a seed file or
+migration changed a venue, cell, type or start and did not clear the keys; SQL run
+by hand; an older Worker version ran after migration 0104 (a rollback); or the
+rule in `lib/spine-keys.ts` changed. A night of it after one of those (several
+nights when many rows are waiting) is the check doing its job. The same count
+every night means something keeps writing without clearing: find the writer
+(`tests/spine-keys-writers.spec.ts` lists the shapes it can and cannot see).
+
+What to do for each `stopped` value:
+
+- `write_cap`: 200 keys were written and more are waiting. Expected for a few
+  nights after a deploy. Nothing to do unless it lasts longer than the number of
+  events waiting, divided by 200, in nights.
+- `row_cap`: the table has more than 5,000 events, so a run reads part of it and
+  the next run starts elsewhere. Nothing to do; a given row is reached within a
+  few nights, more as the table grows.
+- `time`: the run took more than 10 seconds, which means the database was slow.
+  Look at the other jobs' lines for the same night. One night of it needs nothing.
+- `db_error`: a page could not be read. `first_error` has the class and code. The
+  run stopped; the next night starts at a different point. If it repeats, treat
+  it as a database problem, not a spine key problem.
+
+`errors` with `stopped` null means a batch of writes failed. A batch is one
+transaction: every write in that page's batch failed together, and they are
+tried again on a later night. The same `first_error` every night needs a person:
+take the code to the database's own error documentation.
+
+On staging `filled` is a small number most nights: the CI seed files clear the
+keys of the events they reset, and the check puts them back.
+
+A save that could not store its keys logs `SPINE_KEYS_REFRESH_FAILED` (a
+warning). The event keeps no key until a nightly check gives it one.
+
+**An event with coordinates and no map cell** is off the map and has no key.
+This is what is left if a coordinate change saved and the statement that computes
+the new cell then failed (the request answered 503). The check cannot repair it.
+Save the event's coordinates again, or, as a platform admin, call the one-shot
+cell backfill route (`POST /api/v2/admin/events/backfill-h3-cells`).
+
+---
+
 ### Issue: An Event Is Still Visible After Undo / Take Offline
 
 **Symptoms:**

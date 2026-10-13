@@ -1,0 +1,49 @@
+info:
+  name: OSE-1615 | public event | the answer carries neither spine key
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: venue_canonical_id and event_correlation_id are on the event
+        // row for joining measures. They are not in the public projection
+        // (lib/public-event-projection.ts), by name or by value.
+        //
+        // Behind a Cloudflare Access challenge the answer is not JSON. That is
+        // the same case the neighbouring GET /api/v2/events/:id request allows
+        // for: it is named as its own test, so a run shows which case it met.
+        const ct = res.getHeader('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          test('not JSON: an Access challenge, nothing to check for keys', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        test('200 with the event', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().item.id).to.be.a('string');
+        });
+        test('the item has neither key', function () {
+          const item = res.getBody().item;
+          expect(Object.keys(item)).to.not.include('venue_canonical_id');
+          expect(Object.keys(item)).to.not.include('event_correlation_id');
+        });
+        test('neither name appears anywhere in the answer', function () {
+          const raw = JSON.stringify(res.getBody());
+          expect(raw).to.not.include('venue_canonical_id');
+          expect(raw).to.not.include('event_correlation_id');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

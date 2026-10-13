@@ -104,7 +104,29 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:416':
+  'handlers/events.ts:1881':
+    'One-shot cell backfill (handleBackfillH3Cells, OSE-489). Cross-brand BY ' +
+    'DESIGN and platform-only: the router puts `_platformOnly` in front of it, so ' +
+    'no brand admin reaches it. It gives every event that has coordinates and no ' +
+    'cell its cell, writes each row back by id, and answers with counts and, for ' +
+    'a row that failed, that row’s id and the error. Until ' +
+    'OSE-1615 this read had no entry here: it passed because the `WHERE id = ?` ' +
+    'of the UPDATE below it fell inside the 400-character window this scan ' +
+    'reads. That UPDATE now also clears the spine keys and sits further down, ' +
+    'so the read is named for what it is.',
+  'lib/spine-keys-store.ts:344':
+    'Nightly spine key check (runSpineKeyCheck, OSE-1615). Cross-brand BY ' +
+    'DESIGN: it reads events of every brand, a page at a time in id order ' +
+    '(`WHERE e.id > ?1`, at most 5,000 a run), computes venue_canonical_id / ' +
+    'event_correlation_id again and writes them where they differ, each row by ' +
+    'its id and at most 200 a run. It reads the columns a key is computed from ' +
+    'and the stored keys. It returns counts to the scheduler and logs counts, ' +
+    'why it stopped and the first error’s class and code, never its message or a row’s id or text ' +
+    '(tested: "a batch of writes that fails" and "a database that cannot be read" in spine-keys-store.spec.ts, each with an error whose message holds row data). Its ' +
+    'one caller is the scheduled handler, so it is not reachable from any ' +
+    "request path. (The store's other read, in refreshSpineKeys, is by a held " +
+    'id and needs no entry.)',
+  'handlers/events.ts:435':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -122,7 +144,8 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
     'by OSE-1500, whose one-line content-type import lands above it; 400→401 by ' +
     'OSE-1684, whose one-line event-code import lands above it; 401→403 by the ' +
-    'event place lookup, whose event-place and maps imports land above it. Scope ' +
+    'event place lookup, whose event-place and maps imports land above it; →434 ' +
+    'by OSE-1615, whose spine-keys-store import and refusal helper land above it. Scope ' +
     'enforcement unchanged; ' +
     'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
   'handlers/portfolio-rollup.ts:185':
@@ -130,8 +153,9 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
     '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
     'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
-  'lib/event-place.ts:164':
-    'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11). ' +
+  'lib/event-place.ts:165':
+    'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11; ' +
+    '163→164 by the OSE-1615 spine-keys-store import). ' +
     'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
     'saves looked places up, for every brand, at most 25 a night. It writes each ' +
     'row back by id and returns nothing to any caller; not reachable from any ' +
