@@ -1,6 +1,6 @@
 /**
- * What a failure toast reads from a refused request: the form switch, and the
- * publish and unpublish steps of a status change.
+ * What a failure toast reads from a refused request, past the first refusal:
+ * the form switch, and the publish and unpublish steps of a status change.
  *
  * A failure toast shows two things and reads them from one place each
  * (`ocrToast.detailsFrom`): the body's `code` and the `X-Request-Id` response
@@ -8,22 +8,23 @@
  *
  * What this holds, for PUT /api/v2/admin/events/:id/flags/:key and for
  * POST /api/v2/admin/events/:id/verify-qr and /unverify-qr:
- *   - a refusal carries a `code`, and `X-Request-Id` as a short id, equal to
- *     the body's `requestId`
+ *   - a refusal on a real event (a status that cannot move that way, a
+ *     publish with no start time, a status that moved while saving) carries a
+ *     `code`, and `X-Request-Id` as a short id, equal to the body's `requestId`
  *   - the reference is the one on the request's audit row, and on the flag
  *     handler's FLAG_EVENT log line, so it can be found later
  *   - an answer that worked carries the header too, and its body is unchanged
  *
- * The rows of REFUSALS have the shape of the table of the same name in
- * ui-toast-route.spec.ts ("what a failure toast reads from a refused request"),
- * which comes with the toast adoption and was not on main when this was
- * written. Once it is, these rows belong in that table.
+ * The refusal for a thing that is not there, one per endpoint, is in the
+ * REFUSALS table of ui-toast-route.spec.ts ("what a failure toast reads from a
+ * refused request"). The rows here have the same shape and need seeded events.
  *
  * Level: W (workers pool, real D1, real routes through SELF).
  *
  * @born-red request reference on a refusal | method: run before
  *   handlers/feature-flags.ts and handlers/qr-verify.ts set the header (every
- *   case failed on a null X-Request-Id) | date: 2026-10-12
+ *   case failed on a null X-Request-Id; five of the cases then here have since
+ *   moved to ui-toast-route.spec.ts) | date: 2026-10-12
  * @born-red the reference is the audit row's | method: the router's call to
  *   verify-qr put back to three arguments, so the handler made an id of its
  *   own (the audit case and the publish case failed, the rest passed) |
@@ -105,10 +106,10 @@ async function auditRow(action: string, requestId: string) {
   return null;
 }
 
-describe('what a failure toast reads from a refused request', () => {
-  // One refusal for a thing that is not there per action, then the refusals a
-  // person can meet on a real event: a status that cannot move that way, and
-  // an archived event brought back with no start time or event type.
+describe('what a failure toast reads from a refusal on a real event', () => {
+  // The refusals a person can meet on a real event: a status that cannot move
+  // that way, and an archived event brought back with no start time or event
+  // type.
   const REFUSALS: Array<{
     action: string;
     method: string;
@@ -118,48 +119,6 @@ describe('what a failure toast reads from a refused request', () => {
     status: number;
     code: string;
   }> = [
-    {
-      action: 'admin: switch a form on or off',
-      method: 'PUT',
-      path: '/api/v2/admin/events/evt_none/flags/not.a.flag',
-      headers: { ...ADMIN, ...JSON_BODY },
-      body: { enabled: true },
-      status: 400,
-      code: 'INVALID_FLAG_KEY',
-    },
-    {
-      action: 'admin: switch a form with no on or off in the request',
-      method: 'PUT',
-      path: '/api/v2/admin/events/evt_none/flags/forms.register',
-      headers: { ...ADMIN, ...JSON_BODY },
-      body: {},
-      status: 400,
-      code: 'MISSING_FIELD',
-    },
-    {
-      action: 'admin: remove a form switch',
-      method: 'DELETE',
-      path: '/api/v2/admin/events/evt_none/flags/not.a.flag',
-      headers: ADMIN,
-      status: 400,
-      code: 'INVALID_FLAG_KEY',
-    },
-    {
-      action: 'admin: publish an event (verify-qr)',
-      method: 'POST',
-      path: '/api/v2/admin/events/evt_none/verify-qr',
-      headers: ADMIN,
-      status: 404,
-      code: 'EVENT_NOT_FOUND',
-    },
-    {
-      action: 'admin: unpublish an event (unverify-qr)',
-      method: 'POST',
-      path: '/api/v2/admin/events/evt_none/unverify-qr',
-      headers: ADMIN,
-      status: 404,
-      code: 'EVENT_NOT_FOUND',
-    },
     {
       action: 'admin: publish a draft',
       method: 'POST',
