@@ -1,0 +1,40 @@
+info:
+  name: OSE-1564 | form switch | a refusal carries a code and a request reference
+  type: http
+  seq: 20
+
+# Contract: the admin form switch reports through the toast. A flag key that
+# does not exist is refused before any read or write, so this request changes
+# nothing and can run any number of times.
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/evt_does_not_exist/flags/not.a.flag"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"enabled":true}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: what a failure toast shows is read from here and nowhere else:
+        // the body's `code` and the `X-Request-Id` header (ocrToast.detailsFrom).
+        // Both must be short ids, and the header must be the body's requestId.
+        test('400 for a flag key that does not exist', function () { expect(res.getStatus()).to.eql(400); });
+        test('the code is INVALID_FLAG_KEY', function () { expect((res.getBody() || {}).code).to.eql('INVALID_FLAG_KEY'); });
+        test('X-Request-Id is a short id the toast can show', function () { expect(String(res.getHeader('x-request-id') || '')).to.match(/^[A-Za-z0-9_.:-]{8,64}$/); });
+        test('the header and the body carry the same reference', function () { expect((res.getBody() || {}).requestId).to.eql(String(res.getHeader('x-request-id') || '')); });
+        test('no stack trace or SQL in the body', function () { expect(JSON.stringify(res.getBody() || {})).to.not.match(/\bat .+:\d+:\d+|SELECT |sqlite/i); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

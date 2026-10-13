@@ -1062,7 +1062,7 @@ export async function route(
       _audit(reqId, 'VERIFY_QR', 'denied', 'event', eventId);
       return authRes;
     }
-    const res = await handleV2AdminVerifyQr(request, env, eventId);
+    const res = await handleV2AdminVerifyQr(request, env, eventId, reqId);
     _audit(reqId, 'VERIFY_QR', res.status < 400 ? 'success' : 'denied', 'event', eventId);
     return res;
   }
@@ -1076,7 +1076,7 @@ export async function route(
       _audit(reqId, 'UNVERIFY_QR', 'denied', 'event', eventId);
       return authRes;
     }
-    const res = await handleV2AdminUnverifyQr(request, env, eventId);
+    const res = await handleV2AdminUnverifyQr(request, env, eventId, reqId);
     _audit(reqId, 'UNVERIFY_QR', res.status < 400 ? 'success' : 'denied', 'event', eventId);
     return res;
   }
@@ -1489,39 +1489,43 @@ export async function route(
       return deny;
     }
     if (method === 'PUT') {
-      const response = await handleSetEventFlag(request, env, eventId, flagKey);
+      const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId);
       const outcome = _auditOutcome(response);
       _audit(reqId, 'SET_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
       return response;
     }
-    const response = await handleRemoveEventFlag(env, eventId, flagKey);
+    const response = await handleRemoveEventFlag(env, eventId, flagKey, reqId);
     const outcome = _auditOutcome(response);
     _audit(reqId, 'REMOVE_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
     return response;
   }
 
   if (pathname === '/api/v2/admin/flags' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleListFlags(request, env);
+    return handleListFlags(request, env, reqId);
   }
 
   if (pathname === '/api/v2/admin/flags/tiers' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleListTiers();
+    return handleListTiers(reqId);
   }
 
   if (pathname === '/api/v2/admin/flags/current-tier' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleGetCurrentTier(env);
+    return handleGetCurrentTier(env, reqId);
   }
 
   if (pathname === '/api/v2/admin/flags/resolve' && method === 'GET') {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleResolveFlags(request, env);
+    return handleResolveFlags(request, env, reqId);
   }
 
   // PUT /api/v2/admin/flags/:key — toggle a global flag
@@ -1539,7 +1543,7 @@ export async function route(
       _audit(reqId, 'SET_FLAG', 'denied', 'flag', flagKeyMatch[1]);
       return notKey;
     }
-    const response = await handleSetFlag(request, env, flagKeyMatch[1]);
+    const response = await handleSetFlag(request, env, flagKeyMatch[1], reqId);
     const outcome = _auditOutcome(response);
     _audit(reqId, 'SET_FLAG', outcome, 'flag', flagKeyMatch[1]);
     return response;
@@ -1558,7 +1562,7 @@ export async function route(
       _audit(reqId, 'APPLY_TIER', 'denied', 'flag');
       return notKey;
     }
-    const response = await handleApplyTier(request, env);
+    const response = await handleApplyTier(request, env, reqId);
     const outcome = _auditOutcome(response);
     _audit(reqId, 'APPLY_TIER', outcome, 'flag');
     return response;

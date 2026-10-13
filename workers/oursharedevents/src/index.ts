@@ -59,18 +59,22 @@ export default {
       // The route pattern, the error class and what the error said, never the
       // URL: a signed link is a credential (lib/unhandled-error-log.ts).
       const failure = summarizeUnhandledError(err, request);
+      // The same id on the line and on the answer (header and body): with the
+      // code it is what a failure toast shows, so the line can be found later.
+      const requestId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
       console.error(
         JSON.stringify({
           type: 'UNHANDLED_ERROR',
           errorClass: failure.errorClass,
           error: failure.error,
           op: failure.op,
+          requestId,
           timestamp: new Date().toISOString(),
         })
       );
       response = Response.json(
-        { ok: false, status: 500, error: 'Internal server error' },
-        { status: 500 }
+        { ok: false, status: 500, code: 'INTERNAL', error: 'Internal server error', requestId },
+        { status: 500, headers: { 'X-Request-Id': requestId } }
       );
     }
     // Emit exactly one aggregate-only cost line per request. Never throws.

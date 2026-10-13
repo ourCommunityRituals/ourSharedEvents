@@ -1,0 +1,37 @@
+info:
+  name: OSE-1564 | unverify-qr | a refusal carries a code and a request reference
+  type: http
+  seq: 22
+
+# Contract: unverify-qr is the unpublish step of a status change, and the admin
+# page reports it through the toast. The event does not exist, so this request
+# changes nothing and can run any number of times.
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/evt_does_not_exist/unverify-qr"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: what a failure toast shows is read from here and nowhere else:
+        // the body's `code` and the `X-Request-Id` header (ocrToast.detailsFrom).
+        // Both must be short ids, and the header must be the body's requestId.
+        test('404 for an event that does not exist', function () { expect(res.getStatus()).to.eql(404); });
+        test('the code is EVENT_NOT_FOUND', function () { expect((res.getBody() || {}).code).to.eql('EVENT_NOT_FOUND'); });
+        test('X-Request-Id is a short id the toast can show', function () { expect(String(res.getHeader('x-request-id') || '')).to.match(/^[A-Za-z0-9_.:-]{8,64}$/); });
+        test('the header and the body carry the same reference', function () { expect((res.getBody() || {}).requestId).to.eql(String(res.getHeader('x-request-id') || '')); });
+        test('no stack trace or SQL in the body', function () { expect(JSON.stringify(res.getBody() || {})).to.not.match(/\bat .+:\d+:\d+|SELECT |sqlite/i); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
