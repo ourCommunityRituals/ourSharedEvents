@@ -23,6 +23,9 @@ export const NODE_SPECS = [
   'tests/sponsor-home-xss.spec.ts',
   // Owner 2026-10-11: less text on the sponsor page (pure render + template).
   'tests/sponsor-home-less-text.spec.ts',
+  // Toast adoption in admin and sponsor home: the pages' scripts and the
+  // @ocr/ui toast script in jsdom, plus one handler called directly. No runtime.
+  'tests/toast-adoption.spec.ts',
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',

@@ -1434,6 +1434,9 @@
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
+    <!-- Toasts (OSE-1564): how this page says an action worked or failed.
+         Same-origin and deferred; the page still works if it does not load. -->
+    <script src="/ui-toast.js" defer></script>
     <style>
       body {
         background: var(--bg);
@@ -2228,10 +2231,20 @@
         hidden
       ></div>
       <script>
-        // window._adminAnnounce(message, kind) — the one place admin feedback
-        // is surfaced. INVARIANT #1 guard: identifiers/errors are written with
-        // textContent, NEVER innerHTML, so a sponsor/event id can't inject.
-        window._adminAnnounce = function (message, kind) {
+        // window._adminAnnounce(message, kind, details): the one place an admin
+        // action says what happened (OSE-1564). It shows an @ocr/ui toast from
+        // /ui-toast.js: 'ok' is a success, 'info' a note, 'error' a failure
+        // with its details. If that script did not load, the status line above
+        // says it instead. INVARIANT #1 guard: the line is written with
+        // textContent, NEVER innerHTML, and the toast inserts text only.
+        window._adminAnnounce = function (message, kind, details) {
+          var toast = window.ocrToast;
+          if (toast) {
+            if (kind === 'error') toast.failure(message, { details: details });
+            else if (kind === 'info') toast.neutral(message);
+            else toast.success(message);
+            return;
+          }
           var el = document.getElementById('admin-status');
           if (!el) return;
           el.textContent = message; // textContent — never innerHTML
@@ -2242,6 +2255,27 @@
             el.hidden = true;
             el.textContent = '';
           }, 6000);
+        };
+        // Reasons this page words itself, by error code. The server's own
+        // sentence is never shown: it can name an id or a person.
+        var FAILURE_REASONS = {
+          CORE_VALUES_MISSING: 'It needs a start time and an event type first.',
+          INVALID_TRANSITION: 'It moved since this page loaded. The panel shows where it is now.',
+        };
+        // window._adminRequestFailed(sentence, res, body, action): a request
+        // failed. The toast says the plain sentence, and its details are the
+        // error code and the request reference (X-Request-Id) only, read by
+        // detailsFrom. No other part of the response, and no browser error
+        // text, reaches the page. `res` is null when nothing came back.
+        window._adminRequestFailed = function (sentence, res, body, action) {
+          var code = body && typeof body.code === 'string' ? body.code : '';
+          var reason = Object.prototype.hasOwnProperty.call(FAILURE_REASONS, code) ? ' ' + FAILURE_REASONS[code] : '';
+          var toast = window.ocrToast;
+          window._adminAnnounce(
+            sentence + (res ? reason : ' Check your connection and try again.'),
+            'error',
+            toast ? toast.detailsFrom(res, body, action) : undefined
+          );
         };
       </script>
 
@@ -3749,7 +3783,7 @@
                 }, 1500);
               },
               function () {
-                window._adminAnnounce('Could not copy — long-press the link to copy it.', 'error');
+                window._adminAnnounce('Could not copy. Long-press the link to copy it.', 'error', { action: 'Copying a link' });
               }
             );
           }
@@ -5362,7 +5396,7 @@
       };
 
       window.mintReportLink = async function(eventId, btn) {
-        if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
+        if (!eventId) { window._adminAnnounce('Select an event first.', 'info'); return; }
         const role = document.getElementById('mint-role').value;
         const isSponsor = role === 'sponsor';
         const depthEl = document.getElementById('mint-depth');
@@ -5422,22 +5456,24 @@
         // Disable during the audited PUT, announce the outcome, revert on error.
         const enabled = el.checked;
         el.disabled = true;
+        let res = null;
+        let data = null;
         try {
-          const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+          res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled }),
           });
-          const data = await res.json();
-          if (!data.ok) throw new Error(data.error || 'Failed');
+          data = await res.json();
+          if (!data.ok) throw new Error('refused');
           if (typeof window._adminAnnounce === 'function')
             window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
         } catch {
           el.checked = !enabled; // revert on failure
-          if (typeof window._adminAnnounce === 'function')
-            window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
+          if (typeof window._adminRequestFailed === 'function')
+            window._adminRequestFailed('Could not update ' + flagKey + '. It is back as it was.', res, data, 'Turning a form on or off');
           // The error can carry server-supplied text, so it is not logged; the
-          // announcement above already tells the organizer which flag failed.
+          // toast above already tells the organizer which flag failed.
           console.error('Flag toggle failed.');
         } finally {
           el.disabled = false;
@@ -6070,10 +6106,12 @@
           const row = document.querySelector('[data-testid="sponsor-row-' + id + '"]');
           if (!row) return;
           if (btn) { btn.disabled = true; btn.textContent = 'Minting…'; }
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsors/' + encodeURIComponent(id) + '/home-link', { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || data.code || 'Could not create link (server said ' + res.status + ')');
+            res = await fetch('/api/v2/admin/sponsors/' + encodeURIComponent(id) + '/home-link', { method: 'POST' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             const cell = row.querySelector('td[data-label="Actions"]');
             let box = row.querySelector('[data-testid="sponsor-home-link-box"]');
             if (!box) {
@@ -6089,7 +6127,7 @@
               '<button type="button" class="copy-btn" data-action="mint-copy" data-token="' + esc(data.url) + '" data-testid="sponsor-home-link-copy" aria-label="Copy sponsor page link">Copy</button>';
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce('Sponsor page link ready. Send it to ' + (row.querySelector('[data-testid="spon-name-' + id + '"]') || {}).textContent + '.', 'ok');
           } catch (err) {
-            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not create sponsor link.', 'error');
+            if (typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not create the sponsor link.', res, data, 'Creating a sponsor page link');
           } finally {
             if (btn) { btn.disabled = false; btn.textContent = 'Sponsor link'; }
           }
@@ -6111,13 +6149,14 @@
             const target = next || table;
             if (target) { if (!next) target.setAttribute('tabindex', '-1'); target.focus(); }
           };
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
+            res = await fetch('/api/v2/admin/sponsor-requests/' + encodeURIComponent(placementId) + '/respond', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ approve: approve }),
             });
-            let data = null;
             try { data = await res.json(); } catch (e) { data = null; }
             if (res.status === 409) {
               // Already answered (another tab or organizer): show the real state.
@@ -6126,7 +6165,7 @@
               focusAfter();
               return;
             }
-            if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.code)) || 'Could not save (server said ' + res.status + ')');
+            if (!res.ok || !data || !data.ok) throw new Error('refused');
             // OSE-1560: approving can turn the event's default map on; the note says so.
             const flipped = data.map && data.map.changed;
             if (flipped && window.oseMapFlipped && window.OSE_selection && window.OSE_selection.id) window.oseMapFlipped(window.OSE_selection.id);
@@ -6136,7 +6175,7 @@
             focusAfter();
           } catch (err) {
             rowButtons.forEach(function (b) { b.disabled = false; });
-            if (typeof window._adminAnnounce === 'function') window._adminAnnounce(err.message || 'Could not answer the request.', 'error');
+            if (typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not answer the request.', res, data, 'Answering a sponsor request');
           }
         };
 
@@ -6153,13 +6192,15 @@
         };
 
         window._confirmDeactivate = async function(id) {
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+            res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             loadSponsors();
           } catch (err) {
-            window._adminAnnounce('Could not deactivate: ' + (err.message || 'Unknown error'), 'error');
+            window._adminRequestFailed('Could not deactivate the sponsor.', res, data, 'Deactivating a sponsor');
             loadSponsors();
           }
         };
@@ -6945,14 +6986,16 @@
           if (yes) yes.focus();
         };
         window._confirmDeletePd = async function (pdId) {
+          let res = null;
+          let data = null;
           try {
-            const res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed.');
+            res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
+            data = await res.json();
+            if (!res.ok || !data.ok) throw new Error('refused');
             window._adminAnnounce('Poster deployment deactivated.', 'ok');
             if (window._pdEventId) window.loadPosterDeployments(window._pdEventId);
           } catch (err) {
-            window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
+            window._adminRequestFailed('Could not deactivate the poster deployment.', res, data, 'Deactivating a poster deployment');
           }
         };
 
@@ -6962,7 +7005,7 @@
         window.downloadPosterQr = function (pdId) {
           const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available for download.', 'error');
+            window._adminAnnounce('QR not available for download.', 'error', { action: 'Downloading a poster code' });
             return;
           }
           const safeName =
@@ -6980,12 +7023,12 @@
         window.printPosterQr = function (pdId) {
           const item = window._pdItems.get(pdId);
           if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available to print.', 'error');
+            window._adminAnnounce('QR not available to print.', 'error', { action: 'Printing a poster code' });
             return;
           }
           const w = window.open('', '_blank');
           if (!w) {
-            window._adminAnnounce('Pop-up blocked — allow pop-ups to print the QR.', 'error');
+            window._adminAnnounce('Pop-up blocked. Allow pop-ups to print the QR.', 'error', { action: 'Printing a poster code' });
             return;
           }
           const label = esc(item.label || 'Poster deployment');
@@ -8584,7 +8627,7 @@
           if (i === 0 && seen) from = seen;
           if (!r.res.ok || !r.data.ok) {
             if (current) current.status = seen || at;
-            return { ok: false, from: from, code: r.data && r.data.code, missing: r.data && r.data.missing, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')' };
+            return { ok: false, from: from, code: r.data && r.data.code, missing: r.data && r.data.missing, error: (r.data && (r.data.error || r.data.code)) || 'Could not change status (server said ' + r.res.status + ')', res: r.res, body: r.data };
           }
           at = route[i];
         }
@@ -8672,7 +8715,10 @@
           paintRowStatus(id, e.status || 'draft');
           window.renderEventStatus(id);
           if (msg) { msg.textContent = result.error; msg.className = 'create-msg error'; if (result.code === 'CORE_VALUES_MISSING' && result.missing) msg.setAttribute('data-missing', result.missing.join(',')); else msg.removeAttribute('data-missing'); }
-          if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error');
+          // A refused or failed request: the toast carries its code and reference.
+          // Otherwise no request was made, and the sentence is this page's own.
+          if (result.res && typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not change the status.', result.res, result.body, 'Changing the event status');
+          else if (typeof window._adminAnnounce === 'function') window._adminAnnounce(result.error, 'error', { action: 'Changing the event status' });
         }
       };
 
