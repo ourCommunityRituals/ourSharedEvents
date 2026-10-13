@@ -36,8 +36,25 @@
  * The runtime side of this is workers/oursharedevents/tests/unhandled-error-log.spec.ts,
  * which reads the lines a real failing request writes.
  *
- * Exemptions: none. If a true false positive appears, add an entry to
- * EXEMPTIONS below with `file`, the exact `pattern` label, and a `reason`.
+ * A caught error is refused too, wherever a database is in reach, in any form
+ * but `errorLabel(err)`: the D1 client writes a response body and a bound value
+ * into its error messages, so `error: err.message` can put a row in the log.
+ * The files, the catch bindings and the names given an error's text are all
+ * derived (see "Error text" below). The runtime side of that is
+ * workers/oursharedevents/tests/d1-error-log.spec.ts.
+ *
+ * Exemptions: one, for a function that stores what it is given in the database
+ * and logs none of it. If a true false positive appears, add an entry to
+ * EXEMPTIONS below with `file`, the exact `pattern` label, and a `reason`; an
+ * "error text" exemption also names the `callee`, never a whole file.
+ *
+ * @born-red error text | method: run against main before any log line was
+ *   changed: 105 sinks in 26 files were named. After the change, faults put
+ *   back one at a time, each in one place: the old `err.message` form in a
+ *   FORMS_DB sink and in a DB sink, `String(err)` handed to a log wrapper,
+ *   `${err}` in a wrapper's object, `results.x = err.message` logged later by
+ *   spread, and `.stack`. Each made the last test fail on that line and no
+ *   other | date: 2026-10-12
  *
  * Runs in the T0 Gate `invariants` shard — listed in the
  * "Architecture: structural invariants" step of
@@ -47,7 +64,7 @@
 
 import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, posix, relative } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const SRC_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
@@ -126,7 +143,22 @@ const FORBIDDEN: Array<{
  * Triaged exemptions — one entry per true false positive, each with a reason.
  * Keep this empty unless a real false positive appears.
  */
-const EXEMPTIONS: Array<{ file: string; pattern: string; reason: string }> = [];
+const EXEMPTIONS: Array<{
+  file: string;
+  pattern: string;
+  /** Only sinks that are calls to this function (an "error text" exemption). */
+  callee?: string;
+  reason: string;
+}> = [
+  {
+    file: 'handlers/bigquery.ts',
+    pattern: 'error text',
+    callee: 'logExportManifest',
+    reason:
+      'logExportManifest stores `details` in DB.export_manifest (the same database the failed ' +
+      'backup read) and its own log line carries export_type, event_id and request_id only',
+  },
+];
 
 // ── Source walking ──────────────────────────────────────────────────────────
 
@@ -566,6 +598,255 @@ function violationsIn(sinks: Sink[], urlScopes: Map<string, UrlScope[]> = new Ma
 
 const URL_SCOPES = deriveUrlScopes(SOURCES);
 
+// ── Error text ──────────────────────────────────────────────────────────────
+
+/**
+ * A caught error, written to the log any way but through `errorLabel`.
+ *
+ * An error's message is free text and can quote data. The D1 client bundled in
+ * workerd writes a whole response body into one message (`Failed to parse body
+ * as JSON, got: …`) and a bound value into another (`D1_TYPE_ERROR: … for value
+ * '…'`), so `error: err.message` after a database call can put a row in the
+ * log. `errorLabel(err)` (src/lib/error-label.ts) gives the error's class and
+ * its database codes, each from a fixed list.
+ *
+ * Derived, not listed:
+ *   WHERE: every file with a database in reach. It names a D1 binding or
+ *     statement itself, or it imports, at any depth, a file that does. An error
+ *     caught in such a file can have come from the database.
+ *   WHAT: in a log sink in such a file,
+ *     1. `.message` or `.stack` of anything named as an error (ERROR_NAME, or
+ *        a name some catch in the file binds);
+ *     2. the name a `catch (NAME)` or a `.catch((NAME) => …)` binds, or an
+ *        error a function takes as a parameter (`err: unknown`), read in that
+ *        block in any form: `String(err)`, `${err}`, `{ err }`, a bare
+ *        argument. Handing it to a function in ERROR_READERS, and
+ *        `NAME instanceof X`, are the only reads allowed;
+ *     3. a name given the error's text inside the catch block
+ *        (`const msg = err.message`), read by a sink later in the block. A name
+ *        that outlives the block (`results.error = err.message`) is followed
+ *        through the whole file.
+ * A log wrapper's call sites are sinks (above), so a wrapper is handed the
+ * label, never the error.
+ *
+ * Not seen from source text: an error whose text reaches a sink through a
+ * function's return value or an object built elsewhere. The runtime side,
+ * workers/oursharedevents/tests/d1-error-log.spec.ts, reads the lines real
+ * failures write.
+ */
+const ERROR_TEXT_LABEL = 'error text';
+
+/** The functions a caught error may be handed to on its way to a log line. */
+const ERROR_READERS = [
+  // src/lib/error-label.ts: the class and the database codes.
+  'errorLabel',
+  'errorCodes',
+  'errorClassOf',
+  // src/lib/unhandled-error-log.ts: keeps the message only when the error
+  // carries no database code (tests/unhandled-error-log.spec.ts).
+  'summarizeUnhandledError',
+];
+
+/** Text that says a file talks to a database itself. `DB_ERROR` is not `DB`. */
+const DATABASE_TOKEN = /\.prepare\(|\.batch\(|\bD1Database\b|\b(?:FORMS_)?DB\b/;
+
+/** The files in `sources` that `file` imports (relative specifiers only). */
+function importsOf(file: string, src: string, known: Set<string>): string[] {
+  const out: string[] = [];
+  const re = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"](\.{1,2}\/[^'"]+)['"]/g;
+  for (const m of src.matchAll(re)) {
+    const base = posix.normalize(posix.join(posix.dirname(file), m[1]));
+    const hit = [base, `${base}.ts`, `${base}/index.ts`].find((p) => known.has(p));
+    if (hit) out.push(hit);
+  }
+  return out;
+}
+
+/** Every file that names a database, or imports one that does, to a fixed point. */
+function databaseReach(sources: Array<{ file: string; src: string }>): Set<string> {
+  const known = new Set(sources.map((s) => s.file));
+  const imports = new Map(sources.map((s) => [s.file, importsOf(s.file, s.src, known)]));
+  const reach = new Set(
+    sources.filter((s) => DATABASE_TOKEN.test(stripComments(s.src))).map((s) => s.file)
+  );
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [file, deps] of imports) {
+      if (!reach.has(file) && deps.some((d) => reach.has(d))) {
+        reach.add(file);
+        changed = true;
+      }
+    }
+  }
+  return reach;
+}
+
+interface NameScope {
+  name: string;
+  start: number;
+  end: number;
+}
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Quoted text is prose; a template literal is kept (`${err}` interpolates). */
+const withoutQuoted = (text: string): string =>
+  text.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, "''");
+
+/** `name` read as a value: not a longer name, not a member, not an object key. */
+function readsName(name: string, text: string): boolean {
+  // A member (`x.name`) is not a read of it; a spread (`...name`) is.
+  return new RegExp(`(?<![\\w$])(?<!(?<!\\.\\.)\\.)${escapeRe(name)}(?![\\w$])(?!\\s*:)`).test(
+    withoutQuoted(text)
+  );
+}
+
+/** A caught error read any way but through a reader or an `instanceof` test. */
+function readsCaughtError(name: string, text: string): boolean {
+  const id = escapeRe(name);
+  const allowed = new RegExp(
+    `\\b(?:${ERROR_READERS.join('|')})\\(\\s*${id}\\s*(?:,[^()]*)?\\)` +
+      `|(?<![\\w$.])${id}\\s+instanceof\\s+[\\w$.]+`,
+    'g'
+  );
+  return readsName(name, withoutQuoted(text).replace(allowed, ''));
+}
+
+/** Every name a catch binds, with the block (or the `.catch(…)` call) it lives in. */
+function caughtErrors(src: string): NameScope[] {
+  const out: NameScope[] = [];
+  for (const m of src.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][\w$]*)\s*(?::[^)]*)?\)\s*\{/g)) {
+    const open = (m.index ?? 0) + m[0].length - 1;
+    out.push({ name: m[1], start: open, end: skipBalanced(src, open) });
+  }
+  const promiseCatch = /\.catch\(\s*(?:async\s*)?\(?\s*([A-Za-z_$][\w$]*)\s*(?::[^)=]*)?\)?\s*=>/g;
+  for (const m of src.matchAll(promiseCatch)) {
+    const open = src.indexOf('(', m.index ?? 0);
+    out.push({ name: m[1], start: open, end: skipBalanced(src, open) });
+  }
+  // An error handed on: a parameter named as an error and typed `unknown` or
+  // `Error` (`(err: unknown, rows: number) => {…}`), through that function's body.
+  for (const m of src.matchAll(/[(,]\s*([A-Za-z_$][\w$]*)\s*:\s*(?:unknown|Error)\s*(?=[,)])/g)) {
+    if (!ERROR_NAME.test(m[1])) continue;
+    let close = (m.index ?? 0) + m[0].length;
+    while (close < src.length && src[close] !== ')') {
+      close = '([{'.includes(src[close]) ? skipBalanced(src, close) : close + 1;
+    }
+    // Past the `)`, a return type and an arrow, to the body.
+    const head = /^\)\s*(?::[^={]+?)?\s*(?:=>\s*)?/.exec(src.slice(close));
+    if (!head) continue;
+    const body = close + head[0].length;
+    const end = src[body] === '{' ? skipBalanced(src, body) : statementEnd(src, body);
+    out.push({ name: m[1], start: body, end });
+  }
+  return out;
+}
+
+/** Index of the `;` (or the closing bracket) that ends the statement at `from`. */
+function statementEnd(text: string, from: number): number {
+  let j = from;
+  while (j < text.length) {
+    const c = text[j];
+    if (c === '"' || c === "'") j = skipQuoted(text, j);
+    else if (c === '`') j = skipTemplate(text, j);
+    else if (c === '(' || c === '[' || c === '{') j = skipBalanced(text, j);
+    else if (c === ';' || c === ')' || c === ']' || c === '}') return j;
+    else j++;
+  }
+  return j;
+}
+
+/**
+ * The names given a caught error's text. Declared in the catch block: read from
+ * there to the block's end. Assigned to something older (`outer = err.message`,
+ * `results.error = String(err)`): the root name, through the whole file.
+ */
+function errorTextNames(src: string, caught: NameScope[]): NameScope[] {
+  const out: NameScope[] = [];
+  const assign =
+    /(?:\b(const|let|var)\s+)?([A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)*\s*(?::[^=;\n]+)?=(?![=>])/g;
+  for (const c of caught) {
+    const block = src.slice(c.start, c.end);
+    for (const m of block.matchAll(assign)) {
+      const from = (m.index ?? 0) + m[0].length;
+      if (!readsCaughtError(c.name, block.slice(from, statementEnd(block, from)))) continue;
+      out.push(
+        m[1]
+          ? { name: m[2], start: c.start + (m.index ?? 0), end: c.end }
+          : { name: m[2], start: 0, end: src.length }
+      );
+    }
+  }
+  return out;
+}
+
+interface ErrorScopes {
+  caught: NameScope[];
+  text: NameScope[];
+}
+
+/** The scopes of every file with a database in reach; other files are not checked. */
+function deriveErrorScopes(sources: Array<{ file: string; src: string }>) {
+  const reach = databaseReach(sources);
+  const scopes = new Map<string, ErrorScopes>();
+  for (const { file, src } of sources) {
+    if (!reach.has(file)) continue;
+    const caught = caughtErrors(src);
+    scopes.set(file, { caught, text: errorTextNames(src, caught) });
+  }
+  return { reach, scopes };
+}
+
+const within = (s: Sink, sc: NameScope): boolean => sc.start <= s.index && s.index < sc.end;
+
+/**
+ * A receiver that is an error by its name: `err.message`, `(e as Error).stack`,
+ * `dbErr.message`. Every name a catch binds in the file counts too.
+ * `payload.message` (an alert's own wording) does not.
+ */
+const ERROR_NAME = /^(?:e|ex|err|error|cause)$|(?:Err|Error|Exception)$/;
+
+/** How a sink reads an error's text, or null when it does not. */
+function errorTextIn(s: Sink, scopes: ErrorScopes): string | null {
+  const members = /([A-Za-z_$][\w$]*)\s*\)?\s*\.(message|stack)\b/g;
+  for (const m of withoutQuoted(s.args).matchAll(members)) {
+    if (ERROR_NAME.test(m[1]) || scopes.caught.some((c) => c.name === m[1])) {
+      return `\`${m[1]}.${m[2]}\``;
+    }
+  }
+  for (const sc of scopes.caught) {
+    if (within(s, sc) && readsCaughtError(sc.name, s.args)) return `the caught \`${sc.name}\``;
+  }
+  for (const sc of scopes.text) {
+    if (within(s, sc) && readsName(sc.name, s.args)) return `\`${sc.name}\`, which holds its text`;
+  }
+  return null;
+}
+
+/** An "error text" exemption names a file and one function's call sites, never a whole file. */
+const errorTextExempt = (s: Sink): boolean =>
+  EXEMPTIONS.some(
+    (e) => e.pattern === ERROR_TEXT_LABEL && e.file === s.file && e.callee === s.callee
+  );
+
+function errorTextViolations(sinks: Sink[], scopes: Map<string, ErrorScopes>): string[] {
+  const out: string[] = [];
+  for (const s of sinks) {
+    const fileScopes = scopes.get(s.file);
+    if (!fileScopes) continue; // no database in reach
+    const how = errorTextIn(s, fileScopes);
+    if (!how) continue;
+    if (errorTextExempt(s)) continue;
+    out.push(
+      `src/${s.file}:${s.line} ${s.callee}(…) contains "${ERROR_TEXT_LABEL}" — ` +
+        `it reads ${how}; an error message can quote a row, log errorLabel(err)`
+    );
+  }
+  return out;
+}
+
+const { reach: DATABASE_REACH, scopes: ERROR_SCOPES } = deriveErrorScopes(SOURCES);
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 test.describe('Invariant: log redaction — no identifiers or credentials in log lines', () => {
@@ -852,12 +1133,141 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
     ).toBeLessThan(SOURCES.length / 10);
   });
 
+  test('log-redaction | negative control | the files with a database in reach are derived', () => {
+    // A file that names the binding, and one that only imports such a file.
+    const reach = databaseReach([
+      { file: 'lib/store.ts', src: 'export const read = (env) => env.DB.prepare("SELECT 1");' },
+      { file: 'handlers/a.ts', src: "import { read } from '../lib/store';" },
+      { file: 'index.ts', src: "import { a } from './handlers/a';" },
+      { file: 'lib/maps.ts', src: "export const code = 'DB_ERROR'; // talks to no DB" },
+    ]);
+    expect([...reach].sort()).toEqual(['handlers/a.ts', 'index.ts', 'lib/store.ts']);
+    // In the worker: the entry, the forms handlers and the shared form helper
+    // are in; the label helper itself, which imports nothing, is out.
+    for (const f of ['index.ts', 'router.ts', 'handlers/forms.ts', 'handlers/subscribers.ts']) {
+      expect(DATABASE_REACH.has(f), `src/${f} has a database in reach`).toBe(true);
+    }
+    expect(DATABASE_REACH.has('lib/error-label.ts')).toBe(false);
+    expect(DATABASE_REACH.size, 'most of the worker can reach a database').toBeGreaterThan(50);
+    // The catch bindings are derived there too, so the rule is not vacuous.
+    const caught = [...ERROR_SCOPES.values()].flatMap((s) => s.caught);
+    expect(caught.length, 'the walk must find catch bindings').toBeGreaterThan(80);
+  });
+
+  test('log-redaction | negative control | a caught error is logged through errorLabel only', () => {
+    const DB = "const db = (env) => env.DB.prepare('SELECT 1').first();";
+    const found = (body: string, file = 'handlers/x.ts', head = DB) => {
+      const sources = [{ file, src: `${head}\nasync function h(env) {\n${body}\n}` }];
+      return errorTextViolations(deriveSinks(sources).sinks, deriveErrorScopes(sources).scopes);
+    };
+    const inCatch = (line: string) => `try { await db(env); } catch (err) {\n${line}\n}`;
+    for (const leak of [
+      // The form the finding is about, and its spellings.
+      "console.error(JSON.stringify({ type: 'DB_ERROR', error: err instanceof Error ? err.message : String(err) }));",
+      'console.error(JSON.stringify({ error: err.message }));',
+      'console.error(JSON.stringify({ error: String(err) }));',
+      'console.error(JSON.stringify({ error: (err as Error).stack }));',
+      'console.warn(`save failed: ${err}`);',
+      "console.error('save failed', err);",
+      'console.error(JSON.stringify({ err }));',
+      'console.error(JSON.stringify({ error: err.cause }));',
+      'console.error(err.toString());',
+      // One step removed: the text is given a name first.
+      'const msg = err instanceof Error ? err.message : String(err);\nconsole.error(JSON.stringify({ error: msg }));',
+      'const message: string = String(err);\nconsole.error(JSON.stringify({ error: message }));',
+      // Through a log wrapper: its call site is a sink.
+      'logIt({ error: err });',
+    ]) {
+      const head = `${DB}\nfunction logIt(meta) { console.log(JSON.stringify(meta)); }`;
+      expect(found(inCatch(leak), 'handlers/x.ts', head).length, `must fire on ${leak}`).toBe(1);
+    }
+    for (const ok of [
+      "console.error(JSON.stringify({ type: 'DB_ERROR', error: errorLabel(err) }));",
+      'console.error(JSON.stringify({ error: errorLabel(err), codes: errorCodes(err) }));',
+      "console.error(JSON.stringify({ kind: err instanceof TypeError ? 'type' : 'other' }));",
+      'const failure = summarizeUnhandledError(err, request);\nconsole.error(JSON.stringify({ error: failure.error }));',
+      // Read for control flow, never logged.
+      "const msg = err instanceof Error ? err.message : String(err);\nif (msg.includes('UNIQUE constraint')) return;\nconsole.error(JSON.stringify({ error: errorLabel(err) }));",
+      // An object key that shares a name is not a read of it.
+      'const message = String(err);\nif (message) console.error(JSON.stringify({ message: errorLabel(err) }));',
+      "console.error('err', 'error', { errors: 1 });",
+    ]) {
+      expect(found(inCatch(ok)), `must not fire on ${ok}`).toEqual([]);
+    }
+    // A promise's catch callback binds an error too, with or without parentheses.
+    expect(found('await db(env).catch((e) => { console.warn(String(e)); });').length).toBe(1);
+    expect(found('await db(env).catch(e => console.warn(`${e}`));').length).toBe(1);
+    // `.message` of anything named as an error: a parameter is not a catch binding.
+    expect(found('const report = (e: unknown) => console.warn(e.message);').length).toBe(1);
+    expect(found('const report = (dbErr: unknown) => console.warn(dbErr.stack);').length).toBe(1);
+    // An error handed on as a parameter is still the error: a helper that keeps
+    // or logs what it is given.
+    expect(
+      found(
+        'const failed = (err: unknown, rows: number): void => {\n  result.first = err instanceof Error ? err.message : String(err);\n};\nconsole.warn(JSON.stringify({ ...result }));'
+      ).length
+    ).toBe(1);
+    expect(
+      found(
+        'function report(phase: string, error: unknown) {\n  const text = String(error);\n  console.error(JSON.stringify({ phase, text }));\n}'
+      ).length
+    ).toBe(1);
+    expect(
+      found(
+        'function report(phase: string, err: unknown) {\n  console.error(JSON.stringify({ phase, error: errorLabel(err) }));\n}'
+      )
+    ).toEqual([]);
+    // An alert's own wording is not an error's message.
+    expect(found('console.log(JSON.stringify({ message: payload.message }));')).toEqual([]);
+    // A name that outlives the catch block is followed through the file.
+    expect(
+      found(
+        'const results = {};\ntry { await db(env); } catch (err) { results.error = String(err); }\nconsole.log(JSON.stringify({ ...results }));'
+      ).length
+    ).toBe(1);
+    expect(
+      found(
+        'let last = null;\ntry { await db(env); } catch (err) { last = err.message; }\nconsole.log(JSON.stringify({ last }));'
+      ).length
+    ).toBe(1);
+    // The scope is the catch block: another function's own `err` is not it, and
+    // neither is a sink above the line that names the text.
+    expect(
+      found(
+        'try { await db(env); } catch (err) { console.info({ msg }); const msg = String(err); }\nconst err = 3;\nconsole.log({ err });'
+      )
+    ).toEqual([]);
+    // A file with no database in reach is not checked.
+    const leak = 'try { await fetch(u); } catch (err) { console.error(err.message); }';
+    expect(found(leak, 'lib/maps.ts', '')).toEqual([]);
+    expect(found(leak, 'lib/maps.ts', DB).length).toBe(1);
+  });
+
+  test('log-redaction | no log sink reads a caught error except through errorLabel', () => {
+    const violations = errorTextViolations(SINKS, ERROR_SCOPES);
+    expect(
+      violations,
+      'An error message can quote data: the D1 client writes a response body and a bound value ' +
+        'into its messages, and Workers Logs are on. Where a database is in reach, log ' +
+        'errorLabel(err) from src/lib/error-label.ts, never err.message, String(err) or the error ' +
+        'itself.\n' +
+        violations.join('\n')
+    ).toEqual([]);
+  });
+
   test('log-redaction | every exemption is still needed and has a reason', () => {
     for (const e of EXEMPTIONS) {
       expect(
         e.reason.trim().length,
         `exemption ${e.file}/${e.pattern} needs a reason`
       ).toBeGreaterThan(10);
+      if (e.pattern === ERROR_TEXT_LABEL) {
+        expect(e.callee, `exemption ${e.file}/${e.pattern} must name a callee`).toBeTruthy();
+        const scopes = ERROR_SCOPES.get(e.file);
+        const hit = SINKS.some((s) => errorTextExempt(s) && !!scopes && !!errorTextIn(s, scopes));
+        expect(hit, `exemption ${e.file}/${e.pattern} is stale — remove it`).toBe(true);
+        continue;
+      }
       if (e.pattern === WHOLE_URL_LABEL) {
         const hit = SINKS.some(
           (s) =>

@@ -87,7 +87,7 @@ const TENANT_TABLES = [
 // shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
 // re-run item 4).
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts:68':
+  'lib/corridor-latch.ts:69':
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
     'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
     'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
@@ -97,7 +97,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     '43→55 by the OSE-1508 settled-events rule, then 55→68 by the landing area ' +
     'latch: its header comment, the LIST_MAX import and LANDING_AREA_LATCH_KEY ' +
     'land above the SELECT.)',
-  'lib/corridor-latch.ts:94':
+  'lib/corridor-latch.ts:95':
     'Nightly landing area latch (latchLandingAreas, called by the same ' +
     'runCorridorLatch — no request, no caller brand). `INSERT OR IGNORE … SELECT ' +
     'brand_id, ?, ? FROM events … GROUP BY brand_id HAVING COUNT(*) >= 10`: one ' +
@@ -114,7 +114,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'of the UPDATE below it fell inside the 400-character window this scan ' +
     'reads. That UPDATE now also clears the spine keys and sits further down, ' +
     'so the read is named for what it is.',
-  'lib/spine-keys-store.ts:344':
+  'lib/spine-keys-store.ts:341':
     'Nightly spine key check (runSpineKeyCheck, OSE-1615). Cross-brand BY ' +
     'DESIGN: it reads events of every brand, a page at a time in id order ' +
     '(`WHERE e.id > ?1`, at most 5,000 a run), computes venue_canonical_id / ' +
@@ -126,7 +126,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'one caller is the scheduled handler, so it is not reachable from any ' +
     "request path. (The store's other read, in refreshSpineKeys, is by a held " +
     'id and needs no entry.)',
-  'handlers/events.ts:434':
+  'handlers/events.ts:435':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
     '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
@@ -153,24 +153,24 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
     '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
     'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
-  'lib/event-place.ts:164':
+  'lib/event-place.ts:165':
     'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11; ' +
     '163→164 by the OSE-1615 spine-keys-store import). ' +
     'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
     'saves looked places up, for every brand, at most 25 a night. It writes each ' +
     'row back by id and returns nothing to any caller; not reachable from any ' +
     'request path.',
-  'handlers/bigquery.ts:83':
+  'handlers/bigquery.ts:84':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
     'from any request path.',
-  'handlers/bigquery.ts:311':
+  'handlers/bigquery.ts:312':
     'OER emission cron, second read: the 24h recent-events backup joined to the ' +
     'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
     'as bigquery.ts:83; not reachable from any request path. (Re-keyed 268→280 by OSE-616: the h3_res7 column + corridor guard sit above it; 280→296 by the backup-scope fix, whose BACKUP_LISTED_EVENTS_SQL + publish-grace import land above it; 296→311 by the listed check in the on-demand route, which lands above it.) Previously passed the ' +
     'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
     'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
-  'handlers/sponsors.ts:671':
+  'handlers/sponsors.ts:672':
     'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
     'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
     'id-key exemption does not match it.',
@@ -190,13 +190,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'Single-row existence check keyed by `sponsor_business_id = ? AND ' +
     'event_id = ?` (both caller-held ids) — verifies a sponsor belongs to an ' +
     'event before minting a token; not enumeration.',
-  'handlers/sponsors.ts:508':
+  'handlers/sponsors.ts:509':
     'Admin-flow cache invalidation: SELECT DISTINCT event_id for one sponsor, ' +
     'keyed by `sponsor_business_id = ?` (the held business id from a ' +
     'brand-scoped admin mutation). Not a public read, not cross-brand.',
   // Line-sensitive: shifted 1253→1259 when create began returning placement_id
   // (the response block grew). Bump on any edit above this read in sponsors.ts.
-  'handlers/sponsors.ts:1259':
+  'handlers/sponsors.ts:1263':
     'Correlated EXISTS subselect keyed by `sp.sponsor_business_id = sb.id`, ' +
     'where the outer `sponsor_business sb` is keyed by `sb.id = ?` (held ' +
     'sponsor id). Scoped to one business; not enumeration.',
@@ -221,36 +221,36 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
   // a never-who geographic aggregate, or a correlated/transitively-scoped
   // subselect — never a request-reachable per-brand row enumeration.
-  'lib/draft-expiry.ts:102':
+  'lib/draft-expiry.ts:104':
     'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
     'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
     'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
-  'lib/draft-expiry.ts:114':
+  'lib/draft-expiry.ts:116':
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
     'brand by design, not request-reachable.',
-  'lib/draft-expiry.ts:150':
+  'lib/draft-expiry.ts:152':
     'Same cron, AUD-3 Phase B: `INSERT INTO admin_audit_log ... SELECT ... FROM ' +
     'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
     '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
     'Held ids, not enumeration; not request-reachable.',
-  'lib/shared-report.ts:233':
+  'lib/shared-report.ts:234':
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
     'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
     'window incl. start-only events, then the real ' +
     'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
     'geographic baseline input; the output is never-who anon-return aggregates. ' +
     'Not request-reachable.',
-  'lib/shared-report.ts:362':
+  'lib/shared-report.ts:363':
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
     'corridor_id)` across brands. A corridor is a shared geography by design; ' +
     'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts:553':
+  'lib/shared-report.ts:554':
     'detectEventSeriesClusters cron — brand/venue/day/hour event-count baseline, ' +
     'GROUPED BY brand_id (OSE-1421: a series never groups events across brands), ' +
     'count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
   // OSE-1421: the two series-lookup subselects that were exempt here (:583, :607) now
   // bind `AND brand_id = ?` themselves, so they no longer need an exemption.
-  'lib/shared-report.ts:748':
+  'lib/shared-report.ts:749':
     // 666→673 by OSE-1460 (country cleanup statement added above; the
     // country-code twin query at :687 was removed with top_country).
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
@@ -259,25 +259,25 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // OSE-1459: aggregateScanCells (scans at the poster's own res9 cell). Same
   // cron class as aggregateScanBuckets (:740). Keys re-keyed after main's OSE-1459
   // and OSE-1460 (#737) merged together; the backfill moved 895/896/899 -> 943/944/947.
-  'lib/shared-report.ts:854':
+  'lib/shared-report.ts:855':
     'aggregateScanCells cron — COUNT of scans at posters with no cell yet (skipped, ' +
     'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
     '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
     'request-reachable.',
-  'lib/shared-report.ts:880':
+  'lib/shared-report.ts:881':
     'Same cron — DELETE of the window before the atomic re-insert, so a corrected ' +
     'poster location never double-counts. Same time window, same rationale.',
-  'lib/shared-report.ts:903':
+  'lib/shared-report.ts:904':
     'Same cron — the single INSERT ... SELECT that rebuilds the window: ' +
     'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
     'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
-  'lib/shared-report.ts:951':
+  'lib/shared-report.ts:952':
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
     'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
     'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts:952':
+  'lib/shared-report.ts:953':
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts:955':
+  'lib/shared-report.ts:956':
     'Same backfill statement, the EXISTS guard correlated by ' +
     '`id = scan_aggregates.event_id`. Same rationale.',
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
@@ -314,12 +314,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // 454→473 and 849→870 for the weekly snapshot claim (PR 741 review);
   // 473→490 and 870→894 when the claim became a compare-and-set;
   // 490→493 and 894→897 for the fail-closed skew check.
-  'lib/shared-report-export.ts:493':
+  'lib/shared-report-export.ts:494':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:897':
+  'lib/shared-report-export.ts:898':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to

@@ -22,6 +22,7 @@ import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
 import { decryptText } from '../lib/pii';
 
+import { errorLabel } from '../lib/error-label';
 export type SubscribersAdminEnv = AdminEnv &
   AuditLogEnv & {
     /** Forms database: host of `subscribers` (OSE-1661). */
@@ -85,7 +86,7 @@ export async function handleListSubscribers(
       JSON.stringify({
         type: 'LIST_SUBSCRIBERS_DB_ERROR',
         requestId,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
     // Fire-and-forget audit for the failure path
@@ -125,7 +126,7 @@ export async function handleListSubscribers(
             JSON.stringify({
               type: 'LIST_SUBSCRIBERS_DECRYPT_ERROR',
               requestId,
-              error: err instanceof Error ? err.message : String(err),
+              error: errorLabel(err),
             })
           );
         }

@@ -34,6 +34,8 @@
  * carries event ids only, no operator identity beyond the system actor.
  */
 
+import { errorLabel } from './error-label';
+
 export interface DraftExpiryEnv {
   DB: D1Database;
   DRAFT_EXPIRY_DAYS?: string;
@@ -161,7 +163,7 @@ export async function runDraftExpiry(env: DraftExpiryEnv): Promise<DraftExpiryRe
     console.error(
       JSON.stringify({
         type: 'DRAFT_EXPIRY_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         days,
         timestamp: now,
       })

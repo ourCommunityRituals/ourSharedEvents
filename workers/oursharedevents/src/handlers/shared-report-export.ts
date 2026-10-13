@@ -24,6 +24,7 @@ import {
 } from '../lib/shared-report-export';
 import { logExportManifest } from '../lib/audit-log';
 
+import { errorLabel } from '../lib/error-label';
 /** BigQuery table each phase writes, for the manifest's provenance record. */
 const PHASE_TABLE: Record<string, string> = {
   anon_id_returns: 'corridor_returns_export', // OSE-1460: counts, not per-person rows
@@ -62,7 +63,7 @@ export async function runSharedReportBigQueryExport(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
         phase: 'anon_id_returns',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -84,7 +85,7 @@ export async function runSharedReportBigQueryExport(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
         phase: 'corridor_density_baseline',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -106,7 +107,7 @@ export async function runSharedReportBigQueryExport(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
         phase: 'event_series',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

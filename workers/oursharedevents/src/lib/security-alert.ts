@@ -14,6 +14,8 @@
  * crash the cron job. Errors are logged as structured JSON.
  */
 
+import { errorLabel } from './error-label';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -94,7 +96,7 @@ async function persistAlert(
     console.error(
       JSON.stringify({
         type: 'SECURITY_ALERT_PERSIST_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         alertType: payload.type,
         timestamp: new Date().toISOString(),
       })
@@ -362,7 +364,7 @@ async function createLinearIssue(
     console.error(
       JSON.stringify({
         type: 'LINEAR_ISSUE_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         alertType: payload.type,
         timestamp: new Date().toISOString(),
       })
@@ -430,7 +432,7 @@ export async function resolveSecurityAlert(db: D1Database, alertId: string): Pro
     console.error(
       JSON.stringify({
         type: 'SECURITY_ALERT_RESOLVE_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         alertId,
         timestamp: new Date().toISOString(),
       })

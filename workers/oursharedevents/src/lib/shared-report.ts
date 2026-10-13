@@ -37,6 +37,7 @@
 import { hashAnonIdForReturns, pepperEpoch } from './anon-id-hash';
 import { phaseTimesFor } from './event-datetime';
 import { isH3Cell } from './export-geography';
+import { errorLabel } from './error-label';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
@@ -207,7 +208,7 @@ export async function materializeAnonIdReturns(
     console.error(
       JSON.stringify({
         type: 'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -295,7 +296,7 @@ export async function materializeAnonIdReturns(
           type: 'SHARED_REPORT_MATERIALIZE_ERROR',
           phase: 'anon_id_returns',
           event_id: row.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: errorLabel(err),
         })
       );
     }
@@ -448,7 +449,7 @@ export async function refreshCorridorBaselines(
               type: 'SHARED_REPORT_MATERIALIZE_ERROR',
               phase: 'corridor_density_snapshot',
               cell: `${c.corridor_id}/${c.bucket_dow}/${c.bucket_hour}`,
-              error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+              error: errorLabel(snapErr),
             })
           );
         }
@@ -459,7 +460,7 @@ export async function refreshCorridorBaselines(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'corridor_density_baseline',
             cell: `${c.corridor_id}/${c.bucket_dow}/${c.bucket_hour}`,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -470,7 +471,7 @@ export async function refreshCorridorBaselines(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'corridor_density_baseline',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -661,7 +662,7 @@ export async function detectEventSeriesClusters(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'event_series_detector',
             cluster: `${c.venue_location}/${c.day_of_week}/${c.hour_of_day}`,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -672,7 +673,7 @@ export async function detectEventSeriesClusters(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'event_series_detector',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -790,7 +791,7 @@ export async function aggregateScanBuckets(
             type: 'SHARED_REPORT_MATERIALIZE_ERROR',
             phase: 'scan_aggregation',
             agg_id: id,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorLabel(err),
           })
         );
       }
@@ -803,7 +804,7 @@ export async function aggregateScanBuckets(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'scan_aggregation',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -913,7 +914,7 @@ async function aggregateScanCells(
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'scan_aggregation',
         step: 'scan_cell_aggregates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }
@@ -965,7 +966,7 @@ export async function backfillH3Cells(
       JSON.stringify({
         type: 'SHARED_REPORT_MATERIALIZE_ERROR',
         phase: 'h3_cell_backfill',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

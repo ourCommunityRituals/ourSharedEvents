@@ -32,6 +32,7 @@ import {
 import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
+import { errorLabel } from './lib/error-label';
 export type { RouterEnv as Env };
 
 export default {
@@ -325,7 +326,7 @@ async function runRegistrationContactClear(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
         phase: 'registrations_contact_clear',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -365,7 +366,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.registrationsDeleted = count;
     await logPiiAudit(env.FORMS_DB, 'registrations_delete', count, 0);
   } catch (err) {
-    results.registrationsError = err instanceof Error ? err.message : String(err);
+    results.registrationsError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -404,7 +405,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.surveysScrubErrors = scrubErrors;
     await logPiiAudit(env.FORMS_DB, 'surveys_scrub', scrubbed, scrubErrors);
   } catch (err) {
-    results.surveysError = err instanceof Error ? err.message : String(err);
+    results.surveysError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -427,7 +428,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.emailSignupsDeleted = count;
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', count, 0);
   } catch (err) {
-    results.emailSignupsError = err instanceof Error ? err.message : String(err);
+    results.emailSignupsError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -454,7 +455,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     results.subscriberRetentionDays = days;
     await logPiiAudit(env.FORMS_DB, 'subscribers_delete', count, 0);
   } catch (err) {
-    results.subscribersError = err instanceof Error ? err.message : String(err);
+    results.subscribersError = errorLabel(err);
     console.error(
       JSON.stringify({
         type: 'LIFECYCLE_PHASE_ERROR',
@@ -547,7 +548,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'auth_failures',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -577,7 +578,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'rate_limit_kv',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -611,7 +612,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'error_rates',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );
@@ -792,7 +793,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       JSON.stringify({
         type: 'SECURITY_CRON_ERROR',
         phase: 'metrics_write',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
         timestamp: now,
       })
     );

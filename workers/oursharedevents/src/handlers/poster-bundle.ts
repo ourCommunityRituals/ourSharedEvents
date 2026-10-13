@@ -42,6 +42,7 @@ import {
 import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 import { eventFormPath } from '../lib/canonical';
 
+import { errorLabel } from '../lib/error-label';
 export interface PosterBundleEnv extends DataProviderEnv {
   DB: D1Database;
   FORMS_DB: D1Database;
@@ -317,7 +318,7 @@ export async function handleGetPosterBundle(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleGetPosterBundle.sponsors',
-        error: err instanceof Error ? err.message : String(err),
+        error: errorLabel(err),
       })
     );
   }

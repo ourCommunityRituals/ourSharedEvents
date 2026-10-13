@@ -34,6 +34,7 @@ import { listSavedPosterCodes } from '../lib/poster-codes';
 import { parsePlacementType } from '../lib/poster-reach';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
+import { errorLabel } from '../lib/error-label';
 
 /** Longest address kept (OSE-1357). A geocoder's formatted_address is well under. */
 const ADDRESS_MAX = 300;
@@ -230,9 +231,12 @@ export async function handleAdminCreatePosterDeployment(
       )
       .run();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreatePosterDeployment', error: msg })
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminCreatePosterDeployment',
+        error: errorLabel(err),
+      })
     );
     return errorResponse('DB_ERROR', 'Failed to create poster deployment', 503, rid);
   }
@@ -462,9 +466,12 @@ export async function handleAdminUpdatePosterDeployment(
       return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     console.error(
-      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminUpdatePosterDeployment', error: msg })
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminUpdatePosterDeployment',
+        error: errorLabel(err),
+      })
     );
     return errorResponse('DB_ERROR', 'Failed to update poster deployment', 503, rid);
   }
