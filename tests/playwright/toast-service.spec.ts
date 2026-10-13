@@ -44,10 +44,9 @@ test.describe.configure({ mode: 'serial' });
 let seeded: SeededSponsorHome;
 
 test.beforeAll(async ({ request }) => {
-  test.skip(
-    !ADMIN_BEARER,
-    'Needs OSE_ADMIN_BEARER (set by playwright.mobile.config.ts for the local worker).'
-  );
+  // Never skipped: playwright.mobile.config.ts sets the local admin key, and a
+  // run without it would report green having looked at nothing.
+  expect(ADMIN_BEARER, 'OSE_ADMIN_BEARER is set by playwright.mobile.config.ts').not.toBe('');
   seeded = await seedSponsorHome(request, ADMIN_BEARER, 'Toast');
 });
 
@@ -56,7 +55,7 @@ const SEEDED = {
   jwt: 'eyJ0ZXN0IjoidG9hc3QifQ.eyJub3QiOiJhLXJlYWwtdG9rZW4ifQ.c2VlZGVkLXNlY3JldA',
   bearer: 'Bearer seeded-bearer-value-0001',
   cookie: 'ose_session=seeded-cookie-value-0002',
-  signedLink: 'https://oursharedevents.com/sponsor?t=seeded-signed-link-0003',
+  signedLink: 'https://events.example/sponsor?t=seeded-signed-link-0003',
   email: 'seeded.person@example.com',
   stack: 'at handleRespond (sponsor-home.ts:340:12)',
   sql: 'SELECT id FROM sponsor_business WHERE id = ?',

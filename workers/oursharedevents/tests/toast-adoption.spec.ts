@@ -60,7 +60,7 @@ const SEEDED = {
   jwt: 'eyJ0ZXN0IjoidG9hc3QifQ.eyJub3QiOiJhLXJlYWwtdG9rZW4ifQ.c2VlZGVkLXNlY3JldA',
   bearer: 'Bearer seeded-bearer-value-0001',
   cookie: 'ose_session=seeded-cookie-value-0002',
-  signedLink: 'https://oursharedevents.com/sponsor?t=seeded-signed-link-0003',
+  signedLink: 'https://events.example/sponsor?t=seeded-signed-link-0003',
   email: 'seeded.person@example.com',
   stack: 'at handleRespond (sponsor-home.ts:340:12)',
   sql: 'SELECT id FROM sponsor_business WHERE id = ?',

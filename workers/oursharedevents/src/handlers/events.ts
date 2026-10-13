@@ -152,8 +152,6 @@ function errorResponse(code: string, message: string, status: number, rid: strin
       requestId: rid,
       timestamp: new Date().toISOString(),
     },
-    // The same reference in the header: it is what a failure toast reads
-    // (ocrToast.detailsFrom), and what success responses already send.
     { status, headers: { 'X-Request-Id': rid } }
   );
 }
