@@ -33,7 +33,6 @@
  */
 
 import { corsHeaders } from './cors';
-import { errorLabel } from './error-label';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
