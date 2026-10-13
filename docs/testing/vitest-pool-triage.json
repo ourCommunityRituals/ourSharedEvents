@@ -3033,6 +3033,13 @@
       "testCount": 30
     },
     {
+      "file": "workers/oursharedevents/tests/toast-refusal-reference.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/token-contract.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -3100,7 +3107,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 13
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/upload.spec.ts",

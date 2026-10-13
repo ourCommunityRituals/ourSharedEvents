@@ -23,6 +23,10 @@
  * @born-red request reference on a refusal | method: run before the events,
  *   sponsors and poster-deployment error helpers set the header (three cases
  *   failed with a null header; the sponsor answer passed) | date: 2026-10-12
+ * @born-red request reference on the form switch, publish and unpublish |
+ *   method: the header taken out of the answers of handlers/feature-flags.ts
+ *   and handlers/qr-verify.ts (those five cases failed with a null header,
+ *   the other refusals passed) | date: 2026-10-12
  */
 
 import { env, SELF } from 'cloudflare:test';
@@ -192,6 +196,48 @@ describe('what a failure toast reads from a refused request', () => {
       body: { status: 'ready' },
       status: 404,
       code: 'NOT_FOUND',
+    },
+    {
+      action: 'admin: switch a form on or off',
+      method: 'PUT',
+      path: '/api/v2/admin/events/evt_none/flags/not.a.flag',
+      headers: { ...ADMIN, ...JSON_BODY },
+      body: { enabled: true },
+      status: 400,
+      code: 'INVALID_FLAG_KEY',
+    },
+    {
+      action: 'admin: switch a form with no on or off in the request',
+      method: 'PUT',
+      path: '/api/v2/admin/events/evt_none/flags/forms.register',
+      headers: { ...ADMIN, ...JSON_BODY },
+      body: {},
+      status: 400,
+      code: 'MISSING_FIELD',
+    },
+    {
+      action: 'admin: remove a form switch',
+      method: 'DELETE',
+      path: '/api/v2/admin/events/evt_none/flags/not.a.flag',
+      headers: ADMIN,
+      status: 400,
+      code: 'INVALID_FLAG_KEY',
+    },
+    {
+      action: 'admin: publish an event (verify-qr)',
+      method: 'POST',
+      path: '/api/v2/admin/events/evt_none/verify-qr',
+      headers: ADMIN,
+      status: 404,
+      code: 'EVENT_NOT_FOUND',
+    },
+    {
+      action: 'admin: unpublish an event (unverify-qr)',
+      method: 'POST',
+      path: '/api/v2/admin/events/evt_none/unverify-qr',
+      headers: ADMIN,
+      status: 404,
+      code: 'EVENT_NOT_FOUND',
     },
   ];
 
