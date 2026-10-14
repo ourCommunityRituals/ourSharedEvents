@@ -20,7 +20,7 @@
  *   UP-ONLY   writeUsesOnNewSecret    the named write sites whose token names a write secret
  *   DOWN-ONLY bareOldTokenUses        bare secrets.OCR_PROPAGATE_TOKEN (baseline 0)
  *   DOWN-ONLY fallbackUses            `NEW || OCR_PROPAGATE_TOKEN` expressions (2: the write sites)
- *   DOWN-ONLY writeUsesOnWrongToken   write sites not on their decided token (notify-osm today)
+ *   DOWN-ONLY writeUsesOnWrongToken   write sites not on their decided token (baseline 0)
  *   DOWN-ONLY unrecognizedTokenForms  token expressions in no recognized form, and read sites
  *                                     with no recognized read token (baseline 0)
  * Current must equal the baseline both ways, per file and per step name, so every move is
@@ -190,15 +190,14 @@ export const TOKEN_HELP = {
   fallbackUses: {
     what: '`NEW || OCR_PROPAGATE_TOKEN` fallback expressions (PR #986), anywhere',
     reason:
-      'Reads name OCR_HUB_READ alone; the only fallbacks left are the two write sites (conformance PR step, notify-osm), removed by OSE-1695. May only fall.',
+      'Reads name OCR_HUB_READ alone; the only fallbacks left are the two write sites, each moving to its own token in the main-automation environment (OSE-1695). May only fall.',
     fix:
       'do not add a fallback: name the new secret alone (${{ secrets.OCR_HUB_READ }} for a read); ' +
       'the two write sites keep theirs until OSE-1695 removes them',
   },
   writeUsesOnWrongToken: {
     what: 'write sites not on their decided token (conformance: OCR_AUTOMATION_WRITE, notify-osm: OCR_NOTIFY_OSM)',
-    reason:
-      'Known violation: notify-osm uses OCR_AUTOMATION_WRITE instead of OCR_NOTIFY_OSM (OSE-1695); may only fall.',
+    reason: 'Every write site is on its decided token (OSE-1695); stays 0.',
     fix: 'point the write step at its own secret (see WRITE_SITES in scripts/ci/hub-token-wiring.mjs)',
   },
   unrecognizedTokenForms: {
@@ -275,10 +274,7 @@ export function compareTokenSplit(current, baseline, baseBaseline) {
         );
       if (gone.length || c < b)
         problems.push(
-          `${head}: went DOWN (good). Lock the gain in: lower the baseline to ${c} (run \`${UPDATE_CMD}\` and commit ${BASELINE_FILE}). Gone:${bullet(gone.length ? gone : ['(the total fell)'])}` +
-            (k === 'writeUsesOnWrongToken' && c === 0
-              ? '\n  At 0, also delete the KNOWN_WRONG_TOKEN line in tests/integration/adr008-wiring.test.js.'
-              : '')
+          `${head}: went DOWN (good). Lock the gain in: lower the baseline to ${c} (run \`${UPDATE_CMD}\` and commit ${BASELINE_FILE}). Gone:${bullet(gone.length ? gone : ['(the total fell)'])}`
         );
     }
     const bbk = baseBaseline?.[k];

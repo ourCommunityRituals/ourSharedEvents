@@ -82,8 +82,8 @@ const ALL_WRITE_FORMS = Object.values(WRITE_FORMS).flat();
 /**
  * The only write uses, by file + job + step name. `expected` is the PO decision (OSE-1695):
  * conformance opens a PR in this repo (automation token); notify-osm opens an issue in
- * another repo and gets its own token. notify-osm is on the wrong one today: a known
- * violation recorded by writeUsesOnWrongToken, which may only fall.
+ * another repo and gets its own token. Both are on their decided token, so
+ * writeUsesOnWrongToken is 0 and may only stay there.
  */
 export const WRITE_SITES = [
   {

@@ -186,11 +186,6 @@ const BARE = E('secrets.OCR_PROPAGATE_TOKEN');
 const AUTO_FB = E('secrets.OCR_AUTOMATION_WRITE || secrets.OCR_PROPAGATE_TOKEN');
 const NOTIFY_FB = E('secrets.OCR_NOTIFY_OSM || secrets.OCR_PROPAGATE_TOKEN');
 const FAKE_LITERAL = 'placeholder-not-a-real-credential';
-// Write sites that are on the wrong token today. May only shrink: when notify-osm is
-// repointed to OCR_NOTIFY_OSM, delete its line (and lower writeUsesOnWrongToken).
-const KNOWN_WRONG_TOKEN = [
-  '.github/workflows/notify-osm-flag-change.yml :: notify :: Open issue in OSM',
-];
 // Files outside .github/workflows, tests/, docs and *.md that mention the staging
 // script, each classified. A new mention fails until someone decides whether it is an
 // invocation (then it must carry a read token from a workflow step) or a reference.
@@ -449,7 +444,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       );
     });
 
-    test('the write sites use write forms; only the known site is on the wrong token', () => {
+    test('the write sites use write forms, each on its decided token', () => {
       const writes = s.sites.filter((x) => x.right === 'write');
       const isWriteForm = (f) =>
         f.startsWith('write-fallback-') || /^new-only-(automation|notify)$/.test(f);
@@ -459,10 +454,8 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
         `Fix: GH_TOKEN names the site's write secret, e.g. ${NOTIFY_FB}.`
       );
       none(
-        writes
-          .filter((x) => !w.writeSiteOnExpected(x) && !KNOWN_WRONG_TOKEN.includes(key(x)))
-          .map(line),
-        'Write sites on the wrong token (not the known notify-osm violation)',
+        writes.filter((x) => !w.writeSiteOnExpected(x)).map(line),
+        'Write sites on the wrong token (conformance: OCR_AUTOMATION_WRITE, notify-osm: OCR_NOTIFY_OSM)',
         'Fix: point the step at its decided secret (WRITE_SITES.expected in scripts/ci/hub-token-wiring.mjs).'
       );
     });

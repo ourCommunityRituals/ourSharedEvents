@@ -238,8 +238,8 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
 // (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret.
 // DOWN-ONLY: bareOldTokenUses, fallbackUses, writeUsesOnWrongToken, unrecognizedTokenForms.
 // The fixture mirrors main: three staging steps and one OCR-docs checkout on
-// OCR_HUB_READ alone (no fallback), and the two named write sites, still on their
-// `NEW || OCR_PROPAGATE_TOKEN` fallback, notify-osm on the wrong (automation) token.
+// OCR_HUB_READ alone (no fallback), and the two named write sites, each on its own
+// token and still on its `NEW || OCR_PROPAGATE_TOKEN` fallback.
 // Each case spawns the CLI a few times: a generous timeout so a loaded runner never turns
 // a real result into a timeout.
 describe(
@@ -284,12 +284,12 @@ describe(
       root = mkdtempSync(join(tmpdir(), 'ci-int-token-'));
       put(root, HUB_WF, hubWf(DEFAULT_STEPS));
       put(root, CONF_WF, writeWf('generate', 'Open/update the conformance-refresh PR', AUTO_FB));
-      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', AUTO_FB));
+      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', NOTIFY_FB));
       expect(run(root, '--update').status).toBe(0);
       const r = run(root);
       expect(r.stderr).toBe('');
       expect(r.stdout).toMatch(
-        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=2\(down\) writeUsesOnWrongToken=1\(down\) unrecognizedTokenForms=0\(down\)/
+        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=2\(down\) writeUsesOnWrongToken=0\(down\) unrecognizedTokenForms=0\(down\)/
       );
     });
 
@@ -455,17 +455,26 @@ describe(
       expect(r.stderr).toMatch(/bareOldTokenUses \[DOWN-ONLY.*current 1: went UP/);
     });
 
-    test('(j) notify-osm repointed to OCR_NOTIFY_OSM, baseline not lowered: red "lower the baseline"', () => {
-      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', NOTIFY_FB));
+    test('(j) notify-osm put back on the automation token: red, ceiling 0 may not rise', () => {
+      const base = snapshotBase();
+      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', AUTO_FB));
       const r = run(root);
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(
-        /writeUsesOnWrongToken \[DOWN-ONLY.*baseline 1, current 0: went DOWN \(good\)\. Lock the gain in: lower the baseline to 0/
+        /writeUsesOnWrongToken \[DOWN-ONLY.*baseline 0, current 1: went UP \(bad; the good direction is DOWN\)/
       );
-      expect(r.stderr).toContain('KNOWN_WRONG_TOKEN');
+      expect(r.stderr).toContain(
+        `${NOTIFY_WF} :: notify :: Open issue in OSM  (expected secrets.OCR_NOTIFY_OSM; GH_TOKEN is an expression naming secrets.OCR_AUTOMATION_WRITE, secrets.OCR_PROPAGATE_TOKEN`
+      );
       expect(r.stderr).not.toMatch(/writeUsesOnNewSecret|fallbackUses/); // nothing else moved
+      // Raising the committed ceiling is locally consistent, but red against the base branch.
       expect(run(root, '--update').status).toBe(0);
       expect(run(root).status).toBe(0);
+      const b = run(root, '--base-config', base);
+      expect(b.status).toBe(1);
+      expect(b.stderr).toMatch(
+        /writeUsesOnWrongToken \[DOWN-ONLY\]: the committed ceiling 1 is above the base branch's 0/
+      );
     });
 
     test('(k) a down-only ceiling raised above the base branch copy: red under --base-config', () => {
