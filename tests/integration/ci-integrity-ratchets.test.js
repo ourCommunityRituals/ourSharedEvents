@@ -12,6 +12,8 @@
  * 5. CI wiring (OSE-1691): the T0 lint shard runs this script with
  *    --base-config, blocking. Before OSE-1691 nothing in CI ran it, and (3)
  *    returned early in CI, so a raised baseline passed every check (#933).
+ * 6. Token split (OSE-1695): six directional measurements from the shared
+ *    enumerator scripts/ci/hub-token-wiring.mjs, born red below on a fixture tree.
  */
 
 const { spawnSync } = require('child_process');
@@ -22,6 +24,14 @@ const { join, dirname } = require('path');
 const ROOT = join(__dirname, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'ci', 'ci-integrity-ratchets.mjs');
 const BASELINE = '.ci-integrity-baseline.json';
+const TOKEN_KEYS = [
+  'readUsesOnNewSecret',
+  'writeUsesOnNewSecret',
+  'bareOldTokenUses',
+  'fallbackUses',
+  'writeUsesOnWrongToken',
+  'unrecognizedTokenForms',
+];
 
 function run(root, ...args) {
   return spawnSync(process.execPath, [SCRIPT, '--root', root, ...args], { encoding: 'utf-8' });
@@ -48,8 +58,13 @@ describe('CI integrity ratchets (OSE-1606): the real tree', () => {
       ...Object.values(b.skipsUnconditional.byFile),
       ...Object.values(b.skipsConditional.byFile),
       ...b.orphanSpecs.files,
+      // Token split (OSE-1695): each key, every per-file entry and every retired site.
+      ...TOKEN_KEYS.map((k) => b[k]),
+      ...TOKEN_KEYS.flatMap((k) => Object.values(b[k].byFile)),
+      ...TOKEN_KEYS.flatMap((k) => b[k].retired || []),
     ];
     expect(entries.length).toBeGreaterThan(0);
+    for (const k of TOKEN_KEYS) expect(['up', 'down'], k).toContain(b[k].direction);
     for (const e of entries) {
       expect(typeof e.reason).toBe('string');
       expect(e.reason.length).toBeGreaterThan(15);
@@ -70,6 +85,9 @@ describe('CI integrity ratchets (OSE-1606): the real tree', () => {
     writeFileSync(baseFile, show.stdout);
     const r = run(ROOT, '--base-config', baseFile);
     expect(r.stderr).not.toContain('baseline raised');
+    // Token split: a down-only ceiling may not rise, an up-only floor may not fall.
+    expect(r.stderr).not.toContain('committed ceiling');
+    expect(r.stderr).not.toContain('committed floor');
   });
 
   test('the lint shard runs the ratchet against the base branch, blocking (OSE-1691)', () => {
@@ -80,8 +98,9 @@ describe('CI integrity ratchets (OSE-1606): the real tree', () => {
     const hits = [];
     for (const [name, job] of Object.entries(wf.jobs || {})) {
       for (const s of job.steps || []) {
-        if (/scripts\/ci\/ci-integrity-ratchets\.mjs/.test(String(s.run || '')))
+        if (/scripts\/ci\/ci-integrity-ratchets\.mjs/.test(String(s.run || ''))) {
           hits.push({ name, job, s });
+        }
       }
     }
     expect(hits.length, 'a CI step runs ci-integrity-ratchets.mjs').toBeGreaterThanOrEqual(1);
@@ -130,8 +149,10 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
     put(
       root,
       WF,
+      // The comment sits after the scalar so the fixture stays valid YAML: the token-split
+      // measurements parse every workflow, and an unparseable one is red.
       CLEAN_WF +
-        '      # never continue-on-error: true here\n            tests/e2e/1-smoke/named.spec.ts\n'
+        '            tests/e2e/1-smoke/named.spec.ts\n      # never continue-on-error: true here\n'
     );
     expect(run(root).status).toBe(0);
   });
@@ -212,3 +233,370 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
     expect(r.stderr).toMatch(/baseline raised to 1 above the base branch's 0/);
   });
 });
+
+// Token split (OSE-1695): directional ratchets on the shared enumerator
+// (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret.
+// DOWN-ONLY: bareOldTokenUses, fallbackUses, writeUsesOnWrongToken, unrecognizedTokenForms.
+// The fixture mirrors main: three staging steps and one OCR-docs checkout on the read
+// fallback, and the two named write sites, notify-osm on the wrong (automation) token.
+// Each case spawns the CLI a few times: a generous timeout so a loaded runner never turns
+// a real result into a timeout.
+describe(
+  'CI integrity ratchets: token split (OSE-1695), born-red on injected faults',
+  { timeout: 30_000 },
+  () => {
+    let root;
+    const E = (body) => '$' + '{{ ' + body + ' }}';
+    const READ_FB = E('secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN');
+    const READ_NEW = E('secrets.OCR_HUB_READ');
+    const BARE = E('secrets.OCR_PROPAGATE_TOKEN');
+    const AUTO_FB = E('secrets.OCR_AUTOMATION_WRITE || secrets.OCR_PROPAGATE_TOKEN');
+    const NOTIFY_FB = E('secrets.OCR_NOTIFY_OSM || secrets.OCR_PROPAGATE_TOKEN');
+    const REVERSED = E('secrets.OCR_PROPAGATE_TOKEN || secrets.OCR_HUB_READ');
+    const FAKE_LITERAL = 'placeholder-not-a-real-credential';
+    const HUB_WF = '.github/workflows/hub.yml';
+    const CONF_WF = '.github/workflows/conformance-report.yml';
+    const NOTIFY_WF = '.github/workflows/notify-osm-flag-change.yml';
+    const stage = (name, value = READ_FB) =>
+      `      - name: ${name}\n` +
+      (value ? `        env:\n          OCR_PROPAGATE_TOKEN: ${value}\n` : '') +
+      '        run: bash scripts/ci-stage-ocr-workspace.sh\n';
+    const checkout = (token = READ_FB) =>
+      `      - name: brain\n        uses: actions/checkout@v7\n        with:\n          repository: ourCommunityRituals/OCR-docs\n          token: ${token}\n`;
+    const hubWf = (steps, { top = '', jobEnv = '' } = {}) =>
+      `on: pull_request\n${top}jobs:\n  build:\n${jobEnv}    steps:\n` + steps;
+    const DEFAULT_STEPS = stage('stage A') + stage('stage B') + stage('stage C') + checkout();
+    const writeWf = (job, step, value) =>
+      `on: push\njobs:\n  ${job}:\n    steps:\n      - name: ${step}\n        env:\n          GH_TOKEN: ${value}\n        run: gh api\n`;
+    const baseline = () => JSON.parse(readFileSync(join(root, BASELINE), 'utf-8'));
+    const writeBaseline = (b) =>
+      writeFileSync(join(root, BASELINE), JSON.stringify(b, null, 2) + '\n');
+    const snapshotBase = () => {
+      const p = join(root, 'base.json');
+      writeFileSync(p, readFileSync(join(root, BASELINE), 'utf-8'));
+      return p;
+    };
+
+    beforeEach(() => {
+      root = mkdtempSync(join(tmpdir(), 'ci-int-token-'));
+      put(root, HUB_WF, hubWf(DEFAULT_STEPS));
+      put(root, CONF_WF, writeWf('generate', 'Open/update the conformance-refresh PR', AUTO_FB));
+      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', AUTO_FB));
+      expect(run(root, '--update').status).toBe(0);
+      const r = run(root);
+      expect(r.stderr).toBe('');
+      expect(r.stdout).toMatch(
+        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=6\(down\) writeUsesOnWrongToken=1\(down\) unrecognizedTokenForms=0\(down\)/
+      );
+    });
+
+    afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+    test('(a) a new bare secrets.OCR_PROPAGATE_TOKEN on a step: red, ceiling may not rise', () => {
+      put(
+        root,
+        '.github/workflows/new.yml',
+        `on: pull_request\njobs:\n  n:\n    steps:\n      - name: sneaky\n        env:\n          T: ${BARE}\n        run: echo\n`
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /bareOldTokenUses \[DOWN-ONLY.*baseline 0, current 1: went UP \(bad; the good direction is DOWN\)/
+      );
+      expect(r.stderr).toContain('.github/workflows/new.yml :: n :: sneaky');
+      expect(r.stderr).toContain('Do not raise the baseline.');
+    });
+
+    test('(b) a read fallback that no longer names OCR_HUB_READ: up-only REGRESSION', () => {
+      put(
+        root,
+        HUB_WF,
+        hubWf(stage('stage A') + stage('stage B') + stage('stage C', BARE) + checkout())
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /REGRESSION readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 3: went DOWN \(bad/
+      );
+      expect(r.stderr).toContain(`${HUB_WF} :: build :: stage C`);
+      expect(r.stderr).toMatch(/bareOldTokenUses \[DOWN-ONLY.*current 1: went UP/);
+    });
+
+    test('(c) a read site deleted: up-only REGRESSION naming it, with the retired recipe', () => {
+      put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + checkout()));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 3/);
+      expect(r.stderr).toContain(`${HUB_WF} :: build :: stage C`);
+      expect(r.stderr).toContain('readUsesOnNewSecret.retired');
+    });
+
+    test('(d) a new correctly wired read step, baseline not raised: red "raise the baseline"', () => {
+      put(
+        root,
+        '.github/workflows/new.yml',
+        'on: pull_request\njobs:\n  n:\n    steps:\n' + stage('stage N', READ_NEW)
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /NOT REGISTERED readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 5: went UP \(good\), so raise the baseline/
+      );
+      expect(r.stderr).toContain('.github/workflows/new.yml :: n :: stage N');
+      expect(r.stderr).toContain('node scripts/ci/ci-integrity-ratchets.mjs --update');
+      expect(r.stderr).not.toMatch(/fallbackUses/); // the new-only form adds no fallback
+    });
+
+    test('(d2) the same new step on the fallback form also raises fallbackUses (down-only)', () => {
+      put(
+        root,
+        '.github/workflows/new.yml',
+        'on: pull_request\njobs:\n  n:\n    steps:\n' + stage('stage N')
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/NOT REGISTERED readUsesOnNewSecret/);
+      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 6, current 7: went UP/);
+    });
+
+    test('(e) a staging step with an unrecognized form (old token first): red', () => {
+      put(
+        root,
+        HUB_WF,
+        hubWf(stage('stage A') + stage('stage B') + stage('stage C', REVERSED) + checkout())
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /unrecognizedTokenForms \[DOWN-ONLY.*baseline 0, current 1: went UP/
+      );
+      expect(r.stderr).toContain(
+        `${HUB_WF} :: build :: stage C  (step-level token expression in no recognized form)`
+      );
+      expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret/);
+    });
+
+    test('(f) a wrong job-level value overriding a correct workflow-level one: red', () => {
+      const steps = stage('stage A', '') + stage('stage B', '') + stage('stage C', '') + checkout();
+      const top = `env:\n  OCR_PROPAGATE_TOKEN: ${READ_FB}\n`;
+      put(root, HUB_WF, hubWf(steps, { top }));
+      expect(run(root, '--update').status).toBe(0);
+      expect(run(root).status).toBe(0);
+      put(
+        root,
+        HUB_WF,
+        hubWf(steps, { top, jobEnv: `    env:\n      OCR_PROPAGATE_TOKEN: ${BARE}\n` })
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 1/);
+      expect(r.stderr).toMatch(/bareOldTokenUses \[DOWN-ONLY.*current 1: went UP/);
+      expect(r.stderr).toContain(`${HUB_WF} :: build :: (job level)`);
+    });
+
+    test('(g) a new workflow with an odd invocation form and no token: red', () => {
+      put(
+        root,
+        '.github/workflows/odd.yml',
+        'on: pull_request\njobs:\n  o:\n    steps:\n      - name: odd\n        run: |\n          echo start\n          cd sub && bash ./scripts/ci-stage-ocr-workspace.sh\n'
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/unrecognizedTokenForms \[DOWN-ONLY.*current 1: went UP/);
+      expect(r.stderr).toContain(
+        '.github/workflows/odd.yml :: o :: odd  (staging site with no recognized read token (missing): OCR_PROPAGATE_TOKEN is not set)'
+      );
+    });
+
+    test('(h) a composite action that runs the staging script: red', () => {
+      put(
+        root,
+        '.github/actions/stage/action.yml',
+        `name: stage\nruns:\n  using: composite\n  steps:\n    - name: stage hub\n      shell: bash\n      env:\n        OCR_PROPAGATE_TOKEN: ${READ_FB}\n      run: bash scripts/ci-stage-ocr-workspace.sh\n`
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/unrecognizedTokenForms \[DOWN-ONLY.*current 1: went UP/);
+      expect(r.stderr).toContain(
+        '.github/actions/stage/action.yml :: (composite action) :: stage hub  (staging site with no recognized read token (composite)'
+      );
+    });
+
+    test('(i) an OCR-docs checkout with a bare old token: red', () => {
+      put(
+        root,
+        HUB_WF,
+        hubWf(stage('stage A') + stage('stage B') + stage('stage C') + checkout(BARE))
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret.*baseline 4, current 3/);
+      expect(r.stderr).toContain(`${HUB_WF} :: build :: brain`);
+      expect(r.stderr).toMatch(/bareOldTokenUses \[DOWN-ONLY.*current 1: went UP/);
+    });
+
+    test('(j) notify-osm repointed to OCR_NOTIFY_OSM, baseline not lowered: red "lower the baseline"', () => {
+      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', NOTIFY_FB));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /writeUsesOnWrongToken \[DOWN-ONLY.*baseline 1, current 0: went DOWN \(good\)\. Lock the gain in: lower the baseline to 0/
+      );
+      expect(r.stderr).toContain('KNOWN_WRONG_TOKEN');
+      expect(r.stderr).not.toMatch(/writeUsesOnNewSecret|fallbackUses/); // nothing else moved
+      expect(run(root, '--update').status).toBe(0);
+      expect(run(root).status).toBe(0);
+    });
+
+    test('(k) a down-only ceiling raised above the base branch copy: red under --base-config', () => {
+      const base = snapshotBase();
+      put(root, HUB_WF, hubWf(DEFAULT_STEPS + stage('stage D', AUTO_FB)));
+      expect(run(root, '--update').status).toBe(0); // ceilings raised in the committed file
+      const local = run(root);
+      expect(local.status).toBe(0); // locally consistent...
+      const r = run(root, '--base-config', base); // ...but CI compares with the base branch
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /fallbackUses \[DOWN-ONLY\]: the committed ceiling 7 is above the base branch's 6/
+      );
+      expect(r.stderr).toMatch(
+        /unrecognizedTokenForms \[DOWN-ONLY\]: the committed ceiling 1 is above the base branch's 0/
+      );
+    });
+
+    test('(l1) an up-only floor lowered below the base branch copy, no retired entry: red', () => {
+      const base = snapshotBase();
+      put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + checkout()));
+      expect(run(root, '--update').status).toBe(0); // floor 4 -> 3, fallback ceiling 6 -> 5
+      expect(run(root).status).toBe(0);
+      const r = run(root, '--base-config', base);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /REGRESSION readUsesOnNewSecret \[UP-ONLY\]: the committed floor 3 is below the base branch's 4\. The floor may rise, never fall/
+      );
+      expect(r.stderr).not.toContain('fallbackUses'); // a down-only key may fall
+    });
+
+    test('(l2) the same lowering with a matching retired entry: green', () => {
+      const base = snapshotBase();
+      put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + checkout()));
+      expect(run(root, '--update').status).toBe(0);
+      const b = baseline();
+      b.readUsesOnNewSecret.retired.push({
+        file: HUB_WF,
+        step: 'build :: stage C',
+        reason: 'job deleted: the drill moved to another workflow',
+        story: 'OSE-9999',
+      });
+      writeBaseline(b);
+      const r = run(root, '--base-config', base);
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+    });
+
+    test('(l3) lowering by more than the retired entries, or an invalid retired entry: red', () => {
+      const base = snapshotBase();
+      put(root, HUB_WF, hubWf(stage('stage A') + checkout()));
+      expect(run(root, '--update').status).toBe(0); // floor 4 -> 2 (stage B and C deleted)
+      const b = baseline();
+      b.readUsesOnNewSecret.retired.push(
+        {
+          file: HUB_WF,
+          step: 'build :: stage C',
+          reason: 'job deleted: moved elsewhere',
+          story: 'OSE-9',
+        },
+        { file: HUB_WF, step: 'build :: stage B', reason: 'job deleted for good reasons' },
+        {
+          file: HUB_WF,
+          step: 'build :: ghost',
+          reason: 'never existed on the base',
+          story: 'OSE-1',
+        }
+      );
+      writeBaseline(b);
+      const r = run(root, '--base-config', base);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/retired\[new #2\] needs a story id like OSE-1234/);
+      expect(r.stderr).toMatch(
+        /"\.github\/workflows\/hub\.yml :: build :: ghost" was not counted on the base branch/
+      );
+      // Only the one valid entry lowers the floor: 4 - 1 = 3 > 2.
+      expect(r.stderr).toMatch(
+        /committed floor 2 is below the base branch's 4 minus 1 newly retired site\(s\) = 3/
+      );
+    });
+
+    test('a key absent from the base copy is new: its base-branch check is skipped', () => {
+      const base = join(root, 'base.json');
+      const b = baseline();
+      for (const k of TOKEN_KEYS) delete b[k];
+      writeFileSync(base, JSON.stringify(b));
+      const r = run(root, '--base-config', base);
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+    });
+
+    test('a swap at equal totals (one read site renamed) is red both ways', () => {
+      put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + stage('stage Z') + checkout()));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret.*baseline 4, current 4/);
+      expect(r.stderr).toMatch(/NOT REGISTERED readUsesOnNewSecret.*baseline 4, current 4/);
+      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 6, current 6: went UP/);
+    });
+
+    test('a renamed write site is no longer counted: up-only REGRESSION', () => {
+      put(root, CONF_WF, writeWf('generate', 'Open the conformance PR', AUTO_FB));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION writeUsesOnNewSecret \[UP-ONLY.*baseline 2, current 1/);
+      expect(r.stderr).toContain(
+        `${CONF_WF} :: generate :: Open/update the conformance-refresh PR`
+      );
+    });
+
+    test('a literal token is never printed; an unparseable workflow is red', () => {
+      put(
+        root,
+        HUB_WF,
+        hubWf(stage('stage A') + stage('stage B') + stage('stage C', FAKE_LITERAL) + checkout())
+      );
+      put(
+        root,
+        '.github/workflows/broken.yml',
+        'jobs:\n  a:\n    steps:\n      - name: x\n        run: echo\n          bad: [\n'
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('a literal value (not printed');
+      expect(r.stderr + r.stdout).not.toContain(FAKE_LITERAL);
+      expect(r.stderr).toMatch(/token split: cannot parse \.github\/workflows\/broken\.yml/);
+    });
+
+    test('--update keeps every reason and retired entry, and writes each direction', () => {
+      const b = baseline();
+      b.readUsesOnNewSecret.byFile[HUB_WF].reason = 'builds the Worker with the pinned hub';
+      b.writeUsesOnWrongToken.reason = 'known violation, falls with OSE-1695';
+      b.readUsesOnNewSecret.retired = [
+        { file: 'x.yml', step: 'j :: s', reason: 'a deleted job kept for history', story: 'OSE-1' },
+      ];
+      writeBaseline(b);
+      expect(run(root, '--update').status).toBe(0);
+      const a = baseline();
+      expect(a.readUsesOnNewSecret.byFile[HUB_WF].reason).toBe(
+        'builds the Worker with the pinned hub'
+      );
+      expect(a.writeUsesOnWrongToken.reason).toBe('known violation, falls with OSE-1695');
+      expect(a.readUsesOnNewSecret.retired).toEqual(b.readUsesOnNewSecret.retired);
+      expect(TOKEN_KEYS.map((k) => a[k].direction)).toEqual([
+        'up',
+        'up',
+        'down',
+        'down',
+        'down',
+        'down',
+      ]);
+    });
+  }
+);

@@ -94,4 +94,87 @@ describe('ci-stage-ocr-workspace.sh — pin must be on hub main (OSE-1394)', () 
     expect(r.stdout).toContain('is not reachable from hub main');
     expect(existsSync(join(r.ws, '..', 'packages', 'ui'))).toBe(false);
   });
+
+  // The one deliberate CI/local difference in the script: when the pinned commit is
+  // fetched but hub main cannot be (here: a branch that does not exist), CI fails and a
+  // local run only warns, so a developer offline from the hub can still work.
+  test('DELIBERATE CI/local difference: unverifiable ancestry fails in CI, warns locally', () => {
+    const go = (ci, name) => {
+      const ws = join(root, name, 'ws');
+      mkdirSync(ws, { recursive: true });
+      writeFileSync(join(ws, '.ocr-hub-ref'), `${mainSha}\n`);
+      const env = { ...process.env, GITHUB_WORKSPACE: ws, OCR_WORKSPACE_REPO: `file://${hub}` };
+      delete env.GITHUB_ACTIONS;
+      delete env.OCR_PROPAGATE_TOKEN;
+      env.OCR_HUB_MAIN_BRANCH = 'no-such-branch';
+      if (ci) env.GITHUB_ACTIONS = 'true';
+      return spawnSync('bash', [SCRIPT], { encoding: 'utf-8', env });
+    };
+    const ci = go(true, 'anc-ci');
+    expect(ci.status, ci.stdout + ci.stderr).toBe(1);
+    expect(ci.stdout).toContain('could not fetch hub no-such-branch');
+    const local = go(false, 'anc-local');
+    expect(local.status, local.stdout + local.stderr).toBe(0);
+    expect(local.stdout).toContain('::warning title=pin ancestry unverified::');
+  }, 30_000); // two real bash + git runs: generous so a loaded runner never times out
+});
+
+/**
+ * Script contract on MAIN, across execution contexts (CI on PR / push, production deploy
+ * and smoke, Dependabot with no Actions secrets, a developer locally). The script reads
+ * the env var OCR_PROPAGATE_TOKEN; workflow steps fill it from
+ * `secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN` (PR #986, OSE-1695). With no
+ * token the fetch from the private hub fails and the ::error:: names the variable; with a
+ * bad token it says the token is present and never prints it. Identical with and without
+ * GITHUB_ACTIONS (the only CI/local difference is the ancestry check above).
+ * Hermetic: the source remote is a file:// path that does not exist; no network.
+ */
+describe('ci-stage-ocr-workspace.sh: token contract in every context (OSE-1695)', () => {
+  const PIN = '0'.repeat(40); // well-formed 40-hex pin, fetchable from nowhere (obviously fake)
+  const PLACEHOLDER = 'placeholder-not-a-real-credential';
+  let tmp;
+  beforeAll(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'hub-token-'));
+  });
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  function go(name, { ci, token }) {
+    const ws = join(tmp, name, 'ws'); // fresh parent each time: no cache to fall back on
+    mkdirSync(ws, { recursive: true });
+    writeFileSync(join(ws, '.ocr-hub-ref'), `${PIN}\n`);
+    const env = {
+      ...process.env,
+      GITHUB_WORKSPACE: ws,
+      OCR_WORKSPACE_REPO: `file://${join(tmp, 'no-such-hub')}`,
+      GIT_TERMINAL_PROMPT: '0',
+    };
+    delete env.GITHUB_ACTIONS;
+    delete env.OCR_PROPAGATE_TOKEN;
+    delete env.OCR_HUB_READ;
+    if (ci) env.GITHUB_ACTIONS = 'true';
+    if (token) env.OCR_PROPAGATE_TOKEN = PLACEHOLDER;
+    const r = spawnSync('bash', [SCRIPT], { encoding: 'utf-8', env });
+    return { ...r, out: r.stdout + r.stderr };
+  }
+  const encoded = Buffer.from(`x-access-token:${PLACEHOLDER}`).toString('base64');
+
+  for (const ci of [true, false]) {
+    const where = ci ? 'CI (GITHUB_ACTIONS=true)' : 'local (GITHUB_ACTIONS unset)';
+
+    test(`${where}: no token -> exit 1, ::error:: names OCR_PROPAGATE_TOKEN`, () => {
+      const r = go(`none-${ci}`, { ci });
+      expect(r.status, r.out).toBe(1);
+      expect(r.stdout).toContain('::error title=@ocr/ui staging failed (ADR-008 pin)::');
+      expect(r.stdout).toContain('OCR_PROPAGATE_TOKEN is not available in this run context');
+    }, 20_000);
+
+    test(`${where}: a bad token -> "present but the fetch still failed", never printed`, () => {
+      const r = go(`bad-${ci}`, { ci, token: true });
+      expect(r.status, r.out).toBe(1);
+      expect(r.stdout).toContain('::error title=@ocr/ui staging failed (ADR-008 pin)::');
+      expect(r.stdout).toContain('OCR_PROPAGATE_TOKEN is present but the fetch still failed');
+      expect(r.out).not.toContain(PLACEHOLDER);
+      expect(r.out).not.toContain(encoded);
+    }, 20_000);
+  }
 });

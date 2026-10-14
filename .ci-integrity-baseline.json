@@ -1,5 +1,5 @@
 {
-  "_comment": "CI integrity ratchet baseline (OSE-1606). Counts may only fall; every entry carries a reason.",
+  "_comment": "CI integrity ratchet baseline (OSE-1606). Each count may only move in its good direction (most may only fall; the token-split keys say theirs in `direction`, OSE-1695); every entry carries a reason.",
   "continueOnError": {
     "total": 22,
     "byFile": {
@@ -815,5 +815,284 @@
         "reason": "tests/e2e spec named in no workflow, never runs in CI (OSE-1244); wire into a workflow or delete."
       }
     ]
+  },
+  "readUsesOnNewSecret": {
+    "direction": "up",
+    "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
+    "total": 28,
+    "byFile": {
+      ".github/workflows/advanced-security-scan.yml": {
+        "count": 2,
+        "steps": [
+          "license-check :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "sbom :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "SBOM and license-check jobs stage the pinned hub (the Worker tree file:-links @ocr/ui and @ocr/flags, ADR-008); reads stay on OCR_HUB_READ."
+      },
+      ".github/workflows/brain-contract-check.yml": {
+        "count": 2,
+        "steps": [
+          "contract-check :: Checkout OCR-docs brain (read-only)",
+          "report-drift :: Checkout OCR-docs brain (read-only)"
+        ],
+        "reason": "contract-check and report-drift check out the OCR-docs brain read-only; reads stay on OCR_HUB_READ."
+      },
+      ".github/workflows/conformance-report.yml": {
+        "count": 2,
+        "steps": [
+          "generate :: Checkout OCR-docs brain (read-only)",
+          "generate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "The generator stages the pinned hub and checks out the OCR-docs brain (invariants registry, OSE-1031); both reads stay on OCR_HUB_READ."
+      },
+      ".github/workflows/dast-zap-baseline.yml": {
+        "count": 1,
+        "steps": [
+          "zap-baseline :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "ZAP baseline boots wrangler dev, which cannot bundle the Worker without the pinned hub @ocr/ui (OSE-1249)."
+      },
+      ".github/workflows/flags-package-ci.yml": {
+        "count": 1,
+        "steps": ["flags-tests :: Checkout OCR-docs brain (flags-contract.yaml)"],
+        "reason": "flags-tests checks out flags-contract.yaml from the OCR-docs brain; the read stays on OCR_HUB_READ."
+      },
+      ".github/workflows/inv22-cross-repo-gate.yml": {
+        "count": 1,
+        "steps": ["inv22-gate :: Checkout OCR-docs brain guard"],
+        "reason": "Checks out the canonical Invariant #22 guard from the OCR-docs brain (OSE-1297); the read stays on OCR_HUB_READ."
+      },
+      ".github/workflows/mobile-workability-audit.yml": {
+        "count": 2,
+        "steps": [
+          "nightly-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "pr-code :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR-code and nightly mobile audits build and serve the Worker, which needs the pinned hub @ocr/ui (ADR-008)."
+      },
+      ".github/workflows/mutation-testing.yml": {
+        "count": 1,
+        "steps": [
+          "mutation :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "Stryker runs the Worker test suite, which imports the pinned hub @ocr/ui (ADR-008)."
+      },
+      ".github/workflows/oursharedevents-ci.yml": {
+        "count": 11,
+        "steps": [
+          "contract-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "deploy-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "deploy-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "functional-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "gate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "gate-tests-sub :: Checkout OCR-docs brain (for OSE-323 drift check)",
+          "gate-tests-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "local-vetting :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "security :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "smoke-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "smoke-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "S0, T0 gate/tests/local-vetting, T1-T4 staging and the production deploy and smoke jobs stage the pinned hub (10), and the worker-d1-schema shard reads the OCR-docs brain (1, OSE-323)."
+      },
+      ".github/workflows/overnight-fuzz.yml": {
+        "count": 1,
+        "steps": [
+          "fuzz :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "Property fuzz runs Worker code that imports the pinned hub @ocr/ui (ADR-008)."
+      },
+      ".github/workflows/red-team-adversarial.yml": {
+        "count": 1,
+        "steps": [
+          "red-team-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "Red-team staging job installs the Worker tree, which file:-links the pinned hub @ocr/ui (ADR-008)."
+      },
+      ".github/workflows/security-monitoring.yml": {
+        "count": 1,
+        "steps": [
+          "npm-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "npm-audit installs the root tree, which file:-links @ocr/flags from the pinned hub (OSE-341)."
+      },
+      ".github/workflows/security-scan.yml": {
+        "count": 1,
+        "steps": [
+          "dependency-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "dependency-audit installs the root tree, which file:-links @ocr/flags from the pinned hub (OSE-341)."
+      },
+      ".github/workflows/staging-rollback-drill.yml": {
+        "count": 1,
+        "steps": [
+          "drill :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "Rollback drill redeploys the Worker to staging, which bundles the pinned hub @ocr/ui (ADR-008)."
+      }
+    },
+    "retired": []
+  },
+  "writeUsesOnNewSecret": {
+    "direction": "up",
+    "reason": "Write sites must name a write secret, not only the old PAT (OSE-1695): may only rise.",
+    "total": 2,
+    "byFile": {
+      ".github/workflows/conformance-report.yml": {
+        "count": 1,
+        "steps": ["generate :: Open/update the conformance-refresh PR"],
+        "reason": "Opens/updates the conformance-refresh PR in this repo on OCR_AUTOMATION_WRITE (decided token, OSE-1695)."
+      },
+      ".github/workflows/notify-osm-flag-change.yml": {
+        "count": 1,
+        "steps": ["notify :: Open issue in OSM"],
+        "reason": "Opens an issue in ourSharedMagnets; names a write secret, but the wrong one until repointed to OCR_NOTIFY_OSM (OSE-1695)."
+      }
+    },
+    "retired": []
+  },
+  "bareOldTokenUses": {
+    "direction": "down",
+    "reason": "No bare use of the write-capable PAT may exist (OSE-1695); stays 0.",
+    "total": 0,
+    "byFile": {}
+  },
+  "fallbackUses": {
+    "direction": "down",
+    "reason": "Fallbacks from PR #986 exist only until the new secrets are set; they fall to 0 in the follow-up (OSE-1695).",
+    "total": 30,
+    "byFile": {
+      ".github/workflows/advanced-security-scan.yml": {
+        "count": 2,
+        "steps": [
+          "license-check :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "sbom :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/brain-contract-check.yml": {
+        "count": 2,
+        "steps": [
+          "contract-check :: Checkout OCR-docs brain (read-only)",
+          "report-drift :: Checkout OCR-docs brain (read-only)"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/conformance-report.yml": {
+        "count": 3,
+        "steps": [
+          "generate :: Checkout OCR-docs brain (read-only)",
+          "generate :: Open/update the conformance-refresh PR",
+          "generate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/dast-zap-baseline.yml": {
+        "count": 1,
+        "steps": [
+          "zap-baseline :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/flags-package-ci.yml": {
+        "count": 1,
+        "steps": ["flags-tests :: Checkout OCR-docs brain (flags-contract.yaml)"],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/inv22-cross-repo-gate.yml": {
+        "count": 1,
+        "steps": ["inv22-gate :: Checkout OCR-docs brain guard"],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/mobile-workability-audit.yml": {
+        "count": 2,
+        "steps": [
+          "nightly-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "pr-code :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/mutation-testing.yml": {
+        "count": 1,
+        "steps": [
+          "mutation :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/notify-osm-flag-change.yml": {
+        "count": 1,
+        "steps": ["notify :: Open issue in OSM"],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/oursharedevents-ci.yml": {
+        "count": 11,
+        "steps": [
+          "contract-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "deploy-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "deploy-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "functional-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "gate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "gate-tests-sub :: Checkout OCR-docs brain (for OSE-323 drift check)",
+          "gate-tests-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "local-vetting :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "security :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "smoke-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "smoke-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/overnight-fuzz.yml": {
+        "count": 1,
+        "steps": [
+          "fuzz :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/red-team-adversarial.yml": {
+        "count": 1,
+        "steps": [
+          "red-team-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/security-monitoring.yml": {
+        "count": 1,
+        "steps": [
+          "npm-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/security-scan.yml": {
+        "count": 1,
+        "steps": [
+          "dependency-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      },
+      ".github/workflows/staging-rollback-drill.yml": {
+        "count": 1,
+        "steps": [
+          "drill :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+      }
+    }
+  },
+  "writeUsesOnWrongToken": {
+    "direction": "down",
+    "reason": "Known violation: notify-osm uses OCR_AUTOMATION_WRITE instead of OCR_NOTIFY_OSM (OSE-1695); may only fall.",
+    "total": 1,
+    "byFile": {
+      ".github/workflows/notify-osm-flag-change.yml": {
+        "count": 1,
+        "steps": ["notify :: Open issue in OSM"],
+        "reason": "Known violation (OSE-1695): notify-osm opens an issue in another repo and must use OCR_NOTIFY_OSM, not OCR_AUTOMATION_WRITE; may only fall."
+      }
+    }
+  },
+  "unrecognizedTokenForms": {
+    "direction": "down",
+    "reason": "Every token expression must be a recognized form and every read site must carry a read token (OSE-1695); stays 0.",
+    "total": 0,
+    "byFile": {}
   }
 }
