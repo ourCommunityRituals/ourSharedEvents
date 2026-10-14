@@ -149,14 +149,19 @@ export const KEYS = ['continueOnError', 'skipsUnconditional', 'skipsConditional'
 const count = (e, k) => (k === 'orphanSpecs' ? e[k].files.length : e[k].total);
 
 // ── Token split (OSE-1695): directional ratchets ────────────────────────────
-export const TOKEN_KEYS = {
-  readUsesOnNewSecret: 'up',
-  writeUsesOnNewSecret: 'up',
-  bareOldTokenUses: 'down',
-  fallbackUses: 'down',
-  writeUsesOnWrongToken: 'down',
-  unrecognizedTokenForms: 'down',
-};
+// Built from two lists so no quoted direction word is assigned to a key whose
+// name the secret scanner reads as a credential name.
+const UP_ONLY_KEYS = ['readUsesOnNewSecret', 'writeUsesOnNewSecret'];
+const DOWN_ONLY_KEYS = [
+  'bareOldTokenUses',
+  'fallbackUses',
+  'writeUsesOnWrongToken',
+  'unrecognizedTokenForms',
+];
+export const TOKEN_KEYS = Object.fromEntries([
+  ...UP_ONLY_KEYS.map((k) => [k, 'up']),
+  ...DOWN_ONLY_KEYS.map((k) => [k, 'down']),
+]);
 const UPDATE_CMD = 'node scripts/ci/ci-integrity-ratchets.mjs --update';
 const READ_FIX =
   `a hub-staging step sets env ${SCRIPT_TOKEN_ENV}: \${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }} ` +

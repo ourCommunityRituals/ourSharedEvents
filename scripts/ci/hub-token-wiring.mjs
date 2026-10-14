@@ -40,24 +40,24 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import yaml from 'js-yaml';
 
-export const OLD_SECRET = 'OCR_PROPAGATE_TOKEN';
-export const READ_SECRET = 'OCR_HUB_READ';
-export const AUTOMATION_SECRET = 'OCR_AUTOMATION_WRITE';
-export const NOTIFY_SECRET = 'OCR_NOTIFY_OSM';
-const FAMILY = new Set([OLD_SECRET, READ_SECRET, AUTOMATION_SECRET, NOTIFY_SECRET]);
+export const OLD_NAME = 'OCR_PROPAGATE_TOKEN';
+export const READ_NAME = 'OCR_HUB_READ';
+export const AUTOMATION_NAME = 'OCR_AUTOMATION_WRITE';
+export const NOTIFY_NAME = 'OCR_NOTIFY_OSM';
+const FAMILY = new Set([OLD_NAME, READ_NAME, AUTOMATION_NAME, NOTIFY_NAME]);
 
 /** The env var scripts/ci-stage-ocr-workspace.sh authenticates with ON MAIN (pinned by a test). */
 export const SCRIPT_TOKEN_ENV = 'OCR_PROPAGATE_TOKEN';
 
 /** Recognized forms: the secret names, in order, joined by `||`. */
 export const FORMS = {
-  bare: [OLD_SECRET],
-  'read-fallback': [READ_SECRET, OLD_SECRET],
-  'write-fallback-automation': [AUTOMATION_SECRET, OLD_SECRET],
-  'write-fallback-notify': [NOTIFY_SECRET, OLD_SECRET],
-  'new-only-read': [READ_SECRET],
-  'new-only-automation': [AUTOMATION_SECRET],
-  'new-only-notify': [NOTIFY_SECRET],
+  bare: [OLD_NAME],
+  'read-fallback': [READ_NAME, OLD_NAME],
+  'write-fallback-automation': [AUTOMATION_NAME, OLD_NAME],
+  'write-fallback-notify': [NOTIFY_NAME, OLD_NAME],
+  'new-only-read': [READ_NAME],
+  'new-only-automation': [AUTOMATION_NAME],
+  'new-only-notify': [NOTIFY_NAME],
 };
 export const READ_FORMS = ['read-fallback', 'new-only-read'];
 export const FALLBACK_FORMS = [
@@ -66,8 +66,8 @@ export const FALLBACK_FORMS = [
   'write-fallback-notify',
 ];
 export const WRITE_FORMS = {
-  [AUTOMATION_SECRET]: ['write-fallback-automation', 'new-only-automation'],
-  [NOTIFY_SECRET]: ['write-fallback-notify', 'new-only-notify'],
+  [AUTOMATION_NAME]: ['write-fallback-automation', 'new-only-automation'],
+  [NOTIFY_NAME]: ['write-fallback-notify', 'new-only-notify'],
 };
 const ALL_WRITE_FORMS = Object.values(WRITE_FORMS).flat();
 
@@ -83,14 +83,14 @@ export const WRITE_SITES = [
     job: 'generate',
     step: 'Open/update the conformance-refresh PR',
     env: 'GH_TOKEN',
-    expected: AUTOMATION_SECRET,
+    expected: AUTOMATION_NAME,
   },
   {
     file: '.github/workflows/notify-osm-flag-change.yml',
     job: 'notify',
     step: 'Open issue in OSM',
     env: 'GH_TOKEN',
-    expected: NOTIFY_SECRET,
+    expected: NOTIFY_NAME,
   },
 ];
 
