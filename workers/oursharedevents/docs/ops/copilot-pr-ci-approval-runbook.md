@@ -66,7 +66,7 @@ before they run with repo secrets.
 
 - ❌ **Do not enable** Settings → _Code, planning, and automation_ → **Copilot → Cloud agent →
   "skip approval for Actions workflows."** That would auto-run unreviewed, agent-authored code with
-  access to `pull_request`-job secrets (e.g. `OCR_PROPAGATE_TOKEN` — used by S0/T0 and several other
+  access to `pull_request`-job secrets (e.g. `OCR_HUB_READ` — used by S0/T0 and several other
   PR-triggered workflows — plus `ANTHROPIC_API_KEY`, `LINEAR_API_KEY`). Rationale + rejected alternatives:
   [ADR-020](../../../../docs/adr/ADR-020-copilot-ci-human-approval-gate.md).
 - ❌ **Do not** re-route the work to a human/Claude-Code author _for the purpose of dodging the

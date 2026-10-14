@@ -237,8 +237,9 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
 // Token split (OSE-1695): directional ratchets on the shared enumerator
 // (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret.
 // DOWN-ONLY: bareOldTokenUses, fallbackUses, writeUsesOnWrongToken, unrecognizedTokenForms.
-// The fixture mirrors main: three staging steps and one OCR-docs checkout on the read
-// fallback, and the two named write sites, notify-osm on the wrong (automation) token.
+// The fixture mirrors main: three staging steps and one OCR-docs checkout on
+// OCR_HUB_READ alone (no fallback), and the two named write sites, still on their
+// `NEW || OCR_PROPAGATE_TOKEN` fallback, notify-osm on the wrong (automation) token.
 // Each case spawns the CLI a few times: a generous timeout so a loaded runner never turns
 // a real result into a timeout.
 describe(
@@ -257,11 +258,13 @@ describe(
     const HUB_WF = '.github/workflows/hub.yml';
     const CONF_WF = '.github/workflows/conformance-report.yml';
     const NOTIFY_WF = '.github/workflows/notify-osm-flag-change.yml';
-    const stage = (name, value = READ_FB) =>
+    // The env var the staging script reads (SCRIPT_TOKEN_ENV): the read secret's own name.
+    const TOKEN_ENV = 'OCR_HUB_READ';
+    const stage = (name, value = READ_NEW, envName = TOKEN_ENV) =>
       `      - name: ${name}\n` +
-      (value ? `        env:\n          OCR_PROPAGATE_TOKEN: ${value}\n` : '') +
+      (value ? `        env:\n          ${envName}: ${value}\n` : '') +
       '        run: bash scripts/ci-stage-ocr-workspace.sh\n';
-    const checkout = (token = READ_FB) =>
+    const checkout = (token = READ_NEW) =>
       `      - name: brain\n        uses: actions/checkout@v7\n        with:\n          repository: ourCommunityRituals/OCR-docs\n          token: ${token}\n`;
     const hubWf = (steps, { top = '', jobEnv = '' } = {}) =>
       `on: pull_request\n${top}jobs:\n  build:\n${jobEnv}    steps:\n` + steps;
@@ -286,7 +289,7 @@ describe(
       const r = run(root);
       expect(r.stderr).toBe('');
       expect(r.stdout).toMatch(
-        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=6\(down\) writeUsesOnWrongToken=1\(down\) unrecognizedTokenForms=0\(down\)/
+        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=2\(down\) writeUsesOnWrongToken=1\(down\) unrecognizedTokenForms=0\(down\)/
       );
     });
 
@@ -322,6 +325,27 @@ describe(
       expect(r.stderr).toMatch(/bareOldTokenUses \[DOWN-ONLY.*current 1: went UP/);
     });
 
+    test('(b2) a staging step that sets the OLD env name (the script reads OCR_HUB_READ): red', () => {
+      put(
+        root,
+        HUB_WF,
+        hubWf(
+          stage('stage A') +
+            stage('stage B') +
+            stage('stage C', READ_NEW, 'OCR_PROPAGATE_TOKEN') +
+            checkout()
+        )
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /REGRESSION readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 3: went DOWN \(bad/
+      );
+      expect(r.stderr).toContain(
+        `${HUB_WF} :: build :: stage C  (staging site with no recognized read token (missing): OCR_HUB_READ is not set)`
+      );
+    });
+
     test('(c) a read site deleted: up-only REGRESSION naming it, with the retired recipe', () => {
       put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + checkout()));
       const r = run(root);
@@ -351,12 +375,12 @@ describe(
       put(
         root,
         '.github/workflows/new.yml',
-        'on: pull_request\njobs:\n  n:\n    steps:\n' + stage('stage N')
+        'on: pull_request\njobs:\n  n:\n    steps:\n' + stage('stage N', READ_FB)
       );
       const r = run(root);
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/NOT REGISTERED readUsesOnNewSecret/);
-      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 6, current 7: went UP/);
+      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 2, current 3: went UP/);
     });
 
     test('(e) a staging step with an unrecognized form (old token first): red', () => {
@@ -378,15 +402,11 @@ describe(
 
     test('(f) a wrong job-level value overriding a correct workflow-level one: red', () => {
       const steps = stage('stage A', '') + stage('stage B', '') + stage('stage C', '') + checkout();
-      const top = `env:\n  OCR_PROPAGATE_TOKEN: ${READ_FB}\n`;
+      const top = `env:\n  ${TOKEN_ENV}: ${READ_NEW}\n`;
       put(root, HUB_WF, hubWf(steps, { top }));
       expect(run(root, '--update').status).toBe(0);
       expect(run(root).status).toBe(0);
-      put(
-        root,
-        HUB_WF,
-        hubWf(steps, { top, jobEnv: `    env:\n      OCR_PROPAGATE_TOKEN: ${BARE}\n` })
-      );
+      put(root, HUB_WF, hubWf(steps, { top, jobEnv: `    env:\n      ${TOKEN_ENV}: ${BARE}\n` }));
       const r = run(root);
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret \[UP-ONLY.*baseline 4, current 1/);
@@ -404,7 +424,7 @@ describe(
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/unrecognizedTokenForms \[DOWN-ONLY.*current 1: went UP/);
       expect(r.stderr).toContain(
-        '.github/workflows/odd.yml :: o :: odd  (staging site with no recognized read token (missing): OCR_PROPAGATE_TOKEN is not set)'
+        '.github/workflows/odd.yml :: o :: odd  (staging site with no recognized read token (missing): OCR_HUB_READ is not set)'
       );
     });
 
@@ -412,7 +432,7 @@ describe(
       put(
         root,
         '.github/actions/stage/action.yml',
-        `name: stage\nruns:\n  using: composite\n  steps:\n    - name: stage hub\n      shell: bash\n      env:\n        OCR_PROPAGATE_TOKEN: ${READ_FB}\n      run: bash scripts/ci-stage-ocr-workspace.sh\n`
+        `name: stage\nruns:\n  using: composite\n  steps:\n    - name: stage hub\n      shell: bash\n      env:\n        ${TOKEN_ENV}: ${READ_NEW}\n      run: bash scripts/ci-stage-ocr-workspace.sh\n`
       );
       const r = run(root);
       expect(r.status).toBe(1);
@@ -457,7 +477,7 @@ describe(
       const r = run(root, '--base-config', base); // ...but CI compares with the base branch
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(
-        /fallbackUses \[DOWN-ONLY\]: the committed ceiling 7 is above the base branch's 6/
+        /fallbackUses \[DOWN-ONLY\]: the committed ceiling 3 is above the base branch's 2/
       );
       expect(r.stderr).toMatch(
         /unrecognizedTokenForms \[DOWN-ONLY\]: the committed ceiling 1 is above the base branch's 0/
@@ -467,7 +487,7 @@ describe(
     test('(l1) an up-only floor lowered below the base branch copy, no retired entry: red', () => {
       const base = snapshotBase();
       put(root, HUB_WF, hubWf(stage('stage A') + stage('stage B') + checkout()));
-      expect(run(root, '--update').status).toBe(0); // floor 4 -> 3, fallback ceiling 6 -> 5
+      expect(run(root, '--update').status).toBe(0); // floor 4 -> 3, fallback ceiling stays 2
       expect(run(root).status).toBe(0);
       const r = run(root, '--base-config', base);
       expect(r.status).toBe(1);
@@ -543,7 +563,31 @@ describe(
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/REGRESSION readUsesOnNewSecret.*baseline 4, current 4/);
       expect(r.stderr).toMatch(/NOT REGISTERED readUsesOnNewSecret.*baseline 4, current 4/);
-      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 6, current 6: went UP/);
+    });
+
+    test('a down-only swap at equal totals (one fallback removed, one added) is red', () => {
+      // conformance drops its fallback (-1); a read step gains one (+1): fallbackUses stays 2.
+      put(
+        root,
+        CONF_WF,
+        writeWf(
+          'generate',
+          'Open/update the conformance-refresh PR',
+          E('secrets.OCR_AUTOMATION_WRITE')
+        )
+      );
+      put(
+        root,
+        HUB_WF,
+        hubWf(stage('stage A') + stage('stage B') + stage('stage C', READ_FB) + checkout())
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/fallbackUses \[DOWN-ONLY.*baseline 2, current 2: went UP/);
+      expect(r.stderr).toContain(`${HUB_WF} :: build :: stage C`);
+      expect(r.stderr).toMatch(
+        /fallbackUses \[DOWN-ONLY.*baseline 2, current 2: went DOWN \(good\)/
+      );
     });
 
     test('a renamed write site is no longer counted: up-only REGRESSION', () => {

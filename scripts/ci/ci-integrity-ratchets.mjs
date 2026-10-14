@@ -19,7 +19,7 @@
  *   UP-ONLY   readUsesOnNewSecret     read sites whose token names OCR_HUB_READ
  *   UP-ONLY   writeUsesOnNewSecret    the named write sites whose token names a write secret
  *   DOWN-ONLY bareOldTokenUses        bare secrets.OCR_PROPAGATE_TOKEN (baseline 0)
- *   DOWN-ONLY fallbackUses            `NEW || OCR_PROPAGATE_TOKEN` expressions (0 after the follow-up)
+ *   DOWN-ONLY fallbackUses            `NEW || OCR_PROPAGATE_TOKEN` expressions (2: the write sites)
  *   DOWN-ONLY writeUsesOnWrongToken   write sites not on their decided token (notify-osm today)
  *   DOWN-ONLY unrecognizedTokenForms  token expressions in no recognized form, and read sites
  *                                     with no recognized read token (baseline 0)
@@ -164,8 +164,8 @@ export const TOKEN_KEYS = Object.fromEntries([
 ]);
 const UPDATE_CMD = 'node scripts/ci/ci-integrity-ratchets.mjs --update';
 const READ_FIX =
-  `a hub-staging step sets env ${SCRIPT_TOKEN_ENV}: \${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }} ` +
-  '(the script reads that variable name); a hub / OCR-docs checkout sets ' +
+  `a hub-staging step sets env ${SCRIPT_TOKEN_ENV}: \${{ secrets.OCR_HUB_READ }} ` +
+  '(the script reads that variable name, with no fallback); a hub / OCR-docs checkout sets ' +
   'with.token to the same expression';
 export const TOKEN_HELP = {
   readUsesOnNewSecret: {
@@ -190,10 +190,10 @@ export const TOKEN_HELP = {
   fallbackUses: {
     what: '`NEW || OCR_PROPAGATE_TOKEN` fallback expressions (PR #986), anywhere',
     reason:
-      'Fallbacks from PR #986 exist only until the new secrets are set; they fall to 0 in the follow-up (OSE-1695).',
+      'Reads name OCR_HUB_READ alone; the only fallbacks left are the two write sites (conformance PR step, notify-osm), removed by OSE-1695. May only fall.',
     fix:
-      'do not add a fallback: name the new secret alone (${{ secrets.OCR_HUB_READ }} for a read), ' +
-      'or keep the fallback at step level of a read or write site only',
+      'do not add a fallback: name the new secret alone (${{ secrets.OCR_HUB_READ }} for a read); ' +
+      'the two write sites keep theirs until OSE-1695 removes them',
   },
   writeUsesOnWrongToken: {
     what: 'write sites not on their decided token (conformance: OCR_AUTOMATION_WRITE, notify-osm: OCR_NOTIFY_OSM)',

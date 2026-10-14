@@ -22,8 +22,8 @@
 # self-test, so a broken guard should not reach main; a stricter pattern that
 # flags real OSE coupling SHOULD red this gate — that is the point.
 #
-# DEPENDABOT: the brain checkout needs OCR_PROPAGATE_TOKEN, which is not available
-# to dependabot-triggered runs. Rather than a job-level skip (which would leave a
+# DEPENDABOT: the brain checkout needs OCR_HUB_READ and is not run for
+# dependabot-triggered runs. Rather than a job-level skip (which would leave a
 # REQUIRED context permanently unsatisfied and deadlock every dependabot PR), the
 # job always runs and reports success; only the guard STEPS are skipped for
 # dependabot. A dependency bump cannot introduce a cross-repo MODULE import, and
@@ -58,8 +58,8 @@ jobs:
       - name: Dependabot notice (guard steps skipped — no cross-repo token)
         if: github.actor == 'dependabot[bot]'
         run: |
-          echo "Dependabot run: the brain guard needs OCR_PROPAGATE_TOKEN, which is"
-          echo "not available here. A dependency bump cannot introduce a cross-repo"
+          echo "Dependabot run: the brain guard needs OCR_HUB_READ, and its steps are"
+          echo "not run here. A dependency bump cannot introduce a cross-repo"
           echo "module import; the guard runs in full on the push to main and on"
           echo "every human PR. Reporting success so this required gate does not"
           echo "deadlock dependabot PRs."
@@ -81,7 +81,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
           ref: main
-          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ }}
           # ADR-012 0.1: never leave the token where later steps can read it.
           persist-credentials: false
 

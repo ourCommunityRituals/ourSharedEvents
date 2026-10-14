@@ -2,9 +2,13 @@
  * Token-split wiring: the ONE enumerator for the OCR_PROPAGATE_TOKEN split (OSE-1695).
  *
  * The org PAT OCR_PROPAGATE_TOKEN is write-capable. PR #986 moved every use onto a
- * fallback expression so nothing breaks before the new secrets exist:
- *   reads  (hub staging, hub / OCR-docs checkouts)  ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+ * fallback expression so nothing broke before the new secrets existed. OCR_HUB_READ now
+ * exists, so the reads name it alone and the staging script reads env OCR_HUB_READ with
+ * no fallback to the old name; only the two write sites keep a fallback (OSE-1695):
+ *   reads  (hub staging, hub / OCR-docs checkouts)  ${{ secrets.OCR_HUB_READ }}
  *   writes (two named steps)                         ${{ secrets.<WRITE_SECRET> || secrets.OCR_PROPAGATE_TOKEN }}
+ * The read-fallback form is still RECOGNIZED (it names OCR_HUB_READ first), but every
+ * fallback is counted by the down-only fallbackUses ratchet, so one cannot come back.
  *
  * Both consumers import this module, so they can never disagree about what exists:
  *   - tests/integration/adr008-wiring.test.js asserts the PROPERTY (every read site is in
@@ -46,8 +50,12 @@ export const AUTOMATION_NAME = 'OCR_AUTOMATION_WRITE';
 export const NOTIFY_NAME = 'OCR_NOTIFY_OSM';
 const FAMILY = new Set([OLD_NAME, READ_NAME, AUTOMATION_NAME, NOTIFY_NAME]);
 
-/** The env var scripts/ci-stage-ocr-workspace.sh authenticates with ON MAIN (pinned by a test). */
-export const SCRIPT_TOKEN_ENV = 'OCR_PROPAGATE_TOKEN';
+/**
+ * The env var scripts/ci-stage-ocr-workspace.sh authenticates with ON MAIN (pinned by a
+ * test): the read secret's own name. A staging step that still sets the old variable name
+ * carries no token the script reads, so it is a read site with no recognized token.
+ */
+export const SCRIPT_TOKEN_ENV = READ_NAME;
 
 /** Recognized forms: the secret names, in order, joined by `||`. */
 export const FORMS = {

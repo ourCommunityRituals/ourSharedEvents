@@ -60,14 +60,14 @@ jobs:
         timeout-minutes: 3
         env:
           GIT_TERMINAL_PROMPT: '0'
-          OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
         working-directory: workers/oursharedevents
         run: npm ci
 
-      # Checkout the brain AFTER npm ci — the OCR_PROPAGATE_TOKEN has org-write scope, so it
+      # Checkout the brain AFTER npm ci — OCR_HUB_READ can read private org repos, so it
       # must never be present in git config while untrusted dependency postinstall scripts run
       # (supply-chain exfil surface). persist-credentials:false so it isn't left behind either.
       # OSE-1031 — this checkout was missing entirely; the generator was silently falling back
@@ -78,7 +78,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: OCR-docs
           ref: main
-          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ }}
           persist-credentials: false
 
       # OSE-1466 0.1, run time: the steps below run PR code, so prove the
