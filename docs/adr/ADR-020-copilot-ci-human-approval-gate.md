@@ -28,7 +28,7 @@ The forces in tension:
 - **Velocity** — an approval click per Copilot push is friction; "continuous" CI would be
   zero-touch.
 - **Security** — this repo's `pull_request`-triggered jobs consume real secrets even on a plain PR
-  (e.g. `OCR_PROPAGATE_TOKEN` in S0/T0 and ~8 other PR-triggered workflows, `ANTHROPIC_API_KEY` in
+  (e.g. `OCR_HUB_READ` in S0/T0 and ~8 other PR-triggered workflows, `ANTHROPIC_API_KEY` in
   claude-review, `LINEAR_API_KEY` in brain-contract/premature-close — representative, not
   exhaustive). Because `pull_request` runs the **PR-head's**
   workflow content with secrets available for same-repo PRs, and `.github/` is protected only at

@@ -19,7 +19,9 @@
  *      ci-stage-ocr-workspace.sh, a hub / OCR-docs checkout) uses a read form
  *      that names OCR_HUB_READ, never the bare write-capable OCR_PROPAGATE_TOKEN;
  *      the two named write steps use write forms; nothing else names the old
- *      token or a write secret. The enumerator is scripts/ci/hub-token-wiring.mjs,
+ *      token or a write secret; the staging script authenticates with env
+ *      OCR_HUB_READ and never expands the old name (no fallback to the write PAT).
+ *      The enumerator is scripts/ci/hub-token-wiring.mjs,
  *      shared with the progress ratchet (scripts/ci/ci-integrity-ratchets.mjs), so
  *      the property and the counts never come from two parsers.
  *
@@ -173,6 +175,12 @@ describe('ADR-008 wiring meta-gate (OSE-1399)', () => {
 // ── 5. Token split (OSE-1695) ──────────────────────────────────────────────
 // `${{ ... }}` is built as '$' + '{{' so JS template literals never expand it.
 const E = (body) => '$' + '{{ ' + body + ' }}';
+// The env var the staging script authenticates with: the read secret's own name, with no
+// fallback to the old OCR_PROPAGATE_TOKEN variable (pinned by the last test below).
+const TOKEN_ENV = 'OCR_HUB_READ';
+const READ_NEW = E('secrets.OCR_HUB_READ');
+// The PR #986 read fallback: still a RECOGNIZED read form, but counted by the down-only
+// fallbackUses ratchet, so it cannot return to a real read site.
 const READ_FB = E('secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN');
 const BARE = E('secrets.OCR_PROPAGATE_TOKEN');
 const AUTO_FB = E('secrets.OCR_AUTOMATION_WRITE || secrets.OCR_PROPAGATE_TOKEN');
@@ -206,7 +214,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
   const job = (steps, jobEnv = '') => `on: push\njobs:\n  j:\n${jobEnv}    steps:\n${steps}`;
   const stage = (name, value) =>
     `      - name: ${name}\n` +
-    (value ? `        env:\n          OCR_PROPAGATE_TOKEN: ${value}\n` : '') +
+    (value ? `        env:\n          ${TOKEN_ENV}: ${value}\n` : '') +
     '        run: bash scripts/ci-stage-ocr-workspace.sh\n';
   const forms = (r) => r.sites.map((x) => `${x.kind}:${x.step}:${x.form}`);
   const key = (x) => `${x.file} :: ${x.id}`;
@@ -263,7 +271,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
 
     test('a step reused through a YAML anchor/alias is found at every use', () => {
       const r = analyze(
-        `on: push\njobs:\n  a:\n    steps:\n      - &stage\n        name: stage\n        env:\n          OCR_PROPAGATE_TOKEN: ${READ_FB}\n        run: bash scripts/ci-stage-ocr-workspace.sh\n  b:\n    steps:\n      - *stage\n`
+        `on: push\njobs:\n  a:\n    steps:\n      - &stage\n        name: stage\n        env:\n          ${TOKEN_ENV}: ${READ_FB}\n        run: bash scripts/ci-stage-ocr-workspace.sh\n  b:\n    steps:\n      - *stage\n`
       );
       expect(r.sites.map((x) => `${x.job}:${x.form}`)).toEqual([
         'a:read-fallback',
@@ -283,12 +291,12 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
     });
 
     test('effective env: a workflow-level token counts; a wrong job-level value overrides it', () => {
-      const ok = analyze(`env:\n  OCR_PROPAGATE_TOKEN: ${READ_FB}\n` + job(stage('s')));
+      const ok = analyze(`env:\n  ${TOKEN_ENV}: ${READ_FB}\n` + job(stage('s')));
       expect(forms(ok)).toEqual(['staging:s:read-fallback']);
       expect(ok.occurrences.map((o) => `${o.level}:${o.form}`)).toEqual(['workflow:read-fallback']);
       const bad = analyze(
-        `env:\n  OCR_PROPAGATE_TOKEN: ${READ_FB}\n` +
-          job(stage('s'), `    env:\n      OCR_PROPAGATE_TOKEN: ${BARE}\n`)
+        `env:\n  ${TOKEN_ENV}: ${READ_FB}\n` +
+          job(stage('s'), `    env:\n      ${TOKEN_ENV}: ${BARE}\n`)
       );
       expect(forms(bad)).toEqual(['staging:s:bare']);
       expect(bad.occurrences.map((o) => `${o.level}:${o.form}`)).toEqual([
@@ -297,10 +305,30 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       ]);
     });
 
-    test('step env wins over a wrong job env', () => {
-      const r = analyze(
-        job(stage('s', READ_FB), `    env:\n      OCR_PROPAGATE_TOKEN: ${AUTO_FB}\n`)
+    test('the new-only read form is recognized; the OLD env name carries no token the script reads', () => {
+      const ok = analyze(job(stage('s', READ_NEW)));
+      expect(forms(ok)).toEqual(['staging:s:new-only-read']);
+      expect(w.READ_FORMS).toContain(ok.sites[0].form);
+      const co = analyze(
+        job(
+          `      - name: hub\n        uses: actions/checkout@v7\n        with:\n          repository: ourCommunityRituals/ourCommunityRituals\n          token: ${READ_NEW}\n`
+        )
       );
+      expect(forms(co)).toEqual(['checkout:hub:new-only-read']);
+      // A step that still sets env OCR_PROPAGATE_TOKEN (even to the new secret) leaves the
+      // script's variable unset: a read site with no recognized token.
+      const stale = analyze(
+        job(
+          `      - name: s\n        env:\n          OCR_PROPAGATE_TOKEN: ${READ_NEW}\n        run: bash scripts/ci-stage-ocr-workspace.sh\n`
+        )
+      );
+      expect(forms(stale)).toEqual(['staging:s:missing']);
+      expect(w.readSiteUnrecognized(stale.sites[0])).toBe(true);
+      expect(stale.sites[0].why).toBe('OCR_HUB_READ is not set');
+    });
+
+    test('step env wins over a wrong job env', () => {
+      const r = analyze(job(stage('s', READ_FB), `    env:\n      ${TOKEN_ENV}: ${AUTO_FB}\n`));
       expect(forms(r)).toEqual(['staging:s:read-fallback']);
     });
 
@@ -319,7 +347,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
 
     test('a composite action that runs the script is never a proven read (no secrets context)', () => {
       const r = analyze(
-        `name: x\nruns:\n  using: composite\n  steps:\n    - name: stage\n      shell: bash\n      env:\n        OCR_PROPAGATE_TOKEN: ${READ_FB}\n      run: bash scripts/ci-stage-ocr-workspace.sh\n`,
+        `name: x\nruns:\n  using: composite\n  steps:\n    - name: stage\n      shell: bash\n      env:\n        ${TOKEN_ENV}: ${READ_FB}\n      run: bash scripts/ci-stage-ocr-workspace.sh\n`,
         'action'
       );
       expect(forms(r)).toEqual(['staging:stage:composite']);
@@ -417,7 +445,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       none(
         s.sites.filter((x) => x.right === 'read' && !w.READ_FORMS.includes(x.form)).map(line),
         'Read sites (hub staging, hub / OCR-docs checkouts) not on a read form',
-        `Fix: a staging step sets env ${w.SCRIPT_TOKEN_ENV}: ${READ_FB} (the script reads that variable name); a checkout sets with.token: ${READ_FB}. A composite action cannot read secrets: run the script from a workflow step.`
+        `Fix: a staging step sets env ${w.SCRIPT_TOKEN_ENV}: ${READ_NEW} (the script reads that variable name, with no fallback); a checkout sets with.token: ${READ_NEW}. A composite action cannot read secrets: run the script from a workflow step.`
       );
     });
 
@@ -465,7 +493,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
           .filter((o) => o.form === 'unrecognized')
           .map((o) => `${key(o)} (${o.level} level)`),
         'Token expressions in no recognized form',
-        `Fix: use a recognized form, new secret first: ${READ_FB}.`
+        `Fix: use a recognized form; for a read, the new secret alone: ${READ_NEW}.`
       );
     });
 
@@ -515,7 +543,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       );
     });
 
-    test('the enumerator reads the env var the staging script authenticates with', () => {
+    test('the staging script authenticates with OCR_HUB_READ, never the old name, and the enumerator agrees', () => {
       const script = readFileSync(join(ROOT, 'scripts', 'ci-stage-ocr-workspace.sh'), 'utf8');
       const m = /x-access-token:\$\{([A-Z_]+)\}/.exec(script);
       expect(m, 'the script builds its auth header from one env var').not.toBeNull();
@@ -523,6 +551,20 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
         m[1],
         'scripts/ci-stage-ocr-workspace.sh now authenticates with another variable: update SCRIPT_TOKEN_ENV in scripts/ci/hub-token-wiring.mjs in the same change'
       ).toBe(w.SCRIPT_TOKEN_ENV);
+      expect(w.SCRIPT_TOKEN_ENV, 'the script reads the read secret by its own name').toBe(
+        w.READ_NAME
+      );
+      expect(TOKEN_ENV).toBe(w.SCRIPT_TOKEN_ENV);
+      // No expansion of the old variable anywhere (prose naming it in a comment is fine): a
+      // `${OCR_HUB_READ:-${OCR_PROPAGATE_TOKEN}}` style fallback would put the write PAT back.
+      const code = script
+        .split('\n')
+        .filter((l) => !/^\s*#/.test(l))
+        .join('\n');
+      expect(
+        code.match(/\$\{?!?OCR_PROPAGATE_TOKEN\b/g) || [],
+        'scripts/ci-stage-ocr-workspace.sh expands OCR_PROPAGATE_TOKEN: the read path has no fallback to the write-capable PAT (OSE-1695)'
+      ).toEqual([]);
     });
   });
 });

@@ -34,13 +34,17 @@
 #
 # ── WORKSPACE TOKEN AUTH (OSE-341, 2026-09-20) ──────────────────────────────
 # Every job starts with zero git credentials for the private hub repo. Call
-# sites pass the org secret OCR_PROPAGATE_TOKEN (same secret used by
-# inv22-cross-repo-gate.yml, brain-contract-check.yml, conformance-report.yml)
-# as an env var of the same name. When present, it authenticates the fetch
+# sites pass the read-only org secret OCR_HUB_READ (Contents read on the hub
+# and OCR-docs; the same secret the hub / OCR-docs checkouts use, OSE-1695) as
+# an env var of the same name. There is deliberately NO fallback to the old
+# variable name OCR_PROPAGATE_TOKEN (the write-capable PAT): if only that is
+# set, the script runs unauthenticated and fails like a missing token. When
+# OCR_HUB_READ is present, it authenticates the fetch
 # via a transient `-c http.extraheader=...` — never a token embedded in the
 # remote URL, so it is never written to $WS_CACHE/.git/config at rest (same
 # posture as conformance-report.yml's `persist-credentials: false`). When it
-# is absent (e.g. dependabot runs, which have no repo-secret access) the fetch
+# is absent (a step that does not set it; a Dependabot run reads it from the
+# Dependabot secret of the same name, never from Actions secrets) the fetch
 # is attempted unauthenticated, which fails for the private hub — and, since
 # @ocr/ui is now required, the step fails with an ::error:: naming the cause.
 # ───────────────────────────────────────────────────────────────────────────
@@ -68,8 +72,8 @@ echo "[stage] hub pin: $REF (from .ocr-hub-ref)"
 # persisted into $WS_CACHE/.git/config. Empty array (no auth) when the token
 # env var isn't set.
 AUTH_ARGS=()
-if [ -n "${OCR_PROPAGATE_TOKEN:-}" ]; then
-  AUTH_HEADER="AUTHORIZATION: basic $(printf '%s' "x-access-token:${OCR_PROPAGATE_TOKEN}" | base64 | tr -d '\n')"
+if [ -n "${OCR_HUB_READ:-}" ]; then
+  AUTH_HEADER="AUTHORIZATION: basic $(printf '%s' "x-access-token:${OCR_HUB_READ}" | base64 | tr -d '\n')"
   AUTH_ARGS=(-c "http.extraheader=${AUTH_HEADER}")
 fi
 
@@ -90,10 +94,10 @@ elif git -C "$WS_CACHE" cat-file -e "${REF}^{commit}" 2>/dev/null && \
      git -C "$WS_CACHE" -c advice.detachedHead=false checkout -q --force --detach "$REF"; then
   echo "::warning title=hub fetch failed — using cached pinned commit::fetch of $REF failed, but the local cache already holds that exact commit, so it was used."
 else
-  if [ -z "${OCR_PROPAGATE_TOKEN:-}" ]; then
-    CAUSE="OCR_PROPAGATE_TOKEN is not available in this run context (e.g. dependabot), so the fetch from the private hub was unauthenticated"
+  if [ -z "${OCR_HUB_READ:-}" ]; then
+    CAUSE="OCR_HUB_READ is not available in this run context (the step must set env OCR_HUB_READ from secrets.OCR_HUB_READ), so the fetch from the private hub was unauthenticated"
   else
-    CAUSE="OCR_PROPAGATE_TOKEN is present but the fetch still failed (revoked/expired token, network error, token lacks access to $SOURCE_REPO, or the pinned commit does not exist on the hub)"
+    CAUSE="OCR_HUB_READ is present but the fetch still failed (revoked/expired token, network error, token lacks access to $SOURCE_REPO, or the pinned commit does not exist on the hub)"
   fi
   fail "could not fetch pinned hub commit" "could not fetch hub commit $REF (.ocr-hub-ref) from $SOURCE_REPO: $CAUSE. The Worker cannot be built or tested without the pinned @ocr/ui."
 fi

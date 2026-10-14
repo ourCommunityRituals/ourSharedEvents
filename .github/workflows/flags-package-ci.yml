@@ -20,10 +20,10 @@
 # REPO_ROOT/OCR-docs/ocr-docs-brain/flags-contract.yaml, so the private OCR-docs
 # repo is checked out at ./OCR-docs (ref: main — live-read, same as
 # brain-contract-check.yml and inv22-cross-repo-gate.yml) with the org secret
-# OCR_PROPAGATE_TOKEN. persist-credentials: false keeps that PAT out of
+# OCR_HUB_READ (read-only). persist-credentials: false keeps that token out of
 # .git/config before `npm ci` runs package scripts.
 #
-# DEPENDABOT: dependabot runs have no access to OCR_PROPAGATE_TOKEN. They are
+# DEPENDABOT: dependabot runs skip the brain checkout (it uses OCR_HUB_READ). They are
 # exactly the runs that bump these devDeps, so the job still typechecks and
 # runs the four adapter suites (memory, sqlite, d1, postgres). Only the
 # contract-dependent checks are skipped (invariants.test.ts, check:generated,
@@ -86,7 +86,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: OCR-docs
           ref: main
-          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ }}
           persist-credentials: false
 
       # OSE-1466 0.1, run time: the steps below run PR code, so prove the
@@ -105,8 +105,8 @@ jobs:
       - name: Dependabot notice (contract checks skipped — no cross-repo token)
         if: github.actor == 'dependabot[bot]'
         run: |
-          echo "::notice::Dependabot run: OCR_PROPAGATE_TOKEN is unavailable, so the OCR-docs brain"
-          echo "contract cannot be checked out. Running the adapter suites (memory, sqlite, d1,"
+          echo "::notice::Dependabot run: the OCR_HUB_READ brain checkout is skipped, so the OCR-docs brain"
+          echo "contract is not checked out. Running the adapter suites (memory, sqlite, d1,"
           echo "postgres) and skipping invariants.test.ts, check:generated and test:level0, which"
           echo "need the brain contract. Everything runs on every human PR and on the push to main."
 

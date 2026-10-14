@@ -958,122 +958,18 @@
   },
   "fallbackUses": {
     "direction": "down",
-    "reason": "Fallbacks from PR #986 exist only until the new secrets are set; they fall to 0 in the follow-up (OSE-1695).",
-    "total": 30,
+    "reason": "The 28 read fallbacks are gone: reads name OCR_HUB_READ alone. The remaining 2 are the write sites (conformance PR step, notify-osm), still `NEW || OCR_PROPAGATE_TOKEN`; OSE-1695 removes them. May only fall.",
+    "total": 2,
     "byFile": {
-      ".github/workflows/advanced-security-scan.yml": {
-        "count": 2,
-        "steps": [
-          "license-check :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "sbom :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/brain-contract-check.yml": {
-        "count": 2,
-        "steps": [
-          "contract-check :: Checkout OCR-docs brain (read-only)",
-          "report-drift :: Checkout OCR-docs brain (read-only)"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
       ".github/workflows/conformance-report.yml": {
-        "count": 3,
-        "steps": [
-          "generate :: Checkout OCR-docs brain (read-only)",
-          "generate :: Open/update the conformance-refresh PR",
-          "generate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/dast-zap-baseline.yml": {
         "count": 1,
-        "steps": [
-          "zap-baseline :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/flags-package-ci.yml": {
-        "count": 1,
-        "steps": ["flags-tests :: Checkout OCR-docs brain (flags-contract.yaml)"],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/inv22-cross-repo-gate.yml": {
-        "count": 1,
-        "steps": ["inv22-gate :: Checkout OCR-docs brain guard"],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/mobile-workability-audit.yml": {
-        "count": 2,
-        "steps": [
-          "nightly-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "pr-code :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/mutation-testing.yml": {
-        "count": 1,
-        "steps": [
-          "mutation :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+        "steps": ["generate :: Open/update the conformance-refresh PR"],
+        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986). The fallback goes when OSE-1695 removes it."
       },
       ".github/workflows/notify-osm-flag-change.yml": {
         "count": 1,
         "steps": ["notify :: Open issue in OSM"],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/oursharedevents-ci.yml": {
-        "count": 11,
-        "steps": [
-          "contract-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "deploy-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "deploy-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "functional-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "gate :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "gate-tests-sub :: Checkout OCR-docs brain (for OSE-323 drift check)",
-          "gate-tests-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "local-vetting :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "security :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "smoke-production :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "smoke-staging-sub :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/overnight-fuzz.yml": {
-        "count": 1,
-        "steps": [
-          "fuzz :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/red-team-adversarial.yml": {
-        "count": 1,
-        "steps": [
-          "red-team-staging :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/security-monitoring.yml": {
-        "count": 1,
-        "steps": [
-          "npm-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/security-scan.yml": {
-        "count": 1,
-        "steps": [
-          "dependency-audit :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
-      },
-      ".github/workflows/staging-rollback-drill.yml": {
-        "count": 1,
-        "steps": [
-          "drill :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
-        ],
-        "reason": "PR #986 fallback (`NEW || OCR_PROPAGATE_TOKEN`) so nothing breaks before the new secrets exist; removed by the follow-up (OSE-1695)."
+        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986); repointed to OCR_NOTIFY_OSM and the fallback removed by OSE-1695."
       }
     }
   },

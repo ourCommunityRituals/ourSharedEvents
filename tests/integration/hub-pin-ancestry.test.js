@@ -74,7 +74,7 @@ describe('ci-stage-ocr-workspace.sh — pin must be on hub main (OSE-1394)', () 
         GITHUB_ACTIONS: 'true',
         GITHUB_WORKSPACE: ws,
         OCR_WORKSPACE_REPO: `file://${hub}`,
-        OCR_PROPAGATE_TOKEN: '',
+        OCR_HUB_READ: '',
       },
     });
     return { ...r, ws };
@@ -105,7 +105,7 @@ describe('ci-stage-ocr-workspace.sh — pin must be on hub main (OSE-1394)', () 
       writeFileSync(join(ws, '.ocr-hub-ref'), `${mainSha}\n`);
       const env = { ...process.env, GITHUB_WORKSPACE: ws, OCR_WORKSPACE_REPO: `file://${hub}` };
       delete env.GITHUB_ACTIONS;
-      delete env.OCR_PROPAGATE_TOKEN;
+      delete env.OCR_HUB_READ;
       env.OCR_HUB_MAIN_BRANCH = 'no-such-branch';
       if (ci) env.GITHUB_ACTIONS = 'true';
       return spawnSync('bash', [SCRIPT], { encoding: 'utf-8', env });
@@ -121,24 +121,26 @@ describe('ci-stage-ocr-workspace.sh — pin must be on hub main (OSE-1394)', () 
 
 /**
  * Script contract on MAIN, across execution contexts (CI on PR / push, production deploy
- * and smoke, Dependabot with no Actions secrets, a developer locally). The script reads
- * the env var OCR_PROPAGATE_TOKEN; workflow steps fill it from
- * `secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN` (PR #986, OSE-1695). With no
- * token the fetch from the private hub fails and the ::error:: names the variable; with a
- * bad token it says the token is present and never prints it. Identical with and without
- * GITHUB_ACTIONS (the only CI/local difference is the ancestry check above).
+ * and smoke, Dependabot, a developer locally). The script reads the env var OCR_HUB_READ;
+ * workflow steps fill it from `secrets.OCR_HUB_READ` alone (OSE-1695). There is
+ * deliberately NO fallback to the old variable OCR_PROPAGATE_TOKEN (the write-capable PAT):
+ * with only that set, the script behaves exactly as with no token. With no token the fetch
+ * from the private hub fails and the ::error:: names OCR_HUB_READ; with a bad token it says
+ * the token is present and never prints it. Identical with and without GITHUB_ACTIONS (the
+ * only CI/local difference is the ancestry check above).
  * Hermetic: the source remote is a file:// path that does not exist; no network.
  */
 describe('ci-stage-ocr-workspace.sh: token contract in every context (OSE-1695)', () => {
   const PIN = '0'.repeat(40); // well-formed 40-hex pin, fetchable from nowhere (obviously fake)
   const PLACEHOLDER = 'placeholder-not-a-real-credential';
+  const OLD_PLACEHOLDER = 'placeholder-old-name-not-a-real-credential';
   let tmp;
   beforeAll(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hub-token-'));
   });
   afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
-  function go(name, { ci, token }) {
+  function go(name, { ci, token, oldToken }) {
     const ws = join(tmp, name, 'ws'); // fresh parent each time: no cache to fall back on
     mkdirSync(ws, { recursive: true });
     writeFileSync(join(ws, '.ocr-hub-ref'), `${PIN}\n`);
@@ -152,29 +154,40 @@ describe('ci-stage-ocr-workspace.sh: token contract in every context (OSE-1695)'
     delete env.OCR_PROPAGATE_TOKEN;
     delete env.OCR_HUB_READ;
     if (ci) env.GITHUB_ACTIONS = 'true';
-    if (token) env.OCR_PROPAGATE_TOKEN = PLACEHOLDER;
+    if (token) env.OCR_HUB_READ = PLACEHOLDER;
+    if (oldToken) env.OCR_PROPAGATE_TOKEN = OLD_PLACEHOLDER;
     const r = spawnSync('bash', [SCRIPT], { encoding: 'utf-8', env });
     return { ...r, out: r.stdout + r.stderr };
   }
-  const encoded = Buffer.from(`x-access-token:${PLACEHOLDER}`).toString('base64');
+  const b64 = (v) => Buffer.from(`x-access-token:${v}`).toString('base64');
 
   for (const ci of [true, false]) {
     const where = ci ? 'CI (GITHUB_ACTIONS=true)' : 'local (GITHUB_ACTIONS unset)';
 
-    test(`${where}: no token -> exit 1, ::error:: names OCR_PROPAGATE_TOKEN`, () => {
+    test(`${where}: no token -> exit 1, ::error:: names OCR_HUB_READ`, () => {
       const r = go(`none-${ci}`, { ci });
       expect(r.status, r.out).toBe(1);
       expect(r.stdout).toContain('::error title=@ocr/ui staging failed (ADR-008 pin)::');
-      expect(r.stdout).toContain('OCR_PROPAGATE_TOKEN is not available in this run context');
+      expect(r.stdout).toContain('OCR_HUB_READ is not available in this run context');
+    }, 20_000);
+
+    test(`${where}: ONLY the old OCR_PROPAGATE_TOKEN set -> still "not available" (no fallback)`, () => {
+      const r = go(`old-only-${ci}`, { ci, oldToken: true });
+      expect(r.status, r.out).toBe(1);
+      expect(r.stdout).toContain('::error title=@ocr/ui staging failed (ADR-008 pin)::');
+      expect(r.stdout).toContain('OCR_HUB_READ is not available in this run context');
+      expect(r.stdout).not.toContain('is present but the fetch still failed');
+      expect(r.out).not.toContain(OLD_PLACEHOLDER);
+      expect(r.out).not.toContain(b64(OLD_PLACEHOLDER));
     }, 20_000);
 
     test(`${where}: a bad token -> "present but the fetch still failed", never printed`, () => {
       const r = go(`bad-${ci}`, { ci, token: true });
       expect(r.status, r.out).toBe(1);
       expect(r.stdout).toContain('::error title=@ocr/ui staging failed (ADR-008 pin)::');
-      expect(r.stdout).toContain('OCR_PROPAGATE_TOKEN is present but the fetch still failed');
+      expect(r.stdout).toContain('OCR_HUB_READ is present but the fetch still failed');
       expect(r.out).not.toContain(PLACEHOLDER);
-      expect(r.out).not.toContain(encoded);
+      expect(r.out).not.toContain(b64(PLACEHOLDER));
     }, 20_000);
   }
 });

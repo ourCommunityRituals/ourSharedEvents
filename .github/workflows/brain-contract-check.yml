@@ -42,7 +42,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
           ref: main
-          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ }}
           # ADR-012 0.1: never leave the token where later steps can read it.
           persist-credentials: false
 
@@ -161,7 +161,7 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
           ref: main
-          token: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+          token: ${{ secrets.OCR_HUB_READ }}
           # ADR-012 0.1: never leave the token where later steps can read it.
           persist-credentials: false
 

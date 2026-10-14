@@ -269,7 +269,7 @@ jobs:
       timeout-minutes: 3
       env:
         GIT_TERMINAL_PROMPT: '0'
-        OCR_PROPAGATE_TOKEN: ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+        OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
       run: bash scripts/ci-stage-ocr-workspace.sh
 
     - name: Install dependencies
