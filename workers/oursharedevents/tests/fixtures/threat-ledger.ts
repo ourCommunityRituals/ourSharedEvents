@@ -1690,6 +1690,77 @@ const LINK_COUNT_ROBOTS: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Invariant gates already in CI, mapped (2026-10-13)
+//
+// The conformance report showed #5, #28 and #29 as gaps because no ledger entry
+// named them, though each has a blocking 0-architecture gate in the T0
+// invariants shard. These entries name those gates. The gates live under the
+// repo-root tests/, which the report's @born-red scanner does not read, so the
+// report shows them without an annotation; the evidence is in red_birth.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const INVARIANT_GATES: ThreatEntry[] = [
+  {
+    id: 'TL-080',
+    layer: 'worker_surface',
+    threat:
+      'Pay-to-rank: a sponsor ordering primitive that sorts by price tier comes back (the retired tierSort), or the covenant stops being keyed on is_local, so a higher tier can push a local out of the rotation instead of the locals holding their share floor.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 5, name: 'tier_equity' },
+    mitigation_story: 'OSE-330',
+    test_ref:
+      'tests/sponsor-share-covenant.spec.ts > a single local among many premiums is never crowded below the floor; structure locked by tests/e2e/0-architecture/tier-equity.invariant.spec.ts (repo root, T0 invariants shard)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-13',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Two faults, each red then green once removed: the local floor set to 0 in allocateShares turned sponsor-share-covenant.spec.ts red ("expected 2 to be greater than or equal to 29.999999"); a tierSort function added back to sponsor-resolver.ts turned the 0-architecture gate red ("tierSort must remain retired"). tier-equity-sort.spec.ts "local floor" stayed green with the floor at 0 (it only checks a local is never zeroed), so it is not cited.',
+    },
+    last_run_green: '2026-10-13',
+  },
+  {
+    id: 'TL-081',
+    layer: 'pipeline',
+    threat:
+      'A job that runs on a plain pull request can reach a secret outside the reviewed allowlist (or a workflow uses pull_request_target), so an auto-run agent PR that edits a workflow could take it before a human looks.',
+    severity: 'HIGH',
+    target_invariant: { number: 28, name: 'ci_approval_gate_secret_surface' },
+    mitigation_story: 'OSE-1045',
+    test_ref:
+      'CI gate: scripts/check-pr-secret-exposure.mjs (T0 lint shard), held in place by tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts (repo root, T0 invariants shard)',
+    // A CI control, not a worker test, so 'mitigated' (no worker @born-red).
+    status: 'mitigated',
+    red_birth: {
+      date: '2026-10-13',
+      method: 'historical-ci-failure',
+      notes:
+        'PR #986: the scanner failed on a real change ("OCR_HUB_READ is PR-reachable but NOT allowlisted", 12 plain-PR jobs) and passed once the read-only token was allowlisted with a reason. A planted deploy credential in the allowlist was not run: the agent was refused that edit as a security weakening.',
+    },
+    last_run_green: '2026-10-13',
+  },
+  {
+    id: 'TL-082',
+    layer: 'd1_boundary',
+    threat:
+      'A declined regime comes in through an innocent field or setting: a migration adds an age, birth date, school, grade or medical column, a config raises ALLOWED_MAX_TIER, or a tier-5 event type appears, so the platform starts holding HIPAA, COPPA or SOPPA data.',
+    severity: 'HIGH',
+    target_invariant: { number: 29, name: 'declined_regulatory_regimes' },
+    mitigation_story: 'OSE-1220',
+    test_ref:
+      'tests/template-clearance-gate.spec.ts > OSE-1220: resolveAllowedMaxTier clamps to the declined-regime ceiling (3); plus tests/e2e/0-architecture/declined-regimes.invariant.test.ts (repo root, T0 invariants shard) and scripts/guard-declined-regimes.js (T0 lint shard)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-13',
+      method: 'deliberate-fixture-break',
+      notes:
+        'The clamp removed from resolveAllowedMaxTier turned template-clearance-gate.spec.ts red ("expected 4 to be 3"); green once restored. The 0-architecture gate also runs the guard against a planted ALLOWED_MAX_TIER=4 and a planted tier-5 event type on every run.',
+    },
+    last_run_green: '2026-10-13',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1708,12 +1779,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...IMPRESSION_PRIVACY_REDTEAM,
   ...EVENT_SHORT_CODES,
   ...LINK_COUNT_ROBOTS,
+  ...INVARIANT_GATES,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-10-10',
+  last_updated: '2026-10-13',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;
