@@ -945,7 +945,7 @@
       ".github/workflows/notify-osm-flag-change.yml": {
         "count": 1,
         "steps": ["notify :: Open issue in OSM"],
-        "reason": "Opens an issue in ourSharedMagnets; names a write secret, but the wrong one until repointed to OCR_NOTIFY_OSM (OSE-1695)."
+        "reason": "Opens an issue in ourSharedMagnets on OCR_NOTIFY_OSM (its own token: Issues write on that repo only, OSE-1695)."
       }
     },
     "retired": []
@@ -958,32 +958,26 @@
   },
   "fallbackUses": {
     "direction": "down",
-    "reason": "The 28 read fallbacks are gone: reads name OCR_HUB_READ alone. The remaining 2 are the write sites (conformance PR step, notify-osm), still `NEW || OCR_PROPAGATE_TOKEN`; OSE-1695 removes them. May only fall.",
+    "reason": "The 28 read fallbacks are gone: reads name OCR_HUB_READ alone. The remaining 2 are the write sites (conformance PR step, notify-osm), each still `<its own token> || OCR_PROPAGATE_TOKEN` until its own token exists in the main-automation environment (OSE-1695). May only fall.",
     "total": 2,
     "byFile": {
       ".github/workflows/conformance-report.yml": {
         "count": 1,
         "steps": ["generate :: Open/update the conformance-refresh PR"],
-        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986). The fallback goes when OSE-1695 removes it."
+        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986). The fallback goes once OCR_AUTOMATION_WRITE exists in the main-automation environment (OSE-1695)."
       },
       ".github/workflows/notify-osm-flag-change.yml": {
         "count": 1,
         "steps": ["notify :: Open issue in OSM"],
-        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986); repointed to OCR_NOTIFY_OSM and the fallback removed by OSE-1695."
+        "reason": "Write site: GH_TOKEN is OCR_NOTIFY_OSM || OCR_PROPAGATE_TOKEN. The fallback goes once OCR_NOTIFY_OSM exists in the main-automation environment (OSE-1695)."
       }
     }
   },
   "writeUsesOnWrongToken": {
     "direction": "down",
-    "reason": "Known violation: notify-osm uses OCR_AUTOMATION_WRITE instead of OCR_NOTIFY_OSM (OSE-1695); may only fall.",
-    "total": 1,
-    "byFile": {
-      ".github/workflows/notify-osm-flag-change.yml": {
-        "count": 1,
-        "steps": ["notify :: Open issue in OSM"],
-        "reason": "Known violation (OSE-1695): notify-osm opens an issue in another repo and must use OCR_NOTIFY_OSM, not OCR_AUTOMATION_WRITE; may only fall."
-      }
-    }
+    "reason": "Every write site is on its decided token (conformance: OCR_AUTOMATION_WRITE, notify-osm: OCR_NOTIFY_OSM; OSE-1695); stays 0.",
+    "total": 0,
+    "byFile": {}
   },
   "unrecognizedTokenForms": {
     "direction": "down",
