@@ -1,0 +1,488 @@
+/**
+ * Token-split wiring: the ONE enumerator for the OCR_PROPAGATE_TOKEN split (OSE-1695).
+ *
+ * The org PAT OCR_PROPAGATE_TOKEN is write-capable. PR #986 moved every use onto a
+ * fallback expression so nothing breaks before the new secrets exist:
+ *   reads  (hub staging, hub / OCR-docs checkouts)  ${{ secrets.OCR_HUB_READ || secrets.OCR_PROPAGATE_TOKEN }}
+ *   writes (two named steps)                         ${{ secrets.<WRITE_SECRET> || secrets.OCR_PROPAGATE_TOKEN }}
+ *
+ * Both consumers import this module, so they can never disagree about what exists:
+ *   - tests/integration/adr008-wiring.test.js asserts the PROPERTY (every read site is in
+ *     a read form, never bare; the write sites are in write forms; nothing else names the
+ *     old token);
+ *   - scripts/ci/ci-integrity-ratchets.mjs records PROGRESS (per-file counts with step
+ *     names, each allowed to move only in its good direction).
+ *
+ * Static only: one walk of .github, js-yaml parse (anchors, aliases, folded and literal
+ * scalars are resolved by the parser, never by regex over YAML text), no network.
+ * Enumerated regardless of trigger: every .github/workflows/*.yml|yaml (GitHub reads only
+ * the top level) and every composite action .github/actions/** /action.yml|yaml, every job,
+ * every step, and the workflow / job / step levels of each.
+ *
+ * OCCURRENCES. Every `secrets.<NAME>` reference to one of the four names below (dot or
+ * bracket spelling, any case: GitHub contexts are case-insensitive), in any key or string
+ * at any level, is classified by the FORM of the `${{ }}` expression holding it (an `if:`
+ * value is an expression even without `${{ }}`). Whitespace is ignored. The new secret
+ * must come FIRST: `||` returns its first truthy operand, so `OLD || NEW` would pick the
+ * write-capable token whenever it exists, which is always; that order is `unrecognized`.
+ *
+ * SITES. A use site has a RIGHT:
+ *   read   a step whose run text (or step env) names ci-stage-ocr-workspace, or runs a
+ *          package.json script that does; or an actions/checkout of the hub or OCR-docs.
+ *          The token a staging step uses is its EFFECTIVE env (workflow, then job, then
+ *          step; later wins, as GitHub resolves it) under SCRIPT_TOKEN_ENV, the variable
+ *          the script authenticates with on main. A checkout's token is `with.token`.
+ *   write  exactly the steps in WRITE_SITES, found by file + job + step name, so a rename
+ *          fails loudly. Their token is the effective env under `env`.
+ * A composite action can never be proven: the `secrets` context does not exist inside it.
+ */
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import yaml from 'js-yaml';
+
+export const OLD_SECRET = 'OCR_PROPAGATE_TOKEN';
+export const READ_SECRET = 'OCR_HUB_READ';
+export const AUTOMATION_SECRET = 'OCR_AUTOMATION_WRITE';
+export const NOTIFY_SECRET = 'OCR_NOTIFY_OSM';
+const FAMILY = new Set([OLD_SECRET, READ_SECRET, AUTOMATION_SECRET, NOTIFY_SECRET]);
+
+/** The env var scripts/ci-stage-ocr-workspace.sh authenticates with ON MAIN (pinned by a test). */
+export const SCRIPT_TOKEN_ENV = 'OCR_PROPAGATE_TOKEN';
+
+/** Recognized forms: the secret names, in order, joined by `||`. */
+export const FORMS = {
+  bare: [OLD_SECRET],
+  'read-fallback': [READ_SECRET, OLD_SECRET],
+  'write-fallback-automation': [AUTOMATION_SECRET, OLD_SECRET],
+  'write-fallback-notify': [NOTIFY_SECRET, OLD_SECRET],
+  'new-only-read': [READ_SECRET],
+  'new-only-automation': [AUTOMATION_SECRET],
+  'new-only-notify': [NOTIFY_SECRET],
+};
+export const READ_FORMS = ['read-fallback', 'new-only-read'];
+export const FALLBACK_FORMS = [
+  'read-fallback',
+  'write-fallback-automation',
+  'write-fallback-notify',
+];
+export const WRITE_FORMS = {
+  [AUTOMATION_SECRET]: ['write-fallback-automation', 'new-only-automation'],
+  [NOTIFY_SECRET]: ['write-fallback-notify', 'new-only-notify'],
+};
+const ALL_WRITE_FORMS = Object.values(WRITE_FORMS).flat();
+
+/**
+ * The only write uses, by file + job + step name. `expected` is the PO decision (OSE-1695):
+ * conformance opens a PR in this repo (automation token); notify-osm opens an issue in
+ * another repo and gets its own token. notify-osm is on the wrong one today: a known
+ * violation recorded by writeUsesOnWrongToken, which may only fall.
+ */
+export const WRITE_SITES = [
+  {
+    file: '.github/workflows/conformance-report.yml',
+    job: 'generate',
+    step: 'Open/update the conformance-refresh PR',
+    env: 'GH_TOKEN',
+    expected: AUTOMATION_SECRET,
+  },
+  {
+    file: '.github/workflows/notify-osm-flag-change.yml',
+    job: 'notify',
+    step: 'Open issue in OSM',
+    env: 'GH_TOKEN',
+    expected: NOTIFY_SECRET,
+  },
+];
+
+export const READ_REPOS = [
+  'ourcommunityrituals/ourcommunityrituals',
+  'ourcommunityrituals/ocr-docs',
+];
+export const STAGE_SCRIPT = /ci-stage-ocr-workspace/;
+const PACKAGE_DIRS = ['workers', 'packages'];
+
+const SECRET_REF = /secrets\s*(?:\.\s*([A-Za-z0-9_]+)|\[\s*['"]([A-Za-z0-9_]+)['"]\s*\])/gi;
+const WHOLE_SECRETS = /\bsecrets\b(?!\s*[.[])/i;
+const EXPR = /\$\{\{([\s\S]*?)\}\}/g;
+
+const rel = (root, p) => relative(root, p).split(sep).join('/');
+
+/**
+ * Describe a token VALUE without ever printing it: only secret NAMES are shown. Anything
+ * else (a literal, which could be a pasted credential, or another expression) is reported
+ * by shape only.
+ */
+export function describeValue(v) {
+  if (v === undefined || v === null || v === '') return 'not set';
+  const s = String(v).trim();
+  const m = /^\$\{\{([\s\S]*)\}\}$/.exec(s);
+  if (m && !m[1].includes('}}')) {
+    const names = [...m[1].matchAll(SECRET_REF)].map(
+      (x) => `secrets.${(x[1] || x[2]).toUpperCase()}`
+    );
+    if (names.length) return `an expression naming ${names.join(', ')} (other text not printed)`;
+    return 'an expression naming no secret (value not printed)';
+  }
+  return /\$\{\{/.test(s)
+    ? 'text mixed with an expression (value not printed)'
+    : 'a literal value (not printed; never put a credential in a workflow)';
+}
+
+/** Form of one expression body; null when it names none of the four secrets. */
+export function classifyExpression(body) {
+  const text = String(body ?? '');
+  const refs = [...text.matchAll(SECRET_REF)].map((m) => (m[1] || m[2]).toUpperCase());
+  const family = refs.filter((n) => FAMILY.has(n));
+  if (!family.length) return WHOLE_SECRETS.test(text) ? 'unrecognized' : null;
+  if (WHOLE_SECRETS.test(text)) return 'unrecognized';
+  const operands = text
+    .replace(/\s+/g, '')
+    .split('||')
+    .map((o) => /^secrets(?:\.([A-Za-z0-9_]+)|\[['"]([A-Za-z0-9_]+)['"]\])$/i.exec(o));
+  if (operands.some((o) => !o)) return 'unrecognized';
+  const names = operands.map((o) => (o[1] || o[2]).toUpperCase());
+  for (const [form, want] of Object.entries(FORMS))
+    if (want.length === names.length && want.every((n, i) => n === names[i])) return form;
+  return 'unrecognized';
+}
+
+/** Form of a VALUE used as a token (an env value or `with.token`). */
+export function classifyValue(v) {
+  if (v === undefined || v === null || v === '') return 'missing';
+  const s = String(v).trim();
+  const m = /^\$\{\{([\s\S]*)\}\}$/.exec(s);
+  if (m && !m[1].includes('}}')) return classifyExpression(m[1]) || 'other-expression';
+  return /\$\{\{/.test(s) ? 'unrecognized' : 'literal';
+}
+
+/** Every family occurrence in one string, by form. `isIf` marks an `if:` value. */
+function occurrencesIn(str, isIf) {
+  const s = String(str);
+  const out = [];
+  let rest = s;
+  for (const m of s.matchAll(EXPR)) {
+    const f = classifyExpression(m[1]);
+    if (f) out.push(f);
+    rest = rest.replace(m[0], ' ');
+  }
+  if (isIf && !/\$\{\{/.test(s)) {
+    const f = classifyExpression(s);
+    if (f) out.push(f);
+    return out;
+  }
+  // A family name outside any expression is never evaluated: fail closed, so prose
+  // never hides a use (drop the `secrets.` prefix in prose).
+  for (const m of rest.matchAll(SECRET_REF))
+    if (FAMILY.has((m[1] || m[2]).toUpperCase())) out.push('unrecognized');
+  return out;
+}
+
+function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else out.push(p);
+  }
+  return out;
+}
+
+/** One walk of .github: workflows (top level) and composite actions (any depth). */
+export function listSources(root) {
+  const out = [];
+  for (const abs of walk(join(root, '.github'))) {
+    const r = rel(root, abs);
+    if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(r)) out.push({ rel: r, abs, kind: 'workflow' });
+    else if (/^\.github\/actions\/.+\/action\.ya?ml$/.test(r))
+      out.push({ rel: r, abs, kind: 'action' });
+  }
+  return out.sort((a, b) => a.rel.localeCompare(b.rel));
+}
+
+/** package.json script names whose command runs the staging script (root, workers/*, packages/*). */
+export function stagingScriptAliases(root) {
+  const files = [];
+  if (existsSync(join(root, 'package.json'))) files.push(join(root, 'package.json'));
+  for (const d of PACKAGE_DIRS) {
+    const base = join(root, d);
+    if (!existsSync(base)) continue;
+    for (const sub of readdirSync(base)) {
+      const p = join(base, sub, 'package.json');
+      if (existsSync(p)) files.push(p);
+    }
+  }
+  const out = [];
+  for (const f of files) {
+    let scripts;
+    try {
+      scripts = JSON.parse(readFileSync(f, 'utf8')).scripts || {};
+    } catch {
+      continue;
+    }
+    for (const [name, cmd] of Object.entries(scripts))
+      if (STAGE_SCRIPT.test(String(cmd))) out.push({ file: rel(root, f), name });
+  }
+  return out;
+}
+
+function invokes(step, aliases) {
+  if (step.run === undefined) return false;
+  const text = String(step.run ?? '');
+  if (STAGE_SCRIPT.test(text)) return true;
+  if (
+    step.env &&
+    typeof step.env === 'object' &&
+    Object.values(step.env).some((v) => STAGE_SCRIPT.test(String(v)))
+  )
+    return true;
+  // `npm run <alias>` / `npm run-script <alias>`, matched on words (no dynamic RegExp).
+  const words = text.split(/[\s;&|()]+/);
+  return aliases.some(({ name }) =>
+    words.some(
+      (w, i) =>
+        w === 'npm' &&
+        (words[i + 1] === 'run' || words[i + 1] === 'run-script') &&
+        words[i + 2] === name
+    )
+  );
+}
+
+function stepLabel(step, i) {
+  if (step && step.name) return String(step.name);
+  // Never echo run text (it could carry a credential); name the step by position instead.
+  const what = step?.uses ? `uses ${String(step.uses).slice(0, 60)}` : 'run step';
+  return `step #${i + 1} (unnamed ${what}; give it a name:)`;
+}
+
+const lowerKeys = (o) =>
+  Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]));
+const omit = (obj, ...keys) =>
+  Object.fromEntries(Object.entries(obj || {}).filter(([k]) => !keys.includes(k)));
+
+/** Effective env: later layers win; an env given as an expression cannot be proven. */
+function effectiveEnv(layers) {
+  const env = {};
+  for (const [where, layer] of layers) {
+    if (layer === undefined || layer === null) continue;
+    if (typeof layer !== 'object' || Array.isArray(layer))
+      return { env: null, why: `${where} env is an expression, so the token cannot be proven` };
+    Object.assign(env, layer);
+  }
+  return { env, why: '' };
+}
+
+/** Visit every key and string under `node`, with its key path. */
+function visit(node, path, fn) {
+  if (typeof node === 'string') return fn(node, path);
+  if (Array.isArray(node)) return node.forEach((v, i) => visit(v, [...path, String(i)], fn));
+  if (node && typeof node === 'object')
+    for (const [k, v] of Object.entries(node)) {
+      fn(k, [...path, `${k} (key)`]);
+      visit(v, [...path, k], fn);
+    }
+}
+
+/** Classify one parsed document. `kind` is 'workflow' or 'action'. */
+export function analyzeDoc(doc, file, kind, aliases = []) {
+  const occurrences = [];
+  const sites = [];
+  const mentions = [];
+  const collect = (job, step, level, node, insideStaging = false) =>
+    visit(node, [], (s, path) => {
+      const isIf = path[path.length - 1] === 'if';
+      for (const form of occurrencesIn(s, isIf))
+        occurrences.push({ file, job, step, level, id: `${job} :: ${step}`, form });
+      if (STAGE_SCRIPT.test(s) && !path[path.length - 1]?.endsWith('(key)'))
+        mentions.push({
+          file,
+          job,
+          step,
+          level,
+          where: path.join('.'),
+          ok: insideStaging || (kind === 'workflow' && level === 'workflow' && path[0] === 'on'),
+        });
+    });
+
+  const jobs =
+    kind === 'action'
+      ? { '(composite action)': { steps: doc?.runs?.steps || [] } }
+      : doc?.jobs && typeof doc.jobs === 'object'
+        ? doc.jobs
+        : {};
+
+  if (kind === 'workflow') collect('(workflow)', '(workflow level)', 'workflow', omit(doc, 'jobs'));
+  else
+    collect('(composite action)', '(action level)', 'action', [
+      omit(doc, 'runs'),
+      omit(doc?.runs, 'steps'),
+    ]);
+
+  for (const [jobName, job] of Object.entries(jobs)) {
+    if (!job || typeof job !== 'object') continue;
+    if (kind === 'workflow') collect(jobName, '(job level)', 'job', omit(job, 'steps'));
+    const steps = Array.isArray(job.steps) ? job.steps : [];
+    steps.forEach((step, i) => {
+      if (!step || typeof step !== 'object') return;
+      const label = stepLabel(step, i);
+      const id = `${jobName} :: ${label}`;
+      const staging = invokes(step, aliases);
+      collect(jobName, label, 'step', step, staging);
+
+      if (staging) {
+        let form;
+        let why = '';
+        if (kind === 'action') {
+          form = 'composite';
+          why = 'composite actions cannot read secrets; invoke the script from a workflow step';
+        } else {
+          const { env, why: w } = effectiveEnv([
+            ['workflow', doc.env],
+            ['job', job.env],
+            ['step', step.env],
+          ]);
+          if (!env) {
+            form = 'unprovable';
+            why = w;
+          } else {
+            form = classifyValue(env[SCRIPT_TOKEN_ENV]);
+            why = `${SCRIPT_TOKEN_ENV} is ${describeValue(env[SCRIPT_TOKEN_ENV])}`;
+          }
+        }
+        sites.push({
+          file,
+          job: jobName,
+          step: label,
+          id,
+          right: 'read',
+          kind: 'staging',
+          form,
+          why,
+        });
+      }
+
+      if (/^actions\/checkout(@|$)/i.test(String(step.uses || ''))) {
+        const w = lowerKeys(step.with);
+        const repo = String(w.repository || '').toLowerCase();
+        if (READ_REPOS.includes(repo)) {
+          const form = kind === 'action' ? 'composite' : classifyValue(w.token);
+          sites.push({
+            file,
+            job: jobName,
+            step: label,
+            id,
+            right: 'read',
+            kind: 'checkout',
+            form,
+            why: `token is ${describeValue(w.token)}`,
+          });
+        }
+      }
+
+      const ws = WRITE_SITES.find(
+        (x) => kind === 'workflow' && x.file === file && x.job === jobName && x.step === label
+      );
+      if (ws) {
+        const { env, why: w } = effectiveEnv([
+          ['workflow', doc.env],
+          ['job', job.env],
+          ['step', step.env],
+        ]);
+        const form = env ? classifyValue(env[ws.env]) : 'unprovable';
+        sites.push({
+          file,
+          job: jobName,
+          step: label,
+          id,
+          right: 'write',
+          kind: 'write',
+          expected: ws.expected,
+          form,
+          why: env ? `${ws.env} is ${describeValue(env[ws.env])}` : w,
+        });
+      }
+    });
+  }
+  return { occurrences, sites, mentions };
+}
+
+const cache = new Map();
+
+/** Enumerate the tree under `root` (memoised per process: callers share one walk). */
+export function scan(root, { fresh = false } = {}) {
+  if (!fresh && cache.has(root)) return cache.get(root);
+  const aliases = stagingScriptAliases(root);
+  const result = {
+    sources: [],
+    aliases,
+    occurrences: [],
+    sites: [],
+    mentions: [],
+    parseErrors: [],
+  };
+  for (const src of listSources(root)) {
+    result.sources.push(src.rel);
+    let doc;
+    try {
+      doc = yaml.load(readFileSync(src.abs, 'utf8'));
+    } catch (e) {
+      result.parseErrors.push(`${src.rel}: ${String(e.message).split('\n')[0]}`);
+      continue;
+    }
+    const r = analyzeDoc(doc, src.rel, src.kind, aliases);
+    result.occurrences.push(...r.occurrences);
+    result.sites.push(...r.sites);
+    result.mentions.push(...r.mentions);
+  }
+  cache.set(root, result);
+  return result;
+}
+
+/** { total, byFile: { file: { count, steps: [id] } } } for a list of entries. */
+export function groupByFile(entries) {
+  const byFile = {};
+  for (const e of entries) {
+    const b = (byFile[e.file] ||= { count: 0, steps: [] });
+    b.count += 1;
+    b.steps.push(e.id);
+  }
+  for (const b of Object.values(byFile)) b.steps.sort();
+  return { total: entries.length, byFile };
+}
+
+/** A read site whose token is in no recognized form (bare and unrecognized are counted elsewhere). */
+export const readSiteUnrecognized = (s) =>
+  s.right === 'read' && ![...READ_FORMS, 'bare', 'unrecognized'].includes(s.form);
+export const writeSiteOnExpected = (s) => (WRITE_FORMS[s.expected] || []).includes(s.form);
+
+/** The six ratchet measurements, from one scan. Names, ids and counts only; never values. */
+export function measureTokenSplit(root) {
+  const s = scan(root);
+  const reads = s.sites.filter((x) => x.right === 'read');
+  const writes = s.sites.filter((x) => x.right === 'write');
+  const badOcc = s.occurrences.filter((o) => o.form === 'unrecognized');
+  const badReads = reads.filter(readSiteUnrecognized);
+  const wrong = writes.filter((x) => !writeSiteOnExpected(x));
+  // Why each entry is counted (names and shapes only, never values); for messages.
+  const whyOf = (list, fn) => Object.fromEntries(list.map((x) => [`${x.file} :: ${x.id}`, fn(x)]));
+  return {
+    readUsesOnNewSecret: groupByFile(reads.filter((x) => READ_FORMS.includes(x.form))),
+    writeUsesOnNewSecret: groupByFile(writes.filter((x) => ALL_WRITE_FORMS.includes(x.form))),
+    bareOldTokenUses: groupByFile(s.occurrences.filter((o) => o.form === 'bare')),
+    fallbackUses: groupByFile(s.occurrences.filter((o) => FALLBACK_FORMS.includes(o.form))),
+    writeUsesOnWrongToken: {
+      ...groupByFile(wrong),
+      why: whyOf(wrong, (x) => `expected secrets.${x.expected}; ${x.why}`),
+    },
+    unrecognizedTokenForms: {
+      ...groupByFile([...badOcc, ...badReads]),
+      why: {
+        ...whyOf(badOcc, (o) => `${o.level}-level token expression in no recognized form`),
+        ...whyOf(
+          badReads,
+          (x) => `${x.kind} site with no recognized read token (${x.form}): ${x.why}`
+        ),
+      },
+    },
+    tokenSplitParseErrors: s.parseErrors,
+  };
+}
