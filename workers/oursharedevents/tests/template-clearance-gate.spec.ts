@@ -160,6 +160,7 @@ describe('OSE-728 — 0057 seed + recompute', () => {
     expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: 'garbage' })).toBe(LAUNCH_MAX_CLEARANCE_TIER);
   });
 
+  // @born-red TL-082 | method: deliberate-fixture-break | date: 2026-10-13
   test('OSE-1220: resolveAllowedMaxTier clamps to the declined-regime ceiling (3)', () => {
     // Tier 3 is the hard ceiling — tiers 4 (HIPAA) / 5 (COPPA) are declined
     // regimes and must be structurally unreachable through config. Even an

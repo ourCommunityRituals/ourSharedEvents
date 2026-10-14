@@ -92,6 +92,7 @@ describe('Invariant #25 | WALL 2 — local floor holds at every demand level', (
     }
   );
 
+  // @born-red TL-080 | method: deliberate-fixture-break | date: 2026-10-13
   test('a single local among many premiums is never crowded below the floor', () => {
     const sponsors = mixedDemand(8, 0, 0, 1); // 8 premium, 1 local
     const shares = byId(allocateShares(sponsors));
