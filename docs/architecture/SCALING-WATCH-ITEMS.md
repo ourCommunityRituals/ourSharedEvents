@@ -128,7 +128,7 @@ _total volume and subrequest count_, not batch inefficiency.
 **Leading indicator (watch this).** Outbound subrequest count on the export
 path (Cloudflare analytics) and BigQuery streamed-bytes / stored-bytes per tick.
 The CI-side wall-clock view of export jobs is in
-`docs/monitoring/ci-cost-history.jsonl` (COST-302).
+the daily `ci-cost-history-*` workflow artifact (COST-302).
 
 **Suggested trigger.** Revisit when nightly streamed rows or bytes trend toward
 a fixed fraction of the BigQuery free tier, or when export wall-clock starts
@@ -151,7 +151,7 @@ observability surfaces:
 | Surface                  | What it shows                                                                                                              | Source                                                                                                |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Runtime `OPERATION_COST` | Per-request `d1Queries`, `d1RowsRead`, `wallMs`, `status` by aggregate `op` label (never-who) — the WI-1 leading indicator | `workers/oursharedevents/src/lib/cost-metric.ts` · contract `docs/monitoring/COST-METRIC-CONTRACT.md` |
-| CI cost history          | Per-job CI wall-clock time-series, incl. export/materialization jobs                                                       | `docs/monitoring/ci-cost-history.jsonl` · collector `scripts/ci-cost-collector.mjs` (COST-302)        |
+| CI cost history          | Per-job CI wall-clock time-series, incl. export/materialization jobs                                                       | `ci-cost-history-*` workflow artifact · collector `scripts/ci-cost-collector.mjs` (COST-302)          |
 | Cloudflare analytics     | Outbound subrequests + egress bandwidth — the WI-2 leading indicator (not in `OPERATION_COST` by design)                   | Cloudflare dashboard                                                                                  |
 
 Both `OPERATION_COST` and the CI collector are **aggregate-only and never-who**
