@@ -63,6 +63,13 @@ const GOOD_GH = () => ({
       { name: 'v*', type: 'tag' },
     ],
   }),
+  [`api repos/${REPO}/environments/main-automation`]: j({
+    protection_rules: [],
+    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+  }),
+  [`api repos/${REPO}/environments/main-automation/deployment-branch-policies`]: j({
+    branch_policies: [{ id: 11, name: 'main', type: 'branch' }],
+  }),
   'secret list': { stdout: 'CLAUDE_CODE_OAUTH_TOKEN\t2026-10-12\n' },
   'api user': j({ login: 'agent', id: 2 }),
   [`api repos/${REPO}/collaborators`]: j([
@@ -177,7 +184,50 @@ describe('verify-hardening: GitHub plane (fixture)', () => {
       G5: 'PASS',
       G6: 'PASS',
       G7: 'PASS',
+      G8: 'PASS',
     });
+  });
+
+  it('G8 fails unless main-automation is usable from branch main only', () => {
+    const e = `api repos/${REPO}/environments/main-automation`;
+    const pol = `${e}/deployment-branch-policies`;
+    const branchPolicies = (list) => (m) => (m[pol] = j({ branch_policies: list }));
+    // missing environment: GitHub would auto-create it with no protection on first use
+    expect(g((m) => delete m[e]).G8).toBe('FAIL');
+    // all branches and tags
+    expect(g((m) => (m[e] = j({ protection_rules: [], deployment_branch_policy: null }))).G8).toBe(
+      'FAIL'
+    );
+    // any protected branch, not main alone
+    expect(
+      g(
+        (m) =>
+          (m[e] = j({
+            deployment_branch_policy: { protected_branches: true, custom_branch_policies: false },
+          }))
+      ).G8
+    ).toBe('FAIL');
+    expect(
+      g(
+        branchPolicies([
+          { name: 'main', type: 'branch' },
+          { name: 'v*', type: 'tag' },
+        ])
+      ).G8
+    ).toBe('FAIL');
+    expect(g(branchPolicies([{ name: '*', type: 'branch' }])).G8).toBe('FAIL');
+    expect(g(branchPolicies([])).G8).toBe('FAIL');
+    expect(g((m) => delete m[pol]).G8).toBe('FAIL');
+    // a reviewer is not graded (it would only stall the scheduled jobs)
+    expect(
+      g(
+        (m) =>
+          (m[e] = j({
+            protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User' }] }],
+            deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+          }))
+      ).G8
+    ).toBe('PASS');
   });
 
   it('G1 fails on a CODEOWNERS error', () => {
@@ -362,6 +412,26 @@ describe('guards found in the confirmation pass', () => {
   });
 });
 
+// Runs apply-github against fixture answers and returns its output plus every gh call it made.
+function applyGithubDryRun(ghMap, args = []) {
+  const dir = scratch('ose-ghfix-');
+  const fixture = join(dir, 'gh.json');
+  const log = join(dir, 'calls.jsonl');
+  writeFileSync(fixture, JSON.stringify(ghMap));
+  const r = run('apply-github.mjs', args, { OCR_GH_FIXTURE: fixture, OCR_GH_FIXTURE_LOG: log });
+  const calls = existsSync(log)
+    ? readFileSync(log, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
+    : [];
+  return { ...r, calls };
+}
+const isWrite = (args) => {
+  const i = args.indexOf('--method');
+  return i !== -1 && String(args[i + 1]).toUpperCase() !== 'GET';
+};
+
 describe('apply-github', () => {
   it('--apply refuses before any gh call when there is no terminal', () => {
     // an empty fixture answers nothing: a gh call would exit 2, the guard must exit 3 first
@@ -369,6 +439,67 @@ describe('apply-github', () => {
     writeFileSync(fixture, '{}');
     const r = run('apply-github.mjs', ['--apply'], { OCR_GH_FIXTURE: fixture });
     expect(r.status).toBe(3);
+    // and with a call log: not one request, read or write, was made
+    const logged = applyGithubDryRun({}, ['--apply']);
+    expect(logged.status).toBe(3);
+    expect(logged.stderr).toMatch(/owner in their own terminal/);
+    expect(logged.calls).toEqual([]);
+  });
+
+  it('pins main-automation: custom branch policy, no reviewers, exactly branch main', async () => {
+    const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
+    expect(ag.MAIN_AUTOMATION).toBe('main-automation');
+    const body = ag.mainAutomationEnv();
+    expect(body).toEqual({
+      deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+    });
+    expect(body).not.toHaveProperty('reviewers');
+    expect(body).not.toHaveProperty('wait_timer');
+    expect(ag.MAIN_AUTOMATION_REFS).toEqual([{ name: 'main', type: 'branch' }]);
+  });
+
+  it('dry run prints the main-automation PUT and one policy POST, and sends nothing', () => {
+    const m = GOOD_GH();
+    delete m[`api repos/${REPO}/environments/main-automation`]; // 404: not created yet
+    delete m[`api repos/${REPO}/environments/main-automation/deployment-branch-policies`];
+    const r = applyGithubDryRun(m);
+    expect(r.status).toBe(0);
+    const env = `repos/${REPO}/environments/main-automation`;
+    expect(r.stdout).toContain(`--method PUT ${env}\n`);
+    expect(r.stdout).toContain(
+      '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
+    );
+    expect(
+      r.stdout.match(/--method POST [^\n]*main-automation\/deployment-branch-policies/g)
+    ).toEqual([`--method POST ${env}/deployment-branch-policies`]);
+    expect(r.stdout).toContain('{"name":"main","type":"branch"}');
+    expect(r.stdout).not.toContain('"reviewers"');
+    expect(r.stdout).toMatch(/Summary: A 0 request\(s\), B 0, C 2 \(main-automation\)/);
+    expect(r.stdout).toMatch(/Dry run/);
+    expect(r.stdout).not.toMatch(/^ok {2}|succeeded/m);
+    // the only gh calls were reads; it read the environment and skipped its policies (absent)
+    expect(r.calls.filter(isWrite)).toEqual([]);
+    expect(r.calls.map((c) => c.join(' '))).toContain(`api ${env}`);
+    expect(r.calls.map((c) => c.join(' '))).not.toContain(`api ${env}/deployment-branch-policies`);
+  });
+
+  it('dry run plans to delete an extra main-automation policy, and sends nothing', () => {
+    const m = GOOD_GH();
+    m[`api repos/${REPO}/environments/main-automation/deployment-branch-policies`] = j({
+      branch_policies: [
+        { id: 11, name: 'main', type: 'branch' },
+        { id: 12, name: 'v*', type: 'tag' },
+      ],
+    });
+    const r = applyGithubDryRun(m);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/C3\. main-automation: remove the extra policy tag:v\*/);
+    expect(r.stdout).toContain(
+      `--method DELETE repos/${REPO}/environments/main-automation/deployment-branch-policies/12`
+    );
+    expect(r.stdout).not.toMatch(/C1\. main-automation environment: custom/);
+    expect(r.stdout).not.toMatch(/C2\. main-automation may be used/);
+    expect(r.calls.filter(isWrite)).toEqual([]);
   });
 
   it('dry run prints the plan from fixture answers and sends nothing', () => {
@@ -396,5 +527,6 @@ describe('apply-github', () => {
     writeFileSync(fixture, JSON.stringify(GOOD_GH()));
     const r = run('apply-github.mjs', [], { OCR_GH_FIXTURE: fixture });
     expect(r.stdout).toMatch(/Nothing to do/);
+    expect(r.stdout).toMatch(/main-automation already allows exactly branch main \(skipped\)/);
   });
 });

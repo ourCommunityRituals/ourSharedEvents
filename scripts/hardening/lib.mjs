@@ -3,7 +3,7 @@
 // key names only, through redact().
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -58,6 +58,11 @@ export const fixtureMode = () => Boolean(process.env.OCR_GH_FIXTURE);
 
 export function gh(args, input) {
   if (fixtureMode()) {
+    // OCR_GH_FIXTURE_LOG=<file> records each call's args, one JSON line per call, so a test can
+    // prove a dry run sent no write. Fixture mode only: a live run never writes this file.
+    if (process.env.OCR_GH_FIXTURE_LOG) {
+      appendFileSync(process.env.OCR_GH_FIXTURE_LOG, `${JSON.stringify(args)}\n`);
+    }
     const map = readJson(process.env.OCR_GH_FIXTURE);
     const hit = map[args.join(' ')];
     if (!hit) {

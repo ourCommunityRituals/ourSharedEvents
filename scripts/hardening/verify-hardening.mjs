@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Read-only verifier for the two planes graded in the 2026-10-11 security review:
 //   workstation  Claude Code settings, hook, connectors, MCP, token scopes
-//   github       CODEOWNERS, branch protection, tag ruleset, environments, secrets
+//   github       CODEOWNERS, branch protection, tag ruleset, environments (production,
+//                main-automation), secrets
 //
 //   node scripts/hardening/verify-hardening.mjs            # table + grade, exit 1 on any FAIL
 //   node scripts/hardening/verify-hardening.mjs --json
@@ -374,6 +375,35 @@ function github() {
       reviewers && refsLimited ? 'PASS' : 'FAIL',
       `reviewers=${reviewers} refs=[${refs}] (a reviewer who is also the agent can approve their own deploy until G6 passes)`
     );
+  }
+
+  // G8 main-automation environment (holds the write tokens, OSE-1695): usable from the main branch
+  // only. No reviewer is expected (its jobs run on schedule and push), so reviewers do not grade.
+  const g8 = 'main-automation environment is usable from branch main only (no tag, no wildcard)';
+  const ma = ghJson(['api', `repos/${REPO}/environments/main-automation`]);
+  if (!ma.ok) unverifiable('G8', g8, ma.error);
+  else {
+    const policy = ma.data?.deployment_branch_policy;
+    const reviewers = (ma.data?.protection_rules ?? []).some(
+      (x) => x.type === 'required_reviewers' && (x.reviewers ?? []).length > 0
+    );
+    let mainOnly = false;
+    let refs = policy?.protected_branches === true ? 'protected branches' : 'any branch or tag';
+    if (policy?.custom_branch_policies === true && policy?.protected_branches !== true) {
+      const pol = ghJson([
+        'api',
+        `repos/${REPO}/environments/main-automation/deployment-branch-policies`,
+      ]);
+      if (!pol.ok) refs = `cannot read policies: ${pol.error}`;
+      else {
+        const names = (pol.data?.branch_policies ?? []).map(
+          (p) => `${p.type ?? 'branch'}:${p.name}`
+        );
+        mainOnly = names.length === 1 && names[0] === 'branch:main';
+        refs = names.join(', ') || 'none';
+      }
+    }
+    add('G8', g8, mainOnly ? 'PASS' : 'FAIL', `refs=[${refs}] reviewers=${reviewers}`);
   }
 
   // G5 deploy credentials are not repository-level secrets

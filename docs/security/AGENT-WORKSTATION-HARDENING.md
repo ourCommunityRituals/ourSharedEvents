@@ -22,7 +22,7 @@ measure the result, and the repository settings that make a stolen agent session
 | `scripts/apply-branch-protection.mjs`           | The drift check now compares required-review rules (it was blind to them).                                                                                                                                                                                                                                                           |
 | `scripts/hardening/verify-hardening.mjs`        | Read-only check of both planes; PASS, FAIL or WARN per control and a grade. A check it cannot run is a FAIL.                                                                                                                                                                                                                         |
 | `scripts/hardening/apply-workstation.mjs`       | **OWNER.** Installs the hook from `origin/main`, wires it for shell, file and MCP tools, tightens permissions, turns off two flags. Dry run by default.                                                                                                                                                                              |
-| `scripts/hardening/apply-github.mjs`            | **OWNER.** Creates the tag ruleset and the production environment reviewer and deploy refs. Dry run by default.                                                                                                                                                                                                                      |
+| `scripts/hardening/apply-github.mjs`            | **OWNER.** Creates the tag ruleset, the production environment reviewer and deploy refs, and the `main-automation` environment (branch `main` only). Dry run by default.                                                                                                                                                             |
 
 ## Order of work
 
@@ -37,7 +37,12 @@ measure the result, and the repository settings that make a stolen agent session
    - a tag ruleset on `refs/tags/v*` (create, update, delete, force-push blocked) whose **only**
      bypass is the repository admin role, so you can still release by tag;
    - the `production` environment with you as required reviewer, deploys allowed from `main` and
-     `v*` tags only.
+     `v*` tags only;
+   - the `main-automation` environment (OSE-1695), usable from the `main` branch only (one branch
+     policy; no tag, no wildcard) and with no reviewer, by design: the scheduled and push jobs that
+     use it would stall waiting for one. Then add `OCR_AUTOMATION_WRITE`, `OCR_NOTIFY_OSM` and
+     `BRANCH_PROTECTION_READ_TOKEN` there as environment secrets yourself. It must exist before
+     any workflow names it: GitHub creates a missing environment on first use, unprotected.
 5. **OWNER** separate the agent identity. Until then every GitHub control above is advisory: the
    agent is the admin account, so it can delete the ruleset or approve its own deployment, and a
    required review would deadlock every merge.
@@ -89,6 +94,7 @@ measure the result, and the repository settings that make a stolen agent session
 | 3             | restore `settings.json.bak-<stamp>` next to the settings file; delete `~/.claude/hooks/policy-gate.mjs`                                        |
 | 4 tag ruleset | `gh api -X DELETE repos/ourCommunityRituals/ourSharedEvents/rulesets/<id>` (id from `GET …/rulesets`)                                          |
 | 4 environment | `PUT …/environments/production` with `{"reviewers":[],"deployment_branch_policy":null}`; never delete the environment (its secrets go with it) |
+| 4 automation  | `main-automation`: remove every workflow reference first, then delete it in settings (its secrets go with it)                                  |
 | 5             | `gh auth login` as the admin again                                                                                                             |
 | 6             | set `required_pull_request_reviews` back to `null` in the JSON and re-apply                                                                    |
 | 7             | re-add the repository secret and revert the workflow change                                                                                    |
