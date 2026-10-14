@@ -145,3 +145,33 @@ describe('mergeHistory — idempotent append', () => {
     merged.forEach((l) => expect(() => JSON.parse(l)).not.toThrow());
   });
 });
+
+// The scheduled workflow must not push to protected `main` (GH006, a red run every
+// day from 2026-10-14) and so must hold no write token. Delivery is the artifact.
+describe('ci-cost-collector.yml — no write to protected main', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs
+    .readFileSync(path.join(__dirname, '../../.github/workflows/ci-cost-collector.yml'), 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith('#')) // comments explain; only code counts
+    .map((line) => line.replace(/\s+#.*$/, ''))
+    .join('\n');
+
+  it('holds no write permission', () => {
+    expect(code).not.toMatch(/^\s*[\w-]+:\s*write\s*$/m);
+  });
+
+  it('never commits or pushes', () => {
+    expect(code).not.toMatch(/\bgit\s+(push|commit)\b/);
+  });
+
+  it('does not persist the checkout token', () => {
+    expect(code).toMatch(/persist-credentials:\s*false/);
+  });
+
+  it('still delivers the history as an artifact', () => {
+    expect(code).toMatch(/actions\/upload-artifact@/);
+    expect(code).toMatch(/ci-cost-history\.jsonl/);
+  });
+});
