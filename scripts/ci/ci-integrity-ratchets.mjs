@@ -13,11 +13,13 @@
  *        --base-config <file> -> the baseline itself may not exceed the base branch's copy.
  *        --update -> rewrite the baseline from the tree (keeps existing reasons).
  *
- * Token split (OSE-1695): progress away from the write-capable OCR_PROPAGATE_TOKEN. Six
+ * Token split (OSE-1695): progress away from the write-capable OCR_PROPAGATE_TOKEN. Seven
  * more measurements from the shared enumerator scripts/ci/hub-token-wiring.mjs (the same
  * one tests/integration/adr008-wiring.test.js uses), each with an explicit good direction:
  *   UP-ONLY   readUsesOnNewSecret     read sites whose token names OCR_HUB_READ
  *   UP-ONLY   writeUsesOnNewSecret    the named write sites whose token names a write secret
+ *   UP-ONLY   writeSitesInMainAutomation  the named write sites whose job declares exactly
+ *                                     environment main-automation (2)
  *   DOWN-ONLY bareOldTokenUses        bare secrets.OCR_PROPAGATE_TOKEN (baseline 0)
  *   DOWN-ONLY fallbackUses            `NEW || OCR_PROPAGATE_TOKEN` expressions (2: the write sites)
  *   DOWN-ONLY writeUsesOnWrongToken   write sites not on their decided token (baseline 0)
@@ -36,7 +38,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { measureTokenSplit, SCRIPT_TOKEN_ENV } from './hub-token-wiring.mjs';
+import { measureTokenSplit, SCRIPT_TOKEN_ENV, MAIN_AUTOMATION_ENV } from './hub-token-wiring.mjs';
 
 export const BASELINE_FILE = '.ci-integrity-baseline.json';
 const SKIP_ROOTS = ['tests', 'workers/oursharedevents/tests', 'packages'];
@@ -151,7 +153,7 @@ const count = (e, k) => (k === 'orphanSpecs' ? e[k].files.length : e[k].total);
 // ── Token split (OSE-1695): directional ratchets ────────────────────────────
 // Built from two lists so no quoted direction word is assigned to a key whose
 // name the secret scanner reads as a credential name.
-const UP_ONLY_KEYS = ['readUsesOnNewSecret', 'writeUsesOnNewSecret'];
+const UP_ONLY_KEYS = ['readUsesOnNewSecret', 'writeUsesOnNewSecret', 'writeSitesInMainAutomation'];
 const DOWN_ONLY_KEYS = [
   'bareOldTokenUses',
   'fallbackUses',
@@ -181,6 +183,14 @@ export const TOKEN_HELP = {
       'set the step env GH_TOKEN to ${{ secrets.<WRITE_SECRET> || secrets.OCR_PROPAGATE_TOKEN }} ' +
       '(conformance: OCR_AUTOMATION_WRITE, notify-osm: OCR_NOTIFY_OSM); a renamed write step ' +
       'is a rename of WRITE_SITES in scripts/ci/hub-token-wiring.mjs',
+  },
+  writeSitesInMainAutomation: {
+    what: `the named write steps whose job declares exactly environment ${MAIN_AUTOMATION_ENV} (where the write tokens live)`,
+    reason: `Write sites read their tokens from the ${MAIN_AUTOMATION_ENV} environment, main only (OSE-1695): may only rise; a deleted write site needs a retired entry.`,
+    restore:
+      `declare \`environment: ${MAIN_AUTOMATION_ENV}\` at job level on the write step's job ` +
+      '(see WRITE_SITES and MAIN_AUTOMATION_JOBS in scripts/ci/hub-token-wiring.mjs); without it ' +
+      'the job sees none of the environment secrets',
   },
   bareOldTokenUses: {
     what: 'bare ${{ secrets.OCR_PROPAGATE_TOKEN }} references (the write-capable PAT, alone)',

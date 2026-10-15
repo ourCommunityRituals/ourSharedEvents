@@ -95,6 +95,8 @@ jobs:
     # already covers the list that blocks merges.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
+    # Its read token is a main-automation environment secret (OSE-1695); main only.
+    environment: main-automation
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
