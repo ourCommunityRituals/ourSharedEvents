@@ -474,7 +474,9 @@ describe('apply-github', () => {
     ).toEqual([`--method POST ${env}/deployment-branch-policies`]);
     expect(r.stdout).toContain('{"name":"main","type":"branch"}');
     expect(r.stdout).not.toContain('"reviewers"');
-    expect(r.stdout).toMatch(/Summary: A 0 request\(s\), B 0, C 2 \(main-automation\)/);
+    expect(r.stdout).toContain(
+      'Summary (requests per step): release-tag-ruleset 0, production-gate 0, main-automation 2.'
+    );
     expect(r.stdout).toMatch(/Dry run/);
     expect(r.stdout).not.toMatch(/^ok {2}|succeeded/m);
     // the only gh calls were reads; it read the environment and skipped its policies (absent)
@@ -493,12 +495,14 @@ describe('apply-github', () => {
     });
     const r = applyGithubDryRun(m);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/C3\. main-automation: remove the extra policy tag:v\*/);
+    expect(r.stdout).toContain(
+      '[main-automation] DELETE environments/main-automation/deployment-branch-policies/12 (remove the extra policy tag:v*)'
+    );
     expect(r.stdout).toContain(
       `--method DELETE repos/${REPO}/environments/main-automation/deployment-branch-policies/12`
     );
-    expect(r.stdout).not.toMatch(/C1\. main-automation environment: custom/);
-    expect(r.stdout).not.toMatch(/C2\. main-automation may be used/);
+    expect(r.stdout).not.toMatch(/\[main-automation\] PUT /);
+    expect(r.stdout).not.toMatch(/\[main-automation\] POST /);
     expect(r.calls.filter(isWrite)).toEqual([]);
   });
 
@@ -516,9 +520,9 @@ describe('apply-github', () => {
     writeFileSync(fixture, JSON.stringify(m));
     const r = run('apply-github.mjs', [], { OCR_GH_FIXTURE: fixture });
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/create tag ruleset/);
+    expect(r.stdout).toMatch(/\[release-tag-ruleset\] POST rulesets \(create release-tags-locked/);
     expect(r.stdout).toMatch(/"actor_type":"RepositoryRole"/);
-    expect(r.stdout).toMatch(/production may deploy from tag v\*/);
+    expect(r.stdout).toMatch(/\[production-gate\] POST [^\n]*\(deploy from tag v\*\)/);
     expect(r.stdout).toMatch(/Dry run/);
   });
 
@@ -527,6 +531,276 @@ describe('apply-github', () => {
     writeFileSync(fixture, JSON.stringify(GOOD_GH()));
     const r = run('apply-github.mjs', [], { OCR_GH_FIXTURE: fixture });
     expect(r.stdout).toMatch(/Nothing to do/);
-    expect(r.stdout).toMatch(/main-automation already allows exactly branch main \(skipped\)/);
+    expect(r.stdout).toContain(
+      '[main-automation] main-automation already allows exactly branch main (skipped)'
+    );
+    expect(r.stdout).toContain(
+      '[release-tag-ruleset] tag ruleset release-tags-locked already present (skipped)'
+    );
+    expect(r.stdout).toContain(
+      '[production-gate] production already has a reviewer and custom refs (skipped)'
+    );
+  });
+});
+
+// ---- apply-github --only: steps are selected by name ----
+const NAMES = ['release-tag-ruleset', 'production-gate', 'main-automation'];
+// A repository with none of the three in place: rulesets empty, both environments missing (404).
+const EMPTY_GH = () => ({
+  'api user': j({ login: 'agent', id: 2 }),
+  [`api repos/${REPO}/rulesets`]: j([]),
+});
+const RULESET_POST =
+  `--method POST repos/${REPO}/rulesets ` +
+  '{"name":"release-tags-locked","target":"tag","enforcement":"active","bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}],"conditions":{"ref_name":{"include":["refs/tags/v*"],"exclude":[]}},"rules":[{"type":"creation"},{"type":"update"},{"type":"deletion"},{"type":"non_fast_forward"}]}';
+const PRODUCTION_REQUESTS = [
+  `--method PUT repos/${REPO}/environments/production {"prevent_self_review":false,"reviewers":[{"type":"User","id":2}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}`,
+  `--method POST repos/${REPO}/environments/production/deployment-branch-policies {"name":"main","type":"branch"}`,
+  `--method POST repos/${REPO}/environments/production/deployment-branch-policies {"name":"v*","type":"tag"}`,
+];
+const MAIN_AUTOMATION_REQUESTS = [
+  `--method PUT repos/${REPO}/environments/main-automation {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}`,
+  `--method POST repos/${REPO}/environments/main-automation/deployment-branch-policies {"name":"main","type":"branch"}`,
+];
+// The request set the script planned on EMPTY_GH before steps had names (origin/main fb79ea5b).
+const ALL_REQUESTS = [RULESET_POST, ...PRODUCTION_REQUESTS, ...MAIN_AUTOMATION_REQUESTS];
+
+// Each planned request as printed: "<label>\n  --method M path\n  {body}" -> "--method M path {body}".
+const planned = (stdout) => {
+  const lines = stdout.split('\n');
+  return lines.flatMap((l, i) => {
+    if (!l.startsWith('  --method ')) return [];
+    const next = lines[i + 1] ?? '';
+    return [next.startsWith('  {') ? `${l.trim()} ${next.trim()}` : l.trim()];
+  });
+};
+// The label line printed above each planned request.
+const labels = (stdout) => {
+  const lines = stdout.split('\n');
+  return lines.filter((_, i) => (lines[i + 1] ?? '').startsWith('  --method '));
+};
+// The step names on the SELECTED or SKIPPED lines of the step list.
+const listed = (stdout, mark) =>
+  stdout
+    .split('\n')
+    .filter((l) => l.startsWith(`  ${mark} `))
+    .map((l) => l.slice(l.indexOf('[') + 1, l.indexOf(']')));
+const callText = (r) => r.calls.map((c) => c.join(' '));
+
+describe('apply-github --only', () => {
+  it('names the steps in one table, in run order', async () => {
+    const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
+    expect(ag.STEP_NAMES).toEqual(NAMES);
+  });
+
+  it('no flag: lists all three as SELECTED and plans exactly the request set it planned before', () => {
+    const r = applyGithubDryRun(EMPTY_GH());
+    expect(r.status).toBe(0);
+    expect(listed(r.stdout, 'SELECTED')).toEqual(NAMES);
+    expect(r.stdout).not.toMatch(/SKIPPED/);
+    expect(planned(r.stdout).sort()).toEqual([...ALL_REQUESTS].sort());
+    expect(r.stdout).toContain(
+      'Summary (requests per step): release-tag-ruleset 1, production-gate 3, main-automation 2.'
+    );
+    expect(r.calls.filter(isWrite)).toEqual([]);
+  });
+
+  it('--only main-automation plans its PUT and one POST and makes no call for the other two', () => {
+    const r = applyGithubDryRun(EMPTY_GH(), ['--only', 'main-automation']);
+    expect(r.status).toBe(0);
+    expect(planned(r.stdout)).toEqual(MAIN_AUTOMATION_REQUESTS);
+    // the environment is missing, so the only read is the environment itself
+    expect(callText(r)).toEqual([`api repos/${REPO}/environments/main-automation`]);
+    expect(listed(r.stdout, 'SKIPPED (not in --only)')).toEqual([
+      'release-tag-ruleset',
+      'production-gate',
+    ]);
+    expect(listed(r.stdout, 'SELECTED')).toEqual(['main-automation']);
+    expect(r.stdout).toContain(
+      'Summary (requests per step): release-tag-ruleset skipped, production-gate skipped, main-automation 2.'
+    );
+    // the = form, on a state where the environment exists: it reads the policies, nothing else
+    const m = GOOD_GH();
+    m[`api repos/${REPO}/environments/main-automation/deployment-branch-policies`] = j({
+      branch_policies: [
+        { id: 11, name: 'main', type: 'branch' },
+        { id: 12, name: 'v*', type: 'tag' },
+      ],
+    });
+    const r2 = applyGithubDryRun(m, ['--only=main-automation']);
+    expect(r2.status).toBe(0);
+    expect(planned(r2.stdout)).toEqual([
+      `--method DELETE repos/${REPO}/environments/main-automation/deployment-branch-policies/12`,
+    ]);
+    expect(callText(r2)).toEqual([
+      `api repos/${REPO}/environments/main-automation`,
+      `api repos/${REPO}/environments/main-automation/deployment-branch-policies`,
+    ]);
+  });
+
+  it('--only release-tag-ruleset,production-gate plans those two steps only', () => {
+    for (const list of [
+      'release-tag-ruleset,production-gate',
+      'production-gate, release-tag-ruleset',
+    ]) {
+      const r = applyGithubDryRun(EMPTY_GH(), ['--only', list]);
+      expect(r.status).toBe(0);
+      expect(planned(r.stdout)).toEqual([RULESET_POST, ...PRODUCTION_REQUESTS]);
+      expect(callText(r).filter((c) => c.includes('main-automation'))).toEqual([]);
+      expect(listed(r.stdout, 'SKIPPED (not in --only)')).toEqual(['main-automation']);
+      expect(r.stdout).toContain(
+        'Summary (requests per step): release-tag-ruleset 1, production-gate 3, main-automation skipped.'
+      );
+      // the main-automation secrets note is about a step that did not run
+      expect(r.stdout).not.toMatch(/environment secrets yourself/);
+    }
+  });
+
+  it('an unknown, empty or repeated --only exits non-zero before any request', () => {
+    for (const args of [
+      ['--only', 'nonsense'],
+      ['--only', 'Release-Tag-Ruleset'],
+      ['--only', 'release-tag-ruleset,nonsense'],
+      ['--only'],
+      ['--only='],
+      ['--only', ''],
+      ['--only', '--apply'],
+      ['--only', 'release-tag-ruleset,'],
+      ['--only', 'release-tag-ruleset', '--only', 'production-gate'],
+      ['--only=nonsense', '--apply'],
+    ]) {
+      const r = applyGithubDryRun(EMPTY_GH(), args);
+      expect({ args, status: r.status }).toEqual({ args, status: 2 });
+      expect(r.calls).toEqual([]);
+      expect(r.stderr).toContain(`Valid step names: ${NAMES.join(', ')}`);
+      expect(r.stdout).not.toMatch(/Dry run|Summary/);
+    }
+  });
+
+  it('every printed label starts with its bracketed step name, never a letter', () => {
+    const r = applyGithubDryRun(EMPTY_GH());
+    const ls = labels(r.stdout);
+    expect(ls).toHaveLength(ALL_REQUESTS.length);
+    const named = ls.map((l) => /^\[([a-z-]+)\] (POST|PUT|DELETE) /.exec(l)?.[1]);
+    expect(named).toEqual([
+      'release-tag-ruleset',
+      'production-gate',
+      'production-gate',
+      'production-gate',
+      'main-automation',
+      'main-automation',
+    ]);
+    expect(r.stdout).toContain(
+      '[production-gate] PUT environments/production (reviewer agent, custom deploy refs)'
+    );
+    // every bracketed name anywhere in the output is a name --only accepts
+    const anyBracket = new Set([...r.stdout.matchAll(/\[([a-z-]+)\]/g)].map((m) => m[1]));
+    expect([...anyBracket].sort()).toEqual([...NAMES].sort());
+    expect(r.stdout).not.toMatch(/^(A|B|C|B1|B2|C1|C2|C3)\. /m);
+  });
+
+  it('the --apply confirmation names the selected steps and the request count', async () => {
+    const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
+    expect(ag.applyConfirmation(['main-automation'], 2)).toBe(
+      `send 2 request(s) to ${REPO} for: main-automation`
+    );
+    // the dry run prints the exact question --apply will ask
+    const one = applyGithubDryRun(EMPTY_GH(), ['--only', 'main-automation']);
+    expect(one.stdout).toContain(
+      `Type APPLY to send 2 request(s) to ${REPO} for: main-automation\n`
+    );
+    const all = applyGithubDryRun(EMPTY_GH());
+    expect(all.stdout).toContain(
+      `Type APPLY to send 6 request(s) to ${REPO} for: ${NAMES.join(', ')}\n`
+    );
+  });
+
+  it('--apply with --only still refuses before any request when there is no terminal', () => {
+    for (const args of [
+      ['--only', 'main-automation', '--apply'],
+      ['--apply', '--only=release-tag-ruleset,production-gate'],
+    ]) {
+      const r = applyGithubDryRun(EMPTY_GH(), args);
+      expect(r.status).toBe(3);
+      expect(r.stderr).toMatch(/owner in their own terminal/);
+      expect(r.calls).toEqual([]);
+      expect(r.stdout).not.toMatch(/--method/);
+    }
+  });
+
+  it('parseOnly: absent selects all; a list selects in run order; bad input is an error', async () => {
+    const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
+    expect(ag.parseOnly([])).toEqual({ ok: true, selected: NAMES });
+    expect(ag.parseOnly(['--apply'])).toEqual({ ok: true, selected: NAMES });
+    expect(
+      ag.parseOnly(['--only', 'main-automation,release-tag-ruleset,release-tag-ruleset'])
+    ).toEqual({ ok: true, selected: ['release-tag-ruleset', 'main-automation'] });
+    expect(ag.parseOnly(['--only', 'x']).ok).toBe(false);
+    expect(ag.parseOnly(['--only']).ok).toBe(false);
+    expect(ag.parseOnly(['--only=a', '--only=b']).ok).toBe(false);
+  });
+
+  it('a mistyped flag exits 2 with a hint before any request, even with --apply', () => {
+    for (const args of [
+      ['--onyl', 'main-automation', '--apply'],
+      ['--onyl=main-automation'],
+      ['--apply', '--aply'],
+    ]) {
+      const r = applyGithubDryRun(EMPTY_GH(), args);
+      expect({ args, status: r.status }).toEqual({ args, status: 2 });
+      expect(r.calls).toEqual([]);
+      expect(r.stderr).toMatch(/did you mean --(only|apply)\?/);
+      expect(r.stderr).toContain(`Valid step names: ${NAMES.join(', ')}`);
+      expect(r.stderr).toContain('Recognised flags: --apply, --only <name>');
+      expect(r.stderr).not.toMatch(/owner in their own terminal/);
+    }
+    expect(applyGithubDryRun(EMPTY_GH(), ['--onyl', 'main-automation']).stderr).toContain(
+      'unknown flag --onyl (did you mean --only?)'
+    );
+  });
+
+  it('an unknown flag or a stray word exits 2 before any request', () => {
+    for (const args of [
+      ['--apply', '--bogus'],
+      ['--bogus'],
+      ['--only', 'main-automation', '--bogus'],
+      ['--only=main-automation', '--bogus', '--apply'],
+      ['main-automation'],
+      ['main-automation', '--apply'],
+      ['--only', 'main-automation', 'production-gate'],
+      ['-x'],
+    ]) {
+      const r = applyGithubDryRun(EMPTY_GH(), args);
+      expect({ args, status: r.status }).toEqual({ args, status: 2 });
+      expect(r.calls).toEqual([]);
+      expect(r.stderr).toContain(`Valid step names: ${NAMES.join(', ')}`);
+      expect(r.stdout).not.toMatch(/Steps:|Dry run/);
+    }
+    const bogus = applyGithubDryRun(EMPTY_GH(), ['--apply', '--bogus']);
+    expect(bogus.stderr).toContain('unknown flag --bogus.');
+    expect(bogus.stderr).not.toMatch(/did you mean/);
+    expect(applyGithubDryRun(EMPTY_GH(), ['main-automation']).stderr).toContain(
+      'unexpected argument "main-automation" (step names go after --only)'
+    );
+  });
+
+  it('every recognised form still works', async () => {
+    const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
+    for (const args of [
+      [],
+      ['--apply'],
+      ['--only', 'main-automation'],
+      ['--only=main-automation'],
+      ['--only', 'release-tag-ruleset,production-gate', '--apply'],
+      ['--apply', '--only=production-gate'],
+      ['--only', '--apply'], // an empty --only: parseOnly reports it, not checkArgs
+    ]) {
+      expect({ args, r: ag.checkArgs(args) }).toEqual({ args, r: { ok: true } });
+    }
+    for (const args of [[], ['--only', 'main-automation'], ['--only=release-tag-ruleset']]) {
+      const r = applyGithubDryRun(EMPTY_GH(), args);
+      expect({ args, status: r.status }).toEqual({ args, status: 0 });
+      expect(r.stdout).toMatch(/Dry run/);
+    }
   });
 });

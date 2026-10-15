@@ -33,16 +33,38 @@ measure the result, and the repository settings that make a stolen agent session
    type `APPLY`. Start a new session. Prove the hook is live: ask Claude to run
    `npx wrangler secret:bulk does-not-exist.json`; it must be refused with `[wrangler-secret]`.
    W6 only passes after the hook has recorded a block.
-4. **OWNER** GitHub: `node scripts/hardening/apply-github.mjs`, then `--apply`. This creates:
-   - a tag ruleset on `refs/tags/v*` (create, update, delete, force-push blocked) whose **only**
-     bypass is the repository admin role, so you can still release by tag;
-   - the `production` environment with you as required reviewer, deploys allowed from `main` and
-     `v*` tags only;
-   - the `main-automation` environment (OSE-1695), usable from the `main` branch only (one branch
-     policy; no tag, no wildcard) and with no reviewer, by design: the scheduled and push jobs that
-     use it would stall waiting for one. Then add `OCR_AUTOMATION_WRITE`, `OCR_NOTIFY_OSM` and
-     `BRANCH_PROTECTION_READ_TOKEN` there as environment secrets yourself. It must exist before
-     any workflow names it: GitHub creates a missing environment on first use, unprotected.
+4. **OWNER** GitHub: `node scripts/hardening/apply-github.mjs`, then `--apply`. It has three
+   steps, each named for what it changes, and every line it prints starts with the step's
+   `[name]`:
+   - `release-tag-ruleset`: creates a tag ruleset `release-tags-locked` on `refs/tags/v*` (create,
+     update, delete, force-push blocked) whose **only** bypass is the repository admin role, so you
+     can still release by tag;
+   - `production-gate`: adds the approval gate to the existing `production` environment: you as
+     required reviewer, deploys allowed from `main` and `v*` tags only. It creates nothing and
+     does not touch the `staging` environment;
+   - `main-automation`: creates the `main-automation` environment (OSE-1695; the step is named
+     after the environment it creates), usable from the `main` branch only (one branch policy; no
+     tag, no wildcard; any other policy is removed) and with no reviewer, by design: the scheduled
+     and push jobs that use it would stall waiting for one. Then add `OCR_AUTOMATION_WRITE`,
+     `OCR_NOTIFY_OSM` and `BRANCH_PROTECTION_READ_TOKEN` there as environment secrets yourself. It
+     must exist before any workflow names it: GitHub creates a missing environment on first use,
+     unprotected.
+
+   With no `--only`, all three steps run, as before. To run some of them, name them (comma
+   separated, no spaces needed); the others send nothing and read nothing:
+
+   ```sh
+   node scripts/hardening/apply-github.mjs --only main-automation
+   node scripts/hardening/apply-github.mjs --only release-tag-ruleset,production-gate
+   node scripts/hardening/apply-github.mjs --only production-gate --apply
+   ```
+
+   The dry run lists each step as SELECTED or SKIPPED and prints the exact question `--apply`
+   will ask (`Type APPLY to send <n> request(s) to … for: <names>`). An unknown or empty name, a
+   second `--only`, an unknown flag (`--onyl` gets a "did you mean --only?" hint) or a step name
+   given without `--only` stops the script before any request and prints the recognised flags and
+   the valid names, so a typo never falls back to running all three steps.
+
 5. **OWNER** separate the agent identity. Until then every GitHub control above is advisory: the
    agent is the admin account, so it can delete the ruleset or approve its own deployment, and a
    required review would deadlock every merge.
