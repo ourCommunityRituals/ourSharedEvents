@@ -44,6 +44,15 @@
  * possible names can be proven) is recorded, and each write site records whether its job
  * declares exactly main-automation, where the write tokens live as environment secrets.
  * ALLOWED_ENVIRONMENTS and MAIN_AUTOMATION_JOBS bound which names and which jobs may appear.
+ *
+ * CHECKOUTS IN TOKEN-HOLDING JOBS. In every job that is a write site's job, is listed in
+ * MAIN_AUTOMATION_JOBS, or may declare main-automation (an unprovable environment counts, fail
+ * closed), every actions/checkout step (any version, any `repository:`) is recorded with whether
+ * `with.persist-credentials` is the YAML boolean false. checkout's default (true) stores the
+ * job's GITHUB_TOKEN as an http extraheader for github.com, and git sends that header on a push
+ * even when the push URL carries another token, so a write token in the URL is never used (the
+ * conformance push answered 403 "Write access to repository not granted"). Composite actions are
+ * out of scope here: they have no job level, so no environment of their own.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -139,6 +148,33 @@ export const MAIN_AUTOMATION_JOBS = Object.freeze([
   ...WRITE_SITES.map(({ file, job }) => ({ file, job })),
   { file: '.github/workflows/branch-protection-drift.yml', job: 'full-settings' },
 ]);
+
+/** The exact one-line fix for a checkout that persists credentials in a token-holding job. */
+export const CHECKOUT_PERSIST_FIX =
+  'add `persist-credentials: false` under `with:` of that actions/checkout step (add `with:` if it has none)';
+
+/** True when `step` runs actions/checkout (any version or ref). */
+export const isCheckout = (step) => /^actions\/checkout(@|$)/i.test(String(step?.uses || ''));
+
+/**
+ * Shape of a checkout's persist-credentials value, from a fixed vocabulary (never the raw text):
+ * { ok: true } only for the YAML boolean false.
+ */
+export function persistCredentialsShape(withBlock) {
+  if (withBlock === undefined || withBlock === null)
+    return { ok: false, shape: 'not set (no with:), so it defaults to true' };
+  if (typeof withBlock !== 'object' || Array.isArray(withBlock))
+    return { ok: false, shape: 'unprovable (with: is not a mapping)' };
+  const w = lowerKeys(withBlock);
+  if (!('persist-credentials' in w)) return { ok: false, shape: 'not set, so it defaults to true' };
+  const v = w['persist-credentials'];
+  if (v === false) return { ok: true, shape: 'false' };
+  if (v === true) return { ok: false, shape: 'true' };
+  if (typeof v === 'string' && /\$\{\{/.test(v))
+    return { ok: false, shape: 'an expression (not the literal false)' };
+  if (typeof v === 'string') return { ok: false, shape: 'a string (not the boolean false)' };
+  return { ok: false, shape: 'a value that is not the boolean false' };
+}
 
 export const READ_REPOS = [
   'ourcommunityrituals/ourcommunityrituals',
@@ -429,6 +465,7 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
   const sites = [];
   const mentions = [];
   const environments = [];
+  const checkouts = [];
   const collect = (job, step, level, node, insideStaging = false) =>
     visit(node, [], (s, path) => {
       const isIf = path[path.length - 1] === 'if';
@@ -480,6 +517,7 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
     const jobEnv = kind === 'workflow' ? resolveEnvironment(job.environment) : { names: [] };
     if (kind === 'workflow' && job.environment !== undefined)
       environments.push({ file, job: jobName, id: `${jobName} :: (job level)`, ...jobEnv });
+    const holdsTokens = kind === 'workflow' && holdsWriteTokens(file, jobName, jobEnv.names);
     const steps = Array.isArray(job.steps) ? job.steps : [];
     steps.forEach((step, i) => {
       if (!step || typeof step !== 'object') return;
@@ -520,7 +558,12 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
         });
       }
 
-      if (/^actions\/checkout(@|$)/i.test(String(step.uses || ''))) {
+      if (holdsTokens && isCheckout(step)) {
+        const { ok, shape } = persistCredentialsShape(step.with);
+        checkouts.push({ file, job: jobName, step: label, id, ok, shape });
+      }
+
+      if (isCheckout(step)) {
         const w = lowerKeys(step.with);
         const repo = String(w.repository || '').toLowerCase();
         if (READ_REPOS.includes(repo)) {
@@ -565,7 +608,7 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
       }
     });
   }
-  return { occurrences, sites, mentions, environments };
+  return { occurrences, sites, mentions, environments, checkouts };
 }
 
 /** True when the proven names are exactly [name]. */
@@ -575,6 +618,31 @@ const declaresExactly = (names, name) =>
 /** A job may (possibly) use main-automation: any proven name equal to it, ignoring case. */
 const mayUse = (names, name) =>
   Array.isArray(names) && names.some((n) => n.toLowerCase() === name.toLowerCase());
+
+/**
+ * A job that holds (or may hold) a main-automation token: a write site's job, a
+ * MAIN_AUTOMATION_JOBS entry, or a job whose environment may be main-automation. An environment
+ * that cannot be proven counts too (fail closed; the name gate reports it separately).
+ */
+function holdsWriteTokens(file, jobName, names) {
+  const listed = [...WRITE_SITES, ...MAIN_AUTOMATION_JOBS].some(
+    (j) => j.file === file && j.job === jobName
+  );
+  return listed || names === null || mayUse(names, MAIN_AUTOMATION_ENV);
+}
+
+/**
+ * Checkouts in token-holding jobs that do not set `persist-credentials: false`. Workflow, job
+ * and step names plus a fixed-vocabulary shape only; never a value.
+ */
+export function checkoutPersistenceProblems(scanResult) {
+  return scanResult.checkouts
+    .filter((c) => !c.ok)
+    .map(
+      (c) =>
+        `${c.file} :: ${c.id}: persist-credentials is ${c.shape}. Fix: ${CHECKOUT_PERSIST_FIX}.`
+    );
+}
 
 /** Job-level environments that are unproven or not in ALLOWED_ENVIRONMENTS. Names only. */
 export function environmentNameProblems(environments) {
@@ -627,6 +695,7 @@ export function scan(root, { fresh = false } = {}) {
     sites: [],
     mentions: [],
     environments: [],
+    checkouts: [],
     parseErrors: [],
   };
   for (const src of listSources(root)) {
@@ -643,6 +712,7 @@ export function scan(root, { fresh = false } = {}) {
     result.sites.push(...r.sites);
     result.mentions.push(...r.mentions);
     result.environments.push(...r.environments);
+    result.checkouts.push(...r.checkouts);
   }
   cache.set(root, result);
   return result;
@@ -665,7 +735,7 @@ export const readSiteUnrecognized = (s) =>
   s.right === 'read' && ![...READ_FORMS, 'bare', 'unrecognized'].includes(s.form);
 export const writeSiteOnExpected = (s) => (WRITE_FORMS[s.expected] || []).includes(s.form);
 
-/** The seven ratchet measurements, from one scan. Names, ids and counts only; never values. */
+/** The eight ratchet measurements, from one scan. Names, ids and counts only; never values. */
 export function measureTokenSplit(root) {
   const s = scan(root);
   const reads = s.sites.filter((x) => x.right === 'read');
@@ -673,6 +743,7 @@ export function measureTokenSplit(root) {
   const badOcc = s.occurrences.filter((o) => o.form === 'unrecognized');
   const badReads = reads.filter(readSiteUnrecognized);
   const wrong = writes.filter((x) => !writeSiteOnExpected(x));
+  const persisting = s.checkouts.filter((c) => !c.ok);
   // Why each entry is counted (names and shapes only, never values); for messages.
   const whyOf = (list, fn) => Object.fromEntries(list.map((x) => [`${x.file} :: ${x.id}`, fn(x)]));
   return {
@@ -694,6 +765,10 @@ export function measureTokenSplit(root) {
           (x) => `${x.kind} site with no recognized read token (${x.form}): ${x.why}`
         ),
       },
+    },
+    mainAutomationJobCheckoutsPersistingCredentials: {
+      ...groupByFile(persisting),
+      why: whyOf(persisting, (c) => `persist-credentials is ${c.shape}`),
     },
     tokenSplitParseErrors: s.parseErrors,
   };

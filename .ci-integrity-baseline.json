@@ -1002,5 +1002,11 @@
     "reason": "Every token expression must be a recognized form and every read site must carry a read token (OSE-1695); stays 0.",
     "total": 0,
     "byFile": {}
+  },
+  "mainAutomationJobCheckoutsPersistingCredentials": {
+    "direction": "down",
+    "reason": "A persisted GITHUB_TOKEN header outranks the write token in a push URL, so the push is refused (OSE-1695); stays 0.",
+    "total": 0,
+    "byFile": {}
   }
 }

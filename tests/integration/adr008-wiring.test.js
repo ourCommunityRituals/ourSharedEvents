@@ -763,4 +763,193 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       });
     });
   });
+
+  // ── 7. Checkouts in token-holding jobs (OSE-1695) ─────────────────────────
+  // actions/checkout persists the job's GITHUB_TOKEN as an http extraheader for github.com
+  // unless `persist-credentials: false`. git sends that header on a push even when the push
+  // URL carries another token, so the conformance push used the read-only GITHUB_TOKEN and
+  // got 403 "Write access to repository not granted" with either write token. So: in every
+  // job that is a write site's job, is in MAIN_AUTOMATION_JOBS, or may declare main-automation,
+  // every actions/checkout step (any version, any repository) sets persist-credentials to the
+  // YAML boolean false. Out of scope: checkouts inside composite actions (a composite action has
+  // no job level or environment of its own; .github/actions does not exist today) and reusable
+  // workflows called with `uses:` at job level.
+  describe('checkouts in write-site and main-automation jobs do not persist credentials (OSE-1695)', () => {
+    const CONF = '.github/workflows/conformance-report.yml';
+    const MA = 'main-automation';
+    const PERSIST_KEY = 'persist-credentials';
+    const co = (name, uses, withLines = []) =>
+      `      - name: ${name}\n        uses: ${uses}\n` +
+      (withLines.length
+        ? `        with:\n${withLines.map((l) => `          ${l}\n`).join('')}`
+        : '');
+    const wf = (jobName, env, steps) =>
+      `on: push\njobs:\n  ${jobName}:\n` +
+      (env ? `    environment: ${env}\n` : '') +
+      '    steps:\n' +
+      steps.join('');
+    const checkoutsOf = (text, file = CONF, kind = 'workflow') =>
+      analyze(text, kind, file).checkouts;
+    describe('negative controls: the detector can fail', () => {
+      test('only the YAML boolean false passes; missing, true, a string, an expression and a non-mapping are red', () => {
+        const shape = (v) => w.persistCredentialsShape(v);
+        expect(shape({ 'fetch-depth': 1, [PERSIST_KEY]: false })).toEqual({
+          ok: true,
+          shape: 'false',
+        });
+        expect(shape({ 'Persist-Credentials': false }).ok).toBe(true); // inputs ignore case
+        expect(shape(undefined)).toEqual({
+          ok: false,
+          shape: 'not set (no with:), so it defaults to true',
+        });
+        expect(shape({ 'fetch-depth': 1 })).toEqual({
+          ok: false,
+          shape: 'not set, so it defaults to true',
+        });
+        expect(shape({ [PERSIST_KEY]: true }).ok).toBe(false);
+        expect(shape({ [PERSIST_KEY]: 'false' }).ok).toBe(false);
+        expect(shape({ [PERSIST_KEY]: E('false') })).toEqual({
+          ok: false,
+          shape: 'an expression (not the literal false)',
+        });
+        expect(shape({ [PERSIST_KEY]: 0 }).ok).toBe(false);
+        expect(shape(E('fromJSON(vars.W)')).ok).toBe(false);
+      });
+
+      test('a write-site job: missing key, true and an expression are each red, by name, with the fix', () => {
+        const text = wf('generate', MA, [
+          co('Checkout', 'actions/checkout@v4', ['fetch-depth: 1']),
+          co('Checkout true', 'actions/checkout@v4', [`${PERSIST_KEY}: true`]),
+          co('Checkout expr', 'actions/checkout@v4', [
+            `${PERSIST_KEY}: ${E('inputs.private_flag_name')}`,
+          ]),
+          co('Checkout ok', 'actions/checkout@v4', ['fetch-depth: 1', `${PERSIST_KEY}: false`]),
+        ]);
+        const p = w.checkoutPersistenceProblems({ checkouts: checkoutsOf(text) });
+        expect(p).toEqual([
+          `${CONF} :: generate :: Checkout: persist-credentials is not set, so it defaults to true. Fix: ${w.CHECKOUT_PERSIST_FIX}.`,
+          `${CONF} :: generate :: Checkout true: persist-credentials is true. Fix: ${w.CHECKOUT_PERSIST_FIX}.`,
+          `${CONF} :: generate :: Checkout expr: persist-credentials is an expression (not the literal false). Fix: ${w.CHECKOUT_PERSIST_FIX}.`,
+        ]);
+        expect(p.join('\n')).not.toContain('private_flag_name'); // a value is never printed
+        expect(w.CHECKOUT_PERSIST_FIX).toContain('`persist-credentials: false`');
+      });
+
+      test('any version and any repository: a sha pin, no ref, odd case, and a repository: checkout are all checked', () => {
+        const text = wf('generate', MA, [
+          co('sha', `actions/checkout@${'a'.repeat(40)}`),
+          co('noref', 'actions/checkout'),
+          co('case', 'Actions/Checkout@v7', [`${PERSIST_KEY}: false`]),
+          co('brain', 'actions/checkout@v4', [
+            'repository: ourCommunityRituals/OCR-docs',
+            `token: ${READ_NEW}`,
+          ]),
+          co('not a checkout', 'actions/setup-node@v4'),
+        ]);
+        expect(checkoutsOf(text).map((c) => `${c.step}:${c.ok}`)).toEqual([
+          'sha:false',
+          'noref:false',
+          'case:true',
+          'brain:false',
+        ]);
+      });
+
+      test('pre-fix shape: only the OCR-docs checkout sets it, the repo checkout does not: red', () => {
+        const text = wf('generate', MA, [
+          co('Checkout', 'actions/checkout@v4', ['fetch-depth: 1']),
+          co('Checkout OCR-docs brain (read-only)', 'actions/checkout@v4', [
+            'repository: ourCommunityRituals/OCR-docs',
+            `token: ${READ_NEW}`,
+            `${PERSIST_KEY}: false`,
+          ]),
+        ]);
+        expect(w.checkoutPersistenceProblems({ checkouts: checkoutsOf(text) })).toHaveLength(1);
+        expect(
+          checkoutsOf(text)
+            .filter((c) => !c.ok)
+            .map((c) => c.step)
+        ).toEqual(['Checkout']);
+      });
+
+      test('a checkout added to an unlisted main-automation job (any case, or via an expression) is checked', () => {
+        for (const env of [
+          MA,
+          'Main-Automation',
+          E(`github.ref == 'refs/heads/main' && '${MA}' || 'staging'`),
+        ]) {
+          const c = checkoutsOf(wf('newjob', env, [co('co', 'actions/checkout@v7')]), 'new.yml');
+          expect(
+            c.map((x) => `${x.file} :: ${x.id}:${x.ok}`),
+            String(env)
+          ).toEqual(['new.yml :: newjob :: co:false']);
+        }
+      });
+
+      test('an unprovable environment fails closed (checked); no environment, or another one, is out of scope', () => {
+        const unprovable = checkoutsOf(
+          wf('j', E('inputs.target'), [co('co', 'actions/checkout@v7')]),
+          'new.yml'
+        );
+        expect(unprovable.map((x) => x.ok)).toEqual([false]);
+        expect(checkoutsOf(wf('j', '', [co('co', 'actions/checkout@v7')]), 'new.yml')).toEqual([]);
+        expect(
+          checkoutsOf(wf('j', 'staging', [co('co', 'actions/checkout@v7')]), 'new.yml')
+        ).toEqual([]);
+      });
+
+      test('a listed job is checked even if it lost its environment (the listing alone is enough)', () => {
+        const c = checkoutsOf(wf('generate', '', [co('Checkout', 'actions/checkout@v4')]));
+        expect(c.map((x) => `${x.id}:${x.ok}`)).toEqual(['generate :: Checkout:false']);
+      });
+
+      test('composite actions are out of scope (no job level): their checkouts are not recorded', () => {
+        const r = analyze(
+          'name: x\nruns:\n  using: composite\n  steps:\n    - name: co\n      uses: actions/checkout@v7\n',
+          'action',
+          '.github/actions/x/action.yml'
+        );
+        expect(r.checkouts).toEqual([]);
+      });
+    });
+
+    describe('the real tree', () => {
+      const none = (list, header, fix) =>
+        expect(
+          list.length,
+          `${header} (${list.length}):\n  - ${list.join('\n  - ')}\n${fix}\n`
+        ).toBe(0);
+      const idOf = (c) => `${c.file} :: ${c.id}`;
+
+      test('every write-site job and main-automation job is scanned, and its checkouts found (no empty pass)', () => {
+        const jobs = new Set(s.checkouts.map((c) => `${c.file} :: ${c.job}`));
+        const missing = [...w.WRITE_SITES, ...w.MAIN_AUTOMATION_JOBS]
+          .map((j) => `${j.file} :: ${j.job}`)
+          .filter((j) => !jobs.has(j));
+        none(
+          missing,
+          'Write-site / main-automation jobs with no checkout found (the scan could pass vacuously)',
+          'Fix: if such a job truly has no checkout, say so here; otherwise the detector is broken.'
+        );
+        // conformance: the repo checkout and the OCR-docs checkout; notify: one; drift: one.
+        expect(s.checkouts.map(idOf)).toEqual(
+          expect.arrayContaining([
+            `${CONF} :: generate :: Checkout`,
+            `${CONF} :: generate :: Checkout OCR-docs brain (read-only)`,
+            '.github/workflows/notify-osm-flag-change.yml :: notify :: step #1 (unnamed uses actions/checkout@v7; give it a name:)',
+            '.github/workflows/branch-protection-drift.yml :: full-settings :: step #1 (unnamed uses actions/checkout@v7; give it a name:)',
+          ])
+        );
+        expect(s.checkouts.length).toBeGreaterThanOrEqual(4);
+      });
+
+      test('no checkout in a write-site or main-automation job persists credentials (zero exceptions)', () => {
+        none(
+          w.checkoutPersistenceProblems(s),
+          'Checkouts in a write-site or main-automation job that persist credentials (git would send the job GITHUB_TOKEN instead of the write token)',
+          `Fix: ${w.CHECKOUT_PERSIST_FIX}.`
+        );
+        expect(s.checkouts.every((c) => c.ok)).toBe(true);
+      });
+    });
+  });
 });

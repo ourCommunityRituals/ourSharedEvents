@@ -45,6 +45,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          # A persisted GITHUB_TOKEN header outranks the write token in the push URL (403).
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

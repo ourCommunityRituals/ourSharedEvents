@@ -13,7 +13,7 @@
  *        --base-config <file> -> the baseline itself may not exceed the base branch's copy.
  *        --update -> rewrite the baseline from the tree (keeps existing reasons).
  *
- * Token split (OSE-1695): progress away from the write-capable OCR_PROPAGATE_TOKEN. Seven
+ * Token split (OSE-1695): progress away from the write-capable OCR_PROPAGATE_TOKEN. Eight
  * more measurements from the shared enumerator scripts/ci/hub-token-wiring.mjs (the same
  * one tests/integration/adr008-wiring.test.js uses), each with an explicit good direction:
  *   UP-ONLY   readUsesOnNewSecret     read sites whose token names OCR_HUB_READ
@@ -25,6 +25,10 @@
  *   DOWN-ONLY writeUsesOnWrongToken   write sites not on their decided token (baseline 0)
  *   DOWN-ONLY unrecognizedTokenForms  token expressions in no recognized form, and read sites
  *                                     with no recognized read token (baseline 0)
+ *   DOWN-ONLY mainAutomationJobCheckoutsPersistingCredentials  actions/checkout steps in a
+ *                                     write-site or main-automation job without
+ *                                     `persist-credentials: false` (a persisted GITHUB_TOKEN
+ *                                     header outranks the write token in a push URL)
  * Current must equal the baseline both ways, per file and per step name, so every move is
  * registered in the same change and a swap at equal totals is red.
  * --base-config: a down-only ceiling may not rise above the base branch's copy; an up-only
@@ -38,7 +42,12 @@
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative, sep, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { measureTokenSplit, SCRIPT_TOKEN_ENV, MAIN_AUTOMATION_ENV } from './hub-token-wiring.mjs';
+import {
+  measureTokenSplit,
+  SCRIPT_TOKEN_ENV,
+  MAIN_AUTOMATION_ENV,
+  CHECKOUT_PERSIST_FIX,
+} from './hub-token-wiring.mjs';
 
 export const BASELINE_FILE = '.ci-integrity-baseline.json';
 const SKIP_ROOTS = ['tests', 'workers/oursharedevents/tests', 'packages'];
@@ -159,6 +168,7 @@ const DOWN_ONLY_KEYS = [
   'fallbackUses',
   'writeUsesOnWrongToken',
   'unrecognizedTokenForms',
+  'mainAutomationJobCheckoutsPersistingCredentials',
 ];
 export const TOKEN_KEYS = Object.fromEntries([
   ...UP_ONLY_KEYS.map((k) => [k, 'up']),
@@ -217,6 +227,12 @@ export const TOKEN_HELP = {
     fix:
       `use a recognized form, new secret FIRST (\`OLD || NEW\` always picks the write PAT). ${READ_FIX}. ` +
       'A composite action cannot read secrets: run the staging script from a workflow step',
+  },
+  mainAutomationJobCheckoutsPersistingCredentials: {
+    what: `actions/checkout steps in a write-site or ${MAIN_AUTOMATION_ENV} job that leave persist-credentials at its default (true)`,
+    reason:
+      'A persisted GITHUB_TOKEN header outranks the write token in a push URL, so the push is refused (OSE-1695); stays 0.',
+    fix: CHECKOUT_PERSIST_FIX,
   },
 };
 
