@@ -33,6 +33,8 @@ jobs:
   generate:
     name: Generate conformance report
     runs-on: ubuntu-24.04
+    # Its write token is a main-automation environment secret (OSE-1695); main only.
+    environment: main-automation
     permissions:
       contents: read     # OSE-1031: report writes flow through a PR opened with
                          # OCR_PROPAGATE_TOKEN (a PAT), never a direct push to protected main —

@@ -39,6 +39,11 @@
  *   write  exactly the steps in WRITE_SITES, found by file + job + step name, so a rename
  *          fails loudly. Their token is the effective env under `env`.
  * A composite action can never be proven: the `secrets` context does not exist inside it.
+ *
+ * ENVIRONMENTS. Every job-level `environment:` (a string, `{ name }`, or an expression whose
+ * possible names can be proven) is recorded, and each write site records whether its job
+ * declares exactly main-automation, where the write tokens live as environment secrets.
+ * ALLOWED_ENVIRONMENTS and MAIN_AUTOMATION_JOBS bound which names and which jobs may appear.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -102,6 +107,39 @@ export const WRITE_SITES = [
   },
 ];
 
+/**
+ * Job-level GitHub environments (OSE-1695). The write tokens (and the branch-protection
+ * read token) are ENVIRONMENT secrets of main-automation: a job sees them only when it
+ * declares `environment: main-automation`, and GitHub starts such a job only from a ref the
+ * environment's branch policy allows (branch main only).
+ */
+export const MAIN_AUTOMATION_ENV = 'main-automation';
+
+/**
+ * The only environment names a job may declare. Change this list only together with the
+ * environment itself: environments are created or protected by scripts/hardening/apply-github.mjs
+ * (steps release-tag-ruleset, production-gate, main-automation; OSE-1693). A name that is not
+ * here (a typo, or a step name such as production-gate) would make GitHub create a new,
+ * unprotected environment on first use.
+ */
+export const ALLOWED_ENVIRONMENTS = Object.freeze([
+  'staging',
+  'production',
+  'copilot',
+  MAIN_AUTOMATION_ENV,
+]);
+
+/**
+ * The only jobs that may declare main-automation: the two write sites' jobs, and the
+ * branch-protection drift job that reads BRANCH_PROTECTION_READ_TOKEN from it (it runs only
+ * on schedule / dispatch). Each must declare exactly main-automation; any other job naming it
+ * is red, so a new job cannot reach the write tokens without an owner decision here.
+ */
+export const MAIN_AUTOMATION_JOBS = Object.freeze([
+  ...WRITE_SITES.map(({ file, job }) => ({ file, job })),
+  { file: '.github/workflows/branch-protection-drift.yml', job: 'full-settings' },
+]);
+
 export const READ_REPOS = [
   'ourcommunityrituals/ourcommunityrituals',
   'ourcommunityrituals/ocr-docs',
@@ -161,6 +199,101 @@ export function classifyValue(v) {
   const m = /^\$\{\{([\s\S]*)\}\}$/.exec(s);
   if (m && !m[1].includes('}}')) return classifyExpression(m[1]) || 'other-expression';
   return /\$\{\{/.test(s) ? 'unrecognized' : 'literal';
+}
+
+/** Split `text` on a top-level operator, outside quotes and parentheses; null if unbalanced. */
+function splitTop(text, op) {
+  const parts = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === "'") {
+        if (text[i + 1] === "'") i++;
+        else quoted = false;
+      }
+    } else if (c === "'") quoted = true;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      if (--depth < 0) return null;
+    } else if (depth === 0 && text.startsWith(op, i)) {
+      parts.push(text.slice(start, i));
+      start = i + op.length;
+      i += op.length - 1;
+    }
+  }
+  if (quoted || depth !== 0) return null;
+  parts.push(text.slice(start));
+  return parts.map((p) => p.trim());
+}
+
+/** Drop parentheses that wrap the whole of `text`. */
+function stripParens(text) {
+  let t = text.trim();
+  while (t.startsWith('(') && t.endsWith(')')) {
+    const inner = t.slice(1, -1);
+    if (splitTop(inner, '\u0000') === null) break; // the outer pair does not match
+    t = inner.trim();
+  }
+  return t;
+}
+
+/** The value of one non-empty single-quoted literal, else null. */
+function literalOf(text) {
+  const m = /^'((?:[^']|'')+)'$/.exec(stripParens(text));
+  return m ? m[1].replace(/''/g, "'") : null;
+}
+
+/**
+ * Every value an environment expression body can produce, or null when that cannot be
+ * proven. Only `c1 && 'a' || c2 && 'b' || 'c'` shapes resolve (any `&&` chain ending in a
+ * literal, then a final literal): `||` takes the first truthy operand, a non-empty literal is
+ * truthy, and a falsy chain falls through, so the outcomes are exactly those literals.
+ * Anything else (a context value, a function call, a chain that can end falsy) fails closed.
+ */
+export function environmentOutcomes(body) {
+  const ors = splitTop(stripParens(String(body ?? '')), '||');
+  if (!ors || ors.some((o) => !o)) return null;
+  const out = [];
+  for (const [i, operand] of ors.entries()) {
+    const ands = splitTop(stripParens(operand), '&&');
+    if (!ands || ands.some((a) => !a)) return null;
+    if (i === ors.length - 1 && ands.length !== 1) return null; // the last one can end falsy
+    const lit = literalOf(ands[ands.length - 1]);
+    if (lit === null) return null;
+    out.push(lit);
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * A job's `environment:` value -> { names, why }. names: [] when none is declared, the list of
+ * possible names when proven, null when it cannot be proven (fail closed). `why` names the
+ * shape only; an unresolved value is never printed.
+ */
+export function resolveEnvironment(value) {
+  if (value === undefined || value === null) return { names: [], why: 'no environment' };
+  let v = value;
+  if (typeof v === 'object' && !Array.isArray(v)) {
+    if (typeof v.name !== 'string')
+      return { names: null, why: 'an environment object with no name string' };
+    v = v.name;
+  }
+  if (typeof v !== 'string')
+    return { names: null, why: 'an environment that is not a string or { name }' };
+  const s = v.trim();
+  if (!s) return { names: null, why: 'an empty environment name' };
+  const m = /^\$\{\{([\s\S]*)\}\}$/.exec(s);
+  if (m && !m[1].includes('}}')) {
+    const names = environmentOutcomes(m[1]);
+    return names
+      ? { names, why: `an expression that can only be ${names.join(' or ')}` }
+      : { names: null, why: 'an expression whose possible names cannot be proven' };
+  }
+  if (/\$\{\{/.test(s)) return { names: null, why: 'text mixed with an expression' };
+  return { names: [s], why: `"${s}"` };
 }
 
 /** Every family occurrence in one string, by form. `isIf` marks an `if:` value. */
@@ -295,6 +428,7 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
   const occurrences = [];
   const sites = [];
   const mentions = [];
+  const environments = [];
   const collect = (job, step, level, node, insideStaging = false) =>
     visit(node, [], (s, path) => {
       const isIf = path[path.length - 1] === 'if';
@@ -325,9 +459,27 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
       omit(doc?.runs, 'steps'),
     ]);
 
+  // A composite action has no job level, so it can never declare an environment.
+  if (kind === 'action' && doc && typeof doc === 'object')
+    for (const [where, node] of [
+      ['(action level)', doc],
+      ['(runs level)', doc.runs],
+    ])
+      if (node && typeof node === 'object' && 'environment' in node)
+        environments.push({
+          file,
+          job: '(composite action)',
+          id: `(composite action) :: ${where}`,
+          names: null,
+          why: 'a composite action cannot declare an environment',
+        });
+
   for (const [jobName, job] of Object.entries(jobs)) {
     if (!job || typeof job !== 'object') continue;
     if (kind === 'workflow') collect(jobName, '(job level)', 'job', omit(job, 'steps'));
+    const jobEnv = kind === 'workflow' ? resolveEnvironment(job.environment) : { names: [] };
+    if (kind === 'workflow' && job.environment !== undefined)
+      environments.push({ file, job: jobName, id: `${jobName} :: (job level)`, ...jobEnv });
     const steps = Array.isArray(job.steps) ? job.steps : [];
     steps.forEach((step, i) => {
       if (!step || typeof step !== 'object') return;
@@ -406,11 +558,60 @@ export function analyzeDoc(doc, file, kind, aliases = []) {
           expected: ws.expected,
           form,
           why: env ? `${ws.env} is ${describeValue(env[ws.env])}` : w,
+          environment: jobEnv.names,
+          environmentWhy: jobEnv.why,
+          inMainAutomation: declaresExactly(jobEnv.names, MAIN_AUTOMATION_ENV),
         });
       }
     });
   }
-  return { occurrences, sites, mentions };
+  return { occurrences, sites, mentions, environments };
+}
+
+/** True when the proven names are exactly [name]. */
+const declaresExactly = (names, name) =>
+  Array.isArray(names) && names.length === 1 && names[0] === name;
+
+/** A job may (possibly) use main-automation: any proven name equal to it, ignoring case. */
+const mayUse = (names, name) =>
+  Array.isArray(names) && names.some((n) => n.toLowerCase() === name.toLowerCase());
+
+/** Job-level environments that are unproven or not in ALLOWED_ENVIRONMENTS. Names only. */
+export function environmentNameProblems(environments) {
+  return environments
+    .filter((e) => !e.names || !e.names.every((n) => ALLOWED_ENVIRONMENTS.includes(n)))
+    .map((e) =>
+      e.names
+        ? `${e.file} :: ${e.id}: environment ${e.names.map((n) => `"${n}"`).join(' or ')} is not one of ${ALLOWED_ENVIRONMENTS.join(', ')}`
+        : `${e.file} :: ${e.id}: ${e.why} (unrecognized; it must resolve to one of ${ALLOWED_ENVIRONMENTS.join(', ')})`
+    );
+}
+
+/**
+ * main-automation users: every MAIN_AUTOMATION_JOBS job declares exactly main-automation (the
+ * write sites included), and no other job may use it. Names only.
+ */
+export function mainAutomationProblems(scanResult) {
+  const problems = [];
+  const allowed = new Set(MAIN_AUTOMATION_JOBS.map((j) => `${j.file} :: ${j.job}`));
+  for (const x of scanResult.sites.filter((s) => s.right === 'write'))
+    if (!x.inMainAutomation)
+      problems.push(
+        `write site ${x.file} :: ${x.id}: its job declares ${x.environmentWhy}, not exactly environment ${MAIN_AUTOMATION_ENV}`
+      );
+  for (const j of MAIN_AUTOMATION_JOBS) {
+    const e = scanResult.environments.find((x) => x.file === j.file && x.job === j.job);
+    if (!e || !declaresExactly(e.names, MAIN_AUTOMATION_ENV))
+      problems.push(
+        `${j.file} :: ${j.job}: listed in MAIN_AUTOMATION_JOBS but declares ${e ? e.why : 'no environment'}, not exactly ${MAIN_AUTOMATION_ENV}`
+      );
+  }
+  for (const e of scanResult.environments)
+    if (mayUse(e.names, MAIN_AUTOMATION_ENV) && !allowed.has(`${e.file} :: ${e.job}`))
+      problems.push(
+        `${e.file} :: ${e.id}: declares ${MAIN_AUTOMATION_ENV} but is not in MAIN_AUTOMATION_JOBS (its secrets are write tokens; a new user is an owner decision, OSE-1695)`
+      );
+  return problems;
 }
 
 const cache = new Map();
@@ -425,6 +626,7 @@ export function scan(root, { fresh = false } = {}) {
     occurrences: [],
     sites: [],
     mentions: [],
+    environments: [],
     parseErrors: [],
   };
   for (const src of listSources(root)) {
@@ -440,6 +642,7 @@ export function scan(root, { fresh = false } = {}) {
     result.occurrences.push(...r.occurrences);
     result.sites.push(...r.sites);
     result.mentions.push(...r.mentions);
+    result.environments.push(...r.environments);
   }
   cache.set(root, result);
   return result;
@@ -462,7 +665,7 @@ export const readSiteUnrecognized = (s) =>
   s.right === 'read' && ![...READ_FORMS, 'bare', 'unrecognized'].includes(s.form);
 export const writeSiteOnExpected = (s) => (WRITE_FORMS[s.expected] || []).includes(s.form);
 
-/** The six ratchet measurements, from one scan. Names, ids and counts only; never values. */
+/** The seven ratchet measurements, from one scan. Names, ids and counts only; never values. */
 export function measureTokenSplit(root) {
   const s = scan(root);
   const reads = s.sites.filter((x) => x.right === 'read');
@@ -475,6 +678,7 @@ export function measureTokenSplit(root) {
   return {
     readUsesOnNewSecret: groupByFile(reads.filter((x) => READ_FORMS.includes(x.form))),
     writeUsesOnNewSecret: groupByFile(writes.filter((x) => ALL_WRITE_FORMS.includes(x.form))),
+    writeSitesInMainAutomation: groupByFile(writes.filter((x) => x.inMainAutomation)),
     bareOldTokenUses: groupByFile(s.occurrences.filter((o) => o.form === 'bare')),
     fallbackUses: groupByFile(s.occurrences.filter((o) => FALLBACK_FORMS.includes(o.form))),
     writeUsesOnWrongToken: {

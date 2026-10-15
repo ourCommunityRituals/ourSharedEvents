@@ -560,4 +560,207 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
       ).toEqual([]);
     });
   });
+
+  // ── 6. Job-level environments (OSE-1695) ──────────────────────────────────
+  // The write tokens are environment secrets of main-automation (branch main only). A job
+  // sees them only when it declares that environment, so: both write sites' jobs declare
+  // exactly main-automation, no job outside MAIN_AUTOMATION_JOBS may declare it, and every
+  // job-level environment anywhere resolves to a name in ALLOWED_ENVIRONMENTS (a typo would
+  // make GitHub create a new, unprotected environment on first use).
+  describe('job-level environments (OSE-1695): main-automation users and allowed names', () => {
+    const CONF = '.github/workflows/conformance-report.yml';
+    const NOTIFY = '.github/workflows/notify-osm-flag-change.yml';
+    const DRIFT = '.github/workflows/branch-protection-drift.yml';
+    const envLine = (env) => (env ? `    environment: ${env}\n` : '');
+    const writeWf = (jobName, stepName, value, env) =>
+      `on: push\njobs:\n  ${jobName}:\n${envLine(env)}    steps:\n      - name: ${stepName}\n        env:\n          GH_TOKEN: ${value}\n        run: gh api\n`;
+    const plainWf = (jobs) =>
+      'on: push\njobs:\n' +
+      Object.entries(jobs)
+        .map(([j, env]) => `  ${j}:\n${envLine(env)}    steps:\n      - run: echo\n`)
+        .join('');
+    // A scan-shaped result over synthetic files, through the real analyzeDoc.
+    const scanOf = (files) => {
+      const out = { sites: [], environments: [] };
+      for (const [file, text] of Object.entries(files)) {
+        const r = analyze(text, 'workflow', file);
+        out.sites.push(...r.sites);
+        out.environments.push(...r.environments);
+      }
+      return out;
+    };
+    const MA = 'main-automation';
+    const good = (overrides = {}) =>
+      scanOf({
+        [CONF]: writeWf('generate', 'Open/update the conformance-refresh PR', AUTO_FB, MA),
+        [NOTIFY]: writeWf('notify', 'Open issue in OSM', NOTIFY_FB, MA),
+        [DRIFT]: plainWf({ 'required-checks': '', 'full-settings': MA }),
+        ...overrides,
+      });
+
+    describe('negative controls: the detectors can fail', () => {
+      test('environment values: string, { name }, provable expressions; everything else fails closed', () => {
+        const r = (v) => w.resolveEnvironment(v).names;
+        expect(r(undefined)).toEqual([]);
+        expect(r('staging')).toEqual(['staging']);
+        expect(r({ name: 'production', url: E('env.PROD_BASE_URL') })).toEqual(['production']);
+        expect(r(E("github.ref == 'refs/heads/main' && 'production' || 'staging'"))).toEqual([
+          'production',
+          'staging',
+        ]);
+        expect(r(E("(a && 'x') || b && c && 'y' || ('z')"))).toEqual(['x', 'y', 'z']);
+        expect(r(E("'a||b' || 'c'"))).toEqual(['a||b', 'c']); // quotes are respected
+        expect(
+          r({ name: E("startsWith(github.ref, 'refs/tags/') && 'production' || 'staging'") })
+        ).toEqual(['production', 'staging']);
+        // Unprovable: a context value, a value fallback, a chain that can end falsy, a call.
+        expect(r(E('inputs.target'))).toBeNull();
+        expect(r(E("inputs.target || 'staging'"))).toBeNull();
+        expect(r(E("github.ref == 'refs/heads/main' && 'production'"))).toBeNull();
+        expect(r(E("format('{0}', 'staging')"))).toBeNull();
+        expect(r(E("'staging' || ''"))).toBeNull();
+        expect(r(E("'unbalanced"))).toBeNull();
+        expect(r('pre-' + E("'staging'"))).toBeNull();
+        expect(r({ url: 'https://example.invalid' })).toBeNull();
+        expect(r(42)).toBeNull();
+        expect(r('')).toBeNull();
+      });
+
+      test('the name gate: a typo, a hardening step name and an unprovable value are red, by name only', () => {
+        const envs = analyze(
+          plainWf({
+            ok: 'staging',
+            typo: 'main-automaton',
+            step: 'production-gate',
+            unknown: E('inputs.private_target_name'),
+            ternary: E("github.ref == 'refs/heads/main' && 'production' || 'staging'"),
+          })
+        ).environments;
+        const p = w.environmentNameProblems(envs);
+        expect(p).toHaveLength(3);
+        expect(p[0]).toMatch(
+          /x\.yml :: typo :: \(job level\): environment "main-automaton" is not one of/
+        );
+        expect(p[1]).toMatch(/step :: \(job level\): environment "production-gate" is not one of/);
+        expect(p[2]).toMatch(
+          /unknown :: \(job level\): an expression whose possible names cannot be proven \(unrecognized/
+        );
+        expect(p.join('\n')).not.toContain('private_target_name'); // the value is never printed
+      });
+
+      test('a composite action that declares an environment is red (it has no job level)', () => {
+        const r = analyze(
+          'name: x\nenvironment: staging\nruns:\n  using: composite\n  steps:\n    - run: echo\n      shell: bash\n',
+          'action',
+          '.github/actions/x/action.yml'
+        );
+        expect(w.environmentNameProblems(r.environments)).toEqual([
+          '.github/actions/x/action.yml :: (composite action) :: (action level): a composite action cannot declare an environment (unrecognized; it must resolve to one of staging, production, copilot, main-automation)',
+        ]);
+      });
+
+      test('a write site records whether its job declares exactly main-automation', () => {
+        const at = (env) =>
+          analyze(writeWf('notify', 'Open issue in OSM', NOTIFY_FB, env), 'workflow', NOTIFY)
+            .sites[0];
+        expect(at(MA).inMainAutomation).toBe(true);
+        expect(at(`{ name: ${MA} }`).inMainAutomation).toBe(true);
+        expect(at('').inMainAutomation).toBe(false);
+        expect(at('staging').inMainAutomation).toBe(false);
+        expect(
+          at(E(`github.ref == 'refs/heads/main' && '${MA}' || 'staging'`)).inMainAutomation
+        ).toBe(false);
+      });
+
+      test('main-automation users: missing on a write site, an extra job, or a stale list entry is red', () => {
+        expect(w.mainAutomationProblems(good())).toEqual([]);
+        // (a) the conformance job loses it: the write site and the listed job are both named.
+        const lost = w.mainAutomationProblems(
+          good({
+            [CONF]: writeWf('generate', 'Open/update the conformance-refresh PR', AUTO_FB, ''),
+          })
+        );
+        expect(lost).toEqual([
+          `write site ${CONF} :: generate :: Open/update the conformance-refresh PR: its job declares no environment, not exactly environment ${MA}`,
+          `${CONF} :: generate: listed in MAIN_AUTOMATION_JOBS but declares no environment, not exactly ${MA}`,
+        ]);
+        // (c) / (e) another job declares it, in any case spelling or through an expression.
+        for (const env of [
+          MA,
+          'Main-Automation',
+          E(`github.ref == 'refs/heads/main' && '${MA}' || 'staging'`),
+        ]) {
+          const extra = w.mainAutomationProblems(
+            good({ [DRIFT]: plainWf({ 'required-checks': env, 'full-settings': MA }) })
+          );
+          expect(extra, String(env)).toEqual([
+            `${DRIFT} :: required-checks :: (job level): declares ${MA} but is not in MAIN_AUTOMATION_JOBS (its secrets are write tokens; a new user is an owner decision, OSE-1695)`,
+          ]);
+        }
+        // A listed job that no longer declares it is a stale entry.
+        expect(
+          w.mainAutomationProblems(
+            good({ [DRIFT]: plainWf({ 'required-checks': '', 'full-settings': '' }) })
+          )
+        ).toEqual([
+          `${DRIFT} :: full-settings: listed in MAIN_AUTOMATION_JOBS but declares no environment, not exactly ${MA}`,
+        ]);
+      });
+    });
+
+    describe('the real tree', () => {
+      const none = (list, header, fix) =>
+        expect(
+          list.length,
+          `${header} (${list.length}):\n  - ${list.join('\n  - ')}\n${fix}\n`
+        ).toBe(0);
+
+      test('the allowed names are the four environments, tied to scripts/hardening/apply-github.mjs (OSE-1693)', async () => {
+        // Changing the allowed set means changing this line too, in the same reviewed change.
+        expect([...w.ALLOWED_ENVIRONMENTS]).toEqual([
+          'staging',
+          'production',
+          'copilot',
+          'main-automation',
+        ]);
+        const g = await import(
+          pathToFileURL(join(ROOT, 'scripts', 'hardening', 'apply-github.mjs')).href
+        );
+        expect(g.MAIN_AUTOMATION, 'apply-github creates the environment this gate allows').toBe(
+          w.MAIN_AUTOMATION_ENV
+        );
+        // Its other step names are steps, never environments.
+        expect(
+          g.STEP_NAMES.filter((n) => n !== g.MAIN_AUTOMATION && w.ALLOWED_ENVIRONMENTS.includes(n))
+        ).toEqual([]);
+        expect(g.STEP_NAMES).toEqual(
+          expect.arrayContaining(['release-tag-ruleset', 'production-gate'])
+        );
+      });
+
+      test('every job-level environment resolves to an allowed name', () => {
+        const names = new Set(s.environments.flatMap((e) => e.names || []));
+        // Anti-vacuity: the deploy jobs and the main-automation jobs are found.
+        expect([...names]).toEqual(
+          expect.arrayContaining(['staging', 'production', 'main-automation'])
+        );
+        none(
+          w.environmentNameProblems(s.environments),
+          'Job-level environments outside ALLOWED_ENVIRONMENTS (or unprovable)',
+          'Fix: use one of the allowed names. A new environment is created and protected by scripts/hardening/apply-github.mjs first, then added to ALLOWED_ENVIRONMENTS in scripts/ci/hub-token-wiring.mjs (OSE-1693).'
+        );
+      });
+
+      test('both write sites declare exactly main-automation; no other job may declare it', () => {
+        expect(s.sites.filter((x) => x.right === 'write' && x.inMainAutomation)).toHaveLength(
+          w.WRITE_SITES.length
+        );
+        none(
+          w.mainAutomationProblems(s),
+          'main-automation users out of line with MAIN_AUTOMATION_JOBS',
+          `Fix: a write site's job declares \`environment: ${w.MAIN_AUTOMATION_ENV}\`; any other job drops it. A new user is an owner decision (OSE-1695): add it to MAIN_AUTOMATION_JOBS in scripts/ci/hub-token-wiring.mjs with that decision.`
+        );
+      });
+    });
+  });
 });

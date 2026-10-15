@@ -21,6 +21,8 @@ jobs:
   notify:
     name: Open issue in OSM
     runs-on: ubuntu-24.04
+    # Its write token is a main-automation environment secret (OSE-1695); main only.
+    environment: main-automation
     defaults:
       run:
         shell: bash

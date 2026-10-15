@@ -12,7 +12,7 @@
  * 5. CI wiring (OSE-1691): the T0 lint shard runs this script with
  *    --base-config, blocking. Before OSE-1691 nothing in CI ran it, and (3)
  *    returned early in CI, so a raised baseline passed every check (#933).
- * 6. Token split (OSE-1695): six directional measurements from the shared
+ * 6. Token split (OSE-1695): seven directional measurements from the shared
  *    enumerator scripts/ci/hub-token-wiring.mjs, born red below on a fixture tree.
  */
 
@@ -27,6 +27,7 @@ const BASELINE = '.ci-integrity-baseline.json';
 const TOKEN_KEYS = [
   'readUsesOnNewSecret',
   'writeUsesOnNewSecret',
+  'writeSitesInMainAutomation',
   'bareOldTokenUses',
   'fallbackUses',
   'writeUsesOnWrongToken',
@@ -235,11 +236,13 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
 });
 
 // Token split (OSE-1695): directional ratchets on the shared enumerator
-// (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret.
-// DOWN-ONLY: bareOldTokenUses, fallbackUses, writeUsesOnWrongToken, unrecognizedTokenForms.
+// (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret,
+// writeSitesInMainAutomation. DOWN-ONLY: bareOldTokenUses, fallbackUses,
+// writeUsesOnWrongToken, unrecognizedTokenForms.
 // The fixture mirrors main: three staging steps and one OCR-docs checkout on
 // OCR_HUB_READ alone (no fallback), and the two named write sites, each on its own
-// token and still on its `NEW || OCR_PROPAGATE_TOKEN` fallback.
+// token, still on its `NEW || OCR_PROPAGATE_TOKEN` fallback, in a job that declares
+// environment main-automation.
 // Each case spawns the CLI a few times: a generous timeout so a loaded runner never turns
 // a real result into a timeout.
 describe(
@@ -269,8 +272,11 @@ describe(
     const hubWf = (steps, { top = '', jobEnv = '' } = {}) =>
       `on: pull_request\n${top}jobs:\n  build:\n${jobEnv}    steps:\n` + steps;
     const DEFAULT_STEPS = stage('stage A') + stage('stage B') + stage('stage C') + checkout();
-    const writeWf = (job, step, value) =>
-      `on: push\njobs:\n  ${job}:\n    steps:\n      - name: ${step}\n        env:\n          GH_TOKEN: ${value}\n        run: gh api\n`;
+    // Like main, each write job declares the main-automation environment (env '' drops it).
+    const writeWf = (job, step, value, env = 'main-automation') =>
+      `on: push\njobs:\n  ${job}:\n` +
+      (env ? `    environment: ${env}\n` : '') +
+      `    steps:\n      - name: ${step}\n        env:\n          GH_TOKEN: ${value}\n        run: gh api\n`;
     const baseline = () => JSON.parse(readFileSync(join(root, BASELINE), 'utf-8'));
     const writeBaseline = (b) =>
       writeFileSync(join(root, BASELINE), JSON.stringify(b, null, 2) + '\n');
@@ -289,7 +295,7 @@ describe(
       const r = run(root);
       expect(r.stderr).toBe('');
       expect(r.stdout).toMatch(
-        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=2\(down\) writeUsesOnWrongToken=0\(down\) unrecognizedTokenForms=0\(down\)/
+        /readUsesOnNewSecret=4\(up\) writeUsesOnNewSecret=2\(up\) writeSitesInMainAutomation=2\(up\) bareOldTokenUses=0\(down\) fallbackUses=2\(down\) writeUsesOnWrongToken=0\(down\) unrecognizedTokenForms=0\(down\)/
       );
     });
 
@@ -609,6 +615,41 @@ describe(
       );
     });
 
+    test('(m) a write job that drops environment main-automation: up-only REGRESSION naming it', () => {
+      put(
+        root,
+        CONF_WF,
+        writeWf('generate', 'Open/update the conformance-refresh PR', AUTO_FB, '')
+      );
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /REGRESSION writeSitesInMainAutomation \[UP-ONLY.*baseline 2, current 1: went DOWN \(bad/
+      );
+      expect(r.stderr).toContain(
+        `${CONF_WF} :: generate :: Open/update the conformance-refresh PR`
+      );
+      expect(r.stderr).toContain('environment: main-automation');
+      expect(r.stderr).not.toMatch(/writeUsesOnNewSecret|fallbackUses/); // the token is unchanged
+    });
+
+    test('(m2) a write job on another environment (or a typo) is not counted: red', () => {
+      put(root, NOTIFY_WF, writeWf('notify', 'Open issue in OSM', NOTIFY_FB, 'main-automaton'));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/REGRESSION writeSitesInMainAutomation.*baseline 2, current 1/);
+      expect(r.stderr).toContain(`${NOTIFY_WF} :: notify :: Open issue in OSM`);
+    });
+
+    test('(m3) the new key against a base copy without it: accepted (first introduction)', () => {
+      const b = baseline();
+      delete b.writeSitesInMainAutomation;
+      put(root, 'base.json', JSON.stringify(b));
+      const r = run(root, '--base-config', join(root, 'base.json'));
+      expect(r.stderr).toBe('');
+      expect(r.status).toBe(0);
+    });
+
     test('a literal token is never printed; an unparseable workflow is red', () => {
       put(
         root,
@@ -643,6 +684,7 @@ describe(
       expect(a.writeUsesOnWrongToken.reason).toBe('known violation, falls with OSE-1695');
       expect(a.readUsesOnNewSecret.retired).toEqual(b.readUsesOnNewSecret.retired);
       expect(TOKEN_KEYS.map((k) => a[k].direction)).toEqual([
+        'up',
         'up',
         'up',
         'down',

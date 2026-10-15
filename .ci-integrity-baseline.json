@@ -950,6 +950,24 @@
     },
     "retired": []
   },
+  "writeSitesInMainAutomation": {
+    "direction": "up",
+    "reason": "Write sites read their tokens from the main-automation environment, main only (OSE-1695): may only rise; a deleted write site needs a retired entry.",
+    "total": 2,
+    "byFile": {
+      ".github/workflows/conformance-report.yml": {
+        "count": 1,
+        "steps": ["generate :: Open/update the conformance-refresh PR"],
+        "reason": "Job generate declares environment main-automation, so OCR_AUTOMATION_WRITE resolves from it and the job starts only from main (OSE-1695)."
+      },
+      ".github/workflows/notify-osm-flag-change.yml": {
+        "count": 1,
+        "steps": ["notify :: Open issue in OSM"],
+        "reason": "Job notify declares environment main-automation, so OCR_NOTIFY_OSM resolves from it and the job starts only from main (OSE-1695)."
+      }
+    },
+    "retired": []
+  },
   "bareOldTokenUses": {
     "direction": "down",
     "reason": "No bare use of the write-capable PAT may exist (OSE-1695); stays 0.",
