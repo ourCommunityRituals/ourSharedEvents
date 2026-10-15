@@ -976,14 +976,9 @@
   },
   "fallbackUses": {
     "direction": "down",
-    "reason": "The 28 read fallbacks are gone: reads name OCR_HUB_READ alone. The remaining 2 are the write sites (conformance PR step, notify-osm), each still `<its own token> || OCR_PROPAGATE_TOKEN` until its own token exists in the main-automation environment (OSE-1695). May only fall.",
-    "total": 2,
+    "reason": "The 28 read fallbacks are gone and the conformance write fallback is gone (its push was proven live 2026-10-15, run 38723828302). The remaining 1 is the notify-osm write site, still `OCR_NOTIFY_OSM || OCR_PROPAGATE_TOKEN` until its first live run (OSE-1695). May only fall.",
+    "total": 1,
     "byFile": {
-      ".github/workflows/conformance-report.yml": {
-        "count": 1,
-        "steps": ["generate :: Open/update the conformance-refresh PR"],
-        "reason": "Write site: GH_TOKEN is OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN (PR #986). The fallback goes once OCR_AUTOMATION_WRITE exists in the main-automation environment (OSE-1695)."
-      },
       ".github/workflows/notify-osm-flag-change.yml": {
         "count": 1,
         "steps": ["notify :: Open issue in OSM"],

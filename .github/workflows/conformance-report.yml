@@ -37,7 +37,7 @@ jobs:
     environment: main-automation
     permissions:
       contents: read     # OSE-1031: report writes flow through a PR opened with
-                         # OCR_PROPAGATE_TOKEN (a PAT), never a direct push to protected main —
+                         # OCR_AUTOMATION_WRITE (a PAT), never a direct push to protected main —
                          # the default GITHUB_TOKEN needs no write scope here.
 
     steps:
@@ -123,13 +123,13 @@ jobs:
         # OSE-1031 layer 3: the report cannot be pushed directly to protected `main`
         # (branch protection rejects the bot push — GH006). Instead open a PR from a stable
         # branch so the refresh flows through the required checks like any change. Opened with
-        # OCR_PROPAGATE_TOKEN (a PAT) — a PR opened by the default GITHUB_TOKEN triggers NO
+        # OCR_AUTOMATION_WRITE (a PAT) — a PR opened by the default GITHUB_TOKEN triggers NO
         # checks and could therefore never merge. Human/CODEOWNERS merges it; the bot does not
         # self-approve. The token is used only here (well after `npm ci`) and inline in the
         # push URL, never persisted to git config.
         if: ${{ github.event.inputs.dry_run != 'true' && github.ref == 'refs/heads/main' }}
         env:
-          GH_TOKEN: ${{ secrets.OCR_AUTOMATION_WRITE || secrets.OCR_PROPAGATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.OCR_AUTOMATION_WRITE }}
         run: |
           set -euo pipefail
           RPT=workers/oursharedevents/docs/security
@@ -142,7 +142,7 @@ jobs:
           # lacking write access to THIS repo) silently starved the refresh mechanism for
           # multiple consecutive weekly runs with no clear signal of what to fix.
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::Neither OCR_AUTOMATION_WRITE nor OCR_PROPAGATE_TOKEN resolved to a value here. Verify secret access for this repo."
+            echo "::error::OCR_AUTOMATION_WRITE did not resolve to a value here. Verify the secret exists in the main-automation environment."
             exit 1
           fi
           BRANCH=chore/conformance-refresh
@@ -152,11 +152,11 @@ jobs:
           # so scheduled runs update ONE PR instead of spawning a new one every week.
           git checkout -B "$BRANCH"
           git add "$RPT/CONFORMANCE.md" "$RPT/conformance.json"
-          git commit -m "chore: regenerate conformance report (OSE-560)"
+          git commit -m "chore: regenerate conformance report"
           if ! git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH" 2>push_err.log; then
             cat push_err.log
             if grep -qi "Write access to repository not granted" push_err.log; then
-              echo "::error::The write token (OCR_AUTOMATION_WRITE, or OCR_PROPAGATE_TOKEN while that is unset) lacks write access to ${GITHUB_REPOSITORY} — it needs Contents: write and Pull requests: write on this repo so the conformance-refresh PR can be opened. The freshly generated report is still available as this run's artifact for manual review in the meantime."
+              echo "::error::The write token (OCR_AUTOMATION_WRITE) lacks write access to ${GITHUB_REPOSITORY} — it needs Contents: write and Pull requests: write on this repo so the conformance-refresh PR can be opened. The freshly generated report is still available as this run's artifact for manual review in the meantime."
             else
               echo "::error::conformance-refresh push failed for an unexpected reason — see push_err.log output above."
             fi
@@ -164,8 +164,8 @@ jobs:
           fi
           if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null)" ]; then
             gh pr create --base main --head "$BRANCH" \
-              --title "chore: regenerate conformance report (OSE-560)" \
-              --body "Automated conformance-meter refresh — generated, never hand-written. Review the coverage diff and merge; this is how the meter stays current without a direct push to protected \`main\` (OSE-1031). Human/CODEOWNERS merge — the bot does not self-approve."
+              --title "chore: regenerate conformance report" \
+              --body "Automated conformance-meter refresh — generated, never hand-written. Review the coverage diff and merge; this is how the meter stays current without a direct push to protected \`main\` (OSE-1031). Human/CODEOWNERS merge — the bot does not self-approve. Part of OSE-560."
           else
             echo "Refresh PR already open for $BRANCH — updated in place by the force-push."
           fi
