@@ -12,7 +12,7 @@
  * 5. CI wiring (OSE-1691): the T0 lint shard runs this script with
  *    --base-config, blocking. Before OSE-1691 nothing in CI ran it, and (3)
  *    returned early in CI, so a raised baseline passed every check (#933).
- * 6. Token split (OSE-1695): seven directional measurements from the shared
+ * 6. Token split (OSE-1695): eight directional measurements from the shared
  *    enumerator scripts/ci/hub-token-wiring.mjs, born red below on a fixture tree.
  */
 
@@ -32,6 +32,7 @@ const TOKEN_KEYS = [
   'fallbackUses',
   'writeUsesOnWrongToken',
   'unrecognizedTokenForms',
+  'mainAutomationJobCheckoutsPersistingCredentials',
 ];
 
 function run(root, ...args) {
@@ -238,7 +239,7 @@ describe('CI integrity ratchets (OSE-1606): born-red on injected faults', () => 
 // Token split (OSE-1695): directional ratchets on the shared enumerator
 // (scripts/ci/hub-token-wiring.mjs). UP-ONLY: readUsesOnNewSecret, writeUsesOnNewSecret,
 // writeSitesInMainAutomation. DOWN-ONLY: bareOldTokenUses, fallbackUses,
-// writeUsesOnWrongToken, unrecognizedTokenForms.
+// writeUsesOnWrongToken, unrecognizedTokenForms, mainAutomationJobCheckoutsPersistingCredentials.
 // The fixture mirrors main: three staging steps and one OCR-docs checkout on
 // OCR_HUB_READ alone (no fallback), and the two named write sites, each on its own
 // token, still on its `NEW || OCR_PROPAGATE_TOKEN` fallback, in a job that declares
@@ -650,6 +651,56 @@ describe(
       expect(r.status).toBe(0);
     });
 
+    // mainAutomationJobCheckoutsPersistingCredentials (DOWN-ONLY): a checkout in a write-site
+    // or main-automation job that leaves persist-credentials at its default (true).
+    const CONF_STEP = 'Open/update the conformance-refresh PR';
+    const withCheckout = (job, step, value, persist) =>
+      `on: push\njobs:\n  ${job}:\n    environment: main-automation\n    steps:\n` +
+      '      - name: Checkout\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 1\n' +
+      (persist === undefined ? '' : `          persist-credentials: ${persist}\n`) +
+      `      - name: ${step}\n        env:\n          GH_TOKEN: ${value}\n        run: gh api\n`;
+
+    test('(n) a write job checkout without persist-credentials: false is red, by name, with the fix', () => {
+      put(root, CONF_WF, withCheckout('generate', CONF_STEP, AUTO_FB, false));
+      expect(run(root).status).toBe(0); // false is the good state: nothing counted
+      put(root, CONF_WF, withCheckout('generate', CONF_STEP, AUTO_FB));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /mainAutomationJobCheckoutsPersistingCredentials \[DOWN-ONLY.*baseline 0, current 1: went UP \(bad; the good direction is DOWN\)/
+      );
+      expect(r.stderr).toContain(
+        `${CONF_WF} :: generate :: Checkout  (persist-credentials is not set, so it defaults to true)`
+      );
+      expect(r.stderr).toContain(
+        'add `persist-credentials: false` under `with:` of that actions/checkout step'
+      );
+      expect(r.stderr).toContain('Do not raise the baseline.');
+      expect(r.stderr).not.toMatch(/writeUsesOnNewSecret|fallbackUses|writeSitesInMainAutomation/);
+      put(root, CONF_WF, withCheckout('generate', CONF_STEP, AUTO_FB, true));
+      expect(run(root).stderr).toContain(
+        `${CONF_WF} :: generate :: Checkout  (persist-credentials is true)`
+      );
+    });
+
+    test('(n2) its ceiling raised above the base copy is red; a fix is red until the baseline is lowered', () => {
+      const base = snapshotBase();
+      put(root, NOTIFY_WF, withCheckout('notify', 'Open issue in OSM', NOTIFY_FB, true));
+      expect(run(root, '--update').status).toBe(0); // ceiling raised to 1 in the committed file
+      expect(run(root).status).toBe(0);
+      const b = run(root, '--base-config', base);
+      expect(b.status).toBe(1);
+      expect(b.stderr).toMatch(
+        /mainAutomationJobCheckoutsPersistingCredentials \[DOWN-ONLY\]: the committed ceiling 1 is above the base branch's 0/
+      );
+      put(root, NOTIFY_WF, withCheckout('notify', 'Open issue in OSM', NOTIFY_FB, false));
+      const r = run(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(
+        /mainAutomationJobCheckoutsPersistingCredentials \[DOWN-ONLY.*baseline 1, current 0: went DOWN \(good\)\. Lock the gain in/
+      );
+    });
+
     test('a literal token is never printed; an unparseable workflow is red', () => {
       put(
         root,
@@ -687,6 +738,7 @@ describe(
         'up',
         'up',
         'up',
+        'down',
         'down',
         'down',
         'down',
