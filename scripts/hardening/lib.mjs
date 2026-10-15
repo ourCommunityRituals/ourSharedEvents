@@ -85,6 +85,16 @@ export function ghJson(args) {
   }
 }
 
+/** The terminal half alone: exits 3 with no TTY and asks nothing. Run it before any network call. */
+export function requireTty(what) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      `Refusing: ${what} must be run by the owner in their own terminal (no TTY here).`
+    );
+    process.exit(3);
+  }
+}
+
 /**
  * A change to security settings is the owner's. --apply needs a real terminal and a typed
  * confirmation, so an agent's non-interactive shell cannot answer it. There is no environment
@@ -93,12 +103,7 @@ export function ghJson(args) {
  * controls are what stand behind this.)
  */
 export async function requireOwnerTerminal(what) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error(
-      `Refusing: ${what} must be run by the owner in their own terminal (no TTY here).`
-    );
-    process.exit(3);
-  }
+  requireTty(what);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise((res) => rl.question(`Type APPLY to ${what}: `, res));
   rl.close();
