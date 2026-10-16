@@ -55,6 +55,7 @@ export const NODE_SPECS = [
   'tests/forbidden-join-boundary.spec.ts',
   'tests/form-page-email-signup-dispatch.spec.ts',
   'tests/form-sponsor-ui.spec.ts',
+  'tests/form-submit-once.spec.ts',
   'tests/forms-pepper-preflight.spec.ts',
   'tests/geo-link-maps-not-h3.spec.ts',
   'tests/geo.spec.ts',

@@ -152,7 +152,6 @@ test('check in: one tap is confirmed, a walk-in too, and neither shows a count',
 // ── Known defects, stated as the behaviour we want ───────────────────────────
 
 test('a second tap on the same phone does not check the same person in twice', async ({ page }) => {
-  test.fail(true, 'Defect: the button stays live after a check-in, so every extra tap adds one.');
   // Counted by the check-ins sent, not by the text: under 5 the page reads
   // "You're checked in." after either tap (OSE-1657), so the text cannot show it.
   await page.goto(formUrl('checkin'));
