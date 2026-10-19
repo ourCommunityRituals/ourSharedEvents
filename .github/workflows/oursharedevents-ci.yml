@@ -1246,7 +1246,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          OUT="$(npx wrangler secret list --env staging 2>&1 || true)"
+          # A failed `secret list` is an auth or network finding, never "not set" (OSE-1731).
+          OUT="$(npx wrangler secret list --env staging 2>&1)" && RC=0 || RC=$?
+          bash ../../scripts/ci/classify-wrangler-failure.sh "$RC" "$OUT" staging
           for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
               echo "::error::$SECRET is not set on the staging worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447). Provision it: bash scripts/set-secrets.sh staging"
@@ -2597,7 +2599,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          OUT="$(npx wrangler secret list --env production 2>&1 || true)"
+          # A failed `secret list` is an auth or network finding, never "not set" (OSE-1731).
+          # It also keeps the forbidden-name check below from passing on an empty list.
+          OUT="$(npx wrangler secret list --env production 2>&1)" && RC=0 || RC=$?
+          bash ../../scripts/ci/classify-wrangler-failure.sh "$RC" "$OUT" production
           for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER ANON_ID_HASH_PEPPER; do
             if ! echo "$OUT" | grep -q "$SECRET"; then
               echo "::error::$SECRET is not set on the production worker — refusing to migrate remote D1 for a deploy that would ship a fail-closed corner inert (or, for FORMS_HASH_PEPPER, a masked 503 per OSE-1343; for RATE_LIMIT_KEY_PEPPER, IP-reversible rate-limit keys per OSE-1447; for ANON_ID_HASH_PEPPER, scans with no id and no return counts per OSE-1659). Provision it: bash scripts/set-secrets.sh production"
