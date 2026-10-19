@@ -49,6 +49,21 @@ gh secret list --repo ourCommunityRituals/ourSharedEvents --json name,updatedAt 
 4. Accept the PR-head reach to the token (F7) until OSE-1699, in writing?
 5. The archived "Token overhaul" session had uncommitted files. Check them on a trusted device before the container is reclaimed.
 
+## Built while you were out (local only, not pushed)
+
+Two commits on top of `f33d1b24`, saved as patches in `.claude/outputs/patches/`. Nothing is pushed to any branch other than this one, and nothing touches a credential.
+
+| Patch | What it does | Proof |
+| ----- | ------------ | ----- |
+| `0001` Lane A | The secrets gate captures wrangler's exit code and `scripts/ci/classify-wrangler-failure.sh` labels auth, network and other failures. A rejected token now reads "Cloudflare authentication failure ... NOT a missing-secret finding ... Do NOT run set-secrets.sh". A genuinely missing name reads as before. Fail-closed is unchanged. | 14 new tests. 4 YAML cases red against the old workflow; 9 behaviour cases red with the script removed. Both real gate texts (staging and production) replayed end to end with a stubbed wrangler: auth, all-present, one-missing. |
+| `0002` Lane B | T2 and T4 install the worker's locked dependencies before their seed steps, so they run wrangler 4.145.0 and not whatever npx fetches. Hub staging becomes required in those two jobs (the ADR-008 wiring gate demands it once they build the Worker). `continue-on-error` baseline 22 to 20. | New spec red on exactly `contract-staging-sub` and `functional-staging-sub` before the change. `tests/unit/ci` plus `tests/integration`: 57 files, 1,175 tests pass. eslint clean. |
+
+Not covered by these patches: a gate that checks the token's scope or owning account (F5), exact-name matching in the secrets gate, and PR-head reach to the token (F7).
+
+Cost to watch: T2 and T4 now run a worker `npm ci` (setup-node already caches both lockfiles). Read the first run's duration.
+
+To use them: say go, and I push each to its own branch and open two draft PRs ("Part of OSE-1731" and "Part of OSE-1695"). Or apply locally: `git am .claude/outputs/patches/*.patch`.
+
 ## Do not
 
 - Do not run `scripts/set-secrets.sh`. The gate message tells you to when auth fails. It overwrites the encryption key and peppers.

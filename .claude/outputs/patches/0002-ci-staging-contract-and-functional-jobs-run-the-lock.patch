@@ -1,0 +1,195 @@
+From 3090a205434ec4cbbc6ed33d6167deb0e8dceea0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 22:04:20 +0000
+Subject: [PATCH 2/2] ci: staging contract and functional jobs run the locked
+ wrangler
+
+Part of OSE-1695
+
+The T2 and T4 jobs installed the root dependencies only. Root has no
+wrangler, so the seed steps' npx wrangler fetched the newest release
+(4.151.1 in run 39194783868) while the deploy job ran the locked 4.145.0,
+and the unpinned copy ran with CLOUDFLARE_API_TOKEN_OSE in its environment.
+
+- both jobs install the worker dependencies before their first wrangler step
+- that makes them Worker-building jobs, so the hub staging step is now
+  required there (continue-on-error removed); the ratchet baseline falls 22 to 20
+- a spec requires every job that runs wrangler, directly or through the seed
+  and trace scripts, to run the worker npm ci first; red against the old
+  workflow on contract-staging-sub and functional-staging-sub
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ .ci-integrity-baseline.json              |  4 +-
+ .github/workflows/oursharedevents-ci.yml | 48 ++++++++++++++++----
+ tests/unit/ci/locked-wrangler.test.js    | 56 ++++++++++++++++++++++++
+ 3 files changed, 98 insertions(+), 10 deletions(-)
+ create mode 100644 tests/unit/ci/locked-wrangler.test.js
+
+diff --git a/.ci-integrity-baseline.json b/.ci-integrity-baseline.json
+index 66b5f21..7c715a2 100644
+--- a/.ci-integrity-baseline.json
++++ b/.ci-integrity-baseline.json
+@@ -1,7 +1,7 @@
+ {
+   "_comment": "CI integrity ratchet baseline (OSE-1606). Each count may only move in its good direction (most may only fall; the token-split keys say theirs in `direction`, OSE-1695); every entry carries a reason.",
+   "continueOnError": {
+-    "total": 22,
++    "total": 20,
+     "byFile": {
+       ".github/workflows/advanced-security-scan.yml": {
+         "count": 2,
+@@ -20,7 +20,7 @@
+         "reason": "Nightly deployed-staging audit is advisory; the PR-code mobile audit in oursharedevents-ci.yml blocks."
+       },
+       ".github/workflows/oursharedevents-ci.yml": {
+-        "count": 10,
++        "count": 8,
+         "reason": "Root-only hub staging steps (best-effort, @ocr/ui not imported, OSE-341) and dorny/test-reporter check publishers; reporters never gate, the test step does."
+       },
+       ".github/workflows/red-team-adversarial.yml": {
+diff --git a/.github/workflows/oursharedevents-ci.yml b/.github/workflows/oursharedevents-ci.yml
+index 1817ae3..0bbd672 100644
+--- a/.github/workflows/oursharedevents-ci.yml
++++ b/.github/workflows/oursharedevents-ci.yml
+@@ -1442,10 +1442,9 @@ jobs:
+             workers/oursharedevents/package-lock.json
+ 
+       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+-        # Root-only job: nothing here imports @ocr/ui, so staging stays
+-        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
+-        # root npm ci tolerates a missing @ocr/flags (OSE-341).
+-        continue-on-error: true
++        # REQUIRED — never continue-on-error: the worker install below resolves
++        # @ocr/ui from the staged hub, and the seed steps need the locked wrangler
++        # it installs (OSE-1731 follow-up, run 39194783868).
+         shell: bash
+         timeout-minutes: 3
+         env:
+@@ -1466,6 +1465,23 @@ jobs:
+             echo "$HASH" > "$STAMP"
+           fi
+ 
++      # Locked wrangler for the seed steps below (they run with the Cloudflare token).
++      # Root has no wrangler, so without this `npx wrangler` fetches the newest release
++      # instead of the version workers/oursharedevents/package-lock.json pins.
++      - name: Install worker dependencies
++        env:
++          FORCE_CLEAN: ${{ inputs.force_clean }}
++        run: |
++          HASH="$(node --version)-$(git hash-object package-lock.json)"
++          STAMP=node_modules/.install-stamp
++          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
++            echo "worker node_modules up-to-date, skipping npm ci"
++          else
++            npm ci --prefer-offline || npm ci
++            echo "$HASH" > "$STAMP"
++          fi
++        working-directory: ${{ env.WORKER_DIR }}
++
+       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
+       # Delegates to the shared classifier so the in-CI probe and the scheduled
+       # canary (.github/workflows/cf-access-canary.yml) can never drift into two
+@@ -1897,10 +1913,9 @@ jobs:
+             workers/oursharedevents/package-lock.json
+ 
+       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+-        # Root-only job: nothing here imports @ocr/ui, so staging stays
+-        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
+-        # root npm ci tolerates a missing @ocr/flags (OSE-341).
+-        continue-on-error: true
++        # REQUIRED — never continue-on-error: the worker install below resolves
++        # @ocr/ui from the staged hub, and the seed steps need the locked wrangler
++        # it installs (OSE-1731 follow-up, run 39194783868).
+         shell: bash
+         timeout-minutes: 3
+         env:
+@@ -1921,6 +1936,23 @@ jobs:
+             echo "$HASH" > "$STAMP"
+           fi
+ 
++      # Locked wrangler for the seed steps below (they run with the Cloudflare token).
++      # Root has no wrangler, so without this `npx wrangler` fetches the newest release
++      # instead of the version workers/oursharedevents/package-lock.json pins.
++      - name: Install worker dependencies
++        env:
++          FORCE_CLEAN: ${{ inputs.force_clean }}
++        run: |
++          HASH="$(node --version)-$(git hash-object package-lock.json)"
++          STAMP=node_modules/.install-stamp
++          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
++            echo "worker node_modules up-to-date, skipping npm ci"
++          else
++            npm ci --prefer-offline || npm ci
++            echo "$HASH" > "$STAMP"
++          fi
++        working-directory: ${{ env.WORKER_DIR }}
++
+       - name: Restore Playwright browser cache
+         uses: actions/cache@v6
+         with:
+diff --git a/tests/unit/ci/locked-wrangler.test.js b/tests/unit/ci/locked-wrangler.test.js
+new file mode 100644
+index 0000000..ad0414e
+--- /dev/null
++++ b/tests/unit/ci/locked-wrangler.test.js
+@@ -0,0 +1,56 @@
++/**
++ * A job that runs wrangler with a Cloudflare token must run the version the worker
++ * lockfile pins (workers/oursharedevents/package-lock.json), not whatever npx
++ * fetches that day.
++ *
++ * Why: the staging contract (T2) and functional (T4) jobs installed the root
++ * dependencies only. Root has no wrangler, so `npx wrangler` downloaded the newest
++ * release (4.151.1 in run 39194783868) while the deploy job ran the locked 4.145.0,
++ * and the unpinned copy ran with CLOUDFLARE_API_TOKEN_OSE in its environment.
++ *
++ * Seen red: against the workflow before this change, contract-staging-sub and
++ * functional-staging-sub fail.
++ */
++const { readFileSync } = require('node:fs');
++const { join } = require('node:path');
++const yaml = require('js-yaml');
++
++const ROOT = join(__dirname, '..', '..', '..');
++const workflow = yaml.load(
++  readFileSync(join(ROOT, '.github', 'workflows', 'oursharedevents-ci.yml'), 'utf8')
++);
++
++// Steps that end up running wrangler: a direct call, or a script that spawns it.
++const RUNS_WRANGLER = /\bnpx wrangler\b|d1-seed-staging\.mjs|trace-scan-staging\.sh/;
++
++const installsWorkerDeps = (step) =>
++  /\bnpm ci\b/.test(step.run ?? '') &&
++  String(step['working-directory'] ?? '').includes('WORKER_DIR');
++
++describe('jobs that run wrangler install the worker dependencies first', () => {
++  const jobs = Object.entries(workflow.jobs).filter(([, job]) =>
++    (job.steps ?? []).some((s) => RUNS_WRANGLER.test(s.run ?? ''))
++  );
++
++  test('the workflow has wrangler-running jobs to check', () => {
++    const names = jobs.map(([name]) => name);
++    expect(names).toEqual(
++      expect.arrayContaining([
++        'deploy-staging',
++        'deploy-production',
++        'contract-staging-sub',
++        'functional-staging-sub',
++      ])
++    );
++  });
++
++  for (const [name, job] of jobs) {
++    test(`${name}: worker npm ci runs before the first wrangler step`, () => {
++      const steps = job.steps;
++      const firstWrangler = steps.findIndex((s) => RUNS_WRANGLER.test(s.run ?? ''));
++      const install = steps.findIndex(installsWorkerDeps);
++      expect(install).toBeGreaterThan(-1);
++      expect(install).toBeLessThan(firstWrangler);
++    });
++  }
++});
+-- 
+2.43.0
+
