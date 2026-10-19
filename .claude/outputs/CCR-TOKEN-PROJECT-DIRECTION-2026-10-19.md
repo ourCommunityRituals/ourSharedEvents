@@ -110,7 +110,7 @@ PO, Lead BE Architect, Lead FE Integration, Sr Design FE, Sr Automation QA, Sr S
 
 | ID  | Finding                                                                                    | Weight | Modifiers                                   | Deduction | Proof            |
 | --- | ------------------------------------------------------------------------------------------ | ------ | ------------------------------------------- | --------- | ---------------- |
-| F1  | Old Cloudflare token not shown revoked; exposure audit log not reviewed (OSE-1467)         | Sec Critical (15) | Floors score at 0%                | 15        | Linear + source  |
+| F1  | Old Cloudflare token still live by design (kept until the new one is proven, per the setup order) while the exposure audit log is unreviewed (OSE-1467) | Sec Critical (15) | Floors score at 0%                | 15        | Linear + source  |
 | F2  | Staging Cloudflare auth outage (T1 gate, T2 seeds)                                         | Critical 15 | Breadth 2 surfaces ×1.58, loop 1        | 23.7      | Runtime          |
 | F4  | Gate says "not set, run set-secrets.sh" on any auth failure; script overwrites keys        | High 10 | Loop 2 ×1.25; correlated with F2           | 12.5      | Replay + source  |
 |     | Correlated pair F2 + F4                                                                    |        | (23.7 + 12.5) × 1.5                         | **54.3**  |                  |
@@ -135,7 +135,7 @@ Do **not** pivot to GitHub Apps or OIDC for Cloudflare now: OSE-1110 records the
 ### Owner lane (your terminal, no values in chat)
 
 1. **Record two dates (2 min).** `gh secret list` dates for `CLOUDFLARE_API_TOKEN_OSE` and `CLOUDFLARE_ACCOUNT_ID`. Compare with 10-16T15:14:11Z. This shows whether anything changed in the unrecorded 10-17 to 10-19 window.
-2. **Old token, F1 (10–20 min).** Read the Cloudflare audit log for the exposure window and the old token's last-used data, write the result including "nothing found" on OSE-1467, then revoke or delete it. E11: no CI job depends on it. Six local scripts will fail if a shell still exports the old value; that is the expected result.
+2. **Old token, F1 (10–20 min).** The setup order is correct: keep the old token until the new one is proven (create → store → green run read in the log → delete). F1 is therefore a sequenced step, not a miss. But the rule's purpose is rollback, and the old value was overwritten in GitHub on 10-16 and cannot be restored, so holding it protects nothing while the chain is red, and the exposure window lasts as long as the outage. Owner's choice: (a) hold per the rule and delete after the green run, or (b) read the Cloudflare audit log for the exposure window and the old token's last-used data now, write the result including "nothing found" on OSE-1467, and delete early if it is clean. E11: no CI job depends on it. Six local scripts will fail if a shell still exports the old value; that is the expected result.
 3. **Separate the three causes with read-only calls, hidden prompt, status codes only (10 min).**
    - `GET /accounts/$ID/tokens/verify`
    - `GET /accounts` (an account-owned token lists exactly its own account)
