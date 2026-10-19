@@ -1,4 +1,4 @@
-From 3090a205434ec4cbbc6ed33d6167deb0e8dceea0 Mon Sep 17 00:00:00 2001
+From d5215d177ab4aeae05e75b1427853ab47bfe42f4 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 19 Oct 2026 22:04:20 +0000
 Subject: [PATCH 2/2] ci: staging contract and functional jobs run the locked
