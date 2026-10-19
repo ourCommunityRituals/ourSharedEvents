@@ -1440,10 +1440,9 @@ jobs:
             workers/oursharedevents/package-lock.json
 
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
-        # Root-only job: nothing here imports @ocr/ui, so staging stays
-        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
-        # root npm ci tolerates a missing @ocr/flags (OSE-341).
-        continue-on-error: true
+        # REQUIRED — never continue-on-error: the worker install below resolves
+        # @ocr/ui from the staged hub, and the seed steps need the locked wrangler
+        # it installs (OSE-1731 follow-up, run 39194783868).
         shell: bash
         timeout-minutes: 3
         env:
@@ -1463,6 +1462,23 @@ jobs:
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
+
+      # Locked wrangler for the seed steps below (they run with the Cloudflare token).
+      # Root has no wrangler, so without this `npx wrangler` fetches the newest release
+      # instead of the version workers/oursharedevents/package-lock.json pins.
+      - name: Install worker dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+        working-directory: ${{ env.WORKER_DIR }}
 
       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
       # Delegates to the shared classifier so the in-CI probe and the scheduled
@@ -1895,10 +1911,9 @@ jobs:
             workers/oursharedevents/package-lock.json
 
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
-        # Root-only job: nothing here imports @ocr/ui, so staging stays
-        # best-effort (it now exits 1 if the pinned hub cannot be fetched);
-        # root npm ci tolerates a missing @ocr/flags (OSE-341).
-        continue-on-error: true
+        # REQUIRED — never continue-on-error: the worker install below resolves
+        # @ocr/ui from the staged hub, and the seed steps need the locked wrangler
+        # it installs (OSE-1731 follow-up, run 39194783868).
         shell: bash
         timeout-minutes: 3
         env:
@@ -1918,6 +1933,23 @@ jobs:
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
+
+      # Locked wrangler for the seed steps below (they run with the Cloudflare token).
+      # Root has no wrangler, so without this `npx wrangler` fetches the newest release
+      # instead of the version workers/oursharedevents/package-lock.json pins.
+      - name: Install worker dependencies
+        env:
+          FORCE_CLEAN: ${{ inputs.force_clean }}
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+        working-directory: ${{ env.WORKER_DIR }}
 
       - name: Restore Playwright browser cache
         uses: actions/cache@v6
