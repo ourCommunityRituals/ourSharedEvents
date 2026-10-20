@@ -518,21 +518,28 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
       <p class="walk-in-row">Didn't register?
         <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">Check in as a walk-in</button>
       </p>
-      <div class="count" id="count" data-testid="checkin-count"></div>
+      <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
       ${privacyNotice('checkin', legalTier)}
     </div>
     <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       let tapping = false;
+      // OSE-1736: once a check-in has gone through, the page takes no more. The
+      // answer carries no count (OSE-1657), so a second tap would add one the
+      // person could never see. A failed submit leaves this false and the
+      // buttons live, so someone who lost signal can try again.
+      let checkedIn = false;
       // OSE-1373: the walk-in button declares its arrival path; the plain tap
       // declares none. A category per check-in — never who checked in.
       async function handleCheckin(e, walkIn) {
         if (e) e.preventDefault();
-        if (tapping) return;
+        if (tapping || checkedIn) return;
         tapping = true;
         const btn = document.getElementById('checkin-btn');
+        const walkInBtn = document.getElementById('walk-in-btn');
         btn.style.transform = 'scale(0.93)';
         btn.style.opacity = '0.7';
+        btn.setAttribute('aria-busy', 'true');
         try {
           await submitForm('${eventId}', 'checkin', walkIn ? {
             sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
@@ -542,11 +549,30 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
           });
           // OSE-1657: counts are post-event only, so the page confirms the
           // check-in and shows no tally.
+          checkedIn = true;
           document.getElementById('count').textContent = "You're checked in.";
+          // Both buttons read as spent, not just inert: dimmed, the label says
+          // why, and a plain cursor. The status line above is a live region, so
+          // a screen reader announces the same sentence.
+          // Not aria-disabled/disabled on purpose: the held journey test taps
+          // again and requires that tap to be a real, harmless one (it must
+          // send nothing), and it must stay a >= 44px target.
+          btn.textContent = 'Checked in';
+          [btn, walkInBtn].forEach(function (b) {
+            b.style.cursor = 'default';
+          });
+          walkInBtn.style.opacity = '0.5';
+        } catch (err) {
+          // submitForm already put the friendly error on the page; nothing
+          // more to say, and nothing to leave unhandled.
         } finally {
           tapping = false;
+          btn.removeAttribute('aria-busy');
           btn.style.transform = 'scale(1)';
-          btn.style.opacity = '1';
+          btn.style.opacity = checkedIn ? '0.5' : '1';
+          // submitForm disabled the button on the way in. A failed submit gets it
+          // back live so a retry is possible; a successful one is held by the
+          // checkedIn guard above, not by a second disable.
           btn.disabled = false;
         }
       }
