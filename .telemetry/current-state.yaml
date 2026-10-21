@@ -1,0 +1,96 @@
+# Current State: first-party measurement, no third-party analytics SDK
+# Scanned: 2026-10-04 (git-tracked files on local main checkout)
+# SDK: none (no Segment / Amplitude / Mixpanel / PostHog / GA / Workers Analytics Engine found)
+# Scope: workers/oursharedevents/src. Writes go to Cloudflare D1, aggregates export to BigQuery.
+
+events:
+  - name: qr_scan
+    status: LIVE
+    inferred_category: core_value
+    trigger: printed QR scanned (poster placement)
+    locations:
+      - workers/oursharedevents/src/handlers/qr-scan.ts:157   # enqueueOrWriteScan
+      - workers/oursharedevents/src/lib/scan-buffer.ts:78     # buildScanStatements (two split rows)
+      - workers/oursharedevents/src/index.ts:138              # queue consumer handleScanBatch
+    stores: [scan_placement_events, scan_node_returns]
+    properties_scan_placement_events: [id, event_id, poster_deployment_id, scan_bucket, created_at]
+    properties_scan_node_returns: [id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at]
+    notes: country_code written as NULL; the two rows share no durable key (OSE-798)
+  - name: shortlink_click
+    status: LIVE
+    inferred_category: acquisition
+    trigger: short link redirect resolved
+    locations:
+      - workers/oursharedevents/src/handlers/shortlink-resolve.ts:70
+      - workers/oursharedevents/src/lib/shortlinks.ts:337   # incrementClick
+    stores: [shortlinks]
+    properties: [code, clicks, last_clicked_at]
+    notes: counter on the shortlink row, not an event row
+  - name: impression
+    status: LIVE
+    inferred_category: sponsor_value
+    trigger: sponsor card rendered on a surface (beacon POST /api/v2/events/:id/sponsors/:sid/impression)
+    locations:
+      - workers/oursharedevents/src/handlers/sponsors.ts:1497   # handleLogImpression
+      - workers/oursharedevents/src/router.ts:1633
+    fired_from_templates: [public.html, display.html, poster.html, admin.html]
+    stores: [sponsor_impressions]
+    properties: [id, sponsor_id, event_id, surface, placement, event_type, h3_res7]
+  - name: click
+    status: LIVE
+    inferred_category: sponsor_value
+    trigger: sponsor card clicked (beacon POST /api/v2/events/:id/sponsors/:sid/click)
+    locations:
+      - workers/oursharedevents/src/handlers/sponsors.ts:1760   # handleLogClick
+      - workers/oursharedevents/src/router.ts:1641
+    stores: [sponsor_impressions]
+    properties: [id, sponsor_id, event_id, surface, placement, event_type, h3_res7]
+  - name: checkin
+    status: LIVE
+    inferred_category: core_value
+    trigger: anonymous check-in form submitted (Turnstile-guarded)
+    locations:
+      - workers/oursharedevents/src/handlers/forms.ts:399
+    stores: [checkin_counts]
+    properties: [id, event_id, total_count, walk_in_count, updated_at, last_anonymous_id]
+  - name: email_signup
+    status: LIVE
+    inferred_category: lifecycle
+    locations:
+      - workers/oursharedevents/src/handlers/forms.ts:531
+    stores: [email_signups]
+    properties: [id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at]
+  - name: report_access
+    status: LIVE
+    inferred_category: report_usage
+    trigger: SharedReport read, granted or denied
+    locations:
+      - workers/oursharedevents/src/lib/audit-log.ts:112   # logReportAccess
+      - workers/oursharedevents/src/handlers/shared-report-read.ts:75
+      - workers/oursharedevents/src/handlers/shared-report-read.ts:83
+      - workers/oursharedevents/src/handlers/shared-report-read.ts:198
+      - workers/oursharedevents/src/handlers/shared-report-read.ts:239
+      - workers/oursharedevents/src/handlers/shared-report-read.ts:328
+    stores: [report_access_log]
+    properties: [id, date, event_id, role, outcome, access_count]
+
+derived_aggregates:   # written by materializers, not by user actions
+  - table: scan_aggregates
+    location: workers/oursharedevents/src/lib/shared-report.ts:762
+  - table: scan_cell_aggregates
+    location: workers/oursharedevents/src/lib/shared-report.ts:876
+  - table: anon_id_returns
+    location: workers/oursharedevents/src/lib/shared-report.ts:277
+  - table: corridor_density_snapshots
+    location: workers/oursharedevents/src/lib/shared-report.ts:427
+
+identity:
+  identify_calls: []
+  group_calls: []
+  anonymous_id: cookie via getOrCreateAnonId (workers/oursharedevents/src/lib/anonymous-id.ts)
+  tenancy: brand_id on events and audit rows; admin_brand_memberships; node_hierarchy (parent/child)
+
+patterns:
+  naming_style: table-per-measure; event_type column values 'impression' and 'click'
+  centralized: partial (scan path via scan-buffer + queue; beacons via handlers/sponsors.ts; counters inline)
+  orphaned_events: 0

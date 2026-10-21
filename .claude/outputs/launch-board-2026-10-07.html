@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Launch board</title>
+    <style>
+      :root {
+        --page: #ffffff;
+        --band: #eeeeee;
+        --rule: #cccccc;
+        --ink: #000000;
+        --quiet: #555555;
+        --link: #0000ee;
+        --you: #0000ee;
+        --you-ink: #ffffff;
+        --card: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --page: #1b1f27;
+          --band: #262b36;
+          --rule: #414958;
+          --ink: #f2f2f2;
+          --quiet: #b4bcc9;
+          --link: #9dbdff;
+          --you: #9dbdff;
+          --you-ink: #10131a;
+          --card: #1f242e;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font:
+          15px/1.45 Verdana,
+          Geneva,
+          Tahoma,
+          sans-serif;
+      }
+      a {
+        color: var(--link);
+      }
+      :focus-visible {
+        outline: 3px solid var(--link);
+        outline-offset: 2px;
+      }
+      header {
+        padding: 20px 16px 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+      h1 {
+        margin: 0;
+        font:
+          700 28px/1.15 Georgia,
+          'Times New Roman',
+          serif;
+      }
+      .asof {
+        margin: 6px 0 0;
+        color: var(--quiet);
+        max-width: 70ch;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--band);
+        border-bottom: 1px solid var(--rule);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .filters fieldset {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+      .filters legend {
+        float: left;
+        margin-right: 8px;
+        padding: 0;
+        color: var(--quiet);
+        line-height: 44px;
+      }
+      button.chip {
+        min-height: 44px;
+        padding: 0 14px;
+        font: inherit;
+        color: var(--ink);
+        background: var(--page);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      button.chip[aria-pressed='true'] {
+        background: var(--ink);
+        color: var(--page);
+        border-color: var(--ink);
+      }
+      .board {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(250px, 1fr);
+        gap: 12px;
+        padding: 16px;
+        overflow-x: auto;
+        align-items: start;
+      }
+      section.col {
+        background: var(--band);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        min-height: 120px;
+      }
+      section.col h2 {
+        margin: 0;
+        padding: 10px 12px;
+        font:
+          700 18px/1.2 Georgia,
+          'Times New Roman',
+          serif;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--rule);
+      }
+      section.col h2 span {
+        font:
+          400 15px/1.45 Verdana,
+          Geneva,
+          Tahoma,
+          sans-serif;
+        color: var(--quiet);
+      }
+      /* The one loud thing: what only the owner can move. */
+      section.col.wait {
+        border: 2px solid var(--you);
+      }
+      section.col.wait h2 {
+        background: var(--you);
+        color: var(--you-ink);
+        border-bottom: 0;
+      }
+      section.col.wait h2 span {
+        color: var(--you-ink);
+      }
+      ol.cards {
+        list-style: none;
+        margin: 0;
+        padding: 8px;
+        display: grid;
+        gap: 8px;
+      }
+      li.card {
+        background: var(--card);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        padding: 10px 10px 10px 12px;
+      }
+      .card .top {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .card .id {
+        font-weight: 700;
+      }
+      .card .step {
+        color: var(--quiet);
+        white-space: nowrap;
+      }
+      .card .title {
+        margin: 4px 0 0;
+      }
+      .card .note {
+        margin: 6px 0 0;
+        color: var(--quiet);
+        font-size: 13px;
+      }
+      .card .meta {
+        margin: 8px 0 0;
+        font-size: 13px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        color: var(--quiet);
+      }
+      .lane::before {
+        content: '';
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        margin-right: 6px;
+        border: 2px solid var(--ink);
+        vertical-align: baseline;
+      }
+      .lane.you::before {
+        background: var(--you);
+        border-color: var(--you);
+      }
+      .lane.fe::before {
+        border-radius: 50%;
+      }
+      .lane.sec::before {
+        background: var(--ink);
+      }
+      .empty {
+        margin: 0;
+        padding: 14px 12px;
+        color: var(--quiet);
+      }
+      footer {
+        padding: 0 16px 24px;
+        color: var(--quiet);
+        max-width: 80ch;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Launch board</h1>
+      <p class="asof">
+        Security and front-end stories in the agreed order. A snapshot taken on 7 October 2026;
+        Linear is the live record. Launch day is 24 October and the merge freeze is 20 October.
+      </p>
+    </header>
+
+    <div class="filters">
+      <fieldset id="f-when">
+        <legend>When</legend>
+      </fieldset>
+      <fieldset id="f-lane">
+        <legend>Whose</legend>
+      </fieldset>
+    </div>
+
+    <main class="board" id="board" aria-live="polite"></main>
+
+    <footer>
+      <p>
+        The number on a card is its place in the order within its group. Cards that share a number
+        can be done in any order. A square marks security and backend, a circle marks front end, a
+        filled blue square marks something only you can do.
+      </p>
+    </footer>
+
+    <script>
+      const WHEN = [
+        'Before launch, Oct 8 to 22',
+        'Launch, Oct 22 to 24',
+        'After launch, to Nov 5',
+        'Nov 5 to 19',
+        'Nov 19 to Dec 3',
+      ];
+      const COLS = [
+        ['wait', 'Waiting on you'],
+        ['blocked', 'Blocked'],
+        ['todo', 'To do'],
+        ['doing', 'In progress'],
+        ['review', 'In review'],
+        ['done', 'Done'],
+      ];
+      const LANES = { you: 'Yours', sec: 'Security and backend', fe: 'Front end' };
+
+      // [when, lane, step, id, title, column, note]
+      const CARDS = [
+        [
+          0,
+          'you',
+          '1',
+          '',
+          'Launch scope and who has admin on launch day',
+          'done',
+          'Founder only. Merge freeze Oct 20.',
+        ],
+        [
+          0,
+          'you',
+          '2',
+          'OSE-1493',
+          'Decide: the anonymous id in the forms database',
+          'done',
+          'Per-event keyed id, not removal.',
+        ],
+        [
+          0,
+          'you',
+          '3',
+          'OSE-1496',
+          'Decide: past the scan limit, and the 4-scan probe',
+          'done',
+          'Send on uncounted. Probe accepted for launch and recorded.',
+        ],
+        [
+          0,
+          'you',
+          '4',
+          'OSE-1467',
+          'Rotate the exposed credentials',
+          'wait',
+          'In a separate terminal. Six steps on the ticket.',
+        ],
+        [
+          0,
+          'you',
+          '4',
+          'OSE-1470',
+          'Delete the old CI artifacts',
+          'wait',
+          'Code is complete. 229 artifacts left; the last expires Oct 22.',
+        ],
+        [
+          0,
+          'you',
+          '5',
+          'OSE-1353',
+          'Create the production Access app',
+          'wait',
+          'About 10 minutes in the dashboard. Also issue a production-only service token.',
+        ],
+        [0, 'you', '6', 'OSE-1478', 'Two-factor on every owner account', 'wait', ''],
+        [
+          0,
+          'you',
+          '7',
+          'OSE-1620',
+          'Decide: the eight toast assumptions',
+          'done',
+          'All eight accepted.',
+        ],
+        [
+          0,
+          'you',
+          '7',
+          'OSE-1643',
+          'Decide: a live event that is off the map',
+          'done',
+          'Its page opens by link.',
+        ],
+        [
+          0,
+          'you',
+          '7',
+          'OSE-292',
+          'Decide: first action in view on the event page',
+          'done',
+          'One short scroll is accepted.',
+        ],
+
+        [
+          0,
+          'sec',
+          '1',
+          'OSE-1369',
+          'Pin wrangler to one exact version',
+          'review',
+          'Pull request 856.',
+        ],
+        [
+          0,
+          'sec',
+          '2',
+          'OSE-1506',
+          'Run the adversarial tests every night',
+          'wait',
+          'The ticket asks for your sign-off before it is built.',
+        ],
+        [
+          0,
+          'sec',
+          '3',
+          'OSE-1493',
+          'Per-event keyed id in the forms database',
+          'todo',
+          'Decided today. Lifts the veto on production scans.',
+        ],
+        [
+          0,
+          'sec',
+          '4',
+          'OSE-1496',
+          'Scan limit and the unsigned cookie',
+          'doing',
+          'Limit merged in pull request 852. Threat-model note left; signing is after launch.',
+        ],
+        [
+          0,
+          'sec',
+          '5',
+          'OSE-1415',
+          'Founder sign-in check on production',
+          'blocked',
+          'The row exists. Waits on OSE-1353.',
+        ],
+        [
+          0,
+          'sec',
+          '5',
+          'OSE-1512',
+          'Production health names its commit',
+          'blocked',
+          'Fixed on main. Waits on a production deploy.',
+        ],
+        [
+          0,
+          'sec',
+          '5',
+          'OSE-1466',
+          'Credential isolation, item 0.7',
+          'blocked',
+          'Items 0.1 and 0.6 are done. 0.7 waits on OSE-1353.',
+        ],
+        [
+          0,
+          'sec',
+          '5',
+          'OSE-1418',
+          'Point the monitors at production',
+          'blocked',
+          'Waits on OSE-1353.',
+        ],
+        [
+          0,
+          'sec',
+          '6',
+          'OSE-1494',
+          'Form logs without the anonymous id',
+          'doing',
+          'State not checked.',
+        ],
+        [
+          0,
+          'sec',
+          '6',
+          'OSE-1495',
+          'Erasure without the email hash',
+          'doing',
+          'State not checked.',
+        ],
+        [
+          0,
+          'sec',
+          '6',
+          'OSE-1492',
+          'Error log without signed links',
+          'doing',
+          'State not checked.',
+        ],
+        [
+          0,
+          'sec',
+          '7',
+          'OSE-1227',
+          'Wire the test-pool manifest check into CI',
+          'todo',
+          'The manifest is 131 specs behind.',
+        ],
+
+        [
+          0,
+          'fe',
+          '1',
+          'OSE-1578',
+          'Browser red tests',
+          'doing',
+          'Close once the staging chain is green.',
+        ],
+        [
+          0,
+          'fe',
+          '1',
+          'OSE-1568',
+          'Red-test layer',
+          'doing',
+          'Close once staging is green. One guard passes for the wrong reason.',
+        ],
+        [
+          0,
+          'fe',
+          '2',
+          'OSE-1601',
+          'Security, contract and Bruno levels',
+          'doing',
+          'Part went in with pull request 850.',
+        ],
+        [0, 'fe', '3', 'OSE-1591', 'Tests for the TV display', 'todo', ''],
+        [0, 'fe', '3', 'OSE-1592', 'Tests for Logs', 'todo', ''],
+        [0, 'fe', '3', 'OSE-1593', 'Tests for Settings', 'todo', ''],
+        [0, 'fe', '3', 'OSE-1595', 'Tests for the create flow', 'todo', ''],
+        [
+          0,
+          'fe',
+          '3',
+          'OSE-1597',
+          'Tests for the poster layout',
+          'todo',
+          'Includes the WebKit run.',
+        ],
+        [0, 'fe', '3', 'OSE-1598', 'Tests for organizer entry', 'todo', ''],
+        [0, 'fe', '4', 'OSE-1636', 'Create flow, slice 2', 'doing', 'Check what was built first.'],
+        [
+          0,
+          'fe',
+          '5',
+          'OSE-1620',
+          'Toast, version 2',
+          'todo',
+          'Assumptions accepted today. Hub rework is next.',
+        ],
+        [0, 'fe', '5', 'OSE-1564', 'Toast service', 'blocked', 'Waits on OSE-1620.'],
+        [
+          0,
+          'fe',
+          '5',
+          'OSE-1644',
+          'Core values leftovers: the two map toasts',
+          'doing',
+          'Three parts merged. The toasts wait on OSE-1564.',
+        ],
+        [
+          0,
+          'fe',
+          '6',
+          'OSE-1643',
+          'Off-map live event opens by link',
+          'todo',
+          'Question 4 decided today.',
+        ],
+
+        [
+          1,
+          'sec',
+          '1',
+          'OSE-1491',
+          'Launch security checklist',
+          'todo',
+          'Run from the production smoke, the canary and the monitors.',
+        ],
+
+        [
+          2,
+          'you',
+          '1',
+          'OSE-1446',
+          'Role and capability matrix',
+          'wait',
+          'A team decision. Everything below it in this group waits on it.',
+        ],
+        [
+          2,
+          'sec',
+          '2',
+          'OSE-1554',
+          'Add roles to the brand test fixture',
+          'todo',
+          'Brands and routes exist. Roles do not.',
+        ],
+        [2, 'sec', '3', 'OSE-841', 'Capability module', 'blocked', 'Waits on OSE-1446.'],
+        [
+          2,
+          'sec',
+          '4',
+          'OSE-850',
+          'Global flags and per-event overrides',
+          'doing',
+          'Global part merged. The rest waits on OSE-841.',
+        ],
+        [
+          2,
+          'sec',
+          '5',
+          'OSE-845',
+          'Event write path',
+          'doing',
+          'Create and update merged. The rest waits on OSE-841.',
+        ],
+        [
+          2,
+          'sec',
+          '6',
+          'OSE-849',
+          'Capability gates on five handlers',
+          'blocked',
+          'Waits on OSE-841.',
+        ],
+        [
+          2,
+          'you',
+          '7',
+          'OSE-1561',
+          'Organizers sharing the platform brand',
+          'wait',
+          'Two questions for you before it can be built.',
+        ],
+        [2, 'sec', '8', 'OSE-857', 'Red team across four roles', 'blocked', 'Waits on OSE-841.'],
+        [
+          2,
+          'sec',
+          '9',
+          'OSE-1447',
+          'Platform data stays platform-only',
+          'doing',
+          'Guards merged. Test tiers and a second approver are left.',
+        ],
+        [
+          2,
+          'sec',
+          '10',
+          'OSE-1456',
+          'Gate: no client admin until the above is done',
+          'blocked',
+          'Follows the rest of this group.',
+        ],
+        [2, 'you', '1', 'OSE-1557', 'Tablet layout', 'wait', 'Choose option a, b or c.'],
+        [2, 'fe', '2', 'OSE-1599', 'Toast test levels', 'blocked', 'Waits on the toast.'],
+        [2, 'you', '3', 'OSE-1642', 'What a draft link shows', 'wait', ''],
+        [2, 'you', '3', 'OSE-1646', 'Logo proxy: an error or the default image', 'wait', ''],
+        [2, 'you', '3', 'OSE-1630', 'Sponsor line on the SharedReport', 'wait', ''],
+        [
+          2,
+          'you',
+          '3',
+          'OSE-1641',
+          'Where "plant my flag" goes',
+          'wait',
+          'Needs the destination address.',
+        ],
+
+        [3, 'sec', '1', 'OSE-1475', 'The Worker never emits a token', 'todo', ''],
+        [3, 'you', '1', 'OSE-1471', 'Access session hardening', 'wait', 'A dashboard setting.'],
+        [3, 'you', '1', 'OSE-1472', 'Device posture for admin', 'wait', 'A dashboard setting.'],
+        [3, 'sec', '1', 'OSE-1473', 'Admin on its own hostname', 'todo', ''],
+        [3, 'you', '1', 'OSE-1474', 'No browser extensions on admin', 'wait', 'A browser policy.'],
+        [3, 'sec', '1', 'OSE-1476', 'Session kill and rotation runbook', 'todo', ''],
+        [3, 'sec', '2', 'OSE-1445', 'Spike: an append-only audit log', 'todo', ''],
+        [3, 'sec', '2', 'OSE-1448', 'Audit every admin request', 'todo', ''],
+        [3, 'sec', '2', 'OSE-1449', 'Tamper-evident audit log', 'todo', ''],
+        [3, 'sec', '2', 'OSE-1450', 'Audit reliability and alerting', 'todo', ''],
+        [3, 'sec', '3', 'OSE-1458', 'Durable, honest erasure', 'todo', ''],
+        [3, 'sec', '3', 'OSE-1133', 'Two-person admin rights', 'todo', ''],
+        [3, 'sec', '4', 'OSE-403', 'Probes: tenant isolation', 'todo', ''],
+        [3, 'sec', '4', 'OSE-404', 'Probe: identity leak', 'todo', ''],
+        [3, 'sec', '4', 'OSE-405', 'Probe: re-identification', 'todo', ''],
+        [3, 'sec', '4', 'OSE-926', 'Coverage of the anonymity rules', 'todo', ''],
+        [
+          3,
+          'fe',
+          '1',
+          'OSE-1640',
+          'Settings, slice 2',
+          'blocked',
+          'Needs the brands table, OSE-1553.',
+        ],
+        [3, 'fe', '1', 'OSE-1639', 'Logs, slice 2', 'blocked', 'The records are not stored yet.'],
+        [3, 'fe', '1', 'OSE-1645', 'SharedReport, slice 2', 'blocked', 'Needs OSE-1552.'],
+        [3, 'fe', '1', 'OSE-1525', 'Manager home', 'blocked', 'Needs OSE-1552.'],
+        [3, 'fe', '1', 'OSE-1556', 'Brand pages', 'blocked', 'Needs OSE-1555 and OSE-1553.'],
+        [
+          3,
+          'fe',
+          '2',
+          '',
+          'Android, new iPhone and old iPhone checks',
+          'todo',
+          'Parked until after launch. The plan is written.',
+        ],
+
+        [4, 'sec', '1', 'OSE-1391', 'Content policy without inline styles', 'todo', ''],
+        [4, 'sec', '1', 'OSE-638', 'Form pages: nonce policy and HSTS', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1500', 'Cross-site guard on admin writes', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1497', 'Registration self-delete', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1124', 'Unused tables with personal columns', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1125', 'Test for the open-redirect guard', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1126', 'Covenant check that passes when it cannot run', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1430', 'Ledger tests that prove themselves', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1425', 'A third way into live', 'todo', ''],
+        [4, 'sec', '1', 'OSE-1426', 'Go-live evidence counts', 'todo', ''],
+        [4, 'sec', '2', 'OSE-1479', 'GitHub organization baseline', 'todo', 'Written work.'],
+        [
+          4,
+          'sec',
+          '2',
+          'OSE-1480',
+          'Cloudflare tokens at least privilege',
+          'todo',
+          'Written work.',
+        ],
+        [4, 'sec', '2', 'OSE-1481', 'DNS and registrar hardening', 'todo', 'Written work.'],
+        [4, 'sec', '2', 'OSE-1482', 'Email domain authentication', 'todo', 'Written work.'],
+        [4, 'sec', '2', 'OSE-1483', 'Backups and disaster recovery', 'todo', 'Written work.'],
+        [4, 'sec', '2', 'OSE-1484', 'Alerting and on-call', 'todo', 'Written work.'],
+        [4, 'sec', '2', 'OSE-1485', 'Incident response plan', 'todo', 'Written work.'],
+        [
+          4,
+          'sec',
+          '2',
+          'OSE-1486',
+          'Threat model',
+          'todo',
+          'Two accepted risks are already noted on the ticket.',
+        ],
+        [4, 'sec', '2', 'OSE-1487', 'Outside penetration test', 'todo', 'Written work.'],
+        [
+          4,
+          'fe',
+          '1',
+          '',
+          'Street map, OSE-1535 to OSE-1545',
+          'todo',
+          'Eleven stories. No priority set.',
+        ],
+        [4, 'fe', '1', 'OSE-1530', 'Street map', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1546', 'Landing', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1547', 'Landing', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1549', 'Landing', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1550', 'Landing', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1517', 'Poster drag and drop', 'todo', 'No priority set.'],
+        [4, 'fe', '1', 'OSE-1533', 'Check-in colour mismatch', 'todo', 'No priority set.'],
+      ];
+
+      const state = { when: 0, lanes: { you: true, sec: true, fe: true } };
+      try {
+        const saved = JSON.parse(localStorage.getItem('launch-board') || 'null');
+        if (saved && typeof saved.when === 'number' && saved.lanes) Object.assign(state, saved);
+      } catch (e) {
+        /* storage unavailable: start from the defaults */
+      }
+      const remember = () => {
+        try {
+          localStorage.setItem('launch-board', JSON.stringify(state));
+        } catch (e) {
+          /* fine without it */
+        }
+      };
+
+      const el = (tag, cls, text) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      };
+
+      function chip(label, pressed, onPress) {
+        const b = el('button', 'chip', label);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(pressed));
+        b.addEventListener('click', onPress);
+        return b;
+      }
+
+      function drawFilters() {
+        const when = document.getElementById('f-when');
+        const lane = document.getElementById('f-lane');
+        [...when.querySelectorAll('button')].forEach((b) => b.remove());
+        [...lane.querySelectorAll('button')].forEach((b) => b.remove());
+        when.appendChild(chip('Everything', state.when === -1, () => set({ when: -1 })));
+        WHEN.forEach((w, i) => when.appendChild(chip(w, state.when === i, () => set({ when: i }))));
+        Object.entries(LANES).forEach(([k, label]) =>
+          lane.appendChild(
+            chip(label, state.lanes[k], () =>
+              set({ lanes: { ...state.lanes, [k]: !state.lanes[k] } })
+            )
+          )
+        );
+      }
+
+      function card([when, lane, step, id, title, , note]) {
+        const li = el('li', 'card');
+        const top = el('div', 'top');
+        if (id) {
+          const a = el('a', 'id', id);
+          a.href = 'https://linear.app/oursharedevents/issue/' + id;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          top.appendChild(a);
+        } else {
+          top.appendChild(el('span', 'id', 'No ticket'));
+        }
+        top.appendChild(el('span', 'step', 'Step ' + step));
+        li.appendChild(top);
+        li.appendChild(el('p', 'title', title));
+        if (note) li.appendChild(el('p', 'note', note));
+        const meta = el('p', 'meta');
+        meta.appendChild(el('span', 'lane ' + lane, LANES[lane]));
+        if (state.when === -1) meta.appendChild(el('span', '', WHEN[when]));
+        li.appendChild(meta);
+        return li;
+      }
+
+      function drawBoard() {
+        const board = document.getElementById('board');
+        board.replaceChildren();
+        const shown = CARDS.filter(
+          (c) => (state.when === -1 || c[0] === state.when) && state.lanes[c[1]]
+        );
+        for (const [key, name] of COLS) {
+          const mine = shown.filter((c) => c[5] === key);
+          const col = el('section', 'col ' + key);
+          const h = el('h2', '', name);
+          h.appendChild(el('span', '', String(mine.length)));
+          col.appendChild(h);
+          if (mine.length) {
+            const list = el('ol', 'cards');
+            mine.forEach((c) => list.appendChild(card(c)));
+            col.appendChild(list);
+          } else {
+            col.appendChild(el('p', 'empty', 'Nothing here.'));
+          }
+          board.appendChild(col);
+        }
+      }
+
+      function set(patch) {
+        Object.assign(state, patch);
+        remember();
+        drawFilters();
+        drawBoard();
+      }
+
+      drawFilters();
+      drawBoard();
+    </script>
+  </body>
+</html>
