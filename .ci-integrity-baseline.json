@@ -1,7 +1,7 @@
 {
   "_comment": "CI integrity ratchet baseline (OSE-1606). Each count may only move in its good direction (most may only fall; the token-split keys say theirs in `direction`, OSE-1695); every entry carries a reason.",
   "continueOnError": {
-    "total": 22,
+    "total": 20,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -20,7 +20,7 @@
         "reason": "Nightly deployed-staging audit is advisory; the PR-code mobile audit in oursharedevents-ci.yml blocks."
       },
       ".github/workflows/oursharedevents-ci.yml": {
-        "count": 10,
+        "count": 8,
         "reason": "Root-only hub staging steps (best-effort, @ocr/ui not imported, OSE-341) and dorny/test-reporter check publishers; reporters never gate, the test step does."
       },
       ".github/workflows/red-team-adversarial.yml": {
