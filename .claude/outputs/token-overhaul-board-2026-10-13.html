@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Token overhaul board</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --surface: #ffffff;
+        --text: #14181f;
+        --muted: #5a6475;
+        --line: #dde1e8;
+        --accent: #1f5fd1;
+        --done: #1a7f4b;
+        --done-bg: #e3f4ea;
+        --po: #9a5b00;
+        --po-bg: #fdf0d9;
+        --agent: #5b3fc4;
+        --agent-bg: #ece8fb;
+        --blocked: #6b7280;
+        --blocked-bg: #eceef2;
+        --warn: #a3281c;
+        --warn-bg: #fbe6e3;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1218;
+          --surface: #171c25;
+          --text: #e8ecf3;
+          --muted: #9aa5b8;
+          --line: #2a3140;
+          --accent: #6fa0ff;
+          --done: #5fd18f;
+          --done-bg: #12301f;
+          --po: #f2b24a;
+          --po-bg: #35270f;
+          --agent: #b3a1ff;
+          --agent-bg: #272046;
+          --blocked: #8d97a8;
+          --blocked-bg: #212733;
+          --warn: #ff8f82;
+          --warn-bg: #3a1a17;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          16px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      h1 {
+        font-size: 1.6rem;
+        margin: 0 0 4px;
+        line-height: 1.2;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin: 0 0 10px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 18px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+      .stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        margin-bottom: 16px;
+      }
+      .stat .n {
+        font-size: 1.9rem;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .stat .l {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .bar {
+        height: 10px;
+        background: var(--blocked-bg);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      .bar > span {
+        display: block;
+        height: 100%;
+        background: var(--done);
+        width: 0;
+        transition: width 0.3s;
+      }
+      .pipeline {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        margin-bottom: 16px;
+      }
+      .pipe {
+        position: relative;
+      }
+      .pipe .t {
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .pipe .nm {
+        font-weight: 600;
+        margin: 2px 0 8px;
+        font-size: 0.95rem;
+      }
+      .pipe .c {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .now {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        margin-bottom: 16px;
+      }
+      .now h2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .now ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+      .now li {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .id {
+        font:
+          600 0.8rem ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        color: var(--muted);
+        min-width: 2.6rem;
+      }
+      .empty {
+        color: var(--muted);
+      }
+      .rules {
+        margin-bottom: 16px;
+        border-left: 4px solid var(--warn);
+      }
+      .rules ul {
+        margin: 6px 0 0;
+        padding-left: 20px;
+      }
+      .phase {
+        margin-bottom: 16px;
+      }
+      .phase header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .phase .meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .task {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 10px;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      .task:first-of-type {
+        border-top: 0;
+      }
+      .box {
+        width: 22px;
+        height: 22px;
+        border: 2px solid var(--line);
+        border-radius: 6px;
+        margin-top: 2px;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        line-height: 1;
+      }
+      .task.done .box {
+        background: var(--done);
+        border-color: var(--done);
+        color: #fff;
+      }
+      .task.doing .box {
+        border-color: var(--accent);
+      }
+      .task.done .title {
+        text-decoration: line-through;
+        color: var(--muted);
+      }
+      .title {
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        align-items: center;
+        margin-top: 4px;
+      }
+      .chip {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 2px 8px;
+        border-radius: 99px;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .chip.po {
+        background: var(--po-bg);
+        color: var(--po);
+      }
+      .chip.agent {
+        background: var(--agent-bg);
+        color: var(--agent);
+      }
+      .chip.both {
+        background: var(--blocked-bg);
+        color: var(--text);
+      }
+      .chip.done {
+        background: var(--done-bg);
+        color: var(--done);
+      }
+      .chip.ready {
+        background: var(--accent);
+        color: #fff;
+      }
+      .chip.blocked {
+        background: var(--blocked-bg);
+        color: var(--blocked);
+      }
+      .chip.doing {
+        background: var(--agent-bg);
+        color: var(--agent);
+      }
+      .ev,
+      .note {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .note {
+        margin-top: 2px;
+      }
+      .filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 0 0 12px;
+      }
+      .filters button {
+        font: inherit;
+        font-size: 0.9rem;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 99px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .filters button[aria-pressed='true'] {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 8px 10px;
+        border-top: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        border-top: 0;
+      }
+      .two {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        margin-top: 16px;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      code {
+        font:
+          0.85em ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Token overhaul board</h1>
+      <p class="sub">
+        OSE-1695 and OSE-1467 &middot; updated <span id="upd"></span> &middot; production stays on
+        hold &middot; no secret value ever appears here
+      </p>
+
+      <div class="grid stats" id="stats"></div>
+      <div class="grid pipeline" id="pipeline" aria-label="Phases"></div>
+
+      <div class="card rules">
+        <h2>Rules for every step</h2>
+        <ul>
+          <li>
+            <strong>Privacy first:</strong> end-user data is never read, queried or pasted. Evidence
+            is by name, date or log line only.
+          </li>
+          <li>
+            <strong>You do every secret operation</strong> in your own terminal or a browser I am
+            not connected to. I verify afterwards.
+          </li>
+          <li>
+            <strong>One credential at a time:</strong> create, set the secret, run a job that uses
+            it, read the log, then delete the old one at the provider.
+          </li>
+          <li>
+            <strong>Gates only improve:</strong> a measurement may rise, never regress (ratchet).
+            Born-red before trust.
+          </li>
+          <li>
+            <strong>Stop and tell me</strong> if the PAT is classic with admin elsewhere, a
+            credential you did not create appears in an audit log, or a verifying run is red for an
+            auth reason.
+          </li>
+        </ul>
+      </div>
+
+      <div class="now" id="now"></div>
+
+      <div class="filters" role="group" aria-label="Filter tasks" id="filters"></div>
+      <div id="phases"></div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>Token matrix (names and rights, no values)</h2>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Right</th>
+                  <th>Target</th>
+                  <th>Held in</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody id="matrix"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Secret baseline (names and dates, read 2026-10-13)</h2>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Level</th>
+                  <th>Dated</th>
+                </tr>
+              </thead>
+              <tbody id="baseline"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px">
+        <h2>Not closed by tonight (owned by other stories)</h2>
+        <ul style="margin: 0; padding-left: 20px">
+          <li>
+            Required review on <code>main</code> (OSE-1698) and a tag ruleset for
+            <code>v*.*.*</code> and a required reviewer on <code>production</code> (OSE-1693).
+            Splitting the PAT narrows its reach across repos; it does not remove a write token's
+            ability to land and ship code in this repo.
+          </li>
+          <li>
+            Separate agent identity over every channel (OSE-1697). Today this machine's GitHub login
+            has <code>admin:org</code>, <code>repo</code> and <code>workflow</code>.
+          </li>
+          <li>
+            Deploy credentials into environments, one secret per PR, after launch (OSE-1699). The T2
+            to T4 sub-jobs read <code>CLOUDFLARE_API_TOKEN_OSE</code> 26 times and have no
+            <code>environment:</code> yet.
+          </li>
+          <li>
+            Data-protection keys are not rotated: <code>FORMS_ENCRYPTION_KEY</code>, the peppers,
+            the signing secrets, <code>WIF_*</code>. A new value breaks stored data.
+          </li>
+        </ul>
+      </div>
+
+      <footer>
+        Source of truth: the <code>TASKS</code> list in this file. Plan:
+        <code>.claude/outputs/TOKEN-OVERHAUL-TONIGHT-2026-10-12.md</code> on <code>main</code>. PR
+        draft: <code>.claude/outputs/PR-HUB-READ-TOKEN-2026-10-13.md</code>.
+      </footer>
+    </div>
+
+    <script>
+      /* ===== data: edit status here; everything else is derived ===== */
+      const UPDATED = '2026-10-15';
+      const PHASES = [
+        { id: 'D', name: 'Decisions', blurb: 'Answers that unblock work' },
+        { id: '0', name: 'Before anything', blurb: 'Revoke, read, identify' },
+        { id: '1', name: 'Create', blurb: 'Replacement credentials and environments' },
+        { id: '2', name: 'Read-swap PR', blurb: 'Hub and OCR-docs reads move to OCR_HUB_READ' },
+        { id: '3', name: 'Write sites', blurb: 'Each write path gets its own token' },
+        { id: '4', name: 'Rotate', blurb: 'One credential at a time' },
+        { id: '5', name: 'Gaps and cleanup', blurb: 'Monitors, deletions, record' },
+      ];
+      /* status: todo | doing | done.  owner: PO | AGENT | BOTH.  after: ids that must be done first. */
+      const TASKS = [
+        // Decisions
+        {
+          id: 'D1',
+          phase: 'D',
+          title: 'Name of the main-only environment',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Blocks 1.1, 1.3, 1.4 and phase 3. OSE-1693 owns the checked-in definition.',
+          note: 'DECIDED 2026-10-14: main-automation (deployment branch main only). Holds OCR_AUTOMATION_WRITE, OCR_NOTIFY_OSM, BRANCH_PROTECTION_READ_TOKEN.',
+        },
+        {
+          id: 'D2',
+          phase: 'D',
+          title:
+            'Keep the one-line OCR_HUB_READ env edit in the deploy jobs inside the PR, or hand it to OSE-1693',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Recommended: keep. The script has no fallback, so leaving the old name fails T1 deploys.',
+        },
+        {
+          id: 'D3',
+          phase: 'D',
+          title: 'Add workflow_dispatch to notify-osm so it can be tested on demand',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'Today it runs only on a push touching the flag files, so 3.2 cannot be verified on demand.',
+        },
+        {
+          id: 'D4',
+          phase: 'D',
+          title: 'Confirm ADR-020 and the runbook get the secret-name correction in this PR',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Name-only edits, no decision text changed. AGENTS.md requires an ADR to match the code.',
+        },
+        {
+          id: 'D5',
+          phase: 'D',
+          title: 'Also create OCR_HUB_READ as a Dependabot secret?',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Recommended: yes. Dependabot PRs fail T0 Gate (tests) and Validate against OCR-docs brain today.',
+        },
+        {
+          id: 'E1',
+          phase: 'D',
+          title: 'Does production hold any real end-user records today?',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Owner answer 2026-10-14: no. No real end-user data is exposed through production today; the risk is the path to it, which matters before the first real client.',
+        },
+
+        // Phase 0
+        {
+          id: '0.1',
+          phase: '0',
+          title:
+            'Revoke the exposed Anthropic key at the provider; remove primaryApiKey and its customApiKeyResponses entry',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'You confirm. I never open ~/.claude/config.json.',
+          note: '2026-10-14: config entry removed, transcript redacted (2 matches), ~/.claude re-scan finds none. OPEN: claude_code_key_mzdano_zvge (legacy, not linked, scope Claude Code, created 2026-03-29, no expiry). Owner read Last used = 30+ days ago (dormant). DONE 2026-10-14: owner deleted both Console keys (claude_code_key_mzdano_zvge and the expired ourwkrp-ci-claude-review); the Console now lists no API keys. Config entry removed, transcript redacted, ~/.claude re-scan clean.',
+        },
+        {
+          id: '0.2',
+          phase: '0',
+          title:
+            'Read the GitHub org audit log and the Cloudflare audit log (30 days); note names and times in OSE-1467',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'Look for: Worker script updates not from CI, D1 queries or exports, R2/KV reads, secret changes, token creation, tag pushes, deploy_production dispatches, merges by the PAT identity. Names and times only.',
+        },
+        {
+          id: '0.3',
+          phase: '0',
+          title:
+            'Read the PAT behind OCR_PROPAGATE_TOKEN: type, owner, repos or scopes, expiry, last used',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Stop rule: classic with admin on other repos means rotate it first and review those repos tonight.',
+          note: '2026-10-14 DONE: OCR-propagate-token is FINE-GRAINED, owner = org ourCommunityRituals, access = ALL org repos, Contents R/W + Pull requests R/W + Metadata R, no org permissions (no admin, no secrets, no workflow-file edits), created 2026-04-05, expires 2027-04-06. Used by 6 OTHER repos too (see 3.0). Classic list for bereasonable13 has 6 tokens (repo, workflow), ALL expired and 5 never used, so none can back OCR_PROPAGATE_TOKEN (CI works with it today). FOUND: fine-grained list has 5; the one is OCR-propagate-token, last used within the last week, so it is FINE-GRAINED, not classic (stop rule not triggered). Still needed from its detail page: resource owner, repository access, permissions, expiry. Others to account for: notion_claude (used within 2 weeks), ocr-audit-read-only (within 3 months), github_notion_smallbus and claude_PAT_ose (never used): both DELETED by owner 2026-10-14.',
+        },
+        {
+          id: '0.4',
+          phase: '0',
+          title: 'Revoke or read-scope the token behind the mcp__cloudflare__* connector',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'It exposes write tools and D1, KV and R2 reads in agent sessions.',
+        },
+        {
+          id: '0.5',
+          phase: '0',
+          title:
+            'Install the merged hook: node scripts/hardening/apply-workstation.mjs, read the plan, then --apply',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'New session, then npx wrangler secret:bulk does-not-exist.json prints [wrangler-secret].',
+        },
+
+        // Phase 1
+        {
+          id: '1.1',
+          phase: '1',
+          title:
+            'Create main-automation (branch main only) and staging-pr, each with its deployment policy, through the checked-in definition (OSE-1693)',
+          owner: 'PO',
+          after: ['D1'],
+          status: 'done',
+          ev: 'Before any workflow names them: GitHub auto-creates a missing environment with no protection.',
+          note: 'PR #992 open 2026-10-14 adds step C (main-automation: branch main only, no reviewer) to scripts/hardening/apply-github.mjs. Merging creates nothing: YOU run `node scripts/hardening/apply-github.mjs` (dry run) then `--apply`. HEADS-UP: --apply also applies A (tag ruleset) and B (production reviewer + deploy refs), neither live today. staging-pr is still OSE-1693. APPLIED, verified live by me 2026-10-14: ruleset release-tags-locked active (v*, admin-role bypass only); production has reviewer bereasonable13 and refs main + v*; main-automation has custom policy, refs main only, no reviewer, no secrets yet. staging and copilot still have no policy (OSE-1693).',
+        },
+        {
+          id: '1.2',
+          phase: '1',
+          title:
+            'Create OCR_HUB_READ: org secret, this repo selected, hub and OCR-docs, Contents and Metadata read, 90 days',
+          owner: 'PO',
+          after: ['0.3'],
+          status: 'done',
+          ev: 'I confirm by name and date in gh secret list --org. Expiry 2027-01-10, reminder 2026-12-27.',
+          note: 'Created 2026-10-14 16:39:22Z by owner, visibility selected = ourSharedEvents only (verified by name and date). Fine-grained, hub + OCR-docs, Contents read; expiry set Jan 12, 2027. Because of the fallback, every job in this repo now resolves to it on its next run: proof runs dispatched on main.',
+        },
+        {
+          id: '1.2b',
+          phase: '1',
+          title: 'Create OCR_HUB_READ as a Dependabot secret too (if D5 is yes)',
+          owner: 'PO',
+          after: ['1.2', 'D5'],
+          status: 'done',
+          ev: 'gh secret list --app dependabot shows the name.',
+          note: 'Created 2026-10-14 16:56:11Z, selected = ourSharedEvents only (verified). A SEPARATE token (OCR_HUB_READ_dependabot) so Dependabot runs can be revoked independently. Dispatch proof run 38600128681: S0 and all T0 jobs success with the new token.',
+        },
+        {
+          id: '1.3',
+          phase: '1',
+          title:
+            'Create OCR_AUTOMATION_WRITE: this repo only, Contents and Pull requests write, 90 days, environment secret',
+          owner: 'PO',
+          after: ['1.1', '0.3', '2.7'],
+          status: 'done',
+          ev: 'Name and date under the main-only environment.',
+          note: 'Stored 2026-10-15 01:20:01Z in main-automation ONLY (verified by me: not at repo, org, production, staging or copilot level). No workflow names the environment yet, so it is invisible until the follow-up PR adds environment: main-automation.',
+        },
+        {
+          id: '1.4',
+          phase: '1',
+          title:
+            'Create OCR_NOTIFY_OSM: ourSharedMagnets only, Issues write, 90 days, environment secret',
+          owner: 'PO',
+          after: ['1.1', '0.3'],
+          status: 'done',
+          ev: 'Name and date under the main-only environment.',
+          note: 'Stored 2026-10-15 01:47:07Z in main-automation ONLY (verified by me: not at repo, org, production, staging or copilot). Invisible until a workflow names the environment.',
+        },
+        {
+          id: '1.5',
+          phase: '1',
+          title:
+            'Create the replacement Cloudflare token (NAME IT per the standard: CF_DEPLOY_STG / CF_DEPLOY_PRD; split after launch, OSE-1699): Workers Scripts, D1, KV, R2 edit, 90 days',
+          owner: 'PO',
+          after: ['0.2', '0.3'],
+          status: 'todo',
+          ev: 'You confirm. One account, so it is still production-capable (accepted decision).',
+        },
+
+        // Phase 2
+        {
+          id: '2.1',
+          phase: '2',
+          title:
+            'Build the gate: one enumerator, property spec, ratchet categories, retired waiver, born-red faults',
+          owner: 'AGENT',
+          after: [],
+          status: 'done',
+          ev: '22 staging steps and 6 OCR-docs checkouts wired; 2 old-token references left.',
+          note: 'Done 2026-10-13. Its workflow edits are superseded by #986; the gate is re-based in 2.3.',
+        },
+        {
+          id: '2.2',
+          phase: '2',
+          title: 'Independent review: diff scope, step count, gates, one fault of my own',
+          owner: 'AGENT',
+          after: ['2.1'],
+          status: 'done',
+          ev: '24 tracked files + 1 new, none under Worker src; ratchet green; 61 tests pass; my fault went red and restored.',
+          note: 'Done 2026-10-13.',
+        },
+        {
+          id: '2.2b',
+          phase: '2',
+          title: 'Fast-forward the worktree to main 10206fea and re-run the gates',
+          owner: 'AGENT',
+          after: ['2.2'],
+          status: 'done',
+          ev: 'Ratchet green, 61 tests pass after the move.',
+          note: 'Done 2026-10-13.',
+        },
+        {
+          id: '2.2c',
+          phase: '2',
+          title: 'Prepare commit message, PR body and owner terminal commands',
+          owner: 'AGENT',
+          after: ['2.2'],
+          status: 'done',
+          ev: '.claude/outputs/PR-HUB-READ-TOKEN-2026-10-13.md. Old-token references 30 to 2, measured.',
+          note: 'Done 2026-10-13.',
+        },
+        {
+          id: '2.0',
+          phase: '2',
+          title:
+            'PR #986 merged: reads fall back OCR_HUB_READ || OCR_PROPAGATE_TOKEN, writes OCR_AUTOMATION_WRITE || OCR_PROPAGATE_TOKEN',
+          owner: 'BOTH',
+          after: [],
+          status: 'done',
+          ev: 'Merged 2026-10-13 19:39Z. main 48295126: T1 to T4 all success. Nothing breaks if the new secrets never exist.',
+          note: 'Supersedes the no-fallback branch. Exposure is NOT reduced until the fallbacks are removed (2.8).',
+        },
+        {
+          id: '2.3',
+          phase: '2',
+          title:
+            'Ratchet PR on top of #986: one enumerator, property spec, ratchet categories for the fallback form (no workflow runtime change)',
+          owner: 'AGENT',
+          after: [],
+          status: 'done',
+          ev: 'Mergeable today: no secret has to exist. Bare secrets.OCR_PROPAGATE_TOKEN must stay at 0; fallbacks may only fall.',
+          note: 'PR #988 opened 2026-10-13: 6 files, 70+ tests, my own typo fault went red in all three layers.',
+        },
+        {
+          id: '2.4',
+          phase: '2',
+          title: 'Read the PR runs: lint-shard ratchet and root-vitest spec green in the log',
+          owner: 'AGENT',
+          after: ['2.3'],
+          status: 'done',
+          ev: 'Run id and the log line, not just a green check.',
+        },
+        {
+          id: '2.5',
+          phase: '2',
+          title: 'Merge the PR',
+          owner: 'PO',
+          after: ['2.4'],
+          status: 'done',
+          ev: 'Merged 2026-10-14 14:12Z as f668b33e. First S0 failure (detect-secrets, 5 names) was reworded, not baselined; PR ended 38 pass, 0 fail.',
+        },
+        {
+          id: '2.6',
+          phase: '2',
+          title:
+            'Post-merge: T1 to T4 all success for the merge SHA; comment the run id on OSE-1695',
+          owner: 'AGENT',
+          after: ['2.5'],
+          status: 'done',
+          ev: 'gh run list --workflow "OurSharedEvents CI/CD" --branch main --event push, then gh run view --json jobs.',
+          note: 'Run 38578405394 on f668b33e: T0 to T3 success; T4 platform failed (impression endpoint 503 then 202, a runtime test on staging; #988 changed no runtime file). Failed jobs re-run (attempt 2): T1 to T4 ALL success for f668b33e. Done bar met for #988; the first failure was a staging flake (503 then 202).',
+        },
+        {
+          id: '2.7',
+          phase: '2',
+          title:
+            'Point notify-osm at OCR_NOTIFY_OSM (#986 pointed it at OCR_AUTOMATION_WRITE, against the PO decision)',
+          owner: 'AGENT',
+          after: ['2.6'],
+          status: 'done',
+          ev: 'MUST land before 1.3: a repo-only OCR_AUTOMATION_WRITE cannot open an issue in ourSharedMagnets, so creating it would break notify-osm.',
+          note: 'MERGED (#990): notify-osm names OCR_NOTIFY_OSM, fallback kept. PR #990 opened 2026-10-14: one-line workflow change (OCR_NOTIFY_OSM || OCR_PROPAGATE_TOKEN), writeUsesOnWrongToken 1 to 0, 140 tests, Linux scan 0 new, runtime unchanged today. Reviewer fault (naming the main-automation environment before it exists) was NOT caught by any gate: see 2.9.',
+        },
+        {
+          id: '2.9',
+          phase: '2',
+          title:
+            'Gate: an environment named in a workflow must already exist in the checked-in definition (or be one of staging, production, copilot)',
+          owner: 'AGENT',
+          after: [],
+          status: 'done',
+          ev: 'Gap found 2026-10-14 by injecting environment: main-automation into notify-osm: ratchet, property spec and infra-consistency all stayed green, and GitHub would auto-create the environment with no protection. Small PR; also feeds OSE-1701 (drift canary).',
+          note: 'Landed in #994 (merged 2026-10-15 as e5cf3f7c): the property spec resolves every job-level environment against ALLOWED_ENVIRONMENTS (staging, production, copilot, main-automation) and fails closed on one it cannot prove; the reviewer fault (drift job losing its environment) turned it red. Post-merge chain for ea8b7cf3 (contains #994 to #996): run 38728251380, S0 and T1 to T4 all success.',
+        },
+        {
+          id: '2.8',
+          phase: '2',
+          title:
+            'Remove the read fallbacks: workflows use only OCR_HUB_READ; drop the old allowlist entry for reads',
+          owner: 'AGENT',
+          after: ['1.2', '2.6'],
+          status: 'done',
+          ev: 'The proof of the swap: a green run with no fallback. Fallbacks 28 to 0 in the ratchet.',
+          note: 'MERGED 2026-10-14 17:46Z as 06496e03 (#989). Run 38609574753: S0, all T0, T1 to T4 success with NO fallback. Verified by me before merge: 0 read fallbacks left, 22 env + 6 checkout sites on OCR_HUB_READ, fallbackUses 30 to 2, OCR_PROPAGATE_TOKEN no longer reachable from any PR job, 140 tests, Linux scan 0 new, my own fault red then green.',
+        },
+
+        // Phase 3
+        {
+          id: '3.1',
+          phase: '3',
+          title:
+            'conformance-report: add the main-only environment and drop the fallback; fallbacks 2 to 1 (environment done in #994; push PROVEN live 2026-10-15 run 38723828302, refresh PR #996 opened; fallback removed in #997, merged 2026-10-15 as f33d1b24; chain run 38730039711 pending)',
+          owner: 'AGENT',
+          after: ['2.6', '1.3'],
+          status: 'done',
+          ev: 'Dispatch run with dry_run=false: log shows the push and the refresh PR.',
+        },
+        {
+          id: '3.2',
+          phase: '3',
+          title:
+            'notify-osm: add the environment and drop the fallback; fallbacks to 0; remove the OCR_PROPAGATE_TOKEN allowlist entry',
+          owner: 'AGENT',
+          after: ['2.6', '1.4', 'D3'],
+          status: 'doing',
+          ev: 'Verified through workflow_dispatch if D3 is yes; otherwise on the next flag-file push.',
+          note: 'Environment main-automation added in #994 and checkout persist-credentials false in #995. Fallback stays (fallbackUses baseline 1) until notify-osm has run live once: it has no dispatch, so it runs on the next push to main that touches the feature-flag files. Then drop it, lower the baseline to 0, remove the allowlist entry.',
+        },
+        {
+          id: '3.0',
+          phase: '3',
+          title:
+            'Move the OTHER repos off OCR_PROPAGATE_TOKEN: OCR-docs (4 workflows, incl. propagate-standards which writes to every spoke), ourAirwaves, ourCommunityRituals (hub ci.yml), ourEventRings, ourSharedGames, ourSharedMagnets, ourWKRP, ourSharedPulse, ourSharedRecords',
+          owner: 'BOTH',
+          after: ['2.6'],
+          status: 'doing',
+          ev: 'Found 2026-10-14 by org code search (repo and path only). Deleting the PAT before this breaks those repos. Reads: OCR_HUB_READ must also be visible to them. propagate-standards is a WRITER to every spoke: one credential per target repo, or a GitHub App; decide before building. Also confirmed 2026-10-14: ourWKRP (brain-contract-check, ci, mobile-workability, its own staging script, a spec), ourSharedPulse and ourSharedRecords (brain-contract-check, design-system-check). 9 repos in all; demo-repository none.',
+        },
+        {
+          id: '3.0a',
+          phase: '3',
+          title: 'OCR-docs: store OCR_SPOKES_READ (repo secret) for the two audits',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'gh secret list --repo ourCommunityRituals/OCR-docs shows it by name and date.',
+          note: 'Stored 2026-10-15 12:16:29Z (second store, after the token was updated). Token page read 2026-10-15: fine-grained, owner org, Contents read-only, expires 2027-01-13. Two corrections open: see 3.0d.',
+        },
+        {
+          id: '3.0b',
+          phase: '3',
+          title:
+            'OCR-docs: create the main-only environment main-automation (branch policy main, no reviewers)',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Read back by name: custom branch policies on, one policy, main (branch).',
+          note: 'Created 2026-10-15 12:17:28Z; branch policy main added (policy id 63158750). OCR-docs had only the copilot environment before.',
+        },
+        {
+          id: '3.0c',
+          phase: '3',
+          title: 'OCR-docs: store OCR_PROPAGATE_WRITE as an environment secret of main-automation',
+          owner: 'PO',
+          after: ['3.0b'],
+          status: 'done',
+          ev: 'gh secret list --repo ourCommunityRituals/OCR-docs --env main-automation shows it by name and date.',
+          note: 'Stored 2026-10-15 13:39:16Z. Token page read: fine-grained, 7 repos, Contents RW, Pull requests RW, Metadata RO, expires 2027-01-13. Open: the pasted value measured 41 characters against 93 for SPOKES_READ; the first dry run of propagate-standards proves the value (a bad one fails 401 at checkout and writes nothing).',
+        },
+        {
+          id: '3.0d',
+          phase: '3',
+          title:
+            'Fix OCR_SPOKES_READ on its token page: remove the 2 extra repos (10 selected, 8 wanted) and add Pull requests: Read-only',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          note: 'DONE, VERIFIED BY RUN 2026-10-15: the first nightly run (38778448065) showed 403 on the PR lookup for all 7 spokes, so the permission had not saved; after the owner added Pull requests: Read-only, run 38779117975 succeeded and its report closed the sync issue with All clear. REOPENED earlier the same day: the owner screenshot of the token page after task 1 still shows 9 repositories selected (8 wanted) and Repositories permissions: 2 (Contents, Metadata; no Pull requests). Owner reported done 2026-10-15 (task 1). I cannot read the token page, so the repo list and the Pull requests permission are owner-attested; the first nightly-sync-check run is the check (it must show real open-PR counts, not 0).',
+          ev: 'Without Pull requests read, nightly-sync-check reports 0 open PRs for every spoke (its gh api call ends in || echo 0): a silent wrong answer, not a failure. The token value does not change, nothing to re-store.',
+        },
+        {
+          id: '3.0e',
+          phase: '3',
+          title:
+            'Org secret OCR_HUB_READ: add 9 repos to its selected list (ourCommunityRituals, OCR-docs, ourWKRP, ourAirwaves, ourSharedGames, ourSharedMagnets, ourSharedPulse, ourSharedRecords, ourEventRings); leave the Dependabot secret alone',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          note: 'Verified by me 2026-10-15 16:59:52Z: org secret OCR_HUB_READ selected, 10 repos (OCR-docs, ourAirwaves, ourCommunityRituals, ourEventRings, ourSharedEvents, ourSharedGames, ourSharedMagnets, ourSharedPulse, ourSharedRecords, ourWKRP); Dependabot store still ourSharedEvents only. The first save attempts only changed the token page lists, not the secret.',
+          ev: 'gh api orgs/ourCommunityRituals/actions/secrets/OCR_HUB_READ/repositories lists 10 names. The token itself already matches: OCR-docs and the hub, Contents read-only (page read 2026-10-15). Only ourSharedEvents has a dependabot.yml, so the Dependabot store stays as is.',
+        },
+        {
+          id: '3.0f',
+          phase: '3',
+          title:
+            'DELETE ocr-audit-read-only (created 2026-08-02, expires 2026-10-31, 10 repos, Contents read, last used within 3 months): it is the PAT exposed in the deleted ourWKRP file OCR_PAT_Authorization_BeforeRelease.md, flagged for revocation since 2026-09-13 and still live',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'It no longer appears in the fine-grained token list. No workflow, repo secret or org secret references it by name (searched 2026-10-15).',
+          note: 'Owner deleted it 2026-10-15 (reported; the token page entry no longer exists). Found 2026-10-15 from the token page (Last used: within 3 months) plus an earlier memory note. The file was deleted from ourWKRP but stays in its git history, so the token must be revoked, not just forgotten. The same file also exposed a non-expiring Cloudflare Access service token named ci-deploy-token: check it was revoked at Cloudflare Access, Service Tokens.',
+        },
+        {
+          id: '3.0g',
+          phase: '3',
+          title:
+            'Open one PR per repo: OCR-docs (propagate-standards on OCR_PROPAGATE_WRITE with environment main-automation; the two audits on OCR_SPOKES_READ; hub checkouts on OCR_HUB_READ) and the 8 read repos (OCR_PROPAGATE_TOKEN to OCR_HUB_READ, no fallback)',
+          owner: 'AGENT',
+          after: ['3.0c', '3.0d', '3.0e'],
+          status: 'done',
+          note: '2026-10-15: 8 read-swap PRs opened (OCR_PROPAGATE_TOKEN to OCR_HUB_READ on the checkouts): ourAirwaves #45, ourEventRings #2, ourSharedGames #43, ourSharedMagnets #45, ourSharedPulse #42, ourSharedRecords #43, ourCommunityRituals #57, ourWKRP #91 (brain-contract-check only). First checks green on the brain and design-system validations, which run the new checkouts. OCR-docs: #164 (propagate-standards on OCR_PROPAGATE_WRITE + environment main-automation), #165 (design-system-check on OCR_HUB_READ, brain-location-audit on OCR_SPOKES_READ), #166 (nightly-sync-check on OCR_SPOKES_READ; merge only after 3.0d is verified). ourWKRP #92 (staging script, ci.yml, mobile-workability and its wiring spec renamed; spec 6 of 6, born red on a workflow-level env). All 12 PRs are open and wait for the owner merge, then run-id verification (3.0h).',
+          ev: 'Plan: .claude/outputs/PLAN-OTHER-REPOS-TOKEN-2026-10-15.md. OCR-docs also gets a small gate so a bare OCR_PROPAGATE_TOKEN cannot come back.',
+        },
+        {
+          id: '3.0h',
+          phase: '3',
+          title:
+            'Merge those PRs, then verify by run id: a green nightly-sync-check, a dry run of propagate-standards, one green read job per repo',
+          owner: 'BOTH',
+          after: ['3.0g'],
+          status: 'done',
+          ev: 'Run ids and log lines only; no values.',
+          note: 'All 12 PRs merged 2026-10-15 17:22 to 17:30Z. Verified: main of all 9 repos has 0 uses of OCR_PROPAGATE_TOKEN in 19 workflows (read from contents, not code search, whose index lags). Propagate dry run 38778443125: 7 of 7 spoke jobs success, 7 deployment records on environment main-automation / ref main, target checkout with OCR_PROPAGATE_WRITE passed. Nightly run 38779117975: success, report All clear.',
+        },
+        {
+          id: '3.0i',
+          phase: '3',
+          title:
+            'Delete the repo-level OCR_PROPAGATE_TOKEN secret in OCR-docs (separate from the org secret, and a repo secret outranks an org secret of the same name)',
+          owner: 'PO',
+          after: ['3.0h'],
+          status: 'done',
+          ev: 'gh secret list --repo ourCommunityRituals/OCR-docs no longer lists it.',
+          note: 'Found 2026-10-15: dated 2026-04-06T03:41:15Z, the org secret 2026-04-06T04:18:51Z.',
+        },
+        {
+          id: '3.0j',
+          phase: '3',
+          title:
+            'Set the org secret OCR_PROPAGATE_TOKEN to selected repositories, none, and wait one nightly cycle (reversible check before deleting)',
+          owner: 'PO',
+          after: ['3.0i'],
+          status: 'done',
+          note: 'Skipped as a separate step: the owner deleted the org secret directly 2026-10-15 (read back: org secrets are now LINEAR_API_KEY and OCR_HUB_READ only). The scream test therefore runs after the deletion: the 2026-10-16 nightly-sync-check and the next push runs must stay green.',
+          ev: 'The next nightly-sync-check and one propagate dry run stay green. Today its visibility is all.',
+        },
+        {
+          id: '3.3',
+          phase: '3',
+          title:
+            'Delete the PAT in GitHub developer settings (OCR-propagate-token). Org secret and OCR-docs repo copy already deleted 2026-10-15, read back by name',
+          owner: 'PO',
+          after: ['3.0', '3.0j', '3.1', '3.2', '0.2'],
+          status: 'done',
+          ev: 'gh secret list --org no longer lists it; the PAT page shows it gone.',
+          note: 'Org secret and the OCR-docs repo copy verified gone by name 2026-10-15. The PAT (listed as OCR-propagate-token, All repositories, Contents and PR write) deleted by the owner 2026-10-15: owner-attested, I cannot read the token list; a screenshot of the list closes it. 2026-10-16 final no-dependency check PASSED: OCR-docs nightly-sync-check 38859078916 (schedule 06:03Z) success, 0 auth errors, no open sync issue; brain-location-audit 38877955512 (schedule 09:04Z) success, 0 errors; cf-access-canary scheduled run 38898734492: token job success. Open: 0.2 audit-log review (owner).',
+        },
+
+        // Phase 4
+        {
+          id: '4.1',
+          phase: '4',
+          title:
+            'CLOUDFLARE_API_TOKEN_OSE: new token, set secret, one staging deploy, read log, delete old at Cloudflare',
+          owner: 'BOTH',
+          after: ['1.5', '3.3'],
+          status: 'doing',
+          ev: 'Deploy success line, no "missing permission" line.',
+          note: '2026-10-20: new account-owned token ose-deploy-2026-10 (7 permissions incl. Workers Editor, zone Workers Routes, no IP filter, expires 2027-01-15). The first two stores via the interactive prompt were rejected (10000); a script verified the value (token verify active; staging secrets call success, 10 names) and stored it by stdin: secret 2026-10-20T14:07:30Z. Staging deploy run 39436555076: T1 Deploy fully green. Chain run 39436555076 fully green (S0, T1 to T4). The old deploy token (a user token under My Profile) was deleted by the owner 2026-10-20 (owner-attested). Open: optionally drop Workers Editor. Tracked in OSE-1730 (In Review).',
+        },
+        {
+          id: '4.2',
+          phase: '4',
+          title:
+            'ADMIN_KEY: GitHub secret and the STAGING Worker secret, same value; production must hold none (ADR-012 gate R2)',
+          owner: 'BOTH',
+          after: ['4.1'],
+          status: 'done',
+          ev: 'Health route through your normal path; secret dates.',
+          note: 'ROTATED 2026-10-20: GitHub ADMIN_KEY dated 2026-10-20T14:38:37Z (was 2026-08-31), staging Worker set (wrangler Success). Proof: cf-access-canary run 39441115142, token job classification=ok (the probe sends Authorization: Bearer ADMIN_KEY; a rejection would classify as worker_auth 401). Production absence of ADMIN_KEY is checked by the production deploy gate (ADR-012 R2), not read by me today. First attempt (script v1) falsely reported success because a parameter was named args; nothing had changed (GitHub date 2026-08-31, canary run 39440888552 still ok); v2 self-tests the plumbing and verifies results.',
+        },
+        {
+          id: '4.3',
+          phase: '4',
+          title:
+            'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET: rotate the service token, update both, run smoke-staging',
+          owner: 'BOTH',
+          after: ['4.2'],
+          status: 'done',
+          ev: 'smoke-staging log line; dates.',
+          note: '2026-10-15: new service token ose-staging-ci-2026-10 (6 months, expires 2027-04-16) added to the policies ci-deploy-service-auth and CI Service Token; CF_ACCESS_CLIENT_ID/SECRET re-stored 18:28:00Z / 18:28:21Z; cf-access-canary run 38786008003, job CF Access token - staging admin authz: success, classification=ok (HTTP 200, application/json). Found: the live token was ose-staging-t4-admin (12,670 requests in 7 days, created 2026-08-30); ci-deploy-token was already Disabled, Last seen 2026-08-30, 0 usage. Still to do: watch the old live token Last Seen stop (another consumer?), then remove it from the 2 policies and delete it; delete ci-deploy-token and its policy; the unused duplicate CI Service Token policy. CLEANUP DONE 2026-10-20: the old live Access token ose-staging-t4-admin was removed from both policies (ci-deploy-service-auth 3:55 PM, CI Service Token 3:59 PM, each now holds only ose-staging-ci-2026-10) and deleted by the owner (its page showed 0 policies, 0 apps, Last Seen Oct 15 1:10 PM, zero use Oct 16 to 20). Canary runs 39496677256 (before delete) and 39497049025 (after): token job ok. Still open: the disabled ci-deploy-token and its own policy, and the unused duplicate CI Service Token policy (5a7b4343). Separate pre-existing canary failures: staging /dashboard /create /briefing reach the Worker without an Access login; production host has no Access app (held, OSE-1353).',
+        },
+        {
+          id: '4.4',
+          phase: '4',
+          title: 'X_OCR_INTERNAL, staging only (production has none)',
+          owner: 'BOTH',
+          after: ['4.3'],
+          status: 'done',
+          ev: 'Staging smoke; date.',
+          note: 'ROTATED 2026-10-20: GitHub X_OCR_INTERNAL dated 2026-10-20T16:37:51Z (was 2026-08-31), staging Worker set (wrangler Success), both verified by the v2 script. Proof: full staging chain run 39459166333 success (S0, T1 to T4); T2 Bruno is the consumer.',
+        },
+        {
+          id: '4.5',
+          phase: '4',
+          title:
+            "ourWKRP CI Anthropic key (ourwkrp-ci-claude-review): already Expired 2026-09-29, so no exposure. Optional: create a new key only if you want that repo's PR reviewer running again",
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: "Owner screenshot 2026-10-14: Expired, last used 30+ days ago. That repo's reviewer has likely been failing since 2026-09-29.",
+        },
+
+        // Phase 5
+        {
+          id: '5.1',
+          phase: '5',
+          title:
+            'Restrict the @claude trigger to OWNER (HARD-9), then create CLAUDE_CODE_OAUTH_TOKEN with claude setup-token',
+          owner: 'BOTH',
+          after: ['3.3'],
+          status: 'todo',
+          ev: 'Until it exists the Claude PR reviewer skips every PR while its check shows green.',
+        },
+        {
+          id: '5.2',
+          phase: '5',
+          title:
+            'Create BRANCH_PROTECTION_READ_TOKEN, STAGING_ADMIN_KEY, SECURITY_WEBHOOK_URL, LINEAR_TEAM_ID; read each monitor log',
+          owner: 'BOTH',
+          after: ['5.1'],
+          status: 'todo',
+          ev: 'Monitor payloads verified: statuses and counts only, no end-user data.',
+        },
+        {
+          id: '5.3',
+          phase: '5',
+          title: 'Delete the four SMOKE_RPT_* repo secrets',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'Verified 2026-10-13: no workflow reads them as secrets.*; T4 mints its own per run.',
+          note: 'Deleted by owner 2026-10-14 (their terminal output); re-read by name: none left.',
+        },
+        {
+          id: '5.4',
+          phase: '5',
+          title:
+            'Deregister the three offline BLOODRAVEN* runners; delete the .runner and .credentials* files in the actions-runner* folders',
+          owner: 'PO',
+          after: [],
+          status: 'done',
+          ev: 'You confirm.',
+          note: '2026-10-14: org lists no runners (ids 9, 10, 11 deleted by owner; 9 after one TLS timeout). No .runner/.credentials* file remains in any actions-runner* folder. All four folders removed afterwards via robocopy mirror (verified gone, ~27 GB freed). Nothing self-hosted remains.',
+        },
+        {
+          id: '5.5',
+          phase: '5',
+          title: 'wrangler logout on this machine (keep a break-glass login agents do not use)',
+          owner: 'PO',
+          after: ['4.4'],
+          status: 'todo',
+          ev: 'After the Cloudflare rotations, which need the login.',
+        },
+        {
+          id: '5.6',
+          phase: '5',
+          title:
+            'Record name, scopes, expiry, storage in the inventory; update OSE-1467 (six boxes), OSE-1490 and the OSE-1695 matrix',
+          owner: 'AGENT',
+          after: ['4.4'],
+          status: 'todo',
+          ev: 'Names and dates only; never values.',
+        },
+        {
+          id: '5.7',
+          phase: '5',
+          title: "Final: exposure report, and a search of tonight's transcripts for any value",
+          owner: 'AGENT',
+          after: ['5.6'],
+          status: 'todo',
+          ev: 'node scripts/check-pr-secret-exposure.mjs --report. If a value appears anywhere, rotate it again.',
+        },
+        {
+          id: '5.8',
+          phase: '5',
+          title: 'Set ANON_ID_HASH_PEPPER on the production Worker, a value separate from staging',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'Name and date in wrangler secret list for production. Enables erasure of scan and return rows. Does not touch PRODUCTION_LIVE.',
+        },
+        {
+          id: '5.9',
+          phase: '5',
+          title:
+            "Record this machine's GitHub login (account, scopes, keyring) as a credential row in the inventory",
+          owner: 'BOTH',
+          after: [],
+          status: 'todo',
+          ev: 'admin:org, repo, workflow, admin:public_key today.',
+        },
+        {
+          id: '5.11',
+          phase: '5',
+          title:
+            'Calendar the token renewals: 2027-01-15 (ose-deploy-2026-10 Cloudflare deploy token), 2027-01-12 (OCR_HUB_READ and its Dependabot twin, OCR_AUTOMATION_WRITE, OCR_NOTIFY_OSM, BRANCH_PROTECTION_READ_TOKEN), 2027-01-13 (OCR_SPOKES_READ, OCR_PROPAGATE_WRITE); read from the token pages 2026-10-15; also notion_claude 2026-10-31 (the owner Notion integration, not read yet)',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'A calendar entry a week before each date. Names and dates only.',
+        },
+        {
+          id: '5.10',
+          phase: '5',
+          title:
+            'Production Worker secret names match staging (values always separate): ANON_ID_HASH_PEPPER, GOOGLE_MAPS_API_KEY, WIF_PRIVATE_KEY_PEM, WIF_PUBLIC_JWKS are missing in production',
+          owner: 'PO',
+          after: [],
+          status: 'todo',
+          ev: 'Read 2026-10-14 by name: staging has 10, production has 5. X_OCR_INTERNAL is staging-only by design (list it as an intentional difference). Maps: OSE-1688 first (enable Geocoding, cap quota). WIF_* are data-protection keys: set one at a time, never bulk-written.',
+        },
+      ];
+      const MATRIX = [
+        [
+          'OCR_HUB_READ',
+          'Contents read',
+          'hub, OCR-docs',
+          'org secret, this repo (and Dependabot if D5)',
+          '2027-01-12',
+        ],
+        [
+          'OCR_AUTOMATION_WRITE',
+          'Contents + PRs write',
+          'this repo',
+          'main-only environment',
+          '2027-01-12',
+        ],
+        [
+          'OCR_NOTIFY_OSM',
+          'Issues write',
+          'ourSharedMagnets',
+          'main-only environment',
+          '2027-01-12',
+        ],
+        [
+          'BRANCH_PROTECTION_READ_TOKEN',
+          'Administration read',
+          'this repo',
+          'main-only environment',
+          '2027-01-12',
+        ],
+        [
+          'OCR_HUB_READ_dependabot',
+          'Contents read',
+          'hub, OCR-docs',
+          'Dependabot secret store, ourSharedEvents only',
+          '2027-01-12',
+        ],
+        [
+          'OCR_SPOKES_READ',
+          'Contents + PRs read',
+          '7 spokes + hub',
+          'OCR-docs repo secret',
+          '2027-01-13',
+        ],
+        [
+          'OCR_PROPAGATE_WRITE',
+          'Contents + PRs write',
+          '7 spokes',
+          'OCR-docs main-automation environment',
+          '2027-01-13',
+        ],
+        [
+          'notion_claude (owner Notion integration)',
+          'not read yet',
+          'not read yet',
+          'Notion; not a repo secret',
+          '2026-10-31',
+        ],
+        [
+          'CLOUDFLARE_API_TOKEN_OSE (new)',
+          'Workers / D1 / KV / R2 edit',
+          'the Cloudflare account',
+          'repo level now; environments after launch',
+          '2027-01-10',
+        ],
+      ];
+      const BASELINE = [
+        ['OCR_PROPAGATE_TOKEN', 'org', '2026-04-06'],
+        ['LINEAR_API_KEY', 'org', '2026-08-12'],
+        ['ADMIN_KEY', 'repo', '2026-08-31'],
+        ['CF_ACCESS_CLIENT_ID', 'repo', '2026-08-31'],
+        ['CF_ACCESS_CLIENT_SECRET', 'repo', '2026-08-31'],
+        ['CLOUDFLARE_ACCOUNT_ID', 'repo', '2026-08-31'],
+        ['CLOUDFLARE_API_TOKEN_OSE', 'repo', '2026-08-31'],
+        ['X_OCR_INTERNAL', 'repo', '2026-08-31'],
+        ['OCR_CI_EDGE_TOKEN', 'repo', '2026-10-02'],
+        ['SMOKE_RPT_* (4)', 'repo', '2026-09-19'],
+        ['staging / production / copilot', 'environments', 'hold no secrets, no protection rules'],
+      ];
+
+      /* ===== derived state and rendering ===== */
+      const byId = Object.fromEntries(TASKS.map((t) => [t.id, t]));
+      function state(t) {
+        if (t.status === 'done') return 'done';
+        const unmet = t.after.filter((id) => !byId[id] || byId[id].status !== 'done');
+        if (unmet.length) return 'blocked';
+        return t.status === 'doing' ? 'doing' : 'ready';
+      }
+      function unmetOf(t) {
+        return t.after.filter((id) => !byId[id] || byId[id].status !== 'done');
+      }
+      function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+      }
+      const ownerLabel = { PO: 'You', AGENT: 'Me', BOTH: 'You + me' };
+      const ownerClass = { PO: 'po', AGENT: 'agent', BOTH: 'both' };
+      let ownerFilter = 'ALL';
+
+      function renderStats() {
+        const work = TASKS.filter((t) => t.phase !== 'D');
+        const done = work.filter((t) => t.status === 'done').length;
+        const po = TASKS.filter((t) => state(t) === 'ready' && t.owner !== 'AGENT').length;
+        const me = TASKS.filter((t) => state(t) === 'ready' && t.owner === 'AGENT').length;
+        const open = TASKS.filter((t) => t.phase === 'D' && t.status !== 'done').length;
+        const wrap = document.getElementById('stats');
+        wrap.textContent = '';
+        const mk = (n, l) => {
+          const c = el('div', 'card stat');
+          c.append(el('div', 'n', n), el('div', 'l', l));
+          return c;
+        };
+        const prog = el('div', 'card stat');
+        prog.append(el('div', 'n', done + ' / ' + work.length), el('div', 'l', 'steps done'));
+        const bar = el('div', 'bar');
+        const sp = el('span');
+        sp.style.width = Math.round((100 * done) / work.length) + '%';
+        bar.append(sp);
+        bar.style.marginTop = '8px';
+        prog.append(bar);
+        wrap.append(
+          prog,
+          mk(po, 'ready for you'),
+          mk(me, 'ready for me'),
+          mk(open, 'decisions open')
+        );
+      }
+      function renderPipeline() {
+        const wrap = document.getElementById('pipeline');
+        wrap.textContent = '';
+        PHASES.forEach((p) => {
+          const ts = TASKS.filter((t) => t.phase === p.id);
+          const d = ts.filter((t) => t.status === 'done').length;
+          const c = el('div', 'card pipe');
+          c.append(
+            el('div', 't', p.id === 'D' ? 'Decisions' : 'Phase ' + p.id),
+            el('div', 'nm', p.name)
+          );
+          const bar = el('div', 'bar');
+          const sp = el('span');
+          sp.style.width = Math.round((100 * d) / ts.length) + '%';
+          bar.append(sp);
+          c.append(bar);
+          c.append(el('div', 'c', d + ' of ' + ts.length + ' done'));
+          wrap.append(c);
+        });
+      }
+      function renderNow() {
+        const wrap = document.getElementById('now');
+        wrap.textContent = '';
+        const mkList = (title, cls, items, emptyText) => {
+          const c = el('div', 'card');
+          const h = el('h2');
+          h.append(
+            el('span', 'chip ' + cls, title === 'Your turn' ? 'You' : 'Me'),
+            document.createTextNode(title)
+          );
+          c.append(h);
+          if (!items.length) {
+            c.append(el('div', 'empty', emptyText));
+            return c;
+          }
+          const ul = el('ul');
+          items.slice(0, 6).forEach((t) => {
+            const li = el('li');
+            li.append(el('span', 'id', t.id), el('span', '', t.title));
+            ul.append(li);
+          });
+          c.append(ul);
+          if (items.length > 6)
+            c.append(el('div', 'empty', '+ ' + (items.length - 6) + ' more below'));
+          return c;
+        };
+        const ready = TASKS.filter((t) => state(t) === 'ready' || state(t) === 'doing');
+        wrap.append(
+          mkList(
+            'Your turn',
+            'po',
+            ready.filter((t) => t.owner !== 'AGENT'),
+            'Nothing waiting on you.'
+          ),
+          mkList(
+            'My turn',
+            'agent',
+            ready.filter((t) => t.owner === 'AGENT'),
+            'Nothing I can do until you unblock something.'
+          )
+        );
+      }
+      function renderFilters() {
+        const wrap = document.getElementById('filters');
+        wrap.textContent = '';
+        [
+          ['ALL', 'Everything'],
+          ['PO', 'Yours'],
+          ['AGENT', 'Mine'],
+          ['READY', 'Ready now'],
+        ].forEach(([k, label]) => {
+          const b = el('button', '', label);
+          b.type = 'button';
+          b.setAttribute('aria-pressed', String(ownerFilter === k));
+          b.addEventListener('click', () => {
+            ownerFilter = k;
+            renderFilters();
+            renderPhases();
+          });
+          wrap.append(b);
+        });
+      }
+      function passes(t) {
+        if (ownerFilter === 'ALL') return true;
+        if (ownerFilter === 'READY') return state(t) === 'ready' || state(t) === 'doing';
+        if (ownerFilter === 'PO') return t.owner !== 'AGENT';
+        return t.owner !== 'PO';
+      }
+      function renderPhases() {
+        const wrap = document.getElementById('phases');
+        wrap.textContent = '';
+        PHASES.forEach((p) => {
+          const all = TASKS.filter((t) => t.phase === p.id);
+          const shown = all.filter(passes);
+          if (!shown.length) return;
+          const s = el('section', 'card phase');
+          const h = el('header');
+          const left = el('div');
+          left.append(
+            el('h2', '', (p.id === 'D' ? '' : p.id + '  ') + p.name),
+            el('div', 'meta', p.blurb)
+          );
+          const d = all.filter((t) => t.status === 'done').length;
+          h.append(left, el('div', 'meta', d + ' of ' + all.length + ' done'));
+          s.append(h);
+          shown.forEach((t) => {
+            const st = state(t);
+            const row = el('div', 'task ' + st);
+            const box = el('div', 'box', st === 'done' ? '✓' : '');
+            const body = el('div');
+            body.append(el('div', 'title', t.id + '  ' + t.title));
+            const chips = el('div', 'row');
+            chips.append(el('span', 'chip ' + ownerClass[t.owner], ownerLabel[t.owner]));
+            if (st === 'done') chips.append(el('span', 'chip done', 'done'));
+            else if (st === 'blocked')
+              chips.append(el('span', 'chip blocked', 'waits on ' + unmetOf(t).join(', ')));
+            else
+              chips.append(
+                el(
+                  'span',
+                  'chip ' + (st === 'doing' ? 'doing' : 'ready'),
+                  st === 'doing' ? 'in progress' : 'ready'
+                )
+              );
+            body.append(chips);
+            if (t.ev) body.append(el('div', 'ev', t.ev));
+            if (t.note) body.append(el('div', 'note', t.note));
+            row.append(box, body);
+            s.append(row);
+          });
+          wrap.append(s);
+        });
+      }
+      function renderTables() {
+        const m = document.getElementById('matrix');
+        MATRIX.forEach((r) => {
+          const tr = el('tr');
+          r.forEach((c, i) => {
+            const td = el('td');
+            if (i === 0) td.append(el('code', '', c));
+            else td.textContent = c;
+            tr.append(td);
+          });
+          m.append(tr);
+        });
+        const b = document.getElementById('baseline');
+        BASELINE.forEach((r) => {
+          const tr = el('tr');
+          r.forEach((c, i) => {
+            const td = el('td');
+            if (i === 0) td.append(el('code', '', c));
+            else td.textContent = c;
+            tr.append(td);
+          });
+          b.append(tr);
+        });
+      }
+      document.getElementById('upd').textContent = UPDATED;
+      renderStats();
+      renderPipeline();
+      renderNow();
+      renderFilters();
+      renderPhases();
+      renderTables();
+    </script>
+  </body>
+</html>

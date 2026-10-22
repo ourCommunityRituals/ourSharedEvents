@@ -86,6 +86,10 @@ test-dashboard/
 # offer to commit it.
 backup/
 
+# Visual baselines are per platform. CI runs on Linux, so the win32 PNGs that a
+# local Windows run writes next to the visual specs are never committed.
+tests/playwright/*-snapshots/*-win32.png
+
 # Build outputs
 dist/
 build/
