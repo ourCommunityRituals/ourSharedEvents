@@ -105,3 +105,82 @@ Agent hygiene note: the Dr of Security lens ran `npx jest` by mistake (wrong run
 4. **F4:** Add a single retry on transport errors only (never assertion failures) to the Bruno step?
 5. **F7:** Wire the visual specs to a Linux baseline job, or delete them?
 6. **Q3:** Record "bump when `packages/ui` changes" as the pin policy decision?
+
+---
+
+# Loop 2 (2026-10-22): owner rulings applied
+
+Team: main session only this loop (narrow follow-up; the full lens fan-out returns in Loop 3 for the governance wording). Loops 3 to 5+ follow, with a human gate after each.
+
+## Owner rulings received at the Loop 1 gate
+
+| Q   | Ruling                                                                                                                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The `ose_anon` cookie is allowed on `/q` and `/s` (the QR code and its shortlink) as the OSE anonymous token. OurWKRP's authenticated "plant your flag" profile has a separate token and cookie. In a hybrid, the codes and links still come from the OSE side. |
+| 2   | Yes: fix the dead `VISION.md` citations through the 5-loop governance route.                                                                                                                                                                                    |
+| 3   | Find the dashboard rules.                                                                                                                                                                                                                                       |
+| 4   | Owner leans to one retry for environmental failures and asked for thoughts (below).                                                                                                                                                                             |
+| 5   | Do not delete the visual specs; move them to a backed-up folder. Done in PR 1011.                                                                                                                                                                               |
+| 6   | Not understood. Plain-language explanation sent in chat; no decision yet.                                                                                                                                                                                       |
+
+## Critical (true versus assumed)
+
+Verified this loop:
+
+- `/q` sets `ose_anon` for a new visitor (`qr-scan.ts:258-261`). **`/s` does not, by design**: `shortlink-resolve.ts:29` says "No IP read. No anon_id read. No session cookie set/read." The ruling permits the cookie on `/s`; the code does not use that permission, and nothing needs to change. The `/s` route is a click counter that never learns who clicked.
+- The forms handlers also set it (`forms.ts:325,468,518,573,603`). The ruling named `/q` and `/s` only. **Forms routes are unconfirmed.**
+- `AGENTS.md` is 12,257 bytes against a 12 KB (12,288) budget (`scripts/ci/agent-instructions-budget.mjs:16`): **31 bytes of headroom**. Any wording change to Invariant 4 must be paid for by cuts elsewhere or an owner-approved budget change.
+- The dashboard rules are not in any tracked file in OCR-docs or the spine (searched `dashboard/`, `docs/dashboard/`, `.github/`, `scripts/`, `docs/network-plate/`, the spine `SKILL.md`). The spine's `/sync` skill (`.claude/skills/sync/SKILL.md`) is an assess-first reconciliation loop and does not define "4 of 4" or the ADR-gap rule. The only scheduled task is `ose-morning-brief`, a read-only OSE brief, not the dashboard. **Where the rules live is still unknown.**
+- The spine's own `SKILL.md:46` says product repos bump their pin "after the PR merges", which supports bumping when `packages/ui` changes.
+
+## Conservative (worst case)
+
+- If forms are not covered by the ruling, five public handlers set a cookie outside it. Needs a one-line owner answer, not a code change yet.
+- Rewording Invariant 4 in `AGENTS.md` can fail the size test unless something else shrinks.
+- The retry, done carelessly, hides real flakiness and re-runs seeded data twice.
+
+## Retry design (thoughts for gate question 4)
+
+Yes, one retry, if all four hold:
+
+1. **Transport errors only.** Retry only when the junit shows zero failed assertions and every failed request is a transport error (`ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`, socket hang up). An assertion failure never retries.
+2. **Whole section, not one request.** Requests depend on variables captured earlier (`testEventId`, `testRegistrationId`), so a single request cannot rerun alone. Cost: the section's seeded rows (section 11 seeds and cleans up sponsors) run twice, so each section must be checked for idempotency on staging before the retry is enabled there.
+3. **Loud, not silent.** A `::warning::` annotation and a retry count in the job summary on every retry, so a flaky route stays visible and is counted, not hidden.
+4. **Born red.** Prove it by pointing one request at a connection that resets, watch it retry once then fail, and watch an assertion failure not retry. The step has `timeout-minutes: 5`, so the retry must fit inside it or raise it.
+
+Recommendation: implement as its own CI PR after the owner's go-ahead. Not a governance file.
+
+## Governance wording proposed for the gate (nothing edited yet)
+
+| File                   | Change                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md:5`          | `OCR-docs/docs/VISION.md` to `OCR-docs/docs/OCR_VISION.md` (+4 bytes)                                                                                                                                                                                                                                |
+| `SKILL.md:134,138`     | Same correction                                                                                                                                                                                                                                                                                      |
+| `AGENTS.md` Inv. 4     | "No cookies on public pages. The one exception is the anonymous `ose_anon` token on `/q` (and `/s`, where none is set today): PO ruling 2026-10-22. OurWKRP's authenticated profile token is separate. Geolocation picks what to show and is never stored." About +230 bytes; needs offsetting cuts. |
+| `AGENTS.md:19` (rider) | The brand-scoping sentence is out of date (object-level scoping exists, per `docs/brain/CONSTRAINTS.md`); correcting it needs bytes too. Optional.                                                                                                                                                   |
+
+## Findings after Loop 2
+
+| Change      | Item                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Closed      | F2 (cookie): the ruling is the exemption. The possible Security Critical floor is removed.                               |
+| New, Medium | F14: forms routes set `ose_anon` and are not named in the ruling                                                         |
+| New, Medium | F15: Invariant 4 wording contradicts the ruling; 31 bytes of budget headroom                                             |
+| In flight   | F7 dead coverage: PR 1011 archives the specs. The `.btn-outline` check in a browser is still open.                       |
+| Unchanged   | F1 (dashboard rules not found), F3, F4 (awaiting go-ahead), F5 (authorized, wording at the gate), F6, F8, F9, F10 to F13 |
+
+Score: 2 High x 10 = 20, 8 Medium x 5 = 40 (F4, F5, F6, F7, F8, F9, F14, F15), 4 Low x 2 = 8. Deductions 68. **System score 32%, flat against Loop 1**: one High closed, two Mediums opened. Assessment confidence 75% (up from 70%; the cookie scope is now verified, the dashboard rules still are not).
+
+Trend: flat. Nothing new is broken; the score stays low because several checks cannot fail and the fixes are in open PRs or waiting on a gate.
+
+## Human-gate questions (Loop 2)
+
+1. **F14:** Does the ruling cover the forms routes (register, check-in, survey, email sign-up), which set `ose_anon` today?
+2. **F1:** Where does the dashboard's row logic live (a script, a tool, a scheduled job in another account)? Without a pointer, Loop 3 cannot check what "4 of 4" tests.
+3. **F15:** For the Invariant 4 wording, which bytes may go from `AGENTS.md`, or may the budget rise from 12 KB?
+4. **F4:** Go ahead with the retry under the four conditions above?
+5. **Q3 pin policy:** decision after reading the plain-language explanation.
+
+## Gate answer received (2026-10-22)
+
+**F14 closed.** The owner confirmed the `ose_anon` ruling also covers the forms routes (register, check-in, survey, email sign-up). No code change needed. Remaining open from Loop 2: F15 (Invariant 4 wording and the 31-byte budget), F1 (dashboard rule location), F4 (retry go-ahead), Q3 (pin policy). Score after closing F14: 7 Medium x 5 = 35, 2 High x 10 = 20, 4 Low x 2 = 8, deductions 63, **system score 37%**.
