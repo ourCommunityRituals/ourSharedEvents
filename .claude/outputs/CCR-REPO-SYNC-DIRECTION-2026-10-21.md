@@ -184,3 +184,122 @@ Trend: flat. Nothing new is broken; the score stays low because several checks c
 ## Gate answer received (2026-10-22)
 
 **F14 closed.** The owner confirmed the `ose_anon` ruling also covers the forms routes (register, check-in, survey, email sign-up). No code change needed. Remaining open from Loop 2: F15 (Invariant 4 wording and the 31-byte budget), F1 (dashboard rule location), F4 (retry go-ahead), Q3 (pin policy). Score after closing F14: 7 Medium x 5 = 35, 2 High x 10 = 20, 4 Low x 2 = 8, deductions 63, **system score 37%**.
+
+---
+
+# Loop 3 (2026-10-22): the full sync chain, hop by hop
+
+Owner frame, 2026-10-22: the full sync is one chain that must work on staging, and production follows once ADR, documentation, shared brain, OCR-docs, ourSharedEvents and ourWKRP all match:
+
+ADR > documentation > shared brain > invariants > code > CI/CD > test pyramid > test results > report > loop > shared brain.
+
+This is `OCR_STANDARD_reconciliationLoop.md` section 0 with ADR and documentation added at the front. The OCR-docs standard does not list those two rungs; adding them is a governance edit for the owner.
+
+Team: all nine lenses, each assigned hops and asked for the one check that can fail on real drift. A check that cannot fail counts as absent. Read-only throughout. The live view is the "Full sync (CCR)" section of the OCR hub board.
+
+## Verdict
+
+| Item                  | Value                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| System score          | **0%** (100 - 173, floored at 0). Loop 2 was 37%.                                                                                                                                                              |
+| Assessment confidence | **80%**. Up from 75%: the dashboard is found, the failed requests and ADR-019 are verified. Still unread: the scheduled task behind the dashboard, staging and production migration levels (need credentials). |
+| Gate result           | **Human gate. Stopped.** Ten owner decisions are listed on the board.                                                                                                                                          |
+| Hops                  | 0 enforced, 6 partial, 5 with no check that can fail                                                                                                                                                           |
+
+The drop from 37% to 0% is the protocol working: the scope widened from four questions to all eleven hops, and most new deductions are checks that are missing, not behavior that is broken. Loop-position and environment modifiers were not applied.
+
+## The one check per hop
+
+| #   | Hop                   | Today                                                                                   | The one check                                                                                                                                                                         | Fails with                                                                                                               | Born red                                                                              | Size  | Lives in       |
+| --- | --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ----- | -------------- |
+| 1   | ADR                   | None                                                                                    | Test that every cited `ADR-NNN` resolves to a file in `docs/adr/`, or is written `fleet ADR-NNN` and matches the OCR-docs list; baseline of the ~40 known cites                       | `ADR-019 cited at sponsor-home.ts:26 has no docs/adr/ADR-019-*.md`                                                       | Fails on `main` today (ADR-019)                                                       | S     | OSE            |
+| 2   | Documentation         | None (link check only warns, and its `[^http]` regex drops links starting h, t or p)    | Dead-citation script over governance, brain and skill docs; ROLE-STATE excluded                                                                                                       | `dead citation: AGENTS.md:5 -> OCR-docs/docs/VISION.md`                                                                  | Add a citation to a missing file in a scratch copy                                    | S     | OSE            |
+| 3   | Shared brain          | Partial (brain check runs, is not required)                                             | Owner makes "Validate against OCR-docs brain" required; nightly diff of each spoke's `.ocr-standards` against the org source                                                          | `<repo> .ocr-standards/<path> differs from org`                                                                          | Break a `test_file` in a PR; change one byte in a fork spoke                          | S + M | OSE, OCR-docs  |
+| 4   | Invariants            | Partial (6 of 9 AGENTS invariants gated; 4, 5, 6 thin)                                  | `agents_n -> brain_id or local gate` map and a T0 script                                                                                                                              | `AGENTS invariant 4 maps to no brain id or gate`                                                                         | Delete one mapping                                                                    | M     | OSE + OCR-docs |
+| 5   | Code                  | None                                                                                    | Nightly level-parity (staging vs production vs `REQUIRED_*` for both D1 databases) plus a pin-drift line per spoke                                                                    | `LEVEL DRIFT DB: staging 104 vs production 103 (required 104)`; `ourWKRP pin b96b2c8 is 11 commits / 99 ui files behind` | Stub list with one migration removed                                                  | M + S | OSE, ourWKRP   |
+| 6   | CI/CD                 | Partial (chain blocks merges; nothing ties Done to a SHA; docs-only merges have no run) | `staging-chain-for-sha.mjs`: claimed SHA is an ancestor of a run with T1 to T4 all success                                                                                            | `T3: skipped for <sha>`                                                                                                  | Fake run JSON: T3 skipped, T4 failed, non-descendant SHA                              | M     | OSE            |
+| 7   | Test pyramid          | Partial (orphan count ratcheted at 97; invariant guards dark)                           | Flag orphan specs that claim an invariant, ceiling 0; and a staging computed-style spec for SharedReport buttons                                                                      | `orphanSpecs: <path> claims invariant N and no workflow runs it`                                                         | Copy a flagged spec into the fixture root; inject `.btn-outline{border:none}`         | S + M | OSE            |
+| 8   | Test results          | Partial (one connection reset fails a required gate)                                    | `bru-retry.mjs`: retry once only if exit 1, zero `<failure>`, at least one `<error>`, every error a transport error; visible warning; first junit renamed so the report glob skips it | `::warning:: retry=1 ECONNRESET`                                                                                         | `<failure>` plus reset must not retry; reset retries once and passes; two resets fail | S     | OSE            |
+| 9   | Report                | None                                                                                    | Ratchet that recomputes each reported number and fails on a stale one                                                                                                                 | `network-plate: orphanSpecs claims 105/262, repo says 97/255`                                                            | Edit the committed number                                                             | S-M   | OSE + spine    |
+| 10  | Loop                  | None                                                                                    | PR check: a PR touching `workers/`, `scripts/`, `.github/` or `tests/` changes `docs/brain/ROLE-STATE.md` or carries `Role-state: n/a <reason>`                                       | `ROLE-STATE.md not updated for this PR`                                                                                  | Scratch PR touching `workers/` with neither                                           | M     | OSE            |
+| 11  | Shared brain (return) | Partial ([brain-drift] tickets are auto-filed; the board shows the loop is live)        | A [brain-drift] ticket may close only with a brain commit SHA or a recorded decision                                                                                                  | `ticket closed with no brain change`                                                                                     | Close a test ticket with neither                                                      | M     | OCR-docs       |
+
+## Critical (true versus assumed)
+
+Verified by the main session this loop (commands or logs, not lens say-so):
+
+- Two of the last three failing main runs failed at T2 on a connection reset, on different requests: `OSE-1242 events map` (run 39702660720) and `4. Forms POST Register` (run 39796433252, `ECONNRESET`, 91 of 92 passed). The rerun of the failed jobs passed T2. The board reports only 62% of main runs green (312 of 503 in 56 days).
+- ADR-019 is cited 19 times under `workers/oursharedevents/src`; no file exists on `main`. Its commit `e3066b22` is only on the unmerged branch `ose-1301-sponsor-consent-trace`. The written reason for Invariant 6 is absent from `main`.
+- ourWKRP's pin `b96b2c8` is 11 commits and 99 `packages/ui` and `packages/tokens` files behind spine `main` (fresh fetch). OSE's pin is one docs-only commit behind.
+- The dashboard is the OCR hub board. Its repo rows come from a scheduled task on the owner's computer (about 4:37 AM Central). The OSE row on the board still said governance 3 of 4 and hub pin `37606bf`, dated 2026-10-21.
+
+Source-read by lenses, not re-verified: the nightly check never compares the vision hash and copies without deleting; the brain check is not required (read from `gh api`, which a lens ran); invariants 4, 5, 6 lack whole-source gates; the SharedReport `.btn-outline` border changed from none to 1.5px; no per-SHA Done check; ourWKRP has no schema guard.
+
+Corrections to earlier claims in this review:
+
+- OCR-docs `CLAUDE.md` on `main` says 29 invariants, not ten (I read a stale local copy).
+- "ourWKRP has no `docs/OCR_VISION.md`" came from a stale local checkout. On origin the `.ocr-standards` copy is byte-identical in both spokes.
+- Section 11 of the Bruno suite is read-only (its seed runs outside `bru run`); my earlier worry about rerunning it was wrong.
+- Hop 11 is partial, not none: the [brain-drift] ticket loop is live.
+- QA cited `AGENTS.md:7` for the dead `VISION.md` reference; it is line 5.
+- The PO suggested merging the ourWKRP pin bump. I did not, and will not without your say.
+
+## Conservative (worst case)
+
+- A passing retry hides a deterministic reset (OSE-1242 sends coordinate-shaped parameters a WAF could trip). Mitigation: two failures fail, and every retry leaves a visible warning and count.
+- A "match" bar that means different things to the owner and to CI turns this into doc polishing during Harbor week.
+- `AGENTS.md` has 31 bytes of headroom, so the Invariant 4 rewording cannot land without cuts. The "Production posture" bullets are owner decisions and are not candidates for cutting.
+- Nothing reads production's migration level, and `schema-guard` fails open on a query error. A green staging chain does not prove production parity.
+
+## Recursive
+
+- Loop 2 to Loop 3: 37% to 0%. Thirteen findings opened, none closed, one downgraded (F1 High to Medium: the dashboard is found, its logic is unread).
+- Fixes between loops are small and are themselves open subjects: #1011 archived two visual specs (merged), #1012 carried Loop 2 (merged). Nothing from Loop 3 has been built.
+- Root causes, not 26 separate problems: (1) checks that report but cannot block; (2) nothing compares across repos or environments; (3) lists and citations with no map (ADR cites, invariant lists, `VISION.md` paths); (4) coverage that counts files, not runs; (5) flake and Done accounting.
+- Loop 4 checks: staging versus production levels (needs credentials), `.btn-outline` on staging, the exact `AGENTS.md` and `SKILL.md` diff against the size budget, the scheduled task's logic.
+
+## Findings register changes
+
+| Change          | Items                                                                                                                                                                                                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New, High       | L3-1 ADR-019 dangling; L3-2 no map across invariant lists; L3-3 ourWKRP pin 11 behind; L3-4 ourWKRP no schema guard; L3-5 UI guards for invariants 1, 4, 5, 6, 8 never run; L3-7 no per-SHA Done check; L3-9 nothing compares OSE to ourWKRP; L3-11 stale numbers on the spine plate and OCR dashboard data; RET registrations 90 days vs target 30 |
+| New, Medium     | L3-6 pin bump changed SharedReport button borders unnoticed; L3-8 ROLE-STATE stale since 2026-10-12; L3-10 lint scope gap (CI lints 4 folders); L3-12 conformance "Enforced" means annotated                                                                                                                                                        |
+| Downgraded      | F1: High to Medium                                                                                                                                                                                                                                                                                                                                  |
+| Open, unchanged | F3, F4, F5, F6, F7, F8, F9, F15, F10 to F13                                                                                                                                                                                                                                                                                                         |
+
+Score: 11 High x 10 = 110, 11 Medium x 5 = 55, 4 Low x 2 = 8. Deductions 173. **0%**.
+
+## Proposed order (all gated; nothing built yet)
+
+1. No owner decision needed, small: dead-citation script (hop 2), orphan-invariant flag (hop 7), pointer test, ADR cite test with a baseline (hop 1).
+2. After the retry go-ahead: `bru-retry.mjs` (hop 8).
+3. After the owner decisions: invariants map (hop 4), `staging-chain-for-sha` (hop 6), cross-repo and `.ocr-standards` nightly checks (hops 3, 5), level-parity (needs read-only tokens).
+4. Governance route (5+ loops, human gate each): the `VISION.md` citations and the Invariant 4 wording.
+5. ourWKRP work in its own session, after it is in scope.
+6. Defer until after Oct 24: orphan-spec wiring, retention constants, report-claims ratchet.
+
+## Human-gate questions (Loop 3)
+
+The ten decisions are on the board, in order. The ones that block the most:
+
+1. **Match bar:** is the staging "match" same SHA and same migration level, or all documents agree?
+2. **Invariant list:** which list is canonical (the brain yaml is recommended)?
+3. **Brain check:** will you make "Validate against OCR-docs brain" a required check (repo control, yours)?
+4. **Retry:** go ahead with the Bruno retry, as one retry for transport errors only?
+5. **AGENTS.md:** which text may be cut, or may the 12 KB limit rise, for the Invariant 4 rewording?
+6. **ADR-019:** may the ADR file on `ose-1301-sponsor-consent-trace` be landed on `main`, or does Invariant 6's rationale need rewriting?
+7. **ourWKRP:** in scope for the first sync, and should it be its own session?
+8. **Read-only Cloudflare tokens** for the staging-versus-production level check (you set secrets yourself).
+9. **Pin policy** and **retention** (registrations 90 or 30; clock from sign-up or event).
+
+## Gate answer received (2026-10-22): the match bar
+
+**Question 1 answered.** The owner ruled that "match" means **all documents agree**, not just the same SHA and migration level, and repeated that the documents should be in agreement.
+
+What this changes:
+
+- The document-agreement checks are **required** for production to follow staging: hop 1 (ADR cites resolve), hop 2 (citations resolve), hop 3 (`.ocr-standards` and the brain check), hop 4 (invariant lists mapped), hop 9 (reported numbers regenerated from the repo), and the vision pointer test.
+- The SHA and migration-level checks (hops 5, 6, 8) stay required too. The bar is the union, not a choice.
+- Decision D4 on the board is reworded: the dashboard is located (the OCR hub board, fed by a morning scheduled task on the owner's computer); the task's own logic is still unread.
+
+Nine decisions remain on the board. Score is unchanged at 0% until a finding closes.
