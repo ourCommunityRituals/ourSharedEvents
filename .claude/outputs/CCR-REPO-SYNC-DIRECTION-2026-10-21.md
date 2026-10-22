@@ -291,3 +291,15 @@ The ten decisions are on the board, in order. The ones that block the most:
 7. **ourWKRP:** in scope for the first sync, and should it be its own session?
 8. **Read-only Cloudflare tokens** for the staging-versus-production level check (you set secrets yourself).
 9. **Pin policy** and **retention** (registrations 90 or 30; clock from sign-up or event).
+
+## Gate answer received (2026-10-22): the match bar
+
+**Question 1 answered.** The owner ruled that "match" means **all documents agree**, not just the same SHA and migration level, and repeated that the documents should be in agreement.
+
+What this changes:
+
+- The document-agreement checks are **required** for production to follow staging: hop 1 (ADR cites resolve), hop 2 (citations resolve), hop 3 (`.ocr-standards` and the brain check), hop 4 (invariant lists mapped), hop 9 (reported numbers regenerated from the repo), and the vision pointer test.
+- The SHA and migration-level checks (hops 5, 6, 8) stay required too. The bar is the union, not a choice.
+- Decision D4 on the board is reworded: the dashboard is located (the OCR hub board, fed by a morning scheduled task on the owner's computer); the task's own logic is still unread.
+
+Nine decisions remain on the board. Score is unchanged at 0% until a finding closes.
