@@ -99,7 +99,7 @@
     }
   },
   "skipsConditional": {
-    "total": 365,
+    "total": 364,
     "byFile": {
       "tests/api/smoke/archive/bundles.spec.ts": {
         "count": 17,
@@ -314,10 +314,6 @@
         "reason": "Conditional skip (env, browser or secret gate); count may only fall."
       },
       "tests/playwright/sponsor-surfaces-journey.spec.ts": {
-        "count": 1,
-        "reason": "Conditional skip (env, browser or secret gate); count may only fall."
-      },
-      "tests/playwright/surfaces.visual.spec.ts": {
         "count": 1,
         "reason": "Conditional skip (env, browser or secret gate); count may only fall."
       },

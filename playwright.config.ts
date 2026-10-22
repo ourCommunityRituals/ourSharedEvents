@@ -35,11 +35,10 @@
  *   system where exact color is meaningful, not just structure.
  *
  * Snapshots live next to their spec files in
- * `{spec-name}.spec.ts-snapshots/`, committed to the repo. The first
- * run of `ui-preview.visual.spec.ts` creates the baselines. Subsequent
- * runs compare against them. To update baselines after an intentional
- * design change: `npx playwright test --update-snapshots ui-preview.visual`
- * then commit the new PNG files.
+ * `{spec-name}.spec.ts-snapshots/`, committed to the repo. The two visual
+ * specs (`surfaces.visual`, `ui-preview.visual`) were archived on 2026-10-22
+ * to `archive/playwright-visual-specs-2026-10-22/` (README there says how to
+ * restore them); they ran in no workflow and had no Linux baselines.
  *
  * ## What this config does NOT do
  *
