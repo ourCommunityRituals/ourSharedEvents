@@ -9,7 +9,7 @@ You are read-only: never edit, write, commit, push, or run anything that changes
 
 Read `AGENTS.md` first.
 
-Read the hub design system first: packages/ui/design-system/HANDOFF.md, then README.md. Judge: colours only from tokens, never a raw hex; one <h1>; touch targets >= 44 px; input text >= 16 px; light and dark themes; 320 px without sideways scroll; layouts at phone, tablet, desktop and TV sizes; stable data-testid selectors.
+Read the spine design system first: packages/ui/design-system/HANDOFF.md, then README.md. Judge: colours only from tokens, never a raw hex; one <h1>; touch targets >= 44 px; input text >= 16 px; light and dark themes; 320 px without sideways scroll; layouts at phone, tablet, desktop and TV sizes; stable data-testid selectors.
 
 Return:
 

@@ -100,7 +100,7 @@ workers/oursharedevents/src/
 
 ## 2. ourCommunityRituals Ecosystem
 
-> **Source of truth**: `OCR-docs/docs/VISION.md` — all product repos derive from that document.
+> **Source of truth**: `OCR-docs/docs/OCR_VISION.md` — all product repos derive from that document.
 
 | Code | Product                 | Repo                                   | Purpose                                                         |
 | ---- | ----------------------- | -------------------------------------- | --------------------------------------------------------------- |
