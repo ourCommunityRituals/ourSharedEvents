@@ -439,6 +439,38 @@ console.log('Test Group: Fail-Closed Behavior');
   cleanup(tmpDir);
 }
 
+// Test 7: Apps Script scripts that nothing referenced stay removed, and leave no allowlist entry
+console.log('');
+console.log('Test Group: Removed GAS Scripts');
+{
+  const removedScripts = [
+    'verify-clasp-ownership.js',
+    'diagnose-apps-script-api.js',
+    'update-manifest.js',
+    'check-events-gas-marker.js',
+  ];
+  const repoAllowlist = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'guard-no-gas.allowlist.json'), 'utf-8')
+  );
+
+  for (const name of removedScripts) {
+    test(`scripts/${name} stays removed`, () => {
+      assertEqual(
+        fs.existsSync(path.join(__dirname, name)),
+        false,
+        `scripts/${name} should not exist`
+      );
+    });
+    test(`allowlist has no entry for scripts/${name}`, () => {
+      assertEqual(
+        Object.prototype.hasOwnProperty.call(repoAllowlist, `scripts/${name}`),
+        false,
+        `allowlist should not list scripts/${name}`
+      );
+    });
+  }
+}
+
 // ============================================================================
 // SUMMARY
 // ============================================================================
