@@ -28,7 +28,7 @@ The org list is `OCR-docs/ocr-docs-brain/architectural-invariants.yaml`; `[#n]` 
 1. **Never who, only how many.** [#1 #7] Publish counts, never identities. Presenters who opt in are the only exception.
 2. **The under-5 floor has no exceptions** [#7 OSE]: a published count below 5 is withheld, for a brand's own admin too and at every tier. Totals and rates use `lib/count-floor.ts` (`floorTotalOfParts`, `flooredRatePct`). A withheld count reads in words ("Fewer than 5"), never as 0. Open gaps: OSE-1656 (some counts an admin still reads exactly), OSE-1652.
 3. **Place, not person** [OSE]: location is an H3 cell, res 7 (the area a link was published into) or res 9 (a physical placement), never request geo or IP; no `CF-IP*` header is read. Public reads refuse coordinate-shaped input (`/api/v2/events/map`); admin placement writes take coordinates only to derive the cell.
-4. **No cookies on public surfaces** [#1]. Geolocation picks what to show and is never stored.
+4. **No cookies on public surfaces** [#1], except the anonymous `ose_anon` token (one-year lifetime) on `/q` and the forms routes (owner ruling 2026-10-22). `/s` sets none. Geolocation picks what to show and is never stored.
 5. **The display shows no counts** [OSE]. The public check-in answer carries no count; counts are post-event.
 6. **Sponsors need two-sided consent** [OSE]: a sponsor shows only when it accepted and the organizer accepted (`SPONSOR_ON_SHOW_SQL` in `lib/sponsor-card.ts`). On a page that shows an event title, the sponsor strip sits below the title and date and above the content and map.
 7. **Security is never tier-gated** [#5 #8 #9 #24]: audit, roles, isolation and retention are the same at every tier. Templates never gate; tiers gate features.
