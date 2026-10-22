@@ -293,7 +293,9 @@ function collectFiles(dir, files = []) {
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      if (!IGNORED_DIRS.has(entry.name)) {
+      // .claude/worktrees/* are nested git worktrees: full copies of the repo, not part of it.
+      const isNestedWorktrees = entry.name === 'worktrees' && path.basename(dir) === '.claude';
+      if (!IGNORED_DIRS.has(entry.name) && !isNestedWorktrees) {
         collectFiles(fullPath, files);
       }
     } else if (entry.isFile()) {
