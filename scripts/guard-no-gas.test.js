@@ -42,7 +42,9 @@ function assertEqual(actual, expected, message) {
 
 function assertIncludes(str, substr, message) {
   if (!str.includes(substr)) {
-    throw new Error(`${message}\n     Expected to include: "${substr}"\n     In: "${str.slice(0, 200)}..."`);
+    throw new Error(
+      `${message}\n     Expected to include: "${substr}"\n     In: "${str.slice(0, 200)}..."`
+    );
   }
 }
 
@@ -72,10 +74,7 @@ function createTestFixtures() {
   );
 
   // File with GAS_BASE_URL
-  fs.writeFileSync(
-    path.join(tmpDir, '.env.example'),
-    'GAS_BASE_URL=https://example.com\n'
-  );
+  fs.writeFileSync(path.join(tmpDir, '.env.example'), 'GAS_BASE_URL=https://example.com\n');
 
   // File with doGet
   fs.writeFileSync(
@@ -108,10 +107,7 @@ function createTestFixtures() {
   );
 
   // File with clasp
-  fs.writeFileSync(
-    path.join(tmpDir, 'config.json'),
-    '{ "clasp": { "scriptId": "abc123" } }\n'
-  );
+  fs.writeFileSync(path.join(tmpDir, 'config.json'), '{ "clasp": { "scriptId": "abc123" } }\n');
 
   // File with action=api_
   fs.writeFileSync(
@@ -309,7 +305,11 @@ console.log('Test Group: Allowlist Functionality');
     const result = runGuard(tmpDir, allowlistPath);
     // Should still fail because src/production.js is not allowlisted
     assertEqual(result.exitCode, 1, 'Guard should still fail for non-allowlisted files');
-    assertNotIncludes(result.output, 'docs/legacy.md', 'Allowlisted file should not appear in output');
+    assertNotIncludes(
+      result.output,
+      'docs/legacy.md',
+      'Allowlisted file should not appear in output'
+    );
     assertIncludes(result.output, 'src/production.js', 'Non-allowlisted file should appear');
   });
 
@@ -379,6 +379,48 @@ console.log('Test Group: Directory Exclusions');
   });
 
   cleanup(tmpDir);
+}
+
+// Test 5b: Nested git worktrees under .claude/worktrees hold full copies of the repo.
+// They are not part of it, so the guard must not scan them, while the rest of .claude is.
+console.log('');
+console.log('Test Group: Nested Worktrees');
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-no-gas-worktrees-'));
+  fs.mkdirSync(path.join(tmpDir, 'scripts'));
+  fs.mkdirSync(path.join(tmpDir, '.claude', 'worktrees', 'agent-x', 'scripts'), {
+    recursive: true,
+  });
+  fs.writeFileSync(
+    path.join(tmpDir, '.claude', 'worktrees', 'agent-x', 'scripts', 'copy.js'),
+    'const sheet = SpreadsheetApp.getActive();\n'
+  );
+  const allowlistPath = createAllowlist(tmpDir, {});
+
+  test('ignores a banned pattern inside .claude/worktrees', () => {
+    const result = runGuard(tmpDir, allowlistPath);
+    assertEqual(result.exitCode, 0, 'Guard should pass (only a nested worktree has the pattern)');
+    assertNotIncludes(result.output, 'copy.js', 'Should not scan .claude/worktrees');
+  });
+
+  cleanup(tmpDir);
+
+  // Control: the same pattern elsewhere under .claude must still fail the guard.
+  const controlDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-no-gas-claude-control-'));
+  fs.mkdirSync(path.join(controlDir, 'scripts'));
+  fs.mkdirSync(path.join(controlDir, '.claude', 'hooks'), { recursive: true });
+  fs.writeFileSync(
+    path.join(controlDir, '.claude', 'hooks', 'leak.js'),
+    'const sheet = SpreadsheetApp.getActive();\n'
+  );
+  const controlAllowlist = createAllowlist(controlDir, {});
+
+  test('still scans the rest of .claude (control)', () => {
+    const result = runGuard(controlDir, controlAllowlist);
+    assertEqual(result.exitCode, 1, 'Guard should fail on a banned pattern under .claude/hooks');
+  });
+
+  cleanup(controlDir);
 }
 
 // Test 6: Handles missing allowlist gracefully (fail-closed)
