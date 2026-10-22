@@ -180,3 +180,7 @@ Trend: flat. Nothing new is broken; the score stays low because several checks c
 3. **F15:** For the Invariant 4 wording, which bytes may go from `AGENTS.md`, or may the budget rise from 12 KB?
 4. **F4:** Go ahead with the retry under the four conditions above?
 5. **Q3 pin policy:** decision after reading the plain-language explanation.
+
+## Gate answer received (2026-10-22)
+
+**F14 closed.** The owner confirmed the `ose_anon` ruling also covers the forms routes (register, check-in, survey, email sign-up). No code change needed. Remaining open from Loop 2: F15 (Invariant 4 wording and the 31-byte budget), F1 (dashboard rule location), F4 (retry go-ahead), Q3 (pin policy). Score after closing F14: 7 Medium x 5 = 35, 2 High x 10 = 20, 4 Low x 2 = 8, deductions 63, **system score 37
