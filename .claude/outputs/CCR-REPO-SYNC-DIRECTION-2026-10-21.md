@@ -303,3 +303,73 @@ What this changes:
 - Decision D4 on the board is reworded: the dashboard is located (the OCR hub board, fed by a morning scheduled task on the owner's computer); the task's own logic is still unread.
 
 Nine decisions remain on the board. Score is unchanged at 0% until a finding closes.
+
+---
+
+# Loop 4 (2026-10-22): sync AGENTS.md with OurCommunityRituals and OCR-docs
+
+Owner direction, 2026-10-22: `AGENTS.md` should be synced with OurCommunityRituals (the spine) and OCR-docs, so the documents agree.
+
+`AGENTS.md` is a governance file: 5+ loops, human gate after every loop. This is the first loop on the wording. **Nothing is applied.** The proposal is the unified diff in `.claude/outputs/AGENTS-SYNC-PROPOSAL-2026-10-22.diff`.
+
+Method: the main session compared `AGENTS.md` with fresh `origin/main` copies of OCR-docs (`CLAUDE.md`, `ocr-docs-brain/architectural-invariants.yaml`, the ADR README) and the spine (`CLAUDE.md`). No lens fan-out this loop. Loop 5 sends the proposal to the Dr of Security and the Backend Architect to confirm the invariant mapping.
+
+## Where AGENTS.md disagrees with the other two
+
+| #   | Where                    | AGENTS.md says                                                  | The other side says                                                                                                                    | Fix lives in                                                                                             |
+| --- | ------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | Line 5                   | Org vision is `OCR-docs/docs/VISION.md`                         | The file is `OCR_VISION.md`; OCR-docs `CLAUDE.md` says read `docs/OCR_VISION.md`                                                       | AGENTS.md                                                                                                |
+| 2   | Invariant 4              | No cookies on public surfaces                                   | Brain #1 (live) enforces the `ose_anon` cookie contract; owner ruling 2026-10-22 allows it on `/q` and forms (`/s` sets none)          | AGENTS.md and `.github/copilot-instructions.md:8` (same old wording; Copilot would flag legitimate code) |
+| 3   | Line 15                  | Brand scoping is list-level only (OSE-1080)                     | `guardAdminObjectScope` runs at `router.ts:807`; its spec exists; `docs/brain/CONSTRAINTS.md` already says so                          | AGENTS.md                                                                                                |
+| 4   | Lines 22, 33, 104        | "hub" means the shared-packages repo                            | The owner's words: hub is OCR-docs, spine is OurCommunityRituals (`ECOSYSTEM-LAYERS.md`)                                               | AGENTS.md (file and secret names `.ocr-hub-ref`, `OCR_HUB_READ` keep theirs)                             |
+| 5   | Sources of truth         | Silent on ADR numbering                                         | OCR-docs ADR README: single-repo ADRs live in the repo, fleet-wide in OCR-docs                                                         | AGENTS.md                                                                                                |
+| 6   | Invariants               | Nine owner decisions, no link to the org list                   | OCR-docs `CLAUDE.md` (main): the list lives in the brain yaml, 29 invariants (17 live, 10 partial, 2 retired), deliberately not copied | AGENTS.md                                                                                                |
+| 7   | Invariant 8              | Colours only from tokens; never change colours in `packages/ui` | Spine `CLAUDE.md`: same, plus read `HANDOFF.md` then `README.md`                                                                       | **Agrees**                                                                                               |
+| 8   | Spine pin                | Bump the pin in a PR                                            | Spine `SKILL.md:46`: tell product repos to bump after the hub PR merges                                                                | Agrees; policy (D7) pending                                                                              |
+| 9   | Brain #5 text            | OSE invariant 5: display shows no counts; invariant 2: floor    | Brain #5 says "same real-time counts at every tier"                                                                                    | OCR-docs (not edited here)                                                                               |
+| 10  | OCR-docs ADRs            | n/a                                                             | Two files numbered ADR-011 inside OCR-docs (the board reports it)                                                                      | OCR-docs (not edited here)                                                                               |
+| 11  | OCR-docs governance list | AGENTS.md is the operating contract                             | "Four governance files per repo" omits AGENTS.md                                                                                       | OCR-docs, owner decision                                                                                 |
+
+## Proposed AGENTS.md edits (nine; none applied)
+
+1. Line 5: `VISION.md` to `OCR_VISION.md`.
+2. ADR bullet: add "Fleet-wide ADRs live in OCR-docs; numbers overlap by design, so cite `fleet ADR-NNN` or `OSE ADR-NNN`."
+3. Brand scoping: replace with the object-level wording and the public-read carve-out.
+4. "hub" to "spine" in the three places, naming OurCommunityRituals once.
+5. Invariants intro: one line pointing at the brain yaml, with `[#n]` ids on each decision.
+6. Invariant 4: "No cookies on public pages [#1]. One exception, owner ruling 2026-10-22: the anonymous `ose_anon` token on `/q` and the forms routes; `/s` sets none. Geolocation picks what to show and is never stored."
+7. Invariant 8: `(hub)` to `[spine]`.
+8. Where things live: design system "hub" to "spine".
+9. `.github/copilot-instructions.md:8`: same cookie wording (a separate, smaller file).
+
+Proposed mapping (to confirm in Loop 5 against each yaml entry's `enforces` text): 1 [#1 #7], 2 [#7], 3 [#2 #4], 4 [#1], 5 [OSE only: no brain entry], 6 [#5], 7 [#5 #9], 8 [spine], 9 [#1 #8].
+
+## The size budget
+
+`AGENTS.md` is 12,257 bytes (CRLF) against a 12,288 limit (31 spare). The edits add 433 bytes, 402 over the limit. Six cuts, each of text that already lives elsewhere, bring it to **12,189 bytes (99 spare)**:
+
+| Cut                                                                      | Bytes | Where it still lives                                      |
+| ------------------------------------------------------------------------ | ----: | --------------------------------------------------------- |
+| Reconciliation-rule parenthetical and audit file pointer                 |   102 | `docs/audits/LINEAR_BACKLOG_RECONCILIATION_2026-09-22.md` |
+| "Templates are Wrangler text modules served with CSP nonces"             |    72 | `docs/brain/CONSTRAINTS.md`                               |
+| Worker-test `Sec-Fetch-Site` hint                                        |    86 | `workers/oursharedevents/CLAUDE.md`                       |
+| `testids.js` / `assetState.js` detail (the "never delete it" line stays) |   111 | `docs/brain/CONSTRAINTS.md`                               |
+| Parenthetical on the Known constraints pointer                           |    62 | the file itself                                           |
+| "(the structural gates run locally...)" on the arch command              |    75 | `npm run test:arch` output                                |
+
+The alternative is raising the limit in `scripts/ci/agent-instructions-budget.mjs:16`. The Production posture, Human approval and Definition of Done sections are untouched.
+
+## Critical, Conservative, Recursive
+
+- **Critical.** Verified: `AGENTS.md` bytes and line endings (CRLF), the three "hub" lines, the object-scope guard in code, brain #1's cookie contract (the `enforces` text and the `cookie_contract` field), the spine `CLAUDE.md` (three design-system bullets), and that no test depends on the changed wording. Not verified: the invariant mapping above (title and `enforces` match only).
+- **Conservative.** The mapping could point a decision at the wrong brain id and give the owner a false sense of agreement; Loop 5 has the two lenses check each entry. Changing "hub" to "spine" could be misread as renaming `.ocr-hub-ref`; the diff keeps that name. Copilot instructions still carry the old cookie wording until item 9 lands.
+- **Recursive.** Six new findings (below). The score stays at the floor: the previous deductions of 173 plus 21 give 194, so 0%. Loop 5 will check the mapping, the cut list and the diff against the budget test run on a real copy.
+
+New findings: L4-1 `AGENTS.md` brand-scoping sentence stale (Medium); L4-2 `copilot-instructions.md` repeats the old cookie wording (Medium); L4-3 brain #5 text conflicts with the display and floor invariants (Medium, OCR-docs); L4-4 "hub" used for the spine (Low); L4-5 two ADR-011 files inside OCR-docs (Low, OCR-docs); L4-6 OCR-docs governance list omits `AGENTS.md` (Low).
+
+## Human-gate questions (Loop 4)
+
+1. Is this the direction (edits 1 to 9), so Loop 5 can send it to the Dr of Security and the Backend Architect?
+2. Which cuts, or may the limit rise instead?
+3. Is "spine" the word for OurCommunityRituals in `AGENTS.md`?
+4. The OCR-docs-side items (9, 10, 11) are a different repository: should I prepare them as OCR-docs PRs in their own session, for your review?
