@@ -183,4 +183,4 @@ Trend: flat. Nothing new is broken; the score stays low because several checks c
 
 ## Gate answer received (2026-10-22)
 
-**F14 closed.** The owner confirmed the `ose_anon` ruling also covers the forms routes (register, check-in, survey, email sign-up). No code change needed. Remaining open from Loop 2: F15 (Invariant 4 wording and the 31-byte budget), F1 (dashboard rule location), F4 (retry go-ahead), Q3 (pin policy). Score after closing F14: 7 Medium x 5 = 35, 2 High x 10 = 20, 4 Low x 2 = 8, deductions 63, **system score 37
+**F14 closed.** The owner confirmed the `ose_anon` ruling also covers the forms routes (register, check-in, survey, email sign-up). No code change needed. Remaining open from Loop 2: F15 (Invariant 4 wording and the 31-byte budget), F1 (dashboard rule location), F4 (retry go-ahead), Q3 (pin policy). Score after closing F14: 7 Medium x 5 = 35, 2 High x 10 = 20, 4 Low x 2 = 8, deductions 63, **system score 37%**.
