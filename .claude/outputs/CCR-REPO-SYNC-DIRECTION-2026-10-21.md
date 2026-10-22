@@ -445,3 +445,70 @@ The wording was first examined in Loop 4, so this is its second loop. The protoc
 3. Tap targets: invariant 8 says 44 px, the spine says 48 px. Keep 44 and say so, or move OSE to 48?
 4. Is the PR split right, and may I open the cookie gate and the sync check as their own small PRs?
 5. Spokes: are only OSE and OW "spokes" (your page) or all product repos (OCR-docs standards)?
+
+---
+
+# Loop 6 (2026-10-22): final verification of the wording, with working prototypes
+
+Owner decisions at the Loop 5 gate: v2 wording confirmed including the brand-scoping sentence; the three small cuts added; 44 px kept for tap targets, with a note. Loop 6 turned those into **v3**, ran six lenses on it, and produced **v4** (below). Nothing is applied to `AGENTS.md`. The proposal is `.claude/outputs/AGENTS-SYNC-PROPOSAL-2026-10-22-v4.diff`.
+
+Lenses this loop: Backend Architect, Dr of Security, PO, QA, FE Integration, DevOps. Not run, because their subject did not change since Loop 5: the Scrum Master (loop accounting settled), SDET/SRE (the main session ran the budget script itself), the Data Scientist (the privacy ids were corrected in v2).
+
+## Verdict
+
+| Item                  | Value                                                                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| System score          | **0%** (deductions 280, floored)                                                                                                               |
+| Assessment confidence | **88%**. Two prototypes were run, one by a lens and again by the main session; the ids and the brand-scoping sentence were re-read from files. |
+| Gate result           | **Human gate.** Wording loops so far: 4, 5, 6 (three).                                                                                         |
+
+## What changed from v3 to v4, and why
+
+| Change in v4                                                   | Reason                                                                                                                                                                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Invariant 3 tag `[#4 OSE]` to `[OSE]`                          | Brain #4 covers poster lat/lng and res-9 aggregation, not res 7, no request geo or no `CF-IP`; it even says poster deployments store lat/lng while `AGENTS.md` says coordinates only derive the cell (Backend Architect) |
+| Invariant 6 tag `[#2 OSE]` to `[OSE]`                          | Brain #2 covers sponsor resolution, not consent (Backend Architect)                                                                                                                                                      |
+| Invariant 8 tag `[spine #14]` to `[#14 OSE]`                   | `[#n]` is the brain id; brain #14 is Mobile Workability (FE Integration, Backend Architect)                                                                                                                              |
+| Invariant 4 adds "(one-year lifetime)"                         | The exception had no stated lifetime; the cookie is Max-Age one year (Dr of Security)                                                                                                                                    |
+| Kept the tap-target note "(OSE's floor; the spine targets 48)" | The PO confirmed it keeps 44 and says so; a longer wording would leave 5 bytes spare                                                                                                                                     |
+
+**v4 is 12,267 bytes (LF), 21 spare.** The budget script passes on an LF copy and on a CRLF copy (12,375 raw bytes: the script strips carriage returns). The Definition of Done heading is intact. The sync check prototype reports `clean` on v4: 7 ids exist (`#1 #5 #7 #8 #9 #14 #24`), 9 invariants tagged, 2 cited paths exist, 29 brain entries read.
+
+The approval chain for the cuts: the Loop 4 worksheet listed six cuts and the owner approved them; Loop 5 restored one (the "structural gates" note) and shortened one (`web/shared/`); the owner then confirmed the three small cuts. The PO lens flagged five cuts as unapproved because its brief did not list the Loop 4 approval; that is a gap in my brief, not a defect.
+
+## What the lenses proved
+
+- **Brand-scoping sentence: true** (Backend Architect, source-read): the guard covers `/admin/events/:id/**` and `/admin/poster-deployments/:id` (`admin-object-scope.ts:76-77`, `router.ts:807`); every sponsor by-id route scopes inside its handler (`sponsors.ts:377,399,771,1105`, `sponsor-home.ts:117-130,496-504`); no by-id admin route is outside both. Two caveats not in the sentence: the guard is silent when there is no actor (local dev-only open admin), and a key actor in "all" mode bypasses it. (The Dr of Security rated the replacement High but said it did not check this; the Backend Architect did.)
+- **Cookie claims: true** (Dr of Security, source-read): the only setter is `setAnonCookie` (`lib/anonymous-id.ts:47`); callers are `handlers/qr-scan.ts:261` and five sites in `handlers/forms.ts`. No template writes `document.cookie`, no middleware adds one, and the `index.ts:131` comment belongs to the nightly retention job.
+- **Cookie gate prototype, proven:** a 60-line script scans `workers/oursharedevents/src`. The main session re-ran it: `scanned 188 files`, `cookie gate OK` (forms 5, qr-scan 1, anonymous-id definition 1). A planted call in `pages.ts` fails with `handlers/pages.ts:2972 sets a cookie outside the allowlist`. **High finding in the prototype:** importing the setter under another name passed. The fix is to match `\bsetAnonCookie\b` anywhere with fixed counts per file. It belongs at `tests/e2e/0-architecture/cookie-setters.invariant.spec.ts` in the T0 `invariants` shard.
+- **Sync check prototype, proven:** on today's `AGENTS.md` it fails (0 ids, invariants untagged, `OCR-docs/docs/VISION.md` missing); on v4 it is clean; three planted faults each fail with exactly one message (retired id `#11`, untagged invariant 5, nonexistent cited path). Surviving mutant: swapping `[#1]` for `[#2]` still passes, because it checks existence and status, not meaning. Wire it into `brain-contract-check.yml` after the "Invariant registry reconciliation" step with `actions/setup-node`.
+
+## New findings this loop
+
+| #    | Severity | Finding                                                                                                                                                                                                                                                                                        |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L6-1 | High     | Invariant 8, "never a raw hex in a page", is **false in OSE today**: `corridor-map.ts:65,70,106`, `landing.html:19`, `admin.html`, `poster.html`, `shared-report.html`, `pages.ts:1358`, `demo-banner.ts`, `briefing.ts:370`. The invariant is the owner's; this is debt, not a wording error. |
+| L6-2 | Medium   | Brain #4 says poster deployments store lat/lng; `AGENTS.md` invariant 3 says coordinates only derive the cell. One is stale; the code was not checked this loop.                                                                                                                               |
+| L6-3 | Medium   | The brain has no entry for four owner decisions: the under-5 floor, place at res 7 and 9, display shows no counts, two-sided sponsor consent. Tags for those are `[OSE]` only.                                                                                                                 |
+| L6-4 | Medium   | The sync check cannot tell a right id from a wrong one that exists.                                                                                                                                                                                                                            |
+| L6-5 | Low      | `.ocr-standards/DAC-BACKUP-PROTOCOL.md:169` cites `VISION.md` (OCR-docs propagation source).                                                                                                                                                                                                   |
+| L6-6 | Low      | One OSE spec asserts only 40 px (`public-surface-e2e.spec.js:1047`); an inline `min-width:44px` at `admin.html:5313` slightly breaches a spine rule against overriding the tap minimum downward.                                                                                               |
+| L6-7 | Low      | `ROLE-STATE.md:39` is a dated record; rewriting "hub" there would read as editing history.                                                                                                                                                                                                     |
+
+Score: 249 + 10 + 5 + 5 + 5 + 2 + 2 + 2 = 280. **0%.** (L5-5, no gate on a new public cookie route, stays open until the gate lands.)
+
+## Follow-up PR 4 edit list (DevOps, mechanical, nothing made)
+
+`docs/brain/CONSTRAINTS.md` lines 13 and 14 and `.claude/agents/role-design-fe.md:12`: "hub" to "spine" where it means the OurCommunityRituals repo. `VISION.md` to `OCR_VISION.md` in `SKILL.md` (134, 138), `.claude/skills/devops.knowledge.md` (207, 240), `.claude/skills/product-director.knowledge.md:10` and `docs/brain/PRODUCT.md:103`. Keep `.ocr-hub-ref`, `OCR_HUB_READ`, the `hub-pin-ancestry` test name, and "hub" where it means OCR-docs (`CLAUDE.md:34`). **Recommended: leave `ROLE-STATE.md` alone** (a dated record). `.ocr-standards/DAC-BACKUP-PROTOCOL.md:169` belongs to OCR-docs.
+
+## Loop count
+
+The wording has had three loops (4, 5, 6). The protocol needs 5+ with a gate after each, and two consecutive stable loops at 95% or above. Proposed: **Loop 7** applies v4 on branches as draft PRs (not merged), runs the real gates, and wires and born-reds the two new checks in CI; **Loop 8** is a clean re-read of the applied diff and the stability check. The earliest the change can be called ready is after Loop 8.
+
+## Human-gate questions (Loop 6)
+
+1. **Raw hex (L6-1):** the invariant is false today. Ticket the debt and keep the invariant (recommended), or soften it to "new pages"?
+2. **ROLE-STATE.md:** leave "hub" in that dated record?
+3. **Brain #4 versus invariant 3:** do poster placements store coordinates or only the H3 cell? (Loop 7 will check the code; say which you intend.)
+4. **Loop 7:** may I open the four PRs as drafts, one per split, plus the sync check and cookie gate as their own small PRs? None would merge before Loop 8 passes.
+5. **OCR-docs:** the brain lacks entries for owner decisions 2, 3, 5 and 6, and its #4 and #5 text conflicts. Add these to the OCR-docs list (D11)?
