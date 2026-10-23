@@ -6,15 +6,15 @@
 
 ## Access Model
 
-| Route Type                                       | Auth Required | Method                                   |
-| ------------------------------------------------ | :-----------: | ---------------------------------------- |
-| Public pages (`/`, `/events`)                    |      No       | Open                                     |
-| Public API (`/api/v2/events`)                    |      No       | Open                                     |
-| Public forms (`POST /api/v2/events/:id/forms/*`) |      No       | Open                                     |
-| Form pages (`/forms/:eventId`)                   |      No       | Open                                     |
-| Admin page (`/admin`)                            |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
-| Admin API (`/api/v2/admin/*`)                    |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
-| Feature flag admin (`/api/v2/admin/flags/*`)     |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
+| Route Type                                                                                    | Auth Required | Method                                   |
+| --------------------------------------------------------------------------------------------- | :-----------: | ---------------------------------------- |
+| Public pages (`/`, `/events`)                                                                 |      No       | Open                                     |
+| Public API (`/api/v2/events`)                                                                 |      No       | Open                                     |
+| Public forms (`/api/v2/events/:id/forms/register`, `checkin`, `survey`, `email-signup`; POST) |      No       | Open                                     |
+| Form pages (`/forms/:eventId`)                                                                |      No       | Open                                     |
+| Admin page (`/admin`)                                                                         |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
+| Admin API (`/api/v2/admin/*`)                                                                 |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
+| Feature flag admin (`/api/v2/admin/flags/*`)                                                  |      Yes      | CF Access JWT, X-OCR-Internal, or Bearer |
 
 ---
 

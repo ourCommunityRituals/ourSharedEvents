@@ -233,31 +233,15 @@ All sponsor metrics are aggregated at the backend — the UI never computes thes
 
 ## Monetization Readiness (Story F4)
 
-The platform has **monetization hooks** built in — read-only billable unit tracking with no billing logic yet. This is the foundation for future sponsor pricing.
-
-### Billable Units
-
-| Unit          | Description                                     |
-| ------------- | ----------------------------------------------- |
-| `qrScans`     | QR code scans attributed to the sponsor         |
-| `impressions` | Page views where sponsor was visible            |
-| `eventCount`  | Number of events the sponsor is associated with |
-
-### API Endpoints
-
-```
-GET /api/v2/sponsor/:sponsorId/monetization  → sponsor billable units + billing window
-GET /api/v2/event/:eventId/monetization      → event billable units + sponsor count
-GET /api/v2/monetization/inert               → CI/CD gate: verify billing hooks are inert
-```
+The platform is **pre-revenue by contract**. The one monetization hook that is built is the inert header: the Worker puts `X-Monetization-Inert: true` on every response (`src/index.ts`, `fetch()` wrapper), as machine-readable evidence that no billing logic ran. Nothing bills, charges or processes a payment, and there is no user-visible billing UI.
 
 ### Key Invariant
 
-**Monetization hooks are INERT.** The `X-Monetization-Inert: true` header is on every response. No billing logic executes. No payment processing. No user-visible billing UI. This is enforced by a CI/CD gate (`checkMonetizationHooksInert`). When actual billing launches, it will be a new layer on top of these existing hooks.
+**Monetization hooks are INERT** (Brain Invariant #6). The header is checked by `tests/e2e/0-architecture/monetization-inert.invariant.spec.ts` (in the T0 invariants step) and by `workers/oursharedevents/tests/testid-pyramid.spec.ts`. When actual billing launches, it will be a new layer on top of this.
 
-### Billing Window
+### Not built: billable-unit endpoints
 
-Billable units are aggregated over a rolling 30-day window. The response includes `windowStart` and `windowEnd` timestamps so sponsors can see exactly what period the data covers.
+An earlier version of this page listed three read-only endpoints at `/api/v2/sponsor/:sponsorId/monetization`, `/api/v2/event/:eventId/monetization` and `/api/v2/monetization/inert`. **The router has no such routes and no handler exists** (corrected 2026-10-23 against `workers/oursharedevents/src/router.ts`). They were a design intent for later: billable units would be QR scans attributed to the sponsor, sponsor-visible impressions, and the count of associated events, summed over a rolling 30-day window. Any such endpoint would sit behind the same two-sided consent and under-5 floor rules as every other sponsor count.
 
 ---
 

@@ -112,3 +112,18 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | [EVENTS.md](EVENTS.md)                   | Event APIs and data model                              |
 | [SURFACES.md](SURFACES.md)               | Admin dashboard and all surfaces                       |
 | [ERROR-REFERENCE.md](ERROR-REFERENCE.md) | Troubleshooting every error code                       |
+
+### Design and Methodology
+
+Pillar documents and the SharedReport design set. Where a status line is out of date, the entry says so; the code and its tests win.
+
+| Document                                                             | Description                                                                                                                                                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [ANONYMOUS-ID.md](ANONYMOUS-ID.md)                                   | Pillar 2: the anonymous id contract, why scans and forms live in separate databases, and what each side stores                                                                       |
+| [NCR-METHODOLOGY.md](NCR-METHODOLOGY.md)                             | Pillar 5: Neighborhood Community Rituals, the method for turning anonymous event data into area-level patterns (a horizon, not a shipped product)                                    |
+| [PLATFORM-FLOW.md](PLATFORM-FLOW.md)                                 | Pillar 1: the end-to-end event lifecycle, from creation to post-event analytics, across the surfaces                                                                                 |
+| [SHARED-REPORT-DATA-PIPELINE.md](SHARED-REPORT-DATA-PIPELINE.md)     | SharedReport data pipeline design (ratified 2026-05-15): the primitives, materialization and the aggregates a report carries                                                         |
+| [SHARED-REPORT-BIGQUERY-EXPORT.md](SHARED-REPORT-BIGQUERY-EXPORT.md) | SharedReport BigQuery export design (ratified 2026-05-15): what leaves D1 for BigQuery and how                                                                                       |
+| [SHARED-REPORT-READ-API.md](SHARED-REPORT-READ-API.md)               | SharedReport read API and WKRP batch design. Its "Design draft" status line is stale: the routes are live; later amendments (for example cache headers, OSE-1502) are inside the doc |
+| [SHARED-REPORT-L1-MATRIX.md](SHARED-REPORT-L1-MATRIX.md)             | The API-level (L1) auth and mutation coverage matrix for the SharedReport, and why each case must exist                                                                              |
+| [SPONSORSHIP-PAGE-SPEC.md](SPONSORSHIP-PAGE-SPEC.md)                 | Sponsorship page spec, a DRAFT from 2026-09-08 awaiting owner review: the sponsor chooses reach, frequency, creative and report depth, never the honesty                             |
