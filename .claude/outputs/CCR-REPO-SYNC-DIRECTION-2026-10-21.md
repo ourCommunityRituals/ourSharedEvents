@@ -566,6 +566,17 @@ My Loop 6 split placed the cookie PR before the cuts; the budget forced the orde
 
 Wording loops so far: 4, 5, 6, 7 (four). **Loop 8** should be: a clean re-read of the actual diffs of #1021 to #1026 (not the proposals), a scratch-branch rehearsal of merging them in the order A, C, B, D then E, F onto `main` with the local gates, and the stability check (a second loop with no new findings against the change). The protocol also asks for two consecutive stable loops at 95% or above, so the change cannot be called ready on Loop 8 alone if it scores 83% on its own scope; that is the owner's call below.
 
+## ADR-024 landed while this loop ran
+
+Another session merged **ADR-024** (#1017, status Proposed): "Reconcile the `ose_anon` cookie with 'no cookies on public surfaces'". It reaches the same facts this review did (the only setter is `setAnonCookie`, called from `qr-scan.ts` and five sites in `forms.ts`; `/s` and every read surface set none; stored ids are keyed since OSE-1659) and recommends **Option B**: keep the cookie, narrow invariant 4 so it is true, and add a structural gate that fails if any other module imports `setAnonCookie`. The owner's 2026-10-22 ruling is Option B.
+
+- #1023 is Option B's wording for `AGENTS.md` and the Copilot file. #1025 is Option B's gate (it matches by name anywhere in each file, so an aliased import is caught as well as an extra import).
+- The ADR leaves two questions with the owner: whether this cookie needs notice or consent under any regime the product serves (it makes no legal finding), and whether Option C's cuts are wanted regardless. Neither is touched by these PRs.
+- **New finding L7-1 (Medium, source-read in ADR-024):** `docs/features/PRIVACY.md`, `docs/features/ANONYMOUS-ID.md` and `ADR-001` still say the scan side stores the raw `ose_anon` value; the code has stored a keyed `snk1_` id since OSE-1659. The ADR defers the correction to a separate docs change under the ADR reconciliation process. Not in this stack.
+- Public copy and `OCR_VISION` that say "no cookies" need the qualifier once B is accepted (ADR-024 consequence). That is a positioning decision for the owner.
+
+Also this loop: PR #1016 (Loop 4) was squash-merged by the owner, which left #1018 with a merge conflict in the worksheet. Resolved by merging `main` into the Loop 5 branch (no rebase, no force push): the only conflict was the end of the worksheet, and both the Loop 4 and Loop 5 sections are kept once.
+
 ## Human-gate questions (Loop 7)
 
 1. **Scope of the score:** may the AGENTS.md change be scored on its own scope (83% now), with the three OCR-docs and process items accepted as known risk, or must it reach 95% on the whole review?
