@@ -31,7 +31,7 @@ Set effort at the start of a session; changing it mid-session clears the cache. 
 - **`repo-scout`** (Haiku): give it a question and get back the few files that matter, so the main session reads those instead of whole folders.
 - Other skills: `daily-scrum`, `story-intake`, `sync-status`.
 
-Subagents are told in their prompts to stay read-only, but their `tools:` lists are **not** enforced at call time (hub `.claude/README.md`, verified 2026-09-01). When read-only matters, dispatch on a harness read-only agent type and ask each worker to list the commands it ran.
+Subagents are told in their prompts to stay read-only, but their `tools:` lists are **not** enforced at call time (spine `.claude/README.md`, verified 2026-09-01). When read-only matters, dispatch on a harness read-only agent type and ask each worker to list the commands it ran.
 
 ## Guardrails on this machine
 
