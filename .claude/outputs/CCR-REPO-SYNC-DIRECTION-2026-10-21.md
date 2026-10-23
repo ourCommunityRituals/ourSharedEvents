@@ -584,3 +584,62 @@ Also this loop: PR #1016 (Loop 4) was squash-merged by the owner, which left #10
 3. **Merge order and who merges:** A (#1021), C (#1022), B (#1023), D (#1024), then E (#1025) and F (#1026), by you after Loop 8. Agreed? Close #1027 when they land.
 4. **Done for a docs-only merge:** it starts no push run, so Done needs the next code push or a manual dispatch with the staging deploy. Accept, or add `AGENTS.md` and `.github/copilot-instructions.md` to the push-trigger paths?
 5. **The pointer test** (nothing fails if `docs/OCR_VISION.md` goes missing): fold it into the sync check, or leave it?
+
+---
+
+# Loop 8 (2026-10-23): a clean re-read of the real diffs, a rehearsal of the merges, the stability check
+
+Owner decisions at the Loop 7 gate: score the AGENTS.md change on its own scope; give the sync its own Linear ticket; merge order A, C, B, D then E, F, by the owner, after Loop 8. Done in this loop: **OSE-1744** created (In Progress) and `Part of OSE-1744` added to the bodies of #1021 to #1026 and #1029; four lenses re-read the actual PR diffs (Dr of Security, Backend Architect, PO, Scrum Master); the six merges were rehearsed on a throwaway local branch; the cookie gate was hardened.
+
+## Rehearsal (proven by running it)
+
+All six branches merged cleanly, in the owner's order, onto a fresh `origin/main` (which now includes ADR-024). The resulting `AGENTS.md` equals the Loop 6 v4 byte for byte (12,267 bytes LF, 21 spare). On that branch:
+
+- `check-agents-sync.mjs` against the fresh OCR-docs `main`: `7 ids [#1,#5,#7,#8,#9,#14,#24], 9 items, 2 cited paths, brain 29 entries`, `clean` (the brain file is unchanged since 2026-10-12).
+- Budget, sync-check, infra-consistency and pr-risk tests: 131 passed, 4 skipped. ESLint: 0 errors.
+- Whole structural suite: 292 passed, 10 skipped.
+
+The throwaway branch was deleted; nothing was pushed from it.
+
+## What the four lenses found against the real diffs
+
+| #              | Severity | Finding                                                                                                                                                                            | Status                                                                                                   |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| L8-1           | Medium   | The cookie gate cannot see a cookie added by the `@ocr/ui` package: `/ui.css` and `/ui-toast.js` copy its response headers whole (`router.ts:652,671`), outside the scanned source | Open; accepted limit, fix is Worker code (strip `set-cookie` on copied headers), a separate story        |
+| L8-2           | Medium   | Comments counted toward the ceilings, so a real `Set-Cookie` swapped in for the `router.ts:584` comment stayed under the ceiling                                                   | **Fixed** in #1025 (commit `1b0f3703`): full-line comments are ignored, `router.ts` now has no allowance |
+| L8-3           | Medium   | The cookie's one-year lifetime was gated nowhere                                                                                                                                   | **Fixed** in #1025: the lifetime must be `365 * 24 * 60 * 60` seconds and used by the cookie string      |
+| L8-4           | Low      | Other ways to set a cookie got past the gate (`cookieStore`, `document["cookie"]`, `.cjs/.jsx/.mts/.cts` files; a split string such as `'Set-' + 'Cookie'`)                        | Mostly **fixed** in #1025; the split string remains (accepted)                                           |
+| L8-5           | Low      | The gate counts files, not routes: wiring a forms handler to a new public route passes                                                                                             | Accepted limit                                                                                           |
+| L8-6           | Medium   | #1023 states the owner's ruling in `AGENTS.md` while ADR-024 stays Proposed; `AGENTS.md` says to update the ADR in the same change                                                 | Open: needs the owner to accept ADR-024 Option B (decision D17)                                          |
+| L8-7           | Low      | Invariant 8 says "44 px (OSE's floor)", but brain #14 sets 44 for every OCR product, so "OSE's floor" reads as OSE-only                                                            | Open: proposed wording "(the org floor, brain #14; the spine targets 48)", +2 bytes                      |
+| L8-8           | Low      | `CLAUDE.md:34` says "hub `.claude/README.md`" for the spine repo. **My earlier reading was wrong:** the note lives in the spine's `.claude/README.md`; OCR-docs has none           | PR #1029 (draft, one word)                                                                               |
+| L8-9           | Medium   | `main` protection has `required_pull_request_reviews: null`: CODEOWNERS names the owner for `AGENTS.md`, but a review is not enforced                                              | Open; a repo control, the owner's to change                                                              |
+| L5-10 (raised) | Medium   | `AGENTS.md`'s Done definition has no docs-only carve-out: a pure Markdown merge starts no push run                                                                                 | Open: the owner's call; code-bearing merges (#1024, #1025) do start the chain                            |
+
+Confirmed by the lenses, no finding: every bracket tag fits and its id is live or partial; the #1021 sentence and the pin bullet match the code and `.ocr-hub-ref`; the Production posture, Human approval and Definition of Done sections are byte-identical to `main`; no decision is left unimplemented; no PR body overclaims; the close-guard is satisfied (no id in branches, titles or commit subjects, no closing word before an id).
+
+Two small items the PO noted, no action: the ADR number sentence is sync scope (a) though no decision names it; the cut of the audit pointer also removed the "reconciliation rule, 2026-09-22" parenthetical, which the Loop 4 list named together.
+
+## The gate hardening (#1025, after the Security lens)
+
+The spec went from 6 to 10 tests: a swapped header, `cookieStore` and a bracketed write and a `.cjs` file, and a longer lifetime each fail; the lifetime check also failed when I planted a two-year `MAX_AGE_SECONDS` in the real `anonymous-id.ts` (restored). Structural suite: 296 passed, 10 skipped, on three consecutive runs. **One earlier run in the middle showed 1 failed, and the next three runs passed;** I did not keep that log and did not identify the test. Treat it as an unexplained transient until it recurs.
+
+## Stability and the score
+
+Loop 8 found new items against the change (L8-1 to L8-9), so this loop is **not stable**: the protocol needs two consecutive stable loops at 95% or above (`ccr-protocol.md:312`). Findings open against the change after this loop's fixes: L6-4 (an id that exists can still be the wrong one), L6-2 and L6-3 (OCR-docs side), L5-10, L8-1, L8-6, L8-9 (Mediums, 7 x 5 = 35) and L8-4, L8-5, L8-7, L8-8 (Lows, 4 x 2 = 8). **Change-scoped score: 100 - 43 = 57%.** Last loop's 83% was higher because Loop 7 did not yet count the gate's bypasses or the process gaps. The whole-review score stays at 0%.
+
+The Scrum Master's reading, which I share: calling the change ready at this score is a gate bypass (Critical) unless the owner records an override. I cannot grant one.
+
+## Ways forward
+
+1. **Record an override** (recommended if you want these on `main` for the Oct 24 window). Merge #1021 to #1026 in order, and record on OSE-1744 that the owner accepts the open items above, with the date. The PRs only tighten wording and add two checks, and each is verified; the risk accepted is the open list.
+2. **Go for 95%:** the owner accepts ADR-024 (D17), the wording tweak (L8-7) and a docs-only Done rule (L5-10) in `AGENTS.md`; OCR-docs PRs fix brain invariants 4 and 5 and add the four missing entries (L6-2, L6-3); a small Worker change strips `set-cookie` from the copied `@ocr/ui` headers (L8-1); the repo requires one review on `main` (L8-9). Then Loops 9 and 10 must both score 95% or more. That is days of work and touches three repos.
+
+## Human-gate questions (Loop 8)
+
+1. **Override or continue:** record an override on OSE-1744 and merge the stack, or continue to Loops 9 and 10?
+2. **ADR-024:** accept Option B (the ruling you gave) so `AGENTS.md` and the ADR agree?
+3. **Invariant 8 wording:** "(the org floor, brain #14; the spine targets 48)" instead of "(OSE's floor...)"?
+4. **Docs-only Done:** accept In Review with "chain not applicable: docs-only" as the Done evidence for the Markdown-only PRs, with Done for #1024 and #1025 on T1 to T4 green?
+5. **Review requirement:** should `main` require one review (repo control, yours)?
+6. **#1029** (one word in `CLAUDE.md`): include it in the stack?
