@@ -66,11 +66,9 @@
   "scripts/deploy-cli.js": ["*"],
   "scripts/deploy-staging.js": ["*"],
   "scripts/diagnose-apps-script-access.js": ["*"],
-  "scripts/diagnose-apps-script-api.js": ["*"],
   "scripts/fix-deployment-permissions.js": ["*"],
   "scripts/get-deployment-url.js": ["*"],
   "scripts/setup-clasp-environment.js": ["*"],
-  "scripts/verify-clasp-ownership.js": ["*"],
   "scripts/compare-environments.js": ["*"],
   "scripts/health-check.js": ["*"],
 
@@ -78,7 +76,6 @@
   "scripts/guard-no-gas.allowlist.json": ["*"],
   "scripts/check-dead-code.js": ["*"],
   "scripts/check-surfaces.js": ["*"],
-  "scripts/check-events-gas-marker.js": ["*"],
 
   "_note_archive_gas": "Decommissioned GAS-era scratch files (fetch-admin-keys.js, fix-*.sh/.py/.patch, test-deployment.js) moved to archive/gas/ under OSE-1215; no allowlist entry needed because guard-no-gas already excludes the whole archive/ directory (scripts/guard-no-gas.js EXCLUDED_DIRS).",
 
@@ -90,7 +87,6 @@
   "scripts/setup-staging.js": ["*"],
   "reference/gas-mvp/scripts/test-event-schema.js": ["*"],
   "scripts/test-url-routing.js": ["*"],
-  "scripts/update-manifest.js": ["*"],
   "scripts/validate-ci-secrets.js": ["*"],
   "scripts/verify-secrets.js": ["*"],
   "scripts/warmup-deployment.js": ["*"],
