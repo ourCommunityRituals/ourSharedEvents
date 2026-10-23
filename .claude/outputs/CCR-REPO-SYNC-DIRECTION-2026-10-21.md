@@ -373,3 +373,75 @@ New findings: L4-1 `AGENTS.md` brand-scoping sentence stale (Medium); L4-2 `copi
 2. Which cuts, or may the limit rise instead?
 3. Is "spine" the word for OurCommunityRituals in `AGENTS.md`?
 4. The OCR-docs-side items (9, 10, 11) are a different repository: should I prepare them as OCR-docs PRs in their own session, for your review?
+
+---
+
+# Loop 5 (2026-10-22): lens review of the AGENTS.md sync proposal
+
+Owner at the Loop 4 gate: direction approved, the six cuts approved, "spine" approved as the word. This loop sent the proposal to all nine lenses, read-only. Nothing is applied to `AGENTS.md`. The revised proposal (v2) is `.claude/outputs/AGENTS-SYNC-PROPOSAL-2026-10-22-v2.diff`.
+
+## Verdict
+
+| Item                  | Value                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| System score          | **0%** (deductions 249, floored)                                                                                                                                |
+| Assessment confidence | **85%**. The mapping and cookie claims are now read against the yaml and source by two lenses; the budget script was run by the main session on a scratch copy. |
+| Gate result           | **Human gate.** The wording is the owner's to confirm; the loop count is 2 of at least 4 on the wording (see below).                                            |
+
+## What the lenses found, and what v2 does about it
+
+| #   | Finding                                                                                                                                                                                                                                        | From                                | v2                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | Invariant 2 tagged `[#7]` overstates the org backing: brain #7 covers SharedReport output, not "no exceptions", every tier, or the "Fewer than 5" wording                                                                                      | Data Scientist, Backend             | `[#7 OSE]`                                                                          |
+| 2   | Invariants 3 and 6 ids are weak: `[#2 #4]` states neither res 7, res 9 nor "never request geo"; `[#5]` (tier equity) says nothing about consent; two-sided acceptance is in #2's enforcement text                                              | Backend, PO, Data Scientist         | `[#4 OSE]` and `[#2 OSE]`                                                           |
+| 3   | Invariant 7 omits #8 (retention) and #24 (audit)                                                                                                                                                                                               | Backend                             | `[#5 #8 #9 #24]`                                                                    |
+| 4   | Brain #5 says "same real-time counts at every tier"; the proposal's `[#5]` on invariant 7 still lets an agent inherit that sentence                                                                                                            | Data Scientist                      | Not fixable in `AGENTS.md`; OCR-docs fix (D11). Raised to High.                     |
+| 5   | The brand-scoping sentence was too broad: the guard covers `/admin/events/:id/**` and poster-deployments by id; sponsor by-id routes scope inside their handlers. The cut also removed "do not assume object-level isolation in a new handler" | Backend, Dr of Security             | Accurate wording and the safeguard kept: "A new by-id handler must scope by brand." |
+| 6   | "public pages" is narrower than "public surfaces", and the forms routes are JSON APIs                                                                                                                                                          | Dr of Security                      | Kept "public surfaces", exception named                                             |
+| 7   | **No gate fails if a new public route sets a cookie**: `anonymity-gate.spec.ts` checks four listed files and never matches a raw `Set-Cookie`                                                                                                  | Dr of Security                      | New check proposed (below)                                                          |
+| 8   | `[spine]` implies OSE matches the spine on tap targets; OSE says 44 px, the spine README says 48 px (`--tap-min`)                                                                                                                              | FE Integration                      | Text unchanged; **owner decision**                                                  |
+| 9   | The `web/shared/` cut dropped the reason not to delete it                                                                                                                                                                                      | PO                                  | Short reason kept                                                                   |
+| 10  | ADR sentence label: the OCR-docs README says "OCR-docs ADR-NNN", not "fleet ADR-NNN"                                                                                                                                                           | Backend                             | "OCR-docs ADR-NNN"                                                                  |
+| 11  | "Hub" means the spine in `docs/brain/CONSTRAINTS.md:13,14`, `ROLE-STATE.md:39`, `.claude/agents/role-design-fe.md:12`; ourWKRP's `CLAUDE.md:71,73` also uses hub for the spine and has no `AGENTS.md`                                          | DevOps                              | Follow-up PRs, not this file                                                        |
+| 12  | `VISION.md` is cited in seven places: `AGENTS.md:5`, `SKILL.md:134,138`, `devops.knowledge.md:207,240`, `product-director.knowledge.md:10`, `docs/brain/PRODUCT.md:103`                                                                        | Scrum Master (partly), main session | Follow-up PR                                                                        |
+| 13  | Docs-only governance merge starts no push run, so the Done bar (T1 to T4 on the merge SHA) needs the next code push or a dispatch                                                                                                              | SDET/SRE                            | Process note                                                                        |
+| 14  | The CRLF figure I gave (31 bytes spare) was wrong: CI counts LF, so `main` is 12,151 bytes and had 137 spare                                                                                                                                   | SDET/SRE                            | Corrected                                                                           |
+
+Corrections to claims made earlier in this review: `CLAUDE.md:34` says "hub" in the OCR-docs sense, so it needs no change (the Scrum Master was wrong, DevOps right). I said the Loop 4 edits do not touch surfaces; they do (cookie exception, CSP-nonce clause, testids detail). The Scrum Master said `VISION.md` is not in `SKILL.md`; it is.
+
+## The size: v2
+
+v2 is **12,219 bytes (LF), 69 spare**. I ran `scripts/ci/agent-instructions-budget.mjs --root` against a scratch copy holding v2, the real `CLAUDE.md`, the worker `CLAUDE.md` and the Copilot file: `agent instructions ok`, exit 0. The cuts are the five approved ones (the `web/shared/` one now short, not total) plus the "(the structural gates...)" note kept, and three small additions to the cut list that need your yes:
+
+| Added cut                                                       | Bytes | Where it still lives   |
+| --------------------------------------------------------------- | ----: | ---------------------- |
+| ", index `docs/adr/README.md`"                                  |    27 | the ADR folder itself  |
+| "(`HANDOFF.md`, then `README.md`)" on the design-system pointer |    36 | the spine `CLAUDE.md`  |
+| "(what each role last changed)" on the ROLE-STATE pointer       |    30 | the file's own heading |
+
+The alternative to those three is raising the limit by 512 bytes.
+
+## The new checks this loop adds to the plan
+
+- **Sync check** (QA): `scripts/check-agents-sync.py`, size S to M, run in `brain-contract-check.yml` after its OCR-docs checkout. It fails when an `[#n]` is missing or retired in the brain yaml, an invariant has no id or tag, or an `OCR-docs/...` path cited in `AGENTS.md` or `CLAUDE.md` does not exist. Born red for free: today's `AGENTS.md:5` cites a missing file.
+- **Cookie gate** (Dr of Security): a source-wide test that every `setAnonCookie` or `Set-Cookie` caller sits in an allowlist (`qr-scan.ts` and the forms handlers), so a new public route that sets a cookie fails. Size S.
+
+## Loop count
+
+The wording was first examined in Loop 4, so this is its second loop. The protocol needs 5+ loops with a gate after each and two consecutive stable loops at 95% or above (`ccr-protocol.md:312,314,670`). Remaining: Loop 6 (the mapping and cookie carve-out against v2 as edited), Loop 7 (the budget and a born-red test on the edited file), Loop 8 (a clean re-read of the applied diff and the stability check). I will not call the change ready before then.
+
+## Proposed PR split, smallest first (nothing opened yet)
+
+1. Brand-scoping sentence alone (owner-gated: `docs/brain/CONSTRAINTS.md` says the correction "waits for the owner").
+2. The cookie ruling in `AGENTS.md` Invariant 4 and `.github/copilot-instructions.md:8` together, with the source-wide cookie gate.
+3. The spine word, the `OCR_VISION.md` fix at `AGENTS.md:5`, the ADR wording, the `[#n]` ids and the cuts.
+4. The other `VISION.md` and "hub" citations in ordinary docs (`SKILL.md`, the two knowledge files, `PRODUCT.md`, `CONSTRAINTS.md`, `ROLE-STATE.md`, `role-design-fe.md`).
+5. ourWKRP and OCR-docs items in their own sessions.
+
+## Human-gate questions (Loop 5)
+
+1. Do you confirm the v2 wording, in particular the new brand-scoping sentence (your approval covered the edit; `CONSTRAINTS.md` says it waits for you) and the Invariant 4 sentence?
+2. Do you add the three small cuts, or raise the limit by 512 bytes?
+3. Tap targets: invariant 8 says 44 px, the spine says 48 px. Keep 44 and say so, or move OSE to 48?
+4. Is the PR split right, and may I open the cookie gate and the sync check as their own small PRs?
+5. Spokes: are only OSE and OW "spokes" (your page) or all product repos (OCR-docs standards)?
