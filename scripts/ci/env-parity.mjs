@@ -41,6 +41,8 @@ export const INTENTIONAL_VALUE_DIFFERENCES = {
   WIF_ISSUER: 'the issuer is the environment host',
   BIGQUERY_DATASET_ID:
     'staging writes _stg; only production writes the dataset OER reads (OSE-1416)',
+  CF_ACCESS_AUD:
+    'a separate Access app per environment, so a separate audience; production is pinned (OSE-1353), staging is still unpinned (OSE-1377)',
 };
 
 /** Settings only one environment may carry, and why. */
@@ -68,12 +70,6 @@ export const UNDECIDED = [
   {
     key: 'binding:queues.consumers:ose-scans',
     reason: 'the consumer side of the same scan queue; decided together with SCAN_QUEUE.',
-  },
-  {
-    key: 'value:CF_ACCESS_AUD',
-    reason:
-      'empty in both environments, so the Access audience is not pinned in either (OSE-1377). Not a difference, but it must be set before production is announced.',
-    sameValueIsOpen: true,
   },
 ];
 

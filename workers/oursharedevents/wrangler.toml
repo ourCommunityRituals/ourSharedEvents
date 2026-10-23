@@ -412,10 +412,12 @@ ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
 # CF Access team domain for JWT signature verification (OSE-573)
 CF_ACCESS_TEAM_DOMAIN = "mzdano.cloudflareaccess.com"
-# OSE-1377: Application Audience (AUD) tag of the admin Access app. DARK ("") = no
-# aud/iss pin (current behavior). Once the Access app is confirmed (CCR gate V3),
-# paste its AUD tag here to pin aud + iss on the CF Access JWT. Non-secret.
-CF_ACCESS_AUD = ""
+# OSE-1377 / OSE-1353: Application Audience (AUD) tag of the production admin Access app
+# ("OSE Admin — production", created 2026-10-23, 16 destinations, policy admin-protect).
+# Pins aud + iss on the CF Access JWT, so a token from any other Access app in the team
+# is rejected. Non-secret. Takes effect on the next production deploy.
+# pragma: allowlist nextline secret
+CF_ACCESS_AUD = "a300bd3bf53d2bdf8692219fa905007c1162d91dab9489e3e20f1d2e300fa3be"
 # Google Cloud — non-sensitive WIF config
 GCP_PROJECT_ID     = "project-7cc9adcd-ed55-47aa-958"
 GCP_PROJECT_NUMBER = "295230478705"
