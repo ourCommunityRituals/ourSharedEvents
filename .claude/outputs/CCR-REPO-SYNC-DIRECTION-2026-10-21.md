@@ -512,3 +512,75 @@ The wording has had three loops (4, 5, 6). The protocol needs 5+ with a gate aft
 3. **Brain #4 versus invariant 3:** do poster placements store coordinates or only the H3 cell? (Loop 7 will check the code; say which you intend.)
 4. **Loop 7:** may I open the four PRs as drafts, one per split, plus the sync check and cookie gate as their own small PRs? None would merge before Loop 8 passes.
 5. **OCR-docs:** the brain lacks entries for owner decisions 2, 3, 5 and 6, and its #4 and #5 text conflicts. Add these to the OCR-docs list (D11)?
+
+---
+
+# Loop 7 (2026-10-22): the AGENTS.md sync applied as draft PRs, real gates run
+
+Owner decisions at the Loop 6 gate: open the changes as draft PRs (four-way split plus the sync check and the cookie gate), none merged before Loop 8; ticket the raw hex debt and keep invariant 8; leave `ROLE-STATE.md` alone. Nothing is merged. Lens fan-out: none this loop; the work was applying, running real gates and proving the new checks born red.
+
+## What was opened
+
+| PR    | Subject                                                                           | Base  | Local checks                                                                                      | CI on the PR                                                                                                                                    |
+| ----- | --------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| #1021 | Brand-scoping sentence says what the guard covers                                 | main  | budget test 16 passed; Definition of Done spec 4 passed; 12,237 bytes (LF)                        | all checks green, invariants shard green                                                                                                        |
+| #1022 | Spine word, `OCR_VISION.md`, ADR rule, `[#n]` tags, 44 px note, approved cuts     | #1021 | budget 16 passed; spec 4 passed; sync check clean; 12,137 bytes                                   | stacked: lighter CI                                                                                                                             |
+| #1023 | The `ose_anon` cookie ruling in `AGENTS.md` and `.github/copilot-instructions.md` | #1022 | budget 16 passed; sync check clean; 12,267 bytes                                                  | stacked: lighter CI                                                                                                                             |
+| #1024 | Sync check script, 10-case hermetic test, `brain-contract-check` step             | #1023 | 10 tests pass; two mutants watched failing; ESLint 0 errors; related suites 131 passed            | stacked: lighter CI                                                                                                                             |
+| #1025 | Source-wide cookie gate spec                                                      | main  | 6 tests pass; planted fault on the real tree fails; whole structural suite 292 passed, 10 skipped | all green; the spec ran in the T0 invariants shard (6 of 250 tests)                                                                             |
+| #1026 | Spine and `OCR_VISION.md` in the ordinary docs                                    | main  | infra-consistency and budget tests 81 passed                                                      | all green                                                                                                                                       |
+| #1027 | **Verification only, do not merge:** same head as #1024, base main                | main  | n/a                                                                                               | the full pipeline on the whole stack: **all required checks green** (every check green; T1 to T4 and the production jobs skipped, as on any PR) |
+
+Order, and why it differs from the Loop 6 split: the cookie sentence alone would put `AGENTS.md` at 12,367 bytes, over the 12,288 limit; the cuts have to land first. Every stage stays under the limit, and applying the steps A, C, B in order gives the Loop 6 v4 file exactly (byte-compared).
+
+The stacked PRs (#1022 to #1024) target each other, so GitHub does not run the main-targeted workflows on them. #1027 exists to run them.
+
+## Real gates, proven in CI on #1027 and #1025
+
+- **The new sync check ran in the real workflow** against the fresh OCR-docs checkout: `agents-sync: 7 ids [#1,#5,#7,#8,#9,#14,#24], 9 items, 2 cited paths, brain 29 entries` then `agents-sync: clean`. "Validate against OCR-docs brain" passed.
+- **The cookie gate ran in CI**: all six `cookie-setters.invariant.spec.ts` tests appear in the T0 `invariants` shard log on #1025, and the shard passed.
+- **Dependency Review** passed on #1027 with one warning only: `actions/setup-node` has no license metadata in the dependency graph. The repo already uses that action elsewhere; no change made.
+
+Born red, proven locally and kept in the tests:
+
+- Sync check: ten hermetic cases (retired id, unknown id, untagged invariant, malformed tag, missing cited path, zero ids, wrong count, empty brain yaml, usage error, clean). Mutant 1 (accept `retired`) and mutant 2 (never check cited paths) each failed exactly one test, then restored. On `main`'s own `AGENTS.md` the script fails (invariants 7, 8, 9 untagged; `OCR-docs/docs/VISION.md` missing).
+- Cookie gate: five permanent fixtures (unlisted handler, aliased import, raw `Set-Cookie`, `document.cookie`, a seventh site in an allowed file) plus a planted `setAnonCookie` line in the real `handlers/pages.ts`, which failed with `handlers/pages.ts: 1 x setAnonCookie (allowed 0)` and was restored.
+
+## Ticket
+
+**OSE-1741**, the raw hex debt (Medium, backlog, labels action, DESIGN and Front End, related to OSE-866 and OSE-1397). Not an Oct 24 blocker. Invariant 8 is unchanged.
+
+## What merging the stack would close
+
+Fifteen findings would close, worth 68 deductions: L4-1, L4-2, L4-4, L5-1, L5-2, L5-3, L5-4, L5-5, L5-6, L5-7, L5-8, L5-9, L6-7 (decided: `ROLE-STATE.md` left alone), F15 and F5. **Nothing is closed yet**; they stay open until the PRs merge. The whole-review score stays at **0%** (deductions 280 today; 212 if the stack merged), because the other hops of the chain (pin drift, database parity, brain check not required, 97 specs that run nowhere, and the rest) are untouched.
+
+## Scoring the AGENTS.md change on its own (proposal)
+
+The protocol's 95% bar applies to the artifact under review. The artifact for Loops 4 to 8 is the AGENTS.md sync, not the whole 11-hop chain, which will take many more changes. Findings still open against the change itself after the stack would merge: L6-4 (sync check proves existence, not meaning: Medium), L6-2 (brain #4 text versus invariant 3: Medium), L6-3 (the brain has no entry for four owner decisions: Medium) and L5-10 (a docs-only merge starts no push run: Low). **Change-scoped score: 100 - 17 = 83%.** Each is documented, owner-visible and outside the PRs' control (two need OCR-docs edits; one is process). The raw hex debt is ticketed (OSE-1741) and pre-existing. This is a proposal: the owner decides whether Loop 8's stability test uses the change scope or the whole review.
+
+## Corrections this loop
+
+My Loop 6 split placed the cookie PR before the cuts; the budget forced the order above. I said the new check would run on every stacked PR; it runs only where the base is `main`, hence #1027.
+
+## Loop count
+
+Wording loops so far: 4, 5, 6, 7 (four). **Loop 8** should be: a clean re-read of the actual diffs of #1021 to #1026 (not the proposals), a scratch-branch rehearsal of merging them in the order A, C, B, D then E, F onto `main` with the local gates, and the stability check (a second loop with no new findings against the change). The protocol also asks for two consecutive stable loops at 95% or above, so the change cannot be called ready on Loop 8 alone if it scores 83% on its own scope; that is the owner's call below.
+
+## ADR-024 landed while this loop ran
+
+Another session merged **ADR-024** (#1017, status Proposed): "Reconcile the `ose_anon` cookie with 'no cookies on public surfaces'". It reaches the same facts this review did (the only setter is `setAnonCookie`, called from `qr-scan.ts` and five sites in `forms.ts`; `/s` and every read surface set none; stored ids are keyed since OSE-1659) and recommends **Option B**: keep the cookie, narrow invariant 4 so it is true, and add a structural gate that fails if any other module imports `setAnonCookie`. The owner's 2026-10-22 ruling is Option B.
+
+- #1023 is Option B's wording for `AGENTS.md` and the Copilot file. #1025 is Option B's gate (it matches by name anywhere in each file, so an aliased import is caught as well as an extra import).
+- The ADR leaves two questions with the owner: whether this cookie needs notice or consent under any regime the product serves (it makes no legal finding), and whether Option C's cuts are wanted regardless. Neither is touched by these PRs.
+- **New finding L7-1 (Medium, source-read in ADR-024):** `docs/features/PRIVACY.md`, `docs/features/ANONYMOUS-ID.md` and `ADR-001` still say the scan side stores the raw `ose_anon` value; the code has stored a keyed `snk1_` id since OSE-1659. The ADR defers the correction to a separate docs change under the ADR reconciliation process. Not in this stack.
+- Public copy and `OCR_VISION` that say "no cookies" need the qualifier once B is accepted (ADR-024 consequence). That is a positioning decision for the owner.
+
+Also this loop: PR #1016 (Loop 4) was squash-merged by the owner, which left #1018 with a merge conflict in the worksheet. Resolved by merging `main` into the Loop 5 branch (no rebase, no force push): the only conflict was the end of the worksheet, and both the Loop 4 and Loop 5 sections are kept once.
+
+## Human-gate questions (Loop 7)
+
+1. **Scope of the score:** may the AGENTS.md change be scored on its own scope (83% now), with the three OCR-docs and process items accepted as known risk, or must it reach 95% on the whole review?
+2. **Ticket:** should the AGENTS.md sync have its own Linear ticket (the PRs say "No ticket"), so Done evidence has a home?
+3. **Merge order and who merges:** A (#1021), C (#1022), B (#1023), D (#1024), then E (#1025) and F (#1026), by you after Loop 8. Agreed? Close #1027 when they land.
+4. **Done for a docs-only merge:** it starts no push run, so Done needs the next code push or a manual dispatch with the staging deploy. Accept, or add `AGENTS.md` and `.github/copilot-instructions.md` to the push-trigger paths?
+5. **The pointer test** (nothing fails if `docs/OCR_VISION.md` goes missing): fold it into the sync check, or leave it?
