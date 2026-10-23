@@ -13,6 +13,10 @@ on:
     paths:
       - 'workers/oursharedevents/src/lib/feature-flags.ts'
       - 'workers/oursharedevents/src/handlers/feature-flags.ts'
+  # Manual token check (OSE-1695): opens a marked test issue in OSM and closes
+  # it at once, so the write token can be proven without a flag change. Runs
+  # only from main, because the environment below is main-only.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -51,6 +55,7 @@ jobs:
           # placeholders are filled by bash string replacement afterwards.
           BRANCH_NAME: ${{ github.ref_name }}
           AUTHOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           BODY="$(cat <<'EOISSUE'
           ## Feature Flag Change Detected
@@ -81,8 +86,20 @@ jobs:
           BODY="${BODY//__SHA__/"$GITHUB_SHA"}"
           BODY="${BODY//__BRANCH__/"$BRANCH_NAME"}"
           BODY="${BODY//__AUTHOR__/"$AUTHOR"}"
-          gh issue create \
+          TITLE="OSE feature flags changed — update Postman/Newman mocks"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TITLE="[token check] $TITLE"
+            NOTE="Manual token check from ourSharedEvents. Not a real flag change; closed at once."
+            BODY="${NOTE}"$'\n\n'"${BODY}"
+          fi
+          ISSUE_URL="$(gh issue create \
             --repo ourCommunityRituals/ourSharedMagnets \
-            --title "OSE feature flags changed — update Postman/Newman mocks" \
+            --title "$TITLE" \
             --label "dependency-sync" \
-            --body "$BODY"
+            --body "$BODY")"
+          echo "Opened: $ISSUE_URL"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            gh issue close "$ISSUE_URL" --reason "not planned" \
+              --comment "Token check passed; closing."
+            echo "Closed the token-check issue."
+          fi
