@@ -93,6 +93,18 @@ jobs:
         working-directory: ${{ github.workspace }}/ose
         run: python3 scripts/check-invariant-registry.py --brain ../ocr-docs/ocr-docs-brain
 
+      # Owner 2026-10-22: the documents agree. Every [#n] tag in AGENTS.md names
+      # a live or partial brain invariant, every owner decision carries a tag, and
+      # every OCR-docs path AGENTS.md cites exists in the fresh checkout above.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: AGENTS.md agrees with the brain (ids exist, decisions tagged, cited paths exist)
+        working-directory: ${{ github.workspace }}/ose
+        run: node scripts/ci/check-agents-sync.mjs AGENTS.md ../ocr-docs/ocr-docs-brain/architectural-invariants.yaml --ocr-docs ../ocr-docs
+
       # Invariant #22 (OCR-ENF-23) is enforced by the canonical, live-read brain
       # guard (OCR-docs check_cross_repo_imports.py, #22 enforcement_kind:
       # brain_script). One reviewed brain edit re-arms/disarms the fleet. The
