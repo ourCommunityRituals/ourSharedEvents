@@ -75,7 +75,21 @@ request:
 
         const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())))));
 
-        if (res.getStatus() !== 302 && !__isCfEdgeBlock && req.getUrl().toString().indexOf('/admin') === -1 && req.getUrl().toString().indexOf('/manage') === -1) {
+        // The other pages behind the staging Access app (scripts/ci/access-protected-paths.txt)
+
+        // answer an unauthenticated request with the Access login page, which carries no worker
+
+        // header. Matched on the path (prefix, the way an Access destination matches), not on a
+
+        // substring, so a public URL that merely contains one of these words is still asserted.
+
+        const __u = req.getUrl().toString();
+
+        const __p = __u.slice(__u.indexOf('/', __u.indexOf('://') + 3)).split('?')[0];
+
+        const __accessGated = ['/dashboard', '/create', '/briefing', '/overview', '/summary'].some(function (x) { return __p.indexOf(x) === 0; });
+
+        if (res.getStatus() !== 302 && !__isCfEdgeBlock && !__accessGated && req.getUrl().toString().indexOf('/admin') === -1 && req.getUrl().toString().indexOf('/manage') === -1) {
 
         \    test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {
 
