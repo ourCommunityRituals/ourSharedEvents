@@ -44,6 +44,7 @@
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → the same page at its older address
  *   POST /subscribe              → email capture
  *   GET /display                  → TV/kiosk live event display
+ *   GET /q/:token                 → poster QR scan: records an anonymous scan, 302 to the event page; per-caller count limit, never a 429 (OSE-625, OSE-1496)
  *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
  *   GET /r/:code /c/:code         → 302 to that event's register / check-in form; a share open
  *   GET /tv/:code                 → 302 to that event's TV; typed on the TV, not counted
@@ -86,6 +87,7 @@
  *   PUT    /api/v2/admin/poster-deployments/:id         → update (re-tags H3 when coords change)
  *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
+ *   POST   /api/v2/admin/geocode                        → address to coordinates for a placement; the server derives the H3 cell from them (auth, OSE-238)
  *   GET    /api/v2/admin/events/:id/poster-codes        → the poster's codes, in order (OSE-1357)
  *   GET    /api/v2/admin/events/:id/display-config      → TV order + dwell + league/donate links, any status (admin)
  *   POST   /api/v2/admin/events/:id/short-links         → the event's code + its five short addresses, minted on first ask (admin, OSE-1684)
