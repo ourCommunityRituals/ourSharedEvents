@@ -204,7 +204,7 @@ PR opened
 
 ### Per-Product Infrastructure
 
-> **Source of truth**: `OCR-docs/docs/VISION.md` — all product repos derive from that document.
+> **Source of truth**: `OCR-docs/docs/OCR_VISION.md` — all product repos derive from that document.
 
 | Code | Product          | Worker        | D1              | Domain              | Status                         |
 | ---- | ---------------- | ------------- | --------------- | ------------------- | ------------------------------ |
@@ -237,7 +237,7 @@ PR opened
 
 ```
 ourCommunityRituals (GitHub Org)
-├── OCR-docs (org brain — VISION.md source of truth)
+├── OCR-docs (org brain — OCR_VISION.md source of truth)
 ├── ourSharedEvents — OSE (anonymous ID platform)
 │   ├── Cloudflare Worker (API + admin)
 │   ├── D1 Database (events, sponsors, customers)
