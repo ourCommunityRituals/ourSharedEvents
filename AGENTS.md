@@ -32,7 +32,7 @@ The org list is `OCR-docs/ocr-docs-brain/architectural-invariants.yaml`; `[#n]` 
 5. **The display shows no counts** [OSE]. The public check-in answer carries no count; counts are post-event.
 6. **Sponsors need two-sided consent** [OSE]: a sponsor shows only when it accepted and the organizer accepted (`SPONSOR_ON_SHOW_SQL` in `lib/sponsor-card.ts`). On a page that shows an event title, the sponsor strip sits below the title and date and above the content and map.
 7. **Security is never tier-gated** [#5 #8 #9 #24]: audit, roles, isolation and retention are the same at every tier. Templates never gate; tiers gate features.
-8. **Design system** [#14 OSE]: colours only from `packages/tokens`; never a raw hex in a page; never change colours in `packages/ui`. One `<h1>` per page; touch targets ≥ 44 px (OSE's floor; the spine targets 48); input text ≥ 16 px.
+8. **Design system** [#14 OSE]: colours only from `packages/tokens`; never a raw hex in a page; never change colours in `packages/ui`. One `<h1>` per page; touch targets ≥ 44 px (the org floor, brain #14; the spine targets 48); input text ≥ 16 px.
 9. **PII** [#1 #8] is encrypted and scrubbed in `lib/forms-db.ts` / `lib/pii.ts`; forms tables store a per-event keyed id, never the raw anonymous id.
 
 ## Commands
