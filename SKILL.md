@@ -131,11 +131,11 @@ User says: "feature flag", "flag", "tier", "free tier", "enterprise"
 | OA (OurAirwaves)       | OSE is the source that OA forks for white label clients                  |
 | OER (OurEventRings)    | OSE event data feeds BigQuery → RAG analytics                            |
 
-Vision lives in OCR-docs `docs/VISION.md` only.
+Vision lives in OCR-docs `docs/OCR_VISION.md` only.
 
 ---
 
-_Derived from OCR-docs/docs/VISION.md_
+_Derived from OCR-docs/docs/OCR_VISION.md_
 _Last updated: April 5 2026_
 _Owner: Matt_
 _Status: ACTIVE_
