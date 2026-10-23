@@ -643,3 +643,14 @@ The Scrum Master's reading, which I share: calling the change ready at this scor
 4. **Docs-only Done:** accept In Review with "chain not applicable: docs-only" as the Done evidence for the Markdown-only PRs, with Done for #1024 and #1025 on T1 to T4 green?
 5. **Review requirement:** should `main` require one review (repo control, yours)?
 6. **#1029** (one word in `CLAUDE.md`): include it in the stack?
+
+## Loop 8 gate answer (2026-10-22, owner's local date)
+
+The owner answered the Loop 8 gate:
+
+1. **Override:** recorded on OSE-1744. The owner accepts the open items listed above (L6-2, L6-3, L6-4, L5-10, L8-1, L8-4, L8-5, L8-6, L8-9) and merges #1021, #1022, #1023, #1024, then #1025, #1026, in that order. The protocol's stability rule (two consecutive loops at 95% or above) is overridden by the owner; it is not met. Change-scoped score stays 57%.
+2. **Invariant 8 wording (question 3):** applied. `AGENTS.md` now says "touch targets ≥ 44 px (the org floor, brain #14; the spine targets 48)". The edit adds 13 bytes, not the 2 estimated above: the final file is 12,280 bytes LF (cap 12,288, 8 spare). L8-7 is closed.
+3. **#1029 (question 6):** included in the stack.
+4. **Not answered, still open:** ADR-024 acceptance (question 2), a docs-only Done rule (question 4), a review requirement on `main` (question 5).
+
+**New finding from the rehearsal (L9-1, Low, process):** squashing the stack one PR at a time conflicts. After #1021 is squashed, #1022 conflicts in `AGENTS.md` on the admin auth line, because both branches changed the neighboring brand-scoping line. With **merge commits** for #1021 to #1024 and squash for #1025, #1026 and #1029, the sequence merges cleanly: `AGENTS.md` equals the #1024 branch byte for byte (12,280 bytes LF), the budget and sync-check tests pass (26), and `check-agents-sync.mjs` is clean against OCR-docs `main`. A comment with this instruction is on #1021 to #1024.
