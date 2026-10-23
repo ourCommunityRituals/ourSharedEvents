@@ -87,13 +87,24 @@ describe('the intentional differences', () => {
     const r = parity.compareEnvironments(BASE);
     expect(keys(r, 'undecided')).toEqual(
       expect.arrayContaining([
-        'value:CF_ACCESS_AUD',
         'binding:queues.producers:SCAN_QUEUE',
         'binding:queues.consumers:ose-scans',
       ])
     );
     expect(r.ok).toBe(true);
     expect(r.strictOk).toBe(false);
+  });
+
+  test('a pinned production audience against an unpinned staging one is intentional, not unlisted', () => {
+    const r = parity.compareEnvironments(
+      BASE.replace(
+        'WIF_ISSUER = "https://example.com"\nBIGQUERY_DATASET_ID = "d"\nCF_ACCESS_AUD = ""',
+        'WIF_ISSUER = "https://example.com"\nBIGQUERY_DATASET_ID = "d"\nCF_ACCESS_AUD = "abc123"'
+      )
+    );
+    expect(keys(r, 'unlisted')).toEqual([]);
+    expect(keys(r, 'intentional')).toContain('value:CF_ACCESS_AUD');
+    expect(keys(r, 'undecided')).not.toContain('value:CF_ACCESS_AUD');
   });
 });
 
@@ -189,13 +200,18 @@ describe('the real wrangler.toml', () => {
     expect(r.findings.filter((f) => f.level === 'unlisted')).toEqual([]);
   });
 
-  test('reports the three open items the owner has to rule on', () => {
+  test('reports the open items the owner has to rule on', () => {
     const r = parity.compareEnvironments(real());
     expect(keys(r, 'undecided').sort()).toEqual([
       'binding:queues.consumers:ose-scans',
       'binding:queues.producers:SCAN_QUEUE',
-      'value:CF_ACCESS_AUD',
     ]);
+  });
+
+  test('production pins the Access audience (OSE-1353)', () => {
+    const toml = real();
+    const prod = toml.slice(toml.indexOf('[env.production.vars]'));
+    expect(prod).toMatch(/^CF_ACCESS_AUD = "[a-f0-9]{64}"$/m);
   });
 });
 
