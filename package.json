@@ -375,6 +375,7 @@
     },
     "@usebruno/converters": {
       "js-yaml": "^4.3.2"
-    }
+    },
+    "@azure/msal-node": "^7.1.1"
   }
 }
