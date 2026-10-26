@@ -13,8 +13,9 @@
 #
 # When this runs:
 #   - Pull requests targeting main
-#   - Push to main branch
-#   - Push to claude/* branches
+#   - Push to main branch (not other branches: a push runs the workflow file from the pushed
+#     branch, so any branch trigger would hand the staging Access token to whoever can push one;
+#     OSE-1695)
 #   - Nightly on default branch (cron)
 #   - Manual trigger
 #
@@ -27,7 +28,7 @@ name: Security Regression Gate
 # and takes ~2.6 min (PR #160 baseline). Without concurrency cancel,
 # a rapid commit stream to a single PR would queue N regression runs
 # on the 3-runner pool. Group by PR number on PR events, else by full
-# ref so main pushes and claude/** pushes don't cancel each other.
+# ref so a main push and a scheduled run don't cancel each other.
 concurrency:
   group: security-regression-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -36,7 +37,6 @@ on:
   push:
     branches:
       - main
-      - 'claude/**'
   pull_request:
     branches:
       - main
