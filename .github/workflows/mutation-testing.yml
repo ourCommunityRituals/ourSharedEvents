@@ -43,6 +43,11 @@ on:
       - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
       - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
+      # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
+      - 'scripts/ci/branch-push-secret-exposure.mjs'
+      - 'tests/unit/ci/no-secret-on-branch-push.test.js'
+      - 'stryker.ci-scripts.conf.mjs'
+      - 'vitest.ci-scripts.config.mjs'
       - 'workers/oursharedevents/vitest.node.config.mts'
       - 'workers/oursharedevents/vitest.node-specs.mjs'
       - 'workers/oursharedevents/package.json'
@@ -101,5 +106,49 @@ jobs:
         with:
           name: mutation-report
           path: workers/oursharedevents/reports/mutation/**
+          retention-days: 30
+          if-no-files-found: warn
+
+  # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
+  # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps
+  # secrets off branch pushes is hollow. Same 95% bar; the rule currently scores 100%.
+  mutation-ci-scripts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Stage pinned hub packages (best-effort; root npm ci tolerates a missing @ocr/flags)
+        # Same step the root CI job runs: the root package.json links @ocr/flags from ../packages.
+        continue-on-error: true
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - run: npm ci
+
+      - name: Install StrykerJS (exact versions, the same as the Worker lockfile; nothing is saved)
+        run: npm install --no-save --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0
+
+      - name: Run Stryker on the CI security rules
+        run: npx stryker run stryker.ci-scripts.conf.mjs
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-ci-scripts
+          path: reports/mutation-ci-scripts/**
           retention-days: 30
           if-no-files-found: warn

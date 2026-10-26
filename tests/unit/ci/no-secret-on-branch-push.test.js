@@ -24,55 +24,12 @@ const yaml = require('js-yaml');
 const ROOT = join(__dirname, '..', '..', '..');
 const WORKFLOWS = join(ROOT, '.github', 'workflows');
 
-/**
- * Secrets that may be used on a push to any branch.
- * GITHUB_TOKEN is minted per run and scoped by the workflow's permissions block.
- * OCR_HUB_READ is a fine-grained, read-only token for the hub repository, by design.
- * This list must only ever shrink or stay the same; adding to it needs a reason in review.
- */
-const SAFE_ON_ANY_BRANCH_PUSH = new Set(['GITHUB_TOKEN', 'OCR_HUB_READ']);
-
-/** The branch patterns a push trigger accepts, or null if the workflow has no push trigger. */
-function pushBranchPatterns(doc) {
-  const on = doc.on ?? doc[true];
-  if (on === undefined || on === null) return null;
-  let push;
-  if (typeof on === 'string') push = on === 'push' ? {} : null;
-  else if (Array.isArray(on)) push = on.includes('push') ? {} : null;
-  else push = 'push' in on ? (on.push ?? {}) : null;
-  if (push === null) return null;
-  if (Array.isArray(push.branches)) return push.branches;
-  if (Array.isArray(push['branches-ignore']))
-    return ['(every branch except ' + push['branches-ignore'].join(', ') + ')'];
-  // `tags` or `paths` alone: with no `branches` key a push to ANY branch still triggers, unless the
-  // trigger names only tags.
-  if (Array.isArray(push.tags) && !push.paths && !push['paths-ignore']) return [];
-  return ['(every branch)'];
-}
-
-/** The secrets a job references, by name. */
-function secretsOfJob(job) {
-  const text = JSON.stringify(job);
-  return [...new Set([...text.matchAll(/secrets\.([A-Za-z0-9_]+)/g)].map((m) => m[1]))];
-}
-
-/** One line per job that uses a protected secret in a workflow a branch push can trigger. */
-function exposures(name, doc) {
-  const branches = pushBranchPatterns(doc);
-  if (!branches) return [];
-  const beyondMain = branches.filter((b) => b !== 'main');
-  if (beyondMain.length === 0) return [];
-  const found = [];
-  for (const [jobName, job] of Object.entries(doc.jobs ?? {})) {
-    const protectedSecrets = secretsOfJob(job).filter((s) => !SAFE_ON_ANY_BRANCH_PUSH.has(s));
-    if (protectedSecrets.length > 0) {
-      found.push(
-        `${name}: job "${jobName}" uses ${protectedSecrets.join(', ')} and a push to ${beyondMain.join(', ')} triggers it`
-      );
-    }
-  }
-  return found;
-}
+let exposures;
+let pushBranchPatterns;
+beforeAll(async () => {
+  ({ exposures, pushBranchPatterns } =
+    await import('../../../scripts/ci/branch-push-secret-exposure.mjs'));
+});
 
 const wf = (on, jobs) => ({ on, jobs });
 const SECRET_JOB = {
@@ -149,6 +106,88 @@ describe('the rule itself: each fault turns it red, each safe shape stays green'
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toContain('job "bad"');
+  });
+});
+
+describe('shapes that must NOT be flagged, and the exact report', () => {
+  // `'push' in someArray` is true (arrays have a .push method), so a list that does not contain
+  // push must be understood as a list, not read as a map with a push key.
+  test('a list or a string without push is not a push trigger', () => {
+    expect(
+      exposures('x.yml', wf(['pull_request', 'workflow_dispatch'], { j: SECRET_JOB }))
+    ).toEqual([]);
+    expect(exposures('x.yml', wf('pull_request', { j: SECRET_JOB }))).toEqual([]);
+    expect(pushBranchPatterns(wf(['pull_request'], {}))).toBeNull();
+    expect(pushBranchPatterns(wf('schedule', {}))).toBeNull();
+  });
+
+  test('a workflow with no trigger at all, or an empty one, is not flagged and does not throw', () => {
+    expect(exposures('x.yml', { jobs: { j: SECRET_JOB } })).toEqual([]);
+    expect(exposures('x.yml', wf(null, { j: SECRET_JOB }))).toEqual([]);
+    expect(pushBranchPatterns({})).toBeNull();
+    expect(pushBranchPatterns({ on: null })).toBeNull();
+    // `??` already turns a null doc.on into undefined; a null under the boolean-true key is the one way
+    // a null reaches the guard, and `'push' in null` would throw.
+    expect(pushBranchPatterns({ [true]: null })).toBeNull();
+    expect(exposures('x.yml', { [true]: null, jobs: { j: SECRET_JOB } })).toEqual([]);
+  });
+
+  test('a map with other triggers but no push is not flagged', () => {
+    expect(pushBranchPatterns(wf({ pull_request: {}, schedule: [] }, {}))).toBeNull();
+  });
+
+  test('the boolean-true key some YAML parsers produce for a bare on: is understood', () => {
+    const doc = { [true]: { push: { branches: ['claude/**'] } }, jobs: { j: SECRET_JOB } };
+    expect(exposures('x.yml', doc)).toHaveLength(1);
+    expect(pushBranchPatterns({ [true]: { push: { branches: ['main'] } } })).toEqual(['main']);
+  });
+
+  test('the branch patterns are reported as written', () => {
+    expect(pushBranchPatterns(wf({ push: { branches: ['main', 'claude/**'] } }, {}))).toEqual([
+      'main',
+      'claude/**',
+    ]);
+    expect(pushBranchPatterns(wf('push', {}))).toEqual(['(every branch)']);
+    expect(pushBranchPatterns(wf(['push'], {}))).toEqual(['(every branch)']);
+    expect(pushBranchPatterns(wf({ push: {} }, {}))).toEqual(['(every branch)']);
+    expect(pushBranchPatterns(wf({ push: { paths: ['src/**'] } }, {}))).toEqual(['(every branch)']);
+  });
+
+  test('branches-ignore is reported with every ignored pattern', () => {
+    expect(
+      pushBranchPatterns(wf({ push: { 'branches-ignore': ['docs/**', 'tmp/**'] } }, {}))
+    ).toEqual(['(every branch except docs/**, tmp/**)']);
+  });
+
+  test('a tags-only push names no branch, but tags with a paths or paths-ignore filter still reach every branch', () => {
+    expect(pushBranchPatterns(wf({ push: { tags: ['v*'] } }, {}))).toEqual([]);
+    expect(pushBranchPatterns(wf({ push: { tags: ['v*'], paths: ['src/**'] } }, {}))).toEqual([
+      '(every branch)',
+    ]);
+    expect(
+      pushBranchPatterns(wf({ push: { tags: ['v*'], 'paths-ignore': ['docs/**'] } }, {}))
+    ).toEqual(['(every branch)']);
+  });
+
+  test('the report names the file, the job, every secret and every branch, exactly', () => {
+    const job = {
+      steps: [{ run: 'echo ${{ secrets.ALPHA }} ${{ secrets.BETA }} ${{ secrets.ALPHA }}' }],
+    };
+    expect(
+      exposures(
+        'deploy.yml',
+        wf({ push: { branches: ['main', 'claude/**', 'feature/**'] } }, { build: job })
+      )
+    ).toEqual([
+      'deploy.yml: job "build" uses ALPHA, BETA and a push to claude/**, feature/** triggers it',
+    ]);
+    expect(exposures('ci.yml', wf({ push: {} }, { j: SECRET_JOB }))).toEqual([
+      'ci.yml: job "j" uses CF_ACCESS_CLIENT_SECRET and a push to (every branch) triggers it',
+    ]);
+  });
+
+  test('a workflow with no jobs is not flagged and does not throw', () => {
+    expect(exposures('x.yml', { on: { push: { branches: ['claude/**'] } } })).toEqual([]);
   });
 });
 
