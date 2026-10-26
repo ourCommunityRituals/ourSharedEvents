@@ -43,6 +43,11 @@ on:
       - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
       - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
+      # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
+      - 'scripts/ci/branch-push-secret-exposure.mjs'
+      - 'tests/unit/ci/no-secret-on-branch-push.test.js'
+      - 'stryker.ci-scripts.conf.mjs'
+      - 'vitest.ci-scripts.config.mjs'
       - 'workers/oursharedevents/vitest.node.config.mts'
       - 'workers/oursharedevents/vitest.node-specs.mjs'
       - 'workers/oursharedevents/package.json'
@@ -101,5 +106,45 @@ jobs:
         with:
           name: mutation-report
           path: workers/oursharedevents/reports/mutation/**
+          retention-days: 30
+          if-no-files-found: warn
+
+  # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
+  # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps
+  # secrets off branch pushes is hollow. Same 95% bar; the rule currently scores 100%.
+  #
+  # Needs no secret and no root install: the rule and its test use only Node, Vitest and js-yaml.
+  # StrykerJS, Vitest and js-yaml go into one separate folder (exact versions: Stryker as in the
+  # Worker lockfile, Vitest and js-yaml as in the root lockfile) and node_modules is linked to it.
+  # --legacy-peer-deps: npm 10.9 (bundled with Node 22) crashes with "Cannot read properties of null
+  # (reading 'edgesOut')" resolving this package set, even in an empty folder. Every peer is listed
+  # explicitly, so skipping peer resolution loses nothing. Reproduced and checked with npm 10.9.2.
+  mutation-ci-scripts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install StrykerJS, Vitest and js-yaml into a separate folder
+        run: npm install --prefix "$RUNNER_TEMP/stryker" --legacy-peer-deps --no-audit --no-fund --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0 vitest@4.1.11 js-yaml@4.3.2
+
+      - name: Link node_modules to it
+        run: ln -s "$RUNNER_TEMP/stryker/node_modules" node_modules
+
+      - name: Run Stryker on the CI security rules
+        run: node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.ci-scripts.conf.mjs
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-ci-scripts
+          path: reports/mutation-ci-scripts/**
           retention-days: 30
           if-no-files-found: warn

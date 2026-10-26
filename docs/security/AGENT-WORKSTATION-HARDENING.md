@@ -85,8 +85,9 @@ measure the result, and the repository settings that make a stolen agent session
    - Only `deploy-staging` and `deploy-production` declare `environment:`. These jobs read the
      secrets without one: `contract-staging-sub`, `smoke-staging-sub`, `functional-staging-sub`
      (also `OCR_CI_EDGE_TOKEN`), `smoke-production`, the CF Access canary probe,
-     `red-team-staging`, `security-closing` and `security-regression` (which also runs on pushes to
-     `claude/**`). Moving a secret empties it for them.
+     `red-team-staging`, `security-closing` and `security-regression` (no longer runs on pushes to
+     `claude/**`; a test now fails if any workflow lets a branch push reach a protected secret). Moving a secret
+     empties it for them.
    - `CLOUDFLARE_API_TOKEN_OSE` serves staging and production with one value; create a distinct
      token per environment first.
    - `SMOKE_RPT_*` has no `secrets.` reference anywhere: delete those, do not move them.

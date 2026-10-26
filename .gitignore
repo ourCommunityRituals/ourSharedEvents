@@ -125,3 +125,6 @@ __pycache__/
 # measure-startup.mjs temp files (workers/oursharedevents/scripts/measure-startup.mjs)
 .h3-stub.measure-startup.tmp.mjs
 .wrangler.measure-startup.tmp.toml
+
+# StrykerJS output (stryker.ci-scripts.conf.mjs)
+/reports/
