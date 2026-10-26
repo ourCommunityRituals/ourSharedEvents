@@ -1,0 +1,54 @@
+# The hub read token can read and cannot write (OSE-1695).
+#
+# OCR_HUB_READ is how CI reads the hub (@ocr/ui, @ocr/flags) and is placed in the environment of
+# many jobs, some of which run code from pull requests. It is only safe while it is a read-only
+# token. This asks GitHub, with the real token, whether it can read the hub and whether it is
+# refused on opening an issue, commenting and pushing. Nothing is ever created.
+#
+# It fails, loudly, if the token:
+#   - gained a write permission (it was edited, or replaced with a classic token),
+#   - cannot read any more (revoked, expired, wrong repository, SSO not authorised), because a
+#     dead token is refused on every write too and would otherwise look safe.
+#
+# No pull_request trigger on purpose: this job holds the token and must never run code from a
+# pull request. The probe script and its mutation tests run on every pull request instead
+# (tests/integration/read-token-cannot-write.test.js), with a stub and no token.
+name: Hub read token cannot write
+
+on:
+  schedule:
+    # Weekly, Monday 06:15 UTC.
+    - cron: '15 6 * * 1'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/ci/assert-token-read-only.sh'
+      - '.github/workflows/hub-read-token-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hub-read-token-check
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the probe script
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 'OCR_HUB_READ can read the hub and is refused on push, comment and issue creation'
+        env:
+          GH_TOKEN: ${{ secrets.OCR_HUB_READ }}
+          PROBE_REPOSITORY: ourCommunityRituals/ourCommunityRituals
+          # An issue or pull request that exists, so a comment probe reaches the permission check.
+          PROBE_ISSUE: '60'
+          PROBE_REQUIRE_READ: '1'
+        run: bash scripts/ci/assert-token-read-only.sh
