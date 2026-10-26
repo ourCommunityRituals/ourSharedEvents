@@ -205,3 +205,11 @@ To carry this to another OCR site (OA client-fork / a new niche vertical), the
 guard travels with the OA template and its invariant registers with the shared
 OCR-docs brain — see ADR-020's cross-repo (constitution) layer. Do not fork the
 scanner per repo; register the invariant once and let each repo inherit it.
+
+## Branch pushes (OSE-1695)
+
+The guard also fails when a job that uses a secret can be triggered by a **push to any branch other than `main`**.
+On a push, GitHub runs the workflow file from the pushed branch, so anyone who can push a branch can edit that file and read the secret.
+The rule is in `scripts/ci/branch-push-secret-exposure.mjs` (mutation-tested with StrykerJS, `stryker.ci-scripts.conf.mjs`) and is applied here, so `npm run guard:pr-secrets` covers both ways in.
+Only `GITHUB_TOKEN` and the read-only hub token `OCR_HUB_READ` may be used on a branch push; every other secret is protected by default.
+`--report` lists the exposures under "Secrets reachable by a push to a branch other than main".

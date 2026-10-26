@@ -23,6 +23,11 @@
  * needs-graph (an upstream job that skips resolves to result='skipped'). A job
  * whose `if:` cannot be parsed is treated as reachable (fail-closed).
  *
+ * It also fails when a job that uses a secret can be triggered by a PUSH to any branch other than
+ * main (OSE-1695): on a push GitHub runs the workflow file from the pushed branch, so a writer can
+ * read the secret. That rule lives in scripts/ci/branch-push-secret-exposure.mjs (mutation-tested)
+ * and is applied here so one report and one exit code cover both ways in.
+ *
  * @see docs/security/PR_SECRET_EXPOSURE_GUARD.md
  * @see docs/adr/ADR-020-copilot-ci-human-approval-gate.md
  * @see tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts
@@ -37,6 +42,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+
+import { exposures as branchPushExposures } from './ci/branch-push-secret-exposure.mjs';
 
 const require = createRequire(import.meta.url);
 const yaml = require('js-yaml');
@@ -715,6 +722,14 @@ function readLocalAction(relPath) {
     }
   }
   return null;
+}
+
+/**
+ * One line per job that uses a protected secret in a workflow a push to a branch other than main
+ * can trigger (OSE-1695). See scripts/ci/branch-push-secret-exposure.mjs.
+ */
+export function branchPushViolations(workflowMap) {
+  return Object.entries(workflowMap).flatMap(([name, wf]) => branchPushExposures(name, wf ?? {}));
 }
 
 function readWorkflowsFromDisk() {
@@ -1710,6 +1725,22 @@ function runSelfTest() {
       );
     }
   }
+  // Branch-push exposure (OSE-1695).
+  const secretJob = { steps: [{ env: { T: '${{ secrets.CF_ACCESS_CLIENT_SECRET }}' } }] };
+  const pushFixtures = [
+    { name: 'push: a secret job on push to claude/** is a violation', wf: { 'a.yml': { on: { push: { branches: ['main', 'claude/**'] } }, jobs: { j: secretJob } } }, expectViolation: true },
+    { name: 'push: a secret job on a push with no branch filter is a violation', wf: { 'a.yml': { on: { push: {} }, jobs: { j: secretJob } } }, expectViolation: true },
+    { name: 'push: a secret job on push to main only is clean', wf: { 'a.yml': { on: { push: { branches: ['main'] }, pull_request: {} }, jobs: { j: secretJob } } }, expectViolation: false },
+    { name: 'push: the read-only hub token on any push is clean', wf: { 'a.yml': { on: { push: {} }, jobs: { j: { steps: [{ env: { T: '${{ secrets.OCR_HUB_READ }}' } }] } } } }, expectViolation: false },
+    { name: 'push: a pull_request-only workflow is not a push exposure', wf: { 'a.yml': { on: { pull_request: {} }, jobs: { j: secretJob } } }, expectViolation: false },
+  ];
+  for (const fx of pushFixtures) {
+    const violated = branchPushViolations(fx.wf).length > 0;
+    const ok = violated === fx.expectViolation;
+    console.log(`${ok ? '  ✅' : '  ❌'} ${fx.name}`);
+    if (!ok) failures++;
+  }
+
   if (failures) {
     console.error(`\n[pr-secret-guard] SELF-TEST FAILED: ${failures} fixture(s) regressed.`);
     process.exit(1);
@@ -1740,6 +1771,9 @@ function main() {
     for (const [secret, where] of [...prSourcedWorkflowRunSecrets.entries()].sort()) {
       console.log(`\nPR-sourced workflow_run holds ${secret}  ← ${[...where].sort().join(', ')}`);
     }
+    const pushHits = branchPushViolations(workflows);
+    console.log('\nSecrets reachable by a push to a branch other than main:');
+    console.log(pushHits.length ? pushHits.map((l) => `  ${l}`).join('\n') : '  (none)');
     process.exit(0);
   }
 
@@ -1769,12 +1803,15 @@ function main() {
         .join(', ')} (ADR-012 0.2: trust a workflow_run only when its source was a push or schedule on this repository's main: event push/schedule, head_branch == 'main', head_repository.full_name == github.repository)`
     );
   }
+  for (const line of branchPushViolations(workflows)) {
+    violations.push(`  ${line} (OSE-1695: a push runs the workflow file from the pushed branch; limit the push trigger to main)`);
+  }
 
   console.log('==================================================');
   console.log('  check-pr-secret-exposure (ADR-020)');
   console.log('==================================================');
   if (violations.length === 0) {
-    console.log('  ✅ PASS — PR-reachable secret surface within allowlist; no pull_request_target.');
+    console.log('  ✅ PASS — PR-reachable secret surface within allowlist; no pull_request_target; no secret reachable by a branch push.');
     process.exit(0);
   }
   console.log('  ❌ FAIL — PR-reachable secret surface exceeded the reviewed allowlist:\n');
