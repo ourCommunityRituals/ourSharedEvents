@@ -3,7 +3,7 @@
 **Status:** RETIRED (2026-09-02, OSE-1194) · **Owner:** infra · **Last updated:** 2026-09-02
 
 > **RETIRED.** The self-hosted runner fleet (BLOODRAVEN, -2, -3) was decommissioned on 2026-09-02.
-> Every OCR workflow now runs on GitHub-hosted `ubuntu-latest`. Brain invariants #11
+> Every OCR workflow now runs on GitHub-hosted `ubuntu-24.04`. Brain invariants #11
 > (`self_hosted_runner_bash_resolution`) and #12 (`runner_pool_readiness_probe`) are `retired`, and
 > the OSE tooling this standard described (`tools/runner/`, `runner-env-validation.yml`) was deleted.
 > The text below is preserved as the historical record of the topology and is **not** to be followed.
