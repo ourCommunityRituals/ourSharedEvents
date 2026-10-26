@@ -259,6 +259,9 @@ describe('.github/workflows', () => {
       }
     }
     expect(probed.sort()).toEqual([
+      // Not a PR-code job: the weekly check that the hub read token (OCR_HUB_READ) can read and
+      // cannot write. It has no pull_request trigger (see hub-read-token-workflow.test.js).
+      'hub-read-token-check.yml:probe',
       'mobile-workability-audit.yml:pr-code',
       'oursharedevents-ci.yml:gate',
     ]);

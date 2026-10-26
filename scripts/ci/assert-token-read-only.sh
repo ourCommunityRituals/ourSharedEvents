@@ -5,6 +5,13 @@
 #   GH_TOKEN=<job token> GITHUB_REPOSITORY=<owner/repo> PROBE_ISSUE=<n> \
 #     bash scripts/ci/assert-token-read-only.sh
 #
+# Two optional settings point it at a token that is not the job token:
+#   PROBE_REPOSITORY=<owner/repo>  probe this repository instead of GITHUB_REPOSITORY
+#   PROBE_REQUIRE_READ=1           first prove the token CAN read that repository. A revoked,
+#                                  expired or wrongly scoped token is refused on every write
+#                                  too, so without this it would look safe. 200 passes; any
+#                                  other status fails.
+#
 # The static gate reads the `permissions:` a job is written with. This asks
 # GitHub what the token is actually allowed to do. A job that runs PR code
 # hands that code its token, so the token must be refused on every write.
@@ -23,7 +30,8 @@
 set -uo pipefail
 
 : "${GH_TOKEN:?GH_TOKEN is required}"
-: "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+REPO="${PROBE_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
+: "${REPO:?GITHUB_REPOSITORY or PROBE_REPOSITORY is required}"
 API="${GITHUB_API_URL:-https://api.github.com}"
 SERVER="${GITHUB_SERVER_URL:-https://github.com}"
 ISSUE="${PROBE_ISSUE:-1}"
@@ -53,12 +61,22 @@ probe() {
 BEARER="header = \"Authorization: Bearer ${GH_TOKEN}\""
 BASIC="user = \"x-access-token:${GH_TOKEN}\""
 
+if [ "${PROBE_REQUIRE_READ:-}" = "1" ]; then
+  read_code="$(printf '%s\n' "$BEARER" | curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -K - "$API/repos/$REPO" 2>/dev/null)" || read_code="000"
+  if [ "$read_code" = "200" ]; then
+    echo "[token-read-only] read $REPO: allowed (200)"
+  else
+    echo "::error title=token cannot read::read $REPO: expected 200, got $read_code, so the write refusals below would prove nothing"
+    status=1
+  fi
+fi
+
 probe 'open an issue' "$BEARER" -X POST -H 'Accept: application/vnd.github+json' \
-  -d '{}' "$API/repos/$GITHUB_REPOSITORY/issues"
+  -d '{}' "$API/repos/$REPO/issues"
 
 probe 'comment on an issue or pull request' "$BEARER" -X POST -H 'Accept: application/vnd.github+json' \
-  -d '{}' "$API/repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments"
+  -d '{}' "$API/repos/$REPO/issues/$ISSUE/comments"
 
-probe 'push' "$BASIC" "$SERVER/$GITHUB_REPOSITORY.git/info/refs?service=git-receive-pack"
+probe 'push' "$BASIC" "$SERVER/$REPO.git/info/refs?service=git-receive-pack"
 
 exit "$status"
