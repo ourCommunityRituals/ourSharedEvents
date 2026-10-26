@@ -15,7 +15,7 @@ export default {
   packageManager: 'npm',
   testRunner: 'vitest',
   vitest: { configFile: 'vitest.ci-scripts.config.mjs' },
-  mutate: ['scripts/ci/branch-push-secret-exposure.mjs'],
+  mutate: ['scripts/ci/branch-push-secret-exposure.mjs', 'scripts/ci/secret-echo-exposure.mjs'],
   // Copy only what the test needs into Stryker's sandbox, not the whole repository (archive/ holds
   // HTML templates that Vite cannot parse, and 3,000 files make every run slow).
   ignorePatterns: [
@@ -28,6 +28,7 @@ export default {
     '!/scripts/ci',
     '/scripts/ci/*',
     '!/scripts/ci/branch-push-secret-exposure.mjs',
+    '!/scripts/ci/secret-echo-exposure.mjs',
     '!/tests',
     '/tests/*',
     '!/tests/unit',
@@ -35,6 +36,7 @@ export default {
     '!/tests/unit/ci',
     '/tests/unit/ci/*',
     '!/tests/unit/ci/no-secret-on-branch-push.test.js',
+    '!/tests/unit/ci/no-secret-echo.test.js',
   ],
   coverageAnalysis: 'perTest',
   reporters: ['html', 'clear-text', 'progress'],

@@ -7,6 +7,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/unit/ci/no-secret-on-branch-push.test.js'],
+    include: ['tests/unit/ci/no-secret-on-branch-push.test.js', 'tests/unit/ci/no-secret-echo.test.js'],
   },
 });

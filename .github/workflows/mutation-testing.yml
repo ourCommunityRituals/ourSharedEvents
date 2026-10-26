@@ -45,7 +45,9 @@ on:
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'
+      - 'scripts/ci/secret-echo-exposure.mjs'
       - 'tests/unit/ci/no-secret-on-branch-push.test.js'
+      - 'tests/unit/ci/no-secret-echo.test.js'
       - 'stryker.ci-scripts.conf.mjs'
       - 'vitest.ci-scripts.config.mjs'
       - 'workers/oursharedevents/vitest.node.config.mts'
