@@ -112,6 +112,12 @@ jobs:
   # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
   # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps
   # secrets off branch pushes is hollow. Same 95% bar; the rule currently scores 100%.
+  #
+  # Needs no secret and no root install: the rule and its test use only Node, Vitest and js-yaml.
+  # StrykerJS, Vitest and js-yaml go into one separate folder (exact versions: Stryker as in the
+  # Worker lockfile, Vitest and js-yaml as in the root lockfile) and node_modules is linked to it.
+  # (npm install --no-save on top of the root tree crashes inside npm, "Cannot read properties of
+  # null (reading 'edgesOut')", because of the root's file: link to @ocr/flags.)
   mutation-ci-scripts:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -123,26 +129,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
 
-      - name: Stage pinned hub packages (best-effort; root npm ci tolerates a missing @ocr/flags)
-        # Same step the root CI job runs: the root package.json links @ocr/flags from ../packages.
-        continue-on-error: true
-        shell: bash
-        timeout-minutes: 3
-        env:
-          GIT_TERMINAL_PROMPT: '0'
-          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
-        run: bash scripts/ci-stage-ocr-workspace.sh
+      - name: Install StrykerJS, Vitest and js-yaml into a separate folder
+        run: npm install --prefix "$RUNNER_TEMP/stryker" --no-audit --no-fund --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0 vitest@4.1.11 js-yaml@4.3.2
 
-      - run: npm ci
-
-      - name: Install StrykerJS (exact versions, the same as the Worker lockfile; nothing is saved)
-        run: npm install --no-save --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0
+      - name: Link node_modules to it
+        run: ln -s "$RUNNER_TEMP/stryker/node_modules" node_modules
 
       - name: Run Stryker on the CI security rules
-        run: npx stryker run stryker.ci-scripts.conf.mjs
+        run: node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.ci-scripts.conf.mjs
 
       - name: Upload mutation report
         if: always()
