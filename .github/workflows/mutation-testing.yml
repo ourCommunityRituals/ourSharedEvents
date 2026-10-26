@@ -116,8 +116,9 @@ jobs:
   # Needs no secret and no root install: the rule and its test use only Node, Vitest and js-yaml.
   # StrykerJS, Vitest and js-yaml go into one separate folder (exact versions: Stryker as in the
   # Worker lockfile, Vitest and js-yaml as in the root lockfile) and node_modules is linked to it.
-  # (npm install --no-save on top of the root tree crashes inside npm, "Cannot read properties of
-  # null (reading 'edgesOut')", because of the root's file: link to @ocr/flags.)
+  # --legacy-peer-deps: npm 10.9 (bundled with Node 22) crashes with "Cannot read properties of null
+  # (reading 'edgesOut')" resolving this package set, even in an empty folder. Every peer is listed
+  # explicitly, so skipping peer resolution loses nothing. Reproduced and checked with npm 10.9.2.
   mutation-ci-scripts:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -131,7 +132,7 @@ jobs:
           node-version: 22
 
       - name: Install StrykerJS, Vitest and js-yaml into a separate folder
-        run: npm install --prefix "$RUNNER_TEMP/stryker" --no-audit --no-fund --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0 vitest@4.1.11 js-yaml@4.3.2
+        run: npm install --prefix "$RUNNER_TEMP/stryker" --legacy-peer-deps --no-audit --no-fund --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0 vitest@4.1.11 js-yaml@4.3.2
 
       - name: Link node_modules to it
         run: ln -s "$RUNNER_TEMP/stryker/node_modules" node_modules
