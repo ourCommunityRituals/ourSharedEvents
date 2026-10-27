@@ -73,8 +73,8 @@ describe('OSE-1529 | landing create cards', () => {
   it('each card links to its own entry point, not a shared bare /admin', () => {
     const event = /<a[^>]*href="([^"]*)"[^>]*data-testid="door-create-event"/.exec(html);
     const sponsor = /<a[^>]*href="([^"]*)"[^>]*data-testid="door-create-sponsor"/.exec(html);
-    expect(event?.[1]).toBe('/admin#create-event');
-    expect(sponsor?.[1]).toBe('/admin#sponsors-card');
+    expect(event?.[1]).toBe('/admin?start=event');
+    expect(sponsor?.[1]).toBe('/admin?start=sponsor');
     expect(event?.[1]).not.toBe(sponsor?.[1]);
   });
 
