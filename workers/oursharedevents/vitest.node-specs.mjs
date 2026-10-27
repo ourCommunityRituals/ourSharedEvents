@@ -174,6 +174,8 @@ export const NODE_SPECS = [
   'tests/admin-wizard-step1.spec.ts',
   // Landing "where are you?" (2026-10-10): zip table, rough box, the location script's limits.
   'tests/landing-where-unit.spec.ts',
+  // The landing doors name their action in ?start= and the admin front door steps aside (owner, 2026-10-27).
+  'tests/admin-start-param.spec.ts',
   'tests/admin-surface-links-not-live.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',

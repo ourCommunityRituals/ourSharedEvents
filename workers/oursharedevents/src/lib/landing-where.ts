@@ -83,7 +83,7 @@ export function renderAreaHeading(state: WhereState): string {
 export function renderNearEmpty(zip: string): string {
   return `<div class="near-empty" data-testid="area-empty-near" role="status">
           <p><strong>Nothing near ${escapeHtml(zip)} yet.</strong></p>
-          <p><a href="/events" data-testid="area-empty-all">See all events</a> &middot; <a href="/admin#create-event" data-testid="area-empty-create">Create one</a></p>
+          <p><a href="/events" data-testid="area-empty-all">See all events</a> &middot; <a href="/admin?start=event" data-testid="area-empty-create">Create one</a></p>
         </div>`;
 }
 

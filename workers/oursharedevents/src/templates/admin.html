@@ -3749,14 +3749,33 @@
           // The front door owns the URL on load (OSE-1315): no stray
           // #create-event, and a state object so popstate can recognise it. A
           // reloaded #create-event reopens the wizard at step 1.
+          //
+          // The public landing's two doors name their action in ?start=event or
+          // ?start=sponsor. A query string survives the Cloudflare Access sign-in round
+          // trip (a #fragment does not), so the visitor lands IN the action they chose,
+          // not on this page's own chooser, which would repeat the choice they just made.
+          // The chooser stays for a visit that names no action. The param is consumed so a
+          // reload lands on the chooser; other parameters are kept.
           (function initWizardHistory() {
             var reopen = location.hash === WIZ_HASH;
+            var start = '';
+            var rest = null;
             try {
-              history.replaceState({ oseAdmin: 'chooser' }, '', location.pathname + location.search);
+              rest = new URLSearchParams(location.search);
+              start = rest.get('start') || '';
+              rest.delete('start');
+            } catch (e) {
+              /* no URLSearchParams: treat as no intent */
+            }
+            var kept = rest ? rest.toString() : '';
+            var search = rest ? (kept ? '?' + kept : '') : location.search;
+            try {
+              history.replaceState({ oseAdmin: 'chooser' }, '', location.pathname + search);
             } catch (e) {
               /* see pushWizardStep */
             }
-            if (reopen) startWizard();
+            if (start === 'sponsor') startSponsor();
+            else if (start === 'event' || reopen) startWizard();
           })();
 
           function skipSignup() {

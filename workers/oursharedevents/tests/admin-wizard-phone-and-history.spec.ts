@@ -141,8 +141,10 @@ describe('OSE-1315 — step 1 has Back, and browser Back returns to the front do
   });
 
   test('the front door owns the URL on load (no stray #create-event, a state to pop to)', () => {
+    // The window is wide enough for the ?start= handling that now runs first (the doors name their
+    // action; see admin-start-param.spec.ts). The intent is unchanged: the block resets the state to the chooser.
     expect(html).toMatch(
-      /initWizardHistory[\s\S]{0,400}history\.replaceState\(\{ oseAdmin: 'chooser' \}/
+      /initWizardHistory[\s\S]{0,900}history\.replaceState\(\{ oseAdmin: 'chooser' \}/
     );
   });
 

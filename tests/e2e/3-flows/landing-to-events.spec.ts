@@ -44,21 +44,21 @@ test.describe('Landing Flow — Navigation', () => {
     await expect(page.locator('[data-testid="public-events"]')).toBeVisible();
   });
 
-  test('"Create an event" door → /admin#create-event (OSE-1529)', async ({ page }) => {
+  test('"Create an event" door → /admin?start=event (OSE-1529)', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
     await expect(page.locator('[data-testid="door-create-event"]')).toHaveAttribute(
       'href',
-      '/admin#create-event'
+      '/admin?start=event'
     );
   });
 
-  test('"Create a sponsor" door → /admin#sponsors-card (OSE-1529)', async ({ page }) => {
+  test('"Create a sponsor" door → /admin?start=sponsor (OSE-1529)', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
     await expect(page.locator('[data-testid="door-create-sponsor"]')).toHaveAttribute(
       'href',
-      '/admin#sponsors-card'
+      '/admin?start=sponsor'
     );
   });
 
