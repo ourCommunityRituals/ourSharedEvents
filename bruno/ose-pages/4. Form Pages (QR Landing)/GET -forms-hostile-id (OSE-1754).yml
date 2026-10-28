@@ -5,23 +5,25 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/forms/x',alert(1754),'?type=register"
+  # A quote breakout with nothing a WAF reads as an attack, so the request
+  # reaches the Worker: before the fix it became submitForm('x',1754,'', ...).
+  url: "{{baseUrl}}/forms/x',1754,'?type=register"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
-      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = res.getStatus() === 403 && !!res.getHeader('cf-mitigated');
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = !!res.getHeader('cf-mitigated');
 
-        test('OSE-1754: a refused /forms id answers 404 (or 403 only when the edge challenges a script client)', function() { expect(res.getStatus() === 404 || edge).to.equal(true); });
+        if (edge) { test('OSE-1754: the edge challenged the request (cf-mitigated), so nothing reached the Worker', function() { expect(edge).to.equal(false); }); }
 
-        if (edge) { test('OSE-1754: NOT PROVEN this run, the edge challenged the request (cf-mitigated)', function() { expect(edge).to.equal(true); }); }
+        test('OSE-1754: a refused /forms id answers 404', function() { expect(res.getStatus()).to.equal(404); });
 
         test('OSE-1754: the page carries no form', function() { expect(body.toLowerCase()).to.not.include('<form'); });
 
-        test('OSE-1754: nothing from the id reaches the page', function() { expect(body).to.not.include('alert(1754)'); });
+        test('OSE-1754: nothing from the id reaches the page', function() { expect(body).to.not.include(',1754,'); });
 
-        if (res.getStatus() === 404) { test('OSE-1754: the 404 page leaves a way back to the events list', function() { expect(body).to.include('href=\"/events\"'); }); }"
+        test('OSE-1754: the 404 page leaves a way back to the events list', function() { expect(body).to.include('href=\"/events\"'); });"
 
 settings:
   encodeUrl: false

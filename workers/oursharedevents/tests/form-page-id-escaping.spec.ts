@@ -59,9 +59,14 @@ function formPage(path: string): Promise<Response> {
   return SELF.fetch(`https://test.local${path}`, { headers: { Accept: 'text/html' } });
 }
 
-/** Every inline <script> body on the page, joined. */
+/**
+ * Every inline <script> body on the page, joined. The end tag allows
+ * attributes and spaces (`</script >`), as browsers do.
+ */
 function scriptText(html: string): string {
-  return [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).join('\n');
+  return [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi)]
+    .map((m) => m[1])
+    .join('\n');
 }
 
 describe('OSE-1754 /forms/:id refuses an id the form endpoints would refuse', () => {

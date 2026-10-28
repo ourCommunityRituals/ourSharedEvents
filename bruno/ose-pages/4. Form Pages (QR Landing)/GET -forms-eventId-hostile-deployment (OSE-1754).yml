@@ -5,21 +5,24 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/forms/{{testEventId}}?type=register&deployment=%3C%2Fscript%3E%3Cscript%3Ealert(1754)%3C%2Fscript%3E"
+  # Closes the script block with markup a WAF does not read as an attack
+  # (</script><b>1754</b>), so the request reaches the Worker. Before the fix
+  # JSON.stringify placed it raw inside the form script.
+  url: "{{baseUrl}}/forms/{{testEventId}}?type=register&deployment=%3C%2Fscript%3E%3Cb%3E1754%3C%2Fb%3E"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
-      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = res.getStatus() === 403 && !!res.getHeader('cf-mitigated');
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = !!res.getHeader('cf-mitigated');
 
-        test('OSE-1754: the form page answers 200 (or 403 only when the edge challenges a script client)', function() { expect(res.getStatus() === 200 || edge).to.equal(true); });
+        if (edge) { test('OSE-1754: the edge challenged the request (cf-mitigated), so nothing reached the Worker', function() { expect(edge).to.equal(false); }); }
 
-        if (edge) { test('OSE-1754: NOT PROVEN this run, the edge challenged the request (cf-mitigated)', function() { expect(edge).to.equal(true); }); }
+        test('OSE-1754: the form page answers 200', function() { expect(res.getStatus()).to.equal(200); });
 
-        if (res.getStatus() === 200) { test('OSE-1754: the page is the form, so the deployment sink was rendered', function() { expect(body.toLowerCase()).to.include('<form'); }); }
+        test('OSE-1754: the page is the form, so the deployment sink was rendered', function() { expect(body.toLowerCase()).to.include('<form'); });
 
-        test('OSE-1754: a ?deployment= of the wrong shape never reaches the page', function() { expect(body).to.not.include('alert(1754)'); });
+        test('OSE-1754: a ?deployment= of the wrong shape never reaches the page', function() { expect(body).to.not.include('<b>1754</b>'); });
 
         test('OSE-1754: no hidden deployment field is written for it', function() { expect(body).to.not.include('data-testid=\"form-deployment-id\"'); });"
 
