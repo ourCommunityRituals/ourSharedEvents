@@ -26,13 +26,15 @@
 
 import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
 import { HARDENING_HEADERS } from '../lib/security-headers';
-import { escapeHtml } from '../lib/html-escape';
+import { escapeHtml, jsonForScript } from '../lib/html-escape';
+import { isValidDeploymentId, isValidEventId, repairEventIdTypo } from '../lib/form-validation';
 import { fetchNextEventsAtVenue, type NextEventRow } from '../lib/next-at-venue';
 import { buildGoogleCalendarUrl } from '../lib/calendar-links';
 import { formatHumanDate } from '../lib/event-datetime';
 import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import {
   canonicalOrigin,
+  eventFormPath,
   eventPagePath,
   EVENT_FORM_SCREENS,
   type EventFormScreen,
@@ -493,10 +495,10 @@ function registrationForm(
         // submitForm has already shown the friendly error on a refusal, so a
         // refusal ends here: no confirmation, no next step, no unhandled rejection.
         try {
-          await submitForm('${eventId}', 'register', {
+          await submitForm(${jsonForScript(eventId)}, 'register', {
             name: document.getElementById('name').value,
             email: document.getElementById('email').value || undefined,
-            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+            sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
           });
         } catch (_) {
           return;
@@ -541,11 +543,11 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
         btn.style.opacity = '0.7';
         btn.setAttribute('aria-busy', 'true');
         try {
-          await submitForm('${eventId}', 'checkin', walkIn ? {
-            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          await submitForm(${jsonForScript(eventId)}, 'checkin', walkIn ? {
+            sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
             arrival_path: 'walk_in',
           } : {
-            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+            sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
           });
           // OSE-1657: counts are post-event only, so the page confirms the
           // check-in and shows no tally.
@@ -627,9 +629,9 @@ function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce
       async function handleSurvey(e) {
         e.preventDefault();
         const comments = document.getElementById('comments').value;
-        await submitForm('${eventId}', 'survey', {
+        await submitForm(${jsonForScript(eventId)}, 'survey', {
           responses: { ...ratings, ...(comments ? { comments } : {}) },
-          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
         });
         showSuccess('Thanks for your feedback!');
       }
@@ -670,9 +672,9 @@ function emailSignupForm(
         e.preventDefault();
         let body;
         try {
-          body = await submitForm('${eventId}', 'email-signup', {
+          body = await submitForm(${jsonForScript(eventId)}, 'email-signup', {
             email: document.getElementById('email').value,
-            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+            sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
           });
         } catch (_) {
           return; // the friendly error is already on screen
@@ -839,7 +841,7 @@ function formPage(
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
   <main id="main-content" data-testid="form-main">${formHtml}${nextStep}
   ${renderBackButton({ fallbackHref: `/events/${encodeURIComponent(eventId)}`, nonce, testid: 'form-back' })}</main>
-  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
+  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', () => jsonForScript(eventId))}</script>
 </body>
 </html>`;
 }
@@ -855,13 +857,49 @@ export async function handleFormPage(
   // `?type=` of the old /forms/ address is not read.
   screen?: EventFormScreen
 ): Promise<Response> {
+  // OSE-1754: /forms/<id> takes any segment without a slash, undecoded, so a
+  // raw quote can arrive here. An id the form endpoints would refuse
+  // (validateFormRequest) gets no form at all: the page could never submit it,
+  // and the id is then never written into a script.
+  if (!isValidEventId(eventId)) {
+    // A link that is right apart from junk on the end (copied out of a
+    // sentence, a space typed after it) goes to the form it meant, at the
+    // event's own address (OSE-1684), with its form type and a valid
+    // ?deployment= kept.
+    const meant = repairEventIdTypo(eventId);
+    if (meant) {
+      const asked = new URL(request.url).searchParams;
+      const deployment = asked.get('deployment');
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: eventFormPath(
+            meant,
+            asked.get('type'),
+            isValidDeploymentId(deployment) ? deployment : null
+          ),
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+    // Loaded on this path only: pages.ts pulls in the .html templates, and this
+    // file must stay importable on its own (the root unit tests render it in Node).
+    const { renderErrorPage } = await import('./pages');
+    return renderErrorPage(
+      404,
+      "This event link doesn't look right",
+      'Try the original link or contact the host.'
+    );
+  }
   const url = new URL(request.url);
   const formType = screen
     ? EVENT_FORM_SCREENS[screen]
     : (url.searchParams.get('type') ?? 'register');
   // OSE-627: deployment ID for poster attribution (written to source_placement_id
   // on form submission so SharedReport can link scans to form registrations).
-  const deploymentId = url.searchParams.get('deployment') ?? null;
+  // OSE-1754: a value of any other shape is dropped, never written into the page.
+  const rawDeployment = url.searchParams.get('deployment');
+  const deploymentId = isValidDeploymentId(rawDeployment) ? rawDeployment : null;
 
   // OSE-R-007 (2026-05-15): event title MUST come from the canonical
   // event row in D1, never from the URL query param. Pre-fix the page

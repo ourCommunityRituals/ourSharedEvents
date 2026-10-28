@@ -1,0 +1,29 @@
+info:
+  name: GET /forms/:eventId. (fat-fingered trailing period, OSE-1754)
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/{{testEventId}}.?type=checkin"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "var edge = !!res.getHeader('cf-mitigated'); var meant = '/events/' + bru.getEnvVar('testEventId') + '/checkin';
+
+        if (edge) { test('OSE-1754: the edge challenged the request (cf-mitigated), so nothing reached the Worker', function() { expect(edge).to.equal(false); }); }
+
+        test('OSE-1754: a link with junk on the end answers 302', function() { expect(res.getStatus()).to.equal(302); });
+
+        test('OSE-1754: it goes to the form it meant, at the address under /events', function() { expect(String(res.getHeader('location'))).to.equal(meant); });
+
+        test('OSE-1754: the repair is never cached', function() { expect(String(res.getHeader('cache-control'))).to.include('no-store'); });"
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -58,6 +58,45 @@ export function isValidEventId(id: string): boolean {
   return id.length > 0 && id.length <= EVENT_ID_MAX && EVENT_ID_RE.test(id);
 }
 
+/** What a copied link most often drags along: sentence punctuation, a bracket, a space. */
+const TRAILING_SLIP = /[\s.,;:!?)\]}'"]+$/;
+/**
+ * Longest segment worth repairing: a valid id plus a little junk, even
+ * percent-encoded. The trailing-junk regex backtracks on a long run of junk,
+ * and /forms/<id> has no rate limit, so a longer segment is refused unread.
+ */
+const REPAIR_MAX = 160;
+
+/**
+ * The event id a fat-fingered form link meant, or null (OSE-1754).
+ *
+ * A link pasted out of a sentence ("register at .../forms/evt_123.") or with a
+ * space typed after it arrives with junk on the end. Only the END is repaired,
+ * and only when what is left is a valid id; anything else stays refused, so a
+ * hostile value can never be "repaired" into running code.
+ */
+export function repairEventIdTypo(raw: string): string | null {
+  if (raw.length > REPAIR_MAX) return null;
+  let typed: string;
+  try {
+    typed = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  const id = typed.trim().replace(TRAILING_SLIP, '');
+  return id !== raw && isValidEventId(id) ? id : null;
+}
+
+/**
+ * A poster deployment id as it arrives in `?deployment=` (a `pd_` id from a
+ * /q scan). Same shape and cap as an event id. The event page and the form
+ * page both read the parameter; a value of any other shape is dropped, never
+ * written into the page (OSE-1754).
+ */
+export function isValidDeploymentId(id: string | null | undefined): id is string {
+  return typeof id === 'string' && isValidEventId(id);
+}
+
 /**
  * Truncate a user-supplied string after trimming. Returns `undefined` for
  * non-string inputs so callers can pass any unknown JSON field safely.

@@ -1761,6 +1761,32 @@ const INVARIANT_GATES: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: form landing pages (OSE-1754). TL-083.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const FORM_PAGE_INJECTION: ThreatEntry[] = [
+  {
+    id: 'TL-083',
+    layer: 'worker_surface',
+    threat:
+      "Reflected script injection on the form page a QR lands on: /forms/<id> took any segment without a slash, undecoded, and wrote the id raw inside the page's nonced inline script as a quoted string. A crafted link with a quote closed the string and ran its own code under the page nonce when the visitor submitted the form, on the page where attendees type their name and email; ?deployment= was also unchecked and placed with JSON.stringify, which does not stop </script>. Mitigated: an id the form endpoints would refuse gets a 404 page with no form (a near-miss with junk on the end redirects to the form it meant), every value in a form script is script-safe JSON (jsonForScript), and a ?deployment= of the wrong shape is dropped.",
+    severity: 'HIGH',
+    target_invariant: null,
+    mitigation_story: 'OSE-1754',
+    test_ref:
+      'tests/form-page-id-escaping.spec.ts > OSE-1754 /forms/:id refuses an id the form endpoints would refuse > OSE-1754 | API | GET /forms/:id?type=register (id breaks out of a script string) | 404 page, no form, nothing from the id in a script',
+    status: 'tested',
+    red_birth: {
+      date: '2026-10-28',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With router.ts, form-pages.ts, pages.ts, form-validation.ts and html-escape.ts restored from main, 22 of the 26 tests in the spec were red (all four form types rendered a form with the quote inside submitForm, the hostile ?deployment= reached the page, fat-finger links got a form or a JSON 404); green with the fix. The 4 that stay green are guards by design: the URL parser keeps a raw quote, a valid unknown id still renders (OSE-1737), the form keeps its back button, a valid deployment is kept. The long-junk test proves the 404, not the 160-character repair cap: without the cap the repair still refuses that input, only slower (84 ms at 16,000 characters in Node).',
+    },
+    last_run_green: '2026-10-28',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1780,12 +1806,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...EVENT_SHORT_CODES,
   ...LINK_COUNT_ROBOTS,
   ...INVARIANT_GATES,
+  ...FORM_PAGE_INJECTION,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-10-13',
+  last_updated: '2026-10-28',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;

@@ -29,3 +29,21 @@ export function escapeHtml(s: string | null | undefined): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/**
+ * A value as JSON for an inline `<script>` body (OSE-1754).
+ *
+ * `JSON.stringify` alone is not enough there: a string holding `</script>` or
+ * `<!--` ends or changes the block, and U+2028 / U+2029 end a line in older
+ * engines. Escaping `<`, `>`, `&` and the two separators leaves valid JSON that
+ * cannot leave the block. Use this for every value a page places in a script,
+ * in place of quoting it by hand.
+ */
+export function jsonForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}

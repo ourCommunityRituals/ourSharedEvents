@@ -2030,7 +2030,8 @@ export async function route(
   }
 
   // ── Public form pages (QR→form landing) ───────────────────────────────────
-  const formPageMatch = pathname.match(/^\/forms\/([^/]+)$/);
+  // A trailing slash is a fat finger, not a different page (OSE-1754).
+  const formPageMatch = pathname.match(/^\/forms\/([^/]+)\/?$/);
   if (formPageMatch && method === 'GET') {
     return handleFormPage(request, env, formPageMatch[1]);
   }

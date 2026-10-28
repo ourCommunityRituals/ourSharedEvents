@@ -1,0 +1,34 @@
+info:
+  name: GET /forms/:eventId?deployment=<closes the script> (OSE-1754)
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  # Closes the script block with markup a WAF does not read as an attack
+  # (</script><b>1754</b>), so the request reaches the Worker. Before the fix
+  # JSON.stringify placed it raw inside the form script.
+  url: "{{baseUrl}}/forms/{{testEventId}}?type=register&deployment=%3C%2Fscript%3E%3Cb%3E1754%3C%2Fb%3E"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = !!res.getHeader('cf-mitigated');
+
+        if (edge) { test('OSE-1754: the edge challenged the request (cf-mitigated), so nothing reached the Worker', function() { expect(edge).to.equal(false); }); }
+
+        test('OSE-1754: the form page answers 200', function() { expect(res.getStatus()).to.equal(200); });
+
+        test('OSE-1754: the page is the form, so the deployment sink was rendered', function() { expect(body.toLowerCase()).to.include('<form'); });
+
+        test('OSE-1754: a ?deployment= of the wrong shape never reaches the page', function() { expect(body).to.not.include('<b>1754</b>'); });
+
+        test('OSE-1754: no hidden deployment field is written for it', function() { expect(body).to.not.include('data-testid=\"form-deployment-id\"'); });"
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

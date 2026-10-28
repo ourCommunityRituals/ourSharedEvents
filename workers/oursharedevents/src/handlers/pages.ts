@@ -11,6 +11,8 @@
 import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../lib/security-headers';
+import { jsonForScript } from '../lib/html-escape';
+import { isValidDeploymentId } from '../lib/form-validation';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
@@ -621,16 +623,6 @@ function buildOgMeta(opts: {
   return lines.join('\n');
 }
 
-/** JSON for an inline <script>: no `<`, `>`, `&` or line separators can end the block. */
-function jsonForScript(value: unknown): string {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
-
 /**
  * Search-engine head for a public event page: the one canonical URL, a meta
  * description and schema.org/Event JSON-LD. The JSON-LD carries only the facts
@@ -776,10 +768,7 @@ function eventFormContextFromRequest(request: Request, fallback: EventFormType):
     ? (rawType as EventFormType)
     : fallback;
   const rawDeployment = url.searchParams.get('deployment');
-  const deploymentId =
-    rawDeployment && rawDeployment.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(rawDeployment)
-      ? rawDeployment
-      : null;
+  const deploymentId = isValidDeploymentId(rawDeployment) ? rawDeployment : null;
   return { type, deploymentId };
 }
 
