@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-27",
-  "commit": "650a90ba",
-  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/40455367955",
+  "generated_at": "2026-10-28",
+  "commit": "793b1ba5",
+  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/40769926071",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
@@ -10,7 +10,7 @@
     "partial": 8,
     "gap": 2,
     "retired": 2,
-    "threat_entries": 82,
+    "threat_entries": 83,
     "open_threats": 2
   },
   "invariants": [
