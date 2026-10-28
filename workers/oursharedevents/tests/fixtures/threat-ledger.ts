@@ -1781,7 +1781,7 @@ const FORM_PAGE_INJECTION: ThreatEntry[] = [
       date: '2026-10-28',
       method: 'deliberate-fixture-break',
       notes:
-        'With router.ts, form-pages.ts, pages.ts, form-validation.ts and html-escape.ts restored from main, 17 of the 21 tests in the spec were red (all four form types rendered a form with the quote inside submitForm, the hostile ?deployment= reached the page, fat-finger links got a form or a JSON 404); green with the fix. The 4 that stay green are guards by design: the URL parser keeps a raw quote, a valid unknown id still renders (OSE-1737), the form keeps its back button, a valid deployment is kept.',
+        'With router.ts, form-pages.ts, pages.ts, form-validation.ts and html-escape.ts restored from main, 22 of the 26 tests in the spec were red (all four form types rendered a form with the quote inside submitForm, the hostile ?deployment= reached the page, fat-finger links got a form or a JSON 404); green with the fix. The 4 that stay green are guards by design: the URL parser keeps a raw quote, a valid unknown id still renders (OSE-1737), the form keeps its back button, a valid deployment is kept. The long-junk test proves the 404, not the 160-character repair cap: without the cap the repair still refuses that input, only slower (84 ms at 16,000 characters in Node).',
     },
     last_run_green: '2026-10-28',
   },

@@ -106,12 +106,23 @@ describe('OSE-1754 /forms/:id refuses an id the form endpoints would refuse', ()
     expect(await res.text()).toContain('<form');
   });
 
-  test('OSE-1754 | API | GET /forms/:id (live event) | the id reaches the script as a JSON string', async () => {
-    const res = await formPage(`/forms/${KNOWN_EVENT_ID}`);
-    expect(res.status).toBe(200);
-    const scripts = scriptText(await res.text());
-    expect(scripts).toContain(`submitForm("${KNOWN_EVENT_ID}"`);
-    expect(scripts).not.toContain(`submitForm('${KNOWN_EVENT_ID}'`);
+  // Every form type, so a revert in any one of the four submitForm sinks shows.
+  for (const type of FORM_TYPES) {
+    test(`OSE-1754 | API | GET /forms/:id?type=${type} (live event) | the id reaches the script as a JSON string`, async () => {
+      const res = await formPage(`/forms/${KNOWN_EVENT_ID}?type=${type}`);
+      expect(res.status).toBe(200);
+      const scripts = scriptText(await res.text());
+      expect(scripts).toContain(`submitForm("${KNOWN_EVENT_ID}"`);
+      expect(scripts).not.toContain(`submitForm('${KNOWN_EVENT_ID}'`);
+    });
+  }
+
+  test('OSE-1754 | API | GET /forms/:id (a long run of junk on the end) | 404 page, refused without a repair', async () => {
+    const res = await SELF.fetch(`https://test.local/forms/${KNOWN_EVENT_ID}${'.'.repeat(4000)}a`, {
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Location')).toBeNull();
   });
 });
 

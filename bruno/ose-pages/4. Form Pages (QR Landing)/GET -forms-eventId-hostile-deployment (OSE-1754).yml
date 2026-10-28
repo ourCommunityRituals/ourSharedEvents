@@ -11,7 +11,13 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody());
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = res.getStatus() === 403 && !!res.getHeader('cf-mitigated');
+
+        test('OSE-1754: the form page answers 200 (or 403 only when the edge challenges a script client)', function() { expect(res.getStatus() === 200 || edge).to.equal(true); });
+
+        if (edge) { test('OSE-1754: NOT PROVEN this run, the edge challenged the request (cf-mitigated)', function() { expect(edge).to.equal(true); }); }
+
+        if (res.getStatus() === 200) { test('OSE-1754: the page is the form, so the deployment sink was rendered', function() { expect(body.toLowerCase()).to.include('<form'); }); }
 
         test('OSE-1754: a ?deployment= of the wrong shape never reaches the page', function() { expect(body).to.not.include('alert(1754)'); });
 
@@ -20,6 +26,6 @@ runtime:
 settings:
   encodeUrl: false
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
+  followRedirects: false
+  maxRedirects: 0
   forwardAuthorizationHeader: false

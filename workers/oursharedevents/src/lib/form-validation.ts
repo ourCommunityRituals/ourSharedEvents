@@ -60,6 +60,12 @@ export function isValidEventId(id: string): boolean {
 
 /** What a copied link most often drags along: sentence punctuation, a bracket, a space. */
 const TRAILING_SLIP = /[\s.,;:!?)\]}'"]+$/;
+/**
+ * Longest segment worth repairing: a valid id plus a little junk, even
+ * percent-encoded. The trailing-junk regex backtracks on a long run of junk,
+ * and /forms/<id> has no rate limit, so a longer segment is refused unread.
+ */
+const REPAIR_MAX = 160;
 
 /**
  * The event id a fat-fingered form link meant, or null (OSE-1754).
@@ -70,6 +76,7 @@ const TRAILING_SLIP = /[\s.,;:!?)\]}'"]+$/;
  * hostile value can never be "repaired" into running code.
  */
 export function repairEventIdTypo(raw: string): string | null {
+  if (raw.length > REPAIR_MAX) return null;
   let typed: string;
   try {
     typed = decodeURIComponent(raw);
