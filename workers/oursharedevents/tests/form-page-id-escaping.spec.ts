@@ -60,14 +60,40 @@ function formPage(path: string): Promise<Response> {
 }
 
 /**
- * Every inline <script> body on the page, joined. The end tag allows
- * attributes and spaces (`</script >`), as browsers do.
+ * Every inline <script> body on the page, joined. The end tag is read the way
+ * a browser reads it: any case, with whitespace or attributes before the `>`
+ * (`</script >`, `</script foo="x">`), but not `</scripts>`, which does not end
+ * the block. Tested below, so the assertions that use it cannot miss a block.
  */
 function scriptText(html: string): string {
-  return [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi)]
+  return [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)]
     .map((m) => m[1])
     .join('\n');
 }
+
+describe('OSE-1754 the scriptText helper reads every form of the script end tag', () => {
+  for (const [label, html, body] of [
+    ['a plain end tag', '<script>a()</script>', 'a()'],
+    ['a space before >', '<script>b()</script >', 'b()'],
+    ['a tab before >', '<script>c()</script\t>', 'c()'],
+    ['a newline before >', '<script>d()</script\n>', 'd()'],
+    ['an attribute', '<script>e()</script foo="bar">', 'e()'],
+    ['upper case', '<SCRIPT>f()</SCRIPT>', 'f()'],
+    ['mixed case, attributes on both tags', `<script nonce="n1">g()</Script data-x='y' >`, 'g()'],
+  ] as const) {
+    test(`OSE-1754 | unit | scriptText (${label}) | reads the block`, () => {
+      expect(scriptText(`<p>before</p>${html}<p>after</p>`)).toBe(body);
+    });
+  }
+
+  test('OSE-1754 | unit | scriptText (</scripts> inside a block) | does not end the block there', () => {
+    expect(scriptText('<script>h()</scripts>i()</script>')).toBe('h()</scripts>i()');
+  });
+
+  test('OSE-1754 | unit | scriptText (two blocks, odd end tags) | reads both', () => {
+    expect(scriptText('<script>j()</script ><p>x</p><script>k()</SCRIPT\n>')).toBe('j()\nk()');
+  });
+});
 
 describe('OSE-1754 /forms/:id refuses an id the form endpoints would refuse', () => {
   test('OSE-1754 | API | path keeps a raw quote | the test request really carries it', () => {
