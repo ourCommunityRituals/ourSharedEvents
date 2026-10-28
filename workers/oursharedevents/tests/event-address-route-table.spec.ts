@@ -70,7 +70,8 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/stats': { why: 'signed-link', reason: 'Alias of /sharedReport.' },
 
   // ── Old addresses, kept for printed and saved links ──────────────────────
-  '/forms/:param': {
+  // The trailing slash is optional (OSE-1754): it is a fat finger, not another page.
+  '/forms/:param/?': {
     why: 'old-address',
     reason: 'Printed form codes; the platform now writes /events/<id>/register etc.',
   },
@@ -193,7 +194,7 @@ describe('the route table, read from src/router.ts', () => {
       '/events/:param/(register|checkin|survey|updates)',
       '/events/:param/calendar.ics',
       '/events/:param/:param',
-      '/forms/:param',
+      '/forms/:param/?',
       '/(e|p|tv|r|c)/:param',
       '/s/*',
       '/display',

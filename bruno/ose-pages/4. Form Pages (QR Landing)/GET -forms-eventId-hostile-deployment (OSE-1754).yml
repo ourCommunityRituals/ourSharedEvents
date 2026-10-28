@@ -1,0 +1,25 @@
+info:
+  name: GET /forms/:eventId?deployment=<closes the script> (OSE-1754)
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/{{testEventId}}?type=register&deployment=%3C%2Fscript%3E%3Cscript%3Ealert(1754)%3C%2Fscript%3E"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody());
+
+        test('OSE-1754: a ?deployment= of the wrong shape never reaches the page', function() { expect(body).to.not.include('alert(1754)'); });
+
+        test('OSE-1754: no hidden deployment field is written for it', function() { expect(body).to.not.include('data-testid=\"form-deployment-id\"'); });"
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

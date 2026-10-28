@@ -1,0 +1,29 @@
+info:
+  name: GET /forms/<id that breaks out of a script string> (OSE-1754)
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/x',alert(1754),'?type=register"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "var body = typeof res.getBody()==='string' ? res.getBody() : JSON.stringify(res.getBody()); var edge = res.getStatus() === 403 && !!res.getHeader('cf-mitigated');
+
+        test('OSE-1754: a refused /forms id answers 404 (or 403 only when the edge challenges a script client)', function() { expect(res.getStatus() === 404 || edge).to.equal(true); });
+
+        test('OSE-1754: the page carries no form', function() { expect(body.toLowerCase()).to.not.include('<form'); });
+
+        test('OSE-1754: nothing from the id reaches the page', function() { expect(body).to.not.include('alert(1754)'); });
+
+        if (res.getStatus() === 404) { test('OSE-1754: the 404 page leaves a way back to the events list', function() { expect(body).to.include('href=\"/events\"'); }); }"
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
