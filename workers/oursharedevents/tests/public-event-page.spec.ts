@@ -664,3 +664,55 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
     expect(html).toContain('data-testid="anonymity-affordance"');
   });
 });
+
+describe('OSE-1760: the page language comes from Accept-Language, by quality value', () => {
+  const eventId = 'evt_ose1760_lang';
+
+  async function get(acceptLanguage?: string): Promise<Response> {
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: 7,
+      endOffsetDays: 8,
+      withFiveW: true,
+    });
+    return SELF.fetch(`https://t.test/events/${eventId}`, {
+      headers: acceptLanguage ? { 'Accept-Language': acceptLanguage } : {},
+    });
+  }
+
+  test('Spanish first: <html lang="es">, Spanish labels, Vary names the header', async () => {
+    const res = await get('es-MX,es;q=0.9,en;q=0.8');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('<html lang="es"');
+    expect(html).toContain('Compartir este evento');
+    expect(res.headers.get('Vary') ?? '').toMatch(/Accept-Language/i);
+  });
+
+  test('English first, or no header: <html lang="en">, English labels', async () => {
+    for (const header of ['en-US,en;q=0.9', undefined]) {
+      const res = await get(header);
+      const html = await res.text();
+      expect(html).toContain('<html lang="en"');
+      expect(html).toContain('Share this event');
+      expect(res.headers.get('Vary') ?? '').toMatch(/Accept-Language/i);
+    }
+  });
+
+  test('quality value, not position, decides: "fr, es;q=0.5" is Spanish', async () => {
+    const res = await get('fr, es;q=0.5');
+    expect(await res.text()).toContain('<html lang="es"');
+  });
+
+  test('a malformed header never breaks the page and falls back to English', async () => {
+    const res = await get(';;;, es;q=abc, *;q=2');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<html lang="en"');
+  });
+
+  test('the language sets no cookie (no cookies on public surfaces)', async () => {
+    const res = await get('es');
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+  });
+});

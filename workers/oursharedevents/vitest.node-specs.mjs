@@ -145,6 +145,9 @@ export const NODE_SPECS = [
   // OSE-1760 — golden renders of the three phase pages in English and Spanish:
   // the language layer must change no byte. Pure over the exported renderers.
   'tests/language-layer-golden.spec.ts',
+  // OSE-1760 — the Accept-Language resolver and the string catalog. Pure, no runtime.
+  'tests/i18n-resolve-language.spec.ts',
+  'tests/i18n-catalog.spec.ts',
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',

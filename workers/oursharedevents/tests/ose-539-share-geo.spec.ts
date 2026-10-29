@@ -105,8 +105,11 @@ describe('OSE-539 L1: static source checks', () => {
     expect(sourceFile('lib/geo-link.ts')).toContain('https://www.google.com/maps/search/');
     expect(sourceFile('lib/geo-link.ts')).toContain('https://maps.apple.com/');
   });
-  test('pages.ts has Spanish share label', () => {
-    expect(sourceFile('handlers/pages.ts')).toContain('Compartir este evento');
+  // OSE-1760: the label moved out of an inline ternary into the language catalog.
+  // Same intent (a Spanish share label exists and the page uses it), one level down.
+  test('the catalog has the Spanish share label, and pages.ts reads it', () => {
+    expect(sourceFile('lib/i18n/catalog.ts')).toContain('Compartir este evento');
+    expect(sourceFile('handlers/pages.ts')).toContain("msg(lang, 'share.label')");
   });
   test('pages.ts uses Web Share API (navigator.share)', () => {
     expect(sourceFile('handlers/pages.ts')).toContain('navigator.share');
