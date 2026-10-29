@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-surface="ose-public">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parish Spring Fundraiser — recap</title>
+  <meta property="og:title" content="Parish Spring Fundraiser" />
+  <meta property="og:description" content="Come support the cause." />
+  <meta property="og:url" content="https://oursharedevents.com/events/evt_golden" />
+  <meta property="og:type" content="event" />
+  <meta property="og:site_name" content="OurSharedEvents" />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Parish Spring Fundraiser" />
+  <meta name="twitter:description" content="Come support the cause." />
+  <meta property="og:event:start_time" content="2026-10-24T23:00:00Z" />
+  <meta property="og:event:end_time" content="2026-10-25T04:59:59.999Z" />
+  <link rel="canonical" href="https://oursharedevents.com/events/evt_golden" />
+  <meta name="description" content="Come support the cause." />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Event","name":"Parish Spring Fundraiser","url":"https://oursharedevents.com/events/evt_golden","startDate":"2026-10-24T23:00:00Z","endDate":"2026-10-25T04:59:59.999Z","eventStatus":"https://schema.org/EventScheduled","location":{"@type":"Place","name":"St. Barnabas Hall","address":"123 Main St"},"description":"Come support the cause."}</script>
+  <link rel="stylesheet" href="/ui.css" />
+  <style>
+    /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
+       [data-brand] on <html> swaps the whole surface. No raw hex here. */
+    [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+    main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: var(--ose-card); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+    .ose-when { color: var(--ose-muted); margin: 0 0 1.25rem; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-card h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+    .ose-card p { margin: 0 0 0.5rem; }
+    .ose-recap-row { margin: 0 0 0.6rem; }
+    .ose-recap-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ose-muted); }
+    /* OSE-657 recap-first: the recap is the hero; suggestions are demoted to a
+       quiet margin — smaller type, muted, set off by a divider, never a card
+       loud enough to compete with the keepsake above it. Palette-agnostic. */
+    .ose-recap-primary { margin: 0 0 1.5rem; }
+    .ose-suggestions { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); }
+
+    .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
+    .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .ose-suggestion-link { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; min-height: 44px; padding: 0.4rem 0; text-decoration: none; color: var(--ose-text); }
+    .ose-suggestion-title { font-size: 0.95rem; }
+    .ose-suggestion-when { font-size: 0.8rem; color: var(--ose-muted); white-space: nowrap; }
+    .ose-venue-next { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); }
+    .ose-suggestions-note { font-size: 0.85rem; color: var(--ose-muted); margin: 0 0 0.5rem; }
+    .ose-suggestions-connect { margin-top: 0.75rem; }
+    .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: var(--on-accent); border-radius: 6px; text-decoration: none; font-weight: 600; }
+    .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
+
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
+    .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus, .ose-calendar-link:focus, .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-calendar-menu { flex: 1 1 120px; }
+    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-summary::-webkit-details-marker { display: none; }
+    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
+    .ose-back { margin: 1.5rem 0 0.5rem; }
+    .ose-back-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-back-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
+    .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
+    .ose-never-who-summary::-webkit-details-marker { display: none; }
+    .ose-never-who-line { color: var(--text); font-weight: 600; }
+    .ose-never-who-trigger { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    .ose-never-who-trigger::after { content: " \25B8"; display: inline-block; text-decoration: none; }
+    .ose-never-who[open] .ose-never-who-trigger::after { content: " \25BE"; }
+    .ose-never-who-summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .ose-never-who-body { padding: 0 0 0.75rem; }
+    .ose-never-who-body p { margin: 0 0 0.5rem; }
+    .ose-never-who-body a { color: var(--accent); }
+
+    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.25rem; }
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
+    .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
+    .ose-sponsor-item:last-child { border-bottom: none; }
+    .ose-sponsor-link { color: var(--accent); font-weight: 600; }
+    .ose-sponsor-name { color: var(--text); font-weight: 600; }
+    /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
+    .ose-section p { margin: 0 0 0.5rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
+  </style>
+</head>
+<body>
+  <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
+    <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    <h1 id="event-title-post" data-testid="event-title-post">Parish Spring Fundraiser</h1>
+    
+    <p class="ose-when" data-testid="event-when-post">Happened Saturday, October 24, 2026 · 6:00 PM CDT &middot; St. Barnabas Hall</p>
+    
+
+    <!-- OSE-1136 / OSE-657: the recap is the canonical 5W table in PAST TENSE and
+       the keepsake hero. Card order is the same facts-first sequence the pre/live
+       renders use — WHAT → WHERE → WHO → HOW MUCH — then the by-the-numbers
+       keepsake. Sponsor thanks sits above, by the title (OSE-1513). HOW is intentionally dropped (nothing to "join"
+       once it is over); WHY moves below the ask. This region is a HARD layout
+       invariant: it MUST precede the suggestions margin below, or
+       post-event-recap-first.spec.ts fails. -->
+    <div class="ose-recap-primary" data-testid="recap-primary" data-region="recap">
+      <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
+      <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
+        <h2 id="recap-heading">What this was</h2>
+        <p data-testid="recap-what">Come support the cause.</p>
+        
+        
+      </section>
+
+      <section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
+             <h2 id="where-heading-post">Where</h2>
+             <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Map of St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />
+             <p><strong>St. Barnabas Hall</strong></p>
+             <p>123 Main St</p>
+           </section>
+
+      <section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
+             <h2 id="who-heading-post">Who</h2>
+             
+             <p data-testid="event-who-host-post">The Parish Council</p>
+             
+           </section>
+
+      
+
+      
+    </div>
+
+    <!-- OSE-657 SUBORDINATE margin: the ask + return loop. Share sits here with
+       the return loop (share the recap, find the next one) — curated, bounded (an
+       <aside>, visually demoted, always after the recap), never a full listing. -->
+    <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
+      <div class="ose-event-actions" data-testid="event-actions">
+  <button class="ose-share-btn" data-testid="share-btn" type="button" data-share-url="https://oursharedevents.com/events/evt_golden" data-share-title="Parish Spring Fundraiser">Share this event</button>
+<script nonce="goldennonce">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='Link copied!';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>
+  
+</div>
+      <h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
+        <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">See what's coming up</a>
+      <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
+        <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
+        <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/events/evt_golden/updates">Keep me posted</a>
+      </section>
+    </aside>
+
+    <!-- WHY — deeper detail, below the ask (mirrors pre/live: facts → ask → detail). -->
+    
+
+    <nav class="ose-back" aria-label="Back">
+      <a class="ose-back-btn" data-testid="event-back" href="/events">Back</a>
+    </nav>
+<script nonce="goldennonce">(function(){var a=document.querySelector('[data-testid="event-back"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>
+
+    <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="event">
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>
+    <div class="ose-never-who-body" data-testid="never-who-body">
+        <p>
+      You're part of the group, anonymously. OurSharedEvents tracks when
+      groups gather &mdash; never who you are. Event hosts and sponsors see
+      corridors and venues, not people. The link you followed counted as a
+      single click; nothing about your device, location, or identity was
+      collected to display this page.
+    </p>
+    </div>
+  </details>
+  </main>
+</body>
+</html>

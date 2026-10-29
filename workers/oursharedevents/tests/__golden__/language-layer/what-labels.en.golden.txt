@@ -1,0 +1,7 @@
+donation: Donate →
+league: View the league →
+workshop: Register →
+substack: Subscribe →
+tickets: Get tickets →
+menu: Menu & reservations →
+website: Visit the site →
