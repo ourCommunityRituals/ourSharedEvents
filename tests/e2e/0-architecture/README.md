@@ -200,6 +200,7 @@ and is wired — and let the mechanism do the scanning.
 | `export-grain.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `geo-resolution.invariant.spec.ts` | #2 hyperlocal_geo_resolution |
 | `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `i18n-catalog-only.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `log-redaction.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `migration-monotonicity.invariant.spec.ts` | #19 migration_monotonicity |
 | `monetization-inert.invariant.spec.ts` | #6 inert_monetization_hooks |

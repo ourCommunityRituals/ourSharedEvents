@@ -1,0 +1,7 @@
+donation: Donar →
+league: Ver la liga →
+workshop: Inscribirse →
+substack: Suscribirse →
+tickets: Comprar entradas →
+menu: Menú y reservas →
+website: Visitar el sitio →

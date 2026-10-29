@@ -41,6 +41,9 @@ import {
 import { injectLegalFooter } from '../lib/legal-footer';
 import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
 import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
+import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
+import { msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
+import { resolveLanguage } from '../lib/i18n/resolve-language';
 import {
   parseDiscoveryFilters,
   applyDiscoveryFilters,
@@ -515,21 +518,17 @@ function clearsFloor(raw: number): boolean {
 // Same destination vocabulary the poster's typed QR slots use.
 // Exported so the what-url-types drift guard can assert this map stays a
 // superset of the canonical WHAT_URL_TYPES allowlist (strict-in / lenient-out).
-export const WHAT_LINK_LABELS: Record<string, { en: string; es: string }> = {
-  donation: { en: 'Donate →', es: 'Donar →' },
-  league: { en: 'View the league →', es: 'Ver la liga →' },
-  workshop: { en: 'Register →', es: 'Inscribirse →' },
-  substack: { en: 'Subscribe →', es: 'Suscribirse →' },
-  tickets: { en: 'Get tickets →', es: 'Comprar entradas →' },
-  menu: { en: 'Menu & reservations →', es: 'Menú y reservas →' },
-  website: { en: 'Visit the site →', es: 'Visitar el sitio →' },
-};
+// OSE-1760: the text itself lives in the language catalog (lib/i18n/catalog.ts);
+// this map is derived from it so the drift guard keeps its export.
+export const WHAT_LINK_LABELS: Record<string, Record<Lang, string>> = Object.fromEntries(
+  WHAT_TYPES.map((type) => [type, msgAll(`what.${type}`)])
+);
 
 function renderWhatLink(
   rawUrl: string | null,
   enabled: boolean | number | null,
   type: string | null,
-  lang: string,
+  lang: Lang,
   testid: string
 ): string {
   // R3 explicit ENABLE gate: the link renders only when the organizer turned it
@@ -537,8 +536,8 @@ function renderWhatLink(
   if (!enabled) return '';
   const url = validateLogoUrl(rawUrl).url;
   if (!url) return '';
-  const key = typeof type === 'string' && type in WHAT_LINK_LABELS ? type : 'website';
-  const label = WHAT_LINK_LABELS[key][lang === 'es' ? 'es' : 'en'];
+  const key = WHAT_TYPES.find((t) => t === type) ?? 'website';
+  const label = msg(lang, `what.${key}`);
   return `<p><a class="ose-what-link" data-testid="${testid}" href="${esc(url)}" target="_blank" rel="noopener noreferrer nofollow">${label}</a></p>`;
 }
 
@@ -662,10 +661,9 @@ function buildSearchMeta(row: PublicEventRow, shareUrl: string): string {
   return lines.join('\n');
 }
 
-/** Detect preferred language from Accept-Language header. Returns 'es' when Spanish is first preference, 'en' otherwise. */
-function preferredLang(request: Request): 'en' | 'es' {
-  const al = request.headers.get('Accept-Language') ?? '';
-  return /^es\b/i.test(al.split(',')[0].trim()) ? 'es' : 'en';
+/** OSE-1760: the page language, from the Accept-Language header by quality value (lib/i18n). */
+function preferredLang(request: Request): Lang {
+  return resolveLanguage(request.headers.get('Accept-Language'));
 }
 
 /**
@@ -691,11 +689,11 @@ function renderShareBlock(
   shareUrl: string,
   title: string,
   nonce: string,
-  lang: 'en' | 'es',
+  lang: Lang,
   inert = false
 ): string {
-  const shareLabel = lang === 'es' ? 'Compartir este evento' : 'Share this event';
-  const copiedLabel = lang === 'es' ? 'Enlace copiado' : 'Link copied!';
+  const shareLabel = msg(lang, 'share.label');
+  const copiedLabel = msg(lang, 'share.copied');
   // OSE-1355: in an admin draft preview the button is shown (it is what the
   // public will see) but switched off — no URL, no script. A draft's link is
   // not public yet, so there is nothing to share.
@@ -712,11 +710,11 @@ function renderEventActions(
   row: PublicEventRow,
   shareUrl: string,
   nonce: string,
-  lang: 'en' | 'es',
+  lang: Lang,
   opts: { calendar?: boolean; inert?: boolean } = {}
 ): string {
-  const calendarLabel = lang === 'es' ? 'Agregar al calendario' : 'Add to calendar';
-  const icsLabel = lang === 'es' ? 'Apple u Outlook' : 'Apple or Outlook';
+  const calendarLabel = msg(lang, 'calendar.label');
+  const icsLabel = msg(lang, 'calendar.ics');
   const calendarHref = `/events/${esc(row.id)}/calendar.ics`;
   // OSE-1358: one "Add to calendar" control offering the standard targets. A
   // CSP-safe <details> disclosure (no JS) — Google Calendar (Android + web) via a
@@ -921,20 +919,8 @@ function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): s
 // Register names what it collects. Check-in keeps its promise only where its
 // label ("Check in at this event") does not already say "anon". Short labels
 // (owner 2026-10-11): "Register" and "Count me in, anon".
-const CHOICE_COPY = {
-  en: {
-    registerNote: 'Asks for your name and email.',
-    checkinLabel: 'Count me in, anon',
-    checkinNote: 'Counted, never named.',
-    heading: 'How would you like to take part?',
-  },
-  es: {
-    registerNote: 'Pide tu nombre y correo.',
-    checkinLabel: 'Cuenta conmigo, de forma anónima',
-    checkinNote: 'Te contamos, nunca te nombramos.',
-    heading: '¿Cómo quieres participar?',
-  },
-} as const;
+// OSE-1760: the copy itself is in the language catalog (lib/i18n/catalog.ts,
+// keys `choices.*`); the notes and labels above describe what each says.
 
 /**
  * OSE-1518: plain choices under the facts: register, or count me in
@@ -951,10 +937,15 @@ function renderEventChoices(
   row: PublicEventRow,
   ctx: EventFormContext,
   phase: 'pre' | 'live',
-  lang: 'en' | 'es',
+  lang: Lang,
   inert: boolean
 ): string {
-  const t = CHOICE_COPY[lang];
+  const t = {
+    registerNote: msg(lang, 'choices.registerNote'),
+    checkinLabel: msg(lang, 'choices.checkinLabel'),
+    checkinNote: msg(lang, 'choices.checkinNote'),
+    heading: msg(lang, 'choices.heading'),
+  };
   const first = phase === 'pre' ? 'event-rsvp' : 'event-checkin';
   const href = (type: EventFormType) =>
     inert ? '' : ` href="${esc(eventFormHref(row.id, { type, deploymentId: ctx.deploymentId }))}"`;
@@ -1078,7 +1069,7 @@ export function renderPreEventHtml(
   social?: EventPageSocialData,
   opts?: {
     nonce?: string;
-    lang?: 'en' | 'es';
+    lang?: Lang;
     formContext?: EventFormContext;
     /** OSE-1355 admin draft preview: noindex, and the RSVP + share are inert. */
     preview?: boolean;
@@ -1087,7 +1078,7 @@ export function renderPreEventHtml(
   }
 ): string {
   const nonce = opts?.nonce ?? '';
-  const lang = opts?.lang ?? 'en';
+  const lang = opts?.lang ?? DEFAULT_LANG;
   const formContext = opts?.formContext ?? { type: 'register' };
   const preview = opts?.preview === true;
   const title = esc(row.title);
@@ -1123,7 +1114,7 @@ export function renderPreEventHtml(
     row.lon,
     row.location,
     row.where_address,
-    lang === 'es' ? 'Cómo llegar' : 'Get directions'
+    msg(lang, 'directions.pre')
   );
 
   return `<!DOCTYPE html>
@@ -1184,7 +1175,7 @@ ${SPONSOR_LIST_CSS}
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
            <h2 id="what-heading">What</h2>
            ${whatShort ? `<p>${whatShort}</p>` : ''}
-           ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${lang === 'es' ? '▶ Ver el video' : '▶ Watch the video'}</a></p>` : ''}
+           ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${msg(lang, 'video.watch')}</a></p>` : ''}
            ${whatLink}
          </section>`
         : ''
@@ -1286,14 +1277,14 @@ export function renderEventLiveHtml(
   social?: EventPageSocialData,
   opts?: {
     nonce?: string;
-    lang?: 'en' | 'es';
+    lang?: Lang;
     formContext?: EventFormContext;
     /** OSE-1518: other events at this venue, listed below the deeper detail. */
     nextEvents?: NextEventRow[];
   }
 ): string {
   const nonce = opts?.nonce ?? '';
-  const lang = opts?.lang ?? 'en';
+  const lang = opts?.lang ?? DEFAULT_LANG;
   const formContext = opts?.formContext ?? { type: 'checkin' };
   const title = esc(row.title);
   // OSE-1313 — keep the scheduled time visible once the page flips to live.
@@ -1318,7 +1309,7 @@ export function renderEventLiveHtml(
     row.lon,
     row.location,
     row.where_address,
-    lang === 'es' ? 'Cómo llegar' : 'Navigate now',
+    msg(lang, 'directions.live'),
     'geo-link-live'
   );
 
@@ -1530,10 +1521,10 @@ export function renderPostEventHtml(
   shareUrl: string,
   nextEvents: NextEventRow[],
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: 'en' | 'es' }
+  opts?: { nonce?: string; lang?: Lang }
 ): string {
   const nonce = opts?.nonce ?? '';
-  const lang = opts?.lang ?? 'en';
+  const lang = opts?.lang ?? DEFAULT_LANG;
   const title = esc(row.title);
   // OSE-1136: the recap is the THIRD phase of the canonical 5W table, past-tense —
   // same fields + fallbacks as the pre-event render. WHAT falls back to description
@@ -2115,6 +2106,10 @@ export async function handlePublicEventPage(
     headers: {
       ...securityHeaders(nonce),
       'Cache-Control': publicEventCacheControl({ status: row.status, ...phaseTimes }, phase),
+      // OSE-1760: the body depends on the Accept-Language header, so a cache must
+      // keep one copy per language. (The page is already private; this keeps a
+      // browser from replaying one language after the visitor changes theirs.)
+      Vary: 'Accept-Language',
       ...(offMap ? { 'X-Robots-Tag': 'noindex' } : {}),
     },
   });

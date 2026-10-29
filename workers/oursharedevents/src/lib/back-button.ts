@@ -17,8 +17,11 @@
  */
 
 import { escapeHtml as esc } from './html-escape';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
+import { msg, msgAll } from './i18n/catalog';
 
-export const BACK_LABELS = { en: 'Back', es: 'Volver' } as const;
+// OSE-1760: the text is in the language catalog (key `back.label`).
+export const BACK_LABELS: Record<Lang, string> = msgAll('back.label');
 
 /**
  * The outlined, full-width Back button. It reads the @ocr/ui role tokens
@@ -35,7 +38,7 @@ export interface BackButtonOptions {
   fallbackHref: string;
   /** The page's CSP nonce. Leave it out when the page's html() adds one to every script. */
   nonce?: string;
-  lang?: 'en' | 'es';
+  lang?: Lang;
   /** Admin draft preview: shown, but switched off. */
   inert?: boolean;
   testid?: string;
@@ -44,7 +47,7 @@ export interface BackButtonOptions {
 }
 
 export function renderBackButton(opts: BackButtonOptions): string {
-  const label = BACK_LABELS[opts.lang ?? 'en'];
+  const label = msg(opts.lang ?? DEFAULT_LANG, 'back.label');
   const testid = opts.testid ?? 'page-back';
   const cls = opts.className ?? 'ose-back-btn';
   if (opts.inert) {
