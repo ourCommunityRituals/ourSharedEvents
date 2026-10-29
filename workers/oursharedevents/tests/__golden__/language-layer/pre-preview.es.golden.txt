@@ -55,6 +55,9 @@
     .ose-back { margin: 1.5rem 0 0.5rem; }
     .ose-back-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-back-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
+    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
+    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
 
     .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
     .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
@@ -158,6 +161,8 @@
     </div>
   </details>
 </div>
+
+    
 
     
 

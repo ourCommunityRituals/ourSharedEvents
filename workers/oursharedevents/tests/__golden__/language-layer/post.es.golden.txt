@@ -16,6 +16,9 @@
   <meta property="og:event:start_time" content="2026-10-24T23:00:00Z" />
   <meta property="og:event:end_time" content="2026-10-25T04:59:59.999Z" />
   <link rel="canonical" href="https://oursharedevents.com/events/evt_golden" />
+  <link rel="alternate" hreflang="en" href="https://oursharedevents.com/events/evt_golden/parish-spring-fundraiser" />
+  <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/events/evt_golden/parish-spring-fundraiser" />
+  <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/events/evt_golden/parish-spring-fundraiser" />
   <meta name="description" content="Come support the cause." />
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Event","name":"Parish Spring Fundraiser","url":"https://oursharedevents.com/events/evt_golden","startDate":"2026-10-24T23:00:00Z","endDate":"2026-10-25T04:59:59.999Z","eventStatus":"https://schema.org/EventScheduled","location":{"@type":"Place","name":"St. Barnabas Hall","address":"123 Main St"},"description":"Come support the cause."}</script>
   <link rel="stylesheet" href="/ui.css" />
@@ -63,6 +66,9 @@
     .ose-back { margin: 1.5rem 0 0.5rem; }
     .ose-back-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-back-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
+    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
+    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
 
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
     .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
@@ -152,6 +158,10 @@
 
     <!-- WHY — deeper detail, below the ask (mirrors pre/live: facts → ask → detail). -->
     
+
+    <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
+      <a lang="en" hreflang="en" data-testid="language-switch-en" href="/events/evt_golden/parish-spring-fundraiser">English</a>
+    </nav>
 
     <nav class="ose-back" aria-label="Volver">
       <a class="ose-back-btn" data-testid="event-back" href="/events">Volver</a>

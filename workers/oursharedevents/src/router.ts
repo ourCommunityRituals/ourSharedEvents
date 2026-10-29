@@ -15,6 +15,11 @@
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
+ *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
+ *                                  the visitor's explicit choice and beats Accept-Language; English
+ *                                  stays unprefixed. Only pages on the language layer exist under a
+ *                                  prefix (lib/i18n/path-prefix.ts); any other path under one is a 404.
+ *   GET /es/e/:code              → 302 to the Spanish event page; counted as /e/:code is
  *   GET /events/:id/calendar.ics → public event calendar download
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
@@ -307,6 +312,7 @@ import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-b
 import { handleAdminDisplayConfig, handleDisplayConfig } from './handlers/display-config';
 import { handleAdminEventCode, handleEventCodeResolve } from './handlers/event-code';
 import { EVENT_CODE_SCREENS, type EventCodeScreen } from './lib/event-code';
+import { matchLanguagePage, parseLangPrefix } from './lib/i18n/path-prefix';
 import {
   handleAdminCreatePosterDeployment,
   handleAdminListPosterDeployments,
@@ -591,6 +597,28 @@ export async function route(
     return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
       handleQrScan(req, e, qrToken, countable)
     )(request, env);
+  }
+
+  // ── Language-prefixed pages (OSE-1761) — `/es/events/<id>`, `/es/e/<code>` ──
+  // The visitor's explicit choice, and it beats Accept-Language. Only a page on
+  // the language layer is matched here (lib/i18n/path-prefix.ts); every other
+  // path under a prefix, and any prefix that is not a listed language, matches no
+  // route below and gets the ordinary 404. So a prefix never reaches admin, API,
+  // /q, /s or any other short link, and the admin write guard (non-GET only) and
+  // the Access check are not in its path. The language is read from the path and
+  // forgotten: no cookie, nothing stored.
+  const langPrefix = method === 'GET' || method === 'HEAD' ? parseLangPrefix(pathname) : null;
+  if (langPrefix) {
+    const page = matchLanguagePage(langPrefix.rest);
+    if (page?.kind === 'event') {
+      return handlePublicEventPage(request, env, page.id, page.name, langPrefix.lang);
+    }
+    if (page?.kind === 'share') {
+      // The same count and per-caller limit as /e/<code>: a share open, what + when.
+      return publicCountLimited('event-code-share', (req, e: typeof env, countable) =>
+        handleEventCodeResolve(req, e, 'share', page.code, countable, langPrefix.lang)
+      )(request, env);
+    }
   }
 
   // ── Event codes (OSE-1684) — `/e|p|tv|r|c/<code>` ────────────────────────

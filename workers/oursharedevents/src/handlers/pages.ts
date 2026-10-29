@@ -44,6 +44,8 @@ import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
 import { msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
 import { resolveLanguage } from '../lib/i18n/resolve-language';
+import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
+import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
 import {
   parseDiscoveryFilters,
   applyDiscoveryFilters,
@@ -632,6 +634,11 @@ function buildOgMeta(opts: {
 function buildSearchMeta(row: PublicEventRow, shareUrl: string): string {
   const description = row.what_short || row.description || '';
   const lines = [`  ${canonicalLinkTagFor(shareUrl)}`];
+  // OSE-1761: each language page names its siblings, and the unprefixed address
+  // is the default, so a search engine and a shared card show the right one.
+  for (const alt of languageAlternates(new URL(shareUrl).origin, eventPagePath(row.id, row.slug))) {
+    lines.push(`  <link rel="alternate" hreflang="${alt.hreflang}" href="${esc(alt.href)}" />`);
+  }
   if (description) lines.push(`  <meta name="description" content="${esc(description)}" />`);
   const startDate = ogEventTime(row.starts_at ?? row.start_date);
   if (startDate) {
@@ -741,8 +748,10 @@ function renderEventActions(
   // a share of the event (owner 2026-10-09). The canonical address, og:url and
   // the calendar entry keep the readable /events/<id>/<name>. No code yet
   // (an older event admin has not opened): the readable address is shared.
+  // OSE-1761: the link keeps the page's language prefix, so it opens in the
+  // sender's language (/es/e/<code>; English stays /e/<code>).
   const shareLink = row.share_code
-    ? `${new URL(shareUrl).origin}/e/${encodeURIComponent(row.share_code)}`
+    ? `${new URL(shareUrl).origin}${withLangPrefix(lang, `/e/${encodeURIComponent(row.share_code)}`)}`
     : shareUrl;
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
@@ -768,6 +777,22 @@ function eventFormContextFromRequest(request: Request, fallback: EventFormType):
   const rawDeployment = url.searchParams.get('deployment');
   const deploymentId = isValidDeploymentId(rawDeployment) ? rawDeployment : null;
   return { type, deploymentId };
+}
+
+/**
+ * OSE-1761: the query the language switch carries to the other language's page,
+ * and nothing else. These two are the only parameters the page reads (they pick
+ * its form link and its poster deployment), so a switch does not drop them and
+ * never reflects anything else the request carried.
+ */
+function carriedQuery(url: URL): string {
+  const carried = new URLSearchParams();
+  const type = url.searchParams.get('type');
+  if (EVENT_FORM_TYPES.has(type as EventFormType)) carried.set('type', type as string);
+  const deployment = url.searchParams.get('deployment');
+  if (isValidDeploymentId(deployment)) carried.set('deployment', deployment as string);
+  const text = carried.toString();
+  return text ? `?${text}` : '';
 }
 
 function eventFormHref(eventId: string, ctx: EventFormContext): string {
@@ -859,7 +884,8 @@ const EVENT_ACTIONS_CSS =
     .ose-calendar-summary::-webkit-details-marker { display: none; }
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
-  BACK_BUTTON_CSS;
+  BACK_BUTTON_CSS +
+  LANGUAGE_SWITCH_CSS;
 
 /**
  * OSE-1518: the plain choices. Register (or check-in while the event is on)
@@ -1075,6 +1101,8 @@ export function renderPreEventHtml(
     preview?: boolean;
     /** OSE-1518: other events at this venue, listed below the deeper detail. */
     nextEvents?: NextEventRow[];
+    /** OSE-1761: the query the language switch carries over (`carriedQuery`). */
+    pageQuery?: string;
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -1247,6 +1275,8 @@ ${SPONSOR_LIST_CSS}
 
     ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
+    ${preview ? '' : renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
+
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, inert: preview, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
@@ -1281,6 +1311,8 @@ export function renderEventLiveHtml(
     formContext?: EventFormContext;
     /** OSE-1518: other events at this venue, listed below the deeper detail. */
     nextEvents?: NextEventRow[];
+    /** OSE-1761: the query the language switch carries over (`carriedQuery`). */
+    pageQuery?: string;
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -1440,6 +1472,8 @@ ${SPONSOR_LIST_CSS}
 
     ${renderNextAtVenue(opts?.nextEvents, venueDisplay)}
 
+    ${renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
+
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
@@ -1521,7 +1555,7 @@ export function renderPostEventHtml(
   shareUrl: string,
   nextEvents: NextEventRow[],
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: Lang }
+  opts?: { nonce?: string; lang?: Lang; pageQuery?: string }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -1783,6 +1817,8 @@ ${SPONSOR_LIST_CSS}
         : ''
     }
 
+    ${renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
+
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
     ${ANONYMITY_AFFORDANCE}
@@ -1932,7 +1968,9 @@ export async function handlePublicEventPage(
   env: PublicEventEnv,
   eventId: string,
   /** The name after the id in /events/<id>/<name> (OSE-1684); absent on /events/<id>. */
-  requestedSlug?: string
+  requestedSlug?: string,
+  /** OSE-1761: the language the visitor chose in the path (/es/...). It beats the header. */
+  pathLang?: Lang
 ): Promise<Response> {
   if (!env.DB) {
     return renderErrorPage(
@@ -2028,7 +2066,11 @@ export async function handlePublicEventPage(
   // so a draft answers the same 404 whatever name is asked and never reveals
   // its real one.
   if (requestedSlug !== undefined) {
-    const own = eventPagePath(encodeURIComponent(row.id), row.slug);
+    // OSE-1761: a name forwarded under a language prefix keeps the prefix.
+    const own = withLangPrefix(
+      pathLang ?? DEFAULT_LANG,
+      eventPagePath(encodeURIComponent(row.id), row.slug)
+    );
     const asked = new URL(request.url);
     if (asked.pathname !== own) {
       return new Response(null, { status: 301, headers: { Location: own + asked.search } });
@@ -2049,11 +2091,15 @@ export async function handlePublicEventPage(
   // current CSP allows `style-src 'unsafe-inline'` (see CSP-tightening
   // follow-on story) — a style nonce would be theater today.
   const nonce = generateNonce();
-  const lang = preferredLang(request);
+  // OSE-1761: an explicit prefix wins; a bare address still negotiates by header.
+  const lang = pathLang ?? preferredLang(request);
   const url = new URL(request.url);
+  const pageQuery = carriedQuery(url);
   // Production names one host (the zone also routes www.), so the share link,
-  // og:url and the canonical (buildSearchMeta) always agree.
-  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
+  // og:url and the canonical (buildSearchMeta) always agree. The address names
+  // the language the body is in, so a Spanish body reached on a bare address
+  // still has its /es/ page as the canonical.
+  const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${withLangPrefix(lang, eventPagePath(row.id, row.slug))}`;
   const preEventFormContext = eventFormContextFromRequest(request, 'register');
   const liveEventFormContext = eventFormContextFromRequest(request, 'checkin');
 
@@ -2071,6 +2117,7 @@ export async function handlePublicEventPage(
       lang,
       formContext: preEventFormContext,
       nextEvents,
+      pageQuery,
     });
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl, social, {
@@ -2078,6 +2125,7 @@ export async function handlePublicEventPage(
       lang,
       formContext: liveEventFormContext,
       nextEvents,
+      pageQuery,
     });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
@@ -2086,7 +2134,7 @@ export async function handlePublicEventPage(
     // OSE-657: a curated few upcoming events at the same venue — the subtle
     // margin, bounded by MAX_POST_EVENT_SUGGESTIONS (never an exhaustive list).
     // Read above, in parallel with the social data.
-    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
+    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang, pageQuery });
   }
 
   // OSE-1012/1013: the /events/:id page is where the demo event actually renders
@@ -2106,10 +2154,12 @@ export async function handlePublicEventPage(
     headers: {
       ...securityHeaders(nonce),
       'Cache-Control': publicEventCacheControl({ status: row.status, ...phaseTimes }, phase),
-      // OSE-1760: the body depends on the Accept-Language header, so a cache must
-      // keep one copy per language. (The page is already private; this keeps a
-      // browser from replaying one language after the visitor changes theirs.)
-      Vary: 'Accept-Language',
+      // OSE-1760: on a bare address the body depends on the Accept-Language
+      // header, so a cache must keep one copy per language. (The page is already
+      // private; this keeps a browser from replaying one language after the
+      // visitor changes theirs.) OSE-1761: under a language prefix the address
+      // alone decides the language and the header is not read.
+      ...(pathLang ? {} : { Vary: 'Accept-Language' }),
       ...(offMap ? { 'X-Robots-Tag': 'noindex' } : {}),
     },
   });
