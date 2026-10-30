@@ -157,11 +157,11 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     expect(box?.height ?? 0, 'target height').toBeGreaterThanOrEqual(44);
     expect(box?.width ?? 0, 'target width').toBeGreaterThanOrEqual(44);
     await toEnglish.click();
-    await expect(page).toHaveURL(new RegExp(`${BASE_URL}${readable}$`));
+    await expect(page).toHaveURL(`${BASE_URL}${readable}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
     await page.locator('[data-testid="language-switch-es"]').click();
-    await expect(page).toHaveURL(new RegExp(`/es${readable}$`));
+    await expect(page).toHaveURL(`${BASE_URL}/es${readable}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'es');
 
     const cookies = await page.context().cookies();
