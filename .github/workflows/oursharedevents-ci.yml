@@ -2459,6 +2459,7 @@ jobs:
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4g Launch Story Smoke | \`${{ steps.launch-story-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4i Language Path Prefix | \`${{ steps.language-path-prefix.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
       # Each leg publishes a check-run for the gates IT ran, so a red names its own
@@ -2504,6 +2505,7 @@ jobs:
               post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
               post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
               post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
+              post "T4i: Language Path Prefix"                        "${{ steps.language-path-prefix.outcome }}"
               ;;
           esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
