@@ -2380,6 +2380,27 @@ jobs:
             tests/e2e/2-pages/poster-print.data.spec.ts
         timeout-minutes: 5
 
+      # OSE-1761: the language in the URL path. A browser against the deployed
+      # Worker: the /es/ page, the switch as a plain link, a shared link that keeps
+      # its prefix, a printed code that does not change, and the paths a prefix must
+      # never reach. The router itself is proved at the worker layer.
+      - name: 'T4i: Language Path Prefix'
+        if: matrix.section == 'surfaces'
+        id: language-path-prefix
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PW_REQUIRE_PRECONDITIONS: '1'
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4i: Language Path Prefix' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/language-path-prefix.spec.ts
+        timeout-minutes: 6
+
       # OSE-1470: the T4 suites send CF Access / admin credentials and mint a
       # CF_Authorization cookie. Refuse to upload anything that recorded one.
       # Prints only the file + pattern name; the upload runs only if this passes.
