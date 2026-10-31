@@ -15,6 +15,16 @@ export type Lang = (typeof LANGUAGES)[number];
 
 export const DEFAULT_LANG: Lang = 'en';
 
+/**
+ * Each language's name in that language (OSE-1761). A language switch shows
+ * these, so a reader finds their own language whatever the page is in. They are
+ * names, not translations, and are not part of the message catalog.
+ */
+export const LANGUAGE_NAMES: Record<Lang, string> = {
+  en: 'English',
+  es: 'Español',
+};
+
 export function isLang(value: unknown): value is Lang {
   return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value);
 }

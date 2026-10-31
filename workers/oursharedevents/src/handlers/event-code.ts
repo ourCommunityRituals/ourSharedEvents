@@ -37,6 +37,8 @@ import {
 import { type ShareScreen, isLinkPreviewRequest, recordShareOpen } from '../lib/share-count';
 import { eventPhaseOf } from '../lib/event-enrich';
 import { eventFormPath, eventPagePath } from '../lib/canonical';
+import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
+import { withLangPrefix } from '../lib/i18n/path-prefix';
 import { renderErrorPage } from './pages';
 import { corsHeaders } from '../lib/cors';
 import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -120,12 +122,18 @@ function unavailablePage(): Response {
   );
 }
 
-function targetFor(screen: EventCodeScreen, row: CodeEventRow, isPublic: boolean): string {
+function targetFor(
+  screen: EventCodeScreen,
+  row: CodeEventRow,
+  isPublic: boolean,
+  lang: Lang
+): string {
   const id = encodeURIComponent(row.id);
   switch (screen) {
     case 'share':
-      // A draft gets the plain address (and its 404), never its name.
-      return isPublic ? eventPagePath(id, row.slug) : `/events/${id}`;
+      // A draft gets the plain address (and its 404), never its name. OSE-1761:
+      // /es/e/<code> lands on the Spanish page; only the event page has one.
+      return withLangPrefix(lang, isPublic ? eventPagePath(id, row.slug) : `/events/${id}`);
     case 'poster':
       return `/events/${id}/poster`;
     case 'tv':
@@ -146,7 +154,9 @@ export async function handleEventCodeResolve(
   env: EventCodeEnv,
   screen: EventCodeScreen,
   raw: string,
-  countable = false
+  countable = false,
+  /** OSE-1761: the language prefix the short link was opened under (`/es/e/<code>`). */
+  lang: Lang = DEFAULT_LANG
 ): Promise<Response> {
   const code = normalizeEventCode(raw);
   if (!code) return notFoundPage();
@@ -205,7 +215,7 @@ export async function handleEventCodeResolve(
 
   return new Response(null, {
     status: 302,
-    headers: { Location: targetFor(screen, row, isPublic), 'Cache-Control': 'no-store' },
+    headers: { Location: targetFor(screen, row, isPublic, lang), 'Cache-Control': 'no-store' },
   });
 }
 

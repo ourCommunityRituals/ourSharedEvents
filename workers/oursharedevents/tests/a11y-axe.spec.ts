@@ -14,7 +14,12 @@ import {
   handlePosterPage,
   handlePublicPage,
   handleLandingPage,
+  renderPreEventHtml,
+  renderEventLiveHtml,
+  renderPostEventHtml,
+  type PublicEventRow,
 } from '../src/handlers/pages';
+import { LANGUAGE_SWITCH_CSS } from '../src/lib/i18n/language-switch';
 import { handleFormPage } from '../src/handlers/form-pages';
 import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
 import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
@@ -196,5 +201,73 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
       expiresIso: '2026-10-01T12:00:00Z',
     });
     await scanPage('Sponsor home page (populated)', page);
+  });
+});
+
+// OSE-1761: the event page under a language prefix, with the language switch.
+// The page is rendered the way /es/events/<id> renders it (Spanish, canonical and
+// hreflang in the head, the switch above Back). axe checks the page language is a
+// valid code, the language-named parts are valid, and nothing in the switch is a
+// critical or serious violation. jsdom cannot compute size, so the 44 px and
+// 16 px floors are asserted on the switch's own stylesheet.
+describe('A11Y-7 / OSE-1761: event page in Spanish with the language switch', () => {
+  const row: PublicEventRow = {
+    id: 'evt_a11y',
+    brand_id: 'root',
+    title: 'Feria de primavera',
+    slug: 'feria-de-primavera',
+    status: 'active',
+    description: 'Una feria del barrio.',
+    location: 'Salón San Bernabé',
+    start_date: '2026-10-24',
+    end_date: '2026-10-24',
+    timezone: 'America/Chicago',
+    starts_at: '2026-10-24T23:00:00Z',
+    what_short: 'Ven a apoyar la causa.',
+    who_host: 'El consejo parroquial',
+    why_purpose: null,
+    how_details: null,
+    where_address: '123 Main St',
+    who_story: null,
+    who_image_url: null,
+    what_video_url: null,
+    what_url: null,
+    what_url_enabled: 0,
+    what_url_type: null,
+    lat: 41.7,
+    lon: -87.7,
+    price_cents: null,
+    price_model: null,
+    price_note: null,
+  };
+  const SHARE = 'https://t.test/es/events/evt_a11y/feria-de-primavera';
+
+  test('pre-event page', async () => {
+    const html = renderPreEventHtml(row, SHARE, undefined, { lang: 'es', pageQuery: '' });
+    await scanPage('Spanish pre-event page', html);
+    expect(document.documentElement.getAttribute('lang')).toBe('es');
+    const link = document.querySelector('[data-testid="language-switch-en"]');
+    expect(link?.getAttribute('lang')).toBe('en');
+    expect(link?.textContent).toBe('English');
+  });
+
+  test('live page', async () => {
+    await scanPage(
+      'Spanish live page',
+      renderEventLiveHtml(row, SHARE, undefined, { lang: 'es', pageQuery: '' })
+    );
+  });
+
+  test('post-event page', async () => {
+    await scanPage(
+      'Spanish post-event page',
+      renderPostEventHtml(row, SHARE, [], undefined, { lang: 'es', pageQuery: '' })
+    );
+  });
+
+  test('the switch keeps the 44 px target and the 16 px text floor', () => {
+    expect(LANGUAGE_SWITCH_CSS).toMatch(/\.ose-lang a \{[^}]*min-height: 44px/);
+    expect(LANGUAGE_SWITCH_CSS).toMatch(/\.ose-lang a \{[^}]*min-width: 44px/);
+    expect(LANGUAGE_SWITCH_CSS).toMatch(/\.ose-lang a \{[^}]*font-size: 1rem/);
   });
 });
