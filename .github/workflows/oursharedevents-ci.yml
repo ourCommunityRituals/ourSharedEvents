@@ -881,7 +881,8 @@ jobs:
             tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts \
             tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts \
             tests/e2e/0-architecture/workflow-injection.invariant.spec.ts \
-            tests/e2e/0-architecture/cookie-setters.invariant.spec.ts
+            tests/e2e/0-architecture/cookie-setters.invariant.spec.ts \
+            tests/e2e/0-architecture/timestamp-precision.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
       # Real browser engine, no deploy. The webServer in

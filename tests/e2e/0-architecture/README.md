@@ -219,6 +219,7 @@ and is wired — and let the mechanism do the scanning.
 | `sponsor-signal-never-who.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `tenant-isolation.invariant.spec.ts` | #9 tenant_isolation |
 | `tier-equity.invariant.spec.ts` | #5 tier_equity |
+| `timestamp-precision.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `uec-codes.invariant.spec.ts` | #3 uec_encoding |
 | `uec-poster-color.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `worker-claude-md.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
