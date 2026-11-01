@@ -2041,9 +2041,9 @@ jobs:
           # Same Access service token every other staging step sends.
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          # /q/* is also behind a Cloudflare managed challenge (OSE-939). A WAF
-          # custom rule skips it only for stg /q/* requests carrying X-OCR-CI
-          # with this value; real visitors stay challenged.
+          # Staging sits behind a Cloudflare managed challenge (OSE-939). A WAF
+          # custom rule skips it only for stg requests carrying X-OCR-CI with
+          # this value (host-wide, owner 2026-11-01); real visitors stay challenged.
           OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
         run: bash scripts/ci/trace-scan-staging.sh
 
@@ -2393,6 +2393,7 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           PW_REQUIRE_PRECONDITIONS: '1'
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |
