@@ -639,6 +639,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/corridor-baseline-publication.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
       "file": "workers/oursharedevents/tests/corridor-density-ratios.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -720,7 +727,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 59
+      "testCount": 65
     },
     {
       "file": "workers/oursharedevents/tests/crawl-policy.spec.ts",
@@ -2638,7 +2645,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-payload-lexicon.spec.ts",
@@ -2666,7 +2673,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 66
+      "testCount": 68
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",

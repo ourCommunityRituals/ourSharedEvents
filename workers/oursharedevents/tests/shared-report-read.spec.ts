@@ -20,6 +20,7 @@ import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import { floorCorridorBaseline } from '../src/lib/count-floor';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 import ADMIN_HTML from '../src/templates/admin.html';
 
@@ -278,6 +279,66 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     const fields = r.report._meta.suppression_reasons.map((s) => s.field);
     expect(fields).toContain('corridor_density.baseline_30d');
     expect(fields).toContain('corridor_density.baseline_90d');
+  });
+
+  test('OSE-1751: 112 in 90 days and 109 in 30 days are published as one chain, not a difference of 3', async () => {
+    await seedCorridor('test-corr-read-chain');
+    await seedEvent({
+      id: 'test-evt-read-chain',
+      corridor_id: 'test-corr-read-chain',
+      start_date: '2026-05-07T19:00:00Z', // Thursday 19:00 UTC
+    });
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('test-corr-read-chain', 4, 19, 109, 112)
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-chain');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const { baseline_30d, baseline_90d } = r.report.corridor_density;
+    // Independent gates published 112 and 109: three people, by subtraction.
+    expect({ baseline_90d, baseline_30d }).toEqual({ baseline_90d: 110, baseline_30d: 105 });
+    // And it is the number the BigQuery export publishes for the same row.
+    const exported = floorCorridorBaseline(112, 109);
+    expect({ baseline_90d, baseline_30d }).toEqual({
+      baseline_90d: exported.window_90d,
+      baseline_30d: exported.window_30d,
+    });
+    const fields = r.report._meta.suppression_reasons.map((s) => s.field);
+    expect(fields).not.toContain('corridor_density.baseline_30d');
+    expect(fields).not.toContain('corridor_density.baseline_90d');
+  });
+
+  test('OSE-1751: a 30-day window the chain holds back is said the same way as one under the floor', async () => {
+    await seedCorridor('test-corr-read-held');
+    await seedEvent({
+      id: 'test-evt-read-held',
+      corridor_id: 'test-corr-read-held',
+      start_date: '2026-05-07T19:00:00Z',
+    });
+    // 30d above 90d is not a chain: the 30-day window is withheld although 55 clears the floor.
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO corridor_density_baseline
+           (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('test-corr-read-held', 4, 19, 55, 40)
+      .run();
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-held');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_density.baseline_90d).toBe(40);
+    expect(r.report.corridor_density.baseline_30d).toBeNull();
+    const held = r.report._meta.suppression_reasons.filter(
+      (s) => s.field === 'corridor_density.baseline_30d'
+    );
+    expect(held).toHaveLength(1);
+    expect(held[0]!.reason).toBe('below_min_sample_size');
   });
 
   test('OSE-616: an event stored with an uppercase res7 cell reads the lowercase baseline', async () => {

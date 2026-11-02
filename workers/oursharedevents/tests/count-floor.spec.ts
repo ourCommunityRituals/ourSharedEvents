@@ -13,13 +13,14 @@ import {
   applyCountFloor,
   flooredRatePct,
   floorCumulativeOfParts,
+  floorCorridorBaseline,
   floorCumulativeSeries,
   floorNestedCounts,
   floorPublishedChain,
   floorTotalOfParts,
   roundForPublish,
 } from '../src/lib/count-floor';
-import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import {
   PUBLISH_ROUNDING as exportPublishRounding,
   roundForPublish as exportRoundForPublish,
@@ -387,5 +388,68 @@ describe('floorPublishedChain — an increase inside one rounding bucket still b
 
   test('the corridor baseline shape: 90d 112, 30d 115 is not nested and is withheld', () => {
     expect(floorPublishedChain([112, 115], 10, 5)).toEqual([110, null]);
+  });
+});
+
+describe('floorCorridorBaseline — the two baseline windows are one chain (OSE-1751)', () => {
+  test('112 in 90 days and 109 in 30 days: the difference of 3 is not published', () => {
+    // Published independently these are 112 and 109 and name three people.
+    expect(floorCorridorBaseline(112, 109)).toEqual({ window_90d: 110, window_30d: 105 });
+  });
+
+  test('windows that round to the same step publish the same number', () => {
+    expect(floorCorridorBaseline(112, 111)).toEqual({ window_90d: 110, window_30d: 110 });
+  });
+
+  test('a window under the baseline floor of 10 is withheld, the other is not', () => {
+    expect(floorCorridorBaseline(80, 9)).toEqual({ window_90d: 80, window_30d: null });
+    expect(floorCorridorBaseline(9, 3)).toEqual({ window_90d: null, window_30d: null });
+  });
+
+  test('a 30-day window larger than the 90-day one is not what the floor assumes: withheld', () => {
+    expect(floorCorridorBaseline(40, 55)).toEqual({ window_90d: 40, window_30d: null });
+  });
+
+  test('the same two numbers as the returns-export chain: one rule on both paths', () => {
+    for (const [w90, w30] of [
+      [112, 109],
+      [80, 40],
+      [14, 11],
+      [200, 199],
+    ] as const) {
+      const [chain90, chain30] = floorPublishedChain(
+        [w90, w30],
+        CORRIDOR_BASELINE_MIN_SAMPLE,
+        CORRIDOR_MAP_MIN_COUNT
+      );
+      expect(floorCorridorBaseline(w90, w30)).toEqual({
+        window_90d: chain90,
+        window_30d: chain30,
+      });
+    }
+  });
+
+  test('over every nested pair up to 200: a published difference is 0 or at least 5', () => {
+    const bad: string[] = [];
+    for (let w90 = 0; w90 <= 200; w90++) {
+      for (let w30 = 0; w30 <= w90; w30++) {
+        const out = floorCorridorBaseline(w90, w30);
+        for (const v of [out.window_90d, out.window_30d]) {
+          if (v !== null && (v < CORRIDOR_BASELINE_MIN_SAMPLE || v % PUBLISH_ROUNDING !== 0)) {
+            bad.push(`${w90}/${w30}: published ${v}`);
+          }
+        }
+        if (out.window_90d !== null && out.window_30d !== null) {
+          const diff = out.window_90d - out.window_30d;
+          if (diff >= 1 && diff <= CORRIDOR_MAP_MIN_COUNT - 1) {
+            bad.push(`${w90}/${w30}: difference ${diff}`);
+          }
+        }
+        // A 30-day window cannot be published when the 90-day one that holds it is not.
+        if (out.window_90d === null && out.window_30d !== null)
+          bad.push(`${w90}/${w30}: 30d alone`);
+      }
+    }
+    expect(bad).toEqual([]);
   });
 });

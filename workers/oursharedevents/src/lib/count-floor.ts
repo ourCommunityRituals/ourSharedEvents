@@ -17,7 +17,7 @@
  * are legitimately exact — an organizer must be able to run their own event.
  */
 
-import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
+import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
 export interface FlooredCount {
   /** The exact count when >= floor; null when suppressed. */
@@ -233,4 +233,27 @@ export function floorCumulativeOfParts(
     return sum;
   });
   return floorCumulativeSeries(totals, floor, diffFloor);
+}
+
+/**
+ * The corridor baseline: distinct people in the 90 days and in the 30 days of a
+ * (corridor, day, hour) bucket, published together (OSE-1751). The 90-day window
+ * holds the 30-day one, so the two are a chain: published on their own, 112 and
+ * 109 hand a reader the 3 people who were there only in days 31 to 90.
+ *
+ * A window under CORRIDOR_BASELINE_MIN_SAMPLE is withheld, and the pair goes
+ * through `floorPublishedChain`, so each value is rounded and any two published
+ * values differ by 0 or at least CORRIDOR_MAP_MIN_COUNT. The report's read path
+ * and the BigQuery export both call this, so they cannot drift apart again.
+ */
+export function floorCorridorBaseline(
+  window90d: number,
+  window30d: number
+): { window_90d: number | null; window_30d: number | null } {
+  const [window_90d, window_30d] = floorPublishedChain(
+    [window90d, window30d],
+    CORRIDOR_BASELINE_MIN_SAMPLE,
+    CORRIDOR_MAP_MIN_COUNT
+  );
+  return { window_90d: window_90d ?? null, window_30d: window_30d ?? null };
 }

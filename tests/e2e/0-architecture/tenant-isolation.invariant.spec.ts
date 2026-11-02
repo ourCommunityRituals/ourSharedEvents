@@ -293,11 +293,12 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // keyed by the geography only, cross-brand by design as before. What leaves
   // the builder is this event's own rate and one yes/no ("another event here
   // must withhold"); no other event's count, id or brand is published.
-  'lib/shared-report-builder.ts:436':
+  // 430→482 and 436→488 when publishCorridorBaseline was added above these queries (OSE-1751).
+  'lib/shared-report-builder.ts:488':
     'Corridor-wide per-event COUNTs keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
     '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
     "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
-  'lib/shared-report-builder.ts:430':
+  'lib/shared-report-builder.ts:482':
     "Same corridor statement, the correlated EXISTS over the corridor's other events " +
     '(same geography key). Same rationale.',
   // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
@@ -315,12 +316,13 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // 473→490 and 870→894 when the claim became a compare-and-set;
   // 490→493 and 894→897 for the fail-closed skew check.
   // 494→484 and 898→889 when roundForPublish moved to count-floor.ts (OSE-1782).
-  'lib/shared-report-export.ts:484':
+  // 484→489 and 889→893 when the baseline export called floorCorridorBaseline (OSE-1751).
+  'lib/shared-report-export.ts:489':
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
     'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
     'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
     'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts:889':
+  'lib/shared-report-export.ts:893':
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
