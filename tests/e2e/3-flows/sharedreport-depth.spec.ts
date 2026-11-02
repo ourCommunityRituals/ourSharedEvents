@@ -94,6 +94,34 @@ function expectBaselineIsOneChain(report: Record<string, unknown>): void {
   }
 }
 
+/**
+ * OSE-1751, on the seeded event. sponsors-tiers-smoke.sql puts 112 people in 90
+ * days and 109 in 30 in this event's bucket, plus 12 attendees, so every value
+ * below exists and the check cannot pass on nulls. Published independently the
+ * pair names 3 people; the deployed Worker must publish 110 and 105 and divide
+ * the ratios by those. A read path that gates each window itself, or divides by
+ * the raw row, fails here. Called from the same tests as the helper above.
+ */
+function expectSeededBaseline(report: Record<string, unknown>): void {
+  const d = report.corridor_density as {
+    this_event_count: number | null;
+    baseline_30d: number | null;
+    baseline_90d: number | null;
+    density_ratio_30d: number | null;
+    density_ratio_90d: number | null;
+  };
+  expect({ baseline_90d: d.baseline_90d, baseline_30d: d.baseline_30d }).toEqual({
+    baseline_90d: 110,
+    baseline_30d: 105,
+  });
+  expect(d.this_event_count, 'the seeded attendees publish a count').not.toBeNull();
+  expect(d.this_event_count!).toBeGreaterThanOrEqual(5);
+  expect(d.density_ratio_30d).not.toBeNull();
+  expect(d.density_ratio_90d).not.toBeNull();
+  expect(Math.abs(d.this_event_count! / 105 - d.density_ratio_30d!)).toBeLessThan(1e-9);
+  expect(Math.abs(d.this_event_count! / 110 - d.density_ratio_90d!)).toBeLessThan(1e-9);
+}
+
 test.describe('SharedReport depth gate', () => {
   test('no token → 401', async ({ request }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
@@ -128,6 +156,7 @@ test.describe('SharedReport depth gate', () => {
     expect('event_id' in report).toBe(true);
     expectScannerCount(report);
     expectBaselineIsOneChain(report);
+    expectSeededBaseline(report);
     // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
     // headcount_trend is the genuinely premium-only section — present here.
@@ -187,6 +216,7 @@ test.describe('SharedReport depth gate', () => {
     const report = body.report as Record<string, unknown>;
     expectScannerCount(report);
     expectBaselineIsOneChain(report);
+    expectSeededBaseline(report);
     // Mid depth = the Mid sections are present (corridor_map is a MID section —
     // the paid value line, OSE-682 — NOT premium-only), and the single
     // premium-only section (headcount_trend) is omitted.
