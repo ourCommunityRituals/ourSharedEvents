@@ -1,5 +1,5 @@
 {
-  "_comment": "Merge these keys into ~/.claude/settings.json (do not replace the file). Keep your existing allow list, enabledPlugins and the mapmap entries. Phase 0 + Phase 1 of .claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md. Delete this _comment key when merging.",
+  "_comment": "Merge these keys into ~/.claude/settings.json (do not replace the file). Keep your existing allow list, enabledPlugins and the mapmap entries. Phase 0 + Phase 1 of docs/ccr-archive/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md. Delete this _comment key when merging.",
 
   "effortLevel": "high",
   "fastMode": false,

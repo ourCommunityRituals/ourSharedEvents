@@ -24,7 +24,7 @@
  *
  * @born-red spine key writers | method: each rule below was seen red on a
  *   planted fault; the faults and what they turned red are in
- *   `.claude/outputs/CCR-SPINE-KEYS-2026-10-12.md` | date: 2026-10-12
+ *   `docs/ccr-archive/CCR-SPINE-KEYS-2026-10-12.md` | date: 2026-10-12
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';

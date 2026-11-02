@@ -6,7 +6,7 @@
 
 > **CCR status (2026-10-03):** Loop 1 failed and was corrected. Loop 2 stopped at
 > the human gate (two PO questions, listed under "Open questions"). Loop 3 has not
-> run. Worksheet: `.claude/outputs/CCR-ADR-022-EVENT-BASE-BRAND-OPTIONAL-2026-10-03.md`.
+> run. Worksheet: `docs/ccr-archive/CCR-ADR-022-EVENT-BASE-BRAND-OPTIONAL-2026-10-03.md`.
 > This ADR stays **Proposed** until Loop 3 passes.
 
 ## Context

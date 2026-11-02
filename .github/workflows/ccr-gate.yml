@@ -1,0 +1,72 @@
+# CCR gate (OSE-1785)
+#
+# A pull request that changes a governed file (AGENTS.md, CLAUDE.md, STORIES.md, the CCR
+# skills, or this gate) must carry a CCR worksheet tied to it: `pr:` this PR, `subject_sha:`
+# the commit the CCR reviewed, 5 loops or more, and no governed change after that commit.
+# Every worksheet in the PR must also meet the worksheet contract. See scripts/ci/ccr-gate.mjs.
+#
+# The gate and its dependencies come from the BASE branch; the PR is only read. A PR therefore
+# cannot weaken the gate that judges it, only the next PR's.
+#
+# Warn-only until the owner sets the repository variable CCR_GATE_MODE to `block` (owner
+# decision 2026-11-02: a tripwire now, a real block later). It is a tripwire: the agent writes
+# the worksheet, so this catches a skipped or untied CCR, not an invented one.
+name: CCR gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: ccr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ccr-gate:
+    name: CCR gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the base branch (the gate's code)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Checkout the pull request (what is judged)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: base/package-lock.json
+
+      # Only the base branch's dependencies are installed, and no install scripts run.
+      - name: Install the base branch's dependencies
+        working-directory: base
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Judge the pull request with the base branch's gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CCR_GATE_MODE: ${{ vars.CCR_GATE_MODE }}
+        run: |
+          if [ ! -f base/scripts/ci/ccr-gate.mjs ]; then
+            echo "::notice::The base branch has no CCR gate yet, so there is nothing to judge with."
+            exit 0
+          fi
+          node base/scripts/ci/ccr-gate.mjs --root head --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --pr "$PR_NUMBER" --mode "${CCR_GATE_MODE:-warn}"

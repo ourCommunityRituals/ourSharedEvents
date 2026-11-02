@@ -1,6 +1,6 @@
 # PR plan: WIP worktree convention (approved 2026-10-22)
 
-Source: [CCR-WIP-WORKTREE-LAYOUT-2026-10-22.md](CCR-WIP-WORKTREE-LAYOUT-2026-10-22.md) (score 81%, human gate answered on direction only).
+Source: [CCR-WIP-WORKTREE-LAYOUT-2026-10-22.md](../../docs/ccr-archive/CCR-WIP-WORKTREE-LAYOUT-2026-10-22.md) (score 81%, human gate answered on direction only).
 
 **Approved by owner:** X (`<app>/.claude/worktrees/<short-name>`) is the default. Y (`C:\Users\mzdan\dev\ourCommunityRituals.worktrees\<app>\<short-name>`) is only for long-lived UNCOMMITTED work. **Hold anything touching the launch path until after Oct 24.**
 

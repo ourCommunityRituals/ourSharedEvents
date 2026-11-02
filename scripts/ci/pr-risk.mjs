@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PR risk classifier: fixed path rules, no model. It decides which reviewer a PR
-// gets ("pr_risk" in .claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md):
+// gets ("pr_risk" in docs/ccr-archive/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md):
 // a model may explain a PR's risk, but the classification is policy, not a guess.
 //
 //   node scripts/ci/pr-risk.mjs --base origin/main     (files changed since the merge base)
