@@ -1,0 +1,104 @@
+R1-01 | High, confirmed | High | At-rest promise false outside scan tables
+R1-02 | High | High | One-grain rule before OSE-1784
+R1-03 | High | High | S4 open hour in withheld words
+R1-04 | High at the baseline; loop 5 rules | High | Recap label; S15 omits `pages.ts`
+R1-05 | High, worse | High | `/privacy:58` "no personal data" vs keyed id
+R1-06 | High | High | S15 tests 2 files; cookie text false
+R1-07 | High | High | S2 staging control passes on fail-open
+R1-08 | High | High | S2 silent no-marker path
+R1-09 | High, worse | High | Born-red argument omits `full-pipeline/*`
+R1-10 | High | High | Row order links the two scan tables
+R1-11 | Med | Med | Non-promise sentence inexact
+R1-12 | Med | Med | `/es/` English block, no `lang`
+R1-13 | Med, worse | Med | No single withheld vocabulary
+R1-14 | Med | Med | S4 allowlist keyed on `FROM` text
+R1-15 | Med | Med | S4 control cannot move figures
+R1-16 | High, conditional (L3 2.3) | High | Seal is a read-time clock
+R1-17 | Med | Med | H marks timing answered
+R1-18 | Med | Med | S2 owner prerequisites unverified
+R1-19 | Med, worse | Med | Wave 0 stale
+R1-20 | Med | Med | S3/S7 ACs without gate semantics
+R1-21 | Med | Med | S7 inventory incomplete
+R1-22 | Med | Med | 0019 truncates consent
+R1-23 | High; Security Critical on any one of three evidence items (2.3) | High | SELECT-only wrapper client-side; token reach
+R1-24 | Med | Med | S6 staging covers the queue path only
+R1-25 | Med, worse | Med | Migration-window premise wrong
+R1-26 | Med | Med | Pin inventory skipped the freeze
+R1-27 | Med | Med | S3 faults rest on a truthy test
+R1-28 | Med, worse | Med | S4 traces to unratified R4
+R1-29 | Med | Med | S4 block two ways; epic Done external
+R1-30 | Med | Med | Bash/docs slices counted as the Done pyramid
+R1-31 | Med | Med | RA-1 `test_ref` checked for presence only
+R1-32 | Med | Med | Collision inventory misses hunks
+R1-33 | Med | Med | Staging step runtime not modelled
+R1-34 | Med | Med | Log trim, no replacement
+R1-35 | Med | Med | Owner judgments outside F
+R1-36 | Med | Med | Clock-relative specs unplanned
+R1-37 | Low | Low | S3, S4 sizes understated
+R1-38 | Low | Low | S4 mint-token gap
+R1-39 | Low | Low | S4 AC5/AC7 targets
+R1-40 | Low | Low | S5 grep narrower than its readers
+R1-41 | Low | Low | Secret gate checks names only
+R1-42 | Low | Low | Own-terminal run includes the remote seed
+R1-43 | Low | Low | Conformance serialisation misdescribed
+R1-44 | Low | Low | "Hour" treated as a duration
+R1-45 | Low, worse | Low | Linear apply plan inconsistent
+R1-46 | Med | Med | Literals written at the freeze
+R2-01 | High | High | No cross-run lock on shared staging
+R2-02 | High (Security Critical declined, 2.4) | High | Map tells none from 1 to 4
+R2-03 | Med | Med | Marker identity tied to rotating secrets
+R2-04 | Med, worse | Med | S15 section contradicts its notice
+R2-05 | Med | Med | Disclosure unreachable
+R2-06 | Med | Med | Scan figure labelled as people
+R2-07 | Med | Med | S4 reverses the real-time promise
+R2-08 | Med | Med | S7 gap premise false
+R2-09 | Med | Med | 0105/0019 rewrite unread history
+R2-10 | Med | Med | RA-1 recorded as accepted while unmet
+R2-11 | Med | Med | S7 AC1 has no gate
+R2-12 | Med | Med | Mock env lacks the pepper
+R2-13 | Med | Med | S3/S7 staging reads one row
+R2-14 | Med | Med | S7 AC4 tiebreak cannot go red
+R2-15 | Med | Med | S16 AC3 marker removable
+R2-16 | Med | Med | Release gates blind to data migrations
+R2-17 | Med | Med | "Nothing auto-closes" by convention
+R2-18 | Med | Med | Batch poison dead-letters 100 scans
+R2-19 | Med | Med | 03:00 cron has no liveness signal
+R2-20 | Low | Low | S4 lag note in the aria-live line
+R2-21 | Low | Low | `--warning` token missing
+R2-22 | Low | Low | S15 AC1 is a literal substring
+R2-23 | Low | Low | Half-hour zones
+R2-24 | Low | Low | Schema bumps return 503 on a slip
+R2-25 | Low | Low | S14 reader checks shape, not output
+R2-26 | Low | Low | OCR-docs read live from `main`
+R2-27 | Low | Low | Schedule skips T4
+R2-28 | Low | Low | Epic keeps the old name
+R2-29 | Low | Low | `/privacy` Back link dead
+R3-01 | **Low** | Med | Erasure gap marks an erased subject's hours
+R3-02 | Low | Low | Dedup marker is not atomic
+R3-03 | High | High | `set-secrets.sh` overwrites every secret
+R3-04 | Med | Med | ROLLBACK commands carry no ticket
+R3-05 | Med | Med | Six new T4 steps are unpinned
+R3-06 | Med | Med | "Later SHA" means ancestry only
+R3-07 | Med | Med | Required checks bind to app 15368
+R3-08 | Med, worse | Med | Code-owner review not enforced
+R3-09 | Low, worse | Low | Rollback docs misdescribe reach
+R3-10 | Low, worse | Low | `LOGGING_STANDARD.md:372` says "Session only"
+R3-11 | Low | Low | S14 AC2 misses the empty-string token
+R3-12 | Low | Low | A failed read renders the withheld words
+R4-01 | High | - | `/privacy` publishes "HIPAA safeguards" and "we comply with 
+R4-02 | Medium | - | The authoritative threat ledger misstates the PR-head threat
+R4-03 | Medium | - | Keys that protect stored identified data have one version. E
+R4-04 | Low | - | Erasure accepts an email only, so a visitor who supplies the
+R4-05 | Medium | - | A client-chosen `source_placement_id` is stored in FORMS_DB 
+R4-06 | Medium | - | The accessibility gates list surfaces by name, and `/privacy
+R4-07 | Low | - | The honesty-lexicon gate reads only three file groups. So "a
+R4-08 | Low | - | On the SharedReport, the sponsor section sits after the stat
+R4-09 | Low | - | The sync chain names no Design FE, QA or PO view for slices 
+R4-10 | Low | - | S2's Docs line names two files. Two more become false with S
+R4-11 | Low | - | Workflow comments contradict the live configuration. `ci.yml
+R4-12 | Low | - | S4 AC3 names a T0 listing rule that reaches only one folder 
+R4-13 | Medium | - | S5 and S6 serve no retained fix, and S14 exists only for the
+R4-14 | Low | - | Written anonymity texts say no IP is read. Public handlers r
+R4-15 | Low; | - | The org brain was not reconciled when OSE's rules changed. Y
+R4-16 | Low | - | ADR-001 keeps sentences the subject's amendments do not name
+R4-17 | Low | - | Two owner statements about the deep tier are not reconciled.

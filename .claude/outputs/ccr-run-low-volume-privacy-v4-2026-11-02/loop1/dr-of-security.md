@@ -1,0 +1,40 @@
+# Loop 1 (Critical) - Dr of Security - frozen v4 (sha256 dd9b8522...b7f4, verified)
+
+Code: worktree `ose-clock-gate` (HEAD abf82c20 = main 39a63d67 + clock-gate commits); paths under `workers/oursharedevents/` unless rooted. Nothing run at runtime.
+
+## 1. Five most dangerous assumptions
+
+1. **A: "no stored value outside the scan tables carries a clock finer than the hour" (S2, S3). FALSE.** `src/handlers/qr-scan.ts:185` writes the dedup marker with `expirationTtl: 3600`, so its expiry is the scan second plus 3600. S2 hashes the name and keeps the TTL; S3 and the clock gate see SQL columns only. With rowid order (assumption 4), a D1+KV holder re-times each placement row to the second, undoing `hourStamp` (`src/lib/scan-buffer.ts:83-92`). A second clock: the `/q` caller bucket stores `resetAt` in ms (`src/lib/rate-limit.ts:206`). That KV list exposes expiry is inferred platform behaviour.
+2. **S15: "We show a scan count only when at least 5 scans were counted at one poster in one hour" is true. FALSE.** `distinct_scanners` is floored per event-hour across posters (`src/lib/shared-report.ts:740-751`, builder `:335-347`); `sample_size` is whole-event (`shared-report-builder.ts:352-365`). S15 is Wave 1, no OSE-1784 edge; its tests check presence, not truth.
+3. **S4 / D L3-21: AC3 "catches a new read anywhere". FALSE.** It matches only `FROM scan_placement_events|scan_cell_aggregates`; misses `scan_aggregates` (builder `:330,:337,:936`), `scan_node_returns`, `anon_id_returns` (`shared-report-export.ts:399,483`) and `JOIN` forms. Sealed SharedReport hours rest on OSE-1784 adopting the derive design (ASSUMED).
+4. **S6: the `scan-buffer.ts:96-100` claim may hold. FALSE by schema (inferred).** Both are rowid tables (`migrations/0062_split_scan_path.sql`, `id TEXT PRIMARY KEY`); one row each per scan, same batch order (`scan-buffer.ts:101-137,168-176`). The negative branch is unreachable; the positive defers the fix outside the epic.
+5. **S2 staging: "a counted scan always sets a marker first" (`qr-scan.ts:177-187`). TRUE on main, FALSE after S2.** AC2/AC3 add counted, marker-free paths; the control is a D1 row, so a Worker writing no marker passes.
+
+Verified TRUE: `scanKey ?? anonId` (`qr-scan.ts:179`); staging warns with the false comment (`.github/workflows/oursharedevents-ci.yml:1260-1267`), production refuses (`:2664-2669`), pin `tests/integration/infra-consistency.test.js:279-290`; `last_clicked_at` has no reader (`src/lib/shortlinks.ts:364`); production has no queue, direct path stamps the request hour (`wrangler.toml:358-375`); "4 injected, withheld iff r = 0" (arithmetic).
+
+## 2. Findings
+
+| id        | Sev                                                   | Slice       | Claim                                             | Evidence                                                                                                                        | Basis                           | Root cause                             | OOS           |
+| --------- | ----------------------------------------------------- | ----------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------- | ------------- |
+| L1-SEC-1  | High                                                  | S2, S3, A   | No sub-hour clock outside scan tables             | `qr-scan.ts:185`; `rate-limit.ts:206`; gate SQL-only                                                                            | source-read; KV expiry inferred | clock audit scoped to SQL columns      | -             |
+| L1-SEC-2  | High (loop 4: maybe Regulatory, false Art. 13 notice) | S15         | 5-per-poster-hour public claim holds              | `shared-report.ts:740-751`; builder `:335-365`                                                                                  | source-read                     | public words ship before code          | OSE-1784 edge |
+| L1-SEC-3  | Medium                                                | S4; D L3-21 | AC3 catches any new read                          | builder `:330,:337,:936`; export `:399,:483`                                                                                    | source-read                     | allowlist names two tables, FROM only  | -             |
+| L1-SEC-4  | Medium                                                | S2; D L3-12 | Staging control proves a marker                   | AC2/AC3; step asserts absence only                                                                                              | source-read                     | control proves scan, not marker        | -             |
+| L1-SEC-5  | Medium                                                | S6          | Row-order outcome is open                         | `0062`; `scan-buffer.ts:101-137`                                                                                                | inferred                        | spike measures a schema certainty      | -             |
+| L1-SEC-6  | Medium                                                | S14         | Reader limits a compromised step to reads         | deploy token in step env, `ci.yml:2030-2031,2040`                                                                               | source-read                     | wrapper mistaken for security boundary | -             |
+| L1-SEC-7  | Medium                                                | H           | Timing within the hour "A" (S4, S7)               | live view polls 30 s, shows taps and check-ins (`src/handlers/live-monitor.ts:95-96,154-157,198`)                               | source-read                     | answered for scans, claimed for all    | -             |
+| L1-SEC-8  | Medium                                                | S16         | ADR-025: every scan figure sums poster-hour cells | as SEC-2; ACs test text only                                                                                                    | source-read                     | ADR states rule, omits violators       | OSE-1784      |
+| L1-SEC-9  | Low                                                   | S2 AC5      | Whole-name secret match                           | production keeps `grep -q "$SECRET"` (`ci.yml:2664-2665`)                                                                       | source-read                     | fix applied to one gate only           | -             |
+| L1-SEC-10 | Low                                                   | S7          | AC1 hour shape                                    | `bucketTimestamp` = `YYYY-MM-DDTHH` (`src/lib/forms-db.ts:36`) vs staging `:00:00`; lexical expiry compare (`src/index.ts:364`) | source-read                     | two hour shapes, one slice             | -             |
+
+D false or partial: L3-21 RBE false (SEC-3); L3-12 RBE partial (SEC-4); loop-1 #16 keeps a determined spike (SEC-5). C on assumption: S6 AC1 has no pass/fail; S5 and S3 AC6 have no failing check (stated).
+
+Out of scope, once: padding, forged cookies, presence bit (OSE-1780); SharedReport who-side (OSE-1783, OSE-1784); cookie signing (OSE-1496).
+
+## 3. Not checked
+
+Linear, `gh` runs, staging; KV list shape, Workers Logs and queue retention (platform); full ADR-001, D5 memo, worksheets (grepped for "expiration": no hit, so SEC-1 appears new); S0, S5 grep, goldens. No tests run.
+
+## 4. Commands (read-only; none refused; one heredoc failed on a quote, redone)
+
+Read: subject (3 ranges). Bash: `git log/status`; `sed -n` on qr-scan, scan-buffer, ci.yml (1245-1275, 2028-2052, 2650-2675), trace-scan-staging.sh, shortlinks, rate-limit, router, public-read-limit, never-who, privacy, builder, shared-report, export, dashboards, scan-cells, 0062, infra-consistency test, clock-gate spec, forms-db, live-monitor, dashboard-contract, ADR-001, memo; greps (scan-table reads, KV TTLs, `.list(`, log fields, `last_clicked_at`, bindings); `sha256sum`, `wc`; `mkdir`, `ls`, `cat` to this file (only write).
