@@ -211,8 +211,10 @@ interface Finding {
 function isFineClock(sql: string): boolean {
   if (/\b(?:datetime|time|unixepoch|julianday)\s*\(\s*(?:['"]now['"]|\))/i.test(sql)) return true;
   if (/\bCURRENT_(?:TIMESTAMP|TIME)\b/i.test(sql)) return true;
-  for (const m of sql.matchAll(/\bstrftime\s*\(\s*'([^']*)'/gi)) {
-    if (/%[MSfsJTRcX]/.test(m[1].replace(/%%/g, ''))) return true;
+  // Both quote styles: SQLite accepts "..." for a string, and a format written
+  // that way must not slip under the coarse-clock exception (review on #1069).
+  for (const m of sql.matchAll(/\bstrftime\s*\(\s*(['"])([^'"]*)\1/gi)) {
+    if (/%[MSfsJTRcX]/.test(m[2].replace(/%%/g, ''))) return true;
   }
   return false;
 }
@@ -395,27 +397,60 @@ const TIMESTAMP_COLUMN = /(?:_at|_time|_timestamp|^timestamp)$/i;
 const JS_CLOCK = /\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)/;
 const JS_LITERAL = /^(?:null|undefined|true|false|\d+|'[^']*'|"[^"]*")$/;
 
+/** The one sanctioned coarsener: `hourStamp(bucket)` is the hour by construction. */
+const SAFE_HELPER = /^hourStamp\s*\(/;
+/** Names in an expression that are syntax or globals, never a value to trace. */
+const NOT_A_BINDING = new Set([
+  'new',
+  'typeof',
+  'void',
+  'await',
+  'String',
+  'Number',
+  'Boolean',
+  'Math',
+  'JSON',
+  'Object',
+  'Array',
+  'Date',
+]);
+
 /**
  * Does this bind argument read the wall clock? It follows the names in the
  * expression to their declarations in the file, so `new Date(nowMs)` is traced.
- * null: a bare value from outside the file, which this gate cannot trace.
+ * null: something this gate cannot trace (a name with no declaration in the
+ * file, a call it does not know, an alias chain past the depth limit). The
+ * caller reports null as `unresolved`, so uncertainty fails closed instead of
+ * passing as safe (review on #1069).
  */
 function bindReadsClock(arg: string, source: string, before: number, depth = 0): boolean | null {
   if (JS_CLOCK.test(arg)) return true;
   if (JS_LITERAL.test(arg)) return false;
+  if (SAFE_HELPER.test(arg)) return false;
   if (depth > 3) return null;
   let traced = false;
+  let unresolved = false;
   for (const name of arg.match(/(?<![.\w'"])[A-Za-z_]\w*/g) ?? []) {
+    if (NOT_A_BINDING.has(name)) continue;
     const declaration = new RegExp(
       `\\b(?:const|let|var)\\s+${name}\\s*(?::[^=;]+)?=(?!=)\\s*([^;]+);`,
       'g'
     );
     const found = [...source.slice(0, before).matchAll(declaration)].pop();
-    if (!found) continue;
+    if (!found) {
+      // An import, a parameter, a function this gate does not know: not safe by default.
+      unresolved = true;
+      continue;
+    }
     traced = true;
-    if (bindReadsClock(found[1].trim(), source, before, depth + 1) === true) return true;
+    const reads = bindReadsClock(found[1].trim(), source, before, depth + 1);
+    if (reads === true) return true;
+    if (reads === null) unresolved = true;
   }
-  return traced || !/^\w+(?:\.\w+)*$/.test(arg) ? false : null;
+  if (unresolved) return null;
+  if (traced) return false;
+  // Nothing to trace: an expression of literals and operators only.
+  return /^[\d\s+\-*/%().'"]*$/.test(arg) ? false : null;
 }
 
 function fineDefaultFindings(
@@ -716,5 +751,48 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
     expect(sourceFindings('x.ts', interpolated, constants, targets).map((f) => f.kind)).toEqual([
       'sql-write',
     ]);
+  });
+
+  test('OSE-1778 | gate | a double-quoted strftime format with seconds is a fine clock', () => {
+    // Review on #1069: only single-quoted formats were read, so this shape
+    // passed under the coarse-clock exception while keeping the seconds.
+    expect(isFineClock(`strftime("%Y-%m-%d %H:%M:%S", 'now')`)).toBe(true);
+    expect(isCoarseClock(`strftime("%Y-%m-%d %H:%M:%S", 'now')`)).toBe(false);
+    expect(isFineClock(`strftime("%Y-%m-%d %H:00:00", created_at)`)).toBe(false);
+    expect(isCoarseClock(`strftime("%Y-%m-%d %H:00:00", created_at)`)).toBe(true);
+    expect(isFineClock(`strftime("%s", 'now')`)).toBe(true);
+  });
+
+  test('OSE-1778 | gate | a bind this gate cannot trace is unresolved, never safe', () => {
+    // Review on #1069: an alias to a value from outside the file, an unknown
+    // call, and a chain past the depth limit all used to read as safe.
+    const targets = new Set(['scan_placement_events']);
+    const sql = `db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?, ?)')`;
+    const kinds = (src: string) =>
+      sourceFindings('x.ts', src, new Map(), targets).map((f) => f.kind);
+    const imported = `import { externalTimestamp } from './clock';
+      const stamp = externalTimestamp;
+      ${sql}.bind(a, stamp);`;
+    const unknownCall = `${sql}.bind(a, getTimestamp());`;
+    const aliasedCall = `const t = getTimestamp();
+      const stamp = t;
+      ${sql}.bind(a, stamp);`;
+    const deepChain = `const a0 = Date.now();
+      const a1 = a0;
+      const a2 = a1;
+      const a3 = a2;
+      const a4 = a3;
+      const a5 = a4;
+      ${sql}.bind(a, a5);`;
+    const literalOnly = `const stamp = '2026-01-01 00:00:00';
+      ${sql}.bind(a, stamp);`;
+    const helper = `const stamp = hourStamp(bucket);
+      ${sql}.bind(a, stamp);`;
+    expect(kinds(imported)).toEqual(['unresolved']);
+    expect(kinds(unknownCall)).toEqual(['unresolved']);
+    expect(kinds(aliasedCall)).toEqual(['unresolved']);
+    expect(kinds(deepChain)).toEqual(['unresolved']);
+    expect(kinds(literalOnly)).toEqual([]);
+    expect(kinds(helper)).toEqual([]);
   });
 });
