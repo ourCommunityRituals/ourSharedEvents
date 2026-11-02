@@ -57,6 +57,71 @@ function expectScannerCount(report: Record<string, unknown>): void {
   expect('unique_gatherings' in report).toBe(false);
 }
 
+/**
+ * OSE-1751: the two corridor baselines are one chain on the deployed Worker.
+ * Each is withheld (null) or a whole number from 10 up, rounded down to a
+ * multiple of 5; and two published together differ by 0 or at least 5, so the
+ * difference never names a group under 5. Called from the tests that already
+ * read a report, so it adds no conditional skip (CI integrity ratchet).
+ */
+function expectBaselineIsOneChain(report: Record<string, unknown>): void {
+  const density = report.corridor_density as
+    | {
+        this_event_count?: number | null;
+        baseline_30d?: number | null;
+        baseline_90d?: number | null;
+        density_ratio_30d?: number | null;
+        density_ratio_90d?: number | null;
+      }
+    | undefined;
+  expect(density, 'corridor_density is a Mid+ section').toBeDefined();
+  const w30 = density!.baseline_30d ?? null;
+  const w90 = density!.baseline_90d ?? null;
+  for (const w of [w30, w90]) {
+    expect(w === null || (Number.isInteger(w) && w >= 10 && w % 5 === 0)).toBe(true);
+  }
+  if (w30 !== null && w90 !== null) {
+    const gap = w90 - w30;
+    expect(gap === 0 || gap >= 5, `baselines ${w90} and ${w30} differ by ${gap}`).toBe(true);
+  }
+  // A ratio divides by the published baseline, so it cannot give the raw one back.
+  const n = density!.this_event_count ?? null;
+  if (n !== null && w30 !== null && density!.density_ratio_30d != null) {
+    expect(Math.abs(n / w30 - density!.density_ratio_30d)).toBeLessThan(1e-9);
+  }
+  if (n !== null && w90 !== null && density!.density_ratio_90d != null) {
+    expect(Math.abs(n / w90 - density!.density_ratio_90d)).toBeLessThan(1e-9);
+  }
+}
+
+/**
+ * OSE-1751, on the seeded event. sponsors-tiers-smoke.sql puts 112 people in 90
+ * days and 109 in 30 in this event's bucket, plus 12 attendees, so every value
+ * below exists and the check cannot pass on nulls. Published independently the
+ * pair names 3 people; the deployed Worker must publish 110 and 105 and divide
+ * the ratios by those. A read path that gates each window itself, or divides by
+ * the raw row, fails here. Called from the same tests as the helper above.
+ */
+function expectSeededBaseline(report: Record<string, unknown>): void {
+  const d = report.corridor_density as {
+    this_event_count: number | null;
+    baseline_30d: number | null;
+    baseline_90d: number | null;
+    density_ratio_30d: number | null;
+    density_ratio_90d: number | null;
+  };
+  expect({ baseline_90d: d.baseline_90d, baseline_30d: d.baseline_30d }).toEqual({
+    baseline_90d: 110,
+    baseline_30d: 105,
+  });
+  expect(d.this_event_count, 'the seeded attendees publish a count').not.toBeNull();
+  expect(d.this_event_count!).toBeGreaterThanOrEqual(5);
+  expect(d.density_ratio_30d).not.toBeNull();
+  expect(d.density_ratio_90d).not.toBeNull();
+  expect(Math.abs(d.this_event_count! / 105 - d.density_ratio_30d!)).toBeLessThan(1e-9);
+  expect(Math.abs(d.this_event_count! / 110 - d.density_ratio_90d!)).toBeLessThan(1e-9);
+}
+
 test.describe('SharedReport depth gate', () => {
   test('no token → 401', async ({ request }) => {
     test.skip(!POST, 'SMOKE_EVENT_POST not seeded');
@@ -90,6 +155,8 @@ test.describe('SharedReport depth gate', () => {
     const report = body.report as Record<string, unknown>;
     expect('event_id' in report).toBe(true);
     expectScannerCount(report);
+    expectBaselineIsOneChain(report);
+    expectSeededBaseline(report);
     // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
     // headcount_trend is the genuinely premium-only section — present here.
@@ -148,6 +215,8 @@ test.describe('SharedReport depth gate', () => {
     expect(body.ok).toBe(true);
     const report = body.report as Record<string, unknown>;
     expectScannerCount(report);
+    expectBaselineIsOneChain(report);
+    expectSeededBaseline(report);
     // Mid depth = the Mid sections are present (corridor_map is a MID section —
     // the paid value line, OSE-682 — NOT premium-only), and the single
     // premium-only section (headcount_trend) is omitted.

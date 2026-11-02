@@ -580,11 +580,27 @@ const LEVERS: Lever[] = [
   },
 ];
 
-/** The corridor baseline has its own, higher floor (10). */
+/**
+ * The corridor baseline has its own, higher floor (10), and is published
+ * rounded down to a multiple of 5 (OSE-1751), so the control crosses a step:
+ * 44 -> 45 shows, where 40 -> 41 would not. The 90-day control keeps the 30-day
+ * window at 40, so the pair stays nested (90 >= 30).
+ */
+const baselineLever = (
+  key: 'baseline30' | 'baseline90',
+  name: string,
+  across: [number, number]
+): Lever => ({
+  ...plain(key, name, 'one person'),
+  control: [set({ [key]: across[0] }), set({ [key]: across[1] })],
+});
 const BASELINE_LEVERS: Lever[] = [
-  plain('baseline30', 'corridor baseline, 30 days', 'one person'),
-  plain('baseline90', 'corridor baseline, 90 days', 'one person'),
+  baselineLever('baseline30', 'corridor baseline, 30 days', [44, 45]),
+  baselineLever('baseline90', 'corridor baseline, 90 days', [84, 85]),
 ];
+
+/** 112 in 90 days, 109 in 30: published independently they name 3 people (OSE-1751). */
+const BASELINE_NAMING_A_GROUP: World = set({ baseline90: 112, baseline30: 109 });
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -852,6 +868,7 @@ describe('every number in the report is registered, and keeps its rule in every 
     const worlds: World[] = [BASE];
     for (const [lever, n] of PAIRS) worlds.push(lever.at(n), lever.at(n + 1));
     for (const lever of [...LEVERS, ...BASELINE_LEVERS]) worlds.push(...lever.control);
+    worlds.push(BASELINE_NAMING_A_GROUP);
     const snaps: Snapshot[] = [];
     for (const w of worlds) snaps.push(await publish(w));
     return snaps;
@@ -896,6 +913,36 @@ describe('every number in the report is registered, and keeps its rule in every 
       expect([...offRule].sort(), 'published values that break their rule').toEqual([]);
       // Thousands of values, not a handful: the check is over every dataset.
       expect(checked).toBeGreaterThan(5000);
+    },
+    ALL_DATASETS_MS
+  );
+
+  test(
+    'the two corridor baselines of a report never differ by 1 to 4, and are rounded (OSE-1751)',
+    async () => {
+      const named = new Set<string>();
+      let pairs = 0;
+      let nearPairs = 0;
+      for (const snap of await everySnapshot()) {
+        for (const [caller, leaves] of snap) {
+          for (const [path, v90] of leaves) {
+            const root = path.match(/^(.*)\.corridor_density\.baseline_90d$/)?.[1];
+            if (root === undefined || typeof v90 !== 'number') continue;
+            const v30 = leaves.get(`${root}.corridor_density.baseline_30d`);
+            if (typeof v30 !== 'number') continue;
+            pairs++;
+            const diff = v90 - v30;
+            if (diff >= 1 && diff < K) named.add(`${caller}: ${v90} - ${v30} = ${diff}`);
+            if (v90 % K !== 0 || v30 % K !== 0) named.add(`${caller}: ${v90}/${v30} not rounded`);
+            if (diff > 0 && diff <= 10) nearPairs++;
+          }
+        }
+      }
+      expect(pairs, 'no report published both baselines: the check saw nothing').toBeGreaterThan(0);
+      // The 112 / 109 dataset is in the walk, so a read path that publishes the raw
+      // pair fails here, on a difference of 3.
+      expect(nearPairs, 'no dataset put the two windows close together').toBeGreaterThan(0);
+      expect([...named]).toEqual([]);
     },
     ALL_DATASETS_MS
   );

@@ -31,7 +31,12 @@ import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-r
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
-import { applyCountFloor, flooredRatePct, floorTotalOfParts } from './count-floor';
+import {
+  applyCountFloor,
+  flooredRatePct,
+  floorCorridorBaseline,
+  floorTotalOfParts,
+} from './count-floor';
 import { sponsorTitle } from './sponsor-card';
 import {
   formatHourBucketLabel,
@@ -130,6 +135,53 @@ export interface SuppressionReason {
   field: string;
   reason: SuppressionReasonCode;
   detail?: string;
+}
+
+export interface PublishedCorridorBaseline {
+  baseline_30d: number | null;
+  baseline_90d: number | null;
+  density_ratio_30d: number | null;
+  density_ratio_90d: number | null;
+  suppression: SuppressionReason[];
+}
+
+/**
+ * What the report carries for one corridor_density_baseline row (OSE-1751).
+ *
+ * The windows go through `floorCorridorBaseline`, which the export also calls, so
+ * the two surfaces cannot publish different numbers for one row. A ratio is built
+ * on the published window and only when this event's own count was published
+ * (DS-01: a ratio of a withheld count re-exposes it). Every withheld window gets
+ * the same entry, whether it was under the floor or held back by the chain, so
+ * the report does not say which case applied.
+ */
+export function publishCorridorBaseline(
+  baseline: { window_30d_count: number; window_90d_count: number },
+  thisEventCount: number | null
+): PublishedCorridorBaseline {
+  const { window_30d, window_90d } = floorCorridorBaseline(
+    baseline.window_90d_count,
+    baseline.window_30d_count
+  );
+  const suppression: SuppressionReason[] = [];
+  const withheld = (field: string): void => {
+    suppression.push({
+      field,
+      reason: 'below_min_sample_size',
+      detail: `a baseline of fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees, or one too close to the other window to publish, is withheld`,
+    });
+  };
+  if (window_30d === null) withheld('corridor_density.baseline_30d');
+  if (window_90d === null) withheld('corridor_density.baseline_90d');
+  return {
+    baseline_30d: window_30d,
+    baseline_90d: window_90d,
+    density_ratio_30d:
+      thisEventCount !== null && window_30d !== null ? thisEventCount / window_30d : null,
+    density_ratio_90d:
+      thisEventCount !== null && window_90d !== null ? thisEventCount / window_90d : null,
+    suppression,
+  };
 }
 
 export interface SharedReport {
@@ -528,32 +580,16 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       // DS-01: density_ratio is ALSO gated on thisEventCount clearing the K-anon
       // floor. When this_event_count is suppressed (null), the ratio would re-expose
       // the exact sub-K numerator (raw = ratio * baseline), so it is left null.
-      if (baseline.window_30d_count >= CORRIDOR_BASELINE_MIN_SAMPLE) {
-        baseline30d = baseline.window_30d_count;
-        // DS-01: only compute the ratio when this_event_count cleared the K-anon
-        // floor. If it is suppressed (null), the ratio (= raw / baseline) would
-        // re-expose the exact sub-K numerator, so leave it null.
-        densityRatio30d =
-          thisEventCount !== null ? thisEventCount / baseline.window_30d_count : null;
-      } else {
-        suppression.push({
-          field: 'corridor_density.baseline_30d',
-          reason: 'below_min_sample_size',
-          detail: `fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees in the corridor baseline`,
-        });
-      }
-      if (baseline.window_90d_count >= CORRIDOR_BASELINE_MIN_SAMPLE) {
-        baseline90d = baseline.window_90d_count;
-        // DS-01: same K-anon gate as the 30d ratio above.
-        densityRatio90d =
-          thisEventCount !== null ? thisEventCount / baseline.window_90d_count : null;
-      } else {
-        suppression.push({
-          field: 'corridor_density.baseline_90d',
-          reason: 'below_min_sample_size',
-          detail: `fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees in the corridor baseline`,
-        });
-      }
+      // OSE-1751: the two windows are one chain (90d holds 30d), published
+      // through the call the BigQuery export makes, so 90d - 30d never names a
+      // group under K. The ratios use the PUBLISHED baseline: a ratio on the raw
+      // one gives it back (this_event_count / ratio), rounding and all.
+      const published = publishCorridorBaseline(baseline, thisEventCount);
+      baseline30d = published.baseline_30d;
+      baseline90d = published.baseline_90d;
+      densityRatio30d = published.density_ratio_30d;
+      densityRatio90d = published.density_ratio_90d;
+      suppression.push(...published.suppression);
     } else {
       suppression.push({
         field: 'corridor_density',

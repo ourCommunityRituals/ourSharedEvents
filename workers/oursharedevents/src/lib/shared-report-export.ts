@@ -57,8 +57,13 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
-import { PUBLISH_ROUNDING, floorPublishedChain, roundForPublish } from './count-floor';
+import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
+import {
+  PUBLISH_ROUNDING,
+  floorCorridorBaseline,
+  floorPublishedChain,
+  roundForPublish,
+} from './count-floor';
 import {
   assertCorridorGrainRow,
   canonicalCorridorId,
@@ -741,14 +746,13 @@ export async function exportCorridorDensityBaseline(
         result.rowsSkipped++;
         continue;
       }
-      // The counts are distinct people. Publish them on the read path's rule
-      // (a window under CORRIDOR_BASELINE_MIN_SAMPLE is suppressed), and as a
-      // chain (90d ⊇ 30d), so 90d − 30d never names a group under K. A row
-      // with nothing left to say is withheld.
-      const [w90, w30] = floorPublishedChain(
-        [r.window_90d_count, r.window_30d_count],
-        CORRIDOR_BASELINE_MIN_SAMPLE,
-        CORRIDOR_MAP_MIN_COUNT
+      // The counts are distinct people. The read path publishes them through
+      // this same call (OSE-1751): a window under CORRIDOR_BASELINE_MIN_SAMPLE is
+      // suppressed, and the pair is a chain (90d ⊇ 30d), so 90d − 30d never names
+      // a group under K. A row with nothing left to say is withheld.
+      const { window_90d: w90, window_30d: w30 } = floorCorridorBaseline(
+        r.window_90d_count,
+        r.window_30d_count
       );
       if (w90 === null && w30 === null) {
         result.rowsSkipped++;

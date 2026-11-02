@@ -20,6 +20,8 @@ export const NODE_SPECS = [
   // OSE-1782 — derived gate: no count published except through count-floor.ts
   // (reads the projection's field list and the src/ tree; no runtime).
   'tests/count-floor-publication.derived.spec.ts',
+  // OSE-1751 — the report's corridor baseline is one chain, shared with the export
+  'tests/corridor-baseline-publication.spec.ts',
   'tests/event-price.spec.ts',
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
   // name + placement fields). Imports the render module, no runtime.

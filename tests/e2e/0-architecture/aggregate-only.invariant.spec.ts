@@ -263,15 +263,31 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
       'DS-01: density_ratio_30d must be null when this_event_count is suppressed — ' +
         'guard the ratio on `thisEventCount !== null` so it cannot divide out the raw sub-K count.'
     ).toMatch(
-      /densityRatio30d\s*=\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*baseline\.window_30d_count\s*:\s*null/
+      /density_ratio_30d:\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*&&\s*window_30d\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*window_30d\s*:\s*null/
     );
     expect(
       src,
       'DS-01: density_ratio_90d must be null when this_event_count is suppressed — ' +
         'guard the ratio on `thisEventCount !== null`.'
     ).toMatch(
-      /densityRatio90d\s*=\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*baseline\.window_90d_count\s*:\s*null/
+      /density_ratio_90d:\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*&&\s*window_90d\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*window_90d\s*:\s*null/
     );
+  });
+
+  test('OSE-INV7 | privacy | suppression | the density ratios divide by the PUBLISHED baseline, not the raw row (OSE-1751)', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // A ratio is this event's published count over a baseline. Over the RAW
+    // window it gives the raw window back (count / ratio), which undoes the
+    // rounding and the chain floor the baseline is published under. The windows
+    // come from floorCorridorBaseline and nowhere else.
+    expect(
+      src,
+      'OSE-1751: a density ratio must not divide by baseline.window_*_count (the raw row)'
+    ).not.toMatch(/thisEventCount\s*\/\s*baseline\.window_/);
+    expect(
+      src,
+      'OSE-1751: the baseline windows must come from floorCorridorBaseline, the call the export also makes'
+    ).toMatch(/floorCorridorBaseline\s*\(/);
   });
 
   test('OSE-INV7 | privacy | interface | report-depth.ts exists (tier-gated access control)', () => {
