@@ -58,7 +58,7 @@ import {
   type RegulatoryPool,
 } from './pool-contract';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
-import { floorNestedCounts } from './count-floor';
+import { PUBLISH_ROUNDING, floorPublishedChain, roundForPublish } from './count-floor';
 import {
   assertCorridorGrainRow,
   canonicalCorridorId,
@@ -297,19 +297,9 @@ async function prepareExport(
 export const RETURNS_WINDOW_DAYS = 90;
 /** A group, or a count inside it, below this is never exported (k-floor). */
 export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
-/**
- * Every published count is rounded down to a multiple of this before the
- * floors apply (PO decision 2026-10-01). A snapshot is compared with the last
- * one, so an exact count would show a one-person change between them (12 then
- * 13); rounded, small changes disappear inside a step of 5, and a change that
- * crosses a step never says how many people moved.
- */
-export const PUBLISH_ROUNDING = CORRIDOR_MAP_MIN_COUNT;
-/** A count rounded down to a multiple of PUBLISH_ROUNDING. */
-export function roundForPublish(n: number): number {
-  const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  return v - (v % PUBLISH_ROUNDING);
-}
+// The rounding primitives live in count-floor.ts (OSE-1782); re-exported so the
+// export path and its specs keep their import.
+export { PUBLISH_ROUNDING, roundForPublish };
 /**
  * The returns snapshot is weekly, not nightly (PO decision 2026-10-01): fewer
  * snapshots to compare. A run takes one only when the last successful snapshot
@@ -550,9 +540,10 @@ export async function exportAnonIdReturns(
         // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
         // published counts reveals a group under the floor (people 12, 2+ 9
         // would say 3 came once). The group floor above already holds people.
-        // Rounded first, so every published value is a multiple of 5.
-        const [peopleOut, ret2, ret3, ret5] = floorNestedCounts(
-          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus].map(roundForPublish),
+        // Rounded first (floorPublishedChain), so every published value is a
+        // multiple of 5.
+        const [peopleOut, ret2, ret3, ret5] = floorPublishedChain(
+          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
           RETURNS_MIN_COUNT,
           RETURNS_MIN_COUNT
         );
@@ -754,8 +745,8 @@ export async function exportCorridorDensityBaseline(
       // (a window under CORRIDOR_BASELINE_MIN_SAMPLE is suppressed), and as a
       // chain (90d ⊇ 30d), so 90d − 30d never names a group under K. A row
       // with nothing left to say is withheld.
-      const [w90, w30] = floorNestedCounts(
-        [r.window_90d_count, r.window_30d_count].map(roundForPublish),
+      const [w90, w30] = floorPublishedChain(
+        [r.window_90d_count, r.window_30d_count],
         CORRIDOR_BASELINE_MIN_SAMPLE,
         CORRIDOR_MAP_MIN_COUNT
       );

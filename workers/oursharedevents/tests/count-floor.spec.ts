@@ -9,12 +9,20 @@
 
 import { describe, test, expect } from 'vitest';
 import {
+  PUBLISH_ROUNDING,
   applyCountFloor,
   flooredRatePct,
+  floorCumulativeSeries,
   floorNestedCounts,
+  floorPublishedChain,
   floorTotalOfParts,
+  roundForPublish,
 } from '../src/lib/count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import {
+  PUBLISH_ROUNDING as exportPublishRounding,
+  roundForPublish as exportRoundForPublish,
+} from '../src/lib/shared-report-export';
 
 describe('applyCountFloor — uniform K-anon floor', () => {
   test('default floor is the SharedReport floor (single source of truth)', () => {
@@ -204,5 +212,101 @@ describe('flooredRatePct — a rate is never a head count under the floor', () =
     expect(flooredRatePct(5.9, 10.7)).toBe(50);
     expect(flooredRatePct(Number.NaN, 20)).toBeNull();
     expect(flooredRatePct(10, Infinity)).toBeNull();
+  });
+});
+
+// OSE-1782 — the publication primitives live here and nowhere else.
+
+describe('roundForPublish — a published count is a multiple of five', () => {
+  test('rounds down to a multiple of PUBLISH_ROUNDING', () => {
+    expect(PUBLISH_ROUNDING).toBe(5);
+    expect([0, 4, 5, 9, 10, 14, 15, 99].map(roundForPublish)).toEqual([0, 0, 5, 5, 10, 10, 15, 95]);
+  });
+
+  test('non-finite, negative and fractional inputs are handled like applyCountFloor does', () => {
+    expect([Number.NaN, -3, 7.9, Infinity].map(roundForPublish)).toEqual([0, 0, 5, 0]);
+  });
+
+  test('is the same function the export path re-exports (one home, no copy)', () => {
+    expect(exportRoundForPublish).toBe(roundForPublish);
+    expect(exportPublishRounding).toBe(PUBLISH_ROUNDING);
+  });
+});
+
+describe('floorPublishedChain — round, then chain-floor, in one call', () => {
+  test('equals rounding each count and then flooring the chain', () => {
+    const chain = [112, 109];
+    expect(floorPublishedChain(chain, 10, 5)).toEqual(
+      floorNestedCounts(chain.map(roundForPublish), 10, 5)
+    );
+  });
+
+  test('the corridor baseline case: 112 and 109 publish 110 and 105, never a gap of 3', () => {
+    // Unrounded, 112 − 109 = 3 names a group under the floor.
+    expect(floorPublishedChain([112, 109], 10, 5)).toEqual([110, 105]);
+  });
+
+  test('every published value is a multiple of the rounding step', () => {
+    for (const chain of [
+      [112, 109],
+      [57, 51, 33],
+      [200, 199, 198, 11],
+      [12, 9, 7],
+    ]) {
+      for (const v of floorPublishedChain(chain)) {
+        if (v !== null) expect(v % PUBLISH_ROUNDING).toBe(0);
+      }
+    }
+  });
+
+  test('defaults match floorNestedCounts (floor 5, difference floor 5)', () => {
+    expect(floorPublishedChain([12, 9])).toEqual([10, 5]);
+  });
+});
+
+describe('floorCumulativeSeries — a running total never publishes an increment', () => {
+  test('the 4 + 4 case: two shows under the floor, cumulative 8, publishes 5 (a range), not 8', () => {
+    // a + b = 8 with a, b ≤ 4 has exactly one solution. Rounded to 5, a + b is
+    // anywhere in 5..9, which has many.
+    expect(floorCumulativeSeries([4, 8])).toEqual([null, 5]);
+  });
+
+  test('the 8 then 15 case: the gap is a multiple of five, never the exact 7', () => {
+    const out = floorCumulativeSeries([8, 15]);
+    expect(out).toEqual([5, 15]);
+  });
+
+  test('every published value is a multiple of the rounding step', () => {
+    for (const series of [
+      [4, 8, 15, 23, 41],
+      [5, 6, 7, 8, 9, 10],
+      [0, 3, 6, 9, 12],
+    ]) {
+      for (const v of floorCumulativeSeries(series)) {
+        if (v !== null) expect(v % PUBLISH_ROUNDING).toBe(0);
+      }
+    }
+  });
+
+  test('a cumulative under the floor is withheld', () => {
+    expect(floorCumulativeSeries([1, 2, 4])).toEqual([null, null, null]);
+  });
+
+  test('a gap from the last published value of 1..4 is refused', () => {
+    // With a floor and step of 1 the gap rule is the only thing left to refuse 12 → 14.
+    expect(floorCumulativeSeries([10, 12, 14], 5, 5, 1)).toEqual([10, null, null]);
+    expect(floorCumulativeSeries([10, 12, 15], 5, 5, 1)).toEqual([10, null, 15]);
+  });
+
+  test('a total that goes down fails closed, and so does the rest', () => {
+    expect(floorCumulativeSeries([10, 20, 15, 30])).toEqual([10, 20, null, null]);
+  });
+
+  test('a repeat of the last published value is published again (a gap of zero)', () => {
+    expect(floorCumulativeSeries([10, 12, 13])).toEqual([10, 10, 10]);
+  });
+
+  test('non-finite inputs are withheld', () => {
+    expect(floorCumulativeSeries([Number.NaN, Infinity])).toEqual([null, null]);
   });
 });

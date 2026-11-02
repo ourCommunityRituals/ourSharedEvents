@@ -1,0 +1,76 @@
+info:
+  name: OSE-1782 | public event | the answer carries no count-shaped field
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Contract: nothing publishes a count except through count-floor.ts.
+        // The public event projection (lib/public-event-projection.ts) carries no
+        // count today, so no key in the answer may read as a number of people.
+        // tests/count-floor-publication.derived.spec.ts holds the same rule over
+        // the projection's own field list; this is the same rule against the
+        // deployed answer. A count added later is declared in
+        // PUBLIC_EVENT_COUNT_SOURCES and added to ALLOWED below, in the same change.
+        //
+        // Behind a Cloudflare Access challenge the answer is not JSON. That is
+        // the same case the neighbouring GET /api/v2/events/:id request allows
+        // for: it is named as its own test, so a run shows which case it met.
+        const ct = res.getHeader('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          test('not JSON: an Access challenge, nothing to check for keys', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const COUNT_WORDS = [
+          'count', 'counts', 'total', 'totals', 'num', 'sum', 'people', 'person',
+          'attendee', 'attendees', 'rsvp', 'rsvps', 'registration', 'registrations',
+          'registered', 'checkin', 'checkins', 'scan', 'scans', 'visitor', 'visitors',
+          'walkin', 'walkins', 'capacity', 'headcount', 'returned',
+        ];
+        const ALLOWED = [];
+        function words(key) {
+          return key
+            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .filter(Boolean);
+        }
+        function countShaped(keys) {
+          return keys.filter(function (k) {
+            const w = words(k);
+            return w.some(function (x) { return COUNT_WORDS.indexOf(x) !== -1; }) ||
+              /walkins?/.test(w.join(''));
+          });
+        }
+        test('200 with the event', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().item.id).to.be.a('string');
+        });
+        test('the detector sees a count-shaped key (negative control)', function () {
+          expect(countShaped(['title', 'attendee_count', 'walk_in_total'])).to.eql([
+            'attendee_count',
+            'walk_in_total',
+          ]);
+        });
+        test('the item has no count-shaped key that is not declared', function () {
+          const found = countShaped(Object.keys(res.getBody().item)).filter(function (k) {
+            return ALLOWED.indexOf(k) === -1;
+          });
+          expect(found).to.eql([]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -119,3 +119,77 @@ export function floorNestedCounts(
     return n;
   });
 }
+
+/**
+ * Every published count is rounded down to a multiple of this before the
+ * floors apply (PO decision 2026-10-01). A snapshot is compared with the last
+ * one, so an exact count would show a one-person change between them (12 then
+ * 13); rounded, small changes disappear inside a step of 5, and a change that
+ * crosses a step never says how many people moved.
+ */
+export const PUBLISH_ROUNDING = CORRIDOR_MAP_MIN_COUNT;
+
+/** A count rounded down to a multiple of PUBLISH_ROUNDING. */
+export function roundForPublish(n: number): number {
+  return roundDownTo(n, PUBLISH_ROUNDING);
+}
+
+// One argument on purpose: callers pass roundForPublish straight to `.map`, which
+// would hand a second argument (the index) to a step parameter.
+function roundDownTo(n: number, step: number): number {
+  const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return v - (v % step);
+}
+
+/**
+ * Round, then chain-floor: the safe way to publish nested counts, and the
+ * shortest. Flooring alone leaves a chain open to arithmetic that the rounding
+ * closes (OSE-1782), so a surface that publishes a chain calls this and not
+ * `floorNestedCounts` directly.
+ */
+export function floorPublishedChain(
+  chain: readonly number[],
+  floor: number = CORRIDOR_MAP_MIN_COUNT,
+  diffFloor: number = CORRIDOR_MAP_MIN_COUNT
+): (number | null)[] {
+  return floorNestedCounts(
+    chain.map((n) => roundForPublish(n)),
+    floor,
+    diffFloor
+  );
+}
+
+/**
+ * Round, then floor, a running total (people so far, across shows): the
+ * cumulative twin of `floorPublishedChain`, where each value counts everything
+ * before it so the series never goes down.
+ *
+ * Published as exact numbers, a running total gives away every increment by
+ * subtraction (8 then 15 says the third show drew exactly 7), and two sub-floor
+ * shows summed (4 + 4 = 8) have one solution. So each value is rounded first,
+ * then published only if it is at or above `floor` and its gap from the last
+ * PUBLISHED value is 0 or at least `diffFloor`. A series that goes down is not a
+ * running total, so it and everything after it fail closed.
+ */
+export function floorCumulativeSeries(
+  series: readonly number[],
+  floor: number = CORRIDOR_MAP_MIN_COUNT,
+  diffFloor: number = CORRIDOR_MAP_MIN_COUNT,
+  step: number = PUBLISH_ROUNDING
+): (number | null)[] {
+  let last: number | null = null;
+  let prev: number | null = null;
+  let broken = false;
+  return series.map((raw) => {
+    const n = roundDownTo(raw, step);
+    if (prev !== null && n < prev) broken = true;
+    prev = n;
+    if (broken || n < floor) return null;
+    if (last !== null) {
+      const gap = n - last;
+      if (gap !== 0 && gap < diffFloor) return null;
+    }
+    last = n;
+    return n;
+  });
+}

@@ -17,6 +17,9 @@ export const NODE_SPECS = [
   // Batch 1 — pure-logic units (import a src/ module, assert its output; no DOM,
   // no axe, no cloudflare:test, no fs). Proven green in the node project.
   'tests/count-floor.spec.ts',
+  // OSE-1782 — derived gate: no count published except through count-floor.ts
+  // (reads the projection's field list and the src/ tree; no runtime).
+  'tests/count-floor-publication.derived.spec.ts',
   'tests/event-price.spec.ts',
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
   // name + placement fields). Imports the render module, no runtime.

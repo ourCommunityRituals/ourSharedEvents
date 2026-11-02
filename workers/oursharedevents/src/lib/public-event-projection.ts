@@ -90,4 +90,18 @@ export function toPublicEvent(row: Record<string, unknown>): Record<string, unkn
   return out;
 }
 
-export { PUBLIC_EVENT_COLUMNS, PUBLIC_EVENT_COMPUTED, PUBLIC_EVENT_FIELDS };
+/**
+ * Fields in the list above that carry a count, each mapped to the `count-floor.ts`
+ * export that produces it (OSE-1782). Empty today: no public event field is a
+ * count. A count added to the projection is declared here or the derived spec
+ * (tests/count-floor-publication.derived.spec.ts) fails the build, so no surface
+ * formats its own number.
+ */
+const PUBLIC_EVENT_COUNT_SOURCES: Readonly<Record<string, string>> = {};
+
+export {
+  PUBLIC_EVENT_COLUMNS,
+  PUBLIC_EVENT_COMPUTED,
+  PUBLIC_EVENT_COUNT_SOURCES,
+  PUBLIC_EVENT_FIELDS,
+};
