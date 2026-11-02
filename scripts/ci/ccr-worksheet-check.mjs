@@ -147,7 +147,28 @@ const MAX_LOOPS = 20; // a bound, so a typo such as 1e9 cannot stall the check
 export const WORKSHEET_NAME = /^ccr[-_].+\.(md|markdown)$/i;
 
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-const stripFences = (t) => t.replace(/^[ \t]*(```|~~~)[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*$/gm, '');
+// Drops fenced code blocks, line by line (CommonMark): a fence is 3 or more backticks or tildes,
+// and it closes on a line of the same character, at least as long, with nothing after it. An
+// unclosed fence runs to the end of the text. A fence line is indented 0 to 3 spaces; four
+// spaces or a tab make it indented code, which is text here.
+function stripFences(t) {
+  const out = [];
+  let fence = null;
+  for (const line of t.split('\n')) {
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !m[2].trim()) fence = null;
+      continue;
+    }
+    // A backtick fence's info string cannot hold a backtick; such a line is inline code.
+    if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+      fence = m[1];
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
 
 function args(argv) {
   const i = argv.indexOf('--root');
@@ -241,8 +262,8 @@ function registerCounts(text) {
   const cells = (l) =>
     l
       .trim()
-      .replace(/^\||\|$/g, '')
-      .split('|')
+      .replace(/^\||(?<!\\)\|$/g, '')
+      .split(/(?<!\\)\|/) // an escaped \| is text inside a cell, not a column break
       .map((c) => c.replace(/\*/g, '').trim());
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
