@@ -370,3 +370,22 @@ describe('floorCumulativeOfParts — a running total of the parts that are thems
     }
   });
 });
+
+describe('floorPublishedChain — an increase inside one rounding bucket still breaks the chain', () => {
+  test('11 then 14 (both round to 10) is not nested: the second is withheld', () => {
+    expect(floorPublishedChain([11, 14])).toEqual([10, null]);
+  });
+
+  test('everything after the first increase is withheld, not only the entry itself', () => {
+    expect(floorPublishedChain([20, 14, 15, 5])).toEqual([20, 10, null, null]);
+  });
+
+  test('a decrease inside one bucket, or equal counts, is still nested', () => {
+    expect(floorPublishedChain([14, 11])).toEqual([10, 10]);
+    expect(floorPublishedChain([14, 14])).toEqual([10, 10]);
+  });
+
+  test('the corridor baseline shape: 90d 112, 30d 115 is not nested and is withheld', () => {
+    expect(floorPublishedChain([112, 115], 10, 5)).toEqual([110, null]);
+  });
+});

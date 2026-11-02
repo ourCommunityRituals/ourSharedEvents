@@ -152,11 +152,23 @@ export function floorPublishedChain(
   floor: number = CORRIDOR_MAP_MIN_COUNT,
   diffFloor: number = CORRIDOR_MAP_MIN_COUNT
 ): (number | null)[] {
-  return floorNestedCounts(
+  const published = floorNestedCounts(
     chain.map((n) => roundForPublish(n)),
     floor,
     diffFloor
   );
+  // The nesting test must see the exact counts: 11 then 14 both round to 10, so
+  // the rounded chain looks nested when it is not. An increase in the exact
+  // counts means the input is not what the floor assumes, so it and everything
+  // after it fail closed.
+  let broken = false;
+  let prev: number | null = null;
+  return published.map((value, i) => {
+    const exact = Number.isFinite(chain[i]) && chain[i] > 0 ? Math.floor(chain[i]) : 0;
+    if (prev !== null && exact > prev) broken = true;
+    prev = exact;
+    return broken ? null : value;
+  });
 }
 
 /**
