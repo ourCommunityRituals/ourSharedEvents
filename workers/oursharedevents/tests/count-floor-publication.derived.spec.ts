@@ -26,6 +26,7 @@ import { join, relative, sep } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import * as countFloor from '../src/lib/count-floor';
 import {
+  COUNT_PUBLISHERS,
   PUBLIC_EVENT_COUNT_SOURCES,
   PUBLIC_EVENT_FIELDS,
   projectEvent,
@@ -145,6 +146,16 @@ describe('the public event projection publishes no count except through count-fl
         toPublicEvent({ [field]: 3 })[field],
         `${field} is declared but published raw`
       ).not.toBe(3);
+    }
+  });
+
+  test('every permitted publisher withholds (null) a sub-floor input, never 0 or the raw value', () => {
+    for (const [name, publish] of Object.entries(COUNT_PUBLISHERS)) {
+      for (const n of [0, 1, 2, 3, 4, -1, 4.9, Number.NaN, Infinity, 'x', null, undefined]) {
+        expect(publish(n), `${name}(${String(n)})`).toBeNull();
+      }
+      expect(publish(5), name).toBe(5);
+      expect(publish(12), name).toBe(name === 'roundForPublish' ? 10 : 12);
     }
   });
 

@@ -93,10 +93,16 @@ export function toPublicEvent(row: Record<string, unknown>): Record<string, unkn
  * taking the raw value and returning what is published. A field declared in
  * PUBLIC_EVENT_COUNT_SOURCES goes through its function here, so the declaration
  * is the transformation and not a note beside it (OSE-1782).
+ *
+ * Every publisher withholds (null) a count under the floor: rounding alone would
+ * turn 0..4 into a published 0, which reads as "none" and not "fewer than 5".
  */
 const COUNT_PUBLISHERS = {
   applyCountFloor: (v: unknown) => applyCountFloor(Number(v)).count,
-  roundForPublish: (v: unknown) => roundForPublish(Number(v)),
+  roundForPublish: (v: unknown) => {
+    const floored = applyCountFloor(Number(v)).count;
+    return floored === null ? null : roundForPublish(floored);
+  },
 } as const;
 
 type CountPublisher = keyof typeof COUNT_PUBLISHERS;
