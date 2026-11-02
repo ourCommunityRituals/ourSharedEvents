@@ -456,6 +456,20 @@ describe('ccr worksheet gate: the extended team', () => {
       worksheet({ per: [{ extra: '```x``` is inline code\nScore: 50%' }] }),
       /loop 1 needs exactly one line "Score: NN%" \(found 2\)/
     ));
+
+  // Four spaces or a tab make a line indented code, not a fence (CommonMark allows 0 to 3).
+  test.each([
+    ['four spaces', '    ```'],
+    ['a tab', '\t```'],
+  ])('a marker indented with %s opens no fence, so the later sections still count', (_n, marker) =>
+    green(worksheet({ per: [{ extra: `${marker}\nan indented example, never closed` }] }))
+  );
+
+  test('a fence indented three spaces is still a fence', () =>
+    green(worksheet({ per: [{ extra: '   ```\nScore: 50%\n   ```' }] })));
+
+  test('a closer indented four spaces does not close the fence', () =>
+    green(worksheet({ per: [{ extra: '```\n    ```\nScore: 50%\n```' }] })));
 });
 
 describe('ccr worksheet gate: the cumulative and the pass', () => {

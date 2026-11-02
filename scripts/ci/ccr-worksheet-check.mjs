@@ -149,12 +149,13 @@ export const WORKSHEET_NAME = /^ccr[-_].+\.(md|markdown)$/i;
 const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 // Drops fenced code blocks, line by line (CommonMark): a fence is 3 or more backticks or tildes,
 // and it closes on a line of the same character, at least as long, with nothing after it. An
-// unclosed fence runs to the end of the text.
+// unclosed fence runs to the end of the text. A fence line is indented 0 to 3 spaces; four
+// spaces or a tab make it indented code, which is text here.
 function stripFences(t) {
   const out = [];
   let fence = null;
   for (const line of t.split('\n')) {
-    const m = line.match(/^[ \t]*(`{3,}|~{3,})(.*)$/);
+    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
     if (fence) {
       if (m && m[1][0] === fence[0] && m[1].length >= fence.length && !m[2].trim()) fence = null;
       continue;
