@@ -709,11 +709,18 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/count-floor-publication.derived.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 14
+    },
+    {
       "file": "workers/oursharedevents/tests/count-floor.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 30
+      "testCount": 59
     },
     {
       "file": "workers/oursharedevents/tests/crawl-policy.spec.ts",

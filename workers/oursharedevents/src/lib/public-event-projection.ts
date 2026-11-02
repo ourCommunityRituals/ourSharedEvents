@@ -32,6 +32,8 @@
 // audit, and OSE-1245 has to decide the location-precision policy first. Doing
 // it here would be guessing at that decision rather than implementing it.
 
+import { applyCountFloor, roundForPublish } from './count-floor';
+
 /** Columns of `events` that a public response may carry. Additions are decisions. */
 const PUBLIC_EVENT_COLUMNS = [
   'id',
@@ -83,11 +85,57 @@ const PUBLIC_EVENT_FIELDS: ReadonlySet<string> = new Set<string>([
  * shape that produced this ticket.
  */
 export function toPublicEvent(row: Record<string, unknown>): Record<string, unknown> {
+  return projectEvent(row, PUBLIC_EVENT_FIELDS, PUBLIC_EVENT_COUNT_SOURCES);
+}
+
+/**
+ * The count-floor.ts functions that may produce a published count field, each
+ * taking the raw value and returning what is published. A field declared in
+ * PUBLIC_EVENT_COUNT_SOURCES goes through its function here, so the declaration
+ * is the transformation and not a note beside it (OSE-1782).
+ *
+ * Every publisher withholds (null) a count under the floor: rounding alone would
+ * turn 0..4 into a published 0, which reads as "none" and not "fewer than 5".
+ */
+const COUNT_PUBLISHERS = {
+  applyCountFloor: (v: unknown) => applyCountFloor(Number(v)).count,
+  roundForPublish: (v: unknown) => {
+    const floored = applyCountFloor(Number(v)).count;
+    return floored === null ? null : roundForPublish(floored);
+  },
+} as const;
+
+type CountPublisher = keyof typeof COUNT_PUBLISHERS;
+
+/**
+ * Fields in the list above that carry a count, each mapped to the `count-floor.ts`
+ * function that produces it (OSE-1782). Empty today: no public event field is a
+ * count. A count added to the projection is declared here, which makes
+ * `projectEvent` run it through that function, and the derived spec
+ * (tests/count-floor-publication.derived.spec.ts) fails the build for a
+ * count-shaped field that is not declared, so no surface formats its own number.
+ */
+const PUBLIC_EVENT_COUNT_SOURCES: Readonly<Record<string, CountPublisher>> = {};
+
+/** The projection itself, with its field list and count declarations passed in. */
+export function projectEvent(
+  row: Record<string, unknown>,
+  fields: ReadonlySet<string>,
+  sources: Readonly<Record<string, CountPublisher>>
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(row)) {
-    if (PUBLIC_EVENT_FIELDS.has(key)) out[key] = row[key];
+    if (!fields.has(key)) continue;
+    const publisher = Object.prototype.hasOwnProperty.call(sources, key) ? sources[key] : null;
+    out[key] = publisher ? COUNT_PUBLISHERS[publisher](row[key]) : row[key];
   }
   return out;
 }
 
-export { PUBLIC_EVENT_COLUMNS, PUBLIC_EVENT_COMPUTED, PUBLIC_EVENT_FIELDS };
+export {
+  COUNT_PUBLISHERS,
+  PUBLIC_EVENT_COLUMNS,
+  PUBLIC_EVENT_COMPUTED,
+  PUBLIC_EVENT_COUNT_SOURCES,
+  PUBLIC_EVENT_FIELDS,
+};

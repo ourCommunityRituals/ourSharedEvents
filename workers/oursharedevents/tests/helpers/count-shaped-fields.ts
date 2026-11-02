@@ -1,0 +1,70 @@
+/**
+ * Helpers for tests/count-floor-publication.derived.spec.ts (OSE-1782).
+ */
+
+/** Words that make a field name count-shaped once it is split into words. */
+const COUNT_WORDS: ReadonlySet<string> = new Set([
+  'count',
+  'counts',
+  'total',
+  'totals',
+  'num',
+  'sum',
+  'people',
+  'person',
+  'attendee',
+  'attendees',
+  'rsvp',
+  'rsvps',
+  'registration',
+  'registrations',
+  'registered',
+  'checkin',
+  'checkins',
+  'scan',
+  'scans',
+  'visitor',
+  'visitors',
+  'walkin',
+  'walkins',
+  'capacity',
+  'headcount',
+  'returned',
+]);
+
+/** Count-shaped compounds, matched on a field name's words run together. */
+const COMPOUND_COUNT = /checkins?|checkedin|walkins?|signups?|attendance|headcount/;
+
+function words(field: string): string[] {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Fields whose name reads as a number of people. A name heuristic, so it leans
+ * wide: a false positive is one declaration; a false negative is a leak.
+ */
+export function countShapedFields(fields: readonly string[]): string[] {
+  return fields.filter((f) => {
+    const w = words(f);
+    // Compound names arrive as several words (check_ins, walk_in, sign_ups,
+    // checked_in); read the words run together as well.
+    const joined = w.join('');
+    return w.some((x) => COUNT_WORDS.has(x)) || COMPOUND_COUNT.test(joined);
+  });
+}
+
+/** True when `text` defines (not merely calls or imports) a function called `name`. */
+export function definesFunction(text: string, name: string): boolean {
+  const fn = new RegExp(`\\bfunction\\s+${name}\\b`);
+  // An initializer that is a function: an arrow (`(n) =>`, `n =>`) or a function
+  // expression (`function (n)`, `async function named(n)`), with or without a type
+  // annotation on the name.
+  const initializer = new RegExp(
+    `\\b(?:const|let|var)\\s+${name}\\s*(?::[^\\n]*?)?=(?!>)\\s*(?:async\\s*)?(?:function\\b|\\(|[A-Za-z_$][\\w$]*\\s*=>)`
+  );
+  return fn.test(text) || initializer.test(text);
+}
