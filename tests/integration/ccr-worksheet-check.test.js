@@ -438,6 +438,24 @@ describe('ccr worksheet gate: the extended team', () => {
       worksheet({ per: [{ team: null, extra: '```\nTeam: ' + TEAM.join(', ') + '\n```' }] }),
       /needs exactly one line "Team:/
     ));
+
+  // CommonMark fences: 3 or more backticks or tildes, closed by the same character, at least as long.
+  test.each([
+    ['a four-backtick fence', '````md\nScore: 50%\n````'],
+    ['a fence closed by a longer one', '```\nScore: 50%\n`````'],
+    ['a fence a shorter line cannot close', '````\n```\nScore: 50%\n````'],
+    ['a backtick fence a tilde line cannot close', '```\n~~~\nScore: 50%\n```'],
+    ['a tilde fence', '~~~~\nScore: 50%\n~~~~'],
+    ['a fence a line with text after it cannot close', '```\n``` not a close\nScore: 50%\n```'],
+  ])('a score example inside %s is not a second score', (_n, extra) =>
+    green(worksheet({ per: [{ extra }] }))
+  );
+
+  test('a line of inline code is not a fence, so a score after it still counts', () =>
+    redWith(
+      worksheet({ per: [{ extra: '```x``` is inline code\nScore: 50%' }] }),
+      /loop 1 needs exactly one line "Score: NN%" \(found 2\)/
+    ));
 });
 
 describe('ccr worksheet gate: the cumulative and the pass', () => {
@@ -844,6 +862,21 @@ describe('ccr worksheet gate: the findings register', () => {
     redWith(
       worksheet({ register: table('| F1 | Severe | open |') }),
       /the findings register has a row of severity "Severe"/
+    ));
+
+  // An escaped \| is text inside a cell; it must not shift the Severity or Status column.
+  const withFinding = (...rows) =>
+    ['| # | Finding | Severity | Status |', '|---|---|---|---|', ...rows].join('\n');
+
+  test('an escaped pipe before Status does not reopen a fixed finding', () =>
+    green(worksheet({ register: withFinding('| F1 | a \\| b | High | fixed |') })));
+
+  test('an escaped pipe before Severity still reads the severity', () =>
+    green(
+      worksheet({
+        fm: { unresolved: unresolved({ low: 1 }) },
+        register: withFinding('| F1 | x \\| y | Low | open |'),
+      })
     ));
 });
 

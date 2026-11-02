@@ -10,7 +10,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- writes a temp repo the test just created */
 
 const { spawnSync } = require('child_process');
-const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('fs');
+const { chmodSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('fs');
 const { tmpdir } = require('os');
 const { join, dirname } = require('path');
 
@@ -294,6 +294,17 @@ describe('ccr gate: a pull request', () => {
     expect(r.problems.join('\n')).toMatch(/loops_run is 4 but the worksheet has loop sections/);
   });
 
+  test('a worksheet already on main that the PR changes can be the tied one', () => {
+    const { root } = repo();
+    commit(root, { [WS]: tie(7, git(root, 'rev-parse', 'HEAD')) }, 'old ccr on main');
+    const base = git(root, 'rev-parse', 'HEAD');
+    const subject = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'rules');
+    const head = commit(root, { [WS]: tie(12, subject) }, 'ccr rewritten for this PR');
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems).toEqual([]);
+    expect(r.notes.join('\n')).toContain(`reviewed by ${WS}`);
+  });
+
   test('a worksheet added before the PR does not count for it', () => {
     const { root } = repo();
     const subject = git(root, 'rev-parse', 'HEAD');
@@ -302,6 +313,56 @@ describe('ccr gate: a pull request', () => {
     const head = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'rules');
     const r = gate({ root, base, head, pr: 12 });
     expect(r.problems.join('\n')).toMatch(/has no CCR worksheet tied to it/);
+  });
+
+  // git C-quotes names with non-ASCII characters unless asked for NUL-delimited output.
+  test('a governed file with a non-ASCII name is still governed', () => {
+    const { root, base } = repo();
+    const head = commit(root, { '.claude/skills/ccr/é.md': 'new rule\n' }, 'rules');
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems.join('\n')).toContain(
+      'changes governed files (.claude/skills/ccr/é.md) and has no CCR worksheet tied to it'
+    );
+  });
+
+  test('a worksheet with a non-ASCII name can be the tied one', () => {
+    const { root, base } = repo();
+    const subject = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'rules');
+    const ws = '.claude/outputs/CCR-règles-2026-11-02.md';
+    const head = commit(root, { [ws]: tie(12, subject) }, 'ccr');
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems).toEqual([]);
+    expect(r.notes.join('\n')).toContain(`reviewed by ${ws}`);
+  });
+
+  test('a failed comparison after the review is not proof that nothing changed', () => {
+    // The reviewed commit's .claude tree is unique to it; removing that object makes only the
+    // subject-to-head diff fail, while the PR's own diff still works.
+    const { root, base } = repo();
+    const subject = commit(
+      root,
+      { 'AGENTS.md': '# rules v2\n', '.claude/agents/extra.md': 'x\n' },
+      'rules'
+    );
+    const head = commit(root, { [WS]: tie(12, subject), '.claude/agents/extra.md': 'y\n' }, 'ccr');
+    const tree = git(root, 'rev-parse', `${subject}:.claude`);
+    const obj = join(root, '.git', 'objects', tree.slice(0, 2), tree.slice(2));
+    chmodSync(obj, 0o644);
+    rmSync(obj);
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems.join('\n')).toContain(
+      `${WS}: could not compare ${subject.slice(0, 12)} with the PR head`
+    );
+  });
+
+  test('a diff that git cannot run is a problem, not a pass', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ccr-gate-nogit-'));
+    made.push(root);
+    put(root, '.claude/outputs/README.md', 'outputs\n');
+    const sha = 'ab'.repeat(20);
+    expect(gate({ root, base: sha, head: sha, pr: 12 }).problems.join('\n')).toMatch(
+      /git diff failed/
+    );
   });
 
   test('bad arguments are a problem, not a pass', () => {

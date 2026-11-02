@@ -60,11 +60,23 @@ function args(argv) {
 }
 
 function git(root, ...a) {
-  const r = spawnSync('git', ['-C', root, ...a], { encoding: 'utf-8' });
-  return { ok: r.status === 0, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
+  const r = spawnSync('git', ['-C', root, ...a], {
+    encoding: 'utf-8',
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  return { ok: r.status === 0, raw: r.stdout ?? '', err: (r.stderr ?? '').trim() };
 }
 
-const lines = (s) => (s ? s.split('\n').filter(Boolean) : []);
+// What a diff touches, as { status, path }. NUL-delimited, so git never C-quotes a name, and
+// with no rename detection, so a move is a delete plus an add and both paths are seen.
+function changedPaths(root, ...range) {
+  const r = git(root, 'diff', '--name-status', '-z', '--no-renames', ...range);
+  const parts = r.raw.split('\0');
+  const entries = [];
+  for (let i = 0; i + 1 < parts.length; i += 2)
+    entries.push({ status: parts[i], path: parts[i + 1] });
+  return { ok: r.ok, err: r.err, entries, paths: entries.map((e) => e.path) };
+}
 
 export function gate({ root, base, head, pr }) {
   const problems = [];
@@ -78,18 +90,20 @@ export function gate({ root, base, head, pr }) {
   problems.push(...check(root).problems);
 
   // 2. A governed change carries a tied worksheet.
-  const diff = git(root, 'diff', '--name-only', '--no-renames', `${base}...${head}`);
+  const diff = changedPaths(root, `${base}...${head}`);
   if (!diff.ok) return { problems: [...problems, `git diff failed: ${diff.err}`], notes };
-  const changed = lines(diff.out);
+  const changed = diff.paths;
   const governed = changed.filter(isGoverned);
   if (!governed.length) {
     notes.push(`no governed file changed (${changed.length} files in the PR)`);
     return { problems, notes };
   }
 
-  const added = lines(
-    git(root, 'diff', '--name-only', '--no-renames', '--diff-filter=AM', `${base}...${head}`).out
-  ).filter((p) => p.startsWith('.claude/outputs/') && WORKSHEET_NAME.test(basename(p)));
+  // Worksheets this PR adds or changes.
+  const added = diff.entries
+    .filter((e) => ['A', 'M'].includes(e.status))
+    .map((e) => e.path)
+    .filter((p) => p.startsWith('.claude/outputs/') && WORKSHEET_NAME.test(basename(p)));
 
   const why = [];
   let tied = null;
@@ -119,9 +133,14 @@ export function gate({ root, base, head, pr }) {
       why.push(`${rel}: subject_sha ${subject.slice(0, 12)} is not a commit on this PR`);
       continue;
     }
-    const since = lines(git(root, 'diff', '--name-only', '--no-renames', subject, head).out).filter(
-      isGoverned
-    );
+    const sinceDiff = changedPaths(root, subject, head);
+    if (!sinceDiff.ok) {
+      why.push(
+        `${rel}: could not compare ${subject.slice(0, 12)} with the PR head (${sinceDiff.err})`
+      );
+      continue;
+    }
+    const since = sinceDiff.paths.filter(isGoverned);
     if (since.length) {
       why.push(
         `${rel}: governed files changed after the reviewed commit ${subject.slice(0, 12)}: ${since.join(', ')}`
