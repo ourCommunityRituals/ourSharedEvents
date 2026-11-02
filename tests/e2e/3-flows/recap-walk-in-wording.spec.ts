@@ -22,7 +22,16 @@ const BASE = process.env.BASE_URL ?? '';
 test.describe('Public recap walk-in wording', () => {
   test('a walk-in count the nested floor withholds reads like one under 5', async ({ request }) => {
     expect(EVENT, 'SMOKE_EVENT_POST names the seeded event').not.toBe('');
-    const res = await request.get(`${BASE}/events/${EVENT}`);
+    // This is a plain HTTP read, not a browser. The config's Chrome user agent on a
+    // non-browser client draws Cloudflare's bot challenge (403, cf-mitigated), so the
+    // request says what it is. Playwright's own default passes the edge.
+    const res = await request.get(`${BASE}/events/${EVENT}`, {
+      headers: { 'User-Agent': 'ose-recap-walk-in-wording-check' },
+    });
+    expect(
+      res.headers()['cf-mitigated'],
+      'the edge challenged this client; the Worker never saw the request'
+    ).toBeUndefined();
     expect(res.status()).toBe(200);
     const html = await res.text();
     expect(html).toContain('data-testid="event-stats-card"');
