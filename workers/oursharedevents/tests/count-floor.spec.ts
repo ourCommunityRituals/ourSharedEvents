@@ -12,6 +12,7 @@ import {
   PUBLISH_ROUNDING,
   applyCountFloor,
   flooredRatePct,
+  floorCumulativeOfParts,
   floorCumulativeSeries,
   floorNestedCounts,
   floorPublishedChain,
@@ -327,5 +328,45 @@ describe('floorCumulativeSeries — a decrease inside one rounding bucket still 
 
   test('a fractional input is floored before the comparison', () => {
     expect(floorCumulativeSeries([14.9, 14.1, 20])).toEqual([10, 10, 20]);
+  });
+});
+
+describe('floorCumulativeOfParts — a running total of the parts that are themselves published', () => {
+  test('five shows of exactly four publish nothing, not a total that names every show', () => {
+    // floorCumulativeSeries([4, 8, 12, 16, 20]) would publish 20, and five shows
+    // under 5 add up to at most 20: every show had exactly four.
+    expect(floorCumulativeOfParts([4, 4, 4, 4, 4])).toEqual([null, null, null, null, null]);
+  });
+
+  test('a part under the floor never joins the sum (drop before sum, as floorTotalOfParts)', () => {
+    // Parts 4, 6, 3, 7: only 6 and 7 are published, so the totals are 0, 6, 6, 13,
+    // rounded to 0, 5, 5, 10.
+    expect(floorCumulativeOfParts([4, 6, 3, 7])).toEqual([null, 5, 5, 10]);
+  });
+
+  test('one more person in a sub-floor part changes nothing', () => {
+    for (const n of [0, 1, 2, 3]) {
+      expect(floorCumulativeOfParts([20, n, 20])).toEqual(floorCumulativeOfParts([20, n + 1, 20]));
+    }
+  });
+
+  test('parts at or above the floor publish rounded running totals', () => {
+    expect(floorCumulativeOfParts([8, 7, 12])).toEqual([5, 15, 25]);
+  });
+
+  test('non-finite parts count for nothing', () => {
+    expect(floorCumulativeOfParts([Number.NaN, Infinity, 6])).toEqual([null, null, 5]);
+  });
+
+  test('every published value is a multiple of the rounding step', () => {
+    for (const parts of [
+      [4, 8, 15, 23, 41],
+      [5, 6, 7, 8, 9, 10],
+      [3, 3, 3, 9, 12],
+    ]) {
+      for (const v of floorCumulativeOfParts(parts)) {
+        if (v !== null) expect(v % PUBLISH_ROUNDING).toBe(0);
+      }
+    }
   });
 });

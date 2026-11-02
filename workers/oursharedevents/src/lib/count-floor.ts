@@ -170,6 +170,11 @@ export function floorPublishedChain(
  * then published only if it is at or above `floor` and its gap from the last
  * PUBLISHED value is 0 or at least `diffFloor`. A series that goes down is not a
  * running total, so it and everything after it fail closed.
+ *
+ * The series must already be sums of PUBLISHED parts. Handed raw totals of shows
+ * that were each withheld, it publishes a total that names them (five shows under
+ * 5 sum to at most 20, so a published 20 says every show had exactly four). To
+ * publish a running total from per-show counts, call `floorCumulativeOfParts`.
  */
 export function floorCumulativeSeries(
   series: readonly number[],
@@ -195,4 +200,25 @@ export function floorCumulativeSeries(
     last = n;
     return n;
   });
+}
+
+/**
+ * A running total from per-show counts: the cumulative twin of
+ * `floorTotalOfParts` (drop before sum, OSE-683). A show under the floor never
+ * joins the sum, so the total cannot be differenced or bounded back to a
+ * withheld show. The totals are then rounded and floored as
+ * `floorCumulativeSeries` does. With no published part so far the total is
+ * withheld.
+ */
+export function floorCumulativeOfParts(
+  parts: readonly (number | null | undefined)[],
+  floor: number = CORRIDOR_MAP_MIN_COUNT,
+  diffFloor: number = CORRIDOR_MAP_MIN_COUNT
+): (number | null)[] {
+  let sum = 0;
+  const totals = parts.map((part) => {
+    sum += applyCountFloor(part ?? 0, floor).count ?? 0;
+    return sum;
+  });
+  return floorCumulativeSeries(totals, floor, diffFloor);
 }

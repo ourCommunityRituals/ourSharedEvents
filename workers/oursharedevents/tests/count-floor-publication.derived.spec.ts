@@ -190,6 +190,7 @@ describe('no privacy primitive lives in a consumer module', () => {
         'flooredRatePct',
         'floorPublishedChain',
         'floorCumulativeSeries',
+        'floorCumulativeOfParts',
         'roundForPublish',
       ])
     );
