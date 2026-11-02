@@ -225,7 +225,39 @@ function isCoarseClock(sql: string): boolean {
   return /\bstrftime\s*\(|\bdate\s*\(\s*(?:['"]now['"]|\))|\bCURRENT_DATE\b/i.test(sql);
 }
 
-const stripSqlComments = (sql: string): string => sql.replace(/--[^\n]*/g, '');
+/**
+ * Drop `-- ...` comments, but not a `--` inside a quoted SQL string: a value
+ * such as '{"answer":"--"}' must not hide the assignments that follow it on the
+ * same line (fourth review on #1069). A doubled quote inside a string ('') is
+ * the SQL escape and does not end it.
+ */
+function stripSqlComments(sql: string): string {
+  let out = '';
+  let quote = '';
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (quote) {
+      out += ch;
+      if (ch === quote) {
+        if (sql[i + 1] === quote) out += sql[++i];
+        else quote = '';
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === '-' && sql[i + 1] === '-') {
+      while (i < sql.length && sql[i] !== '\n') i++;
+      i--;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
 
 /** The text between the parenthesis at `open` and its match, comments removed. */
 function readParens(text: string, open: number): { inner: string; end: number } {
@@ -915,5 +947,19 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
     expect(sourceFindings('x.ts', uses, constants, targets).map((f) => f.kind)).toEqual([
       'sql-write',
     ]);
+  });
+
+  test('OSE-1778 | gate | a -- inside a quoted SQL string is not a comment', () => {
+    // Fourth review on #1069: the comment stripper cut the line at a "--"
+    // inside a value, hiding the clock assignment after it.
+    const targets = new Set(['scan_placement_events']);
+    const quotedDashes = `db.prepare("UPDATE scan_placement_events SET id = '{\\"answer\\":\\"--\\"}', created_at = datetime('now')").run();`;
+    expect(sourceFindings('x.ts', quotedDashes, new Map(), targets).map((f) => f.kind)).toEqual([
+      'sql-write',
+    ]);
+    expect(stripSqlComments("SET a = 'x--y', b = 1 -- trailing\nSET c = 2")).toBe(
+      "SET a = 'x--y', b = 1 \nSET c = 2"
+    );
+    expect(stripSqlComments("SET a = 'it''s -- not', b = 1")).toBe("SET a = 'it''s -- not', b = 1");
   });
 });
