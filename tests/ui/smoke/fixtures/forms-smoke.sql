@@ -41,3 +41,11 @@ INSERT OR IGNORE INTO form_surveys
 VALUES
   ('srv_smoke_tiers_1', 'evt_smoke_tiers',
    '{"q_enjoyment":5,"q_return":"yes"}', strftime('%Y-%m', 'now'), 1);
+
+-- OSE-1752: put the recap's walk-in line in the case that used to leak. 7 check-ins
+-- with 5 walked in: 5 clears the floor, but the 2 who registered and came do not, so
+-- the nested floor withholds the walk-in count. That line must read exactly like one
+-- under 5 ("Fewer than 5 Walked in"). INSERT OR IGNORE above keeps an older row as it
+-- was, so the count is set here, only while none has been recorded.
+UPDATE checkin_counts SET walk_in_count = 5
+ WHERE id = 'chk_smoke_tiers' AND walk_in_count = 0;

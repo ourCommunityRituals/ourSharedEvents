@@ -22,6 +22,8 @@ export const NODE_SPECS = [
   'tests/count-floor-publication.derived.spec.ts',
   // OSE-1751 — the report's corridor baseline is one chain, shared with the export
   'tests/corridor-baseline-publication.spec.ts',
+  // OSE-1752 — the recap's walk-in line reads the same however it is withheld
+  'tests/recap-stat-lines.spec.ts',
   'tests/event-price.spec.ts',
   // CCR-PR567 re-run item 8 — XSS lock over the pure /sponsor render (sponsor
   // name + placement fields). Imports the render module, no runtime.
