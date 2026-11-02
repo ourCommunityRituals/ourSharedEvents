@@ -691,7 +691,10 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
       db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?, ?)').bind(a, stamp);`;
     const bucketed = `db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?, ?)')
       .bind(a, hourStamp(b));`;
-    const interpolated = `db.prepare(\`UPDATE scan_placement_events SET created_at = \${NOW_SQL}\`).run();`;
+    // Built by concatenation so the fixture carries a literal "${NOW_SQL}" without a
+    // "\$" escape (CodeQL js/useless-regexp-character-escape, PR #1060).
+    const interpolated =
+      'db.prepare(`UPDATE scan_placement_events SET created_at = ' + '$' + '{NOW_SQL}`).run();';
     const hour = `UPDATE scan_placement_events SET created_at = strftime('%Y-%m-%d %H:00:00', created_at)`;
 
     expect(isFineClock(ddl)).toBe(true);
