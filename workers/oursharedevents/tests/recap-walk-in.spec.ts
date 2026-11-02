@@ -186,6 +186,19 @@ describe('OSE-1373 | acceptance: N registrations, M registered-path + W walk-in 
     expect(card).toContain('75% of those registered showed up');
   });
 
+  test('OSE-1752: 18 walk-ins of 20 check-ins and 3 of 20 draw the very same card', async () => {
+    // Both walk-in counts are withheld, for different reasons: 18 clears 5 but would
+    // leave 2 who registered and came; 3 is under 5. The card must not say which.
+    await seed('evt_walkin_held', 25, 2, 18); // 20 check-ins, 18 walked in
+    await seed('evt_walkin_small', 25, 17, 3); // 20 check-ins, 3 walked in
+    const held = statsCard(await recap('evt_walkin_held'));
+    const small = statsCard(await recap('evt_walkin_small'));
+    expect(held).toContain('<strong>20</strong> Checked in');
+    expect(held).toContain('Fewer than 5 Walked in');
+    expect(held).not.toMatch(/: held|cannot be worked out/i);
+    expect(held).toBe(small);
+  });
+
   test('no walk-ins recorded reads like 1 to 4: "Fewer than 5 Walked in" (OSE-1657)', async () => {
     const id = 'evt_walkin_none';
     await seed(id, 10, 6, 0);

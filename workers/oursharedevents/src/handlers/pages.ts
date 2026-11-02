@@ -78,7 +78,8 @@ import {
 } from '../lib/data-provider.js';
 import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
-import { applyCountFloor, floorNestedCounts, flooredRatePct } from '../lib/count-floor.js';
+import { flooredRatePct } from '../lib/count-floor.js';
+import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
 import {
   formatEventTime,
   formatHumanDate,
@@ -481,29 +482,6 @@ function renderEventTypeMeta(row: PublicEventRow, testId = 'event-type'): string
   const label = esc(row.event_type_name) || esc(row.event_type_id);
   if (!label) return '';
   return `<p class="ose-meta" data-testid="${testId}">Type: ${label}</p>`;
-}
-
-/**
- * D1 (CCR 2026-09-14) — the public post-event recap is the LEAST-trusted surface
- * (unauthenticated) and must not become a side-channel that leaks an exact small
- * count the admin tile + SharedReport hide. Every attendee-derived stat here
- * routes through the SAME uniform floor the admin tile and corridor map use
- * (applyCountFloor, K=5): a sub-K cohort renders "Fewer than 5", never the exact
- * number. A 3-of-5 or "50% of 2" line back-derives an individual — the exact
- * never-who break OSE-665 exists to close. Server-side, so the raw value never
- * reaches the client.
- */
-function statLine(raw: number, label: string, testid: string): string {
-  const f = applyCountFloor(raw);
-  const inner = f.suppressed
-    ? `Fewer than ${f.floor} ${label}`
-    : `<strong>${f.count}</strong> ${label}`;
-  return `<p data-testid="${testid}">${inner}</p>`;
-}
-
-/** True when a count clears the uniform floor (safe to publish exactly / use in a ratio). */
-function clearsFloor(raw: number): boolean {
-  return !applyCountFloor(raw).suppressed;
 }
 
 /**
@@ -1749,18 +1727,7 @@ ${SPONSOR_LIST_CSS}
         // every line is drawn: a small count reads "Fewer than 5", whether it
         // is 0 or 4.
         const hasStats = [regCount, checkinCount, surveyCount, emailCount].some(clearsFloor);
-        // Walk-ins are a subset of check-ins. Floored one by one, 8 check-ins
-        // and 6 walk-ins would both print and give back the 2 who came through
-        // registration. Floored as a nested pair, a walk-in count prints only
-        // when what is left is 0 or at least 5.
-        const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
-        const walkInLine = !clearsFloor(checkinCount)
-          ? ''
-          : walkInShown !== null
-            ? statLine(walkInShown, 'Walked in', 'stat-walk-ins')
-            : clearsFloor(walkInCount)
-              ? '<p data-testid="stat-walk-ins">Walked in: held, so a group under 5 cannot be worked out</p>'
-              : statLine(walkInCount, 'Walked in', 'stat-walk-ins');
+        const walkInLine = walkInStatLine(checkinCount, walkInCount);
         const walkInPct = flooredRatePct(walkInCount, checkinCount);
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">

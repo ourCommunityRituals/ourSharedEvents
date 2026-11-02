@@ -2207,11 +2207,18 @@
       "testCount": 23
     },
     {
+      "file": "workers/oursharedevents/tests/recap-stat-lines.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 13
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/red-story-helper.spec.ts",

@@ -325,8 +325,11 @@ describe('OSE-1657 item 4 | the recap cannot tell 0 from fewer than 5', () => {
     expect(both, 'check-ins and walk-ins both exact').toBe(false);
     expect(card).not.toContain('<strong>6</strong>');
     expect(card).not.toContain('data-testid="stat-walk-in-share"');
-    // Withheld in words, and true: six walked in, so not "Fewer than 5".
-    expect(card).toMatch(/data-testid="stat-walk-ins"[^>]*>Walked in: held/);
+    // Withheld in words, and in the SAME words as walk-ins under 5 (OSE-1752): the
+    // card does not say which of the two reasons applied. It used to print a
+    // separate "held" line here, which told a reader six or more walked in.
+    expect(card).toContain('<p data-testid="stat-walk-ins">Fewer than 5 Walked in</p>');
+    expect(card).not.toMatch(/: held|cannot be worked out/i);
   });
 
   test('walk-ins: 0 and 1 to 4 read the same, once check-ins print', () => {

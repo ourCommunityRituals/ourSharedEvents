@@ -2356,7 +2356,8 @@ jobs:
         run: |
           PW_LABEL='T4f: SharedReport Depth Gate' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
-            tests/e2e/3-flows/sharedreport-depth.spec.ts
+            tests/e2e/3-flows/sharedreport-depth.spec.ts \
+            tests/e2e/3-flows/recap-walk-in-wording.spec.ts
         timeout-minutes: 5
 
       - name: 'T4g: Launch Story Smoke'
