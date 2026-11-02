@@ -31,14 +31,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout the base branch (the gate's code)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
           persist-credentials: false
 
       - name: Checkout the pull request (what is judged)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: head
@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
