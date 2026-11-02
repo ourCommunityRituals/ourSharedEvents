@@ -7,13 +7,16 @@
 // 5 loops or more. Nothing checked that. This does, on the pull request:
 //
 //   1. Every worksheet in the PR's tree meets the worksheet contract (ccr-worksheet-check.mjs).
-//   2. If the PR changes a governed file, the PR adds or changes a worksheet under .claude/outputs
-//      whose frontmatter has `pr:` this PR and `subject_sha:` a commit on the PR, ran 5 loops or
+//   2. If the PR changes a governed file (a rename counts as a delete and an add), the PR adds or
+//      changes a worksheet under .claude/outputs whose frontmatter has `pr:` this PR and
+//      `subject_sha:` a commit on the PR (reachable from head, not from base), ran 5 loops or
 //      more, and the governed files are the same at the PR head as at subject_sha (the review
 //      saw what will merge).
 //
 // The workflow (.github/workflows/ccr-gate.yml) runs this file and its checker from the BASE
-// branch, so a PR cannot weaken the gate that judges it.
+// branch, so a PR cannot edit these scripts to pass itself. The workflow file itself is read
+// from the PR (a `pull_request` run), so a PR that edits it can still skip the judge. Only an
+// owner setting closes that: a ruleset that requires this workflow from main.
 //
 // It is a tripwire, not proof. The agent writes the worksheet, so a worksheet can still be
 // invented; this makes a skipped or untied CCR visible. In warn mode (the default) it prints
@@ -75,7 +78,7 @@ export function gate({ root, base, head, pr }) {
   problems.push(...check(root).problems);
 
   // 2. A governed change carries a tied worksheet.
-  const diff = git(root, 'diff', '--name-only', `${base}...${head}`);
+  const diff = git(root, 'diff', '--name-only', '--no-renames', `${base}...${head}`);
   if (!diff.ok) return { problems: [...problems, `git diff failed: ${diff.err}`], notes };
   const changed = lines(diff.out);
   const governed = changed.filter(isGoverned);
@@ -85,7 +88,7 @@ export function gate({ root, base, head, pr }) {
   }
 
   const added = lines(
-    git(root, 'diff', '--name-only', '--diff-filter=AM', `${base}...${head}`).out
+    git(root, 'diff', '--name-only', '--no-renames', '--diff-filter=AM', `${base}...${head}`).out
   ).filter((p) => p.startsWith('.claude/outputs/') && WORKSHEET_NAME.test(basename(p)));
 
   const why = [];
@@ -108,11 +111,17 @@ export function gate({ root, base, head, pr }) {
       why.push(`${rel}: no subject_sha`);
       continue;
     }
-    if (!git(root, 'merge-base', '--is-ancestor', subject, head).ok) {
+    // On this PR: reachable from head and not from base, so a review of older history cannot stand in.
+    if (
+      !git(root, 'merge-base', '--is-ancestor', subject, head).ok ||
+      git(root, 'merge-base', '--is-ancestor', subject, base).ok
+    ) {
       why.push(`${rel}: subject_sha ${subject.slice(0, 12)} is not a commit on this PR`);
       continue;
     }
-    const since = lines(git(root, 'diff', '--name-only', subject, head).out).filter(isGoverned);
+    const since = lines(git(root, 'diff', '--name-only', '--no-renames', subject, head).out).filter(
+      isGoverned
+    );
     if (since.length) {
       why.push(
         `${rel}: governed files changed after the reviewed commit ${subject.slice(0, 12)}: ${since.join(', ')}`

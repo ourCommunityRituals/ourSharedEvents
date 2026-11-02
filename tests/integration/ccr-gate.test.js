@@ -229,6 +229,44 @@ describe('ccr gate: a pull request', () => {
     );
   });
 
+  test('that renames AGENTS.md away with no worksheet is a problem (a rename is a delete)', () => {
+    const { root, base } = repo();
+    git(root, 'mv', 'AGENTS.md', 'docs-old-rules.md');
+    git(root, 'commit', '-q', '-m', 'move the rules');
+    const head = git(root, 'rev-parse', 'HEAD');
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems.join('\n')).toMatch(
+      /changes governed files \(AGENTS\.md\) and has no CCR worksheet tied to it/
+    );
+  });
+
+  test('that renames a governed file after the reviewed commit is a problem', () => {
+    const { root, base } = repo();
+    const subject = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'rules');
+    commit(root, { [WS]: tie(12, subject) }, 'ccr');
+    git(root, 'mv', 'AGENTS.md', 'docs-old-rules.md');
+    git(root, 'commit', '-q', '-m', 'move the rules after the review');
+    const head = git(root, 'rev-parse', 'HEAD');
+    const r = gate({ root, base, head, pr: 12 });
+    expect(r.problems.join('\n')).toMatch(
+      /governed files changed after the reviewed commit [0-9a-f]{12}: AGENTS\.md/
+    );
+  });
+
+  test('with a subject_sha from the base history is a problem, even when the files match', () => {
+    // main moved AGENTS.md from v1 to v2; the PR puts v1 back and names main's old v1 commit.
+    const { root, base: oldV1 } = repo();
+    git(root, 'checkout', '-q', 'main');
+    const mainV2 = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'main moves on');
+    git(root, 'checkout', '-q', '-b', 'restore');
+    commit(root, { 'AGENTS.md': '# rules v1\n' }, 'restore v1');
+    const head = commit(root, { [WS]: tie(12, oldV1) }, 'ccr naming an old commit');
+    const r = gate({ root, base: mainV2, head, pr: 12 });
+    expect(r.problems.join('\n')).toContain(
+      `subject_sha ${oldV1.slice(0, 12)} is not a commit on this PR`
+    );
+  });
+
   test('that changes only non-governed files after the reviewed commit passes', () => {
     const { root, base } = repo();
     const subject = commit(root, { 'AGENTS.md': '# rules v2\n' }, 'rules');

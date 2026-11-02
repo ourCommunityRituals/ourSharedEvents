@@ -5,8 +5,12 @@
 # the commit the CCR reviewed, 5 loops or more, and no governed change after that commit.
 # Every worksheet in the PR must also meet the worksheet contract. See scripts/ci/ccr-gate.mjs.
 #
-# The gate and its dependencies come from the BASE branch; the PR is only read. A PR therefore
-# cannot weaken the gate that judges it, only the next PR's.
+# The gate scripts and their dependencies come from the BASE branch; the PR is only read, so a
+# PR cannot edit the scripts to pass itself. This workflow file, though, is read from the PR
+# (a `pull_request` run uses the PR's merge ref), so a PR that edits it can skip the judge or
+# force warn mode. That PR still shows as a governed change in its diff, but nothing here
+# stops it. Closing it needs an owner setting: a repository ruleset that requires this
+# workflow from main (pull_request_target is banned here, scripts/check-pr-secret-exposure.mjs).
 #
 # Warn-only until the owner sets the repository variable CCR_GATE_MODE to `block` (owner
 # decision 2026-11-02: a tripwire now, a real block later). It is a tripwire: the agent writes
