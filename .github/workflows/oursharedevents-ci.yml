@@ -769,7 +769,6 @@ jobs:
           PARITY_ARGS: ${{ vars.PRODUCTION_LIVE == 'true' && '--strict' || '' }}
         run: node scripts/ci/env-parity.mjs $PARITY_ARGS
 
-
       # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
       # in-CI preflight step and the cf-access-canary tripwire — no network.
       - name: 'Unit: CF Access probe classifier'
@@ -2302,6 +2301,20 @@ jobs:
             tests/ui/smoke/journey-attendee-arc.smoke.spec.ts \
             tests/ui/smoke/journey-short-codes.smoke.spec.ts
         timeout-minutes: 5
+
+      # OSE-1751: the depth gate checks the corridor baseline against a seeded 112/109
+      # pair and 12 attendees. The staging Worker's 03:00 UTC cron deletes attendee rows
+      # with no pepper epoch and recomputes baselines, so this seed is applied HERE, in
+      # the step just before the gate, and not with the other smoke fixtures above,
+      # which are two test steps earlier. Idempotent; a failed seed reds the tier.
+      - name: 'T4f-seed: corridor baseline for the depth gate'
+        if: matrix.section == 'surfaces'
+        timeout-minutes: 11
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/corridor-baseline-smoke.sql
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
       # OSE-834 ARM: continue-on-error removed — with tokens absent the run all-skips
