@@ -197,6 +197,19 @@ describe('no privacy primitive lives in a consumer module', () => {
     expect(sourceFiles(SRC).length).toBeGreaterThan(50);
   });
 
+  test('floorCumulativeSeries is for floorCumulativeOfParts only: no consumer calls it on raw totals', () => {
+    // Raw totals of shows that were each withheld can name them (five shows under
+    // 5 total at most 20, so a published 20 says each had four). Per-show counts go
+    // through floorCumulativeOfParts, which drops withheld shows before summing.
+    const callers: string[] = [];
+    for (const file of sourceFiles(SRC)) {
+      const rel = relative(SRC, file).split(sep).join('/');
+      if (rel === 'lib/count-floor.ts') continue;
+      if (readFileSync(file, 'utf8').includes('floorCumulativeSeries')) callers.push(rel);
+    }
+    expect(callers).toEqual([]);
+  });
+
   test('count-floor.ts is the only file under src/ that defines any of them', () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
