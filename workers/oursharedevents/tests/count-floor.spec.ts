@@ -310,3 +310,22 @@ describe('floorCumulativeSeries — a running total never publishes an increment
     expect(floorCumulativeSeries([Number.NaN, Infinity])).toEqual([null, null]);
   });
 });
+
+describe('floorCumulativeSeries — a decrease inside one rounding bucket still breaks the series', () => {
+  test('14 then 11 is a decrease even though both round to 10', () => {
+    expect(floorCumulativeSeries([14, 11, 20])).toEqual([10, null, null]);
+  });
+
+  test('a decrease below the floor breaks the series too', () => {
+    expect(floorCumulativeSeries([4, 3, 20])).toEqual([null, null, null]);
+    expect(floorCumulativeSeries([9, 8, 30])).toEqual([5, null, null]);
+  });
+
+  test('a repeat of the same exact count is not a decrease', () => {
+    expect(floorCumulativeSeries([14, 14, 20])).toEqual([10, 10, 20]);
+  });
+
+  test('a fractional input is floored before the comparison', () => {
+    expect(floorCumulativeSeries([14.9, 14.1, 20])).toEqual([10, 10, 20]);
+  });
+});

@@ -56,8 +56,11 @@ export function countShapedFields(fields: readonly string[]): string[] {
 /** True when `text` defines (not merely calls or imports) a function called `name`. */
 export function definesFunction(text: string, name: string): boolean {
   const fn = new RegExp(`\\bfunction\\s+${name}\\b`);
-  const arrow = new RegExp(
-    `\\b(?:const|let|var)\\s+${name}\\s*=\\s*(?:async\\s*)?(?:\\(|[A-Za-z_$][\\w$]*\\s*=>)`
+  // An initializer that is a function: an arrow (`(n) =>`, `n =>`) or a function
+  // expression (`function (n)`, `async function named(n)`), with or without a type
+  // annotation on the name.
+  const initializer = new RegExp(
+    `\\b(?:const|let|var)\\s+${name}\\s*(?::[^\\n]*?)?=(?!>)\\s*(?:async\\s*)?(?:function\\b|\\(|[A-Za-z_$][\\w$]*\\s*=>)`
   );
-  return fn.test(text) || arrow.test(text);
+  return fn.test(text) || initializer.test(text);
 }

@@ -181,9 +181,12 @@ export function floorCumulativeSeries(
   let prev: number | null = null;
   let broken = false;
   return series.map((raw) => {
+    // The decrease test uses the exact (floored) counts, not the rounded ones: 14
+    // then 11 is a fall inside one bucket of 5 and must break the series.
+    const exact = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
     const n = roundDownTo(raw, step);
-    if (prev !== null && n < prev) broken = true;
-    prev = n;
+    if (prev !== null && exact < prev) broken = true;
+    prev = exact;
     if (broken || n < floor) return null;
     if (last !== null) {
       const gap = n - last;

@@ -28,6 +28,8 @@ import * as countFloor from '../src/lib/count-floor';
 import {
   PUBLIC_EVENT_COUNT_SOURCES,
   PUBLIC_EVENT_FIELDS,
+  projectEvent,
+  toPublicEvent,
 } from '../src/lib/public-event-projection';
 import { countShapedFields, definesFunction } from './helpers/count-shaped-fields';
 
@@ -96,6 +98,24 @@ describe('the detector (negative controls on synthetic input)', () => {
     expect(definesFunction('export const roundForPublish = (n) => n', 'roundForPublish')).toBe(
       true
     );
+    expect(
+      definesFunction('const roundForPublish = function (n) { return n; }', 'roundForPublish')
+    ).toBe(true);
+    expect(
+      definesFunction(
+        'const roundForPublish = function roundIt(n) { return n; }',
+        'roundForPublish'
+      )
+    ).toBe(true);
+    expect(
+      definesFunction(
+        'export const roundForPublish = async function (n) { return n; }',
+        'roundForPublish'
+      )
+    ).toBe(true);
+    expect(
+      definesFunction('const roundForPublish: (n: number) => number = (n) => n', 'roundForPublish')
+    ).toBe(true);
     expect(definesFunction('const x = roundForPublish(3)', 'roundForPublish')).toBe(false);
     expect(
       definesFunction("import { roundForPublish } from './count-floor'", 'roundForPublish')
@@ -117,6 +137,28 @@ describe('the public event projection publishes no count except through count-fl
         `${undeclared.join(', ')}. Produce the value with a count-floor.ts function and ` +
         `declare it in PUBLIC_EVENT_COUNT_SOURCES.`
     ).toEqual([]);
+  });
+
+  test('every declared field is produced by its helper: a sub-floor input never comes out raw', () => {
+    for (const field of Object.keys(PUBLIC_EVENT_COUNT_SOURCES)) {
+      expect(
+        toPublicEvent({ [field]: 3 })[field],
+        `${field} is declared but published raw`
+      ).not.toBe(3);
+    }
+  });
+
+  test('planted fault: a declared field that bypasses its helper is caught, and the real projector is not', () => {
+    const fields = new Set(['title', 'attendee_count']);
+    const sources = { attendee_count: 'applyCountFloor' } as const;
+    const bypassing = (project: (row: Record<string, unknown>) => Record<string, unknown>) =>
+      Object.keys(sources).filter((f) => project({ [f]: 3 })[f] === 3);
+    // A projector that copies the value unchanged (what toPublicEvent did before it consulted the declarations).
+    const copying = (row: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(row).filter(([k]) => fields.has(k)));
+    expect(bypassing(copying)).toEqual(['attendee_count']);
+    expect(bypassing((row) => projectEvent(row, fields, sources))).toEqual([]);
+    expect(projectEvent({ attendee_count: 12 }, fields, sources).attendee_count).toBe(12);
   });
 
   test('every declaration names a real field and a real count-floor function', () => {
