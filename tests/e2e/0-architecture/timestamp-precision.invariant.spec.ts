@@ -349,8 +349,16 @@ function assignmentsFromSet(text: string): Assignment[] {
 function parseWrite(
   raw: string
 ): { op: 'insert' | 'update'; table: string; assignments: Assignment[] } | null {
+  // `?` after `?3` is index 4, as SQLite numbers it: an explicit index advances
+  // the counter, so a mixed `VALUES (?1, ?)` does not read both as ?1 (review on #1069).
   let next = 0;
-  const sql = raw.replace(/\?(\d*)/g, (_, n: string) => `?${n || ++next}`);
+  const sql = raw.replace(/\?(\d*)/g, (_, n: string) => {
+    if (n) {
+      next = Math.max(next, Number(n));
+      return `?${n}`;
+    }
+    return `?${++next}`;
+  });
   const insert = sql.match(
     /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO)\s+["`]?(\w+)["`]?\s*/i
   );
@@ -397,8 +405,21 @@ const TIMESTAMP_COLUMN = /(?:_at|_time|_timestamp|^timestamp)$/i;
 const JS_CLOCK = /\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\)/;
 const JS_LITERAL = /^(?:null|undefined|true|false|\d+|'[^']*'|"[^"]*")$/;
 
-/** The one sanctioned coarsener: `hourStamp(bucket)` is the hour by construction. */
-const SAFE_HELPER = /^hourStamp\s*\(/;
+/**
+ * The one sanctioned coarsener: a COMPLETE `hourStamp(...)` call and nothing
+ * after it. `hourStamp(b).slice(0, 14) + tail` is not safe: the tail can put
+ * the seconds back (review on #1069).
+ */
+function isCompleteHourStamp(arg: string): boolean {
+  const head = arg.match(/^hourStamp\s*\(/);
+  if (!head) return false;
+  try {
+    const { end } = readParens(arg, head[0].length - 1);
+    return arg.slice(end + 1).trim() === '';
+  } catch {
+    return false;
+  }
+}
 /** Names in an expression that are syntax or globals, never a value to trace. */
 const NOT_A_BINDING = new Set([
   'new',
@@ -426,14 +447,14 @@ const NOT_A_BINDING = new Set([
 function bindReadsClock(arg: string, source: string, before: number, depth = 0): boolean | null {
   if (JS_CLOCK.test(arg)) return true;
   if (JS_LITERAL.test(arg)) return false;
-  if (SAFE_HELPER.test(arg)) return false;
+  if (isCompleteHourStamp(arg)) return false;
   if (depth > 3) return null;
   let traced = false;
   let unresolved = false;
   for (const name of arg.match(/(?<![.\w'"])[A-Za-z_]\w*/g) ?? []) {
     if (NOT_A_BINDING.has(name)) continue;
     const declaration = new RegExp(
-      `\\b(?:const|let|var)\\s+${name}\\s*(?::[^=;]+)?=(?!=)\\s*([^;]+);`,
+      `\\b(const|let|var)\\s+${name}\\s*(?::[^=;]+)?=(?!=)\\s*([^;]+);`,
       'g'
     );
     const found = [...source.slice(0, before).matchAll(declaration)].pop();
@@ -442,8 +463,14 @@ function bindReadsClock(arg: string, source: string, before: number, depth = 0):
       unresolved = true;
       continue;
     }
+    if (found[1] !== 'const') {
+      // A `let` or `var` can be reassigned after its initializer; this gate does
+      // not follow assignments, so the value is unknown (review on #1069).
+      unresolved = true;
+      continue;
+    }
     traced = true;
-    const reads = bindReadsClock(found[1].trim(), source, before, depth + 1);
+    const reads = bindReadsClock(found[2].trim(), source, before, depth + 1);
     if (reads === true) return true;
     if (reads === null) unresolved = true;
   }
@@ -551,6 +578,9 @@ function sourceWrites(source: string, constants: Map<string, string>): SourceWri
     const close = literalEnd(source, m.index);
     const literal = source
       .slice(m.index + 1, close)
+      // Decode the JavaScript string escapes first, so a quote written as \' in
+      // the source is a quote in the SQL the clock checks read (review on #1069).
+      .replace(/\\(['"`\\])/g, '$1')
       .replace(/\$\{(\w+)\}/g, (whole, name: string) => constants.get(name) ?? whole);
     const write = parseWrite(literal);
     if (!write) continue;
@@ -709,6 +739,11 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
           `${file}: a write to ${table} must bind ${column} through hourStamp. If it leaves the ` +
             `column out, the live second-precision default fires (0062, which 0100 could not alter).`
         ).toMatch(/^hourStamp\(/);
+        expect(
+          isCompleteHourStamp(arg ?? ''),
+          `${file}: the ${column} bind for ${table} must be a complete hourStamp(...) call with ` +
+            `nothing after it; a trailing expression could put the seconds back.`
+        ).toBe(true);
       }
     }
   });
@@ -794,5 +829,40 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
     expect(kinds(deepChain)).toEqual(['unresolved']);
     expect(kinds(literalOnly)).toEqual([]);
     expect(kinds(helper)).toEqual([]);
+  });
+
+  test('OSE-1778 | gate | only a complete hourStamp call is safe; a tail is traced', () => {
+    // Review on #1069: `hourStamp(b).slice(0, 14) + tail` restores the seconds.
+    const targets = new Set(['scan_placement_events']);
+    const sql = `db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?, ?)')`;
+    const kinds = (src: string) =>
+      sourceFindings('x.ts', src, new Map(), targets).map((f) => f.kind);
+    expect(isCompleteHourStamp('hourStamp(bucket)')).toBe(true);
+    expect(isCompleteHourStamp('hourStamp(scanBucket(nowDate))')).toBe(true);
+    expect(isCompleteHourStamp('hourStamp(bucket).slice(0, 14)')).toBe(false);
+    expect(isCompleteHourStamp('hourStamp(bucket) + tail')).toBe(false);
+    const restored = `const tail = new Date().toISOString().slice(14, 19);
+      ${sql}.bind(a, hourStamp(bucket).slice(0, 14) + tail);`;
+    expect(kinds(restored)).toEqual(['js-clock']);
+    const sliced = `${sql}.bind(a, hourStamp(bucket).slice(0, 14));`;
+    expect(kinds(sliced)).toEqual(['unresolved']);
+  });
+
+  test('OSE-1778 | gate | a reassignable binding, an escaped literal and mixed placeholders', () => {
+    // Review on #1069, three more ways a fine clock slipped past the reader.
+    const targets = new Set(['scan_placement_events']);
+    const kinds = (src: string) =>
+      sourceFindings('x.ts', src, new Map(), targets).map((f) => f.kind);
+    const reassigned = `let stamp = null;
+      stamp = new Date().toISOString();
+      db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?, ?)').bind(a, stamp);`;
+    expect(kinds(reassigned)).toEqual(['unresolved']);
+    // Source text with \' escapes inside a single-quoted JavaScript string.
+    const escaped =
+      "db.prepare('UPDATE scan_placement_events SET created_at = strftime(\\'%Y-%m-%d %H:%M:%S\\', \\'now\\')').run();";
+    expect(kinds(escaped)).toEqual(['sql-write']);
+    const mixed = `db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?1, ?)')
+      .bind(a, new Date().toISOString());`;
+    expect(kinds(mixed)).toEqual(['js-clock']);
   });
 });
