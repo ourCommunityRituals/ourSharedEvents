@@ -1,7 +1,7 @@
 {
   "_comment": "CI integrity ratchet baseline (OSE-1606). Each count may only move in its good direction (most may only fall; the token-split keys say theirs in `direction`, OSE-1695); every entry carries a reason.",
   "continueOnError": {
-    "total": 20,
+    "total": 19,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -26,10 +26,6 @@
       ".github/workflows/red-team-adversarial.yml": {
         "count": 1,
         "reason": "Report-publishing step; the red-team run itself decides the result."
-      },
-      ".github/workflows/security-regression.yml": {
-        "count": 1,
-        "reason": "Advisory reporting step; regression assertions run in blocking steps."
       },
       ".github/workflows/security-scan.yml": {
         "count": 2,

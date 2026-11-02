@@ -99,9 +99,6 @@ jobs:
       github.event_name != 'pull_request' ||
       startsWith(github.head_ref, 'full-pipeline/')
 
-    # Allow failures on scheduled runs to not block development
-    continue-on-error: ${{ github.event_name == 'schedule' }}
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7
