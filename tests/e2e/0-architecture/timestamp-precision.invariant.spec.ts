@@ -351,14 +351,40 @@ function parseWrite(
 ): { op: 'insert' | 'update'; table: string; assignments: Assignment[] } | null {
   // `?` after `?3` is index 4, as SQLite numbers it: an explicit index advances
   // the counter, so a mixed `VALUES (?1, ?)` does not read both as ?1 (review on #1069).
+  // A `?` inside a quoted SQL string ('https://x/?q=1') is text, not a
+  // placeholder, so numbering skips quoted tokens (third review on #1069).
   let next = 0;
-  const sql = raw.replace(/\?(\d*)/g, (_, n: string) => {
-    if (n) {
-      next = Math.max(next, Number(n));
-      return `?${n}`;
+  let sql = '';
+  let quote = '';
+  const text = stripSqlComments(raw);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      sql += ch;
+      if (ch === quote) {
+        if (text[i + 1] === quote) sql += text[++i];
+        else quote = '';
+      }
+      continue;
     }
-    return `?${++next}`;
-  });
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      sql += ch;
+      continue;
+    }
+    if (ch === '?') {
+      const n = (text.slice(i + 1).match(/^\d*/) ?? [''])[0];
+      i += n.length;
+      if (n) {
+        next = Math.max(next, Number(n));
+        sql += `?${n}`;
+      } else {
+        sql += `?${++next}`;
+      }
+      continue;
+    }
+    sql += ch;
+  }
   const insert = sql.match(
     /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO)\s+["`]?(\w+)["`]?\s*/i
   );
@@ -536,8 +562,11 @@ function sourceFiles(dir: string): string[] {
 function clockConstants(sources: string[]): Map<string, string> {
   const constants = new Map<string, string>();
   for (const source of sources) {
-    for (const m of source.matchAll(/\bconst\s+(\w+)\s*=\s*(['"`])((?:(?!\2)[^\n])*)\2/g)) {
-      if (isFineClock(m[3]) || isCoarseClock(m[3])) constants.set(m[1], m[3]);
+    // An escaped delimiter inside the string (\') does not end it, and the
+    // value is decoded before it is classified (third review on #1069).
+    for (const m of source.matchAll(/\bconst\s+(\w+)\s*=\s*(['"`])((?:\\.|(?!\2)[^\n\\])*)\2/g)) {
+      const value = m[3].replace(/\\(['"`\\])/g, '$1');
+      if (isFineClock(value) || isCoarseClock(value)) constants.set(m[1], value);
     }
   }
   return constants;
@@ -864,5 +893,27 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
     const mixed = `db.prepare('INSERT INTO scan_placement_events (id, created_at) VALUES (?1, ?)')
       .bind(a, new Date().toISOString());`;
     expect(kinds(mixed)).toEqual(['js-clock']);
+  });
+
+  test('OSE-1778 | gate | a ? inside a quoted SQL token, and an escaped clock constant', () => {
+    // Third review on #1069: a literal question mark shifted the placeholder
+    // numbers, and an escaped quote cut a clock constant short.
+    const targets = new Set(['scan_placement_events']);
+    const quoted = `db.prepare("UPDATE scan_placement_events SET id = 'https://x.test/?q=1', created_at = ? WHERE id = ?")
+      .bind(new Date().toISOString(), 'abc123');`;
+    expect(sourceFindings('x.ts', quoted, new Map(), targets).map((f) => f.kind)).toEqual([
+      'js-clock',
+    ]);
+    const declared = "const NOW_SQL = 'datetime(\\'now\\')';";
+    const constants = clockConstants([declared]);
+    expect(constants.get('NOW_SQL')).toBe("datetime('now')");
+    const uses =
+      declared +
+      ' db.prepare(`UPDATE scan_placement_events SET created_at = ' +
+      '$' +
+      '{NOW_SQL}`).run();';
+    expect(sourceFindings('x.ts', uses, constants, targets).map((f) => f.kind)).toEqual([
+      'sql-write',
+    ]);
   });
 });
