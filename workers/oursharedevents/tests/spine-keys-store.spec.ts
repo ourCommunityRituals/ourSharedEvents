@@ -19,7 +19,7 @@
  *   and its log line were rewritten twice after review, with their tests; those
  *   tests, like every other in this file, were seen red on a planted fault. The
  *   faults, one place each, and the tests each turned red are in
- *   `.claude/outputs/CCR-SPINE-KEYS-2026-10-12.md`, section D | date: 2026-10-12
+ *   `docs/ccr-archive/CCR-SPINE-KEYS-2026-10-12.md`, section D | date: 2026-10-12
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';

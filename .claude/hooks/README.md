@@ -7,7 +7,7 @@ protected `gh api` calls, and reading or searching credential files. Each
 Bash/PowerShell call is logged to `~/.claude/audit/policy-YYYY-MM-DD.jsonl`
 with secrets redacted.
 
-Background: `.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
+Background: `docs/ccr-archive/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md`
 (finding S2, and S1, where an agent printed `~/.claude/config.json`).
 
 | File                          | What it is                                                                                                       |

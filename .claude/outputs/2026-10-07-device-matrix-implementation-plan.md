@@ -10,7 +10,7 @@
 
 **Tech Stack:** Playwright 1.62.0 (`@playwright/test`), Vitest (root config, `tests/unit/**`), GitHub Actions, `js-yaml`.
 
-**Spec:** `.claude/outputs/SPRINT-PLAN-SECURITY-AND-FE-TDD-2026-10-07.md` and `.claude/outputs/CCR-TEST-PLAN-SECURITY-AND-FE-2026-10-07.md`, as amended by the PO on 2026-10-07: "I do not need to execute on every device. This would be cost prohibitive. I do want a solid plan though isolating a desktop, new iphone, old iphone, android, and tablet."
+**Spec:** `.claude/outputs/SPRINT-PLAN-SECURITY-AND-FE-TDD-2026-10-07.md` and `docs/ccr-archive/CCR-TEST-PLAN-SECURITY-AND-FE-2026-10-07.md`, as amended by the PO on 2026-10-07: "I do not need to execute on every device. This would be cost prohibitive. I do want a solid plan though isolating a desktop, new iphone, old iphone, android, and tablet."
 
 ## Global Constraints
 

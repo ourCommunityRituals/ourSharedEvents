@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI failure triage: fixed rules, no model ("classify_ci" in
-// .claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md).
+// docs/ccr-archive/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md).
 //
 // A failed pipeline run usually shows several red jobs, and most of them are
 // red only because something upstream failed (a gate summary, the reconciler).

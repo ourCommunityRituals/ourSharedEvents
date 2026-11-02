@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Agent instruction budget: keeps the files every agent reads on every turn small
 // and well formed. Root CLAUDE.md grew from 19 KB to 89 KB in about six weeks
-// before the AGENTS.md split (.claude/outputs/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md).
+// before the AGENTS.md split (docs/ccr-archive/CCR-CLAUDE-USAGE-OPTIMIZATION-2026-10-11.md).
 //
 //   node scripts/ci/agent-instructions-budget.mjs [--root .]
 //

@@ -11,7 +11,7 @@
  * @born-red spine keys, the rule | method: the file was first run before
  *   `src/lib/spine-keys.ts` existed and failed to load; each rule was then seen
  *   red on a planted fault (the list, one place each, and the tests each turned
- *   red: `.claude/outputs/CCR-SPINE-KEYS-2026-10-12.md`, section D, "The rule")
+ *   red: `docs/ccr-archive/CCR-SPINE-KEYS-2026-10-12.md`, section D, "The rule")
  *   | date: 2026-10-12
  */
 import { describe, expect, it } from 'vitest';
