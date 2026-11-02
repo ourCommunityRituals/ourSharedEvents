@@ -37,6 +37,7 @@ runtime:
           'walkin', 'walkins', 'capacity', 'headcount', 'returned',
         ];
         const ALLOWED = [];
+        const COMPOUND = /checkins?|checkedin|walkins?|signups?|attendance|headcount/;
         function words(key) {
           return key
             .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -48,7 +49,7 @@ runtime:
           return keys.filter(function (k) {
             const w = words(k);
             return w.some(function (x) { return COUNT_WORDS.indexOf(x) !== -1; }) ||
-              /walkins?/.test(w.join(''));
+              COMPOUND.test(w.join(''));
           });
         }
         test('200 with the event', function () {
@@ -56,9 +57,11 @@ runtime:
           expect(res.getBody().item.id).to.be.a('string');
         });
         test('the detector sees a count-shaped key (negative control)', function () {
-          expect(countShaped(['title', 'attendee_count', 'walk_in_total'])).to.eql([
+          expect(countShaped(['title', 'attendee_count', 'walk_in_total', 'check_ins', 'signUps'])).to.eql([
             'attendee_count',
             'walk_in_total',
+            'check_ins',
+            'signUps',
           ]);
         });
         test('the item has no count-shaped key that is not declared', function () {

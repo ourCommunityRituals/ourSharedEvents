@@ -72,6 +72,21 @@ describe('the detector (negative controls on synthetic input)', () => {
     ]);
   });
 
+  test('finds compound names split across words: check-ins, walk-ins, sign-ups, attendance', () => {
+    const names = [
+      'check_ins',
+      'checkIns',
+      'checked_in',
+      'checkedIn',
+      'check_in',
+      'walk_ins',
+      'sign_ups',
+      'signUps',
+      'attendance',
+    ];
+    expect(countShapedFields(names)).toEqual(names);
+  });
+
   test('leaves the current projection alone (no false positives)', () => {
     expect(
       countShapedFields([

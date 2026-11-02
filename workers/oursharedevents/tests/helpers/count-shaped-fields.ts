@@ -32,6 +32,9 @@ const COUNT_WORDS: ReadonlySet<string> = new Set([
   'returned',
 ]);
 
+/** Count-shaped compounds, matched on a field name's words run together. */
+const COMPOUND_COUNT = /checkins?|checkedin|walkins?|signups?|attendance|headcount/;
+
 function words(field: string): string[] {
   return field
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
@@ -47,9 +50,10 @@ function words(field: string): string[] {
 export function countShapedFields(fields: readonly string[]): string[] {
   return fields.filter((f) => {
     const w = words(f);
-    // "walk_in" arrives as two words; read it as one.
+    // Compound names arrive as several words (check_ins, walk_in, sign_ups,
+    // checked_in); read the words run together as well.
     const joined = w.join('');
-    return w.some((x) => COUNT_WORDS.has(x)) || /walkins?/.test(joined);
+    return w.some((x) => COUNT_WORDS.has(x)) || COMPOUND_COUNT.test(joined);
   });
 }
 
