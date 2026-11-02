@@ -23,6 +23,9 @@ on:
       # red for 10+ nights with no one notified; a failure now files (or
       # comments on) a tracked issue like every other scan here.
       - "Overnight fat-finger fuzz"
+      # Nightly security regression (security-regression.yml), which used to report
+      # green on a red. Must equal name: there, or workflow_run never fires.
+      - "Security Regression Gate"
     types:
       - completed
 
