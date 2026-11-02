@@ -20,8 +20,8 @@
 //
 // CI TRAFFIC (CCR finding, 2026-10-04): T2 Bruno, T3 smoke and T4 call /api/v2/events*
 // from one GitHub runner IP. If a run goes past 60 requests in 10 s the rule would 429
-// the pipeline's own tests. Only the /q/* scan trace (scripts/ci/trace-scan-staging.sh)
-// and T4i send the X-OCR-CI header today. Before --apply on staging either:
+// the pipeline's own tests. Only the /q/* scan trace sends the X-OCR-CI header today
+// (scripts/ci/trace-scan-staging.sh). Before --apply on staging either:
 //   (a) apply with --ci-exempt (OCR_CI_EDGE_TOKEN in the environment) AND make the T2-T4
 //       clients send `X-OCR-CI: $OCR_CI_EDGE_TOKEN`, or
 //   (b) apply without it, run T2-T4 once, and watch for 429s before leaving it on.

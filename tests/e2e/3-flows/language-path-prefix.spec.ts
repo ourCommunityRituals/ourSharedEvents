@@ -10,14 +10,13 @@
  * It creates its own event (a 2099 date, a per-run slug) and removes it after.
  */
 
-import { test, expect, type BrowserContext } from '@playwright/test';
+import { test, expect, type Browser } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
-const OCR_CI_EDGE_TOKEN = process.env.OCR_CI_EDGE_TOKEN || '';
 const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // No skip: a missing credential fails the run. A gate that skips when it cannot
@@ -34,35 +33,20 @@ function adminHeaders(): Record<string, string> {
   if (X_OCR_INTERNAL) headers['X-OCR-Internal'] = X_OCR_INTERNAL;
   if (CF_ACCESS_CLIENT_ID) headers['CF-Access-Client-Id'] = CF_ACCESS_CLIENT_ID;
   if (CF_ACCESS_CLIENT_SECRET) headers['CF-Access-Client-Secret'] = CF_ACCESS_CLIENT_SECRET;
-  return { ...headers, ...edgeHeaders() };
+  return headers;
 }
 
-// Staging answers bots with a Cloudflare managed challenge before the Worker runs.
-// A WAF rule skips it for requests carrying X-OCR-CI (OSE-939, OSE-1162).
-function edgeHeaders(): Record<string, string> {
-  return { 'X-OCR-CI': OCR_CI_EDGE_TOKEN };
-}
-
-// Not extraHTTPHeaders: that would send the token to every host a page loads.
-async function sendEdgeHeaderToStaging(context: BrowserContext): Promise<void> {
-  const staging = new URL(BASE_URL).origin;
-  await context.route(
-    (url) => url.origin === staging,
-    (route) => route.continue({ headers: { ...route.request().headers(), ...edgeHeaders() } })
-  );
+// A red should name the edge, not read as a wrong status from the Worker.
+function throwIfChallenged(headers: Record<string, string>, method: string, path: string): void {
+  if (headers['cf-mitigated']) {
+    throw new Error(
+      `Cloudflare's Bot Fight Mode answered ${method} ${path}, not the Worker; no rule can skip it, so this client looks like a bot`
+    );
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Req = any;
-
-// A red should name the edge, not read as a wrong status from the Worker.
-function throwIfChallenged(resp: Req, method: string, path: string): void {
-  if (resp.headers()['cf-mitigated']) {
-    throw new Error(
-      `the Cloudflare edge answered ${method} ${path}, not the Worker; check the X-OCR-CI WAF skip rule and OCR_CI_EDGE_TOKEN`
-    );
-  }
-}
 
 async function adminFetch(request: Req, method: string, path: string, body?: object) {
   const resp = await request.fetch(`${BASE_URL}${path}`, {
@@ -71,7 +55,7 @@ async function adminFetch(request: Req, method: string, path: string, body?: obj
     data: body,
     timeout: 30_000,
   });
-  throwIfChallenged(resp, method, path);
+  throwIfChallenged(resp.headers(), method, path);
   if ((resp.headers()['content-type'] || '').includes('text/html')) {
     throw new Error(
       `CF Access returned HTML for ${method} ${path}; the spec did not reach the Worker`
@@ -80,16 +64,29 @@ async function adminFetch(request: Req, method: string, path: string, body?: obj
   return resp;
 }
 
-/** A GET that does not follow redirects, so the Location can be read. */
-async function open(request: Req, path: string) {
-  const resp = await request.fetch(`${BASE_URL}${path}`, {
-    method: 'GET',
-    headers: edgeHeaders(),
-    maxRedirects: 0,
-    timeout: 30_000,
-  });
-  throwIfChallenged(resp, 'GET', path);
-  return resp;
+/**
+ * The first answer to a GET, before any redirect, with its Location readable.
+ * A fresh browser each time, because Bot Fight Mode challenges Node's HTTP client
+ * whatever headers it sends, and no rule can skip it (OSE-1162).
+ */
+async function open(browser: Browser, path: string) {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    const last = await page.goto(`${BASE_URL}${path}`, { waitUntil: 'commit' });
+    let request = last!.request();
+    for (let from = request.redirectedFrom(); from; from = request.redirectedFrom()) request = from;
+    const first = await request.response();
+    const headers = await first!.allHeaders();
+    throwIfChallenged(headers, 'GET', path);
+    return {
+      status: first!.status(),
+      location: headers['location'],
+      cookie: headers['set-cookie'],
+    };
+  } finally {
+    await context.close();
+  }
 }
 
 test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
@@ -101,7 +98,6 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
 
   test.beforeAll(async ({ request }) => {
     precondition(!ADMIN_KEY, 'ADMIN_KEY or X_OCR_INTERNAL is required');
-    precondition(!OCR_CI_EDGE_TOKEN, 'OCR_CI_EDGE_TOKEN is required');
     slug = `language-prefix-${RUN_ID}`;
     const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
       brand_id: 'root',
@@ -146,10 +142,6 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     expect(qrToken).toBeTruthy();
   });
 
-  test.beforeEach(async ({ context }) => {
-    await sendEdgeHeaderToStaging(context);
-  });
-
   test.afterAll(async ({ request }) => {
     for (const path of [
       deploymentId && `/api/v2/admin/poster-deployments/${encodeURIComponent(deploymentId)}`,
@@ -168,9 +160,15 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     page,
   }) => {
     const readable = `/events/${eventId}/${slug}`;
+    // Headless Chromium fails Bot Fight Mode's JS check, and a failed check gets the
+    // next navigation challenged. Without a result, the two clicks below reach the Worker.
+    await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
     const res = await page.goto(`${BASE_URL}/es${readable}`, { waitUntil: 'domcontentloaded' });
     expect(res?.status(), 'the Spanish page is served by the Worker').toBe(200);
-    expect(res?.headers()['set-cookie'], 'no cookie because of language').toBeUndefined();
+    expect(
+      (await res?.allHeaders())?.['set-cookie'],
+      'no cookie because of language'
+    ).toBeUndefined();
 
     await expect(page.locator('html')).toHaveAttribute('lang', 'es');
     await expect(page.locator('[data-testid="share-btn"]')).toHaveText('Compartir este evento');
@@ -214,14 +212,12 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
   }) => {
     const readable = `/events/${eventId}/${slug}`;
     const english = await browser.newContext({ locale: 'en-US' });
-    await sendEdgeHeaderToStaging(english);
     const spanishPrefixed = await (await english.newPage()).goto(`${BASE_URL}/es${readable}`);
     expect(spanishPrefixed?.status()).toBe(200);
     expect(await spanishPrefixed?.text()).toContain('<html lang="es"');
     await english.close();
 
     const spanish = await browser.newContext({ locale: 'es-MX' });
-    await sendEdgeHeaderToStaging(spanish);
     const bare = await (await spanish.newPage()).goto(`${BASE_URL}${readable}`);
     expect(bare?.status()).toBe(200);
     expect(await bare?.text()).toContain('<html lang="es"');
@@ -230,7 +226,7 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
 
   test('a shared link keeps the prefix, and a printed code does not change', async ({
     page,
-    request,
+    browser,
   }) => {
     const readable = `/events/${eventId}/${slug}`;
     await page.goto(`${BASE_URL}/es${readable}`, { waitUntil: 'domcontentloaded' });
@@ -239,26 +235,26 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       new RegExp(`/es/e/${code}$`)
     );
 
-    const sharedSpanish = await open(request, `/es/e/${code}`);
-    expect(sharedSpanish.status()).toBe(302);
-    expect(sharedSpanish.headers()['location']).toBe(`/es${readable}`);
-    expect(sharedSpanish.headers()['set-cookie']).toBeUndefined();
+    const sharedSpanish = await open(browser, `/es/e/${code}`);
+    expect(sharedSpanish.status).toBe(302);
+    expect(sharedSpanish.location).toBe(`/es${readable}`);
+    expect(sharedSpanish.cookie).toBeUndefined();
 
-    const sharedEnglish = await open(request, `/e/${code}`);
-    expect(sharedEnglish.status()).toBe(302);
-    expect(sharedEnglish.headers()['location']).toBe(readable);
+    const sharedEnglish = await open(browser, `/e/${code}`);
+    expect(sharedEnglish.status).toBe(302);
+    expect(sharedEnglish.location).toBe(readable);
 
     // A printed poster code is language-neutral: it lands where it always did.
-    const printed = await open(request, `/q/${qrToken}`);
-    expect(printed.status()).toBe(302);
-    const where = printed.headers()['location'] || '';
+    const printed = await open(browser, `/q/${qrToken}`);
+    expect(printed.status).toBe(302);
+    const where = printed.location || '';
     expect(where, 'a printed code resolves to the unprefixed event page').toContain(
       `/events/${eventId}`
     );
     expect(where).not.toMatch(/\/es\//);
   });
 
-  test('a prefix reaches nothing but the event page and its share link', async ({ request }) => {
+  test('a prefix reaches nothing but the event page and its share link', async ({ browser }) => {
     for (const path of [
       '/fr/events/x',
       '/ES/events/x',
@@ -272,8 +268,8 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       `/es/p/${code}`,
       `/es/events/${eventId}/tv`,
     ]) {
-      const res = await open(request, path);
-      expect(res.status(), path).toBe(404);
+      const res = await open(browser, path);
+      expect(res.status, path).toBe(404);
     }
   });
 });

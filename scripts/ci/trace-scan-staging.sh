@@ -9,11 +9,11 @@
 # the Cloudflare Access service token (CF_ACCESS_CLIENT_ID,
 # CF_ACCESS_CLIENT_SECRET), and OCR_CI_EDGE_TOKEN.
 #
-# Why OCR_CI_EDGE_TOKEN: staging sits behind a Cloudflare managed challenge
-# (bot protection), so a non-browser client gets a 403 "Just a moment..." page
-# from the edge and the Worker never runs (OSE-939). A WAF custom rule on the
-# zone skips that challenge only for requests to stg.oursharedevents.com that
-# carry the header X-OCR-CI with this value.
+# Why OCR_CI_EDGE_TOKEN: /q/* on staging sits behind a Cloudflare managed
+# challenge (bot protection), so a non-browser client gets a 403 "Just a
+# moment..." page from the edge and the Worker never runs (OSE-939). A WAF
+# custom rule on the zone skips that challenge only for requests to
+# stg.oursharedevents.com/q/* that carry the header X-OCR-CI with this value.
 # Real visitors and production stay challenged.
 # The poster comes from tests/ui/smoke/fixtures/trace-eagles-poster.sql.
 #
@@ -52,7 +52,7 @@ if [ -z "${CF_ACCESS_CLIENT_ID:-}" ] || [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ]; t
   exit 1
 fi
 if [ -z "${OCR_CI_EDGE_TOKEN:-}" ]; then
-  echo "::error::OCR_CI_EDGE_TOKEN is not set; without it the Cloudflare managed challenge on staging answers 403 (OSE-939)"
+  echo "::error::OCR_CI_EDGE_TOKEN is not set; without it the Cloudflare managed challenge on /q/* answers 403 (OSE-939)"
   exit 1
 fi
 
@@ -69,7 +69,7 @@ if [ "$status" != "302" ]; then
   # cf-mitigated is set by Cloudflare when the edge challenged or blocked the
   # request, so the Worker never saw it.
   if grep -qi '^cf-mitigated:' "$headers_file"; then
-    echo "::error::GET /q/$TOKEN returned $status from the Cloudflare edge ($(grep -i '^cf-mitigated:' "$headers_file" | tr -d '\r')), not the Worker. Check the WAF skip rule for X-OCR-CI on staging and that OCR_CI_EDGE_TOKEN matches it (OSE-939)."
+    echo "::error::GET /q/$TOKEN returned $status from the Cloudflare edge ($(grep -i '^cf-mitigated:' "$headers_file" | tr -d '\r')), not the Worker. Check the WAF skip rule for X-OCR-CI on stg /q/* and that OCR_CI_EDGE_TOKEN matches it (OSE-939)."
   else
     echo "::error::GET /q/$TOKEN returned $status, expected 302"
   fi
