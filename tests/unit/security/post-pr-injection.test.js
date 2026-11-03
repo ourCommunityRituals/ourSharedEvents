@@ -289,6 +289,25 @@ describe('T5 post-PR injection check (born-red)', () => {
     );
   });
 
+  test('RED: bracket and mixed-case property access reach the same untrusted fields', () => {
+    for (const expr of [
+      "github.event.pull_request['title']",
+      "github.event['pull_request']['title']",
+      'github.event.pull_request.TITLE',
+      "github['event'].pull_request.head['ref']",
+    ]) {
+      red({}, wf(`      - run: echo "\${{ ${expr} }}"\n`), 'expr-injection');
+    }
+  });
+
+  test('RED: the whole secrets context passed to any function is a dump', () => {
+    red(
+      {},
+      wf('      - run: echo "$S"\n        env:\n          S: ${{ format(\'{0}\', secrets) }}\n'),
+      'secret-dump'
+    );
+  });
+
   test('RED: a secret reference split across lines is still read', () => {
     red(
       {},

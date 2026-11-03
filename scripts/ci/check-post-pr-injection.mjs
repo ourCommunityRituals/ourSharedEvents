@@ -118,7 +118,7 @@ const BIDI_OR_TAG = new RegExp(
 const ZERO_WIDTH = new RegExp(`[${cp(0x200b)}${cp(0x2060)}${cp(0x180e)}]|(?!^)${cp(0xfeff)}`, 'u');
 
 const UNTRUSTED =
-  /\b(github\.event\.(issue|pull_request|discussion)\.(title|body)|github\.event\.(comment|review|review_comment)\.body|github\.event\.pages\.[^\s}]*page_name|github\.event\.commits\.[^\s}]*\.(message|author\.(email|name))|github\.event\.head_commit\.(message|author\.(email|name))|github\.event\.pull_request\.head\.(ref|label)|github\.event\.pull_request\.head\.repo\.default_branch|github\.head_ref|github\.event\.workflow_run\.(head_branch|display_title|head_commit\.(message|author\.(email|name))|pull_requests\.[^\s}]*head\.ref)|github\.event\.(inputs|client_payload)\.\w+|inputs\.\w+)/;
+  /\b(github\.event\.(issue|pull_request|discussion)\.(title|body)|github\.event\.(comment|review|review_comment)\.body|github\.event\.pages\.[^\s}]*page_name|github\.event\.commits\.[^\s}]*\.(message|author\.(email|name))|github\.event\.head_commit\.(message|author\.(email|name))|github\.event\.pull_request\.head\.(ref|label)|github\.event\.pull_request\.head\.repo\.default_branch|github\.head_ref|github\.event\.workflow_run\.(head_branch|display_title|head_commit\.(message|author\.(email|name))|pull_requests\.[^\s}]*head\.ref)|github\.event\.(inputs|client_payload)\.\w+|inputs\.\w+)/i;
 const LOADER_NAMES =
   'LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|BASH_ENV|PYTHONSTARTUP|PYTHONPATH|NODE_PATH|GIT_SSH_COMMAND|GIT_ASKPASS|PROMPT_COMMAND|NODE_OPTIONS';
 const LOADER_ENV = new RegExp(`\\b(${LOADER_NAMES})\\s*[:=]\\s*(.*)$`);
@@ -184,6 +184,13 @@ export function urlHosts(text) {
 
 // ── Pure scan ───────────────────────────────────────────────────────────────
 const excerpt = (s) => s.trim().slice(0, 120);
+// GitHub reads github.event['pull_request']['title'] and github.event.pull_request.TITLE the
+// same as the dotted form, so the field rules see this canonical dotted, bracket-free form.
+export const canonical = (expr) =>
+  expr
+    .replace(/\[\s*(['"])([^'"\]]*)\1\s*\]/g, '.$2')
+    .replace(/\[\s*(\d+|\*)\s*\]/g, '.$1')
+    .replace(/\s*\.\s*/g, '.');
 // A finding message can quote added text, so escape backslash first, then the table pipe.
 const mdCell = (s) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
@@ -262,9 +269,9 @@ function scanWorkflow(path, content, added, allow, add) {
     // An `if:` value is an expression whether or not it is wrapped in ${{ }}.
     if (key === 'if' && exprs.length === 0) exprs.push(value);
     for (const expr of exprs) {
-      if (code && UNTRUSTED.test(expr))
+      if (code && UNTRUSTED.test(canonical(expr)))
         add('expr-injection', path, n, `untrusted value used in a ${key} body: ${expr.trim()}`, '');
-      if (/\b(toJSON|join)\(\s*(secrets|vars)\s*[,)]/i.test(expr))
+      if (/[(,]\s*(secrets|vars)\s*[,)]/i.test(expr))
         add('secret-dump', path, n, 'expression dumps the whole secrets or vars context', '');
       for (const s of expr.matchAll(
         /\b(secrets|vars)\.([A-Za-z_]\w*)|\b(secrets|vars)\[\s*['"]([^'"]+)['"]\s*\]/g
