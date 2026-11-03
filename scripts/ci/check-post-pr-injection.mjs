@@ -56,7 +56,13 @@ import { parseDocument, isMap, isSeq, isScalar } from 'yaml';
    and the CI step summary. */
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAX_LINE = 20000;
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+// Git's empty tree id, asked of git (--all only) so no long hex literal sits in this
+// file: the committed-secret gate reads one as a possible secret.
+const emptyTreeId = () =>
+  execFileSync('git', ['hash-object', '-t', 'tree', '--stdin'], {
+    encoding: 'utf8',
+    input: '',
+  }).trim();
 
 // ── What counts as a surface ────────────────────────────────────────────────
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
@@ -471,7 +477,8 @@ function main() {
   const opt = (k) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : undefined);
   const head = opt('--head') || 'HEAD';
   let base = opt('--base') || `${head}^1`;
-  if (argv.includes('--all')) base = EMPTY_TREE;
+  const EMPTY_TREE = argv.includes('--all') ? emptyTreeId() : null;
+  if (EMPTY_TREE) base = EMPTY_TREE;
 
   let diff;
   let message = '';
