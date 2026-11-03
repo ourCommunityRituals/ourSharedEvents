@@ -4,8 +4,8 @@
  * runner or a reader could be steered by.
  *
  * It reads the merge commit's own diff (HEAD^1..HEAD) and the commit message,
- * and looks only at what the merge ADDED, so old text never turns it red. It
- * needs no secrets and runs nothing from the change. Findings, all failing:
+ * and reports only what the merge ADDED, so old text never turns it red. It
+ * runs nothing from the change. Findings, all failing:
  *
  *   hidden-char    bidi controls or Unicode tag characters in any added text;
  *                  zero-width characters in instruction surfaces and code
@@ -13,15 +13,24 @@
  *                  a file an agent reads (CLAUDE.md, .claude/**, workflows, ...)
  *   commit-message the same wording or characters in the merge commit message
  *                  (a squash copies the PR body there)
- *   expr-injection an untrusted ${{ github.event... }} value used in a run or
- *                  script body instead of an env: value
+ *   oversize-line  an added line past MAX_LINE on a scanned surface (padding
+ *                  must not push text out of the pattern checks)
+ *   new-host       a URL host not in the allowlist (instruction and CI surfaces);
+ *                  the host is the one URL parsing resolves, not the raw text
+ *   lifecycle      a package.json install-time script added or changed, found by
+ *                  comparing the parsed before and after, not by the added line
+ *
+ * Workflow files are parsed as YAML (whole file, then mapped back to the lines the
+ * merge added), so a value split over lines or quoted is read as the runner reads it:
+ *
+ *   expr-injection an untrusted ${{ github.event... }} value inside a `run:` or
+ *                  `script:` body; the same value in env:/with:/name: is data
  *   loader-env     LD_PRELOAD, NODE_OPTIONS and similar set in a workflow
  *   unpinned-action `uses:` pinned to @main, @master, @HEAD or @latest
  *   pr-target      a pull_request_target trigger added
  *   secret-dump    toJSON(secrets) or toJSON(vars) in an expression
  *   new-secret     a secrets.X / vars.X name not in the allowlist
- *   new-host       a URL host not in the allowlist (instruction and CI surfaces)
- *   lifecycle      a package.json install-time script added
+ *   yaml-parse     a changed workflow that cannot be read (fails closed)
  *
  * The allowlist is scripts/ci/post-pr-injection-allowlist.json. Adding to it is
  * a reviewed change (CODEOWNERS), which is the point: a new host or secret name
@@ -30,16 +39,21 @@
  * Usage: node scripts/ci/check-post-pr-injection.mjs [--base <rev>] [--head <rev>] [--all]
  *   --all  scan every tracked file as if it were all added (a dry run for baselining)
  * Exit: 0 clean, 1 findings, 2 cannot compare (fail closed).
+ *
+ * Needs the `yaml` package, so T5 installs dependencies with --ignore-scripts
+ * before running this: nothing from the change executes first.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDocument, isMap, isSeq, isScalar } from 'yaml';
 
 /* eslint-disable security/detect-unsafe-regex, security/detect-non-literal-regexp, security/detect-non-literal-fs-filename --
-   The patterns are fixed and run over single lines capped at MAX_LINE (see scan);
-   the two constructed ones are built from constant code points, not input; the
-   file paths are this repo's own allowlist and the CI step summary. */
+   The patterns are fixed and run over lines capped at MAX_LINE (see scan), and
+   an over-long line is itself a finding; the two constructed ones are built from
+   constant code points, not input; the file paths are this repo's own allowlist
+   and the CI step summary. */
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAX_LINE = 20000;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -57,12 +71,9 @@ const INSTRUCTION_SURFACE = [
   /^\.mcp\.json$/,
 ];
 const WORKFLOW_FILE = /^\.github\/(workflows\/[^/]+\.ya?ml|actions\/.+\.ya?ml)$/;
+const PACKAGE_JSON = /(^|\/)package\.json$/;
 const CODE_FILE = /\.(js|mjs|cjs|ts|sh|ya?ml|json|toml)$/;
-const URL_SURFACE_EXTRA = [
-  /^scripts\/ci\//,
-  /^workers\/[^/]+\/wrangler\.[^/]+$/,
-  /(^|\/)package\.json$/,
-];
+const URL_SURFACE_EXTRA = [/^scripts\/ci\//, /^workers\/[^/]+\/wrangler\.[^/]+$/, PACKAGE_JSON];
 
 export const isInstructionSurface = (p) =>
   !TEST_FILE.test(p) && INSTRUCTION_SURFACE.some((re) => re.test(p));
@@ -108,15 +119,23 @@ const ZERO_WIDTH = new RegExp(`[${cp(0x200b)}${cp(0x2060)}${cp(0x180e)}]|(?!^)${
 
 const UNTRUSTED =
   /\b(github\.event\.(issue|pull_request|discussion)\.(title|body)|github\.event\.(comment|review|review_comment)\.body|github\.event\.pages\.[^\s}]*page_name|github\.event\.commits\.[^\s}]*\.(message|author\.(email|name))|github\.event\.head_commit\.(message|author\.(email|name))|github\.event\.pull_request\.head\.(ref|label)|github\.event\.pull_request\.head\.repo\.default_branch|github\.head_ref|github\.event\.workflow_run\.(head_branch|display_title|head_commit\.(message|author\.(email|name))|pull_requests\.[^\s}]*head\.ref)|github\.event\.(inputs|client_payload)\.\w+|inputs\.\w+)/;
-// `key: ${{ expr }}` for any key but run/script is an env/with/ref style assignment,
-// where the value never reaches a shell or a script as code.
-const SAFE_ASSIGNMENT = /^[A-Za-z_][\w-]*:\s*["']?\$\{\{[^}]*\}\}["']?\s*$/;
-const LOADER_ENV =
-  /\b(LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|BASH_ENV|PYTHONSTARTUP|PYTHONPATH|NODE_PATH|GIT_SSH_COMMAND|GIT_ASKPASS|PROMPT_COMMAND|NODE_OPTIONS)\s*[:=]\s*(.*)$/;
+const LOADER_NAMES =
+  'LD_PRELOAD|LD_LIBRARY_PATH|DYLD_INSERT_LIBRARIES|BASH_ENV|PYTHONSTARTUP|PYTHONPATH|NODE_PATH|GIT_SSH_COMMAND|GIT_ASKPASS|PROMPT_COMMAND|NODE_OPTIONS';
+const LOADER_ENV = new RegExp(`\\b(${LOADER_NAMES})\\s*[:=]\\s*(.*)$`);
+const LOADER_KEY = new RegExp(`^(${LOADER_NAMES})$`);
 const SAFE_NODE_OPTIONS = /^["']?--max[-_]old[-_]space[-_]size=\d+["']?\s*$/;
-const UNPINNED_USES = /^\s*-?\s*uses:\s*\S+@(main|master|HEAD|latest)\s*$/i;
-const URL_RE = /https?:\/\/(?:[^\s/@'"`]*@)?([A-Za-z0-9][A-Za-z0-9.-]*)/g;
-const LIFECYCLE = /"(preinstall|install|postinstall|prepare)"\s*:/;
+const MOVING_REF = /@(main|master|HEAD|latest)$/i;
+const URL_CANDIDATE = /https?:\/\/[^\s'"`<>\\)\]]*/gi;
+const PLACEHOLDER = /\$\{\{[^}]*\}\}|\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*/g;
+const SOLE_PLACEHOLDER = /^(\$\{\{[^}]*\}\}|\$\{[^}]*\}|\$[A-Za-z_]\w*)(:\d+)?$/;
+const LIFECYCLE_KEYS = [
+  'preinstall',
+  'install',
+  'postinstall',
+  'preprepare',
+  'prepare',
+  'postprepare',
+];
 
 // ── Allowlist ───────────────────────────────────────────────────────────────
 export function loadAllowlist(
@@ -128,6 +147,7 @@ export function loadAllowlist(
     secrets: new Set(raw.secrets.map((s) => s.name)),
     vars: new Set(raw.vars.map((s) => s.name)),
     phraseExemptPaths: new Set(raw.phraseExemptPaths.map((s) => s.path)),
+    bidiExemptPaths: new Set((raw.bidiExemptPaths || []).map((s) => s.path)),
   };
 }
 export const hostAllowed = (host, hosts) => {
@@ -135,30 +155,203 @@ export const hostAllowed = (host, hosts) => {
   return hosts.some((a) => h === a || h.endsWith(`.${a}`));
 };
 
+/**
+ * The hosts a line's URLs resolve to, as URL parsing sees them (percent-escapes
+ * and IP forms normalized, any scheme case). `null` stands for an authority that
+ * does not parse. A URL whose whole host is one shell or Actions placeholder is
+ * dynamic and left to the secret and var allowlists.
+ */
+export function urlHosts(text) {
+  const out = [];
+  for (const m of text.matchAll(URL_CANDIDATE)) {
+    const scheme = m[0].slice(0, m[0].indexOf(':')).toLowerCase();
+    // A port that is a number or a placeholder is not part of the host.
+    const auth = m[0]
+      .slice(m[0].indexOf('//') + 2)
+      .split(/[/?#]/)[0]
+      .replace(/:(\d+|\$\{[^}]*\}|\$[A-Za-z_]\w*)$/, '');
+    // `https://` on its own is a scheme in a string, not a URL.
+    if (auth === '' || SOLE_PLACEHOLDER.test(auth)) continue;
+    const cleaned = auth.replace(PLACEHOLDER, 'x').replace(/[.,;:!}]+$/, '');
+    try {
+      out.push({ auth, host: new URL(`${scheme}://${cleaned}`).hostname });
+    } catch {
+      out.push({ auth, host: null });
+    }
+  }
+  return out;
+}
+
 // ── Pure scan ───────────────────────────────────────────────────────────────
 const excerpt = (s) => s.trim().slice(0, 120);
 // A finding message can quote added text, so escape backslash first, then the table pipe.
 const mdCell = (s) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
-/** @param {{path:string, lines:{n:number,text:string}[]}[]} files */
+const lineStarts = (text) => {
+  const starts = [0];
+  for (let i = 0; i < text.length; i += 1) if (text.charCodeAt(i) === 10) starts.push(i + 1);
+  return starts;
+};
+const lineOf = (starts, offset) => {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
+};
+
+/** Install-time scripts that differ between the two package.json texts. */
+export function lifecycleChanges(beforeText, afterText) {
+  let after;
+  try {
+    after = JSON.parse(afterText);
+  } catch {
+    return [{ key: null, why: 'package.json no longer parses' }];
+  }
+  let before = {};
+  try {
+    before = beforeText == null ? {} : JSON.parse(beforeText);
+  } catch {
+    before = {};
+  }
+  const out = [];
+  for (const key of LIFECYCLE_KEYS) {
+    const a = after && after.scripts && after.scripts[key];
+    const b = before && before.scripts && before.scripts[key];
+    if (a !== undefined && a !== b)
+      out.push({ key, why: `install-time script "${key}" added or changed` });
+  }
+  return out;
+}
+
+function scanWorkflow(path, content, added, allow, add) {
+  if (content == null) {
+    add('yaml-parse', path, 1, 'cannot read the workflow to parse it; failing closed', '');
+    return;
+  }
+  const doc = parseDocument(content);
+  if (doc.errors.length) {
+    add(
+      'yaml-parse',
+      path,
+      1,
+      `workflow does not parse: ${doc.errors[0].message.split('\n')[0]}`,
+      ''
+    );
+    return;
+  }
+  const starts = lineStarts(content);
+  // First line of `node` that the merge added, or null.
+  const hit = (node) => {
+    const r = node && node.range;
+    if (!r) return null;
+    const last = lineOf(starts, Math.max(r[0], r[1] - 1));
+    for (let n = lineOf(starts, r[0]); n <= last; n += 1) if (added.has(n)) return n;
+    return null;
+  };
+
+  const checkScalar = (node, key) => {
+    const n = hit(node);
+    if (n == null) return;
+    const value = node.value;
+    const code = key === 'run' || key === 'script';
+    const exprs = [...value.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].map((m) => m[1]);
+    // An `if:` value is an expression whether or not it is wrapped in ${{ }}.
+    if (key === 'if' && exprs.length === 0) exprs.push(value);
+    for (const expr of exprs) {
+      if (code && UNTRUSTED.test(expr))
+        add('expr-injection', path, n, `untrusted value used in a ${key} body: ${expr.trim()}`, '');
+      if (/\b(toJSON|join)\(\s*(secrets|vars)\s*[,)]/i.test(expr))
+        add('secret-dump', path, n, 'expression dumps the whole secrets or vars context', '');
+      for (const s of expr.matchAll(
+        /\b(secrets|vars)\.([A-Za-z_]\w*)|\b(secrets|vars)\[\s*['"]([^'"]+)['"]\s*\]/g
+      )) {
+        const kind = s[1] || s[3];
+        const name = s[2] || s[4];
+        if (!allow[kind].has(name))
+          add('new-secret', path, n, `${kind}.${name} is not in the allowlist`, '');
+      }
+    }
+    if (code) {
+      for (const ln of value.split('\n')) {
+        const lo = LOADER_ENV.exec(ln);
+        if (lo && !(lo[1] === 'NODE_OPTIONS' && SAFE_NODE_OPTIONS.test(lo[2])))
+          add('loader-env', path, n, `${lo[1]} set in a ${key} body`, ln);
+      }
+    }
+    if (key === 'uses' && MOVING_REF.test(value.trim()))
+      add('unpinned-action', path, n, 'action pinned to a moving ref', value);
+  };
+
+  const prtNodes = (node) => {
+    const isPrt = (s) => isScalar(s) && s.value === 'pull_request_target';
+    if (isPrt(node)) return [node];
+    if (isSeq(node)) return node.items.filter(isPrt);
+    if (isMap(node)) return node.items.map((p) => p.key).filter(isPrt);
+    return [];
+  };
+
+  const visit = (node, key, depth) => {
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        const k = isScalar(pair.key) ? String(pair.key.value) : null;
+        if (depth === 0 && k === 'on') {
+          for (const t of prtNodes(pair.value)) {
+            const n = hit(t);
+            if (n != null) add('pr-target', path, n, 'pull_request_target trigger added', '');
+          }
+        }
+        if (key === 'env' && k && LOADER_KEY.test(k)) {
+          const n = hit(pair.key) ?? hit(pair.value);
+          const v = isScalar(pair.value) ? String(pair.value.value ?? '') : '';
+          if (n != null && !(k === 'NODE_OPTIONS' && SAFE_NODE_OPTIONS.test(v)))
+            add('loader-env', path, n, `${k} set in a workflow`, v);
+        }
+        visit(pair.value, k, depth + 1);
+      }
+    } else if (isSeq(node)) {
+      for (const item of node.items) visit(item, key, depth + 1);
+    } else if (isScalar(node) && typeof node.value === 'string') {
+      checkScalar(node, key);
+    }
+  };
+  visit(doc.contents, null, 0);
+}
+
+/**
+ * @param {{path:string, lines:{n:number,text:string}[], content?:string|null, before?:string|null}[]} files
+ *   content: the file at head (workflows and package.json); before: package.json at base
+ */
 export function scan(files, message, allow) {
   const findings = [];
   const add = (id, file, line, msg, text) =>
     findings.push({ id, file, line, msg, excerpt: text == null ? '' : excerpt(text) });
 
-  for (const { path, lines } of files) {
+  for (const { path, lines, content, before } of files) {
     const instr = isInstructionSurface(path);
     // Test fixtures carry zero-width characters on purpose (hostile-input cases).
     const strictInvisible = instr || (CODE_FILE.test(path) && !/(^|\/)tests?\//.test(path));
     const phraseExempt = allow.phraseExemptPaths.has(path);
-    const wf = WORKFLOW_FILE.test(path);
     const urlSurface = isUrlSurface(path);
+    const wf = WORKFLOW_FILE.test(path);
+    const surface = instr || urlSurface || wf;
 
     for (const { n, text: full } of lines) {
-      // The text is attacker-controlled, so the pattern passes below read a bounded
-      // prefix; the character-class checks are linear and read the whole line.
+      // The character-class checks are linear and read the whole line. The pattern
+      // checks read a bounded prefix, so a line past the bound is a finding itself.
       const text = full.length > MAX_LINE ? full.slice(0, MAX_LINE) : full;
-      if (BIDI_OR_TAG.test(full))
+      if (full.length > MAX_LINE && surface)
+        add(
+          'oversize-line',
+          path,
+          n,
+          `added line is ${full.length} characters; not read in full`,
+          ''
+        );
+      if (BIDI_OR_TAG.test(full) && !allow.bidiExemptPaths.has(path))
         add('hidden-char', path, n, 'bidi control or Unicode tag character', '');
       else if (strictInvisible && ZERO_WIDTH.test(full))
         add('hidden-char', path, n, 'zero-width character', '');
@@ -168,58 +361,21 @@ export function scan(files, message, allow) {
       }
 
       if (urlSurface) {
-        for (const m of text.matchAll(URL_RE)) {
-          if (!hostAllowed(m[1], allow.hosts))
-            add('new-host', path, n, `host not in the allowlist: ${m[1]}`, text);
+        for (const { auth, host } of urlHosts(text)) {
+          if (host === null)
+            add('new-host', path, n, `URL authority does not parse: ${auth}`, text);
+          else if (!hostAllowed(host, allow.hosts))
+            add('new-host', path, n, `host not in the allowlist: ${host}`, text);
         }
       }
+    }
 
-      if (/(^|\/)package\.json$/.test(path) && LIFECYCLE.test(text)) {
-        add('lifecycle', path, n, 'install-time script added or changed', text);
-      }
+    if (wf) scanWorkflow(path, content, new Set(lines.map((l) => l.n)), allow, add);
 
-      if (!wf) continue;
-      const trimmed = text.trim();
-      if (/^\s*#/.test(text)) continue;
-
-      for (const m of text.matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
-        const expr = m[1];
-        if (
-          UNTRUSTED.test(expr) &&
-          !(SAFE_ASSIGNMENT.test(trimmed) && !/^(run|script):/.test(trimmed))
-        ) {
-          add(
-            'expr-injection',
-            path,
-            n,
-            `untrusted value used outside an env: assignment: ${expr.trim()}`,
-            text
-          );
-        }
-        if (/\b(toJSON|join)\(\s*(secrets|vars)\s*[,)]/i.test(expr)) {
-          add('secret-dump', path, n, 'expression dumps the whole secrets or vars context', text);
-        }
-        for (const s of expr.matchAll(
-          /\b(secrets|vars)\.([A-Za-z_]\w*)|\b(secrets|vars)\[\s*['"]([^'"]+)['"]\s*\]/g
-        )) {
-          const kind = s[1] || s[3];
-          const name = s[2] || s[4];
-          if (!allow[kind].has(name))
-            add('new-secret', path, n, `${kind}.${name} is not in the allowlist`, '');
-        }
-      }
-
-      const lo = LOADER_ENV.exec(text);
-      if (lo && !(lo[1] === 'NODE_OPTIONS' && SAFE_NODE_OPTIONS.test(lo[2]))) {
-        add('loader-env', path, n, `${lo[1]} set in a workflow`, text);
-      }
-      if (UNPINNED_USES.test(text))
-        add('unpinned-action', path, n, 'action pinned to a moving ref', text);
-      if (
-        /^\s*pull_request_target\s*:/.test(text) ||
-        /^\s*on\s*:.*\bpull_request_target\b/.test(text)
-      ) {
-        add('pr-target', path, n, 'pull_request_target trigger added', text);
+    if (PACKAGE_JSON.test(path) && content != null) {
+      for (const c of lifecycleChanges(before, content)) {
+        const idx = c.key ? content.split('\n').findIndex((l) => l.includes(`"${c.key}"`)) : -1;
+        add('lifecycle', path, idx >= 0 ? idx + 1 : 1, c.why, '');
       }
     }
   }
@@ -240,21 +396,46 @@ export function scan(files, message, allow) {
 }
 
 // ── Diff parsing ────────────────────────────────────────────────────────────
+/**
+ * Added lines per file from `git diff --unified=0`. Inside a hunk every row is
+ * content, counted off the hunk header, so an added line that begins `++ ` (it
+ * prints as `+++ `) is never taken for a file header.
+ */
 export function parseAdded(diffText) {
   const files = [];
   let cur = null;
   let n = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
   for (const raw of diffText.split('\n')) {
-    if (raw.startsWith('+++ ')) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (raw.startsWith('\\')) continue;
+      if (raw.startsWith('+')) {
+        newLeft -= 1;
+        if (cur) cur.lines.push({ n, text: raw.slice(1) });
+        n += 1;
+      } else if (raw.startsWith('-')) {
+        oldLeft -= 1;
+      } else {
+        oldLeft -= 1;
+        newLeft -= 1;
+        n += 1;
+      }
+      continue;
+    }
+    if (raw.startsWith('diff --git ')) {
+      cur = null;
+    } else if (raw.startsWith('+++ ')) {
       const p = raw.slice(4).split('\t')[0];
       cur = p === '/dev/null' ? null : { path: p.replace(/^b\//, ''), lines: [] };
       if (cur) files.push(cur);
     } else if (raw.startsWith('@@')) {
-      const m = /\+(\d+)/.exec(raw);
-      n = m ? Number(m[1]) : 0;
-    } else if (cur && raw.startsWith('+') && !raw.startsWith('+++')) {
-      cur.lines.push({ n, text: raw.slice(1) });
-      n += 1;
+      const m = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(raw);
+      if (m) {
+        oldLeft = m[1] === undefined ? 1 : Number(m[1]);
+        n = Number(m[2]);
+        newLeft = m[3] === undefined ? 1 : Number(m[3]);
+      }
     }
   }
   return files;
@@ -266,6 +447,17 @@ const git = (args) =>
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
   });
+const show = (rev, path) => {
+  try {
+    return execFileSync('git', ['show', `${rev}:${path}`], {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
+  }
+};
 
 function main() {
   const argv = process.argv.slice(2);
@@ -279,12 +471,18 @@ function main() {
   try {
     git(['rev-parse', '--verify', `${head}^{commit}`]);
     if (base !== EMPTY_TREE) git(['rev-parse', '--verify', `${base}^{commit}`]);
+    // --text: a .gitattributes `-diff` in the change must not turn a file into a
+    // "binary" notice with no lines to scan. --no-textconv: no converter runs.
     diff = git([
       'diff',
       '--unified=0',
       '--no-color',
       '--no-ext-diff',
+      '--no-textconv',
+      '--text',
       '--no-renames',
+      '--src-prefix=a/',
+      '--dst-prefix=b/',
       '--diff-filter=ACMR',
       base,
       head,
@@ -298,6 +496,10 @@ function main() {
   }
 
   const files = parseAdded(diff);
+  for (const f of files) {
+    if (WORKFLOW_FILE.test(f.path) || PACKAGE_JSON.test(f.path)) f.content = show(head, f.path);
+    if (PACKAGE_JSON.test(f.path) && base !== EMPTY_TREE) f.before = show(base, f.path);
+  }
   const findings = scan(files, message, loadAllowlist());
   const summary = process.env.GITHUB_STEP_SUMMARY;
   const surfaces = files.filter((f) => isInstructionSurface(f.path)).map((f) => f.path);

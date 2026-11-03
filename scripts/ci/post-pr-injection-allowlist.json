@@ -54,6 +54,12 @@
     { "name": "T4_MAX_SKIP_RATIO" },
     { "name": "TEST_EVENT_ID" }
   ],
+  "bidiExemptPaths": [
+    {
+      "path": "workers/oursharedevents/tests/forms-adversarial.spec.ts",
+      "reason": "Hostile-input fixture: a right-to-left override inside a registrant name, to test form handling."
+    }
+  ],
   "phraseExemptPaths": [
     {
       "path": ".github/claude-review/security-charter.md",

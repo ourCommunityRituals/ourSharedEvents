@@ -56,16 +56,20 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      # Before `npm ci`: install scripts are code the merged change can control,
-      # so the change is read as text first and nothing from it has run yet.
+      # Install scripts are code the merged change can control. The check needs the
+      # `yaml` package to read workflows, so dependencies go in first with scripts
+      # off (files only, nothing runs), then the change is read as text, and only
+      # then do install scripts run (npm rebuild).
+      - name: Install dependencies (install scripts off)
+        run: npm ci --ignore-scripts --prefer-offline || npm ci --ignore-scripts
       - name: 'T5: merged change added no injection (agent files, workflows, hosts, secrets)'
         run: node scripts/ci/check-post-pr-injection.mjs
       - name: 'T5: committed-secret gate (nothing injected during testing)'
         run: |
           python -m pip install 'detect-secrets==1.5.0' --quiet
           python scripts/check-secrets-baseline.py
-      - name: Install dependencies
-        run: npm ci --prefer-offline || npm ci
+      - name: Run install scripts (only after the change was read)
+        run: npm rebuild
       - name: Install Playwright browsers
         run: bash scripts/ci/install-playwright-browsers.sh chromium
       - name: 'T5: deployed surface carries no injected content'
