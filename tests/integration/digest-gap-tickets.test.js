@@ -108,6 +108,18 @@ describe('digest gap tickets', () => {
     expect(run(OK.replace('| A gap | OSE-1790 | n |', 'A gap | OSE-1790 | n')).code).toBe(0);
   });
 
+  it('keeps an escaped pipe inside its cell and accepts the ticket', () => {
+    const row = '| Reader \\| actor split | OSE-1790 | n |';
+    expect(run(OK.replace('| A gap | OSE-1790 | n |', row)).code).toBe(0);
+  });
+
+  it('does not take a ticket id from a cell that holds an escaped pipe', () => {
+    const row = '| Gap \\| OSE-1790 | later | n |';
+    const r = run(OK.replace('| A gap | OSE-1790 | n |', row));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('gap "Gap | OSE-1790"');
+  });
+
   it('accepts an indented row that has a ticket', () => {
     expect(run(OK.replace('| A gap | OSE-1790 | n |', '  | A gap | OSE-1790 | n |')).code).toBe(0);
   });
