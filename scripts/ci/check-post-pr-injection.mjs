@@ -137,6 +137,8 @@ export const hostAllowed = (host, hosts) => {
 
 // ── Pure scan ───────────────────────────────────────────────────────────────
 const excerpt = (s) => s.trim().slice(0, 120);
+// A finding message can quote added text, so escape backslash first, then the table pipe.
+const mdCell = (s) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
 /** @param {{path:string, lines:{n:number,text:string}[]}[]} files */
 export function scan(files, message, allow) {
@@ -309,8 +311,7 @@ function main() {
     out.push('', 'Instruction surfaces touched:', ...surfaces.map((p) => `- \`${p}\``));
   if (findings.length) {
     out.push('', '| Check | Where | Finding |', '|---|---|---|');
-    for (const f of findings)
-      out.push(`| ${f.id} | \`${f.file}:${f.line}\` | ${f.msg.replace(/\|/g, '\\|')} |`);
+    for (const f of findings) out.push(`| ${f.id} | \`${f.file}:${f.line}\` | ${mdCell(f.msg)} |`);
   } else out.push('', 'No findings.');
   if (summary) appendFileSync(summary, `${out.join('\n')}\n`);
 

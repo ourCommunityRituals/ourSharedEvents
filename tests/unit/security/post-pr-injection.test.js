@@ -220,6 +220,14 @@ describe('T5 post-PR injection check (born-red)', () => {
     );
   });
 
+  test('the step summary escapes backslashes and pipes quoted from the change', () => {
+    const dir = mergeOf({}, wf('      - run: echo "${{ github.head_ref || \'a\\b\' }}"\n'));
+    dirs.push(dir);
+    expect(run(dir).code).toBe(1);
+    const summary = readFileSync(path.join(dir, '.summary'), 'utf8');
+    expect(summary).toContain("github.head_ref \\|\\| 'a\\\\b'");
+  });
+
   test('fail-closed: a repo with no parent commit exits 2, never green', () => {
     const dir = mergeOf({}, null);
     dirs.push(dir);
