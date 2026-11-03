@@ -35,13 +35,21 @@ export function check(text) {
   else if (newest && mapped[1] < newest)
     problems.push(`mapped through ${mapped[1]} but the newest scan is ${newest}; update the mapping`);
 
+  // A row may be indented, have one cell, or omit the closing pipe; all are still gap rows.
   const rows = section
     .split('\n')
+    .map((l) => l.trim())
     .filter((l) => l.startsWith('|'))
-    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()))
-    .filter((c) => c.length >= 2 && !/^-+$/.test(c[0].replace(/\s/g, '')) && c[0] !== 'Open gap');
+    .map((l) =>
+      l
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim())
+    )
+    .filter((c) => !c.every((x) => /^:?-+:?$/.test(x)) && c[0] !== 'Open gap');
   if (!rows.length) problems.push('the section has no gap rows');
-  for (const [gap, ticket] of rows) {
+  for (const [gap, ticket = ''] of rows) {
     if (!/\bOSE-\d+\b/.test(ticket) && !/^no ticket, decided: \S/i.test(ticket))
       problems.push(`gap "${gap}" has neither an OSE id nor "no ticket, decided: <reason>"`);
   }

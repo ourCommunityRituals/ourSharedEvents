@@ -66,6 +66,37 @@ describe('digest gap tickets', () => {
     expect(r.out).toContain('gap "A gap" has neither an OSE id');
   });
 
+  it('fails on a one-cell row beside a valid row', () => {
+    const r = run(
+      OK.replace('| A gap | OSE-1790 | n |', '| A gap | OSE-1790 | n |\n| Untracked gap |')
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('gap "Untracked gap"');
+  });
+
+  it('fails on an indented row with no ticket', () => {
+    const r = run(
+      OK.replace(
+        '| A gap | OSE-1790 | n |',
+        '| A gap | OSE-1790 | n |\n  | Indented gap | later | n |'
+      )
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('gap "Indented gap"');
+  });
+
+  it('fails on a row with no closing pipe and no ticket', () => {
+    const r = run(
+      OK.replace('| A gap | OSE-1790 | n |', '| A gap | OSE-1790 | n |\n| Open ended gap | later')
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('gap "Open ended gap"');
+  });
+
+  it('accepts an indented row that has a ticket', () => {
+    expect(run(OK.replace('| A gap | OSE-1790 | n |', '  | A gap | OSE-1790 | n |')).code).toBe(0);
+  });
+
   it('fails when "no ticket, decided:" has no reason', () => {
     const r = run(OK.replace('no ticket, decided: provider-side only', 'no ticket, decided:'));
     expect(r.code).toBe(1);
