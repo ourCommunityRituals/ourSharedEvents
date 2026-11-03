@@ -1,0 +1,69 @@
+{
+  "_about": "What the T5 post-PR injection check treats as known (scripts/ci/check-post-pr-injection.mjs). Seeded 2026-11-02 from the hosts, secret names and variable names the repo already used. CODEOWNERS-locked: adding an entry is a security-owner decision. A host matches itself and any subdomain.",
+  "hosts": [
+    {
+      "host": "oursharedevents.com",
+      "reason": "Our production host and its stg. and qa. subdomains."
+    },
+    { "host": "github.com", "reason": "Repository, API (api.github.com) and release links." },
+    {
+      "host": "githubusercontent.com",
+      "reason": "raw.githubusercontent.com, used by the pinned hub fetch."
+    },
+    { "host": "cloudflare.com", "reason": "api., dash. and developers.cloudflare.com." },
+    { "host": "cloudflareaccess.com", "reason": "The Cloudflare Access team domain." },
+    { "host": "linear.app", "reason": "Linear API (ticket sync)." },
+    { "host": "npmjs.org", "reason": "registry.npmjs.org." },
+    { "host": "nodejs.org", "reason": "Node release metadata." },
+    { "host": "localhost", "reason": "Local development." },
+    { "host": "127.0.0.1", "reason": "Local development." },
+    { "host": "example.com", "reason": "RFC 2606 reserved; cannot reach a real server." },
+    { "host": "example.org", "reason": "RFC 2606 reserved; cannot reach a real server." },
+    { "host": "test", "reason": "RFC 2606 reserved TLD, e.g. poster.test." }
+  ],
+  "secrets": [
+    { "name": "ADMIN_KEY" },
+    { "name": "ANTHROPIC_API_KEY" },
+    { "name": "BRANCH_PROTECTION_READ_TOKEN" },
+    { "name": "CF_ACCESS_CLIENT_ID" },
+    { "name": "CF_ACCESS_CLIENT_SECRET" },
+    { "name": "CLAUDE_CODE_OAUTH_TOKEN" },
+    { "name": "CLOUDFLARE_ACCOUNT_ID" },
+    { "name": "CLOUDFLARE_API_TOKEN_OSE" },
+    { "name": "GITHUB_TOKEN" },
+    { "name": "LINEAR_API_KEY" },
+    { "name": "LINEAR_TEAM_ID" },
+    { "name": "OCR_AUTOMATION_WRITE" },
+    { "name": "OCR_CI_EDGE_TOKEN" },
+    { "name": "OCR_HUB_READ" },
+    { "name": "OCR_NOTIFY_OSM" },
+    { "name": "OCR_PROPAGATE_TOKEN" },
+    { "name": "OSE_ADMIN_BEARER" },
+    { "name": "SECURITY_WEBHOOK_URL" },
+    { "name": "STAGING_ADMIN_KEY" },
+    { "name": "STAGING_BASE_URL" },
+    { "name": "X_OCR_INTERNAL" }
+  ],
+  "vars": [
+    { "name": "CCR_GATE_MODE" },
+    { "name": "PRODUCTION_LIVE" },
+    { "name": "PRODUCTION_URL" },
+    { "name": "PR_REVIEWER" },
+    { "name": "RED_TEAM_BASE_URL" },
+    { "name": "STAGING_URL" },
+    { "name": "T4_MAX_SKIP_RATIO" },
+    { "name": "TEST_EVENT_ID" }
+  ],
+  "bidiExemptPaths": [
+    {
+      "path": "workers/oursharedevents/tests/forms-adversarial.spec.ts",
+      "reason": "Hostile-input fixture: a right-to-left override inside a registrant name, to test form handling."
+    }
+  ],
+  "phraseExemptPaths": [
+    {
+      "path": ".github/claude-review/security-charter.md",
+      "reason": "Defines what a reviewer must treat as injection, so it quotes the wording."
+    }
+  ]
+}
