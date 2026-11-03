@@ -25,8 +25,8 @@ export const STAGES = [
   { id: 'T2', key: 'contract-staging', label: 'T2 Contract → Staging (Bruno)', proves: 'API and page contracts hold' },
   { id: 'T3', key: 'smoke-staging', label: 'T3 Smoke → Staging (Playwright)', proves: 'Security smoke, health, form endpoints' },
   { id: 'T4', key: 'functional-staging', label: 'T4 Functional → Staging', proves: 'End-to-end journeys and UI smoke' },
-  { id: 'T5', key: null, label: 'T5 Security (post-test integrity)', proves: 'The merged change added no injection; nothing was left behind by T1-T4', where: 'red-team-adversarial.yml, after this run is green on main' },
-  { id: 'T6', key: null, label: 'T6 Adversarial Red Team', proves: 'Attacks on staging fail', where: 'red-team-adversarial.yml, after T5' },
+  { id: 'T5', key: null, label: 'T5 Adversarial Red Team', proves: 'Attacks on staging fail', where: 'red-team-adversarial.yml, after this run is green on main' },
+  { id: 'T6', key: null, label: 'T6 Closing Security', proves: 'Security holds after the full run', where: 'red-team-adversarial.yml, after T5' },
   { id: 'P1', key: 'deploy-production', label: 'T1 Deploy → Production', proves: 'Production deploy', optional: true },
   { id: 'P2', key: 'smoke-production', label: 'T2 Smoke → Production', proves: 'Production smoke', optional: true },
 ];

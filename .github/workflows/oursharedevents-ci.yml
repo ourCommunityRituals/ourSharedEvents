@@ -2,8 +2,8 @@
 #
 # S0 Security → T0 Gate → T1 Deploy → T2 Bruno API → T3 Playwright Smoke
 #                                   → T4 E2E → T4d Functional/UI Smoke
-#                                   → T5 Security (separate workflow)
-#                                   → T6 Adversarial (separate workflow)
+#                                   → T5 Adversarial (separate workflow)
+#                                   → T6 Security (separate workflow)
 #
 # Security runs unconditionally on every PR (no paths filter on pull_request trigger).
 # Gate and all downstream jobs are blocked behind security via needs: — security results
@@ -38,10 +38,9 @@
 #       - Health check                 → curl /health (HTTP 200)
 #
 # Fail-fast test chain after T1 deploy: T2 Bruno API contract → T3 Playwright
-# smoke → T4 E2E → T4d functional/UI smoke. T5 Security (post-test integrity,
-# including the post-PR injection check) starts only after this CI/CD workflow
-# succeeds, then T6 Adversarial Red Team starts only after T5 succeeds. Each
-# stage gates the next, so a red stage stops everything
+# smoke → T4 E2E → T4d functional/UI smoke. T5 Adversarial Red Team starts only
+# after this CI/CD workflow succeeds, then T6 Security starts only after T5
+# succeeds. Each stage gates the next, so a red stage stops everything
 # downstream — fix one layer at a time. Contract-first: nail the API contract,
 # then perpetuate into Playwright smoke, E2E, and functional coverage.
 #
@@ -63,14 +62,12 @@
 #   T4d: Functional/UI Smoke — runs after the E2E tiers inside functional-staging
 #       - UI smoke                     → npm run test:ui:smoke
 #
-#   T5: Security (post-test integrity) — separate workflow_run after this workflow succeeds
-#       - red-team-adversarial.yml      → T5/T6 — Security then Adversarial Red Team
-#       - security-closing              → T5 Security: post-PR injection check, secret gate,
-#                                         deployed-surface check (runs before any npm install)
+#   T5: Adversarial Red Team — separate workflow_run after this workflow succeeds
+#       - red-team-adversarial.yml      → T5 — Adversarial Red Team
 #
-#   T6: Adversarial Red Team — job in red-team-adversarial.yml, after the T5 job succeeds
-#       - red-team-staging              → T6 Adversarial (red-team) → deployed env
-#       - post-t6-security              → final post-T6 security bookend, after T6
+#   T6: Security — jobs in red-team-adversarial.yml, after the T5 job succeeds
+#       - security-closing              → T6 Closing Security
+#       - post-t6-security              → final post-T6 security bookend
 #
 # Trigger Matrix:
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
@@ -3066,8 +3063,8 @@ jobs:
           echo "| T2 Bruno API STG | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 Playwright Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 E2E + T4d Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T5 Security (post-test integrity) | red-team-adversarial.yml | separate workflow after CI success |" >> $GITHUB_STEP_SUMMARY
-          echo "| T6 Adversarial Red Team | red-team-adversarial.yml | job after T5 success |" >> $GITHUB_STEP_SUMMARY
+          echo "| T5 Adversarial Red Team | red-team-adversarial.yml | separate workflow after CI success |" >> $GITHUB_STEP_SUMMARY
+          echo "| T6 Security | red-team-adversarial.yml | job after T5 success |" >> $GITHUB_STEP_SUMMARY
           echo "| Post-T6 Security Bookend | red-team-adversarial.yml | job after T6 success |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY

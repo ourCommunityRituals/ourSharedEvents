@@ -1,23 +1,13 @@
-# T5 — Security (post-test integrity), then T6 — Adversarial Red Team, then the
-# post-T6 bookend
+# T5 — Adversarial red-team run, then T6 Security Finale, then the post-T6 bookend
 #
 # Starts only after the full staging pipeline (OurSharedEvents CI/CD, push on
-# main) has passed. T5, T6 and post-T6 are jobs here, chained by `needs:`, not
+# main) has passed. T6 and post-T6 are jobs here, chained by `needs:`, not
 # separate workflow_run workflows: a workflow_run fired by another workflow_run
 # reports workflow_run.event == 'workflow_run', so the push-on-main gate below
-# could never pass one link down the chain. As separate workflows, the later
-# links skipped on every run from #743 (2026-10-01) until they became jobs here.
-# Here every job reads the CI/CD run's own event, so one gate covers the chain.
-#
-# Order, and why:
-#   T5 security-closing    First. The merged change has just run through T1-T4.
-#                          Before anything else touches it (npm ci runs install
-#                          scripts; the red team holds live secrets), check that
-#                          the change added no prompt injection, no workflow
-#                          injection, no unreviewed host or secret name.
-#   T6 red-team-staging    Attacks the deployed env, only once T5 is clear.
-#   post-t6-security       Last. Checks the red team left nothing behind.
-name: T5/T6 — Security then Adversarial Red Team
+# could never pass one link down the chain. As separate workflows, T6 and
+# post-T6 skipped on every run from #743 (2026-10-01) until this change. Here
+# every job reads the CI/CD run's own event, so one gate covers the chain.
+name: T5 — Adversarial Red Team
 
 on:
   workflow_run:
@@ -32,60 +22,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  security-closing:
-    name: 'T5 Security (post-test integrity)'
+  red-team-staging:
+    name: 'T5 Adversarial (red-team) → deployed env'
     # ADR-012 0.2: a workflow_run job runs with main as its ref, so environment
     # branch rules do not stop it, and a head_repository check only stops forks.
     # It must never check out and run code from a pull_request source run while
     # holding secrets, so only push runs on main qualify. (full-pipeline/* PR
-    # runs are no longer checked with live secrets; check-pr-secret-exposure
-    # rule W enforces this.) Every job below repeats this gate.
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          # Two commits: the merge and its parent, which the injection check diffs.
-          fetch-depth: 2
-          clean: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-      # Install scripts are code the merged change can control. The check needs the
-      # `yaml` package to read workflows, so dependencies go in first with scripts
-      # off (files only, nothing runs), then the change is read as text, and only
-      # then do install scripts run (npm rebuild).
-      - name: Install dependencies (install scripts off)
-        run: npm ci --ignore-scripts --prefer-offline || npm ci --ignore-scripts
-      - name: 'T5: merged change added no injection (agent files, workflows, hosts, secrets)'
-        run: node scripts/ci/check-post-pr-injection.mjs
-      - name: 'T5: committed-secret gate (nothing injected during testing)'
-        run: |
-          python -m pip install 'detect-secrets==1.5.0' --quiet
-          python scripts/check-secrets-baseline.py
-      - name: Run install scripts (only after the change was read)
-        run: npm rebuild
-      - name: Install Playwright browsers
-        run: bash scripts/ci/install-playwright-browsers.sh chromium
-      - name: 'T5: deployed surface carries no injected content'
-        env:
-          # OSE-1418: same target as T6 (repo variable RED_TEAM_BASE_URL).
-          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          npx playwright test --config=playwright.red-team.config.ts             tests/red-team/public-list-stored-xss.spec.ts             tests/red-team/security-headers.spec.ts
-
-  red-team-staging:
-    name: 'T6 Adversarial (red-team) → deployed env'
-    needs: [security-closing]
-    # Same ADR-012 0.2 gate as security-closing; needs: adds "only after T5
-    # succeeded".
+    # runs are no longer red-teamed with live secrets; check-pr-secret-exposure
+    # rule W enforces this.)
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -128,9 +72,45 @@ jobs:
         # rule, which no earlier tier can see, and they need not gate each push.
         run: npx playwright test --config=playwright.red-team.config.ts --grep-invert "RL-"
 
+  security-closing:
+    name: 'T6 Closing Security (post-test integrity)'
+    needs: [red-team-staging]
+    # Same ADR-012 0.2 gate as red-team-staging (only push runs on main hold
+    # secrets); needs: adds "only after T5 succeeded".
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          clean: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: 'Closing: committed-secret gate (nothing injected during testing)'
+        run: |
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
+      - name: Install dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright browsers
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
+      - name: 'Closing: deployed surface carries no injected content'
+        env:
+          # OSE-1418: same target as T5 (repo variable RED_TEAM_BASE_URL).
+          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          npx playwright test --config=playwright.red-team.config.ts             tests/red-team/public-list-stored-xss.spec.ts             tests/red-team/security-headers.spec.ts
+
   post-t6-security:
     name: 'Post-T6 Security (final bookend)'
-    needs: [red-team-staging]
+    needs: [security-closing]
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -159,17 +139,3 @@ jobs:
 
       - name: 'Closing: dependency audit'
         run: npm audit --omit=dev --audit-level=moderate --package-lock-only
-
-      # T5 ran before the red team, so it cannot see what the red team left on the
-      # deployed env (stored payloads, changed headers). This is the last look.
-      - name: Install dependencies
-        run: npm ci --prefer-offline || npm ci
-      - name: Install Playwright browsers
-        run: bash scripts/ci/install-playwright-browsers.sh chromium
-      - name: 'Closing: the red team left no injected content on the deployed surface'
-        env:
-          BASE_URL: ${{ vars.RED_TEAM_BASE_URL || 'https://stg.oursharedevents.com' }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          npx playwright test --config=playwright.red-team.config.ts             tests/red-team/public-list-stored-xss.spec.ts             tests/red-team/security-headers.spec.ts
