@@ -169,7 +169,7 @@ async function main() {
     console.error(`Write failed (HTTP ${put.status}): ${JSON.stringify(put.body.errors ?? [])}`);
     process.exit(1);
   }
-  console.log('Applied. Verify with the T5 red-team run (RL-001/RL-002).');
+  console.log('Applied. Verify with the T6 red-team run (RL-001/RL-002).');
 }
 
 import { fileURLToPath } from 'node:url';

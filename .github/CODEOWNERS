@@ -26,3 +26,9 @@
 /scripts/check-pr-secret-exposure.allowlist.json               @bereasonable13
 /tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts  @bereasonable13
 /docs/adr/ADR-020-copilot-ci-human-approval-gate.md            @bereasonable13
+
+# ── T5 post-PR injection check ───────────────────────────────────────────────
+# The allowlist of hosts and secret names the check treats as known. Widening it
+# silences the check, so a change here needs the security owner.
+/scripts/ci/check-post-pr-injection.mjs                         @bereasonable13
+/scripts/ci/post-pr-injection-allowlist.json                    @bereasonable13
