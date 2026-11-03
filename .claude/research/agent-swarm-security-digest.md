@@ -8,28 +8,28 @@
 
 ## Corroboration Tracker (update every scan)
 
-| Item                                                              | First seen | Last seen  | Status        | Notes                                                                                          |
-| ----------------------------------------------------------------- | ---------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| Prompt Infection (LLM→LLM injection, self-replicating across MAS) | 2026-09-11 | 2026-10-13 | CORROBORATED  | ESORICS 2025; extended by arXiv 2609.22949 & 2608.00718 (ICML 2026)                           |
-| OWASP Top 10 for Agentic Apps (ASI01–ASI10)                       | 2026-09-11 | 2026-10-13 | CORROBORATED  | Widely cited 2026; ASI01 = Goal Hijack ≈ indirect prompt injection; companion LLM 2026 list   |
-| MITRE ATLAS (agentic tactics)                                     | 2026-09-11 | 2026-10-13 | CORROBORATED  | v5.3.0 (Jan): MCP case studies; v5.4.0 (Feb): "Publish Poisoned AI Agent Tool"; monthly cadence |
-| CaMeL — defeating prompt injection by design                      | 2026-09-11 | 2026-10-13 | CORROBORATED  | Published IEEE SaTML 2026; 77% task rate secured vs 84% unsecured; 2.8× tokens                |
-| MCP tool poisoning (descriptions/results)                         | 2026-09-11 | 2026-10-13 | CORROBORATED  | MCPTox AAAI 2026: o1-mini 72.8% ASR on 45 real servers; STDIO systemic flaw adds RCE path     |
-| Lethal trifecta (private data + untrusted input + exfil)          | 2026-09-11 | 2026-10-13 | CORROBORATED  | NSA/CISA May 2026 "privilege" risk category; zero-trust agent identity calls for ephemeral creds |
-| Infection monitoring (INFA-Guard, VIGIL verify-before-commit)     | 2026-09-11 | 2026-10-08 | CORROBORATED  | INFA-Guard −33% ASR; VIGIL 2601.05755; not prominent Oct 13 — basis remains Oct 8 scan        |
-| NSA/CISA Five Eyes "Careful Adoption of Agentic AI"               | 2026-10-08 | 2026-10-13 | CORROBORATED  | May 1 2026; 30 pp; 100+ controls; prompt injection "most persistent and difficult-to-fix"     |
-| OWASP MCP Top 10                                                  | 2026-10-08 | 2026-10-13 | CORROBORATED  | MCP03 = Tool Poisoning (indirect injection variant); MCP06 = Intent Flow Subversion            |
-| Cross-Agent Campaign Attribution (arXiv 2607.18826)               | 2026-10-08 | 2026-10-13 | CORROBORATED  | ICML 2026; A2FV async fingerprinting across pipeline hops; AUC 0.82                           |
-| Beyond Single-Model Injection (arXiv 2609.22949)                  | 2026-10-08 | 2026-10-13 | CORROBORATED  | ICML 2026; 14 vectors; 67% agents vulnerable w/ guardrails; 31%→4%                            |
-| SEAgent — MAC for LLM privilege escalation (arXiv 2601.11893)     | 2026-10-08 | 2026-10-08 | CORROBORATED  | Confused deputy in MAS; 0% ASR vs 39.14% baseline; not prominent Oct 13                       |
-| MCP CVE surge                                                     | 2026-10-08 | 2026-10-13 | CORROBORATED  | Expanding: CVE-2026-35394 (Mobile MCP RCE); CVE-2026-33032 nginx-ui CVSS 9.8; 7+ critical in major platforms |
-| OWASP Top 10 for LLM Applications 2026                            | 2026-10-08 | 2026-10-13 | CORROBORATED  | Aug 2026; distinct from ASI agentic list; widely cross-cited in enterprise guidance            |
-| MCPTox benchmark (arXiv 2508.14925)                               | 2026-10-13 | 2026-10-13 | NEW           | AAAI 2026; 45 real MCP servers, 353 tools, 20 LLMs; o1-mini 72.8% ASR; MindGuard defense eval |
-| AEGIS: Cross-Domain Resource Abuse in MCP (arXiv 2608.20481)      | 2026-10-13 | 2026-10-13 | NEW           | DSN 2026 (IBM Research); OPA policy enforcement; 937 tool defs from 56 servers                |
-| Image-Based Prompt Injection / VPI-Bench (arXiv 2603.03637 + 2506.02456) | 2026-10-13 | 2026-10-13 | NEW    | Typographic injection 64% ASR (black-box); VPI-Bench for computer-use agents; physical-world surface |
-| NIST Cyber AI Profile (draft IR 8596) / CAISI                     | 2026-10-13 | 2026-10-13 | NEW           | Feb 2026; extends CSF 2.0; agent least-privilege + continuous auth as baseline; not finalized  |
-| MCP STDIO systemic design flaw (OX Security / CSA May 2026)       | 2026-10-13 | 2026-10-13 | NEW           | Architectural RCE in STDIO transport; ~200k vulnerable instances; 10 vulns across major MCP platforms |
-| Unicode TAG-Block concealment in MCP (arXiv 2607.05744)           | 2026-10-13 | 2026-10-13 | NEW           | Approval-view fidelity gap: human sees sanitized view, model receives payload; 3 server impls  |
+| Item                                                                     | First seen | Last seen  | Status       | Notes                                                                                                        |
+| ------------------------------------------------------------------------ | ---------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------ |
+| Prompt Infection (LLM→LLM injection, self-replicating across MAS)        | 2026-09-11 | 2026-10-13 | CORROBORATED | ESORICS 2025; extended by arXiv 2609.22949 & 2608.00718 (ICML 2026)                                          |
+| OWASP Top 10 for Agentic Apps (ASI01–ASI10)                              | 2026-09-11 | 2026-10-13 | CORROBORATED | Widely cited 2026; ASI01 = Goal Hijack ≈ indirect prompt injection; companion LLM 2026 list                  |
+| MITRE ATLAS (agentic tactics)                                            | 2026-09-11 | 2026-10-13 | CORROBORATED | v5.3.0 (Jan): MCP case studies; v5.4.0 (Feb): "Publish Poisoned AI Agent Tool"; monthly cadence              |
+| CaMeL — defeating prompt injection by design                             | 2026-09-11 | 2026-10-13 | CORROBORATED | Published IEEE SaTML 2026; 77% task rate secured vs 84% unsecured; 2.8× tokens                               |
+| MCP tool poisoning (descriptions/results)                                | 2026-09-11 | 2026-10-13 | CORROBORATED | MCPTox AAAI 2026: o1-mini 72.8% ASR on 45 real servers; STDIO systemic flaw adds RCE path                    |
+| Lethal trifecta (private data + untrusted input + exfil)                 | 2026-09-11 | 2026-10-13 | CORROBORATED | NSA/CISA May 2026 "privilege" risk category; zero-trust agent identity calls for ephemeral creds             |
+| Infection monitoring (INFA-Guard, VIGIL verify-before-commit)            | 2026-09-11 | 2026-10-08 | CORROBORATED | INFA-Guard −33% ASR; VIGIL 2601.05755; not prominent Oct 13 — basis remains Oct 8 scan                       |
+| NSA/CISA Five Eyes "Careful Adoption of Agentic AI"                      | 2026-10-08 | 2026-10-13 | CORROBORATED | May 1 2026; 30 pp; 100+ controls; prompt injection "most persistent and difficult-to-fix"                    |
+| OWASP MCP Top 10                                                         | 2026-10-08 | 2026-10-13 | CORROBORATED | MCP03 = Tool Poisoning (indirect injection variant); MCP06 = Intent Flow Subversion                          |
+| Cross-Agent Campaign Attribution (arXiv 2607.18826)                      | 2026-10-08 | 2026-10-13 | CORROBORATED | ICML 2026; A2FV async fingerprinting across pipeline hops; AUC 0.82                                          |
+| Beyond Single-Model Injection (arXiv 2609.22949)                         | 2026-10-08 | 2026-10-13 | CORROBORATED | ICML 2026; 14 vectors; 67% agents vulnerable w/ guardrails; 31%→4%                                           |
+| SEAgent — MAC for LLM privilege escalation (arXiv 2601.11893)            | 2026-10-08 | 2026-10-08 | CORROBORATED | Confused deputy in MAS; 0% ASR vs 39.14% baseline; not prominent Oct 13                                      |
+| MCP CVE surge                                                            | 2026-10-08 | 2026-10-13 | CORROBORATED | Expanding: CVE-2026-35394 (Mobile MCP RCE); CVE-2026-33032 nginx-ui CVSS 9.8; 7+ critical in major platforms |
+| OWASP Top 10 for LLM Applications 2026                                   | 2026-10-08 | 2026-10-13 | CORROBORATED | Aug 2026; distinct from ASI agentic list; widely cross-cited in enterprise guidance                          |
+| MCPTox benchmark (arXiv 2508.14925)                                      | 2026-10-13 | 2026-10-13 | NEW          | AAAI 2026; 45 real MCP servers, 353 tools, 20 LLMs; o1-mini 72.8% ASR; MindGuard defense eval                |
+| AEGIS: Cross-Domain Resource Abuse in MCP (arXiv 2608.20481)             | 2026-10-13 | 2026-10-13 | NEW          | DSN 2026 (IBM Research); OPA policy enforcement; 937 tool defs from 56 servers                               |
+| Image-Based Prompt Injection / VPI-Bench (arXiv 2603.03637 + 2506.02456) | 2026-10-13 | 2026-10-13 | NEW          | Typographic injection 64% ASR (black-box); VPI-Bench for computer-use agents; physical-world surface         |
+| NIST Cyber AI Profile (draft IR 8596) / CAISI                            | 2026-10-13 | 2026-10-13 | NEW          | Feb 2026; extends CSF 2.0; agent least-privilege + continuous auth as baseline; not finalized                |
+| MCP STDIO systemic design flaw (OX Security / CSA May 2026)              | 2026-10-13 | 2026-10-13 | NEW          | Architectural RCE in STDIO transport; ~200k vulnerable instances; 10 vulns across major MCP platforms        |
+| Unicode TAG-Block concealment in MCP (arXiv 2607.05744)                  | 2026-10-13 | 2026-10-13 | NEW          | Approval-view fidelity gap: human sees sanitized view, model receives payload; 3 server impls                |
 
 ---
 
@@ -104,6 +104,7 @@
 **Already defending us (unchanged):** CCR adversarial-verify, worktree isolation, Invariant #22 module isolation, human-in-the-loop gates, S2 post-execution integrity.
 
 **Open gaps (updated):**
+
 - (unchanged from 2026-09-11) No explicit trifecta break (reader vs actor agents); broad per-subagent tool inheritance (not least-privilege); cross-agent messages treated as trusted instructions (no spotlighting/provenance); no infection monitoring on pipeline
 - (new 2026-10-08) No campaign-attribution layer — asynchronous multi-hop attacks (A2FV threat model) are undetectable in current architecture
 - (new 2026-10-08) No MAC/information-flow enforcement — SEAgent pattern not implemented; confused deputy is exploitable at documented 39% baseline rate
@@ -128,6 +129,7 @@
 - MCP CVE surge — expanding: CVE-2026-35394 (Mobile MCP RCE, url passed unsanitized before 0.0.50); CVE-2026-33032 (nginx-ui, CVSS 9.8, no-auth command exec via MCP endpoint); CVE-2026-13341 (Kong Konnect, indirect prompt injection via MCP → unintended API requests); OX Security April 2026: 7+ critical CVEs across MCP Inspector, LiteLLM, Cursor IDE, LibreChat, Windsurf — sentinelone.com, thehackernews.com, labs.cloudsecurityalliance.org
 
 **Items not prominently seen this scan (Last seen date not advanced):**
+
 - Infection monitoring (INFA-Guard arXiv 2601.14667, VIGIL arXiv 2601.05755) — not directly cited in Oct 13 results; CORROBORATED status unchanged; basis remains Oct 8 scan
 - SEAgent (arXiv 2601.11893) — not directly cited in Oct 13 results; CORROBORATED status unchanged
 
@@ -151,7 +153,30 @@
 **Already defending us (unchanged):** CCR adversarial-verify, worktree isolation, Invariant #22 module isolation, human-in-the-loop gates, S2 post-execution integrity.
 
 **Open gaps (updated):**
+
 - (unchanged from 2026-09-11) No explicit trifecta break (reader vs actor agents); broad per-subagent tool inheritance (not least-privilege); cross-agent messages treated as trusted instructions (no spotlighting/provenance); no infection monitoring on pipeline
 - (unchanged from 2026-10-08) No campaign-attribution layer; no MAC/information-flow enforcement (confused deputy exploitable at 39% baseline)
 - (new 2026-10-13) Human-in-the-loop approval gates are not Unicode TAG-block aware — model may receive a different payload than the human reviews (arXiv 2607.05744)
 - (new 2026-10-13) MCP STDIO transport in our server stack may carry architectural RCE exposure (OX Security finding) — not confirmed per our specific servers, but affects major MCP ecosystem platforms including our providers
+
+---
+
+## Open gap to ticket
+
+Mapped through scan: 2026-10-13
+
+Added 2026-11-03 (OSE-1792). Append-only history above is unchanged; this section is the one place a gap meets a ticket.
+Every row names an OSE id, or says `no ticket, decided:` with the reason. When a new scan is appended, update this
+section and the line above (`scripts/ci/check-digest-gap-tickets.mjs` fails until you do). "Partial" means the
+ticket covers part of the gap; the note says which part.
+
+| Open gap                                                                     | Ticket   | Note                                                                                                                         |
+| ---------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| No explicit trifecta break (reader vs actor agents)                          | OSE-1790 | Blocked by OSE-619. OSE-618 rung 3 is a builder/reviewer split, adjacent but not this.                                       |
+| Broad per-subagent tool inheritance (not least privilege)                    | OSE-1788 | Declaration table and a test. Runtime enforcement still depends on the harness agent type.                                   |
+| Cross-agent messages trusted as instructions (no spotlighting or provenance) | OSE-1790 | Provenance tiers also in OSE-620 (Rung 1) and OSE-619.                                                                       |
+| No infection monitoring on the pipeline                                      | OSE-618  | Partial: rung 4 (tripwires, diff-scope anomaly gate). No ticket for pipeline-level infection monitoring; PO decision needed. |
+| No campaign-attribution layer (A2FV, arXiv 2607.18826)                       | OSE-618  | Partial: rung 4 only. Research-grade; PO decision needed on whether to pursue.                                               |
+| No MAC or information-flow enforcement (confused deputy)                     | OSE-618  | Partial: rung 3 credential split and OSE-619 two-key rule. Not information-flow control.                                     |
+| Approval views may hide Unicode TAG characters                               | OSE-1791 | Spike; lint goes to OSE-620 if the views hide them.                                                                          |
+| MCP STDIO transport may carry architectural RCE                              | OSE-1700 | Partial: pins and scopes the Cloudflare MCP. Per-server exposure still unconfirmed.                                          |
