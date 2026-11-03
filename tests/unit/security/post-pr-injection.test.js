@@ -17,6 +17,7 @@ const { execFileSync } = require('node:child_process');
 const { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const YAML = require('yaml');
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -289,15 +290,61 @@ describe('T5 post-PR injection check (born-red)', () => {
     );
   });
 
-  test('RED: bracket and mixed-case property access reach the same untrusted fields', () => {
-    for (const expr of [
-      "github.event.pull_request['title']",
-      "github.event['pull_request']['title']",
-      'github.event.pull_request.TITLE',
-      "github['event'].pull_request.head['ref']",
-    ]) {
-      red({}, wf(`      - run: echo "\${{ ${expr} }}"\n`), 'expr-injection');
-    }
+  test.each([
+    "github.event.pull_request['title']",
+    "github.event['pull_request']['title']",
+    'github.event.pull_request.TITLE',
+    "github['event'].pull_request.head['ref']",
+    "github['event']['pull_request']['title']",
+    'github.event.commits[0].message',
+    'github.event.workflow_run.pull_requests[0].head.ref',
+    'GITHUB.EVENT.PULL_REQUEST.TITLE',
+  ])('RED: %s reaches the same untrusted field as the dotted form', (expr) => {
+    red({}, wf(`      - run: echo "\${{ ${expr} }}"\n`), 'expr-injection');
+  });
+
+  test('RED: an upper-case context name cannot hide a new secret', () => {
+    red(
+      {},
+      wf('      - run: echo "$S"\n        env:\n          S: ${{ SECRETS.BRAND_NEW_TOKEN }}\n'),
+      'new-secret'
+    );
+  });
+
+  test('GREEN: a known secret written in another case is the same secret', () => {
+    green({}, wf('      - run: echo "$S"\n        env:\n          S: ${{ secrets.admin_key }}\n'));
+  });
+
+  test('RED: an anchored value reaches a run body through an alias', () => {
+    red(
+      {},
+      {
+        [WF]: 'name: x\non: push\nenv:\n  CMD: &cmd "${{ github.event.pull_request.title }}"\njobs:\n  j:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: *cmd\n',
+      },
+      'expr-injection'
+    );
+  });
+
+  test('GREEN: the same anchor used only as an env value stays data', () => {
+    green(
+      {},
+      {
+        [WF]: 'name: x\non: push\nenv:\n  CMD: &cmd "${{ github.event.pull_request.title }}"\njobs:\n  j:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo "$T"\n        env:\n          T: *cmd\n',
+      }
+    );
+  });
+
+  test('RED: a URL spelled with YAML escapes is read as the runner decodes it', () => {
+    const bs = String.fromCharCode(92);
+    red({}, wf(`      - run: "curl https:${bs}x2f${bs}x2fcollector.example.net/x"\n`), 'new-host');
+  });
+
+  test('RED: a prepublish hook is an install-time script', () => {
+    red(
+      { 'package.json': '{\n  "scripts": {}\n}\n' },
+      { 'package.json': '{\n  "scripts": {\n    "prepublish": "node x.js"\n  }\n}\n' },
+      'lifecycle'
+    );
   });
 
   test('RED: the whole secrets context passed to any function is a dump', () => {
@@ -346,6 +393,35 @@ describe('T5 post-PR injection check (born-red)', () => {
     const dir = mergeOf({}, null);
     dirs.push(dir);
     expect(run(dir).code).toBe(2);
+  });
+});
+
+// ─── Git's quoted path format ────────────────────────────────────────────────
+// A file name with a quote or backslash cannot be created on every OS the tests run
+// on, so the diff header is fed in directly.
+describe('diff headers with C-quoted paths', () => {
+  const header = (p) => `diff --git a/x b/x\n--- /dev/null\n+++ ${p}\n@@ -0,0 +1 @@\n+name: x\n`;
+
+  test('a quoted name is decoded before it is classified', async () => {
+    const { parseAdded } = await import(pathToFileURL(SCRIPT).href);
+    const q = String.fromCharCode(34);
+    const bs = String.fromCharCode(92);
+    const [f] = parseAdded(header(`${q}b/.github/workflows/a${bs}${q}b.yml${q}`));
+    expect(f.path).toBe(`.github/workflows/a${q}b.yml`);
+  });
+
+  test('octal escapes are decoded as UTF-8 bytes', async () => {
+    const { parseAdded } = await import(pathToFileURL(SCRIPT).href);
+    const q = String.fromCharCode(34);
+    const bs = String.fromCharCode(92);
+    const [f] = parseAdded(header(`${q}b/docs/${bs}303${bs}251.md${q}`));
+    expect(f.path).toBe('docs/é.md');
+  });
+
+  test("an unquoted name keeps its spaces and loses git's trailing tab", async () => {
+    const { parseAdded } = await import(pathToFileURL(SCRIPT).href);
+    const [f] = parseAdded(header('b/docs/a b.md\t'));
+    expect(f.path).toBe('docs/a b.md');
   });
 });
 

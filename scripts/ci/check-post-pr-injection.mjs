@@ -47,7 +47,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseDocument, isMap, isSeq, isScalar } from 'yaml';
+import { parseDocument, isAlias, isMap, isSeq, isScalar } from 'yaml';
 
 /* eslint-disable security/detect-unsafe-regex, security/detect-non-literal-regexp, security/detect-non-literal-fs-filename --
    The patterns are fixed and run over lines capped at MAX_LINE (see scan), and
@@ -138,6 +138,7 @@ const LIFECYCLE_KEYS = [
   'preinstall',
   'install',
   'postinstall',
+  'prepublish',
   'preprepare',
   'prepare',
   'postprepare',
@@ -150,8 +151,9 @@ export function loadAllowlist(
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   return {
     hosts: raw.hosts.map((h) => h.host.toLowerCase()),
-    secrets: new Set(raw.secrets.map((s) => s.name)),
-    vars: new Set(raw.vars.map((s) => s.name)),
+    // Actions secret and variable names are case-insensitive, so both sides compare upper-case.
+    secrets: new Set(raw.secrets.map((s) => s.name.toUpperCase())),
+    vars: new Set(raw.vars.map((s) => s.name.toUpperCase())),
     phraseExemptPaths: new Set(raw.phraseExemptPaths.map((s) => s.path)),
     bidiExemptPaths: new Set((raw.bidiExemptPaths || []).map((s) => s.path)),
   };
@@ -258,7 +260,11 @@ function scanWorkflow(path, content, added, allow, add) {
   }
   const starts = lineStarts(content);
   // First line of `node` that the merge added, or null.
+  // While an alias is followed from a line the merge added, everything under it is
+  // attributed to that line: the use-site is the change, wherever the anchor sits.
+  let forced = null;
   const hit = (node) => {
+    if (forced != null) return forced;
     const r = node && node.range;
     if (!r) return null;
     const last = lineOf(starts, Math.max(r[0], r[1] - 1));
@@ -279,14 +285,18 @@ function scanWorkflow(path, content, added, allow, add) {
         add('expr-injection', path, n, `untrusted value used in a ${key} body: ${expr.trim()}`, '');
       if (/[(,]\s*(secrets|vars)\s*[,)]/i.test(expr))
         add('secret-dump', path, n, 'expression dumps the whole secrets or vars context', '');
-      for (const s of expr.matchAll(
-        /\b(secrets|vars)\.([A-Za-z_]\w*)|\b(secrets|vars)\[\s*['"]([^'"]+)['"]\s*\]/g
-      )) {
-        const kind = s[1] || s[3];
-        const name = s[2] || s[4];
-        if (!allow[kind].has(name))
-          add('new-secret', path, n, `${kind}.${name} is not in the allowlist`, '');
+      // Context and property names are case-insensitive; read the canonical dotted form.
+      for (const s of canonical(expr).matchAll(/\b(secrets|vars)\.([^\s.(),!=<>&|'"[\]}]+)/gi)) {
+        const kind = s[1].toLowerCase();
+        if (!allow[kind].has(s[2].toUpperCase()))
+          add('new-secret', path, n, `${kind}.${s[2]} is not in the allowlist`, '');
       }
+    }
+    // The decoded value, not the source line: a YAML escape can spell a URL the raw line hides.
+    for (const { auth, host } of urlHosts(value)) {
+      if (host === null) add('new-host', path, n, `URL authority does not parse: ${auth}`, value);
+      else if (!hostAllowed(host, allow.hosts))
+        add('new-host', path, n, `host not in the allowlist: ${host}`, value);
     }
     if (code) {
       for (const ln of value.split('\n')) {
@@ -323,14 +333,27 @@ function scanWorkflow(path, content, added, allow, add) {
           if (n != null && !(k === 'NODE_OPTIONS' && SAFE_NODE_OPTIONS.test(v)))
             add('loader-env', path, n, `${k} set in a workflow`, v);
         }
-        visit(pair.value, k, depth + 1);
+        // A merge key (<<) adds entries to the map it sits in, so they keep that map's key.
+        visit(pair.value, k === '<<' ? key : k, depth + 1);
       }
     } else if (isSeq(node)) {
       for (const item of node.items) visit(item, key, depth + 1);
+    } else if (isAlias(node)) {
+      // The runner resolves an alias where it is used, so a value anchored as data can
+      // become a run: body. Read the target in the use-site's key context.
+      const target = node.resolve(doc);
+      if (!target || active.has(target)) return;
+      active.add(target);
+      const before = forced;
+      forced = hit(node) ?? forced;
+      visit(target, key, depth + 1);
+      forced = before;
+      active.delete(target);
     } else if (isScalar(node) && typeof node.value === 'string') {
       checkScalar(node, key);
     }
   };
+  const active = new Set();
   visit(doc.contents, null, 0);
 }
 
@@ -405,10 +428,45 @@ export function scan(files, message, allow) {
     for (const [re, why] of PHRASES)
       if (re.test(message)) add('commit-message', '(commit message)', 0, why, message.match(re)[0]);
   }
-  return findings;
+  // The raw line and the decoded value can both report the same host; report it once.
+  const seen = new Set();
+  return findings.filter((f) => {
+    const k = `${f.id}|${f.file}|${f.line}|${f.msg}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 // ── Diff parsing ────────────────────────────────────────────────────────────
+const C_ESCAPES = { a: 7, b: 8, f: 12, n: 10, r: 13, t: 9, v: 11, '\\': 92, '"': 34 };
+/**
+ * A path as a diff header prints it. Git C-quotes a name that holds a quote, a
+ * backslash or a control character (core.quotePath=false only spares non-ASCII), so
+ * a quoted name is decoded; otherwise a trailing tab (added after names with
+ * spaces) is dropped.
+ */
+export function gitPath(field) {
+  if (!field.startsWith('"')) return field.split('\t')[0];
+  const body = field.slice(1, field.lastIndexOf('"'));
+  const bytes = [];
+  for (let i = 0; i < body.length; i += 1) {
+    const c = body[i];
+    if (c !== '\\') {
+      bytes.push(...Buffer.from(c));
+      continue;
+    }
+    i += 1;
+    const d = body[i];
+    if (/[0-7]/.test(d)) {
+      let oct = d;
+      while (oct.length < 3 && /[0-7]/.test(body[i + 1] ?? '')) oct += body[(i += 1)];
+      bytes.push(parseInt(oct, 8));
+    } else bytes.push(d in C_ESCAPES ? C_ESCAPES[d] : d.charCodeAt(0));
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
 /**
  * Added lines per file from `git diff --unified=0`. Inside a hunk every row is
  * content, counted off the hunk header, so an added line that begins `++ ` (it
@@ -439,7 +497,7 @@ export function parseAdded(diffText) {
     if (raw.startsWith('diff --git ')) {
       cur = null;
     } else if (raw.startsWith('+++ ')) {
-      const p = raw.slice(4).split('\t')[0];
+      const p = gitPath(raw.slice(4));
       cur = p === '/dev/null' ? null : { path: p.replace(/^b\//, ''), lines: [] };
       if (cur) files.push(cur);
     } else if (raw.startsWith('@@')) {
