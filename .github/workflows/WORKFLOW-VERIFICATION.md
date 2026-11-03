@@ -5,48 +5,20 @@
 
 ## Active Workflows
 
-| Workflow                     | File                                         | Triggers                                        |
-| ---------------------------- | -------------------------------------------- | ----------------------------------------------- |
-| **Stage-1 Validation**       | `stage1.yml`                                 | PR to main, Push to main, Tag `v*.*.*`          |
-| **T5 → T6 → Post-T6**        | `red-team-adversarial.yml`                   | workflow_run (CI/CD success on a push to main)  |
-| Name of that workflow        | `T5/T6 — Security then Adversarial Red Team` |                                                 |
-| **CodeQL Security Analysis** | `security-scan.yml`                          | Push to main/claude/**, PR to main, Weekly cron |
+| Workflow                     | File                       | Triggers                                        |
+| ---------------------------- | -------------------------- | ----------------------------------------------- |
+| **Stage-1 Validation**       | `stage1.yml`               | PR to main, Push to main, Tag `v*.*.*`          |
+| **T5 → T6 → Post-T6**        | `red-team-adversarial.yml` | workflow_run (CI/CD success on a push to main)  |
+| **CodeQL Security Analysis** | `security-scan.yml`        | Push to main/claude/**, PR to main, Weekly cron |
 
 The canonical OurSharedEvents pipeline is defined in `oursharedevents-ci.yml`.
-T5 (Security, post-test integrity), T6 (Adversarial Red Team) and the post-T6
-security bookend are three jobs in one workflow run, chained by `needs:`: T6
-starts only after T5 succeeds, and the bookend only after T6. T5 goes first
-(owner, 2026-11-02): it reads the merged change as text for injection before
-anything installs or runs it, and before the red team holds live secrets. The
-bookend repeats the deployed-surface check, because T5 can no longer see what
-the red team leaves behind. Every job runs only when the triggering CI/CD run
-was a push to `main` from this repo (ADR-012 0.2); pull-request pipeline runs
-are never red-teamed with live secrets. They were separate workflow_run
-workflows until 2026-10-03, but a workflow_run fired by another workflow_run
-reports `event == 'workflow_run'`, so the later links skipped on every run.
-
-### What T5 checks in the merged change
-
-`scripts/ci/check-post-pr-injection.mjs` reads only what the merge commit added
-(plus its commit message), needs no secrets, and fails closed if it cannot
-compare. Allowlist: `scripts/ci/post-pr-injection-allowlist.json` (CODEOWNERS).
-
-| Check             | Catches                                                                          |
-| ----------------- | -------------------------------------------------------------------------------- |
-| `phrase`          | Override wording or chat-template tokens added to a file an agent reads          |
-| `hidden-char`     | Bidi controls, Unicode tag characters; zero-width characters in agent files/code |
-| `commit-message`  | The same wording or characters in the merge commit message                       |
-| `expr-injection`  | An untrusted `${{ github.event... }}` value used in a `run:` or script body      |
-| `loader-env`      | `LD_PRELOAD`, `NODE_OPTIONS` (other than heap size) and similar in a workflow    |
-| `unpinned-action` | `uses:` pinned to `@main`, `@master`, `@HEAD`, `@latest`                         |
-| `pr-target`       | A `pull_request_target` trigger added                                            |
-| `secret-dump`     | `toJSON(secrets)` or `toJSON(vars)`                                              |
-| `new-secret`      | A `secrets.X` or `vars.X` name not in the allowlist                              |
-| `new-host`        | A URL host not in the allowlist (agent files, workflows, `scripts/ci`, wrangler) |
-| `lifecycle`       | An install-time script added to `package.json`                                   |
-
-Not covered: it does not fetch live pages, and it cannot see text a user later
-types into the deployed app. The deployed-surface specs cover stored payloads.
+T5, T6 and the post-T6 security bookend are three jobs in one workflow run,
+chained by `needs:`: T6 starts only after T5 succeeds, and the bookend only
+after T6. Every job runs only when the triggering CI/CD run was a push to
+`main` from this repo (ADR-012 0.2); pull-request pipeline runs are never
+red-teamed with live secrets. They were separate workflow_run workflows until
+2026-10-03, but a workflow_run fired by another workflow_run reports
+`event == 'workflow_run'`, so T6 and the bookend skipped on every run.
 
 ## A pull request whose pipeline never ran (OSE-1212)
 

@@ -1,5 +1,5 @@
 # Nightly live rate-limit check (RL-001..RL-004) against the deployed env.
-# Split out of T6 (red-team-adversarial.yml) to keep merges fast and cheap: the
+# Split out of T5 (red-team-adversarial.yml) to keep merges fast and cheap: the
 # bursts are slow, and the limit they test (a Cloudflare WAF rule, OSE-1509;
 # scripts/ci/cf-waf-rate-limit.mjs) cannot be seen by any earlier tier.
 # Uses no secrets: it only sends public requests.
