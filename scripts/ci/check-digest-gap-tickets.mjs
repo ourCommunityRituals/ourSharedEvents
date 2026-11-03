@@ -35,11 +35,13 @@ export function check(text) {
   else if (newest && mapped[1] < newest)
     problems.push(`mapped through ${mapped[1]} but the newest scan is ${newest}; update the mapping`);
 
-  // A row may be indented, have one cell, or omit the closing pipe; all are still gap rows.
+  // A row may be indented, have one cell, or omit the leading or closing pipe; all are still
+  // gap rows. Any line in the section holding a pipe is read as a row, so a prose line with a
+  // pipe fails closed instead of letting a row slip past.
   const rows = section
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l.startsWith('|'))
+    .filter((l) => l.includes('|'))
     .map((l) =>
       l
         .replace(/^\|/, '')

@@ -93,6 +93,21 @@ describe('digest gap tickets', () => {
     expect(r.out).toContain('gap "Open ended gap"');
   });
 
+  it('fails on a row with no leading pipe and no ticket', () => {
+    const r = run(
+      OK.replace(
+        '| A gap | OSE-1790 | n |',
+        '| A gap | OSE-1790 | n |\nUntracked gap | later | n |'
+      )
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('gap "Untracked gap"');
+  });
+
+  it('accepts a row with no outer pipes that has a ticket', () => {
+    expect(run(OK.replace('| A gap | OSE-1790 | n |', 'A gap | OSE-1790 | n')).code).toBe(0);
+  });
+
   it('accepts an indented row that has a ticket', () => {
     expect(run(OK.replace('| A gap | OSE-1790 | n |', '  | A gap | OSE-1790 | n |')).code).toBe(0);
   });
