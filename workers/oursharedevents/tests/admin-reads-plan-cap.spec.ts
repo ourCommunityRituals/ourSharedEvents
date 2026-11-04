@@ -304,3 +304,65 @@ describe('OSE-682 | platform reads past the plan are audited', () => {
     expect(n!.n).toBe(0);
   });
 });
+
+// ── Review 2026-11-04 (2): a downgrade reaches every event ───────────────────
+// A brand admin's "on" within its plan follows the plan (the override is
+// removed), so changing the global plan later changes the event too. Only a
+// platform admin writes an explicit grant that outlives the plan.
+//
+// @born-red OSE-682 | method: write-override | verified: letting a brand admin's
+//   in-plan "on" write an event row (handleSetEventFlag) turns "Mid → brand admin
+//   switches on → Free" red (the event keeps the paid view after the downgrade).
+describe('OSE-682 | a brand admin cannot carry a paid plan past a downgrade', () => {
+  const flagPath = `/api/v2/admin/events/${A.activeEventId}/flags/analytics.shared-report`;
+  const setGlobalOnly = (paid: boolean) =>
+    formsDb()
+      .prepare(
+        `UPDATE feature_flags SET enabled = ? WHERE scope = 'global' AND flag_key = 'analytics.shared-report'`
+      )
+      .bind(paid ? 1 : 0)
+      .run();
+
+  test('Mid → brand admin switches the paid report on → Free: the event is capped', async () => {
+    await setPlan(true);
+    // Off, then on again: the organizer's own choice, within the plan.
+    expect((await callAs(OWNER, 'PUT', flagPath, { enabled: false })).status).toBe(200);
+    expect((await callAs(OWNER, 'PUT', flagPath, { enabled: true })).status).toBe(200);
+    // The plan changes; event overrides are left as they are.
+    await setGlobalOnly(false);
+    const body = await read(OWNER, dash);
+    expect(body.reach as Record<string, unknown>).not.toHaveProperty('scansByDay');
+    expect(body).toHaveProperty('plan');
+  });
+
+  test("a platform admin's grant outlives the downgrade", async () => {
+    await setPlan(true);
+    expect((await callAs(PLATFORM, 'PUT', flagPath, { enabled: true })).status).toBe(200);
+    await setGlobalOnly(false);
+    const body = await read(OWNER, dash);
+    expect(body.reach as Record<string, unknown>).toHaveProperty('scansByDay');
+  });
+
+  test("a brand admin's off still holds: it is their choice, below the plan", async () => {
+    await setPlan(true);
+    expect((await callAs(OWNER, 'PUT', flagPath, { enabled: false })).status).toBe(200);
+    const body = await read(OWNER, dash);
+    expect(body.reach as Record<string, unknown>).not.toHaveProperty('scansByDay');
+  });
+});
+
+// ── Review 2026-11-04 (2): the audit records what actually happened ──────────
+describe('OSE-682 | a platform read is audited with its real outcome', () => {
+  test('a rejected platform read (no brand named) is audited as denied, not success', async () => {
+    await setPlan(false);
+    await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+    // A key actor in all-scope must name a brand: 400 BRAND_REQUIRED.
+    const res = await callAs(PLATFORM, 'GET', '/api/v2/admin/dashboards/corridor?data_class=all');
+    expect(res.status).toBe(400);
+    await new Promise((r) => setTimeout(r, 50));
+    const rows = await db()
+      .prepare(`SELECT outcome FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`)
+      .all<{ outcome: string }>();
+    expect(rows.results.map((r) => r.outcome)).toEqual(['denied']);
+  });
+});

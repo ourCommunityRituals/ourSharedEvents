@@ -89,8 +89,12 @@ then global); every plan read fails closed.
   already includes it (`isFlagInPlan`, fails closed), and may always switch one
   off or remove an override. Anything beyond the plan answers 403
   `EVENT_FLAG_ABOVE_PLAN` and is audited; a platform admin may grant it.
+  Within the plan, a brand admin's "on" follows the plan: the override is
+  removed, not written, so a later downgrade reaches the event too. Only a
+  platform admin's grant is a stored "on" that outlives the plan.
 - A platform admin's full view of a capped read is audited (`READ_PAST_PLAN`,
-  with actor, request id and the event or brand).
+  with actor, request id and the event or brand) after the handler answers,
+  with its real outcome (a refused read is `denied`).
 - Brand scoping is unchanged and still decides **which** events a caller
   reaches; the plan decides **how much** of each.
 - Entity totals stay on every plan: event and poster counts, registrations,
