@@ -429,3 +429,37 @@ describe('OSE-682 | the corridor audit records the brand the handler validated',
     expect((await auditRows()).results).toEqual([{ outcome: 'denied', brand_id: null }]);
   });
 });
+
+// ── Review 2026-11-04 (4): the plan rule answers in the flag handler's envelope ──
+// A refusal carries its code and a request reference (X-Request-Id, equal to the
+// body's requestId) so the admin toast can link it to its audit row
+// (toast-refusal-reference.spec.ts is the contract); an unknown flag key is a
+// 400 before any plan rule runs.
+describe('OSE-682 | event flag plan rule keeps the flag envelope', () => {
+  const REFERENCE = /^[0-9a-f-]{8,}$/i;
+  const flagPath = (key: string) => `/api/v2/admin/events/${A.activeEventId}/flags/${key}`;
+
+  test('the above-plan refusal carries its code and request reference', async () => {
+    await setPlan(false);
+    const res = await callAs(OWNER, 'PUT', flagPath('analytics.shared-report'), { enabled: true });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { code: string; requestId: string };
+    expect(body.code).toBe('EVENT_FLAG_ABOVE_PLAN');
+    expect(res.headers.get('X-Request-Id')).toMatch(REFERENCE);
+    expect(body.requestId).toBe(res.headers.get('X-Request-Id'));
+  });
+
+  test('an in-plan "on" (the override removed) answers with a request reference', async () => {
+    await setPlan(true);
+    const res = await callAs(OWNER, 'PUT', flagPath('analytics.shared-report'), { enabled: true });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Request-Id')).toMatch(REFERENCE);
+  });
+
+  test('an unknown flag key is a 400 for a brand admin, before any plan rule', async () => {
+    await setPlan(true);
+    const res = await callAs(OWNER, 'PUT', flagPath('not.a.flag'), { enabled: true });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe('INVALID_FLAG_KEY');
+  });
+});

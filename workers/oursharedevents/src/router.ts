@@ -270,9 +270,7 @@ import {
   listFlags,
   detectCurrentTier,
   isPaidReportEnabled,
-  isFlagInPlan,
   readReportPlan,
-  removeEventFlag,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
 import {
@@ -1590,50 +1588,11 @@ export async function route(
       return deny;
     }
     if (method === 'PUT') {
-      // Review 2026-11-04 (OSE-682): an event override is how a plan reaches one
-      // event, so switching a feature ON is an entitlement write. A brand admin
-      // may switch on only what its plan already includes; turning a feature off
-      // or removing an override is always theirs. Beyond the plan is platform's.
-      const peek = (await request
-        .clone()
-        .json()
-        .catch(() => null)) as { enabled?: unknown } | null;
-      if (peek?.enabled === true && !(await isPlatformActor(request, env))) {
-        if (!(await isFlagInPlan(env.FORMS_DB, flagKey))) {
-          _audit(reqId, 'SET_EVENT_FLAG', 'denied', 'flag', `${eventId}/${flagKey}`);
-          return Response.json(
-            {
-              ok: false,
-              status: 403,
-              code: 'EVENT_FLAG_ABOVE_PLAN',
-              error: "This feature isn't in this plan; a platform admin can grant it for an event",
-            },
-            { status: 403 }
-          );
-        }
-        // Within the plan, a brand admin's "on" means "follow the plan": the
-        // override is removed rather than written, so a later downgrade of the
-        // plan reaches this event too. Only a platform admin writes an explicit
-        // grant that outlives the plan (review 2026-11-04).
-        try {
-          await removeEventFlag(env.FORMS_DB, eventId, flagKey);
-        } catch {
-          _audit(reqId, 'SET_EVENT_FLAG', 'denied', 'flag', `${eventId}/${flagKey}`);
-          return Response.json(
-            { ok: false, status: 503, code: 'DB_ERROR', error: 'Failed to set event flag' },
-            { status: 503 }
-          );
-        }
-        _audit(reqId, 'SET_EVENT_FLAG', 'success', 'flag', `${eventId}/${flagKey}`);
-        return Response.json({
-          ok: true,
-          eventId,
-          flagKey,
-          enabled: true,
-          scope: 'plan',
-        });
-      }
-      const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId);
+      // Review 2026-11-04 (OSE-682): an event override is an entitlement write;
+      // the handler applies the plan rule, in its own envelope (X-Request-Id).
+      const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId, {
+        platform: await isPlatformActor(request, env),
+      });
       const outcome = _auditOutcome(response);
       _audit(reqId, 'SET_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
       return response;
