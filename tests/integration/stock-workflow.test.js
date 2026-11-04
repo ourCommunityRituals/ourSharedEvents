@@ -415,4 +415,61 @@ describe('build and check-swap', () => {
     const swap = stepsOf('check-swap').find((s) => /run-day\.mjs check-swap/.test(s.run || ''));
     expect(swap.env.BUILD_RESULT).toBe('${{ needs.build.result }}');
   });
+
+  test('a slow build fails its step, not the job: the result is failure, so check-swap runs', () => {
+    const build = stepsOf('build').find((s) => /run-day\.mjs build/.test(s.run || ''));
+    expect(build['timeout-minutes']).toBe(25);
+    expect(jobs.build['timeout-minutes']).toBe(30);
+    expect(build['timeout-minutes']).toBeLessThan(jobs.build['timeout-minutes']);
+  });
+
+  test('a missing manifest artifact still lets run-day report it red; nothing else bypasses a failure', () => {
+    const steps = stepsOf('check-swap');
+    const downloadAt = steps.findIndex((s) => /^actions\/download-artifact@/.test(s.uses || ''));
+    const swapAt = steps.findIndex((s) => /run-day\.mjs check-swap/.test(s.run || ''));
+    expect(swapAt).toBe(downloadAt + 1);
+    expect(steps[downloadAt].id).toBe('download');
+    expect(steps[swapAt].if).toBe(
+      "${{ !cancelled() && (success() || steps.download.outcome == 'failure') }}"
+    );
+    for (const job of Object.keys(jobs)) {
+      for (const s of stepsOf(job)) {
+        expect(s['continue-on-error'], `${job}/${s.name}`).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe('the search installs nothing into the checkout before its gate', () => {
+  const steps = stepsOf('search');
+  const actionAt = steps.findIndex((s) => /^anthropics\/claude-code-action@/.test(s.uses || ''));
+  const gateAt = steps.findIndex((s) => /git status --porcelain/.test(String(s.run || '')));
+  const installs = (s) => /\bnpm\s+(ci|install|i)\b|\byarn\b|\bpnpm\b/.test(String(s.run || ''));
+
+  test('every install before the gate happens in a copy outside the checkout', () => {
+    expect(gateAt).toBe(actionAt + 1);
+    const early = steps.slice(0, gateAt).filter(installs);
+    expect(early).toHaveLength(1);
+    expect(early[0].env.PREP_SRC).toBe('${{ runner.temp }}/stock-src');
+    expect(early[0].run).toContain('git archive HEAD | tar -x -C "$PREP_SRC"');
+    const cdAt = early[0].run.indexOf('cd "$PREP_SRC"');
+    expect(cdAt).toBeGreaterThanOrEqual(0);
+    expect(cdAt).toBeLessThan(early[0].run.indexOf('npm ci'));
+    expect(early[0]['working-directory']).toBeUndefined();
+  });
+
+  test('repo code before the gate runs from that copy', () => {
+    for (const s of steps.slice(0, gateAt)) {
+      if (!/\bnode\s+scripts\//.test(String(s.run || ''))) continue;
+      expect(s['working-directory'], s.name).toBe('${{ runner.temp }}/stock-src');
+    }
+  });
+
+  test('the checkout gets its dependencies after the gate, then the schema check runs', () => {
+    const installAt = steps.findIndex((s, i) => i > gateAt && installs(s));
+    const checkAt = steps.findIndex((s) => /run-day\.mjs search-output/.test(String(s.run || '')));
+    expect(installAt).toBeGreaterThan(gateAt);
+    expect(steps[installAt]['working-directory']).toBeUndefined();
+    expect(checkAt).toBeGreaterThan(installAt);
+  });
 });

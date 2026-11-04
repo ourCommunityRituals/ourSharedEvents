@@ -225,6 +225,7 @@ export async function checkSwap({
   // A node the manifest records but nodes.json no longer lists is never purged, so
   // its manifest would stay listed for good: say so, and turn the run red.
   const knownNodes = new Set(nodeList.map((n) => n.id));
+  const todayIds = new Set((manifest.items || []).map((i) => i.id));
   const unknownNodes = (name, m) => {
     const unknown = nodesOf(m).filter((node) => !knownNodes.has(node));
     if (unknown.length) {
@@ -285,16 +286,16 @@ export async function checkSwap({
         : 0,
   });
 
-  // Today's rows when no manifest of them could be saved: purge them all. A purge
-  // that fails leaves rows recorded only in this run's artifact.
-  async function purgeUnsaved() {
+  // Today's rows when their manifest could not be listed: purge them all. A purge
+  // that fails leaves live rows, and the summary says where they are recorded.
+  async function purgeUnsaved({ objectSaved = false } = {}) {
     await purgeAll(todayName, manifest);
     const left = purges.filter((p) => p.name === todayName && !p.ok).map((p) => p.node);
-    if (left.length) {
-      problems.push(
-        `rows of ${todayName} for ${left.join(', ')} are still live and recorded only in this run's stock-manifest artifact; purge them by hand`
-      );
-    }
+    if (!left.length) return;
+    const where = objectSaved
+      ? `the manifest object ${MANIFEST_PREFIX}${todayName} exists in R2 but is not listed in the index; add it by hand or rely on this run's artifact`
+      : `they are recorded only in this run's stock-manifest artifact; purge them by hand`;
+    problems.push(`rows of ${todayName} for ${left.join(', ')} are still live; ${where}`);
   }
 
   // 1. The index, then today's manifest object and its name in the index. If
@@ -309,6 +310,7 @@ export async function checkSwap({
     return report(allFailing('index-unreadable'), { written: false });
   }
   const before = names;
+  let objectSaved = false;
   try {
     const exists =
       names.includes(todayName) || (await cloud.r2Get(`${MANIFEST_PREFIX}${todayName}`)) !== null;
@@ -318,10 +320,15 @@ export async function checkSwap({
       return report(allFailing('manifest-exists'), { before, written: false });
     }
     await cloud.r2Put(`${MANIFEST_PREFIX}${todayName}`, `${JSON.stringify(manifest, null, 2)}\n`);
+    objectSaved = true;
     await cloud.r2Put(INDEX_KEY, indexText([...before, todayName]));
   } catch (err) {
-    problems.push(`today's manifest not saved: ${err.message}`);
-    await purgeUnsaved();
+    problems.push(
+      objectSaved
+        ? `today's manifest is saved but not listed in the index: ${err.message}`
+        : `today's manifest not saved: ${err.message}`
+    );
+    await purgeUnsaved({ objectSaved });
     return report(allFailing('manifest-not-saved'), { before, written: false });
   }
   unknownNodes(todayName, manifest);
@@ -384,8 +391,13 @@ export async function checkSwap({
       }
       const m = JSON.parse(text);
       if (!m || !Array.isArray(m.items)) throw new Error('no items list');
-      unknownNodes(name, m);
-      stale.push({ name, manifest: m });
+      // Never purge, from a stale manifest, an id today's manifest also records: a
+      // re-run of this job alone (next attempt, same artifact) lists the earlier
+      // attempt as stale with the very ids that just passed. What remains is all
+      // the stale manifest still holds; with nothing left it leaves the index.
+      const own = { ...m, items: m.items.filter((i) => !todayIds.has(i.id)) };
+      unknownNodes(name, own);
+      stale.push({ name, manifest: own });
     } catch (err) {
       problems.push(`${name} unreadable: ${err.message}; it stays in the index`);
     }
@@ -642,6 +654,9 @@ export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
   let manifest = null;
   const saveManifest = (m) =>
     fs.writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(m, null, 2)}\n`);
+  // Before the first API call: a build killed before it records anything still
+  // hands check-swap a manifest (an empty one), so check-swap reports it red.
+  saveManifest({ date: today, items: [], qr: [], acceptSql: [], short: {}, warnings: [] });
   try {
     const client = clientFrom(env, fetchFn);
     const catalog = await fetchCatalog(client);

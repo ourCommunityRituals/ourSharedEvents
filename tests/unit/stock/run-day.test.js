@@ -537,6 +537,103 @@ describe('the search prompt', () => {
   });
 });
 
+describe('fix round 2: a re-run of check-swap alone', () => {
+  test('attempt 2 over attempt 1’s artifact never purges today’s rows; attempt 1 leaves, attempt 2 stays', async () => {
+    const first = `manifest-${TODAY}-${RUN}-1.json`;
+    const second = `manifest-${TODAY}-${RUN}-2.json`;
+    const same = manifestOf(TODAY, 't', ['a', 'b']);
+    const w = world({ index: [first], objects: { [`stock/${first}`]: same } });
+    const report = await swap(w, { manifest: same, runAttempt: '2' });
+    allCalls.push(...w.calls);
+    const todayIds = same.items.map((i) => i.id);
+    for (const sql of w.sqls().filter((s) => s.startsWith('DELETE'))) {
+      for (const id of todayIds) expect(sql).not.toContain(`'${id}'`);
+    }
+    for (const key of w.deletes()) for (const id of todayIds) expect(key).not.toContain(id);
+    expect(w.sqls().filter((s) => s.startsWith('DELETE'))).toEqual([]);
+    expect(w.deletes()).toEqual([]);
+    expect(w.liveIndex()).toEqual([second]);
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('a build killed before its first API call still leaves an empty manifest', async () => {
+    const w = world();
+    const outDir = path.join('/out');
+    let calls = 0;
+    let stalled;
+    const hung = new Promise((resolve) => (stalled = resolve));
+    rd.runBuild({
+      env: {
+        STG_FULL_ADMIN_KEY: 'k',
+        STG_FULL_ACCESS_CLIENT_ID: 'i',
+        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+      },
+      fs: w.fs,
+      fetch: () => {
+        calls += 1;
+        stalled();
+        return new Promise(() => {}); // killed during the very first request
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    await hung;
+    expect(calls).toBe(1);
+    expect(JSON.parse(w.files.get(path.join(outDir, 'manifest.json')))).toEqual({
+      date: TODAY,
+      items: [],
+      qr: [],
+      acceptSql: [],
+      short: {},
+      warnings: [],
+    });
+  });
+
+  test('check-swap on that empty manifest is red and touches no row', async () => {
+    const w = world({ index: [] });
+    w.fs.writeFileSync(
+      path.join('/out', 'manifest.json'),
+      JSON.stringify({ date: TODAY, items: [], qr: [], acceptSql: [], short: {}, warnings: [] })
+    );
+    const code = await rd.runCheckSwap({
+      env: {
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: ATTEMPT,
+        STG_FULL_ADMIN_KEY: 'k',
+        STG_FULL_ACCESS_CLIENT_ID: 'i',
+        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+      },
+      fs: w.fs,
+      fetch: async () => ({ status: 200 }),
+      wrangler: w.wrangler,
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: path.join('/out'),
+      tmpDir: '/tmp',
+      log: () => {},
+    });
+    allCalls.push(...w.calls);
+    expect(code).toBe(1);
+    expect(w.sqls()).toEqual([]);
+    expect(w.liveIndex()).toEqual([]);
+  });
+
+  test('a stale manifest sharing some ids purges only the ones today does not record', async () => {
+    const stale = manifestOf('2026-11-03', 'y', ['a', 'b']);
+    const today = manifestOf(TODAY, 't', ['a', 'b']);
+    // the stale run also recorded one of today's sponsors (a shared row)
+    stale.items.push({ kind: 'sponsor', id: 't_sp_a', node: 'a', tier: 'premium' });
+    const w = world({ index: [STALE_NAME], objects: { [`stock/${STALE_NAME}`]: stale } });
+    const report = await swap(w, { manifest: today });
+    allCalls.push(...w.calls);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'y_evt_a'");
+    expect(purged).toContain("'y_sp_a'");
+    expect(purged).not.toContain("'t_sp_a'");
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(report.exitCode).toBe(0);
+  });
+});
+
 describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
   test('a re-run (same run id, attempt 2) makes attempt 1 stale and purges it', async () => {
     const first = `manifest-${TODAY}-${RUN}-1.json`;
@@ -600,8 +697,26 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
       notes: { ok: true },
     });
     expect(summary).toContain(
-      `rows of ${TODAY_NAME} for b are still live and recorded only in this run's stock-manifest artifact; purge them by hand`
+      `rows of ${TODAY_NAME} for b are still live; they are recorded only in this run's stock-manifest artifact; purge them by hand`
     );
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('when the manifest object was saved but the index write failed, the summary says so', async () => {
+    const w = world({
+      index: [],
+      fail: (c) =>
+        (c.args[2] === 'put' && c.args[3].endsWith('manifest-index.json')) ||
+        (c.sql !== null && c.sql.includes("'t_evt_b'")),
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(w.r2.has(`stock/${TODAY_NAME}`)).toBe(true);
+    const text = report.problems.join('\n');
+    expect(text).toContain(
+      `rows of ${TODAY_NAME} for b are still live; the manifest object stock/${TODAY_NAME} exists in R2 but is not listed in the index; add it by hand or rely on this run's artifact`
+    );
+    expect(text).not.toContain('recorded only in');
     expect(report.exitCode).toBe(1);
   });
 
