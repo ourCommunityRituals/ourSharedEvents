@@ -46,7 +46,12 @@ import {
   type DataProviderEnv,
 } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
-import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
+import {
+  extractAdminActor,
+  isDevOpenAdmin,
+  logNullAdminActorDenied,
+  type AdminEnv,
+} from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 // NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
@@ -580,6 +585,7 @@ export async function handleAdminCreateSponsor(
           (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
         if (!inScope) eventBrandId = null;
       } else if (!isDevOpenAdmin(env)) {
+        logNullAdminActorDenied('sponsor-create', env);
         eventBrandId = null;
       }
     }

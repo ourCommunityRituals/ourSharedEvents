@@ -62,7 +62,13 @@ import {
 } from '../lib/spine-keys-store';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
-import { extractAdminActor, isAutomationActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
+import {
+  extractAdminActor,
+  isAutomationActor,
+  isDevOpenAdmin,
+  logNullAdminActorDenied,
+  type AdminEnv,
+} from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
@@ -583,12 +589,17 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // really on (re-tested here, never inferred from the null). Anywhere else a
   // null actor creates nothing (OSE-1801).
   const actor = extractAdminActor(request, env);
+  if (actor === null && !isDevOpenAdmin(env)) {
+    logNullAdminActorDenied('event-create', env);
+    return errorResponse(
+      'BRAND_FORBIDDEN',
+      'Your admin sign-in could not be confirmed for this request. Sign in again and retry.',
+      403,
+      rid
+    );
+  }
   const scope =
-    actor !== null
-      ? await resolveAdminBrandScopeAsync(actor, env)
-      : isDevOpenAdmin(env)
-        ? ({ mode: 'all' } as const)
-        : ({ mode: 'deny' } as const);
+    actor !== null ? await resolveAdminBrandScopeAsync(actor, env) : ({ mode: 'all' } as const);
   if (scope.mode === 'deny') {
     return errorResponse(
       'BRAND_FORBIDDEN',

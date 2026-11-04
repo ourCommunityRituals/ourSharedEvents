@@ -21,6 +21,7 @@
 import { corsHeaders } from '../lib/cors';
 import { REPEAT_SOURCE_COLUMNS, buildRepeatBody, type RepeatSource } from '../lib/event-repeat';
 import { handleCreateEvent, type EventsEnv } from './events';
+import { inheritAdminActor } from '../auth/admin';
 
 import { errorLabel } from '../lib/error-label';
 const SLUG_ATTEMPTS = 3;
@@ -75,10 +76,16 @@ export async function handleAdminRepeatEvent(
     // Same caller identity (CF Access JWT / key header) and URL; only the body is new.
     const headers = new Headers(request.headers);
     headers.set('Content-Type', 'application/json');
-    created = await handleCreateEvent(
-      new Request(request.url, { method: 'POST', headers, body: JSON.stringify(body) }),
-      env
-    );
+    const createRequest = new Request(request.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    // OSE-1801: the copy acts as the caller's resolved actor. A new Request would
+    // otherwise decode the token again after the source read, and an expiry in
+    // between would refuse a repeat inside the caller's own brand.
+    inheritAdminActor(request, createRequest, env);
+    created = await handleCreateEvent(createRequest, env);
     if (created.status !== 409) break; // 409 = the slug suffix collided: try another
   }
   if (!created || created.status >= 400)

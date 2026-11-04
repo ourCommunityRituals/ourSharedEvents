@@ -27,7 +27,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 8
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-actor-memo.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
@@ -552,7 +559,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 23
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/brand-matrix-selfcheck.spec.ts",
@@ -622,7 +629,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 4
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
@@ -2288,7 +2295,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): fetchMock",
-      "testCount": 14
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/red-team/auth-jwt-fuzz.property.spec.ts",

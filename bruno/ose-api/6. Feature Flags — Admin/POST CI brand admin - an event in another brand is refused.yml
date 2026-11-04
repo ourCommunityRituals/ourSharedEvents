@@ -1,0 +1,51 @@
+info:
+  name: POST CI brand admin - an event in another brand is refused
+  type: http
+  seq: 17
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "title": "ci-brand guard: must never be created",
+        "brand_id": "root",
+        "start_date": "2099-06-01"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1801 staging layer: a brand admin cannot create an event in a brand it is
+        // not in. The CI service actor is a brand admin of ci-brand only (OSE-1800).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('403 BRAND_FORBIDDEN for a brand the actor is not in', function () {
+          expect(res.getStatus()).to.eql(403);
+          expect(res.getBody().code).to.eql('BRAND_FORBIDDEN');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
