@@ -16,6 +16,7 @@
 // READ-ONLY. It lists existing short links and never mints one; when none
 // exists yet the card points at the poster page, which mints on open.
 
+import { hasPaidReport, planNote, type ReportPlan } from '../lib/report-plan';
 import { generateQrCode } from '../lib/qr';
 import { listShortlinksForEvent } from '../lib/shortlinks';
 import {
@@ -53,7 +54,8 @@ export function daysToGo(row: EventRow, now: Date): number | null {
 export async function handleAdminPreEventActivity(
   request: Request,
   env: PreEventActivityEnv,
-  eventId: string
+  eventId: string,
+  plan: ReportPlan
 ): Promise<Response> {
   let row: EventRow | null = null;
   try {
@@ -96,11 +98,22 @@ export async function handleAdminPreEventActivity(
     link = null;
   }
 
+  // OSE-682: on a plan without the paid report a brand admin gets the Local
+  // line, totals only. Per-placement and per-code reach (poster attribution) and
+  // the per-day series are withheld, and the response names them.
+  const paidReport = hasPaidReport(plan, eventId);
+  const fullActivity = organizerPreEventActivity(activity);
+  const { scansByDay: _scansByDay, ...activityTotals } = fullActivity;
   return Response.json({
     ok: true,
     event: { id: row.id, status: row.status ?? 'draft', days_to_go: daysToGo(row, now) },
-    activity: organizerPreEventActivity(activity),
-    reach,
+    activity: paidReport ? fullActivity : activityTotals,
+    reach: paidReport ? reach : { totals: reach.totals },
+    ...(paidReport
+      ? {}
+      : {
+          plan: planNote(['reach.venue', 'reach.community', 'reach.taps', 'activity.scansByDay']),
+        }),
     link,
     poster_url: `/events/${encodeURIComponent(eventId)}/poster`,
   });

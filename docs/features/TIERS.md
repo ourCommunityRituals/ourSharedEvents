@@ -32,7 +32,7 @@
 
 **Use case:** Community organizer running a one-off event. Needs registration and door count. Nothing else.
 
-¹ Free still gets a SharedReport, at the Local depth: distinct scanners, the sponsors' own display counts and the class breakdown (OSE-682, PO 2026-08-10: "everyone gets SharedReport"). `analytics.shared-report` turns on the paid report; with it off, every signed-link viewer reads at Local, the organizer too. See [REPORT-DEPTH.md](REPORT-DEPTH.md), "The plan caps depth".
+¹ Free still gets a SharedReport, at the Local depth: distinct scanners, the sponsors' own display counts and the class breakdown (OSE-682, PO 2026-08-10: "everyone gets SharedReport"). `analytics.shared-report` turns on the paid report; with it off, every signed-link viewer reads at Local, the organizer too. See [REPORT-DEPTH.md](REPORT-DEPTH.md), "The plan caps depth". The admin reads follow the same plan for a brand admin (totals on Free; per-poster, per-day and map data on Mid), while a platform admin sees everything: "Who × plan on every read" in the same doc.
 
 ---
 

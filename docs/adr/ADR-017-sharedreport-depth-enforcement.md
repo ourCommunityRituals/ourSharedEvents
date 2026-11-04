@@ -91,6 +91,22 @@ buys the deeper report.
   customer view.
 - Decision 2 (omission only) is unchanged: same numbers, fewer sections.
 
+**Addendum, same day (owner decisions 2026-11-04): who × plan on every read.**
+The same numbers also leave through admin reads and the internal batch read, and
+what the front end hides does not matter if the back end returns it. So:
+
+- The internal batch read is capped by plan too (Local on a Free event), through
+  the same `capDepthToPlan` → `filterReportByDepth` gate. This narrows Decision
+  3's "`internal` → premium" to "`internal` → premium on a paid plan".
+- Admin reads (event dashboard, pre-event activity, poster deployments, the
+  corridor dashboard) give a brand admin the Local line on a Free event: totals,
+  with per-day, per-poster, per-placement and map data withheld and named in a
+  `plan` block. A platform admin (scope `all` or an `ose-platform` member)
+  sees everything, audited. These are not SharedReport sections, so they sit
+  beside this ADR's one gate rather than in it; the rule and table live in
+  `docs/features/REPORT-DEPTH.md` ("Who × plan on every read").
+- The sponsor home prints totals only on every plan; a test locks it.
+
 **Consequences.** The report page loads on every plan, and the auth boundary is
 the report API (`/api/v2/events/:id/shared-report`), not the page shell; the
 EX-003 red-team probes test it there. Until OSE-1562 makes the plan per brand, the

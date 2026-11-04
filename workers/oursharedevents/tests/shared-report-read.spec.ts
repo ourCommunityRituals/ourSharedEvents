@@ -825,7 +825,11 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     expect(body).not.toHaveProperty('upgrade');
   });
 
-  test('SR-25 static: filterReportByDepth not present in batch handler (OSE-593 superseded)', () => {
+  test('static: the batch handler filters by depth only through the plan cap (SR-25 as amended by OSE-682)', () => {
+    // SR-25: the internal class gets the full report, by role. OSE-682 (owner,
+    // 2026-11-04): unless the event's plan lacks the paid report, then Local. So
+    // the batch handler may call the depth filter only behind capDepthToPlan
+    // applied to the internal role's depth; it never picks a depth of its own.
     const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
     const files = JSON.parse(src) as Record<string, string>;
     const readKey = Object.keys(files).find((k) =>
@@ -834,12 +838,16 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     expect(readKey, 'shared-report-read.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
     const handlerSrc = files[readKey!]!;
 
-    const batchIdx = handlerSrc.indexOf('handleBatchSharedReports');
-    const filterIdx = handlerSrc.indexOf('filterReportByDepth', batchIdx);
-    expect(
-      filterIdx,
-      'filterReportByDepth must NOT appear inside handleBatchSharedReports (SR-25 supersedes OSE-593 depth gate)'
-    ).toBe(-1);
+    const batchSrc = handlerSrc.slice(
+      handlerSrc.indexOf('export async function handleBatchSharedReports')
+    );
+    expect(batchSrc).toContain("capDepthToPlan(resolveDepth({ role: 'internal' })");
+    const capIdx = batchSrc.indexOf('capDepthToPlan(');
+    const filterIdx = batchSrc.indexOf('filterReportByDepth(');
+    expect(filterIdx, 'the batch depth filter runs only after the plan cap').toBeGreaterThan(
+      capIdx
+    );
+    expect(batchSrc).toContain("resolved.depth === 'premium'");
   });
 
   test('SR-25 static: sponsor_class_breakdown present in buildSharedReport return', () => {
@@ -1740,6 +1748,56 @@ describe('OSE-682 — the plan caps report depth (router → read handler)', () 
     );
     expect(report).toHaveProperty('headcount_trend');
     expect(report).not.toHaveProperty('upgrade');
+  });
+});
+
+// ── OSE-682 — the internal batch read follows the plan too ──────────────────
+// Owner decision 2026-11-04: no back door holds the paid sections. The internal
+// service token reads a Free-plan event at Local, through the same gate.
+//
+// @born-red OSE-682 | method: plan-forced-paid | verified: passing
+//   `async () => FULL_PLAN` as the batch plan read in router.ts turns "Free plan
+//   | internal batch" red.
+describe('OSE-682 — the batch read caps by plan', () => {
+  const formsDb = () => (env as unknown as { FORMS_DB: D1Database }).FORMS_DB;
+  const setGlobal = (on: boolean) =>
+    formsDb()
+      .prepare(
+        `UPDATE feature_flags SET enabled = ? WHERE scope = 'global' AND flag_key = 'analytics.shared-report'`
+      )
+      .bind(on ? 1 : 0)
+      .run();
+  const batch = async (ids: string[]) => {
+    const res = await SELF.fetch('https://test.local/api/v2/events/shared-reports/batch', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${INTERNAL_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { reports: Record<string, Record<string, unknown>> }).reports;
+  };
+
+  beforeEach(resetForTest);
+  afterEach(() => setGlobal(true));
+
+  test('Free plan | internal batch reads at Local, the upgrade names Mid', async () => {
+    await setGlobal(false);
+    await seedEvent({ id: 'test-evt-read-682-b1' });
+    await seedScanAggregate('test-evt-read-682-b1', 20);
+    const r = (await batch(['test-evt-read-682-b1']))['test-evt-read-682-b1']!;
+    expect(r).toHaveProperty('distinct_scanners');
+    expect(r).not.toHaveProperty('headcount_trend');
+    expect(r).not.toHaveProperty('poster_attribution');
+    expect((r.upgrade as { next_depth: string }).next_depth).toBe('mid');
+  });
+
+  test('Mid plan | internal batch reads the full report', async () => {
+    await setGlobal(true);
+    await seedEvent({ id: 'test-evt-read-682-b2' });
+    await seedScanAggregate('test-evt-read-682-b2', 20);
+    const r = (await batch(['test-evt-read-682-b2']))['test-evt-read-682-b2']!;
+    expect(r).toHaveProperty('headcount_trend');
+    expect(r).not.toHaveProperty('upgrade');
   });
 });
 

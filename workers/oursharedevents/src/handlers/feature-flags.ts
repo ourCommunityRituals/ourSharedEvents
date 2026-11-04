@@ -31,6 +31,7 @@ import {
   applyTier,
   setEventFlag,
   removeEventFlag,
+  isFlagInPlan,
   resolveFlags,
   detectCurrentTier,
 } from '../lib/feature-flags';
@@ -227,13 +228,23 @@ export async function handleApplyTier(
   }
 }
 
-/** PUT /api/v2/admin/events/:id/flags/:key — set event-level override */
+/**
+ * PUT /api/v2/admin/events/:id/flags/:key — set event-level override.
+ *
+ * `caller.platform`: whether the caller is a platform admin (router, via
+ * isPlatformActor). An event override is an entitlement write (review
+ * 2026-11-04, OSE-682): a brand admin may switch a feature on only within its
+ * plan, and within the plan "on" follows the plan (the override is removed, so a
+ * later downgrade reaches the event); switching off or removing is always theirs.
+ * Only a platform admin writes an explicit grant that outlives the plan.
+ */
 export async function handleSetEventFlag(
   request: Request,
   env: FeatureFlagEnv,
   eventId: string,
   flagKey: string,
-  rid: string
+  rid: string,
+  caller: { platform: boolean }
 ): Promise<Response> {
   if (!isValidFlagKey(flagKey)) {
     return errorResponse('INVALID_FLAG_KEY', `Unknown flag key: ${flagKey}`, 400, rid);
@@ -248,6 +259,25 @@ export async function handleSetEventFlag(
 
   if (typeof body.enabled !== 'boolean') {
     return errorResponse('MISSING_FIELD', 'Missing required field: enabled (boolean)', 400, rid);
+  }
+
+  if (body.enabled === true && !caller.platform) {
+    if (!(await isFlagInPlan(env.FORMS_DB, flagKey))) {
+      return errorResponse(
+        'EVENT_FLAG_ABOVE_PLAN',
+        "This feature isn't in this plan; a platform admin can grant it for an event",
+        403,
+        rid
+      );
+    }
+    try {
+      await removeEventFlag(env.FORMS_DB, eventId, flagKey);
+      logFlagEvent('set_event', rid, { eventId, flagKey, enabled: true, followsPlan: true });
+      return jsonResponse({ ok: true, eventId, flagKey, enabled: true, scope: 'plan' }, rid);
+    } catch (err) {
+      logFlagEvent('set_event_error', rid, { eventId, flagKey, error: errorLabel(err) });
+      return errorResponse('DB_ERROR', 'Failed to set event flag', 503, rid);
+    }
   }
 
   try {
