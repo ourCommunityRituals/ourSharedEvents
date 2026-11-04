@@ -1,5 +1,7 @@
 // Validates the morning search's finds before anything is built from them.
 // Pure but for the injected geocoder: no network here.
+// `today` must be a America/Chicago calendar date (YYYY-MM-DD); use chicagoDate(new Date()).
+// The 90-day window is judged on each event's Chicago calendar date, never the string prefix.
 import * as h3 from 'h3-js';
 
 const RES = 7;
@@ -7,7 +9,41 @@ const WINDOW_DAYS = 90;
 const TITLE_MAX = 120;
 const SUMMARY_MAX = 200;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const START_RE = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}/;
+// explicit offset required: `Z` or +hh:mm / -hh:mm
+const START_RE =
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed-width groups only, no backtracking risk
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+const CHICAGO = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Chicago',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** The America/Chicago calendar date (YYYY-MM-DD) of an instant. */
+export function chicagoDate(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) throw new Error('chicagoDate: invalid date');
+  return CHICAGO.format(d);
+}
+
+// The instant of a well-formed starts_at, or null when it is not a real calendar time.
+function startInstant(s) {
+  const m = START_RE.exec(s);
+  if (!m) return null;
+  const [y, mo, d, h, mi] = m.slice(1, 6).map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d, h, mi));
+  const roundTrips =
+    t.getUTCFullYear() === y &&
+    t.getUTCMonth() === mo - 1 &&
+    t.getUTCDate() === d &&
+    t.getUTCHours() === h &&
+    t.getUTCMinutes() === mi &&
+    Number(m[6] ?? 0) < 60;
+  if (!roundTrips) return null;
+  const instant = new Date(s);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
 
 const isStr = (v) => typeof v === 'string';
 const dayNumber = (ymd) => {
@@ -30,7 +66,7 @@ function badShape(r) {
   }
   if (r.sector !== 'private' && r.sector !== 'public') return true;
   if (r.ends_at !== null && !isStr(r.ends_at)) return true;
-  if (!START_RE.test(r.starts_at)) return true;
+  if (!startInstant(r.starts_at)) return true;
   return false;
 }
 
@@ -75,13 +111,19 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
       refuse(row, 'no-source');
       continue;
     }
-    const offset = dayNumber(row.starts_at.match(START_RE)[1]) - first;
+    const offset = dayNumber(chicagoDate(startInstant(row.starts_at))) - first;
     if (offset < 0 || offset > WINDOW_DAYS) {
       refuse(row, 'outside-window');
       continue;
     }
     if (!eventTypeIds.has(row.event_type_id)) {
       refuse(row, 'unknown-type');
+      continue;
+    }
+
+    const key = `${row.venue.toLowerCase().replace(/\s+/g, ' ').trim()}|${row.starts_at}`;
+    if (seen.has(key)) {
+      refuse(row, 'duplicate');
       continue;
     }
 
@@ -99,13 +141,7 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
 
     const cell = h3.latLngToCell(point.lat, point.lng, RES);
 
-    const key = `${row.venue.toLowerCase().replace(/\s+/g, ' ').trim()}|${row.starts_at}`;
-    if (seen.has(key)) {
-      refuse(row, 'duplicate');
-      continue;
-    }
     seen.add(key);
-
     accepted.push({
       ...row,
       title: row.title.slice(0, TITLE_MAX),

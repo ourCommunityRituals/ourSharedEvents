@@ -17,7 +17,9 @@ const TIGER_QUERY =
   '&outFields=NAME%2CBASENAME%2CGEOID&outSR=4326&f=geojson';
 const TIGER_URL = `${TIGER_BASE}?${TIGER_QUERY}`;
 
-// order is the tie-break order when two boundaries both hold a cell's center
+// Order is the fixed node order. Each boundary is simplified independently, so shared borders
+// can end up with small gaps and overlaps; a point in two polygons goes to the first node in
+// this order (see nodeAt in validate-finds.mjs).
 const NODES = [
   { id: 'blue-island', name: 'Blue Island', zips: ['60406'], kind: 'tiger', match: 'Blue Island' },
   { id: 'beverly', name: 'Beverly', zips: ['60643'], kind: 'chicago', match: 'BEVERLY' },

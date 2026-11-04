@@ -7,8 +7,10 @@ const { nodes } = JSON.parse(
 );
 let validateFinds;
 let nodeAt;
+let chicagoDate;
 beforeAll(async () => {
-  ({ validateFinds, nodeAt } = await import('../../../scripts/stock/validate-finds.mjs'));
+  ({ validateFinds, nodeAt, chicagoDate } =
+    await import('../../../scripts/stock/validate-finds.mjs'));
 });
 // A point the polygon test puts in the node: scan the outer ring's bounding box.
 const insideOf = (id) => {
@@ -119,6 +121,47 @@ describe('validateFinds', () => {
   test('a null geocode is geocode-failed', async () => {
     expect(await reason(find({ address: 'nowhere' }))).toBe('geocode-failed');
   });
+  test('a Z time that is still today in Chicago is day 0 and accepted', async () => {
+    const r = await run([find({ starts_at: '2026-11-05T02:00Z' })]);
+    expect(r.accepted).toHaveLength(1);
+  });
+  test('a Z time that was yesterday in Chicago is outside-window', async () => {
+    expect(await reason(find({ starts_at: '2026-11-04T02:00Z' }))).toBe('outside-window');
+  });
+  test('a starts_at with no offset is bad-shape', async () => {
+    expect(await reason(find({ starts_at: `${day(10)}T19:00:00` }))).toBe('bad-shape');
+  });
+  test('the +90 edge in Z is accepted; +91 in Chicago given as Z is refused', async () => {
+    expect((await run([find({ starts_at: '2027-02-03T05:59Z' })])).accepted).toHaveLength(1);
+    expect(await reason(find({ starts_at: '2027-02-03T06:00Z' }))).toBe('outside-window');
+  });
+  test('an impossible calendar date is bad-shape', async () => {
+    expect(await reason(find({ starts_at: '2026-13-45T19:00-06:00' }))).toBe('bad-shape');
+    expect(await reason(find({ starts_at: '2026-02-30T19:00-06:00' }))).toBe('bad-shape');
+  });
+  test('chicagoDate follows Chicago across the November DST change', () => {
+    expect(chicagoDate('2026-10-31T04:59Z')).toBe('2026-10-30');
+    expect(chicagoDate('2026-10-31T05:00Z')).toBe('2026-10-31');
+    expect(chicagoDate('2026-11-02T05:59Z')).toBe('2026-11-01');
+    expect(chicagoDate(new Date('2026-11-02T06:00Z'))).toBe('2026-11-02');
+  });
+  test('a duplicate costs no geocoder call', async () => {
+    let calls = 0;
+    const counting = async (a) => {
+      calls += 1;
+      return geocode(a);
+    };
+    const r = await validateFinds({
+      finds: [find(), find({ venue: ' cork &  kerry ' })],
+      eventTypeIds,
+      nodes,
+      today: TODAY,
+      geocode: counting,
+    });
+    expect(r.refused.map((x) => x.reason)).toEqual(['duplicate']);
+    expect(calls).toBe(1);
+  });
+
   test('a point in no polygon is not-in-node', async () => {
     expect(await reason(find({ address: 'faraway' }))).toBe('not-in-node');
   });
